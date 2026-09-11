@@ -102,6 +102,19 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
 @media (max-width: 1760px) { #whoami { display: none; } nav.pages button { padding: 6px 8px; } }
 @media (max-width: 1500px) { .brand small { display: none; } .top .meta > span[title="Monitor uptime"] { display: none; } }
 @media (max-width: 1280px) { .top .meta > span[title="Node RPC round trip"] { display: none; } #nodePick > span { max-width: 16ch; } }
+
+/* THE TABS GET THEIR OWN ROW WHEN THE WINDOW IS NARROW (operator, 2026-09-11: "we need scrolling to
+   see menu/tabs that are being cut off and not displayed"). The bar is one unwrappable line, so at
+   1150 px the nav held 868 px of tabs in a 650 px box -- 218 px of them unreachable: it does scroll
+   sideways, but with the scrollbar hidden nothing said so, and a wheel scrolls the page, not the bar.
+   Under 1400 px the bar wraps and the nav takes a full row of its own (every tab fits at 1150), and
+   where it still overflows -- a phone -- its scrollbar is visible and it can be dragged. */
+@media (max-width: 1400px) {
+  header.top { flex-wrap: wrap; height: auto; padding-bottom: 6px; row-gap: 2px; }
+  nav.pages { order: 10; flex: 1 0 100%; margin-left: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
+  nav.pages::-webkit-scrollbar { display: block; height: 6px; }
+  nav.pages::-webkit-scrollbar-thumb { background: var(--bg-3, #12161c); border-radius: 6px; }
+}
 .userchip select, .btn {
   background: var(--bg-3, #12161c); color: var(--fg); border: 1px solid var(--line, #262c35);
   border-radius: var(--radius-sm); padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer;
@@ -1289,9 +1302,13 @@ table.xtable tr:hover td { background: #16202c; }
 .kbf .flowwrap { flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; padding: 2px 10px 6px; }
 .kbf .flowwrap > .flow { zoom: 0.8; }
 .kbf .flownote, .kbf .tiplegend { display: none; }
-@media (max-width: 1100px) {
-  .kiosk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: none; }
-  .kcol > .kmk .kboard, .kcol > .ksp .kboard { height: 60vh; flex: none; }
+/* ONE COLUMN SOONER (operator, 2026-09-11: "Kiosk doesn't look proper on a smaller window"). At
+   1150 px the two columns were 555 px each: the block-space board came out 553x440 and Block flow's
+   cards were clipped. The kiosk stacks from 1400 px now, at its own height, and main scrolls. */
+@media (max-width: 1400px) {
+  .kiosk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: none; height: auto; min-height: 0; }
+  .kcol > .kmk .kboard, .kcol > .ksp .kboard { height: 58vh; flex: none; }
+  .kcol > .kbf { height: 260px; }
 }
 
 /* the viewer controls in the panel heading, off the board (mining.js modeSwitch) */
