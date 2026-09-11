@@ -36,8 +36,8 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
   lightning ball that runs along the grid lighting the cubes it passes.
 - Viewer modes: **Simple** (the richest few hundred transactions as cubes, the rest as
   equal pieces coloured by their feerate) and
-  **Detailed** (every transaction in the next block on a 96-unit grid, small ones of the
-  same feerate bundled into larger squares, drawn as low slabs, area-true so a full block
+  **Detailed** (every transaction in the next block on a 96-unit grid, small ones bundled,
+  in feerate order, into equal larger squares, drawn as low slabs, area-true so a full block
   fills the board),
   remembered per browser.
 

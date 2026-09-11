@@ -670,9 +670,11 @@ flowchart TD
   allowance so the many transactions just over one unit keep their share, at least 1 and
   at most the grid width. `vsizeForSide` is its exact inverse, which the renderer uses to
   cut the aggregate tail into whole squares.
-- **Detailed** first bundles small transactions (`bundleSmall`, `bundleSide: 5`): a run of
-  consecutive transactions under a quarter of a bundle, in the same feerate band, becomes one
-  square of about 5×5 units, its id `bundle:<count>:<first txid>`; larger ones stay single.
+- **Detailed** first bundles small transactions (`bundleSmall`, `bundleSide: 5`): walking the
+  block richest first, every transaction smaller than a bundle joins the current run, which
+  closes when it reaches a bundle's vbytes and is drawn at exactly 5×5 (a fixed `side` that
+  `packBlock` honours). Only transactions of a bundle's size or more stand alone, so the board
+  fills in order with equal squares. Ids are `bundle:<count>:<first txid>`.
 - **Detailed** uses area-true sides (`ditheredSide`, `dither: true`): a transaction
   of u units is drawn at floor(√u) or one more, the larger with the probability that makes
   its expected area exactly u, the coin a hash of its txid so its side never changes between

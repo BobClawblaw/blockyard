@@ -440,7 +440,9 @@ test('Viewer Mode 2 packs a whole block of small transactions as low slabs, quic
   assert.ok(r.tiles.length > 150 && r.tiles.length < 1200, `bundled into larger squares (${r.tiles.length})`);
   // (the pool here is ~1.26 MvB and the board draws one block's worth, as before: 2,500+ of them)
   assert.ok(r.tiles.reduce((a, t) => a + held(t), 0) > 2500, 'most transactions are drawn, in their own square or a bundle');
-  assert.ok(r.tiles.some((t) => String(t.txid).startsWith('bundle:')) && r.tiles.some((t) => /^t\d+$/.test(String(t.txid))), 'bundles and single transactions side by side');
+  const bundles = r.tiles.filter((t) => String(t.txid).startsWith('bundle:'));
+  assert.ok(bundles.length > 100, 'small transactions are bundled');
+  assert.ok(bundles.filter((t) => t.s === 5).length >= bundles.length - 1, 'every bundle the same square: nothing odd-sized to plug holes');
   assert.ok(r.tiles.every((t) => t.tall <= DENSE_OPTS.slab + 1e-9), 'slabs, not cubes');
   assert.ok(r.tiles.some((t) => t.s >= 4), 'large squares, not sand');
   assert.ok(ms < 4000, `packed and drawn in ${ms} ms`);
