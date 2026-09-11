@@ -241,35 +241,3 @@ test('ditheredSide: the floor or one more, stable per transaction, and area-true
   assert.equal(ditheredSide(1e12, vpu, 40, 'x'), 40, 'clamped to the grid');
   assert.equal(ditheredSide(1, vpu, 96, 'x'), 1, 'never under one unit');
 });
-
-import { bundleSmall } from '../public/js/blockpack.js';
-
-test('bundleSmall: every bundle the same square, in order, big ones alone, totals untouched', () => {
-  const vpu = vbytesPerUnit(1_000_000, 96);
-  const target = 25 * vpu;
-  const txs = [];
-  for (let i = 0; i < 3000; i++) {
-    const v = i % 250 === 0 ? 6000 : i % 41 === 0 ? 900 : 140;     // big, mid-sized, typical
-    txs.push({ txid: i.toString(16).padStart(64, '0'), vsize: v, fee: v * (3 - i / 1000) });
-  }
-  const out = bundleSmall(txs, vpu, 5);
-  const sum = (l, k) => l.reduce((a, t) => a + t[k], 0);
-  assert.equal(sum(out, 'vsize'), sum(txs, 'vsize'), 'vbytes conserved');
-  assert.ok(Math.abs(sum(out, 'fee') - sum(txs, 'fee')) < 1e-6, 'fees conserved');
-  const bundles = out.filter((t) => t.txid.startsWith('bundle:'));
-  const full = bundles.filter((b) => b.side === 5);
-  assert.ok(full.length >= bundles.length - 1, 'every bundle but the cheapest remainder is drawn at exactly 5x5');
-  for (const b of full) assert.ok(b.vsize >= target && b.vsize < target + 900, `a full bundle is one bundle's vbytes, give or take its last member (${b.vsize})`);
-  assert.deepEqual(out.filter((t) => !t.txid.startsWith('bundle:')).map((t) => t.vsize), txs.filter((t) => t.vsize >= target).map((t) => t.vsize), 'only transactions of a bundle\'s size or more stand alone');
-  const n = bundles.reduce((a, b) => a + Number(b.txid.split(':')[1]), 0) + out.filter((t) => !t.txid.startsWith('bundle:')).length;
-  assert.equal(n, txs.length, 'every transaction is in exactly one square');
-  const rates = bundles.map((b) => b.fee / b.vsize);
-  for (let i = 1; i < rates.length; i++) assert.ok(rates[i] <= rates[i - 1] + 1e-9, 'bundles run richest first');
-  assert.equal(bundles[0].txid.split(':')[2], txs[1].txid, 'named by its first member');
-  const pieces = [{ txid: 'aggregate-0', vsize: 100, fee: 10 }];
-  assert.deepEqual(bundleSmall(pieces, vpu, 5), pieces, 'aggregate pieces are left alone');
-  // packBlock draws a full bundle at its fixed side
-  const p = packBlock(out, { resolution: 96, blockLimit: 1_000_000, dither: true });
-  const fixed = new Set(full.map((b) => b.txid));
-  for (const t of p.tiles) if (fixed.has(t.txid)) assert.equal(t.s, 5);
-});

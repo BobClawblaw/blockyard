@@ -13,7 +13,7 @@
 //     one's loop.
 //  3. Zero dependencies, no CDN.
 
-import { packBlock, vbytesPerUnit, vsizeForSide, bundleSmall } from './blockpack.js';
+import { packBlock, vbytesPerUnit, vsizeForSide } from './blockpack.js';
 import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cyclePath, ballPath, cycleCrashes, cellTops, pathHeights } from './blockscene3d.js';
 
 const STATE = new WeakMap();
@@ -1164,11 +1164,9 @@ function bindHover(canvas, st) {
     if (hit.label) { tip.textContent = hit.label; tip.classList.remove('hidden'); return; }
     const rate = hit.rate ?? 0;
     const id = String(hit.txid);
-    const bundle = /^bundle:(\d+):/.exec(id);
     const label = id.startsWith('aggregate@')
       ? 'aggregated small transactions'
-      : bundle ? `${Number(bundle[1]).toLocaleString('en-US')} small transactions`
-        : (id.length > 20 ? id.slice(0, 12) + '…' + id.slice(-6) : id);
+      : (id.length > 20 ? id.slice(0, 12) + '…' + id.slice(-6) : id);
     tip.textContent = `${label} · ${fmtVb(hit.vsize ?? 0)} · ${rate.toFixed(rate < 10 ? 2 : 1)} sat/vB`;
     tip.classList.remove('hidden');
   });
@@ -1209,8 +1207,7 @@ export function render3d(canvas, cells, options = {}) {
   // layout was made at, since at another scale every square's side changes.
   const laid = Array.isArray(opts.laid) ? opts.laid : null;   // board3d: tiles the caller laid out
   const pack = (k) => {
-    const vpu = vbytesPerUnit(opts.blockVbytes * k, opts.resolution);
-    const txs = opts.bundleSide ? bundleSmall(toTxs(cells, vpu), vpu, opts.bundleSide) : toTxs(cells, vpu);   // Detailed: small ones bundled
+    const txs = toTxs(cells, vbytesPerUnit(opts.blockVbytes * k, opts.resolution));
     const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k, dither: !!opts.dither };   // dither: Detailed, area-true sides
     // Fresh every time. The stable packer (blockpack.js packStable) moved far
     // fewer blocks but left the resting board ragged -- columns half a cell

@@ -433,18 +433,9 @@ test('Viewer Mode 2 packs a whole block of small transactions as low slabs, quic
   const t0 = Date.now();
   const r = mempool3d(h.canvas, { cells: dense }, DENSE_OPTS);
   const ms = Date.now() - t0;
-  // Detailed bundles runs of small same-feerate transactions into ~5x5 squares (operator,
-  // 2026-09-11: "Detailed is still too granular"), so there are far fewer squares than
-  // transactions -- but every transaction is still in exactly one of them
-  const held = (t) => { const m = /^bundle:(\d+):/.exec(String(t.txid)); return m ? Number(m[1]) : 1; };
-  assert.ok(r.tiles.length > 150 && r.tiles.length < 1200, `bundled into larger squares (${r.tiles.length})`);
-  // (the pool here is ~1.26 MvB and the board draws one block's worth, as before: 2,500+ of them)
-  assert.ok(r.tiles.reduce((a, t) => a + held(t), 0) > 2500, 'most transactions are drawn, in their own square or a bundle');
-  const bundles = r.tiles.filter((t) => String(t.txid).startsWith('bundle:'));
-  assert.ok(bundles.length > 100, 'small transactions are bundled');
-  assert.ok(bundles.filter((t) => t.s === DENSE_OPTS.bundleSide).length >= bundles.length - 1, 'every bundle one unit of the board');
+  assert.ok(r.tiles.length > 2500, `most transactions get a square of their own (${r.tiles.length})`);
   assert.ok(r.tiles.every((t) => t.tall <= DENSE_OPTS.slab + 1e-9), 'slabs, not cubes');
-  assert.ok(r.tiles.some((t) => /^t\d+$/.test(String(t.txid)) && t.s >= 2), 'transactions larger than a bundle keep bigger squares of their own');
+  assert.ok(r.tiles.some((t) => t.s === 1) && r.tiles.some((t) => t.s >= 4), 'small and large side by side');
   assert.ok(ms < 4000, `packed and drawn in ${ms} ms`);
 });
 

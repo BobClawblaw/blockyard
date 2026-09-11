@@ -57,7 +57,7 @@ export const VIEWER_MODES = [
   // named Simple and Detailed (operator, 2026-09-11: "We should not call it Goggles Mode. We should call it
   // Detailed. Mode 1 as Simple"); the ids stay '1' and '2' so a remembered choice survives the rename
   { id: '1', label: 'Simple', title: 'Simple: the richest 400 transactions as cubes, the rest as equal pieces coloured by feerate' },
-  { id: '2', label: 'Detailed', title: 'Detailed: every transaction in the next block; small ones bundled, in feerate order, into equal squares' },
+  { id: '2', label: 'Detailed', title: 'Detailed: every transaction in the next block, one square each' },
 ];
 // 96 UNITS, MEASURED (2026-09-11, the live next block: 3,051 transactions, p10/50/90 139/140/141
 // vB). The packer rounds a square's side (round(sqrt(1.1 vsize / vbytes-per-unit))), and at 128
@@ -65,15 +65,8 @@ export const VIEWER_MODES = [
 // everything back to 1 x 1, and 30 of the 128 rows stood empty -- the scattered, holed board. At
 // 96 a typical transaction is exactly one unit: every one fits with no shrinking, 2,943 of them
 // 1 x 1, the board 94% full, the largest still 26 units a side.
-// dither: area-true square sides (blockpack.js ditheredSide), so a full block fills the board;
-// bundleSide: runs of small transactions, in feerate order, drawn as one unit each (bundleSmall).
-// ONE BUNDLE PER UNIT ON A 24-UNIT BOARD (operator, 2026-09-11, on 5x5 bundles on the 96-unit
-// board: "YOU ARE GETTING WORSE AND WORSE!"). 5 does not divide 96 and the single transactions
-// came out 6, 7, 14 units, so nothing lined up: measured on the live block, 454 holes (4.9% of the
-// board) and feerate order rho 0.978. With the bundle as the grid's own unit every square is a whole
-// number of the same units and a single unit fills any hole: 0 holes, rho 0.999, 23 of 24 rows at
-// full scale. The slab and the neon grid step scale with the unit (1.2 and 8 at 96 -> 0.3 and 2).
-export const DENSE_OPTS = { resolution: 24, slab: 0.3, order: 'diagonal', gridStep: 2, neonCell: 'rgba(50,190,125,0.22)', dither: true, bundleSide: 1 };
+// dither: area-true square sides (blockpack.js ditheredSide), so a full block fills the board
+export const DENSE_OPTS = { resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, neonCell: 'rgba(50,190,125,0.22)', dither: true };
 export function viewerSetup(s, state) {
   const d = state?.denseBlock;
   if (state?.viewerMode === '2' && d?.v?.length) {

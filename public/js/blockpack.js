@@ -81,43 +81,6 @@ export function ditheredSide(vsize, vpu, gridWidth = Infinity, key = '') {
   return Math.max(1, Math.min(Math.floor(gridWidth) || 1, s));
 }
 
-// BUNDLES FOR THE DETAILED VIEW (operator, 2026-09-11: "Detailed is still too granular. We need
-// to see much larger groupings sooner."). A live block is thousands of 140 vB transactions -- one
-// unit each at 96 units -- and one square per transaction drew them as sand.
-//
-// EVERY BUNDLE IS THE SAME SQUARE (operator, on the first version: "WHAT IS THIS UNSORTED UNPACKED
-// MESS"). That version closed a run at every feerate-band change and at every larger transaction,
-// so bundles came in every size, rounded to 3, 4 or 5 units, and first-fit packing then dropped
-// later, cheaper squares into the holes beside earlier ones: gaps, a stagger, colours out of order.
-// Now, walking the block richest first, every transaction SMALLER than a bundle joins the current
-// run, whatever its band and whatever larger transaction came between; the run closes as soon as
-// it reaches a bundle's vbytes and is drawn at exactly side x side (`side`, which packBlock honours).
-// Only transactions of a bundle's size or more stand alone, so the board fills row by row, in
-// order, with nothing small left to plug holes. The run is sorted, so a bundle spans a narrow
-// feerate range, coloured by its weighted mean. Its area is true to within its last member (a
-// 140 vB transaction is 5% of a 25-unit bundle); the cheapest remainder is sized like a
-// transaction. Ids are "bundle:<count>:<first txid>"; vbytes and fees are conserved exactly.
-export function bundleSmall(txs, vpu, side = 5) {
-  const target = side * side * Math.max(1e-9, Number(vpu) || 0);
-  const out = [];
-  let run = null;
-  const close = (full) => {
-    if (!run) return;
-    if (run.ids.length === 1) out.push(run.first);
-    else out.push({ txid: `bundle:${run.ids.length}:${run.ids[0]}`, vsize: run.vsize, fee: run.fee, ...(full ? { side } : {}) });
-    run = null;
-  };
-  for (const tx of txs || []) {
-    const v = Math.max(1, Number(tx?.vsize) || 0);
-    if (v >= target || String(tx?.txid).startsWith('aggregate')) { out.push(tx); continue; }
-    if (!run) run = { vsize: 0, fee: 0, ids: [], first: tx };
-    run.vsize += v; run.fee += Math.max(0, Number(tx?.fee) || 0); run.ids.push(tx?.txid);
-    if (run.vsize >= target) close(true);
-  }
-  close(false);
-  return out;
-}
-
 const idOf = (tx) => (tx && typeof tx === 'object' ? tx.txid : tx);
 
 // ---------------------------------------------------------------------------
@@ -269,10 +232,7 @@ function prepare(txs, vpu, width, dither = false) {
     const vsize = Math.max(1, Number(tx?.vsize) || 0);
     const fee = Number(tx?.fee);
     const rate = Number.isFinite(fee) && fee > 0 ? fee / vsize : 0;
-    // a fixed side (a Detailed bundle, bundleSmall) is drawn as given
-    const fixed = Math.floor(Number(tx?.side) || 0);
-    const s = fixed >= 1 ? Math.min(width, fixed) : dither ? ditheredSide(vsize, vpu, width, tx?.txid ?? '') : sideFor(vsize, vpu, width);
-    return { txid: tx?.txid, vsize, rate, s };
+    return { txid: tx?.txid, vsize, rate, s: dither ? ditheredSide(vsize, vpu, width, tx?.txid ?? '') : sideFor(vsize, vpu, width) };
   });
 }
 

@@ -578,8 +578,8 @@ therefore a shareable link.
   - **Viewer modes** (`VIEWER_MODES`). Simple (id `1`) shows the richest cells as
     cubes and the tail as equal aggregate pieces on a 44-unit board. Detailed
     (id `2`) shows every transaction in the next block's worth, from
-    `/api/mempool/dense`, as low slabs on a 24-unit board, one unit per bundle of small transactions (`DENSE_OPTS`:
-    `resolution: 24, bundleSide: 1, slab: 0.3, order: 'diagonal', gridStep: 2`). Both modes use
+    `/api/mempool/dense`, as low slabs on a 96-unit board (`DENSE_OPTS`:
+    `resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8`). Both modes use
     full transaction ids, so switching modes moves tiles rather than emptying and
     refilling the board, and a click on a tile opens it in the explorer.
   - **One viewer everywhere.** `poolViewer()` is used on Overview, Block space,
@@ -670,12 +670,7 @@ flowchart TD
   allowance so the many transactions just over one unit keep their share, at least 1 and
   at most the grid width. `vsizeForSide` is its exact inverse, which the renderer uses to
   cut the aggregate tail into whole squares.
-- **Detailed** first bundles small transactions (`bundleSmall`, `bundleSide: 5`): walking the
-  block richest first, every transaction smaller than a bundle joins the current run, which
-  closes when it reaches a bundle's vbytes and is drawn at exactly 5×5 (a fixed `side` that
-  `packBlock` honours). Only transactions of a bundle's size or more stand alone, so the board
-  fills in order with equal squares. Ids are `bundle:<count>:<first txid>`.
-- **Detailed** uses area-true sides (`ditheredSide`, `dither: true`): a transaction
+- **Detailed** uses area-true sides instead (`ditheredSide`, `dither: true`): a transaction
   of u units is drawn at floor(√u) or one more, the larger with the probability that makes
   its expected area exactly u, the coin a hash of its txid so its side never changes between
   refreshes. Nearest-side rounding drew a live block of mostly 140 vB transactions (1.27
