@@ -196,7 +196,7 @@ The control bar in the corner of the panel has:
 | Mode | What it draws |
 |---|---|
 | **Simple** | The richest ~400 transactions as cubes, as tall as they are wide, with the rest of the block as equal smaller pieces. The best view for seeing which transactions dominate. |
-| **Detailed** | Every transaction in the next block on a 96-unit grid: larger ones as their own squares, the smaller ones bundled, in feerate order, into equal larger squares (hover one to see how many), drawn as low slabs so that thousands of them stay readable. The best view for the block's texture. |
+| **Detailed** | Every transaction in the next block on a 24-unit grid: the small ones bundled in feerate order, one bundle per grid unit (hover one to see how many), and the larger ones as bigger squares on the same grid, drawn as low slabs so that thousands of them stay readable. The best view for the block's texture. |
 
 ![Block space, Detailed](images/block-space-mode2.jpg)
 

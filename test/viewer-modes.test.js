@@ -39,7 +39,7 @@ test('viewer modes: Mode 1 is the viewer as it was; Mode 2 draws every transacti
   assert.equal(two.mode, '2');
   assert.deepEqual(two.args.cells, [{ vbytes: 200, rate: 9, txid: 'aa' }, { vbytes: 150, rate: 3, txid: 'bb' }]);
   assert.equal(two.opts, DENSE_OPTS);
-  assert.equal(DENSE_OPTS.resolution, 96);
+  assert.equal(DENSE_OPTS.resolution, 24);
   assert.equal(DENSE_OPTS.order, 'diagonal');
 });
 
@@ -55,23 +55,39 @@ test('viewer modes are wired: the endpoint, the switch, the remembered choice', 
 
 import { packBlock } from '../public/js/blockpack.js';
 
-test('Mode 2 at 96 units: a realistic block fits at full scale, a typical transaction one unit, the board nearly full', () => {
-  // the live shape (2026-09-11): 3,051 transactions, nearly all 139-141 vB, a few large ones
+import { bundleSmall } from '../public/js/blockpack.js';
+
+test('Detailed packs a realistic block with no holes, in feerate order, at full scale', () => {
+  // the live shape (2026-09-11): nearly all 139-141 vB, a large transaction every 97th. Operator, on
+  // 5x5 bundles on the 96-unit board: "YOU ARE GETTING WORSE AND WORSE!" -- 4.9% holes, a stagger.
   const txs = [];
   let used = 0, i = 0;
   while (used < 1_000_000) {
     const v = i % 97 === 0 ? 1200 + (i % 7) * 900 : 139 + (i % 3);
     if (used + v > 1_000_000) break;
-    txs.push({ txid: `t${i}`, vsize: v, fee: v * (60 - i / 60) });
+    txs.push({ txid: i.toString(16).padStart(64, '0'), vsize: v, fee: v * (60 - i / 60) });
     used += v; i++;
   }
-  const p = packBlock(txs, { resolution: DENSE_OPTS.resolution, blockLimit: 1_000_000 });
+  const R = DENSE_OPTS.resolution;
+  const vpu = vbytesPerUnit(1_000_000, R);
+  const p = packBlock(bundleSmall(txs, vpu, DENSE_OPTS.bundleSide), { resolution: R, blockLimit: 1_000_000, dither: DENSE_OPTS.dither });
   const tallest = p.tiles.reduce((m, t) => Math.max(m, t.y + t.s), 0);
-  const area = p.tiles.reduce((a, t) => a + t.s * t.s, 0);
-  assert.ok(tallest <= DENSE_OPTS.resolution, `fits at full scale (${tallest} rows)`);
-  // the live block measured 94% full; this synthetic one, with a large transaction every 97th, ~83%
-  assert.ok(area / DENSE_OPTS.resolution ** 2 > 0.8, `nearly full (${(area / DENSE_OPTS.resolution ** 2 * 100).toFixed(1)}%)`);
-  assert.ok(p.tiles.filter((t) => t.s === 1).length / p.tiles.length > 0.9, 'a typical transaction is one unit');
+  assert.ok(tallest <= R, `fits at full scale (${tallest} of ${R} rows)`);
+  const occ = new Uint8Array(R * R);
+  let area = 0;
+  for (const t of p.tiles) for (let y = t.y; y < t.y + t.s; y++) for (let x = t.x; x < t.x + t.s; x++) { occ[y * R + x] = 1; area++; }
+  let holes = 0;
+  for (let x = 0; x < R; x++) { let top = -1; for (let y = 0; y < R; y++) if (occ[y * R + x]) top = y; for (let y = 0; y < top; y++) if (!occ[y * R + x]) holes++; }
+  assert.equal(holes, 0, 'no holes: every gap below the surface is filled');
+  assert.ok(area / (R * R) > 0.85, `nearly full (${(area / (R * R) * 100).toFixed(1)}%)`);
+  // feerate order: rows go up as feerates go down (Spearman rank correlation)
+  const ts = p.tiles.map((t) => ({ r: t.rate, y: t.y + t.s / 2 }));
+  const rank = (key, desc) => { const idx = ts.map((_, k) => k).sort((a, b) => (desc ? ts[b][key] - ts[a][key] : ts[a][key] - ts[b][key])); const rk = []; idx.forEach((k, n) => { rk[k] = n; }); return rk; };
+  const rr = rank('r', true), ry = rank('y', false), n = ts.length;
+  const rho = 1 - (6 * rr.reduce((a, v, k) => a + (v - ry[k]) ** 2, 0)) / (n * (n * n - 1));
+  assert.ok(rho > 0.99, `in feerate order (rho ${rho.toFixed(4)})`);
+  const bundles = p.tiles.filter((t) => t.txid.startsWith('bundle:'));
+  assert.ok(bundles.length > 200 && bundles.every((t, k) => t.s === 1 || k === bundles.length - 1 || t.s === DENSE_OPTS.bundleSide), 'bundles are single units');
 });
 
 test('both modes name a transaction the same way, so a switch moves tiles instead of refilling the board', () => {
@@ -158,7 +174,7 @@ test('Detailed draws the block at its true area: a full block fills the board in
     txs.push({ txid: i.toString(16).padStart(64, '0'), vsize: v, fee: v * (60 - i / 60) });
     used += v; i++;
   }
-  const R = DENSE_OPTS.resolution;
+  const R = 96;   // the packer's own rounding, on a fine grid where it bites
   const trueUnits = used / vbytesPerUnit(1_000_000, R);
   const areaOf = (p) => p.tiles.reduce((a, t) => a + t.s * t.s, 0);
   const nearest = packBlock(txs, { resolution: R, blockLimit: 1_000_000 });
@@ -173,7 +189,7 @@ test('Detailed draws the block at its true area: a full block fills the board in
 });
 
 test('Detailed bundles small transactions into larger squares, and says so on hover', () => {
-  assert.equal(DENSE_OPTS.bundleSide, 5);
+  assert.equal(DENSE_OPTS.bundleSide, 1);
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /opts\.bundleSide \? bundleSmall\(toTxs\(cells, vpu\), vpu, opts\.bundleSide\)/);
   assert.match(src, /small transactions\`/);

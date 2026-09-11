@@ -578,8 +578,8 @@ therefore a shareable link.
   - **Viewer modes** (`VIEWER_MODES`). Simple (id `1`) shows the richest cells as
     cubes and the tail as equal aggregate pieces on a 44-unit board. Detailed
     (id `2`) shows every transaction in the next block's worth, from
-    `/api/mempool/dense`, as low slabs on a 96-unit board (`DENSE_OPTS`:
-    `resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8`). Both modes use
+    `/api/mempool/dense`, as low slabs on a 24-unit board, one unit per bundle of small transactions (`DENSE_OPTS`:
+    `resolution: 24, bundleSide: 1, slab: 0.3, order: 'diagonal', gridStep: 2`). Both modes use
     full transaction ids, so switching modes moves tiles rather than emptying and
     refilling the board, and a click on a tile opens it in the explorer.
   - **One viewer everywhere.** `poolViewer()` is used on Overview, Block space,
