@@ -34,7 +34,8 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
   with bounces; cube-on-cube shadows; a refresh countdown and a "refresh now" button.
 - Idle effects at rest: ripples, scans, tides, cascades, twinkles, TRON light cycles and a
   lightning ball that runs along the grid lighting the cubes it passes.
-- Viewer modes: **Simple** (the richest few hundred transactions as cubes) and
+- Viewer modes: **Simple** (the richest few hundred transactions as cubes, the rest as
+  equal pieces coloured by their feerate) and
   **Detailed** (every transaction in the next block, one square each on a 96-unit
   grid, drawn as low slabs, each square area-true so a full block fills the board),
   remembered per browser.

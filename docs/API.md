@@ -477,6 +477,8 @@ The mempool panel's data, including the scatter points and treemap cells that th
 
 - `scatter` rows are `[ageSec, feerate sat/vB, vsize]`, sampled to at most 1500 points. Entries with an unknown age (`time` 0) or no fee are left out, and `ageUnknown` counts the unknown ages.
 - `cells` holds the richest (up to) 400 transactions, then one aggregate cell for the rest.
+  The aggregate carries `strata`: the tail grouped by feerate, richest first, at most 32
+  groups of `{ "vbytes", "rate", "n" }`; the 3D board colours the tail's pieces from them.
 - `projected` cuts the pool, richest feerate first, into 1,000,000 vB blocks. `skipped` is the first block's worth, which the node is assembling itself (see `/api/nextblock`). `blocks` holds the next six, and `rest` sums everything beyond. This is an estimate: the node reports no ancestor data, so a CPFP child is placed at its own feerate.
 - `history` holds the last 60 raw ring rows for count and usage.
 

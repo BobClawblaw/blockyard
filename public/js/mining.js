@@ -56,7 +56,7 @@ export function refreshLabel(nextAt, now, { paused = false, period = 60_000 } = 
 export const VIEWER_MODES = [
   // named Simple and Detailed (operator, 2026-09-11: "We should not call it Goggles Mode. We should call it
   // Detailed. Mode 1 as Simple"); the ids stay '1' and '2' so a remembered choice survives the rename
-  { id: '1', label: 'Simple', title: 'Simple: the richest 400 transactions as cubes, the rest as equal pieces' },
+  { id: '1', label: 'Simple', title: 'Simple: the richest 400 transactions as cubes, the rest as equal pieces coloured by feerate' },
   { id: '2', label: 'Detailed', title: 'Detailed: every transaction in the next block, one square each' },
 ];
 // 96 UNITS, MEASURED (2026-09-11, the live next block: 3,051 transactions, p10/50/90 139/140/141

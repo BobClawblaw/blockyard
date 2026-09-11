@@ -2297,9 +2297,38 @@ function poolCells(vsizes, feerates, entries, { maxCells = 400, coverPct = 0.97 
   if (tail.length) {
     const w = tail.reduce((n, c) => n + c.vbytes, 0);
     const r = tail.reduce((n, c) => n + c.rate * c.vbytes, 0) / Math.max(1, w);
-    cells.push({ vbytes: w, rate: round(r, 2), aggregate: tail.length });
+    cells.push({ vbytes: w, rate: round(r, 2), aggregate: tail.length, strata: tailStrata(tail) });
   }
   return cells;
+}
+
+// THE TAIL IN COLOUR (operator, 2026-09-11: "why can't we do 128 colors in simple mode as well?").
+// Measured that day: the aggregate held 17,118 transactions and 96% of the Simple board's space
+// under ONE weighted-mean feerate (0.49 sat/vB), so however many colours the palette had, almost
+// the whole board was one of them. The cell stays ONE aggregate -- the 2D maps and everything
+// that counts cells are unchanged -- and carries its make-up: the tail (richest first, as sorted
+// above) grouped in geometric feerate steps as wide as the 3D palette's bands (from 0.1 sat/vB,
+// ~8% a step; public/js/feepalette.js), merged down to STRATA_MAX by joining the lightest
+// neighbouring pair. The 3D board colours its equal pieces from these; nothing is claimed about
+// any individual transaction.
+const STRATA_MAX = 32;
+const STRATUM_STEP = Math.log(2000 / 0.1) / 126;
+function tailStrata(tail) {
+  const key = (rate) => (rate < 0.1 ? -1 : Math.floor(Math.log(rate / 0.1) / STRATUM_STEP + 1e-9));
+  const out = [];
+  for (const c of tail) {
+    const k = key(c.rate);
+    const last = out.at(-1);
+    if (last && last.k === k) { last.vbytes += c.vbytes; last.fee += c.rate * c.vbytes; last.n++; }
+    else out.push({ k, vbytes: c.vbytes, fee: c.rate * c.vbytes, n: 1 });
+  }
+  while (out.length > STRATA_MAX) {
+    let best = 0;
+    for (let i = 1; i < out.length - 1; i++) if (out[i].vbytes + out[i + 1].vbytes < out[best].vbytes + out[best + 1].vbytes) best = i;
+    const a = out[best], b = out[best + 1];
+    out.splice(best, 2, { k: a.k, vbytes: a.vbytes + b.vbytes, fee: a.fee + b.fee, n: a.n + b.n });
+  }
+  return out.map((s) => ({ vbytes: s.vbytes, rate: round(s.fee / Math.max(1, s.vbytes), 2), n: s.n }));
 }
 
 function q(sorted, p) {

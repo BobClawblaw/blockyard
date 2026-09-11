@@ -686,7 +686,9 @@ flowchart TD
 packs fresh every time, because stable packing left the resting board ragged.
 
 **Aggregate tail.** The backend sends small transactions as one aggregate cell.
-The renderer splits it into equal pieces whose sides are whole grid units.
+The renderer splits it into equal pieces whose sides are whole grid units. The mempool's
+aggregate also carries `strata` (the tail grouped by feerate, richest first), and each piece
+takes the feerate of the stratum it falls in, so the tail shows its own spread of colours.
 Pieces are renamed `aggregate@x,y` by slot, so an unchanged slot keeps its
 identity and does not animate.
 

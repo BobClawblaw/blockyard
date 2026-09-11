@@ -75,7 +75,25 @@ function aggregatePieces(vsize, count, vpu) {
   return Math.max(1, Math.min(count, 600, Math.round(vsize / exact)));
 }
 
-function toTxs(cells, vpu = 0) {
+// The tail's pieces take the feerate of the stratum they fall in, richest first (the server's
+// strata, 2026-09-11: one mean feerate painted 96% of the Simple board one colour). The number and
+// size of the pieces are exactly as before, so a layout is unchanged; only the colours are new.
+function strataRates(strata, fallback) {
+  if (!Array.isArray(strata) || strata.length < 2) return () => fallback;
+  const total = strata.reduce((a, s) => a + (Number(s.vbytes) || 0), 0);
+  if (!(total > 0)) return () => fallback;
+  return (frac) => {
+    const want = frac * total;
+    let acc = 0;
+    for (const s of strata) {
+      acc += Number(s.vbytes) || 0;
+      if (want < acc) return Math.max(0, Number(s.rate) || 0);
+    }
+    return Math.max(0, Number(strata.at(-1).rate) || 0);
+  };
+}
+
+export function toTxs(cells, vpu = 0) {
   const out = [];
   let i = 0;
   for (const c of cells || []) {
@@ -87,7 +105,8 @@ function toTxs(cells, vpu = 0) {
       const each = Math.max(1, vsize / n);
       // stable ids, or a refresh treats the whole field as departing and
       // arriving and it flashes
-      for (let k = 0; k < n; k++) out.push({ txid: `aggregate-${k}`, vsize: each, fee: rate * each });
+      const rateAt = strataRates(c.strata, rate);
+      for (let k = 0; k < n; k++) out.push({ txid: `aggregate-${k}`, vsize: each, fee: rateAt((k + 0.5) / n) * each });
       i++;
       continue;
     }
