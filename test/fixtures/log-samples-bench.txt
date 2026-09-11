@@ -1,0 +1,26 @@
+2026-09-08 04:31:26.043 [dlc] -- recv 11.1MB/s (avg 10.6MB/s) | write 10.9MB/s (avg 10.8MB/s) | floor 32.0 KB/s (median 353.4) | banned 6/121 | events 0 rot 0 wait 0 help 0 fail 0 abandon (run 206/100/10/102/0) --
+2026-09-08 04:31:26.043 [dlc] == elapsed 1:28:22 | eta 00:08:38:19 | overall: 397852/966011 stored (41.19% of real tip) | in flight 321 of window 4096 through 398172 (oldest gap 0s at 396276, 99.92% landed) | applied=396275 lag=0 ==
+2026-09-08 04:31:19.940 [utxo_live] catchup progress: height=396273/966010 (41.0%) 23.8 blk/s (avg 23.8) eta 00:06:38:48 | read 0% idx 3% verify 1% get 17% put 21% ckpt 58% flush 0% csi 0% other 0% (42.30 ms/blk over 1)
+2026-09-08 04:30:57.369 [utxo_live] compaction done in 3.0s (11 run(s) [1..12) of 12, mid-catchup, newest runs, tombstones kept; started at height 396239): manifest_n 12 -> 4, merged into run 5353, 2 flushed meanwhile, 11 input run(s) unlinked; apply never waited
+2026-09-08 03:02:14.744 [check] checklevel=3 over 6 block(s) [136156..136161]: 1 examined, 5 hole(s), 1 problem(s)
+2026-09-08 03:02:15.783 [dl] outbound 4 = 24.9.164.99:8333 (fd 70) proto=70016 services=0xc49 ua="/Satoshi:31.0.0/" height=966010 addrv2=1
+2026-09-08 03:02:15.858 [dl] archive at 136161, peers announce 966010: 829849 blocks behind -- running the parallel downloader (16 workers)
+2026-09-08 03:02:15.858 [dl] connected 5/8 peer(s); downloading across them...
+2026-09-08 03:03:06.502 [dl] per-block lines and tip announcements are off while the tip is older than maxtipage (initial block download; Core relays no blocks in IBD) -- they resume at the tip
+2026-09-08 03:02:15.870 [dlc] discovered +0 peers (book now 339)
+2026-09-08 03:02:15.871 [dlc] 304 candidate peer(s) in pool
+2026-09-08 03:02:23.884 [dlc] 121 confirmed-live peer(s) (1 probe round(s))
+2026-09-08 04:30:41.273 [dlc]   w15 93.25.150.155:8333    chunks=0    blocks=0      (+0 blk/s, 404.8KB/s)
+2026-09-08 03:08:39.750 [dlc]   w8 16.163.61.38:8333     chunks=0    blocks=0      (+0 blk/s, 0.0B/s) [early-kill, last 0.0B/s, peer BANNED]
+2026-09-08 03:08:39.750 [dlc]   w7 146.148.120.238:8333  chunks=0    blocks=0      (+0 blk/s, 0.0B/s) (Dragging: 2 of 3)
+2026-09-08 03:03:03.668 [dlc]   #3 72.13.212.106:8333     789 KB/s
+2026-09-08 04:30:41.273 [dlc] -- peer status (16/16 worker(s) active) --
+2026-09-08 03:08:50.803 [dlc] -- 22 peer(s) dropped for lacking NODE_WITNESS; 0 redial(s) skipped since --
+2026-09-08 03:03:04.366 [dlc] headers +3 from 57.132.130.217:8333 (total 966011)
+2026-09-08 05:48:32.775 [dlc] -- recv 0.0B/s (avg 0.0B/s) | write 0.0B/s (avg 0.0B/s) | floor 32.0 KB/s (median 0.0) | banned 0/129 | staged 71 commit 1455 | events 0 rot 211 wait 0 help 17 fail 0 abandon (run 0/211/0/17/0) --
+2026-09-08 06:17:11.134 [dlc] -- recv 11.1MB/s (avg 11.1MB/s) | write 11.1MB/s (avg 11.0MB/s) | floor 32.0 KB/s (median 400.3) | banned 5/129 | staged 26 commit 6484 | events 2 rot 0 wait 0 help 0 fail 0 abandon (run 156/438/7/74/0) --
+2026-09-08 06:28:09.856 [dlc] == elapsed 0:39:47 | eta 00:04:13:34 | overall: 332281/966023 stored (34.40% of real tip) | in flight 0 of window 4096 through 332280 (no gap, 100.00% landed) | applied=332280 lag=0 ==
+2026-09-08 05:48:32.775 [dlc] == elapsed 0:00:10 | eta --:--:--:-- | overall: 103681/966023 stored (10.73% of real tip) | in flight 0 of window 4096 through 103680 (no gap, 100.00% landed) | applied=84233 lag=19447 ==
+2026-09-08 05:34:05.870 [serve] inbound 127.0.0.1:34208 accepted -> child pid 3425602 (2/245 inbound)
+2026-09-08 05:34:05.870 [serve] inbound 127.0.0.1:34208 v2 handshake failed -- dropping
+2026-09-08 06:21:35.635 [serve] shutting down (signal 15): tip=965914 outbound_legs=0

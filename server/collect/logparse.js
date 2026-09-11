@@ -1,0 +1,765 @@
+// Pure parsers for the node's own log lines. No I/O here, so the formats can be
+// unit-tested against frozen real lines (test/fixtures/log-samples.txt).
+//
+// Why parse logs at all when there is RPC: three things this node only exposes
+// in its log, each confirmed against the live file --
+//   1. bandwidth. getnettotals() answers {totalbytesrecv:0,totalbytessent:0} in
+//      this deployment, because the peer byte counters live in the forked
+//      download worker. The `[dlc] -- network recv this tick ... --` line is the
+//      real number.
+//   2. per-peer transaction relay. getpeerinfo() answers [] in this deployment
+//      while getconnectioncount() says 13. The `[txrelay] ... via legs
+//      [0:136.38.88.88:8333 +70, ...]` line names the peers and their counts.
+//   3. which peer served which block (`[block] stored ... (via IP:port)`).
+// Every rule below is deliberately tolerant: an unrecognised line still becomes
+// a generic event, because an unexpected format is information, not noise.
+
+const TS_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d{3}) /;
+const TAG_RE = /^\[[a-z0-9_]+(?::\d+)?\]\s*/;
+
+// "1.0KB", "32.0 KB/s", "0.0B", "2.3MB", "128 KB". The node prints decimal
+// units (4096 bytes renders as "4.0KB"), so decode the same way back.
+const SIZE_UNITS = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12, PB: 1e15 };
+export function parseSize(text) {
+  if (text == null) return null;
+  const m = String(text).trim().match(/^([0-9]*\.?[0-9]+)\s*(B|KB|MB|GB|TB|PB)(?:\/s)?$/i);
+  if (!m) return null;
+  const unit = m[2].toUpperCase();
+  return Math.round(parseFloat(m[1]) * SIZE_UNITS[unit]);
+}
+
+export function parseRate(text) {
+  if (text == null) return null;
+  const m = String(text).trim().match(/^([0-9]*\.?[0-9]+)\s*(B|KB|MB|GB|TB)\/s$/i);
+  if (!m) return null;
+  return parseFloat(m[1]) * SIZE_UNITS[m[2].toUpperCase()];
+}
+
+// DD:HH:MM:SS as printed by the heartbeat.
+export function parseUptime(text) {
+  const m = String(text || '').match(/^(\d+):(\d{2}):(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const [, d, h, mi, s] = m;
+  return ((+d * 24 + +h) * 60 + +mi) * 60 * 1000 + +s * 1000;
+}
+
+// The same node prints two different clock widths depending on the line, both
+// seen on 2026-09-08 in the bench log: `elapsed 1:22:01` (H:MM:SS, 3 fields) and
+// `eta 00:07:54:48` (DD:HH:MM:SS, 4 fields). Rightmost field is always seconds,
+// so decode by counting fields instead of assuming a width -- guessing DD would
+// have read the 1h22m elapsed as 1 day 22 minutes.
+export function parseClock(text) {
+  const parts = String(text || '').trim().split(':');
+  if (parts.length < 2 || parts.length > 4) return null;
+  if (!parts.every((p) => /^\d+$/.test(p))) return null;
+  const [s, mi, h, d] = parts.reverse();
+  return (((+(d || 0) * 24 + +h) * 60 + +mi) * 60 + +s) * 1000;
+}
+
+// Split an address like "1.2.3.4:8333" or a CJDNS/I2P form without a port.
+function addrParts(s) {
+  if (!s) return null;
+  const m = s.match(/^(.+):(\d{2,5})$/);
+  if (m) return { host: m[1], port: Number(m[2]), addr: s };
+  return { host: s, port: null, addr: s };
+}
+
+const RULES = [
+  // [dlc] -- network recv this tick: 4.0KB (405.0B/s) | total recv: 2.3MB || disk write this tick: 0.0B (0.0B/s) | total written: 1.9MB --
+  {
+    name: 'bandwidth',
+    re: /\[dlc\]\s*--\s*network recv this tick:\s*(\S+)\s*\(([^)]+)\)\s*\|\s*total recv:\s*(\S+)\s*\|\|\s*disk write this tick:\s*(\S+)\s*\(([^)]+)\)\s*\|\s*total written:\s*(\S+)\s*--/,
+    apply(m) {
+      return {
+        kind: 'bandwidth',
+        netThisTick: parseSize(m[1]),
+        netRate: parseRate(m[2]) ?? parseSize(m[2]),
+        netTotal: parseSize(m[3]),
+        diskThisTick: parseSize(m[4]),
+        diskRate: parseRate(m[5]) ?? parseSize(m[5]),
+        diskTotal: parseSize(m[6]),
+      };
+    },
+  },
+  // [dlc] -- average since start: 0.0B/s recv, 0.0B/s write --
+  {
+    name: 'bwAverage',
+    re: /\[dlc\]\s*--\s*average since start:\s*([^\s]+)\s+recv,\s*([^\s]+)\s+write\s*--/,
+    apply(m) { return { kind: 'bw_average', avgRecv: parseRate(m[1]), avgWrite: parseRate(m[2]) }; },
+  },
+  // [dlc] -- dead-weight floor this tick: 32.0 KB/s (pool median 0.0 KB/s, absolute 32.0 KB/s) --
+  {
+    name: 'deadweight',
+    re: /\[dlc\]\s*--\s*dead-weight floor this tick:\s*([^\s]+(?:\s?[KMG]?B\/s)?)\s*\(pool median\s*([^,]+),\s*absolute\s*([^)]+)\)/,
+    apply(m) {
+      return { kind: 'deadweight', floor: parseRate(m[1].trim()), poolMedian: parseRate(m[2].trim()), absolute: parseRate(m[3].trim()) };
+    },
+  },
+  // [dlc] -- peers banned: 0 of 109 --
+  { name: 'banned', re: /\[dlc\]\s*--\s*peers banned(?: this run)?:\s*(\d+)\s+of\s*(\d+)\s*--/, apply: (m) => ({ kind: 'ban_count', banned: +m[1], of: +m[2], severity: +m[1] > 0 ? 'warn' : 'info' }) },
+  // [dlc] ranked 116 live peer(s) by a 2000-header sample in 44.6s: 39 answered, best 94 KB/s, median 63 KB/s, slowest answering 48 KB/s; the 77 silent rank last
+  {
+    name: 'ranking',
+    re: /\[dlc\]\s*ranked\s*(\d+)\s*live peer\(s\)[^.]*in\s*([\d.]+)s:\s*(\d+)\s*answered,\s*best\s*([^,]+),\s*median\s*([^,]+),\s*slowest answering\s*([^;]+);\s*the\s*(\d+)\s*silent/,
+    apply(m) {
+      return {
+        kind: 'peer_ranking', live: +m[1], sampleSecs: +m[2], answered: +m[3],
+        best: parseRate(m[4].trim()), median: parseRate(m[5].trim()), slowest: parseRate(m[6].trim()), silent: +m[7],
+        // Warn only when the pool is mostly silent -- the phrase 'silent rank last'
+        // appears in healthy runs too, so a keyword match would cry wolf.
+        severity: (+m[3] / Math.max(1, +m[1])) < 0.4 ? 'warn' : 'info',
+      };
+    },
+  },
+  // [dl] heartbeat: tip=965993 peers=12/16 txouts=165335351 uptime=00:14:15:21 sync_failing=10
+  {
+    name: 'heartbeat',
+    re: /\[dl\]\s*heartbeat:\s*tip=(\d+)\s+peers=(\d+)\/(\d+)\s+txouts=(\d+)(?:\s+uptime=(\S+))?(?:\s+sync_failing=(\d+))?/,
+    apply(m) {
+      return {
+        kind: 'heartbeat', tip: +m[1], peersInUse: +m[2], peersWanted: +m[3],
+        txouts: +m[4], uptime: parseUptime(m[5]), syncFailing: m[6] == null ? null : +m[6],
+      };
+    },
+  },
+  // [dl] new block: height=965993 hash=0000... (+2)
+  { name: 'newBlock', re: /\[dl\]\s*new block:\s*height=(\d+)\s+hash=([0-9a-f]{6,})(?:\s+\(\+(\d+)\))?/, apply: (m) => ({ kind: 'new_block', height: +m[1], hashPrefix: m[2], jump: m[3] == null ? 1 : +m[3] }) },
+  // [dl] announced tip height=965993 to 12/13 legs
+  { name: 'announce', re: /\[dl\]\s*announced tip height=(\d+)\s+to\s*(\d+)\/(\d+)\s+legs/, apply: (m) => ({ kind: 'tip_announce', height: +m[1], legsReached: +m[2], legsTotal: +m[3] }) },
+  // [dl] parallel downloader wrote 7 block(s); archive now 965993
+  { name: 'archive', re: /\[dl\]\s*parallel downloader wrote\s*(\d+)\s*block\(s\);\s*archive now\s*(\d+)/, apply: (m) => ({ kind: 'archive_write', blocks: +m[1], archiveHeight: +m[2] }) },
+  // [block] stored height=965923 hash=0000000000000000.. bytes=1464177 tx=6866 (via 193.223.81.8:8333)
+  {
+    name: 'blockStored',
+    re: /\[block\]\s*stored\s+height=(\d+)\s+hash=([0-9a-f.]+)\s+bytes=(\d+)\s+tx=(\d+)(?:\s*\(via\s*([^\)]+)\))?/,
+    apply(m) {
+      const via = addrParts(m[5]);
+      return { kind: 'block_stored', height: +m[1], hashPrefix: m[2].replace(/\.$/, ''), bytes: +m[3], txs: +m[4], via: via?.addr ?? null, viaHost: via?.host ?? null };
+    },
+  },
+  // [mempool] block 965993: removed 175 pool tx (confirmed/conflicted)
+  { name: 'mempoolBlock', re: /\[mempool\]\s*block\s*(\d+):\s*removed\s*(\d+)\s*pool tx/, apply: (m) => ({ kind: 'mempool_block_drain', height: +m[1], removed: +m[2] }) },
+  // [tx_accept] last 30s: +77 accepted (mempool 4033) | rejected: 333 missing-inputs, 0 invalid, 18 policy | 0 already confirmed
+  {
+    name: 'txAccept',
+    re: /\[tx_accept\]\s*last\s*(\d+)s:\s*\+(\d+)\s*accepted\s*\(mempool\s*(\d+)\)\s*\|\s*rejected:\s*(\d+)\s*missing-inputs,\s*(\d+)\s*invalid,\s*(\d+)\s*policy\s*\|\s*(\d+)\s*already confirmed/,
+    apply(m) {
+      return {
+        kind: 'tx_accept', windowSec: +m[1], accepted: +m[2], mempool: +m[3],
+        rejectMissingInputs: +m[4], rejectInvalid: +m[5], rejectPolicy: +m[6], alreadyConfirmed: +m[7],
+        acceptRate: +(+m[2] / Math.max(1, +m[1])).toFixed(2),
+      };
+    },
+  },
+  // [txrelay] last 60s: +195 tx accepted via legs [0:83.106.166.127:8333 +39, 4:136.38.88.88:8333 +114] (mempool 9624)
+  {
+    name: 'txRelay',
+    re: /\[txrelay\]\s*last\s*(\d+)s:\s*\+(\d+)\s*tx accepted via legs\s*\[([^\]]*)\]\s*\(mempool\s*(\d+)\)/,
+    apply(m) {
+      const legs = [];
+      for (const part of m[3].split(',')) {
+        const pm = part.trim().match(/^(\d+):(\S+?)\s*\+(\d+)$/);
+        if (pm) {
+          const a = addrParts(pm[2]);
+          legs.push({ leg: +pm[1], addr: a?.addr ?? pm[2], host: a?.host ?? pm[2], accepted: +pm[3] });
+        }
+      }
+      return { kind: 'tx_relay', windowSec: +m[1], accepted: +m[2], legs, mempool: +m[4], relayRate: +(+m[2] / Math.max(1, +m[1])).toFixed(2) };
+    },
+  },
+  // [txrelay] last 60s: +5 tx accepted (mempool 12) -- the no-legs form
+  { name: 'txRelayBare', re: /\[txrelay\]\s*last\s*(\d+)s:\s*\+(\d+)\s*tx accepted(?! via)\s*\(mempool\s*(\d+)\)/, apply: (m) => ({ kind: 'tx_relay', windowSec: +m[1], accepted: +m[2], legs: [], mempool: +m[3] }) },
+  // [txrelay] orphans: 0 held, 71004 parked, 16288 resolved, 54716 dropped; 1p1c: 2 accepted, 0 failed
+  {
+    name: 'orphans',
+    re: /\[txrelay\]\s*orphans:\s*(\d+)\s*held,\s*(\d+)\s*parked,\s*(\d+)\s*resolved,\s*(\d+)\s*dropped(?:;\s*1p1c:\s*(\d+)\s*accepted,\s*(\d+)\s*failed)?/,
+    apply(m) {
+      return { kind: 'orphans', held: +m[1], parked: +m[2], resolved: +m[3], dropped: +m[4], oneP1C: m[5] == null ? null : { accepted: +m[5], failed: +m[6] } };
+    },
+  },
+  // [txrelay] orphan drops: 54714 ttl, 0 evicted, 2 rejected | parents requested 76410, notfound 60971, re-requested after timeout 16714, retried on another peer 532026 (gave up 132632, in flight 379), sync deferred 15150
+  {
+    name: 'orphanDetail',
+    re: /\[txrelay\]\s*orphan drops:\s*(\d+)\s*ttl,\s*(\d+)\s*evicted,\s*(\d+)\s*rejected\s*\|\s*parents requested\s*(\d+),\s*notfound\s*(\d+),\s*re-requested after timeout\s*(\d+),\s*retried on another peer\s*(\d+)\s*\(gave up\s*(\d+),\s*in flight\s*(\d+)\)(?:,\s*sync deferred\s*(\d+))?/,
+    apply(m) {
+      return {
+        kind: 'orphan_detail', ttl: +m[1], evicted: +m[2], rejected: +m[3], requested: +m[4],
+        notfound: +m[5], reRequested: +m[6], retriedOtherPeer: +m[7], gaveUp: +m[8], inFlight: +m[9],
+        syncDeferred: m[10] == null ? null : +m[10],
+      };
+    },
+  },
+  // [dial] 208.161.116.211:8333 connected over v2
+  { name: 'dialOk', re: /\[dial\]\s*(\S+?)\s+connected over\s*(v\d)/, apply: (m) => ({ kind: 'peer_connect', addr: m[1], host: addrParts(m[1])?.host, transport: m[2], reason: 'connected' }) },
+  // [dial] 172.233.47.67:8333 lacks NODE_WITNESS (services=0xc05) -- dropping...
+  { name: 'dialReject', re: /\[dial\]\s*(\S+?)\s+lacks NODE_WITNESS \(services=(\S+?)\)/, apply: (m) => ({ kind: 'peer_reject', addr: m[1], host: addrParts(m[1])?.host, reason: 'lacks NODE_WITNESS', services: m[2] }) },
+  // [dial] 154.5.180.120:8333: dialing as block-relay-only (1 of 2)
+  { name: 'dialBlockRelay', re: /\[dial\]\s*(\S+?):\s*dialing as block-relay-only\s*\((\d+) of (\d+)\)/, apply: (m) => ({ kind: 'peer_dial', addr: m[1], host: addrParts(m[1])?.host, reason: 'block-relay-only' }) },
+  // [mux:7] leg replaced: connected next pool peer 208.161.116.211:8333 (fd 266) addrv2=1
+  { name: 'legReplaced', re: /\[mux:(\d+)\]\s*leg replaced:\s*connected next pool peer\s*(\S+)\s*\(fd\s*(\d+)\)\s*addrv2=(\d)/, apply: (m) => ({ kind: 'peer_connect', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, fd: +m[3], addrv2: m[4] === '1', reason: 'leg replaced' }) },
+  // [mux:9] next peer 86.147.78.44:8333 unreachable: connect: Operation now in progress (leg stays down)
+  { name: 'legDown', re: /\[mux:(\d+)\]\s*next peer\s*(\S+)\s+unreachable:\s*(.+?)\s*\(leg stays down\)/, apply: (m) => ({ kind: 'peer_unreachable', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, reason: m[3].trim() }) },
+  // [dl:7] 209.38.162.73:8333 connection dropped (revents 0x11); re-dialing
+  { name: 'legDropped', re: /\[dl:(\d+)\]\s*(\S+?)\s+connection dropped\s*\(revents\s*(\S+?)\)(?:;\s*(\S+))?/, apply: (m) => ({ kind: 'peer_drop', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, revents: m[3], follow: m[4] || null }) },
+  // [net] feeler 47.232.103.88:8333 -> dead
+  { name: 'feeler', re: /\[net\]\s*feeler\s*(\S+?)\s*->\s*dead/, apply: (m) => ({ kind: 'feeler_dead', addr: m[1], host: addrParts(m[1])?.host }) },
+  // [check] block data is NOT laid out monotonically (first break at height 964924) -- ...
+  { name: 'archiveHole', re: /\[check\]\s*block data is NOT laid out monotonically\s*\(first break at height\s*(\d+)\)/, apply: (m) => ({ kind: 'archive_hole', height: +m[1], severity: 'warn' }) },
+  // [config] conns: max=256 outbound=11 (full=8 blockrelay=2 feeler=1) inbound=245 feeler_every=120s
+  {
+    name: 'connBudget',
+    re: /\[config\]\s*conns:\s*max=(\d+)\s+outbound=(\d+)\s*\(full=(\d+) blockrelay=(\d+) feeler=(\d+)\)\s*inbound=(\d+)(?:\s+feeler_every=(\d+)s)?/,
+    apply(m) {
+      return {
+        kind: 'conn_budget', max: +m[1], outbound: +m[2], fullRelay: +m[3],
+        blockRelay: +m[4], feeler: +m[5], inboundCap: +m[6], feelerEverySec: m[7] == null ? null : +m[7],
+      };
+    },
+  },
+  // [mempool] recent-rejects filter: 128 KB shared (...)
+  { name: 'rejectFilter', re: /\[mempool\]\s*recent-rejects filter:\s*([^\s]+)\s*(?:KB|MB|B)?\s+shared/, apply: (m) => ({ kind: 'reject_filter', size: parseSize(m[1] + (/\s?(KB|MB|B)$/i.test(m[1]) ? '' : 'KB')) }) },
+
+  // ---- the 2026-09-08 bench build (v0.0.1, built 03:02) rewrote these lines ----
+  // Measured the same day against that node's own log: of 1,702 lines the rules
+  // above matched 30, and of its 1,006 `[dlc]` lines exactly 1 matched. The same
+  // facts are still there, in a new grammar:
+  //   prod  [dlc] -- network recv this tick: 4.0KB (405.0B/s) | total recv: 2.3MB ||
+  //               disk write this tick: 0.0B (0.0B/s) | total written: 1.9MB --
+  //   bench [dlc] -- recv 11.2MB/s (avg 10.5MB/s) | write 11.2MB/s (avg 10.7MB/s) |
+  //               floor 32.0 KB/s (median 499.6) | banned 6/121 | events 0 rot 0 ...
+  // It decodes to the SAME `bandwidth` kind, so nothing downstream has to know
+  // which build it is talking to. The new line has no running totals, so
+  // netTotal/diskTotal are absent (rendered `–`), never zero.
+  //
+  // `(median 499.6)` is printed WITHOUT a unit. It is left in `poolMedianText`
+  // and `poolMedian` stays null: if it is KB/s it is a peer speed, if it is B/s
+  // it is 2000x smaller, and the log does not say which. Rule 3 -- no invented
+  // unit to fill a gap.
+  {
+    name: 'bandwidthTick',
+    re: /\[dlc\]\s*--\s*recv\s*([^\s(]+)\s*\(avg\s*([^)]+)\)\s*\|\s*write\s*([^\s(]+)\s*\(avg\s*([^)]+)\)\s*\|\s*floor\s*([^()]+?)\s*\(median\s*([^)]+)\)\s*\|\s*banned\s*(\d+)\/(\d+)(?:\s*\|\s*(events.*?))?\s*--/,
+    apply(m) {
+      const counters = {};
+      for (const [, k, v] of (m[9] || '').matchAll(/\b(events|rot|wait|help|fail)\s+(\d+)/g)) counters[k] = +v;
+      return {
+        kind: 'bandwidth',
+        netRate: parseRate(m[1]),
+        avgNetRate: parseRate(m[2]),
+        diskRate: parseRate(m[3]),
+        avgDiskRate: parseRate(m[4]),
+        floor: parseRate((m[5] || '').trim()),
+        poolMedianText: (m[6] || '').trim() || null,
+        banned: +m[7],
+        bannedOf: +m[8],
+        worker: Object.keys(counters).length ? counters : null,
+        workerText: (m[9] || '').trim() || null,
+        // Explicit severity: the generic classifier warns on the word "banned",
+        // which would mark every 10-second tick as a warning even at banned=0.
+        severity: +m[7] > 0 ? 'warn' : 'info',
+      };
+    },
+  },
+  // The same tick line, decoded field by field instead of end to end. Written
+  // because the rigid version above died twice in two hours: at 05:42 the node
+  // added `staged 1` and 26 of 26 tick lines matched nothing; by 06:14 it had added
+  // a second one (`staged 38 commit 6288`). A labelled line is now scanned one
+  // labelled field at a time, so an added, removed or reordered field costs that
+  // field and not the measurement. Fields no rule knows about are kept verbatim in
+  // `extraValues` and named in `extraFields` -- a new field becomes visible data
+  // rather than a silently unparsed line, and nobody has to guess what `staged`
+  // means before the numbers work again.
+  //
+  // It requires two recognised fields to claim the line, so the other
+  // `[dlc] -- … --` banners (`peer status`, `peers banned: N of M`, `dead-weight
+  // floor this tick:`, `average since start:`) stay with their own rules.
+  {
+    name: 'bandwidthTickFields',
+    re: /\[dlc\]\s*--\s*(.+?)\s*--/,
+    apply(m) {
+      const out = { kind: 'bandwidth', extraFields: [], extraValues: null };
+      let claims = 0;
+      for (const seg of m[1].split('|').map((s) => s.trim()).filter(Boolean)) {
+        let r;
+        if ((r = /^recv\s+(\S+)(?:\s*\(avg\s+([^)]+)\))?/.exec(seg))) {
+          out.netRate = parseRate(r[1]); if (r[2]) out.avgNetRate = parseRate(r[2]); claims += 1;
+        } else if ((r = /^write\s+(\S+)(?:\s*\(avg\s+([^)]+)\))?/.exec(seg))) {
+          out.diskRate = parseRate(r[1]); if (r[2]) out.avgDiskRate = parseRate(r[2]); claims += 1;
+        } else if ((r = /^floor\s+(\S+\s*(?:[KMGTP]?B\/s)?)(?:\s*\(median\s+([^)]+)\))?/i.exec(seg))) {
+          out.floor = parseRate(r[1].trim());
+          // Still no unit printed for the median, so still no unit invented.
+          if (r[2]) out.poolMedianText = r[2].trim();
+          claims += 1;
+        } else if ((r = /^banned\s+(\d+)\/(\d+)/.exec(seg))) {
+          out.banned = +r[1]; out.bannedOf = +r[2]; claims += 1;
+        } else if (/^events\b/.test(seg)) {
+          const counters = {};
+          for (const [, k, v] of seg.matchAll(/\b(events|rot|wait|help|fail)\s+(\d+)/g)) counters[k] = +v;
+          if (Object.keys(counters).length) out.worker = counters;
+          out.workerText = seg;
+          claims += 1;
+        } else {
+          // One segment can carry more than one new field (`staged 26 commit 6484`),
+          // so name each `label number` pair inside it. Half-parsing a new field is
+          // still better than losing the line: the name is what tells you the node
+          // changed, and the value is what lets you decide later what it means.
+          const pairs = [...seg.matchAll(/\b([a-z][a-z0-9_]*)\s+(-?\d+(?:\.\d+)?)/g)];
+          if (pairs.length) {
+            for (const [, label, value] of pairs) {
+              (out.extraFields ||= []).push(label);
+              (out.extraValues ||= {})[label] = value;
+            }
+          } else {
+            const label = /^([a-z][a-z0-9_]*)\b/.exec(seg)?.[1];
+            if (label) {
+              (out.extraFields ||= []).push(label);
+              (out.extraValues ||= {})[label] = seg.slice(label.length).trim();
+            }
+          }
+        }
+      }
+      if (claims < 2) return null;
+      if (out.extraFields?.length) out.unexpected = `tick line carries fields no rule knows yet: ${out.extraFields.join(', ')}`;
+      out.severity = (out.banned ?? 0) > 0 ? 'warn' : 'info';
+      return out;
+    },
+  },
+  // Field-scanned progress line. The rigid rule above died on 2026-09-08 when the
+  // parenthetical changed shape and 185 of 185 progress lines matched nothing:
+  //   (oldest gap 0s at 388878, 99.93% landed)   ->  (no gap, 100.00% landed)
+  // and `eta` can print `--:--:--:--` when the node has no estimate. Decoded field
+  // by field: an unknown eta is null, an unknown gap phrasing is kept verbatim, and
+  // the stored/applied figures survive whatever the node does to the prose.
+  {
+    name: 'dlcProgressFields',
+    re: /\[dlc\]\s*==\s*(.+?)\s*==/,
+    apply(m) {
+      const out = { kind: 'dlc_progress', extraFields: [] };
+      let claims = 0;
+      for (const seg of m[1].split('|').map((s) => s.trim()).filter(Boolean)) {
+        let r;
+        if ((r = /^elapsed\s+(\S+)/.exec(seg))) { out.elapsedMs = parseClock(r[1]); claims += 1; }
+        else if ((r = /^eta\s+(\S+)/.exec(seg))) {
+          // `--:--:--:--` is the node saying it has no estimate. parseClock returns
+          // null for it, which is exactly right: absent, not zero, not a huge number.
+          out.nodeEtaMs = parseClock(r[1]);
+          out.etaText = r[1];
+          claims += 1;
+        } else if ((r = /^overall:\s*(\d+)\/(\d+)\s*stored\s*(?:\((\d+\.?\d*)%\s*of\s*real tip\))?/.exec(seg))) {
+          out.stored = +r[1]; out.storedOf = +r[2]; if (r[3] != null) out.storedPct = +r[3]; claims += 1;
+        } else if ((r = /^in flight\s+(\d+)(?:\s*of\s*window\s*(\d+))?(?:\s*through\s*(\d+))?\s*(?:\((.*)\))?/.exec(seg))) {
+          out.inFlight = +r[1];
+          if (r[2] != null) out.windowSize = +r[2];
+          if (r[3] != null) out.throughHeight = +r[3];
+          const paren = (r[4] || '').trim();
+          if (paren) {
+            out.gapText = paren;
+            const landed = /([\d.]+)%\s*landed/.exec(paren);
+            if (landed) out.landedPct = +landed[1];
+            const gap = /oldest gap\s*(\d+)s\s*at\s*(\d+)/.exec(paren);
+            if (gap) { out.oldestGapSec = +gap[1]; out.oldestGapAtHeight = +gap[2]; }
+            else if (/^no gap/i.test(paren)) out.oldestGapSec = 0;
+          }
+          claims += 1;
+        } else if ((r = /^applied=(\d+)\s+lag=(\d+)/.exec(seg))) {
+          out.applied = +r[1]; out.appliedLag = +r[2]; claims += 1;
+        } else {
+          const pairs = [...seg.matchAll(/\b([a-z][a-z0-9_]*)\s+(-?\d+(?:\.\d+)?)/g)];
+          for (const [, label, value] of pairs) {
+            (out.extraFields ||= []).push(label);
+            (out.extraValues ||= {})[label] = value;
+          }
+        }
+      }
+      if (claims < 2) return null;
+      if (out.extraFields?.length) out.unexpected = `progress line carries fields no rule knows yet: ${out.extraFields.join(', ')}`;
+      return out;
+    },
+  },
+  // [serve] inbound 127.0.0.1:34184 accepted -> child pid 3425259 (1/245 inbound)
+  // The node forks a child per inbound connection, so this is the inbound half of
+  // the peer table -- which matters most when the handshake then fails, because
+  // getpeerinfo never sees the connection at all. 646 of these arrived in half an
+  // hour on the production node, all from 127.0.0.1, all failing v2.
+  {
+    name: 'serveInboundAccept',
+    re: /\[serve\]\s*inbound\s*(\S+)\s*accepted ->\s*child pid\s*(\d+)\s*\((\d+)\/(\d+) inbound\)/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return {
+        kind: 'peer_connect', direction: 'inbound', addr: a?.addr ?? m[1], host: a?.host ?? m[1],
+        childPid: +m[2], inboundCount: +m[3], inboundCap: +m[4], reason: 'inbound accepted',
+      };
+    },
+  },
+  // [serve] inbound 127.0.0.1:34184 v2 handshake failed -- dropping
+  // The peer is gone before the protocol version is known, so no RPC ever learns
+  // it existed. 323 accepts, 323 failures: whatever is probing the node's P2P port
+  // locally cannot speak BIP324.
+  {
+    name: 'serveHandshakeFail',
+    re: /\[serve\]\s*inbound\s*(\S+)\s*(v\d) handshake failed\s*--+\s*dropping/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return {
+        kind: 'peer_reject', addr: a?.addr ?? m[1], host: a?.host ?? m[1],
+        transport: m[2], reason: `${m[2]} handshake failed`, severity: 'warn',
+      };
+    },
+  },
+  // [serve] shutting down (signal 15): tip=965914 outbound_legs=0
+  // The monitor's RPC goes away a moment later, so a restart that is not in the log
+  // looks like a network fault. This line says what actually happened, including
+  // the tip the node last had -- useful when the question is "did it lose blocks".
+  {
+    name: 'serveShutdown',
+    re: /\[serve\]\s*shutting down\s*\(signal (\d+)\):\s*tip=(\d+)(?:\s+outbound_legs=(\d+))?/,
+    apply(m) {
+      return { kind: 'node_shutdown', signal: +m[1], tipAtShutdown: +m[2], outboundLegs: m[3] == null ? null : +m[3], severity: 'warn' };
+    },
+  },
+  // [dlc]   w1 84.215.4.221:8333     chunks=54   blocks=2160   (+10 blk/s, 941.2KB/s)
+  // [dlc]   w2 164.90.253.129:8333   chunks=0    blocks=0      (+0 blk/s, 0.0B/s) [early-kill, last 0.0B/s, peer BANNED]
+  // [dlc]   w3 13.41.145.246:8333    chunks=0    blocks=0      (+0 blk/s, 0.0B/s) (Dragging: 1 of 3)
+  //
+  // Per-peer DOWNLOAD RATE for one named peer. Nothing in the RPC offers this:
+  // getpeerinfo on the production build answers [] and on the bench build answers
+  // rows whose bytessent/bytesrecv sum to getnettotals -- 3 KB of a ~47 GB run
+  // (MEASUREMENTS 3). This line is the only per-peer throughput that exists.
+  // blk/s can be negative: the node prints `+-46 blk/s` when a worker is being
+  // re-windowed, and that is decoded as negative rather than dropped.
+  {
+    name: 'dlcWorkerPeer',
+    re: /\[dlc\]\s*w(\d+)\s+(\S+?)\s+chunks=(\d+)\s+blocks=(\d+)\s*\(\+(-?\d+) blk\/s,\s*([^)]+)\)(?:\s*[\[(]([^\])]*?)[\])])?/,
+    apply(m) {
+      const a = addrParts(m[2]);
+      const note = (m[7] || '').trim() || null;
+      const banned = /banned/i.test(note || '');
+      return {
+        kind: 'peer_throughput', worker: +m[1],
+        addr: a?.addr ?? m[2], host: a?.host ?? m[2],
+        chunks: +m[3], blocks: +m[4], blkPerSec: +m[5], rate: parseRate(m[6].trim()),
+        note, banned,
+        severity: banned || /early-kill/i.test(note || '') ? 'warn' : 'info',
+      };
+    },
+  },
+  // [dlc]   #1 57.132.130.217:8333    1270 KB/s   (a row of the ranking table)
+  {
+    name: 'dlcRankRow',
+    re: /\[dlc\]\s*#(\d+)\s+(\S+?)\s+([0-9.]+\s*[KMG]?B\/s)\s*$/,
+    apply(m) {
+      const a = addrParts(m[2]);
+      return { kind: 'peer_speed', rank: +m[1], addr: a?.addr ?? m[2], host: a?.host ?? m[2], rate: parseRate(m[3].trim()) };
+    },
+  },
+  // [dlc] -- peer status (16/16 worker(s) active) --
+  { name: 'dlcWorkerStatus', re: /\[dlc\]\s*--\s*peer status\s*\((\d+)\/(\d+) worker\(s\) active\)/, apply: (m) => ({ kind: 'worker_status', active: +m[1], total: +m[2], severity: +m[1] < +m[2] ? 'warn' : 'info' }) },
+  // [dlc] -- 1 peer(s) dropped for lacking NODE_WITNESS; 0 redial(s) skipped since --
+  { name: 'dlcPeerDropCount', re: /\[dlc\]\s*--\s*(\d+) peer\(s\) dropped for lacking NODE_WITNESS;\s*(\d+) redial\(s\) skipped since\s*--/, apply: (m) => ({ kind: 'peer_drop_count', dropped: +m[1], redialsSkipped: +m[2], severity: +m[1] > 0 ? 'warn' : 'info' }) },
+  // [dlc] headers +3 from 57.132.130.217:8333 (total 966011)
+  { name: 'dlcHeaders', re: /\[dlc\]\s*headers\s*\+(\d+)\s*from\s*(\S+?)\s*\(total\s*(\d+)\)/, apply: (m) => { const a = addrParts(m[2]); return { kind: 'headers_from', headers: +m[1], addr: a?.addr ?? m[2], host: a?.host ?? m[2], total: +m[3] }; } },
+  // [dlc] == elapsed 1:22:12 | eta 00:07:54:27 | overall: 391483/966011 stored (40.53% of real tip)
+  //         | in flight 279 of window 4096 through 391761 (oldest gap 0s at 388878, 99.93% landed)
+  //         | applied=388876 lag=1 ==
+  // The node's OWN sync arithmetic, including its own ETA -- kept as a separate
+  // labelled figure and never merged with the monitor's measured rate (rules 4 and
+  // 9). Stored, not streamed: 424 of these arrive per 80 minutes of IBD.
+  //
+  // Parsed by `dlcProgressFields` above, which subsumes the rigid rule this used to
+  // have: an end-anchored pattern here matched 185 of 185 progress lines on the old
+  // grammar and then 0 of 185 when the parenthetical became `(no gap, 100.00%
+  // landed)`. Two code paths for one line is how that happens.
+  // [utxo_live] catchup progress: height=135639/966010 (14.0%) 23.3 blk/s (avg 23.3)
+  //               eta 00:09:55:05 | read 0% idx 0% verify 70% ... (42.40 ms/blk over 1)
+  // A third rate, from the state-applying thread rather than the download worker.
+  // Again: stored beside the others, not averaged with them.
+  {
+    name: 'catchupProgress',
+    re: /\[utxo_live\]\s*catchup progress:\s*height=(\d+)\/(\d+)\s*\((\d+\.?\d*)%\)\s*([\d.]+)\s*blk\/s\s*\(avg\s*([\d.]+)\)\s*eta\s*(\S+)\s*\|\s*(.*?)\s*\(([\d.]+)\s*ms\/blk over (\d+)\)/,
+    apply(m) {
+      // Groups: 1 height 2 of 3 pct 4 blk/s 5 avg 6 eta 7 phase text 8 ms/blk 9 samples.
+      // An earlier cut of this apply() read 8/9/10 and returned msPerBlk 155 for a
+      // line printing "15.90 ms/blk" -- caught by decoding a real line, not by the
+      // test I would have written around my own assumption.
+      const phases = {};
+      for (const [, name, pct] of (m[7] || '').matchAll(/\b([a-z0-9_]+)\s+(\d+(?:\.\d+)?)%/g)) phases[name] = +pct;
+      return {
+        kind: 'catchup_progress',
+        height: +m[1], of: +m[2], pct: +m[3], blkPerSec: +m[4], avgBlkPerSec: +m[5],
+        nodeEtaMs: parseClock(m[6]), phases: Object.keys(phases).length ? phases : null,
+        msPerBlk: +m[8], samples: +m[9],
+      };
+    },
+  },
+  // [utxo_live] compaction done in 0.3s (12 run(s) [0..12) of 12, mid-catchup, full merge;
+  //   started at height 138932): manifest_n 12 -> 1, merged into run 36, 0 flushed meanwhile,
+  //   12 input run(s) unlinked; apply never waited
+  {
+    name: 'utxoCompaction',
+    re: /\[utxo_live\]\s*compaction done in\s*([\d.]+)s\s*\((\d+) run\(s\)\s*\[[^\]]*\)\s*of\s*(\d+)[^;]*;\s*started at height\s*(\d+)\)?:\s*manifest_n\s*(\d+)\s*->\s*(\d+),\s*merged into run\s*(\d+),\s*(\d+) flushed meanwhile,\s*(\d+) input run\(s\) unlinked;\s*apply\s*(never waited|waited[^;,]*)/,
+    apply(m) {
+      const waited = m[10] !== 'never waited';
+      return {
+        kind: 'utxo_compaction',
+        secs: +m[1], runsMerged: +m[2], runsTotal: +m[3], startedAtHeight: +m[4],
+        manifestFrom: +m[5], manifestTo: +m[6], runId: +m[7],
+        flushedMeanwhile: +m[8], inputsUnlinked: +m[9],
+        applyWaited: waited, detail: m[10],
+        // "apply waited" is the one clause that says UTXO compaction stalled
+        // block validation, which is a thing an operator needs to see unprompted.
+        severity: waited ? 'warn' : 'info',
+      };
+    },
+  },
+  // [check] checklevel=3 over 6 block(s) [136156..136161]: 1 examined, 5 hole(s), 1 problem(s)
+  {
+    name: 'checkLevel',
+    re: /\[check\]\s*checklevel=(\d+)\s*over\s*(\d+) block\(s\)\s*\[(\d+)\.\.(\d+)\]:\s*(\d+) examined,\s*(\d+) hole\(s\),\s*(\d+) problem\(s\)/,
+    apply(m) {
+      const problems = +m[7];
+      return {
+        kind: 'checklevel', level: +m[1], blocks: +m[2], from: +m[3], to: +m[4],
+        examined: +m[5], holes: +m[6], problems,
+        severity: problems > 0 ? 'warn' : 'info',
+      };
+    },
+  },
+  // [dl] outbound 4 = 24.9.164.99:8333 (fd 70) proto=70016 services=0xc49 ua="/Satoshi:31.0.0/" height=966010 addrv2=1
+  // Peer identity. On the production build getpeerinfo answers [] and on the
+  // bench build it answers 5 rows covering 3 KB of a ~47 GB run (MEASUREMENTS 3),
+  // so the log remains the only complete list of who we are talking to.
+  {
+    name: 'peerIdentify',
+    re: /\[dl\]\s*(outbound|inbound)\s*(\d+)\s*=\s*(\S+?)\s*\(fd\s*(\d+)\)\s*proto=(\d+)\s*services=(\S+?)\s*ua="([^"]*)"\s*height=(\d+)(?:\s+addrv2=(\d))?/,
+    apply(m) {
+      const a = addrParts(m[3]);
+      return {
+        kind: 'peer_identify', direction: m[1], index: +m[2],
+        addr: a?.addr ?? m[3], host: a?.host ?? m[3], fd: +m[4], proto: +m[5],
+        services: m[6], userAgent: m[7], peerHeight: +m[8], addrv2: m[9] == null ? null : m[9] === '1',
+      };
+    },
+  },
+  // [dl] archive at 136161, peers announce 966010: 829849 blocks behind -- running the parallel downloader (16 workers)
+  {
+    name: 'ibdBehind',
+    re: /\[dl\]\s*archive at\s*(\d+),\s*peers announce\s*(\d+):\s*(\d+) blocks behind\s*--+\s*running the parallel downloader\s*\((\d+) workers\)/,
+    apply: (m) => ({ kind: 'ibd_behind', archiveHeight: +m[1], announcedTip: +m[2], behind: +m[3], workers: +m[4] }),
+  },
+  // [dl] connected 5/8 peer(s); downloading across them...
+  { name: 'dlConnected', re: /\[dl\]\s*connected\s*(\d+)\/(\d+)\s*peer\(s\);\s*downloading/, apply: (m) => ({ kind: 'dl_connected', connected: +m[1], wanted: +m[2] }) },
+  // [dl] per-block lines and tip announcements are off while the tip is older than maxtipage
+  //      (initial block download; Core relays no blocks in IBD) -- they resume at the tip
+  //
+  // Kept as a rule because it is the *reason* the per-peer panels are empty during
+  // IBD. When a panel has no data, this line is the answer, and an unexplained
+  // blank is what rule 3 is about.
+  {
+    name: 'relayPaused',
+    re: /\[dl\]\s*per-block lines and tip announcements are off\s*while the tip is older than maxtipage\s*\(([^)]*)\)/,
+    apply: (m) => ({ kind: 'relay_paused', reason: m[1].trim(), resumes: 'at the tip' }),
+  },
+  // [dlc] discovered +0 peers (book now 339) | 304 candidate peer(s) in pool
+  //      | 121 confirmed-live peer(s) (1 probe round(s))
+  { name: 'peerDiscovery', re: /\[dlc\]\s*discovered\s*([-+]\d+)\s*peers\s*\(book now\s*(\d+)\)/, apply: (m) => ({ kind: 'peer_discovery', delta: +m[1], book: +m[2] }) },
+  { name: 'peerCandidates', re: /\[dlc\]\s*(\d+) candidate peer\(s\) in pool/, apply: (m) => ({ kind: 'peer_candidates', candidates: +m[1] }) },
+  { name: 'peerLiveProbe', re: /\[dlc\]\s*(\d+) confirmed-live peer\(s\)\s*\((\d+) probe round\(s\)\)/, apply: (m) => ({ kind: 'peer_live_probe', live: +m[1], probeRounds: +m[2] }) },
+  // [txrelay] addrv2 gossip: +3 address(es) to the book
+  // 418 occurrences on production, median 22 s apart. This is the chatter that made
+  // the corpus parse ratio fall to 73.4% today while costing no measurement at all --
+  // parsed so the ratio means something again, and so book growth is a figure.
+  { name: 'addrGossip', re: /\[txrelay\]\s*addrv2 gossip:\s*\+(\d+)\s*address\(es\)\s*to the book/, apply: (m) => ({ kind: 'addr_gossip', added: +m[1] }) },
+  // [dl] outbound top-up: 4 dial(s) failed, first 172.104.174.241:8333: peer lacks NODE_WITNESS
+  // The reason is the finding, so it is kept verbatim: 'peer lacks NODE_WITNESS' and
+  // 'handshake failed (rc=0)' are different problems. Aggregate in the monitor --
+  // median 59 s, p95 393 s apart on production.
+  {
+    name: 'dialTopUpFails',
+    re: /\[dl\]\s*outbound top-up:\s*(\d+)\s*dial\(s\) failed(?:,\s*first\s+(\S+):\s*(.+?))?\s*$/,
+    apply(m) {
+      const a = m[2] ? addrParts(m[2]) : null;
+      return {
+        kind: 'dial_failures', failed: +m[1], firstHost: a?.host ?? null, firstAddr: a?.addr ?? null,
+        reason: (m[3] || '').trim() || null,
+        severity: +m[1] > 0 ? 'warn' : 'info',
+      };
+    },
+  },
+  // [dl] updating utxo: applied 2 block(s), now at height 966001, live=165338542 (0.34s)
+  // Validation throughput from the thread that applies blocks: a third rate, and it
+  // stays a third rate. The download rate, `[utxo_live] catchup progress` and this one
+  // measure different things and are never averaged (rule 9).
+  {
+    name: 'utxoApply',
+    re: /\[dl\]\s*updating utxo:\s*applied\s*(\d+)\s*block\(s\),\s*now at height\s*(\d+),\s*live=(\d+)\s*\(([\d.]+)s\)/,
+    apply(m) {
+      const blocks = +m[1], secs = +m[4];
+      return {
+        kind: 'utxo_apply', blocks, height: +m[2], utxoCount: +m[3], secs,
+        blocksPerSec: secs > 0 ? +(blocks / secs).toFixed(2) : null,
+      };
+    },
+  },
+  // [dl] header mirror +1 from the archive (now 966055, archive tip 966054)
+  // How far the header chain is running ahead of what has been applied.
+  {
+    name: 'headerMirror',
+    re: /\[dl\]\s*header mirror\s*\+(\d+)\s*from the archive\s*\(now\s*(\d+),\s*archive tip\s*(\d+)\)/,
+    apply(m) {
+      return { kind: 'header_mirror', added: +m[1], headersNow: +m[2], archiveTip: +m[3], gap: +m[2] - +m[3] };
+    },
+  },
+  // [dial] 31.47.202.112:8333: dialing in the background (ipv4)
+  // Aggregate only: 52 of these in the sampled window would be a feed of nothing
+  // but dial attempts.
+  {
+    name: 'dialAttempt',
+    re: /\[dial\]\s*(\S+?):\s*dialing in the background\s*(?:\((\w+)\))?/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return { kind: 'dial_attempt', addr: a?.addr ?? m[1], host: a?.host ?? m[1], family: m[2] ?? null };
+    },
+  },
+  // [dial] 172.104.174.241:8333: background dial failed: peer lacks NODE_WITNESS
+  // One per host with a reason, at ~20 per window: that volume belongs in the peer
+  // event list, which is what it is for.
+  {
+    name: 'dialBackgroundFail',
+    re: /\[dial\]\s*(\S+?):\s*background dial failed:\s*(.+?)\s*$/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return { kind: 'peer_reject', direction: 'outbound', addr: a?.addr ?? m[1], host: a?.host ?? m[1], reason: m[2].trim(), severity: 'warn' };
+    },
+  },
+  // [dial] no global IPv6 route on this host: ipv6 peers are unreachable (cjdns unaffected)
+  // A capability the host lacks, not a peer problem, and it explains an ipv6 peer
+  // count of zero better than the count does.
+  {
+    name: 'noIPv6',
+    re: /\[dial\]\s*no global IPv6 route on this host:\s*(ipv6 peers are unreachable)\s*(\(([^)]*)\))?/,
+    apply(m) {
+      return { kind: 'network_note', note: m[1], caveat: (m[3] || '').trim() || null, severity: 'info' };
+    },
+  },
+];
+
+// Which measurements must keep arriving, and how long a silence counts as a format
+// change rather than a quiet phase.
+//
+// Why this exists: four grammars changed on 2026-09-08 and the corpus-wide parse
+// ratio flagged none of them, because a ratio over every line measures the corpus
+// and not the rule (rule 16). The ratio then cut the other way an hour later --
+// production dropped to 73.4% purely because `addrv2 gossip` chatter grew, costing
+// nothing.
+//
+// Gates are p95 x 8, clamped to [10 min, 30 min], from cadences measured on both
+// live nodes the same day (production: 355-640 occurrences per shape):
+//
+//   shape                  median    p95     max     gate
+//   heartbeat                65s    152s   1657s     20 min
+//   relay legs               64s    120s   1842s     16 min
+//   orphans                  65s    152s   1657s     20 min
+//   accepts and rejects      33s     86s   1652s     12 min
+//   address gossip           22s     87s    902s     12 min
+//   bandwidth tick           10s     17s     17s     10 min   (IBD only)
+//   download progress        10s     17s     17s     10 min   (IBD only)
+//
+// Left unwatched, with the numbers that justify it: `[dl] updating utxo`
+// (460/1868/3669 s) and `header mirror` (502/2054/3669 s) are bursty, and
+// `ban_count`, `relay_paused`, `ibd_behind` and the discovery lines are one-shot or
+// phase-dependent. Watching an irregular line produces a warning that is wrong often
+// enough to be ignored, which is worse than no warning.
+//
+// A shape is watched only after it has matched at least once (armed). That is how
+// build differences are handled without a build table: the bench build never emits
+// `heartbeat`, and production emits a bandwidth tick twice in several hours because
+// it is synced. Neither should be a warning.
+export const SHAPES = [
+  { shape: 'bandwidth rate', rules: ['bandwidthTick', 'bandwidthTickFields'], gateMs: 600_000, ibdOnly: true },
+  { shape: 'download progress', rules: ['dlcProgressFields'], gateMs: 600_000, ibdOnly: true },
+  { shape: 'heartbeat', rules: ['heartbeat'], gateMs: 1_200_000 },
+  { shape: 'relay legs', rules: ['txRelay', 'txRelayBare'], gateMs: 960_000 },
+  { shape: 'accepts and rejects', rules: ['txAccept'], gateMs: 720_000 },
+  { shape: 'orphans', rules: ['orphans'], gateMs: 1_200_000 },
+  { shape: 'address gossip', rules: ['addrGossip'], gateMs: 720_000 },
+];
+
+// The shape a rule belongs to, for the liveness bookkeeping in the monitor.
+// Built once: rule name -> shape label.
+export const RULE_TO_SHAPE = new Map(
+  SHAPES.flatMap((s) => s.rules.map((r) => [r, s.shape])),
+);
+
+// Coarse severity so the UI can colour the feed without understanding each tag.
+function classify(tag, msg) {
+  if (/\b(error|failed|failure|unreachable|refus|denied|dropped|not laid out|abort|fatal|panic|corrupt|OOM|killed)\b/i.test(msg)) return 'warn';
+  if (/\b(warn|warning|stall|banned|silent rank last)\b/i.test(msg)) return 'warn';
+  if (/\b(connected|accepted|stored|wrote|resolved|done|synced|bound|listening)\b/i.test(msg)) return 'info';
+  return 'info';
+}
+
+// The node logs local time with no UTC offset, so assemble the date in local
+// time. Date.parse of a non-ISO string is implementation-defined; explicit
+// fields are not.
+function localFromLogTs(dateTime, ms) {
+  const m = dateTime.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+  if (!m) return Date.now();
+  const [, y, mo, d, h, mi, s] = m;
+  return new Date(+y, +mo - 1, +d, +h, +mi, +s, +ms).getTime();
+}
+
+// One line in, one event out (or null for a continuation/blank line).
+export function parseLine(line) {
+  if (!line) return null;
+  const trimmed = line.replace(/\r$/, '');
+  if (!trimmed.trim()) return null;
+
+  let ts = Date.now();
+  let rest = trimmed;
+  const tsm = trimmed.match(TS_RE);
+  if (tsm) {
+    ts = localFromLogTs(tsm[1], tsm[2]);
+    rest = trimmed.slice(tsm[0].length);
+  }
+
+  let tag = null;
+  const tagm = rest.match(TAG_RE);
+  if (tagm) { tag = tagm[0].replace(/[\[\]\s]/g, ''); rest = rest.slice(tagm[0].length); }
+  const tagBase = tag ? tag.split(':')[0] : null;
+
+  for (const rule of RULES) {
+    const m = rest.match(rule.re) ?? trimmed.match(rule.re);
+    if (m) {
+      const out = rule.apply(m);
+      if (out) {
+        out.ts = ts;
+        out.tag = tag;
+        out.tagBase = tagBase;
+        out.text = rest.trim();
+        out.rule = rule.name;
+        out.severity = out.severity ?? classify(tagBase, rest);
+        return out;
+      }
+    }
+  }
+
+  return {
+    kind: 'raw',
+    ts,
+    tag,
+    tagBase,
+    text: rest.trim(),
+    severity: classify(tagBase, rest),
+    rule: null,
+  };
+}
+
+// Lines arrive in chunks; keep the trailing partial line for the next round.
+export function splitLines(buf, state = { carry: '' }) {
+  const text = state.carry + buf;
+  const parts = text.split('\n');
+  state.carry = parts.pop() ?? '';
+  const out = [];
+  for (const p of parts) { const e = parseLine(p); if (e) out.push(e); }
+  return out;
+}

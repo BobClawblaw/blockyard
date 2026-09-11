@@ -1,0 +1,1008 @@
+// API surface. Every handler returns a plain object; the server serialises it and
+// turns thrown HttpError into a JSON envelope. Nothing here writes to the node
+// except the /action route, which is opt-in, role-gated and audited.
+import { classifyMethod, allowlistSummary, ACTIONS, actionAllowed, NODE_REFUSES } from '../rpc/allowlist.js';
+import { SERIES } from '../store/history.js';
+import { randomPassword } from '../auth/users.js';
+import { formatEta, formatBytes } from '../util/fmt.js';
+import { xSearch, xTx, xBlock, xAddress } from './explorer.js';
+
+// Dollar figures for the explorer: a spot price if one is at hand within 1.5 s -- never a slower
+// page for want of one (server/collect/markets.js spot()).
+async function withUsd(app, r) {
+  if (!r?.ok || !app.markets) return r;
+  const p = await Promise.race([app.markets.spot().catch(() => null), new Promise((res) => { setTimeout(res, 1500, null).unref?.(); })]);
+  return { ...r, usd: p?.usd ?? null };
+}
+
+export class HttpError extends Error {
+  constructor(status, message, { code = null, detail = null } = {}) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
+const ban = (user) => ({ ok: false, reason: 'CSRF token missing or incorrect', status: 403, user });
+
+function needRole(ctx, role) {
+  const rank = { viewer: 0, operator: 1, admin: 2 };
+  if ((rank[ctx.user?.role] ?? -1) < (rank[role] ?? 99)) {
+    // In open mode the shortfall is structural, not personal: name the switch that
+    // changes it instead of telling an anonymous visitor they lack a role they have
+    // no way to acquire.
+    if (ctx.app?.cfg?.auth?.enabled === false) {
+      throw new HttpError(403, 'accounts are disabled, so this endpoint has no one to authorise; start with BMC_MON_AUTH=1 to enable sign-in, users and the audit trail');
+    }
+    throw new HttpError(403, `this needs role "${role}"; you are "${ctx.user?.role ?? 'anonymous'}"`);
+  }
+}
+
+function pickNode(ctx, app) {
+  const wanted = ctx.query.node || ctx.query.nodeId;
+  if (!wanted) return app.primary;
+  const m = app.monitors.get(wanted);
+  if (!m) throw new HttpError(404, `no node "${wanted}"; known: ${[...app.monitors.keys()].join(', ')}`);
+  return m;
+}
+
+function parseRange(text, fallbackMs = 3600_000) {
+  if (!text) return fallbackMs;
+  const m = String(text).match(/^(\d+(?:\.\d+)?)\s*(s|m|h|d)?$/i);
+  if (!m) return fallbackMs;
+  const n = Number(m[1]);
+  const unit = (m[2] || 's').toLowerCase();
+  const mult = { s: 1000, m: 60_000, h: 3600_000, d: 86_400_000 }[unit];
+  return Math.max(1000, Math.min(31 * 86_400_000, n * mult));
+}
+
+const RANGES = { '15m': 900_000, '1h': 3600_000, '6h': 21600_000, '24h': 86400_000, '7d': 604800_000 };
+
+// Which source backs each panel -- stated per mode, because the answer genuinely
+// differs. Every claim below is a measurement from 2026-09-08, and the RPC-only
+// column is build-dependent in a way that no RPC call can tell you: the build
+// that published 2,116,236,872 bytes and the build that published 0 both report
+// subversion /BitcoinMachineCode:0.0.1/.
+function sourcesFor(logEnabled) {
+  const logOnly = 'no RPC source for this; it exists only in the node log';
+  return [
+    { panel: 'sync bar', source: 'getblockchaininfo blocks/headers + verificationprogress', note: 'kept as two separate figures (rule 9)' },
+    logEnabled
+      ? { panel: 'bandwidth', source: 'node log [dlc] tick lines', note: 'the deployed build answers getnettotals 0/0; the 03:02 bench build answers real totals (11.56 MB/s by delta against 11.2 MB/s stated in its own log)' }
+      : { panel: 'bandwidth', source: 'getnettotals delta rate (RPC-only mode)', note: 'works when the counters move. Measured 2026-09-09: the production daemon read 0/0 at 09:36 and 23,955,131 bytes received at 17:36 with no restart in between, so this row is a question to re-ask, not an answer to remember (MEASUREMENTS 23). When the counter is flat the panel is empty, never 0 B/s' },
+    logEnabled
+      ? { panel: 'peer identity', source: 'node log (relay legs, worker lines, connects)', note: 'getpeerinfo returns [] on the deployed build; the 03:02 bench build answers 21 rows with per-peer bytes' }
+      : { panel: 'peer identity', source: 'getpeerinfo (RPC-only mode, promoted to the 15 s tier)', note: '[] on the deployed build means no peer panel at all; on newer builds rows sum to 70.29% of getnettotals, so they are a subset, not a breakdown' },
+    logEnabled
+      ? { panel: 'peer book', source: 'getaddrmaninfo (RPC) + log [dlc] discovery lines', note: 'production addrman measured: 52,877 tried (ipv4 36,482 / ipv6 9,046 / onion 6,304 / i2p 1,045)' }
+      : { panel: 'peer book', source: 'getaddrmaninfo (RPC)', note: 'the only peer-set figure RPC-only mode keeps; the log\'s "book now N" and "confirmed-live" counts are lost' },
+    logEnabled
+      ? { panel: 'banned peers', source: 'node log [dlc] banned N/M', note: 'listbanned answered [] while the same node\'s log said banned 8/114 -- worker bans are not in the stored ban table' }
+      : { panel: 'banned peers', source: 'listbanned (stored ban table only)', note: 'the download worker\'s per-run bans have no RPC source; that count is unavailable, not zero' },
+    { panel: 'disk write rate', source: logEnabled ? 'node log [dlc] write field' : 'none (RPC-only mode)', note: logEnabled ? 'getnettotals carries no write counter' : logOnly },
+    { panel: 'mempool ingest + rejects', source: logEnabled ? 'node log [tx_accept] / [txrelay]' : 'none (RPC-only mode)', note: logEnabled ? 'pool counts also come from getmempoolinfo' : logOnly },
+    { panel: 'mempool feerate', source: 'getrawmempool verbose (vsize, fees.base)', note: 'no depends/ancestorcount fields in this node\'s reply' },
+    { panel: 'block stats', source: 'getblockstats', note: 'per-height fee, txs, total_size/total_weight and feerate percentiles. The size shown is total_size -- the sum of transaction sizes, not the serialized block (the 80-byte header and the txid-count varint are excluded), and the row carries that basis as sizeBasis. size/weight/strippedsize are getblock fields and are not statistics this endpoint has: asking for them by name returns 31 keys and none of them (MEASUREMENTS 24)' },
+    { panel: 'node\'s own IBD eta', source: logEnabled ? 'node log [dlc] == / [utxo_live] catchup' : 'none (RPC-only mode)', note: 'kept separate from the monitor\'s measured rate, never merged (rule 4)' },
+    { panel: 'validation stalls / archive holes', source: logEnabled ? 'node log [utxo_live] / [check]' : 'none (RPC-only mode)', note: logOnly },
+  ];
+}
+
+export const routes = [
+  // ---------------------------------------------------------------- public
+  {
+    method: 'GET', path: '/api/build', auth: 'none', handler: async (ctx, app) => {
+      // Computed once per request: reporting one digest in `build` and answering
+      // `matchesClient` from a second one would be two answers to one question.
+      const live = await app.buildId();
+      return {
+        version: app.version,
+        // Live, not the value this process read at boot. The question this endpoint exists
+        // to answer is "is the code in my tab the code on disk?", and on a box that
+        // deploys by copying files over a running service -- which is this box, and the
+        // reason the id is a file digest rather than a git SHA -- the boot value stops
+        // being that answer the moment anyone edits public/. Editing one asset and
+        // leaving the service up made every page report "you are running an older
+        // build", because the page was stamped with the live digest while the API still
+        // quoted the boot one.
+        build: live,
+        bootBuild: app.build,
+        // The page sends what it was served with; the answer is whether they agree.
+        // This exists because "did my fix land?" cost fifteen minutes each time it was
+        // asked on 2026-09-08: an unversioned script behind a revalidating ETag is
+        // indistinguishable from a stale one from inside the tab.
+        matchesClient: ctx.query.build ? String(ctx.query.build) === live : null,
+        scheme: app.scheme,
+        tls: app.tls,
+        uptimeSec: Math.round((Date.now() - app.startedAt) / 1000),
+      };
+    },
+  },
+  {
+    method: 'GET', path: '/api/health', auth: 'none', handler: (ctx, app) => {
+      const nodes = [...app.monitors.values()].map((m) => ({
+        id: m.id, label: m.label, online: m.rpc.telemetry().online,
+        // Without this the `required` filter below sees `optional` undefined on
+        // every node, treats ALL of them as required, and the optional-node fix
+        // silently does nothing. Behaviour is asserted in
+        // test/health-semantics.test.js, not just pattern-matched.
+        optional: !!m.cfg.optional,
+        chain: m.state.chain, tip: m.state.chainInfo?.blocks ?? null,
+        lastError: m.state.lastError?.message ?? null,
+      }));
+      // What "ok" means, since uptime probes key on it. Requiring EVERY
+      // configured node to be up was wrong in a way I introduced myself: making
+      // the benchmark node a default meant that benchmark ending turned the whole
+      // app red ("ok": false) while it was monitoring its real node perfectly.
+      // An optional node that has gone away is a note, not a failure.
+      const required = nodes.filter((n) => !n.optional);
+      const degraded = nodes.filter((n) => !n.online).map((n) => n.id);
+      return {
+        ok: app.monitors.size > 0 && required.every((n) => n.online),
+        degraded,
+        version: app.version,
+        build: app.build,
+        scheme: app.scheme,
+        tls: app.tls,
+        uptimeSec: Math.round((Date.now() - app.startedAt) / 1000),
+        authRequired: app.cfg.auth.enabled,
+        nodes,
+      };
+    },
+  },
+
+  // ------------------------------------------------------------------ auth
+  {
+    method: 'POST', path: '/api/login', auth: 'none', body: true, csrf: false,
+    handler: async (ctx, app) => {
+      // Accounts off: do not run the KDF against a password nobody can own. This is
+      // also the honest answer — "accounts are disabled" beats "invalid username or
+      // password", which implies a credential exists to be wrong about.
+      if (!app.cfg.auth.enabled) {
+        throw new HttpError(403, 'accounts are disabled on this monitor; it is open without sign-in (start it with BMC_MON_AUTH=1 to require accounts)', { code: 'accounts_disabled' });
+      }
+      // Per-address throttle in front of the KDF. LoginGuard answers "this username
+      // keeps failing", and the per-user token bucket cannot apply here (there is no
+      // user yet), so before this a distributed grind -- many addresses, a few
+      // attempts each -- sat below every threshold the code had. It is also the only
+      // thing standing between a cheap flood and the scrypt KDF (~50 ms, ~16 MB per
+      // guess) running on the request thread until the box stops answering.
+      const rl = app.loginLimiter?.check(`login:${ctx.ip}`, 1);
+      if (rl && !rl.ok) {
+        await app.audit({ type: 'login-throttled', username: String(ctx.body?.username ?? '').toLowerCase().trim() || null, ip: ctx.ip, retryAfterMs: rl.retryAfterMs });
+        throw new HttpError(429, `too many login attempts from this address; retry in ${Math.ceil(rl.retryAfterMs / 1000)}s`, { code: 'throttled' });
+      }
+      const username = String(ctx.body?.username ?? '').toLowerCase().trim();
+      const password = String(ctx.body?.password ?? '');
+      if (!username || !password) throw new HttpError(400, 'username and password are both required');
+      const gate = app.guard.status(username, ctx.ip);
+      if (gate.blocked) {
+        throw new HttpError(429, `too many failed logins; retry in ${Math.ceil(gate.retryAfterMs / 1000)}s`, { code: 'locked' });
+      }
+      const result = await app.users.verify(username, password);
+      if (!result.ok) {
+        const lock = app.guard.noteFailure(username, ctx.ip);
+        await app.audit({ type: 'login', ok: false, username, ip: ctx.ip, reason: result.reason, locked: lock.locked.length > 0 });
+        // Same message for "no such user" and "wrong password": the account's
+        // existence is not information this endpoint hands out.
+        throw new HttpError(401, 'invalid username or password', { code: 'bad_credentials' });
+      }
+      if (result.upgraded) {
+        // Say it once, in the log and the audit trail rather than in the UI: an
+        // operator who raises auth.scrypt needs to know it took effect, and "it
+        // applies on the next login" is only checkable if that login reports.
+        app.log({ level: 'info', msg: `rehashed ${username}'s password at the configured cost (N ${result.upgraded.from.N} -> ${result.upgraded.to.N})` });
+        await app.audit({ type: 'kdf-upgrade', username, from: result.upgraded.from, to: result.upgraded.to, ip: ctx.ip });
+      }
+      app.guard.noteSuccess(username, ctx.ip);
+      const { token, session } = app.sessions.create(result.user, { ip: ctx.ip, userAgent: ctx.req.headers['user-agent'] });
+      await app.sessions.save().catch(() => {});
+      await app.audit({ type: 'login', ok: true, username, ip: ctx.ip });
+      ctx.setCookie(app.cfg.auth.cookieName, token, { maxAgeMs: app.cfg.auth.sessionTtlMs, secure: app.cfg.auth.secureCookie });
+      // Readable by JS on purpose: it is the CSRF double-submit value.
+      ctx.setCookie('bmcmon_csrf', session.csrf, { httpOnly: false, maxAgeMs: app.cfg.auth.sessionTtlMs, secure: app.cfg.auth.secureCookie });
+      return { ok: true, user: publicUser(result.user), csrf: session.csrf };
+    },
+  },
+  {
+    method: 'POST', path: '/api/logout', auth: 'any', csrf: true,
+    handler: async (ctx, app) => {
+      // Nothing to end when there was never a session; answer honestly rather than
+      // writing an anonymous "logout" row into a trail that cannot attribute it.
+      if (!app.cfg.auth.enabled) return { ok: true, accounts: false, note: 'accounts are off, so there is no session to end' };
+      if (ctx.token) app.sessions.destroy(ctx.token);
+      await app.sessions.save().catch(() => {});
+      ctx.clearCookie(app.cfg.auth.cookieName);
+      ctx.clearCookie('bmcmon_csrf');
+      await app.audit({ type: 'logout', ok: true, username: ctx.user.username, ip: ctx.ip });
+      return { ok: true };
+    },
+  },
+  {
+    method: 'GET', path: '/api/me', auth: 'any',
+    // Open mode is reported, not assumed: `accounts:false` is what the UI keys the
+    // header pill and the hidden sign-out button off, and `note` says the same thing
+    // in words so nobody has to infer the posture from a missing button.
+    handler: (ctx, app) => (ctx.user?.open ? {
+      user: publicUser(ctx.user),
+      accounts: false,
+      sessions: [],
+      note: 'no sign-in: this monitor is open to anyone who can reach it, read-only',
+      actions: visibleActions(app.cfg, ctx.user.role),
+      capabilities: {
+        canCallRpc: true,
+        canAct: false,
+        actionsEnabled: app.cfg.actions.enabled,
+        // Node writes stay refused in open mode unless the operator opted into
+        // exactly that, twice (config.actions.allowWritesWithoutAuth).
+        writesRequireAccounts: !app.cfg.actions.allowWritesWithoutAuth,
+        allowedActions: [],
+        ceiling: 'viewer',
+      },
+    } : {
+      user: publicUser(ctx.user),
+      accounts: true,
+      sessions: app.sessions.listFor(ctx.user.id).map((s) => ({ ...s, current: ctx.session && s.createdAt === ctx.session.createdAt })),
+      actions: visibleActions(app.cfg, ctx.user.role),
+      capabilities: {
+        canCallRpc: true,
+        canAct: app.cfg.actions.enabled && app.cfg.actions.allow.length > 0,
+        actionsEnabled: app.cfg.actions.enabled,
+        allowedActions: app.cfg.actions.allow,
+        ceiling: ctx.user.role,
+      },
+    }),
+  },
+  {
+    method: 'POST', path: '/api/logout-all', auth: 'any', csrf: true,
+    handler: async (ctx, app) => {
+      if (!app.cfg.auth.enabled) throw new HttpError(403, 'accounts are disabled (start with BMC_MON_AUTH=1 to enable them)');
+      const n = app.sessions.destroyForUser(ctx.user.id);
+      await app.sessions.save().catch(() => {});
+      ctx.clearCookie(app.cfg.auth.cookieName);
+      await app.audit({ type: 'logout-all', ok: true, username: ctx.user.username, sessions: n, ip: ctx.ip });
+      return { ok: true, revoked: n };
+    },
+  },
+
+  // -------------------------------------------------------------- read model
+  { method: 'GET', path: '/api/state', auth: 'any', handler: (ctx, app) => fullState(ctx, app) },
+  {
+    // The sync bar's endpoint on its own: small enough to poll hard from a
+    // status widget without paying for the whole read model.
+    method: 'GET', path: '/api/sync', auth: 'any',
+    handler: (ctx, app) => {
+      const m = pickNode(ctx, app);
+      const s = m.snapshot({ seriesRanges: {} });
+      return { node: s.id, sync: s.sync, tip: s.tip, chain: s.chain, ibd: s.ibd, health: { rpc: { online: s.health.rpc.online, lastError: s.health.lastError } } };
+    },
+  },
+  { method: 'GET', path: '/api/mempool', auth: 'any', handler: (ctx, app) => mempoolView(pickNode(ctx, app)) },
+  // Viewer Mode 2: every transaction in the next block's worth of the pool (monitor.js denseBlock)
+  {
+    method: 'GET', path: '/api/mempool/dense', auth: 'any',
+    handler: (ctx, app) => { const m = pickNode(ctx, app); return { node: m.id, ...(m.mempoolDense ?? { at: null, n: 0, v: [], r: [], id: [] }) }; },
+  },
+  { method: 'GET', path: '/api/peers', auth: 'any', handler: (ctx, app) => peersView(pickNode(ctx, app)) },
+  { method: 'GET', path: '/api/net', auth: 'any', handler: (ctx, app) => netView(pickNode(ctx, app)) },
+  { method: 'GET', path: '/api/mining', auth: 'any', handler: (ctx, app) => ({ node: pickNode(ctx, app).id, ...pickNode(ctx, app).miningView() }) },
+  {
+    // The block being built right now. On demand by design: the node spends 1.3-1.5 s of
+    // its single RPC thread answering this, so the page that shows it asks for it, and the
+    // answer is shared with anyone else watching inside the freshness window.
+    method: 'GET', path: '/api/nextblock', auth: 'any',
+    handler: async (ctx, app) => {
+      const m = pickNode(ctx, app);
+      const stale = Number(ctx.query.stale ?? 15000);
+      const res = await m.fetchTemplate({ staleMs: Number.isFinite(stale) ? stale : 15000, force: ctx.query.refresh === '1' });
+      return { node: m.id, ...(res ?? { unavailable: 'no answer' }) };
+    },
+  },
+  {
+    method: 'GET', path: '/api/blocks', auth: 'any',
+    handler: (ctx, app) => {
+      const m = pickNode(ctx, app);
+      const limit = clampInt(ctx.query.limit, 1, 400, 90);
+      const s = m.snapshot({ seriesRanges: {} });
+      return { node: m.id, blocks: s.blocks.recent.slice(0, limit), stats: blockStats(s.blocks.recent) };
+    },
+  },
+  // ------------------------------------------------- block / tx drill-down
+  //
+  // "Which transaction?" used to be answerable only by typing an RPC call into the
+  // console, which is a shell, not a view. These two routes are read-only, go
+  // through the same serialized lane as everything else (rule 1), and are
+  // deliberately narrow about what they ask the node:
+  //
+  //   * getblock verbosity=2 is never called. Measured 2026-09-08 (MEASUREMENTS §6):
+  //     this node returns 11 MB of hex for one block at verbosity 2 AND omits the
+  //     fee/deltafee fields Core includes, so the verbose form is simultaneously the
+  //     slowest option and the least informative. verbosity=1 gives header + txids.
+  //   * No transaction hex is ever returned. A caller who needs it is one
+  //     /api/rpc getblock away; a dashboard proxying 11 MB per click is a denial of
+  //     service against a single-threaded server, wearing a nice font.
+  {
+    method: 'GET', path: '/api/block', auth: 'any',
+    handler: async (ctx, app) => blockDrill(ctx, app),
+  },
+  {
+    method: 'GET', path: '/api/tx', auth: 'any',
+    handler: async (ctx, app) => txDrill(ctx, app),
+  },
+  // The explorer (server/http/explorer.js): block, transaction and address pages, each one
+  // batched lane turn (or two). They answer { ok: false, error, hint } for a bad query.
+  { method: 'GET', path: '/api/x/search', auth: 'any', handler: (ctx, app) => xSearch(pickNode(ctx, app), ctx.query) },
+  { method: 'GET', path: '/api/x/tx', auth: 'any', handler: async (ctx, app) => withUsd(app, await xTx(pickNode(ctx, app), ctx.query)) },
+  { method: 'GET', path: '/api/x/block', auth: 'any', handler: async (ctx, app) => withUsd(app, await xBlock(pickNode(ctx, app), ctx.query)) },
+  { method: 'GET', path: '/api/x/address', auth: 'any', handler: async (ctx, app) => withUsd(app, await xAddress(pickNode(ctx, app), ctx.query)) },
+  // Exchange prices (server/collect/markets.js). Asking is what keeps the feed polling.
+  {
+    method: 'GET', path: '/api/markets', auth: 'any',
+    handler: (ctx, app) => {
+      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BMC_MON_MARKETS=0 or markets.enabled=false)' };
+      app.markets.touch();
+      return app.markets.view();
+    },
+  },
+  // The depth chart: the books as cumulative depth, and the snapshot `ago` seconds earlier.
+  {
+    method: 'GET', path: '/api/markets/depth', auth: 'any',
+    handler: (ctx, app) => {
+      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BMC_MON_MARKETS=0 or markets.enabled=false)' };
+      app.markets.touch();
+      return app.markets.depthView(Number(ctx.query.ago) || 600);
+    },
+  },
+  {
+    method: 'GET', path: '/api/events', auth: 'any',
+    handler: (ctx, app) => {
+      const since = ctx.query.since != null ? Number(ctx.query.since) : 0;
+      const limit = clampInt(ctx.query.limit, 1, 1000, 200);
+      // Default: what this monitor observed and decided. Node log lines are a separate
+      // source and are not shown as panels any more; ?source=all opts back in for a
+      // person debugging the parser itself.
+      const src = ctx.query.source ? String(ctx.query.source).split(',') : ['monitor'];
+      const sev = ctx.query.severity ? String(ctx.query.severity).split(',') : null;
+      const kinds = ctx.query.kind ? String(ctx.query.kind).split(',') : null;
+      const q = ctx.query.q ? String(ctx.query.q).toLowerCase() : null;
+      let rows = app.history.eventsSinceSeq(since, limit * 4);
+      if (!src.includes('all')) rows = rows.filter((r) => src.includes(r.source ?? 'monitor'));
+      if (sev) rows = rows.filter((r) => sev.includes(r.severity));
+      if (kinds) rows = rows.filter((r) => kinds.includes(r.kind));
+      if (q) rows = rows.filter((r) => `${r.text ?? ''} ${r.tag ?? ''} ${r.kind ?? ''}`.toLowerCase().includes(q));
+      return { events: rows.slice(0, limit), maxSeq: app.history.eventsSeq, count: rows.length };
+    },
+  },
+  {
+    method: 'GET', path: '/api/series', auth: 'any',
+    handler: (ctx, app) => {
+      const m = pickNode(ctx, app);
+      const names = (ctx.query.name ? String(ctx.query.name).split(',') : ['mempool']);
+      const range = parseRange(ctx.query.range ?? ctx.query.since, 3600_000);
+      const points = clampInt(ctx.query.points, 20, 2000, 240);
+      const bucketMs = Math.max(1000, Math.round(range / points / 1000) * 1000);
+      const out = { node: m.id, rangeMs: range, bucketMs, series: {} };
+      for (const name of names) {
+        const fields = SERIES[name];
+        if (!fields) throw new HttpError(400, `unknown series "${name}"; known: ${Object.keys(SERIES).join(', ')}`);
+        const wantFields = ctx.query.field ? String(ctx.query.field).split(',') : fields.filter((f) => f !== 't');
+        const bad = wantFields.filter((f) => !fields.includes(f));
+        if (bad.length) throw new HttpError(400, `field(s) ${bad.join(', ')} not in series "${name}"; known: ${fields.join(', ')}`);
+        const ring = app.history.forNode(m.id).ring(name);
+        out.series[name] = Object.fromEntries(wantFields.map((f) => [
+          f, ring.series(f, { since: Date.now() - range, bucketMs, agg: ctx.query.agg ?? 'last' }),
+        ]));
+      }
+      return out;
+    },
+  },
+  {
+    // Every configured node with its sync state, so the UI can say WHICH node is
+    // which. A single-node deployment that reports "Synced 100%" while a second
+    // node three directories away is 72% through an IBD is not lying, but it is
+    // not useful either -- and it is exactly what happened on this box.
+    method: 'GET', path: '/api/nodes', auth: 'any',
+    handler: (ctx, app) => ({
+      nodes: [...app.monitors.values()].map((m) => {
+        let sync = null;
+        try { sync = m.snapshot({ seriesRanges: {} }).sync; } catch { /* not yet populated */ }
+        return {
+          id: m.id, label: m.label, color: m.color, rpcUrl: m.node?.rpcUrl ?? m.rpc.url,
+          chain: m.state.chain, online: m.rpc.telemetry().online,
+          optional: !!m.cfg.optional,
+          syncState: sync?.state ?? null, pct: sync?.pct ?? null,
+          height: sync?.height ?? null, headers: sync?.headers ?? null,
+          syncing: !!sync && sync.state !== 'synced' && sync.state !== 'unknown',
+        };
+      }),
+      primary: app.primary?.id ?? null,
+      // Any node needing attention, so a default landing page lands on the work
+      // rather than on the node that has none.
+      attention: [...app.monitors.values()].map((m) => {
+        try {
+          const sy = m.snapshot({ seriesRanges: {} }).sync;
+          // Unknown counts as attention: a node we cannot read is exactly the
+          // thing to land on, not something to hide behind a synced sibling.
+          return sy && sy.state !== 'synced' ? m.id : null;
+        } catch { return null; }
+      }).filter(Boolean),
+    }),
+  },
+  {
+    method: 'GET', path: '/api/telemetry', auth: 'any',
+    handler: async (ctx, app) => ({
+      self: app.selfTelemetry(),
+      nodes: [...app.monitors.values()].map((m) => ({
+        id: m.id,
+        rpc: m.rpc.telemetry(),
+        log: m.tail ? m.tail.status() : { exists: false },
+        tiers: m.state.tierRunAt,
+        lastTier: m.tierStats ?? null,
+        history: app.history.summary(),
+      })),
+      sse: app.hub.stats(),
+      audit: await app.auditLog.stats(),
+    }),
+  },
+  {
+    method: 'GET', path: '/api/config', auth: 'any',
+    handler: (ctx, app) => ({
+      poll: app.cfg.poll,
+      rpc: { maxInFlight: app.cfg.rpc.maxInFlight, minIntervalMs: app.cfg.rpc.minIntervalMs, maxRatePerSec: app.cfg.rpc.maxRatePerSec, timeoutMs: app.cfg.rpc.timeoutMs },
+      allowlist: allowlistSummary(),
+      actions: { enabled: app.cfg.actions.enabled, allow: app.cfg.actions.allow, requireAdmin: app.cfg.requireAdmin },
+      retention: { hours: app.cfg.store.retentionHours, ringCapacity: app.cfg.store.ringCapacity, events: app.cfg.store.maxEventLog },
+      // Access posture, so the UI can state it rather than infer it from which
+      // buttons happen to be hidden.
+      access: app.cfg.auth.enabled
+        ? { mode: 'accounts', anonymous: false }
+        : { mode: 'open', anonymous: true, role: 'viewer', writesAllowed: app.cfg.actions.allowWritesWithoutAuth },
+      // Which source backs each panel, stated rather than implied.
+      // The posture itself, so the UI and the smoke suite can assert against the
+      // source table instead of a remembered string: which sources are in effect is a
+      // fact about this deployment, not a constant.
+      log: { enabled: app.cfg.log.enabled === true },
+      sources: sourcesFor(app.cfg.log.enabled),
+    }),
+  },
+
+  // ------------------------------------------------------- RPC passthrough
+  {
+    method: 'POST', path: '/api/rpc', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      const m = pickNode(ctx, app);
+      const method = String(ctx.body?.method ?? '');
+      const params = Array.isArray(ctx.body?.params) ? ctx.body.params : [];
+      const cls = classifyMethod(method);
+      if (!cls.allowed) {
+        await app.audit({ type: 'rpc-denied', username: ctx.user.username, node: m.id, method, reason: cls.reason, ip: ctx.ip });
+        throw new HttpError(403, `${method || '(empty)'} is not callable from the web UI: ${cls.reason}`, { code: 'rpc_denied' });
+      }
+      const t0 = Date.now();
+      try {
+        const result = await m.rpc.call(method, params, {});
+        await app.audit({ type: 'rpc', ok: true, username: ctx.user.username, node: m.id, method, ms: Date.now() - t0, ip: ctx.ip });
+        return {
+          ok: true, node: m.id, method, ms: Date.now() - t0, result,
+          note: NODE_REFUSES.has(method) ? 'the node documents this method as refused or worker-owned; an error here is expected behaviour, not a monitor fault' : null,
+        };
+      } catch (err) {
+        await app.audit({ type: 'rpc', ok: false, username: ctx.user.username, node: m.id, method, error: err.message, ip: ctx.ip });
+        return { ok: false, node: m.id, method, ms: Date.now() - t0, error: { message: err.message, code: err.code ?? null, kind: err.kind ?? 'rpc' } };
+      }
+    },
+  },
+
+  // ------------------------------------------------------------- actions
+  {
+    method: 'GET', path: '/api/actions', auth: 'any',
+    handler: (ctx, app) => ({ enabled: app.cfg.actions.enabled, allowed: app.cfg.actions.allow, actions: visibleActions(app.cfg, ctx.user.role) }),
+  },
+  {
+    method: 'POST', path: '/api/action', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      const name = String(ctx.body?.action ?? '');
+      const m = pickNode(ctx, app);
+      const gate = actionAllowed(app.cfg, name, ctx.user.role);
+      if (!gate.ok) {
+        await app.audit({ type: 'action-denied', username: ctx.user.username, node: m.id, action: name, reason: gate.reason, ip: ctx.ip });
+        throw new HttpError(403, `action "${name}" not permitted: ${gate.reason}`, { code: 'action_denied' });
+      }
+      if (ctx.body?.confirm !== name) {
+        // A typed confirmation of the action name, so a stray click cannot fire.
+        throw new HttpError(400, `pass confirm:"${name}" to run this action`, { code: 'confirm_required' });
+      }
+      // Belt and braces with the config-load guard: a node write arriving over an
+      // unauthenticated socket fails even if that check is ever loosened.
+      if (!app.cfg.auth.enabled && !app.cfg.actions.allowWritesWithoutAuth) {
+        await app.audit({ type: 'action-denied', username: ctx.user.username, node: m.id, action: name, reason: 'writes disabled while accounts are off', ip: ctx.ip });
+        throw new HttpError(403, `action "${name}" refused: accounts are off, so this request carries no identity to hold accountable`, { code: 'action_denied' });
+      }
+      const def = gate.def;
+      const params = def.fixed ?? normaliseArgs(def.args, ctx.body?.args);
+      if (def.fixed && def.args.length) params.push(...normaliseArgs(def.args.slice(def.fixed.length), ctx.body?.args));
+      try {
+        const result = await m.rpc.call(def.method, params, {});
+        await app.audit({ type: 'action', ok: true, username: ctx.user.username, node: m.id, action: name, method: def.method, ip: ctx.ip, resultPreview: preview(result) });
+        return { ok: true, action: name, method: def.method, result };
+      } catch (err) {
+        await app.audit({ type: 'action', ok: false, username: ctx.user.username, node: m.id, action: name, error: err.message, ip: ctx.ip });
+        return { ok: false, action: name, method: def.method, error: { message: err.message, code: err.code ?? null } };
+      }
+    },
+  },
+
+  // --------------------------------------------------------------- admin
+  { method: 'GET', path: '/api/users', auth: 'admin', handler: (ctx, app) => ({ users: app.users.list(), roles: ['viewer', 'operator', 'admin'] }) },
+  {
+    method: 'POST', path: '/api/users', auth: 'admin', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      const { username, password, role } = ctx.body ?? {};
+      try {
+        const created = await app.users.createUser(username, password, { role: role ?? 'viewer' });
+        await app.audit({ type: 'user-create', username: ctx.user.username, target: created.username, role: created.role, ip: ctx.ip });
+        return { ok: true, user: created };
+      } catch (err) {
+        throw new HttpError(400, err.message);
+      }
+    },
+  },
+  {
+    // Creates a user with a generated password shown exactly once. There is no
+    // email to send a reset link to on a LAN box, so "generate and hand it over"
+    // is the honest equivalent -- and never storing it in plaintext is the price.
+    method: 'POST', path: '/api/users/generate', auth: 'admin', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      const uname = String(ctx.body?.username ?? '').toLowerCase().trim();
+      const role = ctx.body?.role ?? 'viewer';
+      const pw = randomPassword(18);
+      try {
+        const created = await app.users.createUser(uname, pw, { role });
+        await app.audit({ type: 'user-create', username: ctx.user.username, target: created.username, role: created.role, generated: true, ip: ctx.ip });
+        return { ok: true, user: created, password: pw, warning: 'this password is shown once and is not stored in recoverable form' };
+      } catch (err) {
+        throw new HttpError(400, err.message);
+      }
+    },
+  },
+  {
+    method: 'POST', path: '/api/users/:username/role', auth: 'admin', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      try {
+        const r = await app.users.setRole(ctx.params.username, ctx.body?.role);
+        app.sessions.destroyForUser(app.users.find(ctx.params.username)?.id);
+        await app.sessions.save().catch(() => {});
+        await app.audit({ type: 'user-role', username: ctx.user.username, target: r.username, role: r.role, ip: ctx.ip });
+        return { ok: true, user: r };
+      } catch (err) { throw new HttpError(400, err.message); }
+    },
+  },
+  {
+    method: 'POST', path: '/api/users/:username/disabled', auth: 'admin', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      try {
+        const r = await app.users.setDisabled(ctx.params.username, !!ctx.body?.disabled);
+        if (r.disabled) {
+          app.sessions.destroyForUser(app.users.find(ctx.params.username)?.id);
+          await app.sessions.save().catch(() => {});
+        }
+        await app.audit({ type: 'user-disabled', username: ctx.user.username, target: r.username, disabled: r.disabled, ip: ctx.ip });
+        return { ok: true, user: r };
+      } catch (err) { throw new HttpError(400, err.message); }
+    },
+  },
+  {
+    method: 'POST', path: '/api/password', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      if (!app.cfg.auth.enabled) throw new HttpError(403, 'accounts are disabled, so there are no passwords to change (start with BMC_MON_AUTH=1)');
+      const current = String(ctx.body?.current ?? '');
+      const next = String(ctx.body?.password ?? '');
+      const who = ctx.user.role === 'admin' && ctx.body?.username ? String(ctx.body.username) : ctx.user.username;
+      if (who !== ctx.user.username) needRole(ctx, 'admin');
+      else {
+        const check = await app.users.verify(ctx.user.username, current);
+        if (!check.ok) throw new HttpError(403, 'current password is incorrect');
+      }
+      try {
+        await app.users.setPassword(who, next);
+        app.sessions.destroyForUser(app.users.find(who)?.id);
+        await app.sessions.save().catch(() => {});
+        ctx.clearCookie(app.cfg.auth.cookieName);
+        await app.audit({ type: 'password-change', username: ctx.user.username, target: who, ip: ctx.ip });
+        return { ok: true, signedOut: true, note: 'sessions revoked; sign in again with the new password' };
+      } catch (err) { throw new HttpError(400, err.message); }
+    },
+  },
+  {
+    // The audit trail names who did what, which only means something if there is a
+    // who. With accounts off every entry would read "anonymous", so the endpoint
+    // says so instead of serving a trail that cannot attribute anything.
+    method: 'GET', path: '/api/audit', auth: 'admin',
+    handler: async (ctx, app) => {
+      if (!app.cfg.auth.enabled) {
+        return { entries: [], disabled: true, note: 'accounts are off, so audit entries could name nobody; start with BMC_MON_AUTH=1 to record per-user activity' };
+      }
+      const limit = clampInt(ctx.query.limit, 1, 500, 100);
+      // `log` is the state of the audit file itself. An audit trail that silently
+      // stopped rotating, or failed to rotate, is a disk-usage incident in progress
+      // -- and an audit trail nobody can see the size of is a lie waiting to happen.
+      return { entries: await app.readAudit(limit), limit, log: await app.auditLog.stats() };
+    },
+  },
+];
+
+// ----------------------------------------------------------------- views
+
+function fullState(ctx, app) {
+  const m = pickNode(ctx, app);
+  // ?series=none is the cheap poll; the chart data comes from /api/series or the
+  // separate `series` SSE event on its own slower cadence.
+  const wantSeries = ctx.query.series === 'none' ? {} : {
+    hour: parseRange(ctx.query.range, 3600_000),
+    hours6: parseRange(ctx.query.range6, 21600_000),
+    day: RANGES['24h'],
+  };
+  const s = m.snapshot({ seriesRanges: wantSeries });
+  return {
+    ...s,
+    app: {
+      version: app.version,
+      build: app.build,
+      scheme: app.scheme,
+      uptimeSec: Math.round((Date.now() - app.startedAt) / 1000),
+      sseClients: app.hub.stats().clients,
+      self: app.selfTelemetry(),
+      serverTime: Date.now(),
+    },
+    user: ctx.user ? publicUser(ctx.user) : null,
+    seq: app.stateSeq,
+  };
+}
+
+const HEX64 = /^[0-9a-fA-F]{64}$/;
+const TX_PAGE = 50; // txids returned per block view; the count is always the real one
+
+function drillError(m, query, err, hint) {
+  // 200 with ok:false, like /api/rpc: the node's own refusal is the information,
+  // and a 5xx would bury it behind the server's generic error shape.
+  return {
+    ok: false,
+    node: m.id,
+    query,
+    error: { message: err?.message ?? String(err), code: err?.code ?? null, kind: err?.kind ?? 'rpc' },
+    hint: hint ?? null,
+  };
+}
+
+/**
+ * One block: header, statistics, and the first page of txids.
+ *
+ * Accepts ?hash=, ?height=, or neither (the current tip). A height that is not
+ * stored is the node's own error, quoted rather than turned into a 404 of our own
+ * invention -- the difference matters when the answer is "pruned", not "typo".
+ */
+async function blockDrill(ctx, app) {
+  const m = pickNode(ctx, app);
+  const hashArg = ctx.query.hash ? String(ctx.query.hash).trim() : null;
+  const heightArg = ctx.query.height != null && ctx.query.height !== '' ? String(ctx.query.height).trim() : null;
+  const query = { hash: hashArg, height: heightArg };
+  if (hashArg && !HEX64.test(hashArg)) throw new HttpError(400, `"${hashArg}" is not a 64-hex-character block hash`);
+  if (heightArg != null && !/^\d{1,12}$/.test(heightArg)) throw new HttpError(400, `"${heightArg}" is not a block height`);
+
+  let height = heightArg != null ? Number(heightArg) : null;
+  let hash = hashArg;
+  try {
+    if (!hash) {
+      if (height == null) {
+        height = m.state.chainInfo?.blocks ?? null;
+        if (height == null) throw new HttpError(503, 'this node has not answered getblockchaininfo yet, so there is no tip to show');
+      }
+      hash = await m.rpc.call('getblockhash', [height]);
+    }
+    const block = await m.rpc.call('getblock', [hash, 1]);
+    // getblockstats by hash: one extra lane turn, and the only way to get per-block
+    // fees without fetching the whole block's transactions.
+    const stats = await m.rpc.call('getblockstats', [hash, ['totalfee', 'txs', 'size', 'weight', 'avgfee', 'medianfee', 'maxfee', 'feerate_percentiles', 'subsidy', 'utxo_increase', 'ins', 'outs']])
+      .catch((err) => ({ error: { message: err.message } }));
+    const txids = Array.isArray(block.tx) ? block.tx : [];
+    return {
+      ok: true,
+      node: m.id,
+      requested: { ...query, resolvedHash: hash, resolvedHeight: block.height ?? height },
+      ms: null,
+      header: {
+        hash: block.hash ?? hash,
+        confirmations: block.confirmations ?? null,
+        height: block.height ?? height,
+        version: block.version ?? null,
+        size: block.size ?? null,
+        weight: block.weight ?? null,
+        time: block.time ?? null,
+        mediantime: block.mediantime ?? null,
+        merkleRoot: block.merkleroot ?? null,
+        txCount: txids.length || block.nTx || null,
+        nTx: block.nTx ?? txids.length,
+        previousblockhash: block.previousblockhash ?? null,
+        nextblockhash: block.nextblockhash ?? null,
+        bits: block.bits ?? null,
+        difficulty: block.difficulty ?? null,
+        chainTrust: block.chaintrust ?? block.chainwork ?? null,
+      },
+      stats: stats?.error ? null : stats,
+      statsError: stats?.error?.message ?? null,
+      txids: txids.slice(0, TX_PAGE),
+      txidsShown: Math.min(txids.length, TX_PAGE),
+      txidsTotal: txids.length || block.nTx || null,
+      truncated: txids.length > TX_PAGE,
+      notes: [
+        'header + txids only: getblock verbosity=2 costs this node 11 MB of hex per block (measured 2026-09-08) and still omits Core\'s fee fields',
+        txids.length > TX_PAGE ? `${txids.length - TX_PAGE} further txid(s) not listed; ask the node directly or drill in from a mempool row` : null,
+        block.confirmations === 0 ? 'confirmations 0: this is not on the best chain (orphan or reorged out)' : null,
+      ].filter(Boolean),
+    };
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    const hint = /blocks of availability|have block|No such block|not on disk|Cannot obtain block/i.test(err?.message ?? '')
+      ? 'the node does not have this block stored (pruned, or a height from before the last prune); pick a height the block list actually covers'
+      : null;
+    return drillError(m, query, err, hint);
+  }
+}
+
+/**
+ * One transaction, decoded by the node (verbosity 1) rather than by us.
+ *
+ * What is *not* here is the fee. Computing it means fetching every input's
+ * prevout, which is N more lane turns per lookup on a server with one thread, and
+ * this node does not include fee/deltafee in its verbose reply anyway (MEASUREMENTS
+ * §6). So `notReported` names it, and no field pretends otherwise (rule 3).
+ */
+async function txDrill(ctx, app) {
+  const m = pickNode(ctx, app);
+  const txid = ctx.query.txid ? String(ctx.query.txid).trim() : null;
+  const blockHash = ctx.query.block ? String(ctx.query.block).trim() : null;
+  const query = { txid, block: blockHash };
+  if (!txid) throw new HttpError(400, 'txid is required');
+  if (!HEX64.test(txid)) throw new HttpError(400, `"${txid}" is not a 64-hex-character txid`);
+  if (blockHash && !HEX64.test(blockHash)) throw new HttpError(400, `"${blockHash}" is not a block hash`);
+  try {
+    const params = blockHash ? [txid, true, blockHash] : [txid, true];
+    const tx = await m.rpc.call('getrawtransaction', params);
+    if (typeof tx === 'string') {
+      // verbosity 1 asked for, hex came back: this node answered the compact form.
+      return {
+        ok: true, node: m.id, requested: query, decoded: false, sizeHex: tx.length / 2,
+        notes: ['the node answered with raw hex despite verbosity=1; decoding it here would be inventing a parser for a node whose answers have already changed shape three times today'],
+      };
+    }
+    const trunc = (s, n = 96) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)}…` : s ?? null);
+    return {
+      ok: true,
+      node: m.id,
+      requested: query,
+      txid: tx.txid ?? txid,
+      size: tx.size ?? null,
+      vsize: tx.vsize ?? null,
+      weight: tx.weight ?? null,
+      version: tx.version ?? null,
+      locktime: tx.locktime ?? null,
+      inMempool: tx.confirmations == null,
+      blockHash: tx.blockhash ?? null,
+      blockHeight: tx.blockheight ?? null,
+      confirmations: tx.confirmations ?? null,
+      blockTime: tx.blocktime ?? null,
+      time: tx.time ?? null,
+      inputs: (tx.vin ?? []).slice(0, 40).map((v) => ({
+        txid: v.txid ?? null,
+        vout: v.vout ?? null,
+        sequence: v.sequence ?? null,
+        scriptSigAsm: trunc(v.scriptSig?.asm),
+        scriptSigType: v.scriptSig?.type ?? null,
+        witness: Array.isArray(v.txinwitness) ? v.txinwitness.map((w) => trunc(w, 32)) : null,
+        value: v.value ?? null,
+        address: v.address ?? null,
+      })),
+      inputsTotal: (tx.vin ?? []).length,
+      outputs: (tx.vout ?? []).slice(0, 40).map((v) => ({
+        n: v.n ?? null,
+        value: v.value ?? null,
+        scriptPubKeyType: v.scriptPubKey?.type ?? null,
+        address: v.scriptPubKey?.address ?? v.scriptPubKey?.addresses?.[0] ?? null,
+        scriptPubKeyAsm: trunc(v.scriptPubKey?.asm),
+        spent: v.spentIndex ? { txid: v.spentIndex.spendingTxid, n: v.spentIndex.spendingIndex } : null,
+      })),
+      outputsTotal: (tx.vout ?? []).length,
+      totalOutSat: (tx.vout ?? []).reduce((a, v) => (Number.isFinite(v?.value) ? a + Math.round(v.value * 1e8) : a), 0) || null,
+      notReported: [
+        'fee / feerate (needs every input\'s prevout, which is N more turns on a one-threaded RPC server; this node also omits fee from its verbose reply)',
+        (tx.vout ?? []).length > 40 ? `${(tx.vout ?? []).length - 40} output(s) beyond the first 40 not listed` : null,
+        (tx.vin ?? []).length > 40 ? `${(tx.vin ?? []).length - 40} input(s) beyond the first 40 not listed` : null,
+      ].filter(Boolean),
+    };
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    const hint = /Transaction not found|no information available|not found in the chain|does not exist/i.test(err?.message ?? '')
+      ? 'not in the mempool' + (blockHash ? '' : ' — if it is confirmed, add &block=<blockhash>, which some nodes need to find a transaction that has left the pool')
+      : null;
+    return drillError(m, query, err, hint);
+  }
+}
+
+function mempoolView(m) {
+  const s = m.snapshot({ seriesRanges: {} });
+  return {
+    node: m.id,
+    // What kind of data this is, stated rather than implied by the word "live":
+    // the node refuses zmqpubsequence, so there is no per-transaction add/remove
+    // stream to show and no UI wording should imply one (docs/DEFECTS.md).
+    feed: {
+      kind: 'poll',
+      cadenceSec: 60,
+      streamAvailable: false,
+      why: 'the node refuses zmqpubsequence: it can publish adds but has no clean "removed" choke point, so a diff of successive polls would report evictions as removes only when the poll happened to straddle them',
+      source: 'getrawmempool verbose on the 20 s pool tier + [tx_accept]/[txrelay] log lines',
+    },
+    info: s.mempool,
+    // The full distribution including the scatter points, which the snapshot
+    // deliberately leaves out.
+    dist: m.state.mempoolDist,
+    // Fields this node does not report, stated so the UI shows "not reported"
+    // instead of an empty box that reads as zero.
+    notReported: [
+      s.mempool.dist?.pendingAncestors == null ? 'pendingancestors' : null,
+      s.mempool.dist?.replaceable == null ? 'replaceable (BIP125) flag' : null,
+      'fees.prioritiserved', 'modifiedfees', 'ancestorcount/ancestorfees', 'withdrawreason', 'replaced-by',
+    ].filter(Boolean),
+    log: {
+      lastDrain: s.logState?.lastDrain ?? s.mempool.lastDrain ?? null,
+      orphans: m.state.logState.orphans ?? null,
+      orphanDetail: m.state.logState.orphanDetail ?? null,
+      accept: m.state.logState.lastTxAccept ?? null,
+      relayRate: m.state.logState.relayRate ?? null,
+    },
+    fees: s.fees,
+    history: {
+      count: app_ring(m, 'mempool', 'count'),
+      usage: app_ring(m, 'mempool', 'usage'),
+    },
+  };
+}
+
+function app_ring(m, seriesName, field) {
+  const r = m.history?.ring?.(seriesName);
+  if (!r) return null;
+  return r.tail(60).map((row) => ({ t: row.t, v: row[field] ?? null }));
+}
+
+function peersView(m) {
+  const s = m.snapshot({ seriesRanges: {} });
+  return {
+    node: m.id,
+    counts: {
+      connections: s.peers.connections, in: s.peers.in, out: s.peers.out, wanted: s.peers.wanted,
+      budget: s.peers.budget, banned: s.peers.banned, bannedOf: s.peers.bannedOf,
+    },
+    ranking: s.peers.ranking,
+    identitySource: s.peers.identitySource,
+    // The `[dl]` identity rows (user agent, protocol, the peer's own height, direction).
+    // Parsed since the first build of this monitor, returned by the snapshot, and never
+    // drawn until now — data collected and then dropped on the floor.
+    identity: s.peers.identity ?? null,
+    rpcRows: s.peers.rpcRows,
+    rpcUpdatedAt: s.peers.rpcRowsUpdatedAt,
+    // The peer table the node's own RPC gives us, verbatim, next to the log
+    // derived activity that exists because it is empty.
+    rpcPeers: m.state.peers.list,
+    activity: s.peers.activity,
+    recentEvents: s.peers.recentEvents,
+    network: s.network,
+  };
+}
+
+// Exported for tests: this is the function that decides whether an absent figure is
+// reported as absent, so it must be reachable without booting an app and a fake node.
+export function netView(m) {
+  const s = m.snapshot({ seriesRanges: {} });
+  // Every gap in one list, in words. It used to hold exactly one entry (upload), which
+  // meant that in RPC-only mode — where a dozen figures lose their only source at once
+  // — the list came back *empty*, saying less the less there was. That is the inverse of
+  // the purpose: the list has to grow when the sources go away.
+  const unavailable = [];
+  if (!s.net.uploadMeasured) {
+    unavailable.push('outbound bytes / upload rate: getnettotals reports 0 in this deployment and no other source carries it');
+  }
+  if (!s.net.downloadMeasured) {
+    unavailable.push('inbound bytes / download rate: totalbytesrecv has read 0 for the whole uptime on this build, so 0 B/s would be a claim about an idle node rather than an absence');
+  }
+  if (!m.logEnabled) {
+    unavailable.push('log-only figures (no RPC source, and the log tail is off by configuration): which peer served a block, per-peer download rate and relay legs, the mempool accept/reject breakdown, disk-write rate and write totals, the download worker\'s banned-peer count, the node\'s own IBD eta, UTXO compaction and validation stalls, archive-layout holes, sync_failing');
+  }
+  return {
+    node: m.id,
+    measured: {
+      inBps: s.net.inBps, diskWriteBps: s.net.diskWriteBps,
+      netTotalLog: s.net.netTotalLog, diskTotal: s.net.diskTotal,
+      avgRecv: s.net.avgRecv, avgWrite: s.net.avgWrite,
+      floor: s.net.floor, poolMedian: s.net.poolMedian,
+      // Named per mode. Claiming "node log [dlc] tick lines" while the tail is closed
+      // is a provenance lie. Note what this string deliberately does NOT say: it used
+      // to assert "the deployed build counts 0 bytes", which was false within the hour
+      // of being written (MEASUREMENTS 23 — the same process read 0/0 at 09:36 and
+      // 23,955,131 bytes at 17:36, no restart). A row that names a build's behaviour is
+      // a claim that rots; the gate on the field next to it is the live answer.
+      source: m.logEnabled
+        ? 'node log [dlc] tick lines'
+        : 'getnettotals delta rate (RPC) — reported only while that counter moves; it has read 0 for whole uptimes on some builds and started counting mid-uptime on others',
+      downloadMeasured: s.net.downloadMeasured,
+    },
+    rpc: { totalRecv: s.net.totalRecvRpc, totalSent: s.net.totalSentRpc, uploadtarget: s.net.uploadtarget, uploadMeasured: s.net.uploadMeasured },
+    // An upload rate we do not have is said so here, in words, so no chart can
+    // imply one. See the nettotals-zero quality flag.
+    unavailable,
+    peers: { connections: s.peers.connections, in: s.peers.in, out: s.peers.out, wanted: s.peers.wanted },
+    series: s.series.net,
+    formatted: { inBps: s.net.inBps == null ? null : formatBytes(s.net.inBps) + '/s', disk: s.net.diskTotal == null ? null : formatBytes(s.net.diskTotal) },
+  };
+}
+
+function blockStats(recent) {
+  if (!recent.length) return null;
+  const fees = recent.map((b) => b.totalfee).filter((v) => v != null);
+  const sizes = recent.map((b) => b.size).filter((v) => v != null);
+  const txs = recent.map((b) => b.txs).filter((v) => v != null);
+  const gaps = recent.map((b) => b.gapSec).filter((v) => v != null && v >= 0 && v < 7200);
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  return {
+    count: recent.length,
+    spanSec: recent.length > 1 ? Math.round((recent[0].t - recent[recent.length - 1].t) / 1000) : null,
+    totalFeesSat: fees.length ? sum(fees) : null,
+    avgFeesSat: fees.length ? Math.round(sum(fees) / fees.length) : null,
+    avgSize: sizes.length ? Math.round(sum(sizes) / sizes.length) : null,
+    maxSize: sizes.length ? Math.max(...sizes) : null,
+    avgTxs: txs.length ? Math.round(sum(txs) / txs.length) : null,
+    avgGapSec: gaps.length ? +(sum(gaps) / gaps.length).toFixed(1) : null,
+    medGapSec: gaps.length ? gaps.slice().sort((a, b) => a - b)[Math.floor(gaps.length / 2)] : null,
+    etaCadence: gaps.length ? formatEta(Math.round(sum(gaps) / gaps.length)) : null,
+  };
+}
+
+function visibleActions(cfg, role) {
+  return Object.entries(ACTIONS).map(([name, def]) => ({
+    name, label: def.label, note: def.note, args: def.args, requiredRole: def.role,
+    enabled: cfg.actions.enabled && cfg.actions.allow.includes(name),
+    permittedForYou: actionAllowed(cfg, name, role).ok,
+    method: def.method,
+  }));
+}
+
+function publicUser(u) {
+  if (!u) return null;
+  return { username: u.username, role: u.role, id: u.id, disabled: !!u.disabled, lastLoginAt: u.lastLoginAt ?? null };
+}
+
+function normaliseArgs(spec = [], args = {}) {
+  const out = [];
+  for (const s of spec) {
+    const key = s.replace(/\?$/, '');
+    const optional = s.endsWith('?');
+    if (args?.[key] !== undefined) out.push(args[key]);
+    else if (!optional) out.push(undefined);
+  }
+  while (out.length && out[out.length - 1] === undefined) out.pop();
+  return out;
+}
+
+function preview(result) {
+  const s = typeof result === 'string' ? result : JSON.stringify(result);
+  return s == null ? null : s.slice(0, 200);
+}
+
+function clampInt(v, min, max, dflt) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.max(min, Math.min(max, Math.round(n)));
+}
+
+export { ban };

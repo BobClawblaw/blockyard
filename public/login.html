@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-bmc-build="%BMCBUILD%">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>sign in - bmcmonitor</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f7931a'/%3E%3Ctext x='16' y='22' font-size='18' font-family='monospace' font-weight='bold' text-anchor='middle' fill='%2316110a'%3EB%3C/text%3E%3C/svg%3E">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <h1>bmcmonitor</h1>
+    <p class="sub" id="sub">Bitcoin Machine Code node monitor</p>
+
+    <div class="err hidden" id="err"></div>
+
+    <form id="f" autocomplete="on">
+      <div class="field">
+        <label for="u">username</label>
+        <input id="u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      </div>
+      <div class="field">
+        <label for="p">password</label>
+        <input id="p" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn primary block" id="go" type="submit">sign in</button>
+    </form>
+    <p class="note tiny faint mt-14" id="hint">Read-only by default. This tool cannot start, stop or reconfigure the node unless the operator has explicitly enabled specific actions.</p>
+  </div>
+  <script type="module" src="/js/login.js"></script>
+</body>
+</html>

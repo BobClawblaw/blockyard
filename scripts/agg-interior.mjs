@@ -1,0 +1,30 @@
+// Pixel truth with CDP's own capture (the Page.captureScreenshot path, which has always
+// matched what a user sees) — sample the aggregate's interior, and crop it.
+const BASE = process.env.BMC_MON_BASE;
+const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
+const ID = process.env.PROBE_ID ?? 'gnMempoolTreemap';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const targets = JSON.parse(await (await fetch(`${CDP}/json/list`)).text());
+const page = targets.find((t) => t.type === 'page');
+const ws = new WebSocket(page.webSocketDebuggerUrl);
+await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+let nextId = 1; const pending = new Map();
+ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } };
+const send = (method, params = {}) => new Promise((res) => { const id = nextId++; pending.set(id, (m) => res(m.result ?? m.error ?? {})); ws.send(JSON.stringify({ id, method, params })); });
+await send('Page.enable'); await send('Runtime.enable');
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1900, deviceScaleFactor: 1, mobile: false });
+await send('Page.navigate', { url: `${BASE}/?t=${Date.now()}#overview` });
+await sleep(5000);
+await send('Runtime.evaluate', { expression: `document.querySelector('#nav button[data-page="mining"]')?.click()` });
+await sleep(16000);
+const box = await send('Runtime.evaluate', { expression: `(() => { const c=document.getElementById(${JSON.stringify(ID)}); if(!c) return ''; const b=c.getBoundingClientRect(); const v=c.__view; const agg=(v?.items??[]).find(i=>i.aggregate);
+  return JSON.stringify({x:b.x,y:b.y,w:b.width,h:b.height, agg: agg?{x:agg.tx,y:agg.ty,w:agg.tw,h:agg.th,n:agg.aggregate}:null}); })()`, returnByValue: true });
+const bb = JSON.parse(box.result?.value ?? '{}');
+console.log('canvas box:', JSON.stringify(bb));
+const clip = { x: bb.x + (bb.agg?.x ?? 0) + 40, y: bb.y + (bb.agg?.y ?? 0) + 40, width: 200, height: 200, scale: 2 };
+const shot = await send('Page.captureScreenshot', { format: 'png', clip });
+const fs = await import('node:fs');
+const out = `/tmp/agg-interior-${process.pid}.png`;
+fs.writeFileSync(out, Buffer.from(shot.data, 'base64'));
+console.log('aggregate interior crop (200x200 @2x):', out);
+ws.close();

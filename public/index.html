@@ -1,0 +1,586 @@
+<!doctype html>
+<!-- data-bmc-build is rewritten per response by server/http/static.js, so the page
+     can compare the build it was served against what /api/build says is current and
+     say "this tab is stale" out loud. `%BMCBUILD%` is the placeholder. -->
+<html lang="en" data-bmc-build="%BMCBUILD%">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>bmcmonitor - Bitcoin Machine Code</title>
+<link rel="stylesheet" href="/css/app.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f7931a'/%3E%3Ctext x='16' y='22' font-size='18' font-family='monospace' font-weight='bold' text-anchor='middle' fill='%2316110a'%3EB%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="mark">B</span> bmcmonitor <small id="ver"></small></div>
+    <nav class="pages" id="nav">
+      <button data-page="overview" class="on">Overview</button>
+      <button data-page="space">Block space</button>
+      <button data-page="chain">Chain &amp; Sync</button>
+      <button data-page="mempool">Mempool</button>
+      <button data-page="explorer">Explorer</button>
+      <button data-page="markets">Markets</button>
+      <button data-page="kiosk">Kiosk</button>
+      <button data-page="peers">Peers</button>
+      <button data-page="network">Network</button>
+      <button data-page="mining">Mining</button>
+      <button data-page="logs">Events</button>
+      <button data-page="node">Node &amp; RPC</button>
+      <button data-page="admin" id="navAdmin" hidden>Admin</button>
+    </nav>
+    <span class="spacer"></span>
+    <div class="meta">
+      <span id="nodePick"></span>
+      <span title="Server-sent events link">stream <b id="sseState" class="warn">connecting</b></span>
+      <span title="Node RPC round trip">rpc <b id="rpcLat">–</b></span>
+      <span title="Monitor uptime">up <b id="appUp">–</b></span>
+      <!-- Shown only when the server reports accounts=false. The posture has to be
+           visible in the page, not inferred from a sign-out button that is missing. -->
+      <span id="accessPill" class="hidden"><b class="badge muted">open access</b></span>
+      <!-- Only shown when the loaded build differs from the served one. Its whole
+           purpose is the case where nothing else on screen has changed. -->
+      <span id="buildNote" class="hidden"><b class="badge bad">stale build</b></span>
+    </div>
+    <div class="userchip">
+      <span class="tiny faint" id="whoami"></span>
+      <button class="btn" id="btnPause" title="Freeze live updates (hold Shift to also stop the event feed)">pause</button>
+      <button class="btn" id="btnLogout">sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="offline" class="offline-bar hidden"></div>
+
+    <!-- ======================================================== OVERVIEW -->
+    <section class="page on" data-page="overview">
+      <div class="grid">
+        <div data-sync-hero="overview"></div>
+
+        <!-- Two independent stacks (operator, 2026-09-11: "Still too much empty
+             space here. Need to compress the mempool and fees view at the very
+             least to sit side-by-side"). A shared grid row coupled the columns,
+             so whichever side was taller padded the other; here each column
+             stacks on its own, and the last card of each takes the height that
+             is left and scrolls inside it. -->
+        <div class="ovcols">
+          <div class="ovcol">
+            <div class="card w8">
+              <h3>Block flow <span class="sp"></span><span class="src">being assembled → <b>the current block</b> → history · <a href="#mining">packages &amp; goggles</a></span></h3>
+              <div id="ovTrain" class="flowwrap"></div>
+            </div>
+
+            <div class="ovpair">
+              <div class="card w5" id="ovMempoolCard">
+                <h3>Mempool <span class="sp"></span><span class="src">getmempoolinfo · vs blocks mined</span></h3>
+                <div class="metric"><div class="l">transactions</div><div><span class="v" id="ovMpCount">–</span><span class="u">tx</span></div>
+                  <div class="s" id="ovMpBytes">–</div></div>
+                <canvas class="chart xs" id="ovMpChart"></canvas>
+                <div class="s faint" id="ovMpVsBlock">–</div>
+                <div class="kv" id="ovMpVsBlockKv"></div>
+              </div>
+
+              <div class="card w3 compact" id="ovFeesCard">
+                <h3>Fees <span class="sp"></span><span class="src">estimatesmartfee</span></h3>
+                <div class="kv" id="ovFees"><dt>–</dt></div>
+                <canvas class="chart xs" id="ovFeeChart"></canvas>
+              </div>
+            </div>
+
+            <div class="card w8" id="ovBlocksCard">
+              <h3>Last blocks <span class="sp"></span><span class="src">getblockstats + [block] stored</span></h3>
+              <div class="scroll md">
+                <table class="t" id="ovBlocks">
+                  <thead><tr><th>height</th><th>age</th><th>gap</th><th class="r">txs</th><th class="r">size</th><th class="r">vsize</th><th class="r">fees (btc)</th><th class="r">min fee rate</th><th>from peer</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="ovcol">
+            <div class="card w8">
+              <h3>Block space <span class="sp"></span><span class="src">area = vbytes, colour = feerate paid</span></h3>
+              <div class="treemapwrap sq">
+                <canvas class="treemap" id="ovGnTreemap"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div>
+                <div class="goggles-tip hidden"></div>
+              </div>
+              <div class="note tiny faint" id="ovGnTreemapNote"></div>
+            </div>
+
+            <div class="card w4" id="ovEventsCard">
+              <h3>Monitor events <span class="sp"></span><span class="src">what this monitor observed; not node log lines</span></h3>
+              <div class="feed" id="ovFeed"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card w12">
+          <h3>Mined by <span class="sp"></span><span class="src">coinbase text + curated labels</span></h3>
+          <div id="ovMiningPools"></div>
+        </div>
+
+        <div class="card w12" id="ovCaveats"></div>
+      </div>
+    </section>
+
+    <!-- ===================================================== BLOCK SPACE -->
+    <!-- The viewer at full size, with the block being built and the chain tip
+         beside it (operator, 2026-09-11: "blockspace viewer really deserves its
+         own tab so it can run in a large window. Try to incorporate current
+         block building, and tip information into the one panel as well"). -->
+    <section class="page" data-page="space">
+      <div class="card w12" id="spaceCard">
+        <h3>Block space <span class="sp"></span><span class="src">the next block's worth of the mempool, richest first · area = vbytes, colour = feerate paid</span></h3>
+        <div class="spacelayout">
+          <div class="treemapwrap space">
+            <canvas class="treemap" id="spTreemap"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div>
+            <div class="goggles-tip hidden"></div>
+          </div>
+          <aside class="spacehud">
+            <div class="hud" id="spNext"></div>
+            <div class="hud" id="spTip"></div>
+            <div class="hud" id="spLegend"></div>
+          </aside>
+        </div>
+        <div class="note tiny faint" id="spNote"></div>
+      </div>
+    </section>
+
+    <!-- ==================================================== CHAIN & SYNC -->
+    <section class="page" data-page="chain">
+      <div class="grid chgrid">
+        <div data-sync-hero="chain"></div>
+        <!-- THREE ACROSS, SHORT (operator, 2026-09-11: "surely we can fit more info on here").
+             Two columns of tall charts made the page 1,518 px at 1483 x 1000 and 1,762 at
+             1280 x 860; the tip chart is a flat line once synced, and Chain state was a 12-row
+             single column. Charts are three to a row at 110 px (tip progression last), the
+             state and UTXO/difficulty cards three across with two-column lists. -->
+
+        <div class="card w4">
+          <h3>Block interval <span class="sp"></span><span class="src">inter-arrival, last 24h</span></h3>
+          <canvas class="chart" id="chGapChart"></canvas>
+          <div class="note tiny faint" id="chGapNote"></div>
+        </div>
+
+        <div class="card w4">
+          <h3>Block size <span class="sp"></span><span class="src">bytes, sum of transaction sizes</span></h3>
+          <canvas class="chart" id="chSizeChart"></canvas>
+          <div class="note tiny faint" id="chSizeNote"></div>
+        </div>
+
+        <div class="card w4">
+          <h3>Fees per block <span class="sp"></span><span class="src">satsoshis</span></h3>
+          <canvas class="chart" id="chFeeChart"></canvas>
+        </div>
+
+        <div class="card w4">
+          <h3>Transactions per block <span class="sp"></span><span class="src">count</span></h3>
+          <canvas class="chart" id="chTxChart"></canvas>
+        </div>
+
+        <div class="card w4">
+          <h3>Transaction rate <span class="sp"></span><span class="src">getchaintxstats txrate</span></h3>
+          <canvas class="chart" id="chTxRateChart"></canvas>
+          <div class="kv two mt-6" id="chTxStats"></div>
+        </div>
+
+        <div class="card w4">
+          <h3>Tip progression <span class="sp"></span><span class="src">blocks vs headers</span></h3>
+          <canvas class="chart" id="chTipChart"></canvas>
+          <div class="note tiny faint" id="chTipNote"></div>
+        </div>
+
+        <div class="card w4">
+          <h3>Chain state <span class="sp"></span><span class="src">getblockchaininfo</span></h3>
+          <dl class="kv two" id="chState"></dl>
+        </div>
+
+        <div class="card w4">
+          <h3>UTXO set <span class="sp"></span><span class="src">gettxoutsetinfo</span></h3>
+          <dl class="kv" id="chUtxo"></dl>
+          <canvas class="chart short" id="chUtxoChart"></canvas>
+        </div>
+
+        <div class="card w4">
+          <h3>Difficulty &amp; work <span class="sp"></span><span class="src">difficulty</span></h3>
+          <dl class="kv" id="chDiff"></dl>
+          <canvas class="chart short" id="chDiffChart"></canvas>
+        </div>
+
+        <div class="card w6">
+          <h3>Block drill-down <span class="sp"></span><span class="src">getblock verbosity=1 + getblockstats</span></h3>
+          <div class="rowform">
+            <input class="f grow minw-180" id="bdQuery" placeholder="height or block hash (blank = current tip)" autocomplete="off">
+            <button class="btn primary" id="bdRun">inspect</button>
+          </div>
+          <div class="note tiny faint" id="bdNote">Header, statistics and the first page of txids. Not the block's transactions: this node returns 11 MB of hex for one verbose block, and its verbose form still omits Core's fee fields.</div>
+          <dl class="kv" id="bdHeader"></dl>
+          <div class="txid-list" id="bdTxids"></div>
+          <div class="drill" id="bdTx"></div>
+        </div>
+
+        <div class="card w6">
+          <h3>Indexes <span class="sp"></span><span class="src">getindexinfo</span></h3>
+          <table class="t" id="chIndexes"><thead><tr><th>index</th><th class="r">height</th><th>synced</th></tr></thead><tbody></tbody></table>
+          <div class="hr"></div>
+          <h3>Chain tips <span class="sp"></span><span class="src">getchaintips</span></h3>
+          <table class="t" id="chTips"><thead><tr><th>height</th><th class="r">branchlen</th><th>status</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== MEMPOOL -->
+    <section class="page" data-page="mempool">
+      <div class="grid">
+        <!-- Two independent stacks, like the Overview (operator, 2026-09-11: "Too
+             much wasted space on this panel. We should compress, and add the
+             mempool display here too in a smaller panel"). The Pool usage card is
+             compact -- gauge beside its figures -- and the Block space viewer (the
+             same one as Overview, Mining and Block space) sits in the narrower
+             right column. -->
+        <div class="mpcols">
+          <div class="ovcol">
+            <div class="card w3" id="mpUsageCard">
+              <h3>Pool usage <span class="sp"></span><span class="src">usage / maxmempool</span></h3>
+              <div class="mpusage">
+                <canvas class="chart meter" id="mpMeter"></canvas>
+                <dl class="kv" id="mpLimits"></dl>
+              </div>
+            </div>
+            <div class="card w5">
+              <h3>Mempool size <span class="sp"></span><span class="src">count and bytes</span></h3>
+              <canvas class="chart" id="mpSizeChart"></canvas>
+            </div>
+            <div class="card w6">
+              <h3>Fee rate distribution <span class="sp"></span><span class="src">sat/vB from getrawmempool (RPC)</span></h3>
+              <canvas class="chart" id="mpHistChart"></canvas>
+              <div class="note tiny faint" id="mpHistNote"></div>
+            </div>
+          </div>
+          <div class="ovcol">
+            <div class="card w4">
+              <h3>Block space <span class="sp"></span><span class="src">the next block's worth</span></h3>
+              <div class="treemapwrap sq">
+                <canvas class="treemap" id="mpTreemap"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div>
+                <div class="goggles-tip hidden"></div>
+              </div>
+            </div>
+            <div class="card w6">
+              <h3>Fee rate vs age <span class="sp"></span><span class="src">sampled scatter</span></h3>
+              <canvas class="chart" id="mpScatter"></canvas>
+              <div class="note tiny faint" id="mpScatterNote"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card w4">
+          <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
+          <canvas class="chart" id="mpAgeChart"></canvas>
+        </div>
+        <div class="card w4">
+          <h3>Fee estimates over time <span class="sp"></span><span class="src">sat/vB</span></h3>
+          <canvas class="chart" id="mpFeeChart"></canvas>
+        </div>
+
+        <div class="card w12">
+          <h3>Fields this node does not report <span class="sp"></span><span class="src">getrawmempool shape</span></h3>
+          <div class="note" id="mpNotReported"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================== PEERS -->
+    <!-- ========================================================== KIOSK -->
+    <!-- The 3D Markets board and the Block space board side by side (public/js/kiosk.js). -->
+    <section class="page" data-page="kiosk">
+      <div class="kiosk" id="kiosk">
+        <div class="kcol">
+        <div class="kpanel kmk">
+          <div class="khead"><b>Markets</b><span class="faint" id="kMkLabel"></span></div>
+          <div class="treemapwrap kboard"><canvas class="treemap" id="kMarkets"></canvas><div class="goggles-tip hidden"></div></div>
+        </div>
+        <!-- the price text in a panel of its own (operator: "Create a new panel for the price text to
+             exist in, and keep the markets in it's own panel") -->
+        <div class="kpanel kpp">
+          <div class="khead"><b>Price</b><span class="faint">five exchanges' public tickers</span></div>
+          <div class="kprice" id="kPrice"></div>
+        </div>
+        </div>
+        <div class="kcol">
+        <div class="kpanel ksp">
+          <div class="khead"><b>Block space</b><span class="faint">the next block's worth of the mempool</span></div>
+          <div class="treemapwrap kboard"><canvas class="treemap" id="kSpace"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div><div class="goggles-tip hidden"></div></div>
+        </div>
+        <div class="kpanel kbf">
+          <div class="khead"><b>Block flow</b><span class="faint">projected → being built → the chain</span></div>
+          <div id="kTrain" class="flowwrap"></div>
+        </div>
+        </div>
+        <button type="button" class="kfull" id="kFull" title="full screen">full screen</button>
+      </div>
+    </section>
+
+    <!-- ======================================================== MARKETS -->
+    <!-- Exchange prices on the block-space board (public/js/markets.js, server/collect/markets.js). -->
+    <section class="page" data-page="markets">
+      <div class="grid">
+        <div class="card w12 mkcard">
+          <h3>Markets <span class="sp"></span><span class="src">public exchange APIs · hourly candles · fetched only while this tab is open</span></h3>
+          <div class="mkbar" id="mkBar"></div>
+          <!-- THE VISUALIZER FIRST (operator: "move the 3D View to the top of the markets display. That
+               should be our main selling point, is the spectacular visualizer") -->
+          <div class="mklayout">
+            <div class="treemapwrap mkboard"><canvas class="treemap" id="mkBoard"></canvas><div class="goggles-tip hidden"></div></div>
+            <aside class="mkside"><div class="hud" id="mkLegend"></div></aside>
+          </div>
+          <div class="mksum" id="mkSummary"></div>
+          <canvas class="mkchart" id="mkChart"></canvas>
+          <div id="mkTable"></div>
+          <h3 class="mksub">Order book depth <span class="faint">cumulative bids and asks against price · each exchange's book, their total, and the total as it stood · change bars on the right, log scale</span></h3>
+          <div class="mkbar" id="mkDepthBar"></div>
+          <canvas class="mkchart mkdepth" id="mkDepth"></canvas>
+          <div class="note tiny faint" id="mkDepthNote"></div>
+          <div class="note tiny faint" id="mkNote"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= EXPLORER -->
+    <!-- Blocks, transactions and addresses from this node (public/js/explorer.js). The route is
+         on the URL: #explorer/block/<height>, #explorer/tx/<txid>, #explorer/address/<addr>. -->
+    <section class="page" data-page="explorer">
+      <div class="grid">
+        <div class="card w12 xcard">
+          <form id="xSearch" class="xsearch" role="search" autocomplete="off">
+            <input id="xQuery" type="search" spellcheck="false" placeholder="block height, block hash, transaction id or address" aria-label="search the chain">
+            <button type="submit">Search</button>
+          </form>
+          <div id="xBody"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="peers">
+      <div class="grid">
+        <!-- THE PEER TABLE IS THE PAGE (operator, 2026-09-11: "We need to really compress the
+             panels in this screen to show more data. I don't want to have to scroll down to see
+             the primary information for that tab"). Two Connections cards showed the same count,
+             two charts the same 24 hours, and a seven-row budget list answered "–" or "not
+             reported" to every row on this build, all before the first peer. Now one strip --
+             the count with what the node does report, then one short history -- and the table. -->
+        <div class="prtop">
+          <div class="card prsum">
+            <h3>Connections <span class="sp"></span><span class="src">getconnectioncount · getnetworkinfo</span></h3>
+            <div class="metric"><div><span class="v" id="prCount">–</span></div><div class="s" id="prSplit">–</div></div>
+            <dl class="kv prbudget" id="prBudget"></dl>
+          </div>
+          <div class="card">
+            <h3>Connection history <span class="sp"></span><span class="src">in / out over 24h</span></h3>
+            <canvas class="chart short" id="prChart"></canvas>
+          </div>
+        </div>
+        <div class="card w12 prpeers">
+          <h3>Peers <span class="sp"></span><span class="src">getpeerinfo, every 15 s · bytes and rates per connection</span></h3>
+          <div class="note tiny faint" id="prIdentityNote"></div>
+          <div id="prTable"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================== NETWORK -->
+    <section class="page" data-page="network">
+      <div class="grid">
+        <div class="card w6">
+          <h3>Throughput <span class="sp"></span><span class="src">getnettotals (RPC)</span></h3>
+          <div class="metric"><div class="l">network in</div><div><span class="v" id="ovNetIn">–</span><span class="u" id="ovNetInU"></span></div>
+            <div class="s" id="ovDisk">–</div></div>
+          <canvas class="chart" id="ovNetChart"></canvas>
+        </div>
+        <div class="card w6">
+          <h3>Upload <span class="sp"></span><span class="src">what the node reports</span></h3>
+          <div class="note" id="ntUploadNote"></div>
+          <dl class="kv" id="ntRpc"></dl>
+        </div>
+        <div class="card w6">
+          <h3>Traffic accounting <span class="sp"></span><span class="src">cumulative</span></h3>
+          <dl class="kv" id="ntAccounting"></dl>
+        </div>
+        <div class="card w12">
+          <h3>Where each number comes from <span class="sp"></span><span class="src">explicit sources</span></h3>
+          <div class="note" id="ntSources"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= EVENTS -->
+    <section class="page" data-page="mining">
+      <div class="grid">
+        <!-- TWO INDEPENDENT STACKS (operator, 2026-09-11: "too much wasted space in this
+             display. Crunch down the panel sizes to fit more info"). One grid coupled the rows:
+             the square Mempool space viewer set the first row, so Block flow sat in a 591 px
+             card using ~273, and the landscape was stretched to the packages table. Stacks never
+             stretch a card to its neighbour; the explanatory Detailed card folds away. -->
+        <div class="mncols">
+          <div class="ovcol">
+            <div class="card">
+              <h3>Block flow <span class="sp"></span><span class="src">being assembled → <b>the current block</b> → history receding</span></h3>
+              <div id="mnFlow" class="flowwrap"></div>
+            </div>
+            <div class="mnpair">
+              <div class="card">
+                <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getblocktemplate · depends</span></h3>
+                <div id="mnPackages"></div>
+              </div>
+              <div class="card">
+                <h3>Feerate landscape <span class="sp"></span><span class="src">the transactions selected for the next block</span></h3>
+                <canvas class="chart" id="mnFeeLandscape"></canvas>
+                <div class="note tiny faint">Buckets are sat/vB. Green means the bucket pays well above the block's own median, red below — the same shape a miner is looking at when it decides what still fits.</div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Pools in this window <span class="sp"></span><span class="src">coinbase tags, grouped by curated label</span></h3>
+              <div id="mnPools"></div>
+            </div>
+          </div>
+          <div class="ovcol">
+            <div class="card">
+              <h3>Mempool space <span class="sp"></span><span class="src">every rectangle is a waiting transaction: area = vbytes, colour = its feerate, richest first</span></h3>
+              <div class="treemapwrap sq">
+                <canvas class="treemap" id="gnMempoolTreemap"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div>
+                <div class="goggles-tip hidden"></div>
+              </div>
+              <div class="note tiny faint" id="gnMempoolNote"></div>
+            </div>
+            <div class="card">
+              <h3>Attribution <span class="sp"></span><span class="src">what we read and from where</span></h3>
+              <div id="mnCoverage"></div>
+            </div>
+            <details class="card mndetailed">
+              <summary><h3>Detailed <span class="sp"></span><span class="src">what this node can and cannot answer</span></h3></summary>
+              <div class="kv">
+                <dt>fee deployment by miner</dt><dd>above, per mined block</dd>
+                <dt>block fullness &amp; gaps</dt><dd>block train above</dd>
+                <dt>mempool feerate landscape</dt><dd>on the <b>Mempool</b> page (fee histogram + scatter)</dd>
+                <dt>CPFP / child-pays-for-parent clusters</dt><dd>shown above, <b>for the block under construction</b>.
+                  The ancestor graph is <span class="mono">getblocktemplate … depends</span> (indices into the selected
+                  transactions) — 1,496 transactions, 19 multi-transaction packages and 40 transactions inside a package as
+                  measured on 2026-09-09. It is <b>not</b> the whole mempool: <span class="mono">getrawmempool verbose</span> on
+                  this build carries no <span class="mono">depends</span> and no <span class="mono">ancestorcount</span>, and
+                  there is no <span class="mono">zmqpubsequence</span>, so the unselected pool cannot be clustered. The card
+                  says which of those two it is showing rather than blurring them together.</dd>
+                <dt>1p1c ancestor packages</dt><dd><span class="warn">not shown.</span> The node reports accepted/failed counts for
+                  1p1c packages, but only in its own log lines, and log files are not a source this monitor reads. The package
+                  view above is built from <span class="mono">getblocktemplate … depends</span>, which is RPC.</dd>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="logs">
+      <div class="grid">
+        <div class="card w12">
+          <h3>Monitor events <span class="sp"></span><span class="src">what this monitor observed and decided; the node's log is not a source here</span><span class="count faint tiny" id="lgCount"></span></h3>
+          <div class="rowform">
+            <input class="f grow minw-200" id="lgSearch" placeholder="filter text, e.g. orphan, unreachable, stored">
+            <select class="f" id="lgSev"><option value="">all severities</option><option value="warn">warn</option><option value="error">error</option><option value="info">info</option></select>
+            <select class="f" id="lgKind"><option value="">all kinds</option></select>
+            <span class="spacer grow"></span>
+            <button class="btn" id="lgClear">clear</button>
+          </div>
+          <div class="feed tall" id="lgFeed"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================== NODE & RPC -->
+    <section class="page" data-page="node">
+      <div class="grid">
+        <div class="card w6">
+          <h3>RPC etiquette <span class="sp"></span><span class="src">what this app asks of the node</span></h3>
+          <dl class="kv" id="ndRpc"></dl>
+          <canvas class="chart short" id="ndLatChart"></canvas>
+          <div class="note tiny faint">The node's RPC server services one connection at a time on a single thread. This app keeps one request in flight, spaces them, batches multiple methods per connection, and drops a poll that could not answer in time to be true.</div>
+        </div>
+        <div class="card w6">
+          <h3>Poll cadence <span class="sp"></span><span class="src">configured vs actual</span></h3>
+          <table class="t" id="ndCadence"><thead><tr><th>tier</th><th class="r">configured</th><th class="r">actual</th><th class="r">last run</th></tr></thead><tbody></tbody></table>
+          <div class="note tiny faint" id="ndCadenceNote"></div>
+        </div>
+
+        <div class="card w6">
+          <h3>Data quality <span class="sp"></span><span class="src">known gaps, stated</span></h3>
+          <div id="ndQuality"></div>
+        </div>
+        <div class="card w3">
+          <h3>Monitor self-telemetry <span class="sp"></span><span class="src">this process</span></h3>
+          <dl class="kv" id="ndSelf"></dl>
+          <canvas class="chart short" id="ndSelfChart"></canvas>
+        </div>
+        <div class="card w3">
+          <h3>Log tail <span class="sp"></span><span class="src">follow state</span></h3>
+          <dl class="kv" id="ndTail"></dl>
+        </div>
+
+        <div class="card w6">
+          <h3>Panel sources <span class="sp"></span><span class="src">provenance</span></h3>
+          <div id="ndSources"></div>
+        </div>
+        <div class="card w6">
+          <h3>RPC console <span class="sp"></span><span class="src">read-only allowlist</span></h3>
+          <div class="rowform">
+            <input class="f grow minw-180" id="rpcMethod" placeholder="method, e.g. getblockchaininfo">
+            <input class="f grow minw-140" id="rpcParams" placeholder='params JSON array, e.g. [6]'>
+            <button class="btn primary" id="rpcRun">call</button>
+          </div>
+          <div class="note tiny faint" id="rpcNote">Mutating, wallet- and peer-control methods are refused by this app regardless of what the node would do.</div>
+          <pre class="mono tiny output-box" id="rpcOut"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================== ADMIN -->
+    <section class="page" data-page="admin">
+      <div class="grid">
+        <div class="card w6">
+          <h3>Users <span class="sp"></span><span class="src">scrypt-hashed, never shown</span></h3>
+          <div class="scroll"><table class="t" id="adUsers"><thead><tr><th>user</th><th>role</th><th>created</th><th>last login</th><th></th></tr></thead><tbody></tbody></table></div>
+          <div class="hr"></div>
+          <div class="rowform">
+            <input class="f" id="newUser" placeholder="username" autocomplete="off">
+            <select class="f" id="newRole"><option value="viewer">viewer</option><option value="operator">operator</option><option value="admin">admin</option></select>
+            <button class="btn" id="btnGen">generate password</button>
+          </div>
+          <div class="note tiny" id="adGen"></div>
+        </div>
+
+        <div class="card w6">
+          <h3>Node actions <span class="sp"></span><span class="src">off unless enabled</span></h3>
+          <div class="note tiny" id="adActions"></div>
+        </div>
+
+        <div class="card w6">
+          <h3>Audit log <span class="sp"></span><span class="src">credentials use, without credentials</span></h3>
+          <div class="scroll lg"><table class="t" id="adAudit"><thead><tr><th>when</th><th>type</th><th>who</th><th>detail</th></tr></thead><tbody></tbody></table></div>
+          <div class="note tiny faint mt-6" id="adAuditSize"></div>
+        </div>
+
+        <div class="card w6">
+          <h3>Change own password <span class="sp"></span></h3>
+          <div class="field"><label>current password</label><input class="f w-full" type="password" id="pwCurrent" autocomplete="current-password"></div>
+          <div class="field"><label>new password</label><input class="f w-full" type="password" id="pwNew" autocomplete="new-password"></div>
+          <button class="btn primary" id="btnPw">change password</button>
+          <div class="note tiny faint mt-6">Changing it revokes every session, including this one.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

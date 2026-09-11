@@ -1,0 +1,100 @@
+# bmcmonitor -- multi-user web monitor for the Bitcoin Machine Code node.
+#
+# Install:
+#   sudo cp systemd/bmcmonitor.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now bmcmonitor
+#
+# Read-only by design: this unit needs no access to the node's datadir beyond the
+# log file and the RPC cookie, and the app performs no node writes unless
+# BMC_MON_ENABLE_ACTIONS=1 plus an explicit BMC_MON_ACTIONS list are set.
+#
+# Nothing in this file is machine- or person-specific on purpose: it is committed,
+# so real usernames and host addresses belong in config/local.json, which is
+# gitignored. Two lines below are therefore placeholders you must edit.
+[Unit]
+Description=bmcmonitor - Bitcoin Machine Code node monitor
+Documentation=file:///storage/bmcmonitor/AGENTS.md
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# EDIT ME: the account that may read <datadir>/<chain>/.cookie and the node log.
+# Cookie authentication is unusable without that read access, so a wrong user here
+# shows up as a permanently-offline node rather than a clear error.
+User=bmcmon
+Group=bmcmon
+WorkingDirectory=/storage/bmcmonitor
+# Name the interpreter, do not go looking for it. Measured on this box 2026-09-09:
+#   /usr/bin/node        is v18.19.1 -- below package.json engines ">=22", and it starts
+#                        far enough to fail on syntax, which reads like a code bug.
+#   /usr/local/bin/node  is a symlink into a root-owned private runtime; that home is
+#                        mode 0700, so for any User= but root it does not exist -- and
+#                        /usr/local/bin is FIRST on systemd's default PATH.
+# `/usr/bin/env node` therefore resolves either to a runtime that is too old or to
+# nothing. Pin PATH for child processes and give ExecStart an absolute path; generate
+# the path once with `node -v` on the target and paste it in, since this file is
+# committed and a per-machine interpreter belongs in a drop-in, not here.
+#Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+#ExecStart=/absolute/path/to/node server/main.js
+ExecStart=/usr/bin/env node server/main.js
+# always, not on-failure. The outage this box actually had -- service gone, nothing on
+# the port, no error line anywhere in the log, no journal entry because nothing was
+# supervising it -- is exactly the case on-failure cannot see: an exit 0, or a stop that
+# leaves no trace. With Restart=always the exit status and signal at least reach the
+# journal, which is the difference between "it died" and "it died of 9/KILL at 08:35".
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+# SIGTERM triggers the durable-shutdown path (history + sessions are saved with
+# tmp+fsync+rename), so give it room to finish rather than SIGKILL mid-flush.
+TimeoutStopSec=45
+
+# BINDING. Which address to serve is a per-machine decision, so it lives in
+# config/local.json (`server.hosts`), not here -- that file is gitignored and the
+# app refuses to start if a configured address is absent at boot, rather than
+# silently falling back to a wildcard. A previous revision of this file embedded a
+# real LAN address here AND had two Environment= assignments concatenated onto one
+# line, which silently discarded BMC_MON_PORT; both are fixed by not putting
+# machine facts in a committed file in the first place.
+#
+# Consequences worth remembering: binding a single non-loopback address means
+# 127.0.0.1 on the host itself stops working (curl checks must use that address),
+# and clients that reach the box over a tunnel need that tunnel's address listed.
+Environment=BMC_MON_PORT=8088
+Environment=BMC_MON_NODE_URL=http://127.0.0.1:8331
+Environment=BMC_MON_DATADIR=/storage/bitcoinmachinecode/data
+Environment=BMC_MON_LOGFILE=/storage/bitcoinmachinecode/logs/main/bitcoin.main.log
+Environment=BMC_MON_LOG_LEVEL=info
+# ACCESS: accounts are OFF by default, so anyone who can reach the bound addresses
+# reads this monitor (role "viewer": charts, feeds, read-only RPC console). User
+# administration, the audit trail and node writes stay closed to them. Uncomment to
+# require sign-in (accounts, roles, sessions, CSRF, per-user audit):
+#Environment=BMC_MON_AUTH=1
+#
+# Node writes stay off, and while accounts are off they stay off even if actions are
+# enabled -- a write with no identity behind it is not attributable. Enabling needs
+# ALL of: the two lines below, accounts on (above), or the explicit
+# BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1. The second line names the specific actions, so
+# "we turned on writes" is never an unspecific statement.
+#Environment=BMC_MON_ENABLE_ACTIONS=1
+#Environment=BMC_MON_ACTIONS=testmempoolaccept,savemempool
+
+# Modest hardening. NoNewPrivileges plus a read-only /home is enough here: the
+# service must read the node's RPC cookie and log, so a full PrivateTmp/
+# ProtectSystem=strict would fight the thing it is monitoring.
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bmcmonitor
+
+[Install]
+WantedBy=multi-user.target

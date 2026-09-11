@@ -1,0 +1,29 @@
+2026-09-07 09:24:39.281 [dlc] -- network recv this tick: 6.6KB (674.1B/s) | total recv: 1.8MB || disk write this tick: 0.0B (0.0B/s) | total written: 1.7MB --
+2026-09-07 09:24:39.281 [dlc] -- peers banned this run: 95 of 123 --
+2026-09-07 09:24:39.281 [dlc] -- average since start: 409.6B/s recv, 380.4B/s write --
+2026-09-07 09:33:50.618 [dial] 172.233.223.232:8333 lacks NODE_WITNESS (services=0xc05) -- dropping
+2026-09-07 09:57:33.224 [dl] parallel downloader wrote 0 block(s); archive now 966013
+2026-09-07 09:57:34.304 [config] conns: max=256 outbound=11 (full=8 blockrelay=2 feeler=1) inbound=245 feeler_every=120s
+2026-09-07 09:57:34.397 [tx_accept] WAL is 7536083 bytes -- sizing the validation snapshot at 2^18 slots, 64 MB blob (the writer was bulk-sized when it last wrote)
+2026-09-07 09:58:23.433 [check] block data is NOT laid out monotonically (first break at height 964924) -- truncation and pruning will refuse to run
+2026-09-07 09:58:23.815 [dial] no global IPv6 route on this host: ipv6 peers are unreachable (cjdns unaffected)
+2026-09-07 10:01:16.987 [dial] 155.186.231.61:8333 connected over v1
+2026-09-07 10:01:58.753 [dl] heartbeat: tip=965913 peers=4/4 txouts=165316904 uptime=00:00:01:04
+2026-09-07 10:01:58.753 [txrelay] orphans: 259 held, 289 parked, 30 resolved, 0 dropped; 1p1c: 0 accepted, 0 failed
+2026-09-07 10:01:58.753 [txrelay] orphan drops: 0 ttl, 0 evicted, 0 rejected | parents requested 325, notfound 93, re-requested after timeout 0, retried on another peer 98 (gave up 44, in flight 106), sync deferred 18
+2026-09-07 10:02:00.206 [txrelay] last 60s: +240 tx accepted via legs [0:70.95.119.72:8333 +50, 1:51.81.57.2:8333 +185, 2:155.186.231.61:8333 +5] (mempool 2741)
+2026-09-07 10:04:36.480 [mux:3] leg replaced: connected next pool peer 79.154.41.211:8333 (fd 30) addrv2=1
+2026-09-07 10:08:28.687 [dlc] ranked 119 live peer(s) by a 2000-header sample in 40.0s: 37 answered, best 78 KB/s, median 59 KB/s, slowest answering 0 KB/s; the 82 silent rank last
+2026-09-07 10:08:35.841 [dlc] -- dead-weight floor this tick: 32.0 KB/s (pool median 0.0 KB/s, absolute 32.0 KB/s) --
+2026-09-07 10:10:20.831 [dl] new block: height=965914 hash=000000000000000000002865d25593b33a67c8d06bc5f518f44153b49fb882ea (+1)
+2026-09-07 10:10:20.832 [dl] announced tip height=965914 to 3/3 legs
+2026-09-07 10:10:20.840 [mempool] block 965914: removed 66 pool tx (confirmed/conflicted)
+2026-09-07 10:14:17.816 [dl:6] 186.226.151.18:8333 connection dropped (revents 0x19); re-dialing
+2026-09-07 10:21:37.219 [block] stored height=965915 hash=0000000000000000.. bytes=1558613 tx=5109 (via 193.223.81.8:8333)
+2026-09-08 10:22:50.137 [txrelay] addrv2 gossip: +2 address(es) to the book
+2026-09-08 10:22:28.460 [dl] outbound top-up: 4 dial(s) failed, first 93.201.114.79:8333: connect: Operation now in progress
+2026-09-08 10:09:13.021 [dl] updating utxo: applied 1 block(s), now at height 966054, live=165330654 (0.21s)
+2026-09-08 10:09:13.021 [dl] header mirror +1 from the archive (now 966055, archive tip 966054)
+2026-09-08 10:19:22.299 [dial] 31.21.210.206:8333: dialing in the background (ipv4)
+2026-09-08 10:19:52.928 [dial] 31.21.210.206:8333: background dial failed: connect: Operation now in progress
+2026-09-08 10:03:05.234 [dial] no global IPv6 route on this host: ipv6 peers are unreachable (cjdns unaffected)

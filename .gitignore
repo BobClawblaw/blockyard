@@ -1,0 +1,21 @@
+# Everything under data/ is runtime state, and some of it is secret:
+#   users.json    scrypt hashes + salts  (0600, but never commit it)
+#   sessions.json hashed session tokens
+#   audit.jsonl   who called what, when
+#   history.json  several MB of time series, rewritten every 2 minutes
+/data/
+/*.log
+*.tmp
+
+config/local.json
+
+node_modules/
+.DS_Store
+*.swp
+
+# local agent worktrees and settings
+.claude/
+
+# working notes stay on the working machine (never published)
+worklog/
+docs/STATE-*.md

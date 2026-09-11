@@ -1,0 +1,1320 @@
+/* bmcmonitor -- dark instrument panel.
+   No webfonts, no CDN: this runs on a LAN box and must look identical with no
+   network. Numbers are monospaced and tabular so they do not jitter as they
+   change, which matters more in a live panel than typography opinions. */
+
+:root {
+  --bg: #0b0d10;
+  --bg-1: #12151a;
+  --bg-2: #171b21;
+  --bg-3: #1e232b;
+  --line: #262c36;
+  --line-soft: #1d222a;
+  --fg: #dfe5ee;
+  --fg-dim: #96a0b0;
+  --fg-faint: #6a7484;
+  --accent: #f7931a;
+  --accent-dim: #b06c10;
+  --ok: #2ecc8f;
+  --warn: #f0b429;
+  --bad: #ef5a5a;
+  --info: #58a6ff;
+  --purple: #a78bfa;
+  --cyan: #4dd0e1;
+  --pink: #f06ba7;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .28);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+a { color: var(--info); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------------- shell */
+
+/* ONE COLUMN, NEVER WIDER THAN THE WINDOW (operator, 2026-09-11: "it's rendering off
+   the screen to the right. We need to make sure the panel fits entirely into the
+   viewspace"). An implicit grid column is as wide as its widest child's min-content,
+   and the locked, unwrappable top bar's is ~1164 px -- so under that width the whole
+   page, Block space panel included, ran off the right edge. minmax(0, 1fr) holds the
+   column to the window; the bar's nav then gives way by scrolling, as designed. */
+.app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); height: 100vh; }
+
+/* THE BAR IS ONE LINE AND DOES NOT MOVE (operator, 2026-09-11: "Look at how
+   text in upper right is being jammed up on resizing. We need to lock shit down
+   better on that line"). Every item is nowrap with a fixed footprint; readouts
+   that change (stream state, rpc latency, uptime) reserve their widest width in
+   tabular digits, so a new value cannot shove its neighbours. When the window
+   narrows, whole low-priority items drop out at fixed breakpoints (below)
+   instead of anything wrapping, and the nav is the one part allowed to give
+   way -- it scrolls sideways rather than squeezing the right-hand side. */
+header.top {
+  display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; white-space: nowrap;
+  min-width: 0; overflow: hidden;   /* last resort: the bar clips, it never widens the page */
+  padding: 0 14px; height: 46px;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border-bottom: 1px solid var(--line, #262c35);
+  z-index: 20;
+}
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; letter-spacing: .2px; flex: 0 0 auto; }
+.brand .mark {
+  width: 20px; height: 20px; border-radius: 5px;
+  background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent-dim));
+  box-shadow: 0 0 0 1px #00000066 inset, 0 0 12px #f7931a55;
+  display: grid; place-items: center; font-size: 11px; color: #16110a; font-weight: 800;
+}
+.brand small { color: var(--fg-faint); font-weight: 500; }
+
+nav.pages { display: flex; gap: 2px; margin-left: 6px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+nav.pages::-webkit-scrollbar { display: none; }
+nav.pages button {
+  background: none; border: 0; color: var(--fg-dim); font: inherit; font-weight: 550;
+  padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;
+}
+nav.pages button:hover { background: var(--bg-3, #12161c); color: var(--fg); }
+nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); box-shadow: inset 0 -2px 0 -1px var(--accent); }
+
+.spacer { flex: 1 1 0; min-width: 8px; }
+.top .meta { display: flex; align-items: center; gap: 12px; color: var(--fg-faint); font-family: var(--mono); font-size: 11px;
+  flex: 0 0 auto; white-space: nowrap; }
+.top .meta > span { flex: 0 0 auto; white-space: nowrap; }
+.top .meta b { color: var(--fg-dim); font-weight: 600; }
+/* widest value each readout can take, reserved, in tabular digits */
+#sseState { display: inline-block; min-width: 10ch; }
+#rpcLat { display: inline-block; min-width: 6ch; font-variant-numeric: tabular-nums; }
+#appUp { display: inline-block; min-width: 6ch; font-variant-numeric: tabular-nums; }
+#nodePick > span { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+
+.userchip { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; white-space: nowrap; }
+/* Whole items leave, in this order, rather than anything wrapping. */
+@media (max-width: 1760px) { #whoami { display: none; } nav.pages button { padding: 6px 8px; } }
+@media (max-width: 1500px) { .brand small { display: none; } .top .meta > span[title="Monitor uptime"] { display: none; } }
+@media (max-width: 1280px) { .top .meta > span[title="Node RPC round trip"] { display: none; } #nodePick > span { max-width: 16ch; } }
+.userchip select, .btn {
+  background: var(--bg-3, #12161c); color: var(--fg); border: 1px solid var(--line, #262c35);
+  border-radius: var(--radius-sm); padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--fg-faint); }
+.btn.primary { background: var(--accent); color: #17110a; border-color: #0000; font-weight: 650; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+main { overflow: auto; padding: 14px; scrollbar-color: var(--bg-3, #12161c) transparent; }
+main::-webkit-scrollbar { width: 10px; }
+main::-webkit-scrollbar-thumb { background: var(--bg-3, #12161c); border-radius: 6px; }
+
+/* pages are hidden rather than unmounted: charts keep their buffers and the
+   active page can re-render without a rebuild */
+.page { display: none; }
+.page.on { display: block; }
+
+/* ---------------------------------------------------------------- cards */
+
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); }
+.card {
+  grid-column: span 4;
+  background: var(--bg-1); border: 1px solid var(--line-soft); border-radius: var(--radius);
+  padding: 12px 13px; box-shadow: var(--shadow); min-width: 0;
+}
+.card.w3 { grid-column: span 3; } .card.w4 { grid-column: span 4; } .card.w5 { grid-column: span 5; }
+.card.w6 { grid-column: span 6; } .card.w7 { grid-column: span 7; } .card.w8 { grid-column: span 8; }
+.card.w9 { grid-column: span 9; } .card.w12 { grid-column: span 12; }
+@media (max-width: 1280px) { .card { grid-column: span 6 !important; } .card.w12 { grid-column: span 12 !important; } }
+@media (max-width: 860px) { .card { grid-column: span 12 !important; } }
+
+.card > h3 {
+  margin: 0 0 9px; font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--fg-faint);
+  display: flex; align-items: center; gap: 8px;
+}
+.card > h3 .src { font: 400 10px/1.2 var(--mono); text-transform: none; letter-spacing: 0; color: var(--fg-faint); opacity: .8; }
+.card > h3 .sp { flex: 1; }
+
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-family: var(--mono); font-size: 12px; }
+.kv dt { color: var(--fg-dim); }
+.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+.metric { font-family: var(--mono); }
+.metric .v { font-size: 24px; font-weight: 600; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.metric .u { font-size: 11px; color: var(--fg-faint); margin-left: 3px; }
+.metric .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-faint); margin-bottom: 2px; }
+.metric .s { font-size: 11px; color: var(--fg-dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.dim { color: var(--fg-dim); } .faint { color: var(--fg-faint); }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .info { color: var(--info); }
+.accent { color: var(--accent); } .purple { color: var(--purple); } .cyan { color: var(--cyan); }
+.mono { font-family: var(--mono); }
+.tiny { font-size: 11px; } .micro { font-size: 10px; }
+
+canvas.chart { width: 100%; height: 130px; display: block; }
+canvas.chart.tall { height: 220px; }
+canvas.chart.short { height: 84px; }
+
+/* ------------------------------------------------------------ sync strip */
+
+/* One dense instrument row + a hairline bar, for every state. The header used to
+   expand to ~10 rows whenever a sync was running, pushing the charts off screen
+   at exactly the wrong moment -- and spent those same rows printing "100%" when
+   nothing was happening. Numbers are tabular so the row does not shimmer. */
+.sync {
+  grid-column: span 12;
+  background: linear-gradient(180deg, #171b22 0%, #12151a 100%);
+  border: 1px solid var(--line, #262c35); border-radius: var(--radius);
+  padding: 8px 12px 9px; box-shadow: var(--shadow); position: relative;
+}
+.sync::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: var(--radius);
+  background: radial-gradient(140% 220% at 4% -60%, #f7931a16, transparent 55%);
+}
+.strip { display: flex; align-items: baseline; gap: 4px 13px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; position: relative; z-index: 1; }
+.sf { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.sf i { font-style: normal; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); }
+.sf b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; letter-spacing: -.1px; }
+.sf.node b { font-family: var(--sans); font-size: 12.5px; letter-spacing: 0; }
+.sf + .sf::before { content: ''; display: inline-block; width: 0; }
+.strip > .sf:not(.node) { border-left: 1px solid var(--line-soft); padding-left: 13px; }
+.pct-big b { font-size: 15px; letter-spacing: -.4px; }
+.sf.accent b { color: var(--accent); } .sf.ok b { color: var(--ok); } .sf.bad b { color: var(--bad); }
+.sf.warn b { color: var(--warn); }
+.sf.jump { background: none; border: 0; border-left: 1px solid var(--line-soft); padding: 0 0 0 13px; cursor: pointer; font: inherit; }
+.sf.jump b { color: var(--info); text-decoration: underline dotted #58a6ff66; text-underline-offset: 3px; }
+.sf.jump:hover b { color: #cfe4ff; }
+.strip-tail { margin-left: auto; display: inline-flex; align-items: center; gap: 9px; }
+.sf.note-count { cursor: pointer; }
+.sf.note-count b { text-decoration: underline dotted currentColor; text-underline-offset: 3px; }
+
+.bar {
+  margin-top: 7px; height: 6px; border-radius: 4px; position: relative;
+  background: #0c0e11; border: 1px solid var(--line, #262c35); box-shadow: inset 0 1px 2px #000000a0; overflow: hidden;
+}
+.bar .fill {
+  position: absolute; inset: 0 auto 0 0; width: 0;
+  background: linear-gradient(90deg, #b06c10, var(--accent));
+  transition: width .6s cubic-bezier(.22, .61, .36, 1);
+}
+.bar .fill.done { background: linear-gradient(90deg, #1a8f68, var(--ok)); }
+.bar .fill.stall { background: linear-gradient(90deg, #8f2a2a, var(--bad)); }
+/* the node's own difficulty-weighted estimate, as a separate marker: the two
+   percentages measure different things and are never merged into one number */
+.bar .vp-tick { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #58a6ffee; box-shadow: 0 0 6px #58a6ff99; }
+.expanded { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.expanded .kv { grid-template-columns: minmax(190px, auto) 1fr; }
+.expanded .kv dd { text-align: left; color: var(--fg); }
+.tiny-btn { padding: 2px 8px; font-size: 11px; }
+
+.caveat {
+  margin-top: 6px; padding: 6px 10px; border-radius: var(--radius-sm);
+  background: #1b1a12; border: 1px solid #453a15; color: #f3d38a;
+  font-size: 11.5px; line-height: 1.45;
+}
+.caveat.bad { background: #1c1214; border-color: #50242a; color: #f0a8ad; }
+.caveat b { color: #fff; font-weight: 650; }
+
+/* status badges (used across every page, not just the sync strip) */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px;
+  font: 650 10.5px/1.6 var(--sans); letter-spacing: .04em; text-transform: uppercase;
+  background: var(--bg-3, #12161c); border: 1px solid var(--line, #262c35); white-space: nowrap;
+}
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.badge.ok { color: var(--ok); } .badge.sync { color: var(--accent); }
+.badge.warn { color: var(--warn); } .badge.bad { color: var(--bad); }
+.badge.muted { color: var(--fg-faint); } .badge.info { color: var(--info); }
+.pulse .dot { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .28; } }
+
+/* --------------------------------------------------------------- tables */
+
+table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.t th {
+  text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--fg-faint); font-weight: 650; padding: 5px 7px; border-bottom: 1px solid var(--line, #262c35);
+  position: sticky; top: 0; background: var(--bg-1); z-index: 1;
+}
+table.t td { padding: 4px 7px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+table.t tr:hover td { background: #ffffff06; }
+table.t td.r { text-align: right; }
+table.t td.w { font-family: var(--sans); }
+.scroll { max-height: 320px; overflow: auto; }
+
+/* ------------------------------------------------------------ feed */
+
+.feed { max-height: 340px; overflow: auto; font-family: var(--mono); font-size: 11.5px; }
+/* Column widths that survive real content, because both original tracks were wrong.
+   - `1fr` has an automatic minimum of `min-width: auto`, so one long unbreakable token
+     (a block hash, `(run 150/438/7/73/0)`) STRETCHED the text track past the card and
+     the row spilled over the next column. `minmax(0, 1fr)` is the cap. Note
+     `word-break: break-word` does not reduce a track's min-content contribution --
+     `overflow-wrap: anywhere` is the property that does.
+   - the tag track was 66px, narrower than the kind names it must hold
+     (`peer_live_probe`, `dial_failures`, `check_problems`), so the tag overflowed into
+     the text column -- reported as "fields carry over from one column to the next".
+     Widened, and allowed to wrap rather than truncate: a clipped kind is a lost fact. */
+.feed .row { display: grid; grid-template-columns: 74px 124px minmax(0, 1fr); gap: 8px; padding: 2.5px 0; border-bottom: 1px solid #ffffff05; align-items: baseline; }
+.feed .row .ts { color: var(--fg-faint); font-size: 10.5px; }
+.feed .row .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .95; }
+.feed .row .txt { color: var(--fg-dim); min-width: 0; overflow-wrap: anywhere; }
+/* An event kind is one word and stays one line (operator, 2026-09-11: "field text getting cut
+   off and wrapped for event name" -- COLLECTOR_ERROR broke as COLLECTOR_ERRO / R in a 96 px
+   column with overflow-wrap: anywhere). 124 px holds it; anything longer is trimmed with an
+   ellipsis and named in full in its title. */
+.feed .row .tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.feed .row.warn .txt { color: #e8c987; }
+.feed .row.warn .tag { color: var(--warn); }
+.feed .row.error .txt, .feed .row.error .tag { color: var(--bad); }
+.feed .row.info .tag { color: var(--info); }
+.feed .row.new { animation: flash .9s ease-out; }
+@keyframes flash { from { background: #f7931a22; } to { background: transparent; } }
+
+.rowform { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+input.f, select.f, textarea.f {
+  background: #0c0e11; border: 1px solid var(--line, #262c35); color: var(--fg);
+  border-radius: var(--radius-sm); padding: 5px 8px; font: inherit; font-size: 12px;
+}
+input.f:focus, select.f:focus, textarea.f:focus { outline: none; border-color: var(--accent-dim); }
+textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: vertical; }
+
+.note { font-size: 11.5px; color: var(--fg-dim); line-height: 1.5; }
+.note.warn { color: #e8c987; }
+.hr { height: 1px; background: var(--line-soft); margin: 10px 0; }
+
+.toast {
+  position: fixed; right: 14px; bottom: 14px; z-index: 100; display: flex; flex-direction: column; gap: 7px;
+}
+.toast div {
+  background: var(--bg-3, #12161c); border: 1px solid var(--line, #262c35); border-left: 3px solid var(--accent);
+  padding: 8px 12px; border-radius: var(--radius-sm); font-size: 12px; box-shadow: var(--shadow);
+  max-width: 380px; animation: slide .18s ease-out;
+}
+.toast div.bad { border-left-color: var(--bad); }
+.toast div.ok { border-left-color: var(--ok); }
+@keyframes slide { from { transform: translateY(8px); opacity: 0; } }
+
+.offline-bar {
+  grid-column: span 12; padding: 9px 12px; border-radius: var(--radius);
+  background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; font-size: 12px;
+}
+.hidden { display: none !important; }
+
+/* ---------------------------------------------------------------- login */
+
+.login-body { display: grid; place-items: center; height: 100vh; overflow: auto; padding: 20px; }
+.login-card {
+  width: 100%; max-width: 372px; background: var(--bg-1); border: 1px solid var(--line, #262c35);
+  border-radius: 12px; padding: 26px; box-shadow: var(--shadow);
+}
+.login-card h1 { margin: 0 0 3px; font-size: 19px; letter-spacing: -.2px; }
+.login-card p.sub { margin: 0 0 20px; color: var(--fg-faint); font-size: 12px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-faint); margin-bottom: 4px; }
+.field input {
+  width: 100%; background: #0c0e11; border: 1px solid var(--line, #262c35); color: var(--fg);
+  border-radius: var(--radius-sm); padding: 9px 10px; font: 14px var(--mono);
+}
+.field input:focus { outline: none; border-color: var(--accent-dim); box-shadow: 0 0 0 3px #f7931a1a; }
+.err { background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; }
+.locked { background: #1b1a12; border-color: #453a15; color: #f3d38a; }
+
+
+/* ----------------------------------------------------------------- extras */
+
+.offline-bar { grid-column: span 12; padding: 9px 12px; border-radius: var(--radius);
+  background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; font-size: 12px; }
+.hidden { display: none !important; }
+
+
+/* ------------------------------------------------- layout helpers, and why
+
+   These exist so that nothing in this app needs a `style="…"` attribute.
+   `style-src 'self'` refuses style attributes, and for most of this file's life the
+   policy carried `style-src-attr 'unsafe-inline'` as an allowance, because the
+   markup drew bars and progress widths that way. The allowance is now gone (it was
+   a CSP hole kept open by convenience), so:
+
+     * static widths like these became classes;
+     * data-driven widths are written through the CSSOM by app.js applyDataSizes(),
+       which reads `data-w` / `data-left` / `data-h` — CSP permits CSSOM writes, and
+       a width that goes through el.style.width cannot be an injection vector.
+
+   Putting a `style="` back will fail test/csp.test.js before it fails the browser
+   console, which is the order these things should happen in. */
+
+.mt-5 { margin-top: 5px; }
+.mt-6 { margin-top: 6px; }
+.mt-8 { margin-top: 8px; }
+.mt-14 { margin-top: 14px; }
+.mb-8 { margin-bottom: 8px; }
+.w-full { width: 100%; }
+.grow { flex: 1; }
+.minw-140 { min-width: 140px; }
+.minw-180 { min-width: 180px; }
+.minw-200 { min-width: 200px; }
+
+.scroll.sm { max-height: 220px; }
+.scroll.md { max-height: 250px; }
+.scroll.lg { max-height: 300px; }
+.feed.tall { max-height: calc(100vh - 260px); }
+canvas.chart.meter { height: 112px; }
+
+pre.pre-block { margin: 6px 0 0; white-space: pre-wrap; }
+pre.output-box {
+  max-height: 260px; overflow: auto; margin: 0; padding: 8px;
+  background: #0c0e11; border: 1px solid var(--line, #262c35); border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+}
+.btn.block { width: 100%; padding: 9px; }
+.select-all { user-select: all; -webkit-user-select: all; }
+
+/* Drill-down (a block, then its transactions): a detail pane inside a card, not a
+   new page, because "which transaction?" is asked while looking at a block. */
+.drill { border-top: 1px dashed var(--line, #262c35); margin-top: 10px; padding-top: 10px; }
+.drill .rowform { margin-bottom: 6px; }
+.txid-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.txid-list button {
+  font: 11px var(--mono); background: var(--bg-2); color: var(--fg-dim);
+  border: 1px solid var(--line, #262c35); border-radius: 4px; padding: 2px 5px; cursor: pointer;
+}
+.txid-list button:hover { color: var(--fg); border-color: var(--accent-dim); }
+.kv.tight { grid-template-columns: auto 1fr; }
+
+/* ---------------------------------------------------------- block flow */
+/* The direction is the content: blocks leave to the right, so the mined ones sit on the
+   left, the tip in the middle, and the block that does not exist yet on the right. A
+   static grid of the same numbers would be a table, not a flow. */
+/* The train reads as a timeline with the present at the divider: forecasts and the
+   block being assembled on the left, the confirmed chain receding right. The row
+   scrolls horizontally and the scroll starts parked AT the divider (JS sets
+   scrollLeft on the first render), so the interesting edge is what you land on and
+   dragging right walks through mined history. Cast shadows and any depth cues live
+   outside the card box; a scroll box clips at its padding edge, so the row needs
+   bottom padding or cards get their edges shaved when the row overflows. */
+.flowwrap { overflow-x: auto; padding-bottom: 8px; }
+/* The flow is a timeline with the present at the divider: [forecasts | being built] |
+   [tip | history receding]. The divider is ONE full-height line with an arrowhead on
+   each end and a rotated tag — the split between pending work and done work, not two
+   little arrows. The zones are flex rows; `done` gets the remaining width and its own
+   history list lives there too. */
+.flow { display: flex; align-items: stretch; gap: 10px; padding: 4px 2px 6px; width: max-content; }
+.flowside { display: flex; align-items: stretch; gap: 10px; min-width: 0; }
+.flowzone-label { position: absolute; top: 0; left: 2px; font-size: 9px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--fg-faint); pointer-events: none; }
+.flowside.todo { position: relative; flex: 0 0 auto; padding-top: 13px; }
+.flowside.done { position: relative; flex: 1 1 auto; padding-top: 13px; overflow: hidden; }
+.flowside.done .flowzone-label { left: auto; right: 2px; }
+.flowsep { position: relative; flex: 0 0 26px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px; }
+.flowsep-line { flex: 1 1 auto; width: 2px; border-radius: 1px;
+  background: linear-gradient(180deg, var(--accent-dim), var(--accent), var(--accent-dim)); }
+.flowsep-arrow { flex: 0 0 auto; width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; }
+.flowsep-arrow.up { border-bottom: 7px solid var(--accent); }
+.flowsep-arrow.down { border-top: 7px solid var(--accent); }
+.flowsep-tag { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg);
+  transform-origin: center; font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase;
+  white-space: nowrap; color: var(--accent-dim); background: var(--bg-1); padding: 1px 6px;
+  border-radius: 3px; border: 1px solid var(--line-soft); }
+
+.flowpast { display: flex; gap: 8px; }
+/* The centre card is the block of the moment: wider, brighter, unmistakable. */
+.bcard.tip { flex-basis: 158px; border-color: var(--accent); background: var(--bg-2);
+  box-shadow: 0 0 0 1px var(--accent-dim), 0 6px 18px #0006; }
+.bcard.tip .bh b { font-size: 13px }
+/* "latest confirmed", not "current": the block being assembled is the current activity,
+   and this card is the chain tip -- the last block the node has actually accepted. */
+.bcard.tip::after { content: 'latest confirmed'; position: absolute; top: -8px; right: 8px; font-size: 9px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--accent); background: var(--bg-1);
+  padding: 0 4px; border-radius: 3px }
+.bcard.pending { border-style: dashed; color: var(--fg-dim); }
+.bcard.pending .bh b { color: var(--fg-faint) }
+.bcard.tip.empty { color: var(--fg-dim) }
+.bcard.next.empty { flex-basis: 210px; color: var(--fg-dim); font-size: 11.5px; line-height: 1.5; }
+.bh { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.bdot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: 0 0 7px; }
+.bpool { margin-left: auto; font-size: 11px; max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bgap { color: var(--fg-dim); font-size: 10.5px; margin: 2px 0 5px; }
+.brows { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.brows > div { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; }
+.brows i { font-style: normal; color: var(--fg-dim); }
+.brows span { font-family: var(--mono); }
+.bfill { margin-top: 6px; height: 4px; background: var(--bg-3, #12161c); border-radius: 2px; overflow: hidden; }
+.bfill span { display: block; height: 100%; }
+.bnextfill { position: absolute; right: -1px; top: -1px; bottom: -1px; width: 5px;
+  background: var(--bg-3, #12161c); border-radius: 0 8px 8px 0; overflow: hidden; }
+.bnextfill span { display: block; width: 100%; background: var(--accent); }
+.bnextpct { margin-top: 6px; font-size: 10.5px; color: var(--accent); }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: 0 0 7px;
+  animation: livepulse 2.6s ease-in-out infinite; }
+@keyframes livepulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+
+/* ------------------------------------------------------ package views */
+.pkghist { display: grid; gap: 3px; margin-bottom: 8px; }
+.pkbar { display: grid; grid-template-columns: 46px 1fr 34px; align-items: center; gap: 6px; font-size: 11px; }
+.pkbar span { display: block; height: 8px; background: var(--accent); opacity: .8; border-radius: 2px; }
+.pkbar i { font-style: normal; color: var(--fg-dim); }
+.pkbar b { font-family: var(--mono); font-weight: 500; }
+.pkgbox { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 3px; }
+tr.cpfp td:first-child::before { content: '↳ '; color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) { .live { animation: none } }
+@media (prefers-reduced-motion: reduce) { .rail, .flow.shift .flowpast, .bcard.arrive { animation: none } .flowpast, .bnextfill span { transition: none } }
+
+/* ------------------------------------------------- the pipeline in motion */
+/* Three motions, and each one is a fact rather than decoration -- see the comment in
+   public/js/mining.js. The rail speed comes from the measured average block gap, the row
+   steps only when a height actually arrives, and the next-block fill eases toward the
+   weight the node reported. prefers-reduced-motion keeps every number and removes all of
+   the movement. */
+.rail { height: 3px; margin: 0 0 5px; border-radius: 2px; overflow: hidden;
+  background: repeating-linear-gradient(90deg, var(--accent-dim) 0 10px, transparent 10px 26px);
+  background-size: 26px 100%; animation: railmove var(--rail-dur, 60s) linear infinite; opacity: .75; }
+.rail span { display: block; height: 100%; }
+@keyframes railmove { from { background-position: 0 0 } to { background-position: 26px 0 } }
+
+.flowpast { transition: transform .6s cubic-bezier(.22, .61, .36, 1); }
+/* History recedes to the right: at the moment of arrival the row is drawn one slot to the
+   left of where it settles, so the eye reads "everything moved right by one". */
+.flow.shift .flowpast { animation: recede .8s cubic-bezier(.22, .61, .36, 1); }
+@keyframes recede { 0% { transform: translateX(-136px); opacity: .35 } 55% { opacity: 1 } 100% { transform: translateX(0); opacity: 1 } }
+
+
+.bnextfill span { transition: height 1.1s cubic-bezier(.22, .61, .36, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rail, .flow.shift .flowpast, .bcard.arrive { animation: none }
+  .flowpast, .bnextfill span { transition: none }
+}
+
+/* ------------------------------------------------- tip freshness, the card rail, density */
+/* The colour of the centre card is the most important colour on this page, so it is the
+   one thing that must never be decorative: green means "found within the last four
+   minutes", amber means "one block late", red means "two blocks gone and one is due".
+   tipFreshness() refuses to answer at all during initial download, while the node is
+   not answering, or while updates are paused -- a red card that means nothing teaches
+   people to ignore the colour that matters. */
+.bcard.tip.fresh { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok), 0 0 14px #2ecc8f33, 0 1px 0 rgba(235,245,255,.06) inset, 0 -10px 18px rgba(0,0,0,.3) inset; }
+/* The tab says what the card IS; the colour says how it is doing. Replacing the label
+   with a verdict hid the thing being labelled. */
+.bcard.tip.fresh::after { content: 'current tip'; color: var(--ok) }
+.bcard.tip.late { background: #f0b4291f; border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn), 0 1px 0 rgba(235,245,255,.06) inset, 0 -10px 18px rgba(0,0,0,.3) inset; }
+.bcard.tip.late::after { content: 'current tip'; color: var(--warn) }
+.bcard.tip.overdue { background: #ef5a5a26; border-color: var(--bad); animation: due 2.4s ease-in-out infinite; box-shadow: 0 0 0 1px var(--bad), 0 1px 0 rgba(235,245,255,.06) inset, 0 -10px 18px rgba(0,0,0,.3) inset; }
+.bcard.tip.overdue::after { content: 'current tip — a block is due'; color: var(--bad) }
+@keyframes due { 0%,100% { box-shadow: 0 0 0 1px var(--bad) } 50% { box-shadow: 0 0 0 1px var(--bad), 0 0 16px #ef5a5a66 } }
+
+.tiplegend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 10.5px; }
+.tl { padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line-soft); color: var(--fg-dim) }
+.tl.fresh { border-color: var(--ok); color: var(--ok) }
+.tl.late { background: #f0b4291f; border-color: var(--warn); color: var(--warn) }
+.tl.overdue { background: #ef5a5a26; border-color: var(--bad); color: var(--bad) }
+.tl.na { color: var(--fg-faint) }
+.tl.now { border-style: dashed }
+
+/* The pool identity has to survive the trip to the right, or every card after the tip
+   becomes anonymous and the train stops telling you who is mining. */
+.bcard { border-left: 3px solid var(--pool, var(--line-soft)); }
+/* A block nobody is assembling yet: dashed, grey, and saying so in its own border. */
+.bcard.ghost { border-style: dashed; border-color: var(--line-soft); background: transparent; opacity: .82 }
+.bcard.ghost .bh b { color: var(--fg-faint) }
+.chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px }
+.chip { font-size: 9.5px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line-soft); color: var(--fg-dim); font-variant-numeric: tabular-nums }
+.chip.hot { border-color: var(--accent); color: var(--accent) }
+.chip.warn { border-color: var(--warn); color: var(--warn) }
+.chip.faint { color: var(--fg-faint) }
+.backlog { margin-top: 4px; height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden }
+.backlog span { display: block; height: 100%; background: var(--accent) }
+.bcard.unlabelled { border-left-color: var(--line-soft) }
+
+/* Cards GROW to fill the row (measured: seven fixed 156 px cards in a 1,369 px card left
+   a third of the panel empty and pushed the row to 2,236 px of scroll). A full row now
+   means a full train; only a train longer than the panel scrolls. */
+/* Shrink AND grow: a fixed basis larger than basis×count fits means the row overflows
+   and never grows — measured 8 cards at 156 px basis in a 1,369 px card = 1,792 px of
+   scroll, the panel half-empty of look yet technically overflowing. Cards now start at
+   132 px, may tighten to 116 px, and expand to fill, so the usual train exactly fills
+   the panel with no scrollbar and no dead column. */
+.bcard { flex: 0 0 auto; width: 168px; min-width: 0; }
+/* A block that does not exist yet gets a sliver, not a card: three 156 px ghost cards
+   used to OPEN the train, so the left third of the panel was dashed boxes reading
+   "not yet assembled" and the real data started at x=500 px. */
+.bcard.ghost.sliver { width: 96px; font-size: 10.5px }
+.bcard.older { width: auto; }
+canvas#gnTreemap { width: 100%; height: auto; aspect-ratio: 1 / 1; display: block }
+/* Same square for the mempool map: the two maps are meant to be compared side by side, so
+   they get the same shape, not a square and a banner. */
+/* The .treemapwrap.sq rules above own this canvas's box (absolute, inset 0),
+   so an aspect-ratio here would only fight them. */
+canvas#gnMempoolTreemap { display: block }
+/* A treemap's whole claim is area, and area only reads when the box is sized to
+   what the picture shows: at w4/168px a half-full block was an 84px band of
+   transactions in a dead square (measured 2026-09-10). The box is therefore w8
+   wide and its height follows the FILL, set by mining.js against the template's
+   own weightPct (floor 240px so an empty block still shows its hatch); the
+   height:240px base above stays the placeholder/no-template case. Same data and
+   rules as the Mining page's map — the note above the Overview copy promised —
+   at the same 433px-scale square when a block is actually full. */
+/* the .treemapwrap.sq rules own this canvas's box too */
+canvas#ovGnTreemap { display: block }
+.bcard.tip { flex-basis: 168px }
+.delt { font-style: normal; color: var(--fg-faint); font-size: 10px }
+.bwhen { font-size: 10.5px; color: var(--fg-dim); margin: 3px 0 5px; font-variant-numeric: tabular-nums }
+.bwhen.longgap { color: var(--warn) }
+.bgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px }
+.bgrid > div { display: flex; justify-content: space-between; gap: 4px; font-size: 10.5px }
+.bgrid i { font-style: normal; color: var(--fg-faint) }
+.bgrid span { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.bcap { font-size: 9.5px; color: var(--fg-faint); margin-top: 3px; font-variant-numeric: tabular-nums }
+
+@media (prefers-reduced-motion: reduce) { .bcard.tip.overdue { animation: none } }
+
+/* ---------------------------------------------------------- block treemap */
+.treemapwrap { position: relative }
+canvas.treemap { width: 100%; height: 240px; display: block; background: var(--bg-1); border: 1px solid var(--line-soft); border-radius: 4px }
+/* The full-panel map: a square whose side is the card's own width, so "fits the entire
+   panel" is geometry the browser enforces, not a height we guessed. */
+.treemapwrap.sq { aspect-ratio: 1 / 1 }
+
+/* 2026-09-10, operator: "I want the panel and viewport a square". The WRAPPER
+   was already square, but the CARD around it was not -- its height is the
+   title plus the square canvas plus the note, so the panel read as a portrait
+   rectangle. The card is now square itself, and the canvas is a square sized
+   by whatever height is left after the chrome, centred in it. Both are square;
+   the canvas is simply smaller than the card's full width, which is the only
+   way both can be true at once. */
+/* 2026-09-11: the card is as tall as its contents. It was forced square with
+   overflow hidden, but a square card cannot hold a square board PLUS its title
+   and note, so the card cut the bottom of the board off (operator: "Blocks are
+   being shown off the viewport. I want the grid bounds flush with the
+   viewport"). The BOARD is the square; the card around it is not. */
+.card:has(> .treemapwrap.sq) { display: flex; flex-direction: column; }
+/* OVERVIEW ORDER (2026-09-11). The operator asked, of Block flow, "Takes up way
+   too much vertical space. We can easily compress this vertically", and gave
+   the Block space viewer its own page (#space) "so it can run in a large
+   window". Block flow used to be stretched to the height of the Block space
+   square beside it (2026-09-10, "equal heights"), and every card inside it
+   stretched with it -- that rule IS the vertical space, so it is gone rather
+   than overridden. Row 1 is Block flow, full width, at its content height;
+   row 2 is the small Block space square with Mempool and Fees, 3 + 5 + 4.
+   `order` stays NEGATIVE: order defaults to 0, and these four must sort ahead
+   of every untouched card (Mined by, Last blocks, Monitor events). The DOM
+   order is Mempool, Fees, Block space, Block flow; CSS does the rearranging. */
+/* ...and the same day, at the operator's width (<= 1280 px, where the global
+   rule above forces every card to half width), the square landed beside a
+   Block flow stretched to its height: "Look at all this wasted space on the
+   overview. Block flow panel needs to be vertically reduced. Surely we can fit
+   more info in that view. Keep the block space size as is." So the square
+   keeps the right half and spans four rows, and the left half is a stack:
+   Block flow at its content height, Mempool, Fees, and Last blocks, which is a
+   scrolling table and takes whatever height the square leaves (the 1fr row)
+   -- the spare room shows more history instead of nothing. Placement is
+   explicit and !important, because the global half-width rule is. */
+/* SUPERSEDED the same day by two independent stacks (.ovcols, below): rows of
+   one grid coupled the columns, so the taller side padded the other ("Still
+   too much empty space here. Need to compress the mempool and fees view at the
+   very least to sit side-by-side"). Left: Block flow, Mempool | Fees, Last
+   blocks. Right: Block space, Monitor events. The last card of each column
+   takes the height that is left. */
+[data-sync-hero="overview"] { grid-column: 1 / -1; }
+.ovcols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+/* the Mempool page's stacks: the Block space viewer's column is the narrower
+   one there ("in a smaller panel"), so the charts keep the width */
+.mpcols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
+.mpcols .card { grid-column: auto !important; }
+.mpusage { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); gap: 14px; align-items: center; }
+.mpusage dl.kv { margin: 0; }
+@media (max-width: 860px) { .mpcols, .mpusage { grid-template-columns: minmax(0, 1fr); } }
+.ovcol  { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ovpair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.ovcols .card { grid-column: auto !important; }
+/* contain: size so the table's own rows do NOT size the row: measured at
+   1280 px, without it Last blocks came out 456 px, the left stack 1,278 px, and
+   the Block space card stretched to match with ~650 px of nothing under its
+   592 px board -- the wasted space, moved to the other side. Contained, the
+   card takes exactly what the square leaves (the 1fr row), never under 220 px,
+   and its table scrolls inside that. */
+#ovBlocksCard, #ovEventsCard { flex: 1 1 0; display: flex; flex-direction: column; contain: size; min-height: 200px; }
+#ovBlocksCard > .scroll, #ovEventsCard > .feed { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; }
+
+/* ...and the lower pair is shrunk so the four fit a screen together. Their
+   charts carry a trend, not a reading, so they lose height first. */
+#ovMempoolCard canvas.chart, #ovFeesCard canvas.chart { height: 64px; }
+#ovMempoolCard, #ovFeesCard { padding: 9px 11px; }
+#ovMempoolCard .metric .v { font-size: 1.35rem; }
+
+@media (max-width: 860px) {
+  .ovcols, .ovpair { grid-template-columns: minmax(0, 1fr); }
+}
+/* a label never breaks mid-card ("fees ₿" was wrapping its unit onto a line of its own) */
+.bgrid i { white-space: nowrap; }
+
+.card:has(> .treemapwrap.sq) > h3 { flex: 0 0 auto; }
+.card:has(> .treemapwrap.sq) > .note { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+/* The wrapper keeps its OWN aspect-ratio and full width from the base rule.
+   An earlier cut set width:auto here to centre it; the canvas inside is
+   position:absolute so it contributes no intrinsic width, and the wrapper
+   collapsed to zero -- the browser check read the overview canvas as
+   zeroSized. Let it be as wide as the card and square by its own ratio. */
+.card:has(> .treemapwrap.sq) > .treemapwrap.sq { flex: 0 0 auto; width: 100%; }
+.treemapwrap.sq canvas.treemap { position: absolute; inset: 0; width: 100%; height: 100% }
+.goggles-tip { position: absolute; left: 8px; bottom: 8px; max-width: 92%; font-size: 10.5px; font-family: var(--mono);
+  background: #0b0d10ee; border: 1px solid var(--line-soft); border-radius: 4px; padding: 2px 7px; color: var(--fg) }
+.lg, .lgc { color: var(--fg-dim) }
+
+/* Compact copy of the map, for the Overview */
+canvas.treemap.sm { height: 168px }
+
+/* The row must be allowed to exceed the card, or the cards at the right are simply cut
+   off with no way to reach them. Measured in a real browser: .flow scrollWidth 2236
+   inside clientWidth 1369, so three blocks and the current-tip card were off-screen with
+   no scrollbar anywhere. The wrap scrolls, the row sizes to its content. */
+/* (.flowwrap is defined above, with the scroll-padding the 3D depth needs.) */
+.flow { width: 100%; min-width: 100%; justify-content: flex-start }
+
+/* One third shorter than .short (130px), for the three Overview cards that are really a
+   number and a sparkline, not a chart to be read in detail. */
+canvas.chart.xs, .chart.xs { height: 86px }
+/* Tighten the compact cards: the metric line and its caption carry the information, the
+   padding did not. */
+.card.compact { padding: 8px 10px }
+.card.compact .metric { margin: 2px 0 4px }
+.card.compact .metric .v { font-size: 20px }
+
+/* The honest tail of a train longer than the panel: it says how many are off-view. */
+.bcard.older { border-style: dotted; color: var(--fg-dim);
+  font-size: 11px; display: flex; flex-direction: column; justify-content: center }
+.bcard.older span { color: var(--fg-faint); font-size: 10px }
+
+/* ==========================================================================
+   BLOCK FLOW: blocks that look like blocks, on a chain
+   ==========================================================================
+   2026-09-11, operator: "I want the blocks to be actual blocks with some depth
+   and linked via a chain ... Make the block flow beautiful".
+
+   This deliberately reverses the 2026-09-10 removal of card depth. That removal
+   was right at the time and for a different reason: the depth then was a
+   ::before lip hanging BELOW the card, and the row's own `overflow` clipped it
+   into a smear. The depth here is painted entirely INSIDE the border box (a lit
+   top edge, a body that falls into shadow, a darkened right face) plus one
+   small cast shadow, so there is nothing for a scroll container to cut off.
+   The guard that pinned the removal is updated alongside, with the reason. */
+
+.bcard {
+  border-radius: 5px;
+  background:
+    /* the top face catches the light, the body falls away from it */
+    linear-gradient(180deg, rgba(235, 245, 255, .07) 0, rgba(235, 245, 255, 0) 38%),
+    /* the right-hand side face: the slab has thickness */
+    linear-gradient(270deg, rgba(0, 0, 0, .34) 0, rgba(0, 0, 0, 0) 9px),
+    linear-gradient(180deg, var(--bg-2) 0, var(--bg-1) 100%);
+  box-shadow:
+    0 1px 0 rgba(235, 245, 255, .10) inset,
+    0 -16px 22px rgba(0, 0, 0, .26) inset,
+    3px 4px 0 -1px rgba(0, 0, 0, .40),
+    7px 9px 16px rgba(0, 0, 0, .30);
+}
+/* A forecast is not a solid: no thickness, no shadow — it has not been built. */
+.bcard.ghost { background: transparent; box-shadow: none; }
+
+/* --- the chain ----------------------------------------------------------
+   Two interlocking links, drawn in the gap between cards. This is a picture of
+   what the cards describe: each block commits to the one before it. */
+.chainlink {
+  flex: 0 0 auto; align-self: center; position: relative;
+  width: 20px; height: 14px; margin: 0 -1px;
+}
+.chainlink i {
+  position: absolute; top: 50%; width: 13px; height: 9px;
+  margin-top: -4.5px; border: 1.5px solid var(--line);
+  border-radius: 3px; background: transparent;
+}
+.chainlink i:first-child { left: 0; }
+/* the second ring overlaps the first, and is painted over it, which is what
+   makes the pair read as INTERLOCKED rather than as two boxes in a row */
+.chainlink i:last-child { right: 0; border-color: var(--fg-faint); }
+
+/* --- the block being built ----------------------------------------------
+   The coloured ring belongs HERE, not on the tip: it says how long this block
+   has been accumulating, which is a fact about work in progress. The tip keeps
+   the accent ring, which says something else — this is the height the chain
+   reports. */
+.bcard.next { border-color: var(--accent); }
+.bcard.next .bage {
+  margin-left: auto; font-size: 10px; font-variant-numeric: tabular-nums;
+  color: var(--fg-dim); font-family: var(--mono);
+}
+.bcard.next.fresh {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px var(--ok), 0 0 16px #2ecc8f2e,
+    0 1px 0 rgba(235, 245, 255, .10) inset, 0 -16px 22px rgba(0, 0, 0, .26) inset,
+    3px 4px 0 -1px rgba(0, 0, 0, .40), 7px 9px 16px rgba(0, 0, 0, .30);
+}
+.bcard.next.fresh .bage { color: var(--ok) }
+.bcard.next.late {
+  border-color: var(--warn); background: #f0b4291c;
+  box-shadow: 0 0 0 1px var(--warn), 0 0 16px #f0b4292e,
+    0 1px 0 rgba(235, 245, 255, .10) inset, 0 -16px 22px rgba(0, 0, 0, .26) inset,
+    3px 4px 0 -1px rgba(0, 0, 0, .40), 7px 9px 16px rgba(0, 0, 0, .30);
+}
+.bcard.next.late .bage { color: var(--warn) }
+.bcard.next.overdue {
+  border-color: var(--bad); background: #ef5a5a22;
+  box-shadow: 0 0 0 1px var(--bad), 0 0 18px #ef5a5a38,
+    0 1px 0 rgba(235, 245, 255, .10) inset, 0 -16px 22px rgba(0, 0, 0, .26) inset,
+    3px 4px 0 -1px rgba(0, 0, 0, .40), 7px 9px 16px rgba(0, 0, 0, .30);
+  animation: due 2.4s ease-in-out infinite;
+}
+.bcard.next.overdue .bage { color: var(--bad) }
+@media (prefers-reduced-motion: reduce) { .bcard.next.overdue { animation: none } }
+
+/* the data-quality line that replaced the four-sentence explainer */
+.flownote { margin-top: 6px; font-size: 10.5px; color: var(--fg-dim) }
+
+/* --- the card is a block, so it fills its height like one -----------------
+   The panel is as tall as the Block space square beside it, and the cards
+   stretch to it. They used to stretch with all their content bunched at the
+   top and 60% of each card empty black. A block's header goes at the top, its
+   numbers in the body, and the weight it used is the FLOOR it stands on. */
+.bcard { display: flex; flex-direction: column; }
+.bcard .bfill, .bcard .bnextfill { margin-top: auto; }
+.bcard .bcap, .bcard .bnextpct { flex: 0 0 auto; }
+
+/* Values were being cut mid-digit ("0.00279 BT", "717,627 / 4,000,00"). A
+   clipped number is worse than a smaller one. */
+.bcard { width: 186px; }
+.bcard.next, .bcard.next.empty { width: 212px; }
+.bcard.tip { flex-basis: 186px; }
+.bgrid span, .brows span { font-size: 10px; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.brows > div { gap: 6px }
+
+/* the zone labels are gone; reclaim the space they reserved */
+.flowside.todo, .flowside.done { padding-top: 0; }
+
+/* --- the chain, made visible ---------------------------------------------
+   At 13px the links read as two pale pills. They are the one piece of this
+   panel that says what the panel IS -- each block commits to the one before
+   it -- so they get room and contrast. */
+.chainlink { width: 26px; height: 18px; }
+.chainlink i {
+  width: 17px; height: 11px; margin-top: -5.5px;
+  border: 2px solid var(--fg-faint); border-radius: 4px;
+}
+.chainlink i:first-child { left: 0; border-color: var(--line) }
+.chainlink i:last-child { right: 0; border-color: var(--fg-dim) }
+
+/* --- the row may exceed the panel; a chopped card is not a design ---------
+   `.flow { width: 100% }` above contradicted the comment right beside it: the
+   row could not exceed the panel, so `.flowside.done { overflow: hidden }`
+   silently CUT the cards past the edge (measured 2026-09-11: done scrollWidth
+   1996 inside clientWidth 744 — the tip's neighbours were sliced in half with
+   no scrollbar to reach them). The row sizes to its content and the wrap
+   scrolls, which is what that comment always intended; `min-width: 100%` keeps
+   a short train filling the panel. Snap points mean a scroll lands on a block
+   boundary rather than mid-card. */
+.flow { width: max-content; min-width: 100%; }
+.flowside.done { overflow: visible; }
+.flowwrap { scroll-snap-type: x proximity; }
+.bcard { scroll-snap-align: start; scroll-margin-left: 10px; }
+
+/* Values ran into the right border ("4,000,00|", "3.2 M|"), which reads as a
+   clipped number even when the element does not actually overflow. */
+.bcard { padding: 9px 11px; }
+.bcard.ghost.sliver { padding: 7px 8px; }
+
+/* --- a card is as tall as what it says -----------------------------------
+   2026-09-11 (operator: "Takes up way too much vertical space"). The cards
+   were stretched to the Block space square beside the row and their numbers
+   were spread through the height with auto margins -- which is how a
+   130 px card became a 460 px one with a black middle. The stretch is gone;
+   the numbers sit under the header, and only the weight bar keeps its place
+   on the floor (it lines the row's cards up along the bottom). */
+.bcard .bgrid, .bcard .brows { margin-top: 2px; }
+.bcard .bwhen, .bcard .bgap { flex: 0 0 auto; }
+.bcard .bgap { margin: 1px 0 3px; }
+.bcard .bmeter { margin: 2px 0 5px; }
+.bcard .chips { margin-top: 5px; }
+
+/* --- the card body IS the block's fullness --------------------------------
+   A card tall enough to stand in this panel had a black middle: header at the
+   top, numbers floating, floor at the bottom. The space is now the block
+   itself — weight used against the 4,000,000 WU cap, rising from the floor in
+   the pool's own colour. A full block is a solid column, and a block that came
+   in light is visibly short, which is the one thing the eye should catch while
+   scanning a row of them. It is the same figure the bar at the foot states in
+   words, drawn at the scale the card actually has. */
+.bcard { position: relative; }
+.bstack {
+  position: absolute; left: 1px; right: 1px; bottom: 1px; z-index: 0;
+  border-radius: 0 0 4px 4px; pointer-events: none;
+  /* Opacity on the ELEMENT, not alpha mixed into the colour. color-mix was
+     tried and came out fully opaque here, which buried the card's own text
+     under a slab of pool colour -- the fill has to sit behind the numbers, not
+     replace them. */
+  background: linear-gradient(180deg, var(--pool, var(--accent)) 0, rgba(0, 0, 0, 0) 140%);
+  opacity: .13;
+}
+.bcard > *:not(.bstack) { position: relative; z-index: 1; }
+
+/* ==========================================================================
+   THE BLOCK METER: the block being built, filling up
+   ==========================================================================
+   2026-09-11, operator: "That orange wavy part inside the block being built is
+   disjointed and not contiguous across the line when moving. we need to find
+   some other visually interesting way to convey information that the block is
+   growing." The row of bobbing ticks (.inflow) wrapped onto a second line and
+   each tick bobbed on its own delay, so it read as broken; it was also a
+   sqrt-shaped decoration, not a measurement.
+
+   ONE row that cannot wrap: 40 segments, each 2.5% of the 4,000,000 WU cap.
+   Lit segments are the weight the node has selected, coloured by the feerate
+   of the transactions that fill that stretch of the template (richest first,
+   our own feerate palette -- the same colours as the stones in Block space).
+   The frontier segment fills fractionally and breathes, its phase carried
+   across the page's once-a-second repaint so it never restarts; segments that
+   a new template reading added light up once as they arrive. */
+.bmeter { display: flex; flex-wrap: nowrap; gap: 1px; height: 13px; margin: 3px 0 7px;
+  padding: 2px; border-radius: 3px; background: rgba(0, 0, 0, .35);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .6), 0 1px 0 rgba(235, 245, 255, .05); }
+.bmeter i { flex: 1 1 0; min-width: 0; position: relative; overflow: hidden; border-radius: 1px;
+  background: rgba(235, 245, 255, .05); }
+.bmeter i.on { background: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .28); }
+.bmeter i.new { animation: meterpop .9s cubic-bezier(.2, .9, .3, 1.2) both; }
+@keyframes meterpop { 0% { transform: scaleY(.15); filter: brightness(2.4) } 60% { filter: brightness(1.5) } 100% { transform: none; filter: none } }
+.bmeter i.edge span { position: absolute; left: 0; top: 0; bottom: 0; display: block; background: var(--accent);
+  animation: meteredge 2.4s ease-in-out infinite; }
+.bmeter i.next { box-shadow: inset 0 0 0 1px rgba(235, 245, 255, .22); animation: meternext 2.4s ease-in-out infinite; }
+@keyframes meteredge { 0%, 100% { filter: brightness(.9) } 50% { filter: brightness(1.7) } }
+@keyframes meternext { 0%, 100% { background: rgba(235, 245, 255, .04) } 50% { background: rgba(235, 245, 255, .16) } }
+@media (prefers-reduced-motion: reduce) { .bmeter i.new, .bmeter i.edge span, .bmeter i.next { animation: none } }
+
+/* ==========================================================================
+   BLOCK SPACE: the Matrix
+   ==========================================================================
+   2026-09-11, operator: "absolutely spectacular ... feel like they are in The
+   Matrix". The canvas paints the board (goggles3d.js); the phosphor rim,
+   vignette and scanlines are CSS over it, because CSS is not subject to the
+   canvas no-composite rule and costs nothing per frame. None of it takes
+   pointer events, so hover still reaches the board. (Digital rain was layered
+   over this the same day and removed: "looks stupid and adds nothing
+   practical".) */
+.treemapwrap.sq, .treemapwrap.space { border-radius: 5px; box-shadow: 0 0 0 1px rgba(60, 255, 150, .28), 0 0 22px rgba(40, 255, 140, .10); }
+.treemapwrap.sq canvas.treemap, .treemapwrap.space canvas.treemap { border-color: rgba(60, 255, 150, .18); background: #020906; }
+.treemapwrap.sq::after, .treemapwrap.space::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1; border-radius: 4px;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .07) 0 1px, rgba(0, 0, 0, 0) 1px 3px),
+    radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 58%, rgba(0, 12, 6, .55) 100%); }
+.treemapwrap .goggles-tip { z-index: 3; color: #b8ffd0; border-color: rgba(60, 255, 150, .45);
+  background: rgba(0, 10, 4, .88); box-shadow: 0 0 12px rgba(40, 255, 140, .18); }
+
+/* ==========================================================================
+   THE BLOCK SPACE PAGE: the viewer at window size, with the block being
+   built and the chain tip beside it (operator, 2026-09-11)
+   ==========================================================================
+   The square is sized to whichever runs out first -- the width left beside the
+   side panel, or the window's height under the header -- so the whole board is
+   always on screen without scrolling. Under 980 px the panel stacks below. */
+.spacelayout { display: flex; gap: 16px; align-items: flex-start; }
+.treemapwrap.space { position: relative; flex: 0 0 auto; aspect-ratio: 1 / 1;
+  width: min(calc(100vw - 470px), calc(100vh - 150px)); min-width: 320px; }
+.treemapwrap.space canvas.treemap { position: absolute; inset: 0; width: 100%; height: 100%; }
+.spacehud { flex: 1 1 300px; min-width: 260px; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+.hud { border: 1px solid rgba(60, 255, 150, .18); border-radius: 6px; padding: 10px 12px;
+  background: rgba(0, 18, 9, .35); }
+.hudh { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; font-size: 11px;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--fg-dim); }
+.hudh b { color: var(--fg); font-weight: 600; }
+.hudk { font-family: var(--mono); font-size: 14px; letter-spacing: 0; text-transform: none; color: var(--fg); }
+.hudclock { margin-left: auto; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line-soft);
+  font-family: var(--mono); font-size: 13px; letter-spacing: 0; color: var(--fg-dim); }
+.hudclock.fresh { color: var(--ok); border-color: var(--ok); }
+.hudclock.late { color: var(--warn); border-color: var(--warn); background: #f0b4291c; }
+.hudclock.overdue { color: var(--bad); border-color: var(--bad); background: #ef5a5a22; }
+.hud .bmeter { height: 18px; margin: 2px 0 8px; }
+.hudbig { display: flex; align-items: baseline; gap: 6px; margin: 0 0 8px; font-family: var(--mono); font-size: 28px; line-height: 1.1; }
+.hudbig small { font-size: 12px; color: var(--fg-dim); }
+.hudbig .chip { margin-left: auto; align-self: center; font-family: inherit; }
+.hudkv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 12px; }
+.hudkv dt { color: var(--fg-dim); }
+.hudkv dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.hudpool { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; font-size: 15px; }
+.hudpool .faint { margin-left: auto; font-size: 11.5px; }
+.hudbar { height: 6px; margin: 4px 0 8px; border-radius: 3px; overflow: hidden; background: var(--bg-3, #12161c); }
+.hudbar span { display: block; height: 100%; }
+.feelegend { display: flex; flex-wrap: wrap; gap: 5px 11px; margin-bottom: 5px; font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
+.feelegend i { display: inline-block; width: 12px; height: 12px; margin-right: 4px; border-radius: 2px; vertical-align: -2px; }
+@media (max-width: 980px) {
+  .spacelayout { flex-direction: column; }
+  .treemapwrap.space { width: 100%; min-width: 0; }
+  .spacehud { max-width: none; width: 100%; }
+}
+
+/* The pool viewer's countdown to its next refresh (operator, 2026-09-11: "we need
+   to add a countdown to refresh somewhere in that panel"). Top-right, over the
+   sphere's margin, where no block rests; the fill behind the text is the share of
+   the minute already gone. Tabular figures, so the chip does not twitch each second. */
+.treemapwrap .viewer-ctl { position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; gap: 6px; align-items: center; }
+.treemapwrap .refresh-in { pointer-events: none;
+  font-size: 10.5px; font-family: var(--mono); font-variant-numeric: tabular-nums; color: #b8ffd0;
+  border: 1px solid rgba(60, 255, 150, .45); border-radius: 4px; padding: 2px 7px;
+  background: linear-gradient(90deg, rgba(60, 255, 150, .24) var(--p, 0%), transparent var(--p, 0%)), #0b0d10dd; }
+.treemapwrap .refresh-in:empty { display: none }
+
+/* "Trigger Refresh Now" beside the countdown: live only while the board is at rest. */
+.treemapwrap .refresh-now { font-size: 10.5px; font-family: var(--mono); color: #b8ffd0; background: #0b0d10dd;
+  border: 1px solid rgba(60, 255, 150, .45); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+.treemapwrap .refresh-now:hover:not(:disabled) { background: rgba(60, 255, 150, .2); }
+.treemapwrap .refresh-now:disabled { opacity: .4; cursor: default; }
+
+/* THE MINING PAGE AS TWO STACKS (operator, 2026-09-11: "#mining -- too much wasted space in
+   this display. Crunch down the panel sizes to fit more info"). As one grid the rows were
+   coupled: measured at 1512 px, Block flow sat in a 975x591 card using ~273 px because the
+   square Mempool space viewer set that row, and the feerate landscape was stretched to the
+   packages table (203 of 330 px). Stacks never stretch a card to a neighbour; the Detailed
+   reference text folds away until asked for. */
+.mncols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.mncols .card { grid-column: auto !important; }
+.mnpair { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: start; }
+.mndetailed > summary { list-style: none; cursor: pointer; }
+.mndetailed > summary::-webkit-details-marker { display: none; }
+.mndetailed > summary h3 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--fg-faint); display: flex; align-items: center; gap: 8px; }
+.mndetailed > summary h3 .src { font: 400 10px/1.2 var(--mono); text-transform: none; letter-spacing: 0; color: var(--fg-faint); opacity: .8; }
+.mndetailed > summary h3 .sp { flex: 1; }
+.mndetailed > summary h3::after { content: "\25B8"; }
+.mndetailed[open] > summary h3::after { content: "\25BE"; }
+.mndetailed[open] > summary h3 { margin-bottom: 9px; }
+@media (max-width: 1100px) { .mncols, .mnpair { grid-template-columns: minmax(0, 1fr); } }
+
+/* THE PEERS PAGE: one strip, then the table (see index.html). Every row that follows is a
+   peer, so the table starts under ~150 px of summary instead of ~780. */
+.prtop { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 12px; align-items: stretch; }
+.prtop .card { grid-column: auto !important; padding: 9px 12px; }
+.prsum { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: center; align-content: start; }
+.prsum > h3 { grid-column: 1 / -1; }
+.prsum .metric .v { font-size: 22px; }
+.prbudget { font-size: 11px; gap: 1px 10px; }
+#prChart { height: 92px; }
+.prpeers .note { margin: 0 0 6px; }
+table.peertbl th { white-space: nowrap; }
+table.peertbl td { padding: 3px 7px; white-space: nowrap; }
+@media (max-width: 860px) { .prtop { grid-template-columns: minmax(0, 1fr); } }
+
+/* THE CHAIN & SYNC PAGE, THREE ACROSS (see index.html). Page-scoped, and it beats the site-wide
+   "every card half width under 1280 px" rule down to 1000 px, where this page still fits three. */
+.chgrid .card.w4 { grid-column: span 4 !important; }
+.chgrid .card.w6 { grid-column: span 6 !important; }
+.chgrid canvas.chart { height: 110px; }
+.chgrid canvas.chart.short { height: 64px; }
+.chgrid .card { padding: 10px 12px; }
+.chgrid .card > h3 { margin-bottom: 6px; }
+.kv.two { grid-template-columns: auto 1fr auto 1fr; column-gap: 12px; }
+.kv.two dd { padding-right: 6px; }
+@media (max-width: 1000px) { .chgrid .card.w4 { grid-column: span 6 !important; } }
+@media (max-width: 700px) { .chgrid .card.w4, .chgrid .card.w6 { grid-column: span 12 !important; } .kv.two { grid-template-columns: auto 1fr; } }
+
+/* PROJECTED BLOCKS (see projectedCards in mining.js). READABLE: a dark card, the fee colour
+   as a left bar and a soft band behind the heading, light mono text one fact per line, no
+   wrapping, only as tall as its content (the row stretches cards; these do not). The first cut
+   put grey 10.5 px text on a saturated fill ("unreadable. Do better !!!"). */
+.flow .bcard.proj { width: 132px; flex: 0 0 auto; align-self: flex-start; padding: 8px 10px 9px; box-shadow: none;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.5; color: #e8eef5;
+  border: 1px solid color-mix(in srgb, var(--pc, #2e8b57) 55%, #1b2229); border-left: 4px solid var(--pc, #2e8b57);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--pc, #2e8b57) 34%, #0c1110) 0, #0c1110 50px); }
+.flow .bcard.proj > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow .bcard.proj .ph { font-size: 14px; font-weight: 700; color: #ffffff; }
+.flow .bcard.proj .pm { font-size: 13px; font-weight: 600; color: #ffffff; margin-bottom: 3px; }
+.flow .bcard.proj .pr, .flow .bcard.proj .pf { color: #c9d2dc; }
+.flow .bcard.proj .pe { color: #8fe3b0; margin-top: 3px; }
+.flow .bcard.proj.rest { opacity: .85; }
+.flowside.todo { gap: 8px; }
+
+/* ---- explorer (public/js/explorer.js) ---- */
+.xcard { display: flex; flex-direction: column; gap: 12px; }
+.xsearch { display: flex; gap: 8px; }
+.xsearch input { flex: 1 1 auto; min-width: 0; padding: 8px 11px; font: 13px var(--mono); color: var(--fg); background: var(--bg-2);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.xsearch input:focus { outline: none; border-color: #4f8f78; }
+.xsearch button { padding: 0 16px; }
+.xhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.xhead h2 { margin: 0; font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.xh { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.xnav { text-decoration: none; padding: 0 7px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--fg-dim); }
+.xnav:hover { color: var(--fg); border-color: #4f8f78; }
+.xmono { font-family: var(--mono); }
+.xtxid { font-size: 13px; word-break: break-all; color: var(--fg); }
+.xkv { grid-template-columns: max-content 1fr max-content 1fr; max-width: 1100px; }
+.xkv dd { text-align: left; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .xkv { grid-template-columns: max-content 1fr; } }
+.xsub { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .05em; }
+.xscroll { max-height: calc(100vh - 360px); min-height: 160px; }
+.xtbl a { color: #8fd8b8; text-decoration: none; }
+.xtbl a:hover, .xkv a:hover { text-decoration: underline; }
+.xkv a { color: #8fd8b8; text-decoration: none; }
+.xio { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 1000px) { .xio { grid-template-columns: 1fr; } }
+.xf { display: inline-block; margin: 0 4px 0 0; padding: 0 6px; border-radius: 3px; font: 600 10px/16px var(--sans); border: 1px solid #ffffff22; color: var(--fg-dim); }
+.xf-segwit { color: #9fd3ff; border-color: #2c5878; }
+.xf-taproot { color: #d2b0ff; border-color: #5a3f80; }
+.xf-rbf { color: #ffcf8a; border-color: #7a5a24; }
+.xf-consolidation { color: #9fe8c4; border-color: #2d6a50; }
+.xf-op_return { color: #f0a8ad; border-color: #6a2e34; }
+.xf-cb { color: #ffe08a; border-color: #7a6424; }
+.xbadge { font: 600 11px/20px var(--sans); padding: 0 9px; border-radius: 10px; }
+.xbadge.ok { background: #143a2c; color: #8fe8c0; }
+.xbadge.warn { background: #3a2e14; color: #f0cf87; }
+.xpos { color: #8fe8c0; }
+.xneg { color: #f0a8ad; }
+.xok { color: #8fe8c0; }
+.xpager { display: flex; justify-content: center; gap: 18px; font: 12px var(--mono); }
+.xpager a { color: #8fd8b8; text-decoration: none; }
+.xtbl th.r { text-align: right; }
+.xflowwrap { background: #0b0e11; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); padding: 4px 0; }
+.xflow { display: block; width: 100%; }
+.xflow path { vector-effect: non-scaling-stroke; }
+.xflow path:hover { stroke: rgba(255,255,255,0.6); stroke-width: 1; }
+.xlink { color: #8fd8b8; text-decoration: none; }
+.bxlink { color: inherit; text-decoration: none; }
+.xlink:hover, .bxlink:hover { text-decoration: underline; }
+
+/* ---- markets (public/js/markets.js) ---- */
+.mkcard { display: flex; flex-direction: column; gap: 10px; }
+.mksum { display: flex; flex-wrap: wrap; gap: 6px 22px; font-family: var(--mono); font-size: 12px; align-items: baseline; }
+.mksum .k { color: var(--fg-faint); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin-right: 7px; }
+.mksum b { font-size: 16px; color: var(--fg); font-weight: 650; }
+.mklayout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 12px; }
+@media (max-width: 1000px) { .mklayout { grid-template-columns: minmax(0, 1fr); } }
+.treemapwrap.mkboard { height: min(58vh, 620px); min-height: 340px; }
+.mkside .hud { font-size: 12px; line-height: 1.45; }
+.mkside .hudh { margin: 8px 0 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); }
+.mkrow { display: flex; align-items: center; gap: 6px; margin: 2px 0; flex-wrap: wrap; }
+.mkn { display: inline-block; min-width: 36px; font-size: 10px; color: var(--fg-faint); }
+.mksw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.mksw.up { background: #1fc98a; }
+.mksw.down { background: #ef4d5e; margin-left: 8px; }
+.mktbl td.stale { color: #e8c987; }
+.mktbl th.r { text-align: right; }
+.treemapwrap.mkboard canvas.treemap { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mkbar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+.mkgrp { display: flex; gap: 4px; flex-wrap: wrap; }
+.mkbtn { font: 12px var(--sans); padding: 4px 10px; border-radius: var(--radius-sm); background: var(--bg-2); color: var(--fg-dim); border: 1px solid var(--line); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.mkbtn.on { color: var(--fg); border-color: #4f8f78; background: #12241d; }
+.mkdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #8aa0b4; }
+.mkdot[data-ex="coinbase"] { background: #4c8dff; }
+.mkdot[data-ex="kraken"] { background: #a78bfa; }
+.mkdot[data-ex="bitstamp"] { background: #2ecc8f; }
+.mkdot[data-ex="bitfinex"] { background: #4dd0e1; }
+.mkdot[data-ex="okx"] { background: #f0b429; }
+canvas.mkchart { width: 100%; height: min(54vh, 480px); min-height: 300px; display: block; background: #0b0e12; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); cursor: crosshair; }
+.mksub { margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .05em; }
+.mksub .faint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.treemapwrap.mkboard { height: min(40vh, 420px); min-height: 280px; }
+.treemapwrap.mkboard { height: min(60vh, 600px); min-height: 380px; }
+.mklab { font-size: 11px; color: var(--fg-faint); margin-right: 4px; align-self: center; }
+canvas.mkchart.mkdepth { height: min(46vh, 420px); min-height: 280px; }
+.mksw.line { background: #ffec28; height: 3px; width: 14px; box-shadow: 0 0 6px #ffec28; }
+
+/* ---- explorer, round two (operator, 2026-09-11: "Surely we can make our display look at least as
+   good as mempool. Do better. Make it beautiful") ---- */
+.xcard { font-family: var(--sans); gap: 14px; }
+.xclip { position: fixed; left: -9999px; top: 0; opacity: 0; }
+.xhero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 8px 0 0; }
+.xhero h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: #f4f7fb; display: flex; align-items: center; gap: 10px; }
+.xhero .xh { font-variant-numeric: tabular-nums; }
+.xhero .xnav { font-size: 20px; line-height: 1; padding: 4px 11px 6px; border-radius: 8px; border: 1px solid #2a3442; color: #9fb0c0; text-decoration: none; }
+.xhero .xnav:hover { color: #fff; border-color: #4fd1ff; }
+.xid { font: 500 16px var(--mono); color: #4fd1ff; word-break: break-all; user-select: all; -webkit-user-select: all; }
+.xid.sm { font-size: 13px; }
+.xcopy { background: none; border: 0; padding: 2px 4px; cursor: pointer; color: #6f8193; }
+.xcopy svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.4; vertical-align: -3px; }
+.xcopy:hover { color: #4fd1ff; }
+.xcopy.done { color: #3fdc8a; }
+.xgrow { flex: 1 1 auto; }
+.xpill { font: 600 14px var(--sans); padding: 7px 15px; border-radius: 7px; white-space: nowrap; }
+.xpill.ok { background: linear-gradient(180deg, #1c9a5d, #137a48); color: #eafff4; box-shadow: 0 0 18px rgba(40,220,140,0.18); }
+.xpill.warn { background: linear-gradient(180deg, #e2434f, #c52f3b); color: #fff; box-shadow: 0 0 18px rgba(240,60,70,0.22); }
+.xcards { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px; background: #121923; border-radius: 12px; border: 1px solid #1d2733; }
+@media (max-width: 1000px) { .xcards { grid-template-columns: 1fr; } }
+.xpanel { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; }
+.xrow { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 12px; padding: 13px 20px; background: #0b1017; font-size: 15px; }
+.xrow:nth-child(even) { background: #0f161f; }
+.xk { color: #c3cfdb; }
+.xv { color: #f2f6fa; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.xv small, .xamt small, .xtotpill small, table.xtable small { color: #7d8b99; font-size: 12px; margin-left: 2px; }
+.xusd { color: #6fe37a; font-weight: 600; margin-left: 12px; }
+.xdim { color: #7d8b99; }
+.xago { color: #7d8b99; margin-left: 10px; }
+.xcard .xv a, .xcard a.xaddr, .xcard table.xtable a, .xcard .xpager a { color: #4fd1ff; text-decoration: none; }
+.xcard .xv a:hover, .xcard a.xaddr:hover, .xcard table.xtable a:hover { text-decoration: underline; }
+.xsect { display: flex; align-items: baseline; gap: 14px; margin: 14px 0 0; }
+.xsect h2 { margin: 0; font-size: 25px; font-weight: 700; color: #f4f7fb; letter-spacing: -0.01em; }
+.xflowcard { padding: 18px; background: #121923; border-radius: 12px; border: 1px solid #1d2733; }
+.xflowcard .xflow { display: block; width: 100%; background: radial-gradient(ellipse at center, #0d1a2e 0%, #080c13 70%); border-radius: 8px; }
+.xflow path { transition: filter .15s ease; }
+.xflow a:hover path, .xflow path:hover { filter: brightness(1.35) drop-shadow(0 0 6px rgba(90,160,255,0.75)); }
+.xiocard { padding: 16px 20px; background: #121923; border-radius: 12px; border: 1px solid #1d2733; }
+.xio2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+@media (max-width: 1000px) { .xio2 { grid-template-columns: 1fr; } }
+.xiohead { font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: #7d8b99; margin: 2px 0 6px; }
+.xiohead span { color: #c3cfdb; margin-left: 4px; }
+.xitem { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid #1a2330; font-size: 15px; }
+.xiocol:last-child .xitem { grid-template-columns: minmax(0, 1fr) auto 24px; }
+.xitem:hover { background: #151e2a; }
+.xlabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xamt { font-variant-numeric: tabular-nums; color: #f2f6fa; text-align: right; white-space: nowrap; }
+.xmore { padding: 8px 4px; }
+.xico-wrap { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
+.xico { width: 22px; height: 22px; }
+.xico circle { fill: #3a4656; transition: fill .15s; }
+.xico path { fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.xico-wrap.in .xico circle { fill: #e8522f; }
+.xico-wrap.in:hover .xico circle { fill: #ff6b45; }
+.xico-wrap.cb .xico circle { fill: #d9a200; }
+.xico-wrap.out .xico circle { fill: #55647a; }
+.xico-wrap.out:hover .xico circle { fill: #4fa3ff; }
+.xico-wrap.unspent i { width: 10px; height: 10px; border-radius: 50%; background: #3fdc8a; box-shadow: 0 0 9px #3fdc8a; }
+.xtotals { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; gap: 12px; }
+.xtot { color: #9fb0c0; font-size: 14px; }
+.xtotpill { background: linear-gradient(90deg, #1c6cff, #2f8fff); color: #fff; padding: 8px 18px; border-radius: 9px; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; box-shadow: 0 0 22px rgba(40,130,255,0.25); }
+.xtotpill small { color: #d6e6ff; }
+.xtotusd { color: #c8ffd0; margin-left: 12px; }
+.xcard .xf { display: inline-block; margin: 0 5px 2px 0; padding: 1px 8px; border-radius: 4px; font: 700 12px/19px var(--sans); color: #fff; border: 0; }
+.xcard .xf-segwit { background: #1d9a4a; }
+.xcard .xf-taproot { background: #7b3fe4; }
+.xcard .xf-rbf { background: #1d9a4a; }
+.xcard .xf-consolidation { background: #0f8a8a; }
+.xcard .xf-op_return { background: #59616f; }
+.xcard .xf-cb { background: #c28f00; }
+.xtablecard { background: #121923; border-radius: 12px; border: 1px solid #1d2733; padding: 4px 14px 8px; max-height: calc(100vh - 320px); min-height: 160px; overflow: auto; }
+table.xtable { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.xtable th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #7d8b99; font-weight: 600; padding: 12px 8px 10px; border-bottom: 1px solid #1d2733; position: sticky; top: 0; background: #121923; }
+table.xtable th.r, table.xtable td.r { text-align: right; }
+table.xtable td { padding: 11px 8px; border-bottom: 1px solid #19222e; font-variant-numeric: tabular-nums; color: #e6edf3; white-space: nowrap; }
+table.xtable tr:hover td { background: #16202c; }
+.xcard .xpager { margin-top: 4px; font-family: var(--sans); font-size: 14px; }
+.xblocks { display: flex; gap: 26px; overflow-x: auto; padding: 16px 12px 22px; }
+.xblk { flex: 0 0 auto; width: 128px; text-decoration: none; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.xblk-h { color: #4fd1ff; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; }
+.xblk-face { position: relative; width: 124px; height: 124px; box-sizing: border-box; padding: 10px 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; background: linear-gradient(180deg, #5b6b7d, #3a4757); transition: transform .18s ease, filter .18s ease; }
+.xblk-face::before { content: ''; position: absolute; left: 5px; right: -5px; top: -10px; height: 10px; background: inherit; filter: brightness(1.3); transform: skewX(-45deg); transform-origin: bottom left; }
+.xblk-face::after { content: ''; position: absolute; top: -5px; bottom: 5px; right: -10px; width: 10px; background: inherit; filter: brightness(0.7); transform: skewY(-45deg); transform-origin: top left; }
+.xblk:hover .xblk-face { transform: translateY(-4px); filter: brightness(1.15); }
+.xblk-face b { font-size: 15px; font-weight: 700; }
+.xblk-face em { font-style: normal; font-size: 19px; font-weight: 700; }
+.xblk-face small { font-size: 11.5px; color: rgba(255,255,255,0.85); }
+.xblk-pool { font-size: 12px; color: #9fb0c0; }
+.xblk.f1 .xblk-face { background: linear-gradient(180deg, #2fae6c, #1c7e4c); }
+.xblk.f2 .xblk-face { background: linear-gradient(180deg, #6bb843, #478a2a); }
+.xblk.f3 .xblk-face { background: linear-gradient(180deg, #a9bd35, #7c8b22); }
+.xblk.f4 .xblk-face { background: linear-gradient(180deg, #d9b52e, #a8841b); }
+.xblk.f5 .xblk-face { background: linear-gradient(180deg, #e38a2d, #b0631b); }
+.xblk.f6 .xblk-face { background: linear-gradient(180deg, #db543c, #a93624); }
+.xblk.f7 .xblk-face { background: linear-gradient(180deg, #b8347f, #86205a); }
+
+/* ---- viewer modes (mining.js VIEWER_MODES) ---- */
+.viewer-ctl .viewer-mode { display: inline-flex; margin-right: 6px; border: 1px solid rgba(60,255,150,0.3); border-radius: 3px; overflow: hidden; }
+.viewer-mode button { font: 11px var(--mono); padding: 3px 9px; background: rgba(2,12,8,0.82); color: #8fd8b8; border: 0; cursor: pointer; }
+.viewer-mode button + button { border-left: 1px solid rgba(60,255,150,0.3); }
+.viewer-mode button.on { background: #1d5a40; color: #eafff4; }
+.viewer-mode button:hover:not(.on) { color: #eafff4; }
+
+/* ---- kiosk (public/js/kiosk.js) ---- */
+.kiosk { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: calc(100vh - 86px); min-height: 480px; }
+.kiosk:fullscreen { height: 100vh; padding: 10px; box-sizing: border-box; background: #010306; }
+@media (max-width: 1100px) { .kiosk { grid-template-columns: minmax(0, 1fr); height: auto; } .treemapwrap.kboard { height: 70vh; } }
+.kpanel { display: flex; flex-direction: column; min-height: 0; background: #04080c; border: 1px solid #16222c; border-radius: 10px; overflow: hidden; }
+.khead { padding: 8px 12px; font: 12px var(--sans); color: #c3cfdb; letter-spacing: .06em; text-transform: uppercase; }
+.khead .faint { text-transform: none; letter-spacing: 0; margin-left: 10px; }
+.treemapwrap.kboard { flex: 1 1 auto; min-height: 0; }
+.treemapwrap.kboard canvas.treemap { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; }
+.kfull { position: absolute; right: 14px; bottom: 12px; z-index: 3; font: 12px var(--mono); padding: 5px 11px; background: rgba(2,12,8,0.82); color: #8fd8b8; border: 1px solid rgba(60,255,150,0.3); border-radius: 4px; cursor: pointer; }
+.kfull:hover { color: #eafff4; }
+
+/* ---- the kiosk's price information panel (markets.js priceInfoHtml) ---- */
+.kprice { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "main ex" "stats ex" "foot foot"; gap: 10px 22px; padding: 14px 16px 10px; border-top: 1px solid #16222c; background: linear-gradient(180deg, #060b10, #04080c); font-family: var(--sans); }
+@media (max-width: 1500px) { .kprice { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "stats" "ex" "foot"; } }
+.kp-wait { color: #7d8b99; padding: 8px 0; }
+.kp-main { grid-area: main; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.kp-pair { font-size: 12px; letter-spacing: .09em; color: #8fa0b1; }
+.kp-price { font-size: 40px; font-weight: 700; line-height: 1.05; color: #ffec28; text-shadow: 0 0 16px rgba(255,220,40,0.45); font-variant-numeric: tabular-nums; }
+.kp-chg { font-size: 18px; font-weight: 600; }
+.kp-chg small { font-size: 11px; color: #7d8b99; font-weight: 400; }
+.kp-stats { grid-area: stats; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kp-stats div { display: flex; flex-direction: column; gap: 3px; }
+.kp-stats span { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: #7d8b99; }
+.kp-stats b { font-size: 15px; font-weight: 600; color: #eef4f8; font-variant-numeric: tabular-nums; }
+.kp-ex { grid-area: ex; width: 100%; border-collapse: collapse; font-size: 13px; align-self: center; }
+.kp-ex td { padding: 3px 4px; color: #dfe6ee; font-variant-numeric: tabular-nums; border-bottom: 1px solid #111b24; }
+.kp-ex td.r { text-align: right; }
+.kp-foot { grid-area: foot; font-size: 11px; color: #6c7a88; }
+
+/* the kiosk as three panels: markets over price on the left, block space the full height on the right */
+.kiosk { grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "mk sp" "pp sp"; }
+.kiosk .kmk { grid-area: mk; }
+.kiosk .kpp { grid-area: pp; }
+.kiosk .ksp { grid-area: sp; }
+.kpp .kprice { border-top: 0; padding-top: 4px; }
+@media (max-width: 1100px) { .kiosk { grid-template-rows: auto; grid-template-areas: "mk" "pp" "sp"; } }
+
+/* the kiosk's fourth panel: Block flow under Block space */
+.kiosk { grid-template-areas: "mk sp" "pp bf"; }
+.kiosk .kbf { grid-area: bf; }
+.kbf .flowwrap { padding: 4px 10px 10px; overflow-x: auto; }
+@media (max-width: 1100px) { .kiosk { grid-template-areas: "mk" "pp" "sp" "bf"; } }
+
+/* THE KIOSK AS TWO INDEPENDENT COLUMNS (operator, 2026-09-11: "Kiosk mode needs to shrink down that
+   particular block flow vertically, and prevent it from resizing when text overflows bounds").
+   Price and Block flow shared one grid row, so a notice line in Block flow grew the row and
+   shrank both boards. Each column is now its own stack; Block flow is a fixed, clipped strip,
+   its cards drawn at 80% (zoom shrinks the layout box too, so the row's parking maths holds),
+   and its notice and timing legend are left to the Overview. */
+.kiosk { grid-template-rows: minmax(0, 1fr); grid-template-areas: none; }
+.kcol { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+.kcol > .kmk, .kcol > .ksp { flex: 1 1 auto; min-height: 0; }
+.kcol > .kpp { flex: 0 0 auto; }
+.kcol > .kbf { flex: 0 0 auto; height: 240px; }
+.kbf .flowwrap { flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; padding: 2px 10px 6px; }
+.kbf .flowwrap > .flow { zoom: 0.8; }
+.kbf .flownote, .kbf .tiplegend { display: none; }
+@media (max-width: 1100px) {
+  .kiosk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: none; }
+  .kcol > .kmk .kboard, .kcol > .ksp .kboard { height: 60vh; flex: none; }
+}
+
+/* the viewer controls in the panel heading, off the board (mining.js modeSwitch) */
+.viewer-ctl.in-head { position: static; display: inline-flex; gap: 6px; align-items: center; margin-left: 12px; flex: 0 0 auto; text-transform: none; letter-spacing: 0; font-weight: 400; vertical-align: middle; }
+.khead { display: flex; align-items: center; }
+.khead .viewer-ctl.in-head { margin-left: auto; }
+
+/* NOTHING JITTERS (operator, 2026-09-11: "Lock the "next refresh" text field in place so it doesnt
+   shift the elements around. In general, lock down elements so they don't shift others around
+   jittering the view"). Numerals are tabular everywhere, so a ticking number never changes width;
+   live labels hold a reserved width and truncate rather than push their neighbours. */
+body { font-variant-numeric: tabular-nums; }
+.viewer-ctl .refresh-in { display: inline-block; min-width: 17ch; text-align: right; white-space: nowrap; font: 11px var(--mono); }
+.viewer-ctl .refresh-now { flex: 0 0 auto; min-width: 12ch; }
+#sseState { display: inline-block; min-width: 12ch; }
+.khead { min-width: 0; }
+.khead b { flex: 0 0 auto; }
+.khead .faint { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kp-chg { display: inline-block; min-width: 9ch; }
+.card > h3 .src { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Block flow: drag the row (mining.js dragScroll); the scrollbar goes */
+.flowwrap { cursor: grab; user-select: none; -webkit-user-select: none; scrollbar-width: none; }
+.flowwrap::-webkit-scrollbar { display: none; }
+.flowwrap.dragging { cursor: grabbing; scroll-snap-type: none; }
+.flowwrap.dragging a { pointer-events: none; }
