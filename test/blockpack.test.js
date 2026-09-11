@@ -241,3 +241,31 @@ test('ditheredSide: the floor or one more, stable per transaction, and area-true
   assert.equal(ditheredSide(1e12, vpu, 40, 'x'), 40, 'clamped to the grid');
   assert.equal(ditheredSide(1, vpu, 96, 'x'), 1, 'never under one unit');
 });
+
+import { bundleSmall } from '../public/js/blockpack.js';
+import { feeBandIndex } from '../public/js/feepalette.js';
+
+test('bundleSmall: runs of small same-band transactions become one square; big ones and totals untouched', () => {
+  const vpu = vbytesPerUnit(1_000_000, 96);
+  const txs = [];
+  for (let i = 0; i < 3000; i++) {
+    const big = i % 250 === 0;
+    const v = big ? 6000 : 140;
+    const rate = i < 1000 ? 2 : 0.31;
+    txs.push({ txid: i.toString(16).padStart(64, '0'), vsize: v, fee: v * rate });
+  }
+  const out = bundleSmall(txs, vpu, 5);
+  const sum = (l, k) => l.reduce((a, t) => a + t[k], 0);
+  assert.equal(sum(out, 'vsize'), sum(txs, 'vsize'), 'vbytes conserved');
+  assert.ok(Math.abs(sum(out, 'fee') - sum(txs, 'fee')) < 1e-6, 'fees conserved');
+  const bundles = out.filter((t) => t.txid.startsWith('bundle:'));
+  assert.ok(bundles.length > 100 && bundles.length < 250, `${bundles.length} bundles from ~2,990 small transactions`);
+  for (const b of bundles) assert.ok(b.vsize <= 25 * vpu, 'a bundle never overfills its square');
+  assert.equal(out.filter((t) => t.vsize === 6000).length, 12, 'large transactions stay themselves');
+  const n = bundles.reduce((a, b) => a + Number(b.txid.split(':')[1]), 0) + out.filter((t) => !t.txid.startsWith('bundle:')).length;
+  assert.equal(n, txs.length, 'every transaction is in exactly one square');
+  for (const b of bundles) assert.ok([feeBandIndex(2), feeBandIndex(0.31)].includes(feeBandIndex(b.fee / b.vsize)), 'a bundle never mixes bands');
+  assert.equal(bundles[0].txid, `bundle:${bundles[0].txid.split(':')[1]}:${txs[1].txid}`, 'named by its first member');
+  const pieces = [{ txid: 'aggregate-0', vsize: 100, fee: 10 }];
+  assert.deepEqual(bundleSmall(pieces, vpu, 5), pieces, 'aggregate pieces are left alone');
+});

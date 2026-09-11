@@ -19,7 +19,7 @@
 // THE STABLE RE-PACK (packStable) lays a refresh out so that transactions
 // already on the board keep their squares, and only what changed moves.
 
-import { feeShade } from './feepalette.js';
+import { feeShade, feeBandIndex } from './feepalette.js';
 
 // A full block needs this share of resolution^2 raw units.
 const BLOCK_SHARE = 0.98;
@@ -79,6 +79,37 @@ export function ditheredSide(vsize, vpu, gridWidth = Infinity, key = '') {
   const p = Math.min(1, Math.max(0, (units - lo * lo) / (hi * hi - lo * lo)));
   const s = key == null || key === '' ? Math.max(1, Math.round(Math.sqrt(units))) : (unitHash(String(key)) < p ? hi : lo);
   return Math.max(1, Math.min(Math.floor(gridWidth) || 1, s));
+}
+
+// BUNDLES FOR THE DETAILED VIEW (operator, 2026-09-11: "Detailed is still too granular. We need
+// to see much larger groupings sooner."). A live block is thousands of 140 vB transactions -- one
+// unit each at 96 units -- and one square per transaction drew them as sand. Walking the block
+// richest first, a run of consecutive SMALL transactions (under a quarter of a bundle) of the same
+// feerate band becomes one square of about side x side units; a run ends at a band change, at a
+// larger transaction, or when the next one would overfill the bundle. Larger transactions stay
+// themselves. A bundle of one is just that transaction. Bundle ids are "bundle:<count>:<first
+// txid>", so the tooltip can say how many it holds and a bundle keeps its id while its first
+// member stays. Vbytes and fees are conserved exactly; only the grouping is drawn.
+export function bundleSmall(txs, vpu, side = 5) {
+  const target = side * side * Math.max(1e-9, Number(vpu) || 0);
+  const out = [];
+  let run = null;
+  const flush = () => {
+    if (!run) return;
+    out.push(run.ids.length === 1 ? run.first : { txid: `bundle:${run.ids.length}:${run.ids[0]}`, vsize: run.vsize, fee: run.fee });
+    run = null;
+  };
+  for (const tx of txs || []) {
+    const v = Math.max(1, Number(tx?.vsize) || 0);
+    const fee = Math.max(0, Number(tx?.fee) || 0);
+    if (v >= target / 4 || String(tx?.txid).startsWith('aggregate')) { flush(); out.push(tx); continue; }
+    const band = feeBandIndex(fee / v);
+    if (run && (run.band !== band || run.vsize + v > target)) flush();
+    if (!run) run = { band, vsize: 0, fee: 0, ids: [], first: tx };
+    run.vsize += v; run.fee += fee; run.ids.push(tx?.txid);
+  }
+  flush();
+  return out;
 }
 
 const idOf = (tx) => (tx && typeof tx === 'object' ? tx.txid : tx);

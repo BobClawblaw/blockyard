@@ -171,3 +171,10 @@ test('Detailed draws the block at its true area: a full block fills the board in
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /blockLimit: opts\.blockVbytes \* k, dither: !!opts\.dither/, 'the renderer passes it to the packer');
 });
+
+test('Detailed bundles small transactions into larger squares, and says so on hover', () => {
+  assert.equal(DENSE_OPTS.bundleSide, 5);
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(src, /opts\.bundleSide \? bundleSmall\(toTxs\(cells, vpu\), vpu, opts\.bundleSide\)/);
+  assert.match(src, /small transactions\`/);
+});

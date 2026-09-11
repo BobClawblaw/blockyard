@@ -57,7 +57,7 @@ export const VIEWER_MODES = [
   // named Simple and Detailed (operator, 2026-09-11: "We should not call it Goggles Mode. We should call it
   // Detailed. Mode 1 as Simple"); the ids stay '1' and '2' so a remembered choice survives the rename
   { id: '1', label: 'Simple', title: 'Simple: the richest 400 transactions as cubes, the rest as equal pieces coloured by feerate' },
-  { id: '2', label: 'Detailed', title: 'Detailed: every transaction in the next block, one square each' },
+  { id: '2', label: 'Detailed', title: 'Detailed: every transaction in the next block; small ones of the same feerate bundled into larger squares' },
 ];
 // 96 UNITS, MEASURED (2026-09-11, the live next block: 3,051 transactions, p10/50/90 139/140/141
 // vB). The packer rounds a square's side (round(sqrt(1.1 vsize / vbytes-per-unit))), and at 128
@@ -65,8 +65,9 @@ export const VIEWER_MODES = [
 // everything back to 1 x 1, and 30 of the 128 rows stood empty -- the scattered, holed board. At
 // 96 a typical transaction is exactly one unit: every one fits with no shrinking, 2,943 of them
 // 1 x 1, the board 94% full, the largest still 26 units a side.
-// dither: area-true square sides (blockpack.js ditheredSide), so a full block fills the board
-export const DENSE_OPTS = { resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, neonCell: 'rgba(50,190,125,0.22)', dither: true };
+// dither: area-true square sides (blockpack.js ditheredSide), so a full block fills the board;
+// bundleSide: runs of small same-feerate transactions drawn as one ~5x5 square (bundleSmall)
+export const DENSE_OPTS = { resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, neonCell: 'rgba(50,190,125,0.22)', dither: true, bundleSide: 5 };
 export function viewerSetup(s, state) {
   const d = state?.denseBlock;
   if (state?.viewerMode === '2' && d?.v?.length) {
