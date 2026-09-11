@@ -782,7 +782,7 @@ export function buildScene(tiles, o = {}) {
     const lock = t.lock ?? 0;
     // an idle effect (see fxAt) lights the cubes it passes
     const pulse = fxv.glow;
-    // the pointer's glow (goggles3d setHover): lit up, outlined, fading when released
+    // the pointer's glow (details3d setHover): lit up, outlined, fading when released
     const hover = o.hoverGlow?.get(t.txid) ?? 0;
     const lit = (1 + 0.55 * lock + 0.45 * pulse + 0.6 * hover) * domeLight(t, o) * reachOf(t);
     const c = t.color;

@@ -905,7 +905,7 @@ canvas.chart.xs, .chart.xs { height: 86px }
    BLOCK SPACE: the Matrix
    ==========================================================================
    2026-09-11, operator: "absolutely spectacular ... feel like they are in The
-   Matrix". The canvas paints the board (goggles3d.js); the phosphor rim,
+   Matrix". The canvas paints the board (details3d.js); the phosphor rim,
    vignette and scanlines are CSS over it, because CSS is not subject to the
    canvas no-composite rule and costs nothing per frame. None of it takes
    pointer events, so hover still reaches the board. (Digital rain was layered

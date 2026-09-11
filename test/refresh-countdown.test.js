@@ -32,7 +32,7 @@ test('"refresh now" fetches at once, and only while the board is at rest', () =>
   // (operator, 2026-09-11: "We should add a button for 'Trigger Refresh Now'
   // that is only enabled when the animation is idle")
   const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
-  assert.ok(/import \{ viewerIdle \} from '\.\/goggles3d\.js';/.test(app), 'the page asks the renderer whether the board is at rest');
+  assert.ok(/import \{ viewerIdle \} from '\.\/details3d\.js';/.test(app), 'the page asks the renderer whether the board is at rest');
   assert.ok(/querySelectorAll\('\[data-refresh-now\]'\)/.test(app), 'every button is kept in step once a second');
   assert.ok(/const ok = !state\.paused && !poolRefreshing && viewerIdle\(/.test(app), 'enabled only when idle, unpaused and not already refreshing');
   assert.ok(/closest\?\.\('\[data-refresh-now\]'\)[\s\S]{0,300}viewerIdle\([\s\S]{0,200}mempoolFetchedAt = 0/.test(app), 'and a click re-checks, then makes the viewer due at once');

@@ -222,3 +222,22 @@ test('packBlock: a whole block of 3,000 transactions packs in well under a frame
   const ms = (performance.now() - t0) / 5;
   assert.ok(ms < 100, `${ms.toFixed(1)} ms per pack`);
 });
+
+import { ditheredSide } from '../public/js/blockpack.js';
+
+test('ditheredSide: the floor or one more, stable per transaction, and area-true on average', () => {
+  const vpu = vbytesPerUnit(1_000_000, 96);
+  const keys = Array.from({ length: 20000 }, (_, i) => i.toString(16).padStart(64, '0'));
+  for (const v of [60, 140, 346, 900, 5000]) {
+    const u = v / vpu;
+    const lo = Math.max(1, Math.floor(Math.sqrt(u)));
+    const sides = keys.map((k) => ditheredSide(v, vpu, 96, k));
+    for (const s of sides) assert.ok(s === lo || s === lo + 1, `${v} vB: side ${s}`);
+    const mean = sides.reduce((a, s) => a + s * s, 0) / sides.length;
+    const want = Math.max(1, u);
+    assert.ok(Math.abs(mean / want - 1) < 0.03, `${v} vB: mean area ${mean.toFixed(3)} vs ${want.toFixed(3)} units`);
+  }
+  assert.equal(ditheredSide(140, vpu, 96, 'abc'), ditheredSide(140, vpu, 96, 'abc'), 'the same transaction, the same side');
+  assert.equal(ditheredSide(1e12, vpu, 40, 'x'), 40, 'clamped to the grid');
+  assert.equal(ditheredSide(1, vpu, 96, 'x'), 1, 'never under one unit');
+});

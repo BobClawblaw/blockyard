@@ -144,7 +144,7 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
                      Both pure geometry and colour: no canvas, so unit-testable.
   js/blockscene3d.js the 3D projection, the transition planner (lanes, L-paths,
                      gravity, bounces) and the fit. Also pure.
-  js/goggles3d.js    the renderer: canvas, rAF, hover. Per-canvas state in a
+  js/details3d.js    the renderer: canvas, rAF, hover. Per-canvas state in a
                      WeakMap -- a module-level rAF handle made two viewers on one
                      page fight over it.
                      Since 2026-09-11 tiles are Tetris cells with a metallic finish
@@ -237,7 +237,7 @@ silently ate another test's result line — rule 22.
 The block-space viewer was rebuilt over 2026-09-10/11: a square packing with the
 look of mempool.space's block view -- since reimplemented from scratch as
 `blockpack.js` + `feepalette.js`, so the project can be Apache-2.0 -- then a 3D viewer with a
-choreographed refresh (`blockscene3d.js` + `goggles3d.js`), shared by Overview and
+choreographed refresh (`blockscene3d.js` + `details3d.js`), shared by Overview and
 Mining. Two invariants carry most of the weight and both are guarded by tests
 verified to fail without them:
 
@@ -312,7 +312,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 568 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 570 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

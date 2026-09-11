@@ -1,8 +1,8 @@
-// Light cycles crash into each other's walls and de-res (blockscene3d cycleCrashes, goggles3d drawCycles).
+// Light cycles crash into each other's walls and de-res (blockscene3d cycleCrashes, details3d drawCycles).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cycleCrashes, cyclePath } from '../public/js/blockscene3d.js';
-import { drawCycles } from '../public/js/goggles3d.js';
+import { drawCycles } from '../public/js/details3d.js';
 
 const line = (x0, y0, x1, y1) => {
   const pts = [];

@@ -55,6 +55,32 @@ export function vsizeForSide(side, vpu) {
   return (Number(vpu) * k * k) / AREA_GAIN;
 }
 
+// AREA-TRUE SIDES FOR THE DETAILED VIEW (operator, 2026-09-11: "Our packer sucks compared to
+// mempool space. How do we improve?"). Measured on the live block that day: 6,699 transactions,
+// 80% of them 139-140 vB, at 96 units (110.7 vB a unit). A 140 vB transaction is 1.27 units and
+// sideFor draws it as ONE, so the block as drawn was 82% of its true area -- a full block stopped
+// 77 rows up a 96-row board, the rest bare grid. Whole-unit squares can only be area-true on
+// average if some of them round up: a transaction of u units is drawn at floor(sqrt(u)) or one
+// more, the larger with the probability that makes its expected area exactly u. The coin is a
+// hash of the txid, so a transaction keeps its side on every refresh (a running error carry is
+// area-exact too, but one newcomer early in the order would resize everything after it). No
+// AREA_GAIN here: the areas are already true.
+function unitHash(key) {
+  let h = 0x9747b28c;                        // not feepalette's seed: size and shade stay independent
+  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12;   // mix, so similar ids spread
+  return (h >>> 0) / 4294967296;
+}
+
+export function ditheredSide(vsize, vpu, gridWidth = Infinity, key = '') {
+  const units = Math.max(0, Number(vsize) || 0) / Math.max(1e-12, Number(vpu) || 0);
+  const lo = Math.max(1, Math.floor(Math.sqrt(units)));
+  const hi = lo + 1;
+  const p = Math.min(1, Math.max(0, (units - lo * lo) / (hi * hi - lo * lo)));
+  const s = key == null || key === '' ? Math.max(1, Math.round(Math.sqrt(units))) : (unitHash(String(key)) < p ? hi : lo);
+  return Math.max(1, Math.min(Math.floor(gridWidth) || 1, s));
+}
+
 const idOf = (tx) => (tx && typeof tx === 'object' ? tx.txid : tx);
 
 // ---------------------------------------------------------------------------
@@ -201,22 +227,22 @@ export class BlockLayout {
 
 // ---------------------------------------------------------------------------
 
-function prepare(txs, vpu, width) {
+function prepare(txs, vpu, width, dither = false) {
   return (txs || []).map((tx) => {
     const vsize = Math.max(1, Number(tx?.vsize) || 0);
     const fee = Number(tx?.fee);
     const rate = Number.isFinite(fee) && fee > 0 ? fee / vsize : 0;
-    return { txid: tx?.txid, vsize, rate, s: sideFor(vsize, vpu, width) };
+    return { txid: tx?.txid, vsize, rate, s: dither ? ditheredSide(vsize, vpu, width, tx?.txid ?? '') : sideFor(vsize, vpu, width) };
   });
 }
 
 const tileOf = (it, pos) => ({ txid: it.txid, x: pos.x, y: pos.y, s: pos.s, vsize: it.vsize, rate: it.rate, color: feeShade(it.rate, it.txid) });
 
-export function packBlock(txs, { resolution = 80, blockLimit = 1000000 } = {}) {
+export function packBlock(txs, { resolution = 80, blockLimit = 1000000, dither = false } = {}) {
   const width = Math.max(1, Math.floor(Number(resolution) || 80));
   const vpu = vbytesPerUnit(blockLimit, width);
   const layout = new BlockLayout({ width, height: width });
-  const items = prepare(txs, vpu, width);
+  const items = prepare(txs, vpu, width, dither);
   const tiles = new Array(items.length);
   let gridHeight = 0;
   for (let i = 0; i < items.length; i++) {
@@ -258,7 +284,7 @@ export function packStable(prev, txs, opts = {}) {
   const width = Math.max(1, Math.floor(Number(opts.resolution) || 80));
   const height = width;
   const vpu = vbytesPerUnit(opts.blockLimit ?? 1000000, width);
-  const items = prepare(txs, vpu, width);
+  const items = prepare(txs, vpu, width, !!opts.dither);
 
   // where each survivor was
   const was = new Map();

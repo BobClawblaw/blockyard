@@ -19,7 +19,7 @@ import { blockTreemap, mempoolTreemap, rateColor as rateBucketColor } from './go
 // grid (the look of mempool.space's block view, our own packer in blockpack.js) with feerate carried
 // in HEIGHT as well as colour, and refreshes that lift, fly and land. The flat
 // treemap entry points stay imported above so a fallback is one edit away.
-import { block3d, mempool3d } from './goggles3d.js';
+import { block3d, mempool3d } from './details3d.js';
 import { feeColor } from './feepalette.js';
 
 // ONE viewer, two pages. The operator asked for the mempool viewer to be
@@ -65,7 +65,8 @@ export const VIEWER_MODES = [
 // everything back to 1 x 1, and 30 of the 128 rows stood empty -- the scattered, holed board. At
 // 96 a typical transaction is exactly one unit: every one fits with no shrinking, 2,943 of them
 // 1 x 1, the board 94% full, the largest still 26 units a side.
-export const DENSE_OPTS = { resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, neonCell: 'rgba(50,190,125,0.22)' };
+// dither: area-true square sides (blockpack.js ditheredSide), so a full block fills the board
+export const DENSE_OPTS = { resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, neonCell: 'rgba(50,190,125,0.22)', dither: true };
 export function viewerSetup(s, state) {
   const d = state?.denseBlock;
   if (state?.viewerMode === '2' && d?.v?.length) {

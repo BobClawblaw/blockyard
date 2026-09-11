@@ -6,7 +6,7 @@
 // is honoured inconsistently on the same rasterisers. shadowBlur joins the list
 // for the same reason -- a rasteriser may skip it, and the viewer's phosphor
 // glow and cast shadows are built from plain rgba strokes and polygons instead.
-// goggles3d.test.js drives the draw path and checks what reaches the context;
+// details3d.test.js drives the draw path and checks what reaches the context;
 // this checks what is written, so a branch that test does not reach is covered.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ const codeOnly = (f) => readFileSync(new URL(`../public/js/${f}`, import.meta.ur
   .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 test('the 3D viewer never uses clip, globalAlpha, composite modes or shadowBlur', () => {
-  for (const f of ['goggles3d.js', 'blockscene3d.js']) {
+  for (const f of ['details3d.js', 'blockscene3d.js']) {
     const src = codeOnly(f);
     assert.ok(src.length > 2000, `${f}: the source was actually read`);
     assert.ok(!/\.clip\(/.test(src), `${f}: no clip()`);

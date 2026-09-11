@@ -495,7 +495,7 @@ loaded from the same origin. There is no build step and no framework.
 | `markets.js`, `pricechart.js`, `depthchart.js` | Markets page: flat price chart with axes and crosshair, the same candles on the 3D board, the depth chart |
 | `kiosk.js` | the 3D Markets board and the Block space board side by side, with a full-screen button |
 | `goggles.js` | the 2D treemap maps (squarified) |
-| `blockpack.js`, `feepalette.js`, `blockscene3d.js`, `goggles3d.js` | the 3D engine (section 4) |
+| `blockpack.js`, `feepalette.js`, `blockscene3d.js`, `details3d.js` | the 3D engine (section 4) |
 | `fmt.js` | formatters: decimal units (as the node prints them), `–` for anything absent |
 | `login.js` | the login page (a separate file because of the CSP) |
 
@@ -636,10 +636,10 @@ responsibility:
 
 | File | Responsibility | Canvas? |
 |---|---|---|
-| `blockpack.js` | the square packer (`packBlock`, `BlockLayout`, `packStable`, `sideFor`, `vsizeForSide`), an original implementation | no, pure |
+| `blockpack.js` | the square packer (`packBlock`, `BlockLayout`, `packStable`, `sideFor`, `ditheredSide`, `vsizeForSide`), an original implementation | no, pure |
 | `feepalette.js` | the 128 feerate bands (a geometric series from 0.1 to 2,000 sat/vB; sky blue to purple, neighbours stepped in tone) and their colour ramp (`feeColor`, `feeShade`) | no, pure |
 | `blockscene3d.js` | projection, the sphere, transition planning, sampling, scene building (faces, paint order, shadows, idle-effect lighting) | no, pure |
-| `goggles3d.js` | the renderer: canvas sizing, the fit, ground and grid, axes, stars, the rAF loop, idle-effect scheduling, hover, public entry points | yes |
+| `details3d.js` | the renderer: canvas sizing, the fit, ground and grid, axes, stars, the rAF loop, idle-effect scheduling, hover, public entry points | yes |
 
 Keeping geometry and choreography pure is what makes the collision-free and
 constant-view invariants testable without a browser.
@@ -670,6 +670,12 @@ flowchart TD
   allowance so the many transactions just over one unit keep their share, at least 1 and
   at most the grid width. `vsizeForSide` is its exact inverse, which the renderer uses to
   cut the aggregate tail into whole squares.
+- **Detailed** uses area-true sides instead (`ditheredSide`, `dither: true`): a transaction
+  of u units is drawn at floor(√u) or one more, the larger with the probability that makes
+  its expected area exactly u, the coin a hash of its txid so its side never changes between
+  refreshes. Nearest-side rounding drew a live block of mostly 140 vB transactions (1.27
+  units each, drawn as one) at 82% of its true area, so a full block stopped short of the
+  top of the board.
 - Squares are placed first-fit into rows scanning upward, in the order given
   (richest first). Row 0 is the expensive end, and it is drawn at the bottom.
 - Resting squares never overlap. The collision-free proof depends on this.
@@ -877,7 +883,7 @@ Callers use `render3d(canvas, cells, options)` or one of its wrappers:
   weight limit divided by 4.
 - `board3d(canvas, tiles, options)`: caller-laid tiles.
 
-Options are merged over `DEFAULTS` in `goggles3d.js`.
+Options are merged over `DEFAULTS` in `details3d.js`.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -943,7 +949,7 @@ Each of these has a test that fails if it is violated.
   browsers, VMs, blocklisted GPUs) silently drop fills drawn through a clip and
   handle alpha and blur inconsistently; this blanked the map once. Transparency
   goes inside `rgba()`, glows are layered strokes, and depth is paint order.
-  `test/viewer-canvas-rules.test.js` scans the source; `test/goggles3d.test.js`
+  `test/viewer-canvas-rules.test.js` scans the source; `test/details3d.test.js`
   and `test/never-clip.test.js` record what actually reaches a context.
 - **No tile is ever see-through.** Arrivals and departures are solid and enter or
   leave the frame whole. A translucent cube over solid ones reads as a ghost.
@@ -1038,10 +1044,10 @@ test is written with `node:test` and `node:assert`, with nothing to install.
 |---|---|
 | `privacy.test.js` | no tracked file contains this machine's username, resolvable hostname or interface addresses (derived at run time, never written down); no overlay-network addresses; RFC 1918 and routable addresses only where explicitly reviewed; the systemd unit uses a placeholder account. Use `192.0.2.x`, `198.51.100.x` or `203.0.113.x` in examples. |
 | `csp.test.js` | no `'unsafe-inline'` and no `style-src-attr`; one nonce per response, in `script-src` only; HSTS only over TLS; no `style=` in shipped HTML or injected markup; data-driven sizes go through the CSSOM |
-| `viewer-canvas-rules.test.js`, `never-clip.test.js`, `goggles3d.test.js` | no `clip`, `globalAlpha`, composite modes or `shadowBlur`, checked both in the source and in what reaches the context |
+| `viewer-canvas-rules.test.js`, `never-clip.test.js`, `details3d.test.js` | no `clip`, `globalAlpha`, composite modes or `shadowBlur`, checked both in the source and in what reaches the context |
 | `never-blank.test.js` | charts never erase data they already show; stale data gets a pill; only `resetCanvas` in `switchNode` clears a canvas |
 | `web-contract.test.js`, `app-boot.test.js`, `browser-render.test.js` | every element id the JS looks up exists; every nav page has a section and a renderer; `app.js` evaluates; every page renders full, mid-IBD and all-null snapshots without throwing, and says something when it has nothing |
-| `blockscene3d.test.js`, `goggles3d.test.js`, `viewer-modes.test.js` | no intersections during a transition, constant transform and camera, paint-order stability, shadows, landings, idle behaviour, loop parking, hover only at rest, both viewer modes |
+| `blockscene3d.test.js`, `details3d.test.js`, `viewer-modes.test.js` | no intersections during a transition, constant transform and camera, paint-order stability, shadows, landings, idle behaviour, loop parking, hover only at rest, both viewer modes |
 | `rpc-lane.test.js` | priority, coalescing, stale drop, breaker semantics, the unkeyed-job recursion bug, cadence stretching and its floor |
 | `open-access.test.js`, `http-app.test.js`, `tls.test.js`, `cidr.test.js`, `audit-and-kdf.test.js` | the viewer ceiling, admin 403 in open mode, refused writes, sessions and CSRF, TLS, CIDR gate failure direction, audit rotation, scrypt |
 | `logparse.test.js`, `bench-log.test.js`, `shape-liveness.test.js` | parsers against real lines, coverage thresholds, per-shape liveness flags |

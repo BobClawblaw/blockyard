@@ -144,3 +144,30 @@ test('the viewer controls move off the board into the panel heading, and refresh
   assert.equal((app.match(/viewerIdle\(viewerCanvasFor\(b\)\)/g) ?? []).length, 2, 'the click and the enable check both use it');
   assert.match(read('../public/css/app.css'), /\.viewer-ctl\.in-head \{ position: static;/);
 });
+
+import { vbytesPerUnit } from '../public/js/blockpack.js';
+
+test('Detailed draws the block at its true area: a full block fills the board instead of stopping short', () => {
+  // the live block of 2026-09-11: 6,699 transactions, 80% of them 139-140 vB. Drawn at the nearest
+  // side a 140 vB transaction (1.27 units) was ONE unit, and the full block covered 82% of its area
+  const txs = [];
+  let used = 0, i = 0;
+  while (used < 1_000_000) {
+    const v = i % 97 === 0 ? 1200 + (i % 7) * 900 : 139 + (i % 3);
+    if (used + v > 1_000_000) break;
+    txs.push({ txid: i.toString(16).padStart(64, '0'), vsize: v, fee: v * (60 - i / 60) });
+    used += v; i++;
+  }
+  const R = DENSE_OPTS.resolution;
+  const trueUnits = used / vbytesPerUnit(1_000_000, R);
+  const areaOf = (p) => p.tiles.reduce((a, t) => a + t.s * t.s, 0);
+  const nearest = packBlock(txs, { resolution: R, blockLimit: 1_000_000 });
+  const exact = packBlock(txs, { resolution: R, blockLimit: 1_000_000, dither: DENSE_OPTS.dither });
+  assert.equal(DENSE_OPTS.dither, true, 'Detailed asks for area-true sides');
+  assert.ok(areaOf(nearest) / trueUnits < 0.92, `nearest-side rounding loses area (${(areaOf(nearest) / trueUnits).toFixed(3)})`);
+  assert.ok(Math.abs(areaOf(exact) / trueUnits - 1) < 0.03, `area-true (${(areaOf(exact) / trueUnits).toFixed(3)})`);
+  const ones = exact.tiles.filter((t) => t.s === 1).length / exact.tiles.length;
+  assert.ok(ones > 0.8 && ones < 0.97, `mostly one unit, some two (${ones.toFixed(3)})`);
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(src, /blockLimit: opts\.blockVbytes \* k, dither: !!opts\.dither/, 'the renderer passes it to the packer');
+});

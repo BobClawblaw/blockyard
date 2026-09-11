@@ -1,8 +1,8 @@
-// Block space hover glow and click-through (goggles3d setHover/glowLevel, blockscene3d buildScene).
+// Block space hover glow and click-through (details3d setHover/glowLevel, blockscene3d buildScene).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { glowLevel } from '../public/js/goggles3d.js';
+import { glowLevel } from '../public/js/details3d.js';
 import { buildScene } from '../public/js/blockscene3d.js';
 
 test('a hovered tile lights up quickly and fades out slowly when released', () => {
@@ -35,7 +35,7 @@ test('a glowing tile is brighter, outlined and washed with light; the others are
 });
 
 test('a click on a transaction opens it in the explorer; the loop wakes only while a glow changes', () => {
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /canvas\.addEventListener\('click'/);
   assert.match(src, /location\.hash = `#explorer\/tx\/\$\{String\(hit\.txid\)\.toLowerCase\(\)\}`/);
   assert.match(src, /!glowAnimating\(st, t\)/);

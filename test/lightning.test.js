@@ -1,4 +1,4 @@
-// The Block space board's lightning ball (goggles3d idle effect 'ball').
+// The Block space board's lightning ball (details3d idle effect 'ball').
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -30,7 +30,7 @@ test('everything the ball comes near lights up; far cubes stay dark', () => {
 });
 
 test('the ball replaced the data packets among the idle effects', () => {
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /lightcycle: 6500, ball: 5600 \}/);
   assert.doesNotMatch(src, /packets: 5200/);
   assert.match(src, /function drawBall\(ctx, view, lw\)/);

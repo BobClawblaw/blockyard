@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { EXCHANGES, MarketFeed } from '../server/collect/markets.js';
 import { tableHtml, summaryHtml, chart3d, C3, CAMERA_3D, MAX_3D_HOURS } from '../public/js/markets.js';
-import { obliqueFit, DEFAULTS } from '../public/js/goggles3d.js';
+import { obliqueFit, DEFAULTS } from '../public/js/details3d.js';
 import { cellTops } from '../public/js/blockscene3d.js';
 import { cubeHeight, tileFaces } from '../public/js/blockscene3d.js';
-import { board3d } from '../public/js/goggles3d.js';
+import { board3d } from '../public/js/details3d.js';
 import { loadConfig } from '../server/config.js';
 import * as fmt from '../public/js/fmt.js';
 
@@ -330,10 +330,10 @@ test('the 3D chart carries a neon close line, and its price height fills the pan
   const f = obliqueFit(1280, 600, 96, C3.depth, o);
   const top = f.ty - f.k * o.unit * ((C3.row + C3.body) * o.oblique.dy + (C3.zBase + z) * o.oblique.oy);
   assert.ok(top > 0 && top < 600 * 0.2, `the highest price near the top of the panel, not halfway down (${top.toFixed(0)} px)`);
-  assert.match(readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8'), /function priceLine/);
+  assert.match(readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8'), /function priceLine/);
 });
 
-import { starField, starAlpha } from '../public/js/goggles3d.js';
+import { starField, starAlpha } from '../public/js/details3d.js';
 
 test('the markets board is space: no deck texture, a translucent floor, a fixed twinkling star field', () => {
   assert.equal(CAMERA_3D.space, true);
@@ -345,13 +345,13 @@ test('the markets board is space: no deck texture, a translucent floor, a fixed 
   const vals = [0, 500, 1000, 1500, 2000, 3000, 4000].map((t) => starAlpha(a[0], t));
   assert.ok(vals.every((v) => v > 0 && v <= 1));
   assert.ok(Math.max(...vals) - Math.min(...vals) > 0.05, 'it twinkles');
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /if \(opts\.space\) \{\n    const S = 24/, 'the deck texture is skipped on a space board');
   assert.match(src, /canvas\.offsetParent === null\) \{ st\.raf = null; return; \}/, 'the twinkle stops while hidden');
 });
 
 import { project } from '../public/js/blockscene3d.js';
-import { hitOps } from '../public/js/goggles3d.js';
+import { hitOps } from '../public/js/details3d.js';
 
 test('a lower camera: depth drawn shorter than width, height at full scale, and the fit agrees', () => {
   const ob = { ox: 0, oy: 1, dy: 0.3 };
@@ -412,7 +412,7 @@ test('a spot price for the explorer: fresh tickers when the tab has them, else o
 });
 
 test('the price line is a steady neon glow now -- the saber is gone', () => {
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /saberPulses|const crackle|polySpan/, "the saber code is gone");
   assert.match(src, /A BRIGHT NEON GLOW/);
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -421,7 +421,7 @@ test('the price line is a steady neon glow now -- the saber is gone', () => {
 
 test('the markets board has no ground grid -- one line between the candles and the hours', () => {
   assert.equal(CAMERA_3D.floorLine, true);
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   const i = src.indexOf('if (opts.space && opts.floorLine) {');
   assert.ok(i > 0);
   const body = src.slice(i, src.indexOf('\n  }\n', i));

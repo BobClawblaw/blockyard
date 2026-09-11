@@ -648,7 +648,7 @@ test('outlines fade with their tile', () => {
   assert.equal(stroke(1), 'rgba(0,0,0,0.4)');
   assert.equal(stroke(0.25), 'rgba(0,0,0,0.1)', 'a quarter-faded tile has a quarter-strength seam');
   assert.equal(stroke(0), 'rgba(0,0,0,0)', 'and a gone one has none');
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.ok(/ctx\.strokeStyle = op\.stroke/.test(src), 'the renderer strokes with the op\'s own colour');
   assert.ok(!/edgeColor/.test(src), 'and the fixed seam colour is gone');
 });

@@ -7,7 +7,7 @@
 //   * the PRICE CHART (pricechart.js) -- flat and exact: axes, candles, volume, crosshair. The
 //     first cut of this tab had only rows of 3D towers with no axis, and the operator's verdict
 //     was "What the fuck is this? Where is the price chart info?!??";
-//   * the SAME CHART ON THE 3D BOARD (goggles3d board3d) -- operator: "Remember, we can alter the
+//   * the SAME CHART ON THE 3D BOARD (details3d board3d) -- operator: "Remember, we can alter the
 //     perspective. I just want to leverage the 3D view engine we have". The camera is swung round
 //     to face a shallow board (CAMERA_3D: height reads straight up, as price) and parked along the
 //     bottom of the panel; each hour is a candle FLOATING at its price -- a body from open to close
@@ -16,7 +16,7 @@
 //     the hours through the same projection (opts.axes). A candle's id is its exchange and hour,
 //     so a new hour slides the chart along and another exchange drops its own candles in.
 // The server polls five exchanges' public APIs while this tab is open (server/collect/markets.js).
-import { board3d } from './goggles3d.js';
+import { board3d } from './details3d.js';
 import { drawPriceChart, readout, EX_COLORS } from './pricechart.js';
 import { niceTicks } from './charts.js';
 import { renderDepth } from './depthchart.js';

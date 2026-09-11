@@ -8,7 +8,7 @@
 import { lineChart, histogram, scatter, meter, stackedBars, sparkline, paint, resetCanvas, COL } from './charts.js';
 import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
-import { viewerIdle } from './goggles3d.js';
+import { viewerIdle } from './details3d.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets } from './markets.js';
 import { renderKiosk } from './kiosk.js';

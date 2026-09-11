@@ -15,7 +15,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { render3d, block3d, mempool3d, hitTest, DEFAULTS, triggerIdle } from '../public/js/goggles3d.js';
+import { render3d, block3d, mempool3d, hitTest, DEFAULTS, triggerIdle } from '../public/js/details3d.js';
 import { planTransition, project } from '../public/js/blockscene3d.js';
 
 function harness() {
@@ -257,11 +257,11 @@ test('the grid is centred on the panel, the sphere fills the rest, and the view 
   // It was then pinned flush bottom-left; since 2026-09-11 ("I want our grid
   // centered within the view-space", "grid surface fills the panel") the board
   // is centred, and still a function of nothing but the grid and the panel.
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.ok(!/for \(const t of frame\.tiles/.test(src), 'the fit must not read tile positions');
   assert.ok(/THE GRID IS CENTRED ON A SPHERE THAT FILLS THE PANEL/.test(src), 'and the renderer says why');
   assert.ok(/ctx\.setTransform\(fit\.scaleX, 0, 0, fit\.scaleY, fit\.tx, fit\.ty\)/.test(src), 'one constant transform');
-  const { obliqueFit } = await import('../public/js/goggles3d.js');
+  const { obliqueFit } = await import('../public/js/details3d.js');
   const opts = { unit: 6, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5 };
   for (const [pw, ph] of [[600, 600], [1400, 800], [500, 900]]) {
     const f = obliqueFit(pw, ph, 44, 44, opts);
@@ -340,7 +340,7 @@ test('the view transform is a constant: a taller packing cannot shift the board 
 test('the board edge is traced on the sphere, not a flat frame between its corners', () => {
   // (operator, 2026-09-11: "the grid is not snapped to the sphere surface.
   // Everything should snap to the sphere surface on the grid")
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.ok(!/const c = \[P\(0, 0\), P\(n, 0\), P\(n, rows\), P\(0, rows\)\]/.test(src), 'no straight rectangle between the four corners');
   assert.ok(/seg\(0, 0, n, 0\); seg\(n, 0, n, rows\); seg\(n, rows, 0, rows\); seg\(0, rows, 0, 0\);/.test(src), 'four edges traced along the surface');
   assert.ok(/Math\.ceil\(Math\.hypot\(x1 - x0, y1 - y0\) \/ 1\.5\)/.test(src), 'every surface line subdivided by its length');
@@ -349,7 +349,7 @@ test('the board edge is traced on the sphere, not a flat frame between its corne
 test('the ground is a lit, fine-grained deck of plates that a shadow can darken', async () => {
   // (operator, 2026-09-11: "Can we have a more interesting ground texture.
   // Something that looks higher res and shows the shadows well?")
-  const { groundLayers, groundShade } = await import('../public/js/goggles3d.js');
+  const { groundLayers, groundShade } = await import('../public/js/details3d.js');
   const view = { unit: 10, dome: 5, gridW: 44, gridH: 44, oblique: DEFAULTS.oblique };
   const layers = groundLayers(view, DEFAULTS, -6, 50, -8, 52);
   const kinds = new Set(layers.map((l) => l.kind));
@@ -366,7 +366,7 @@ test('the ground is a lit, fine-grained deck of plates that a shadow can darken'
 test('the neon grid is drawn inside the board: a line between every cell, brighter on every plate', async () => {
   // (operator, 2026-09-11: "i want to see the green neon grid explicitly drawn
   // within the block bounds. Right now its just drawing the outer border")
-  const { boardGridLayers } = await import('../public/js/goggles3d.js');
+  const { boardGridLayers } = await import('../public/js/details3d.js');
   const view = { unit: 10, dome: 5, gridW: 44, gridH: 44, oblique: DEFAULTS.oblique };
   const by = Object.fromEntries(boardGridLayers(view, DEFAULTS, 44, 44).map((l) => [l.kind, l]));
   assert.equal(by['neon-cell'].lines.length, 2 * 33, 'a thin line between every pair of cells, both ways');
@@ -384,7 +384,7 @@ test('the neon grid is drawn inside the board: a line between every cell, bright
 
 test('viewerIdle: a board is idle only once it has come to rest', async () => {
   // (operator, 2026-09-11: "only enabled when the animation is idle")
-  const { viewerIdle } = await import('../public/js/goggles3d.js');
+  const { viewerIdle } = await import('../public/js/details3d.js');
   const h = harness();
   assert.equal(viewerIdle(h.canvas), false, 'nothing drawn yet');
   render3d(h.canvas, cells, {});
@@ -412,7 +412,7 @@ test('the glowing layer is laid over the shadows, so no shadow dims the grid', (
 
 test('the first effect after the board comes to rest comes within about a second', () => {
   // (operator, 2026-09-11: "trigger any effects sooner when the board comes to rest, rather than later")
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.deepEqual(DEFAULTS.idleFirst, [800, 1600]);
   assert.ok(DEFAULTS.idleEvery[1] <= 9000, 'and the ones after it no more than 9 s apart');
   assert.match(src, /scheduleFx\(canvas, st, opts, !afterEffect\)/, 'a board that has just landed schedules the quick one');

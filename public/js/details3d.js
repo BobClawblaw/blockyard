@@ -1,4 +1,4 @@
-// goggles3d.js -- the renderer. Owns the canvas, the loop, the camera and the
+// details3d.js -- the renderer. Owns the canvas, the loop, the camera and the
 // per-canvas state; the geometry and choreography are blockscene3d.js.
 //
 // THE RULES THIS FILE EXISTS UNDER, all three learned the hard way here:
@@ -1189,7 +1189,7 @@ export function render3d(canvas, cells, options = {}) {
   const laid = Array.isArray(opts.laid) ? opts.laid : null;   // board3d: tiles the caller laid out
   const pack = (k) => {
     const txs = toTxs(cells, vbytesPerUnit(opts.blockVbytes * k, opts.resolution));
-    const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k };
+    const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k, dither: !!opts.dither };   // dither: Detailed, area-true sides
     // Fresh every time. The stable packer (blockpack.js packStable) moved far
     // fewer blocks but left the resting board ragged -- columns half a cell
     // out of step, holes (operator: "I mean what even is this?"). Kept for

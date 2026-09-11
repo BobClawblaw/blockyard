@@ -2,7 +2,7 @@
 // drawn high enough. You can see black when there should be at least another grid row").
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULTS, obliqueFit, groundExtent } from '../public/js/goggles3d.js';
+import { DEFAULTS, obliqueFit, groundExtent } from '../public/js/details3d.js';
 import { project } from '../public/js/blockscene3d.js';
 
 const PANELS = [[1450, 780, 40, 32], [2900, 1100, 96, 96], [1200, 1200, 48, 40], [3000, 900, 64, 60], [900, 1400, 30, 30]];
@@ -39,7 +39,7 @@ test('the textured sphere covers the whole panel, the far edge included', () => 
 
 test('drawGrid lays the ground over the extent, not a fixed margin', async () => {
   const { readFileSync } = await import('node:fs');
-  const src = readFileSync(new URL('../public/js/goggles3d.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /const \{ X0, X1, Y0, Y1 \} = vr \? groundExtent\(view, vr\)/);
   assert.doesNotMatch(src, /Math\.ceil\(vr\.y1\) \+ 3/);
 });

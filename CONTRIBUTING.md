@@ -33,7 +33,7 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before a larger change.
 5. **No inline styles.** The Content Security Policy forbids `style="…"` attributes. Put
    styles in `public/css/app.css`; for data-driven values use `data-*` attributes and set them
    through the CSSOM. `test/csp.test.js` enforces this.
-6. **Canvas rules for the 3D engine.** In `public/js/goggles3d.js` and
+6. **Canvas rules for the 3D engine.** In `public/js/details3d.js` and
    `public/js/blockscene3d.js`: no `ctx.clip()`, no `globalAlpha`, no composite modes, no
    `shadowBlur`. Transparency rides inside `rgba()` colours; depth is paint order. Some
    software rasterisers silently drop what those features produce. `test/viewer-canvas-
