@@ -16,10 +16,20 @@ test('below 1400 px the tabs take a row of their own, and can still be scrolled'
   assert.match(css, /nav\.pages \{[^}]*overflow-x: auto/, 'the nav scrolls sideways at every width');
 });
 
-test('the kiosk stacks into one column below 1400 px, at its own height, and main scrolls', () => {
-  const at = css.slice(css.indexOf('/* ONE COLUMN SOONER'));
-  assert.match(at, /@media \(max-width: 1400px\) \{/);
-  assert.match(at, /\.kiosk \{ grid-template-columns: minmax\(0, 1fr\)[^}]*height: auto/, 'one column, its own height');
-  assert.match(at, /\.kcol > \.kmk \.kboard, \.kcol > \.ksp \.kboard \{ height: 58vh/, 'each board keeps a readable height');
-  assert.match(css, /^main \{ overflow: auto;/m, 'so the page can scroll to the rest of it');
+test('the kiosk keeps two columns until 1100 px, and fills main rather than assuming a bar height', () => {
+  // operator, 2026-09-11: "Kiosk is absolutely fucked now" -- stacking from 1400 px turned a 1350 px
+  // window from two columns into one tall column that had to be scrolled.
+  assert.match(css, /\.kiosk \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\)[^}]*height: 100%/, 'two columns, filling main');
+  assert.doesNotMatch(css, /@media \(max-width: 1400px\) \{\s*\.kiosk \{ grid-template-columns: minmax\(0, 1fr\)/, 'it does not stack at 1400 px');
+  const tight = css.slice(css.indexOf('@media (max-width: 1400px) and (min-width: 1101px)'));
+  assert.match(tight, /\.kcol > \.kbf \{ height: 200px; \}/, 'between 1100 and 1400 it gives space back instead of stacking');
+  const stack = css.slice(css.indexOf('@media (max-width: 1100px) {\n  .kiosk'));
+  assert.ok(css.includes('@media (max-width: 1100px)'), 'and stacks below 1100 px as it always did');
+});
+
+test('the kiosk page section has a height, so the board fills the window', () => {
+  // main is a definite grid row, but .kiosk sits inside section.page, whose height is auto: without
+  // this the kiosk fell back to its min-height -- 480 px of kiosk in a 782 px window (2026-09-11).
+  assert.match(css, /section\.page:has\(> \.kiosk\) \{ height: 100%; \}/);
+  assert.match(css, /\.kiosk \{[^}]*min-height: min\(calc\(100vh - 130px\), 900px\)/, 'and a viewport fallback where :has() is missing');
 });

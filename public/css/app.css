@@ -124,7 +124,10 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
 .btn.danger { color: var(--bad); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
-main { overflow: auto; padding: 14px; scrollbar-color: var(--bg-3, #12161c) transparent; }
+/* A DEFINITE HEIGHT, so a panel may fill it (the kiosk asks for height: 100%). main is the
+   grid row .app gives it; without a height of its own, a percentage child cannot resolve and the
+   kiosk collapsed to its min-height -- a 480 px kiosk in a 782 px window (2026-09-11). */
+main { overflow: auto; padding: 14px; height: 100%; box-sizing: border-box; scrollbar-color: var(--bg-3, #12161c) transparent; }
 main::-webkit-scrollbar { width: 10px; }
 main::-webkit-scrollbar-thumb { background: var(--bg-3, #12161c); border-radius: 6px; }
 
@@ -1245,7 +1248,12 @@ table.xtable tr:hover td { background: #16202c; }
 .viewer-mode button:hover:not(.on) { color: #eafff4; }
 
 /* ---- kiosk (public/js/kiosk.js) ---- */
-.kiosk { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: calc(100vh - 86px); min-height: 480px; }
+/* THE PAGE SECTION HAS TO HAVE A HEIGHT TOO, or the kiosk cannot fill it: main is a definite
+   grid row, but .kiosk sits inside section.page, whose height is auto -- so height: 100% fell back
+   to min-height and gave a 480 px kiosk in a 782 px window (2026-09-11). The vh fallback covers a
+   browser without :has(), with room for the bar in both its heights (46 px, or 69 px wrapped). */
+section.page:has(> .kiosk) { height: 100%; }
+.kiosk { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: 100%; min-height: min(calc(100vh - 130px), 900px); }   /* 100% of main: the bar wraps below 1400 px, so its height is not a constant */
 .kiosk:fullscreen { height: 100vh; padding: 10px; box-sizing: border-box; background: #010306; }
 @media (max-width: 1100px) { .kiosk { grid-template-columns: minmax(0, 1fr); height: auto; } .treemapwrap.kboard { height: 70vh; } }
 .kpanel { display: flex; flex-direction: column; min-height: 0; background: #04080c; border: 1px solid #16222c; border-radius: 10px; overflow: hidden; }
@@ -1302,13 +1310,16 @@ table.xtable tr:hover td { background: #16202c; }
 .kbf .flowwrap { flex: 1 1 auto; min-height: 0; overflow-x: auto; overflow-y: hidden; padding: 2px 10px 6px; }
 .kbf .flowwrap > .flow { zoom: 0.8; }
 .kbf .flownote, .kbf .tiplegend { display: none; }
-/* ONE COLUMN SOONER (operator, 2026-09-11: "Kiosk doesn't look proper on a smaller window"). At
-   1150 px the two columns were 555 px each: the block-space board came out 553x440 and Block flow's
-   cards were clipped. The kiosk stacks from 1400 px now, at its own height, and main scrolls. */
-@media (max-width: 1400px) {
-  .kiosk { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: none; height: auto; min-height: 0; }
-  .kcol > .kmk .kboard, .kcol > .ksp .kboard { height: 58vh; flex: none; }
-  .kcol > .kbf { height: 260px; }
+/* TWO COLUMNS FOR AS LONG AS THERE IS ROOM (operator, 2026-09-11: "Kiosk is absolutely fucked
+   now"). Stacking from 1400 px was wrong: a 1350 px window, which had been two columns, became one
+   tall column that had to be scrolled. It stacks below 1100 px as it always did; between 1100 and
+   1400 it stays two columns and gives the space back instead -- tighter gaps and a shorter Block
+   flow strip -- which is what "doesn't look proper on a smaller window" was about. */
+@media (max-width: 1400px) and (min-width: 1101px) {
+  .kiosk { gap: 8px; }
+  .kcol { gap: 8px; }
+  .kcol > .kbf { height: 200px; }
+  .kbf .flowwrap > .flow { zoom: 0.7; }
 }
 
 /* the viewer controls in the panel heading, off the board (mining.js modeSwitch) */
