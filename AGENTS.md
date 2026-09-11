@@ -140,7 +140,7 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
   js/blockpack.js    the square packer: first fit on an integer grid, area ~ vsize,
                      plus the stable re-pack. Our own implementation, inspired by
                      the look of mempool.space's block view (no code from it).
-  js/feepalette.js   65 feerate bands (a geometric series from 0.1 sat/vB) and their colour ramp.
+  js/feepalette.js   128 feerate bands (a geometric series from 0.1 sat/vB) and their colour ramp.
                      Both pure geometry and colour: no canvas, so unit-testable.
   js/blockscene3d.js the 3D projection, the transition planner (lanes, L-paths,
                      gravity, bounces) and the fit. Also pure.

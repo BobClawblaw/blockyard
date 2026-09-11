@@ -16,8 +16,8 @@ function hueOf(hex) {
 const MIN_NEIGHBOUR = 16;
 const luma = (hex) => { const [r, g, b] = rgbOf(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 
-test('the bands: 65 thresholds, 0 then 0.1 up to 2000 sat/vB, ascending', () => {
-  assert.equal(FEE_BANDS.length, 65);
+test('the bands: 128 of them, 0 then 0.1 up to 2000 sat/vB, ascending', () => {
+  assert.equal(FEE_BANDS.length, 128);
   assert.equal(FEE_BANDS[0], 0);
   assert.equal(FEE_BANDS[1], 0.1, 'band 1 starts at 0.1 sat/vB: this chain\'s blocks go that low');
   assert.equal(FEE_BANDS.at(-1), 2000);
@@ -26,28 +26,30 @@ test('the bands: 65 thresholds, 0 then 0.1 up to 2000 sat/vB, ascending', () => 
 });
 
 test('the bands are a geometric series: close together near the floor, far apart near the ceiling', () => {
-  assert.ok(FEE_BANDS.filter((b) => b >= 0.1 && b < 1).length >= 14, 'a dozen and more bands below 1 sat/vB');
-  assert.ok(FEE_BANDS.filter((b) => b >= 0.1 && b <= 30).length >= 35, '0.1..30 sat/vB, where this chain lives, spans 35+ bands');
+  assert.ok(FEE_BANDS.filter((b) => b >= 0.1 && b < 1).length >= 28, 'dozens of bands below 1 sat/vB');
+  assert.ok(FEE_BANDS.filter((b) => b >= 0.1 && b <= 30).length >= 70, '0.1..30 sat/vB, where this chain lives, spans 70+ bands');
   // every step is roughly the same ratio (two-figure rounding aside)
   const ratios = FEE_BANDS.slice(2).map((b, i) => b / FEE_BANDS[i + 1]);
   const mean = ratios.reduce((a, r) => a + r, 0) / ratios.length;
   for (const r of ratios) assert.ok(Math.abs(r / mean - 1) < 0.2, `ratio ${r.toFixed(3)} near the mean ${mean.toFixed(3)}`);
   const gaps = FEE_BANDS.slice(1).map((b, i) => b - FEE_BANDS[i]);
   assert.ok(gaps.at(-1) > 1000 * gaps[1], 'the ceiling gaps are far wider than the floor gaps');
-  // readable numbers: two significant figures
-  for (const b of FEE_BANDS.slice(1)) assert.equal(Number(b.toPrecision(2)), b, `${b} is a two-figure number`);
+  // readable numbers: two significant figures, three only where two would repeat the band below
+  for (const b of FEE_BANDS.slice(1)) assert.equal(Number(b.toPrecision(3)), b, `${b} has at most three figures`);
+  const three = FEE_BANDS.slice(1).filter((b) => Number(b.toPrecision(2)) !== b);
+  assert.ok(three.length < 20, `${three.length} three-figure thresholds (${three.join(' ')})`);
 });
 
-test('65 separate colours: neighbours differ in hue and in tone', () => {
+test('128 separate colours: neighbours differ in hue and in tone', () => {
   const colors = FEE_BANDS.map((b) => feeColor(b));
-  assert.ok(new Set(colors).size >= 64, `${new Set(colors).size} distinct colours`);
+  assert.equal(new Set(colors).size, 128, `${new Set(colors).size} distinct colours`);
   const dist = (a, b) => Math.hypot(...rgbOf(a).map((v, i) => v - rgbOf(b)[i]));
   for (let i = 1; i < colors.length; i++) {
     assert.ok(dist(colors[i], colors[i - 1]) >= MIN_NEIGHBOUR, `bands ${i - 1} and ${i}: ${colors[i - 1]} vs ${colors[i]} too close (${dist(colors[i], colors[i - 1]).toFixed(1)})`);
   }
   // a block that runs 0.1..30 sat/vB shows dozens of colours, not one
   const live = new Set(Array.from({ length: 300 }, (_, i) => feeColor(0.1 * 1.02 ** i)).filter((_, i) => 0.1 * 1.02 ** i <= 30));
-  assert.ok(live.size >= 35, `0.1..30 sat/vB: ${live.size} colours`);
+  assert.ok(live.size >= 70, `0.1..30 sat/vB: ${live.size} colours`);
 });
 
 test('feeBandIndex: the highest band whose threshold is at or below the rate, clamped', () => {

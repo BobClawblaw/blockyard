@@ -10,11 +10,14 @@
 // matters as much as the difference between 500 and 1000, so the bands sit
 // close together near the floor and far apart near the ceiling.
 //
-// 65 BANDS FROM 0.1 sat/vB (operator, 2026-09-11: "we really need more color
-// separation. at least 64 different colors and shades"). The first palette
-// began at 1 sat/vB with 36 bands, and this chain's blocks run from 0.1 to a
-// few tens of sat/vB -- so most of a block fell into band 0 and the board was
-// one green. Starting at 0.1 puts 0.1..30 sat/vB across some 37 bands.
+// 128 BANDS FROM 0.1 sat/vB (operator, 2026-09-11: "we really need more color
+// separation. at least 64 different colors and shades", then "we should try
+// 128 colors"). The first palette began at 1 sat/vB with 36 bands, and this
+// chain's blocks run from 0.1 to a few tens of sat/vB -- so most of a block
+// fell into band 0 and the board was one green. Starting at 0.1 puts
+// 0.1..30 sat/vB across some 73 bands, each step about 8% up the scale.
+// Thresholds are two significant figures, three where two would repeat the
+// band below (an 8% step is finer than two figures near the start of a decade).
 //
 // THE COLOURS are a ramp through a handful of anchors, interpolated in HSL
 // with the hue unwrapped so it only ever travels one way: sky blue for the
@@ -32,19 +35,24 @@
 
 const FLOOR_RATE = 0.1;    // sat/vB: the start of band 1 (below it is band 0)
 const TOP_RATE = 2000;     // sat/vB: the start of the last band
-const STEPS = 63;          // ratios between FLOOR_RATE and TOP_RATE: 65 bands in all
+const STEPS = 126;         // ratios between FLOOR_RATE and TOP_RATE: 128 bands in all
 
-// two significant figures: 1.2505 -> 1.3, 14.6 -> 15, 1279 -> 1300
-function twoFigures(v) {
-  const mag = 10 ** (Math.floor(Math.log10(v)) - 1);
+// n significant figures: figures(1.2505, 2) -> 1.3, figures(14.6, 2) -> 15, figures(1.049, 3) -> 1.05
+function figures(v, n) {
+  const mag = 10 ** (Math.floor(Math.log10(v)) - (n - 1));
   return Math.round(v / mag) * mag;
 }
 const tidy = (v) => Number(v.toPrecision(12));   // drop float dust (1.3000000000000003)
 
-export const FEE_BANDS = Object.freeze([
-  0,
-  ...new Set(Array.from({ length: STEPS + 1 }, (_, i) => tidy(twoFigures(FLOOR_RATE * (TOP_RATE / FLOOR_RATE) ** (i / STEPS))))),
-]);
+export const FEE_BANDS = Object.freeze((() => {
+  const bands = [0];
+  for (let i = 0; i <= STEPS; i++) {
+    const v = FLOOR_RATE * (TOP_RATE / FLOOR_RATE) ** (i / STEPS);
+    const two = tidy(figures(v, 2));
+    bands.push(two > bands.at(-1) ? two : tidy(figures(v, 3)));
+  }
+  return bands;
+})());
 
 // [position along the ramp, hue (deg), saturation, lightness], with the rate
 // that lands there. Hues are unwrapped (they fall from blue past 0 into

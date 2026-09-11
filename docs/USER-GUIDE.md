@@ -166,7 +166,7 @@ transactions, up to one block (1,000,000 vB), laid out richest first on a 3D gri
 
 - **Area is vbytes.** Every transaction is a square whose side is a whole number of
   grid units, packed first-fit, richest first.
-- **Colour is fee rate**, in 65 bands from under 0.1 to 2,000 sat/vB and over: sky blue for the
+- **Colour is fee rate**, in 128 bands from under 0.1 to 2,000 sat/vB and over: sky blue for the
   cheapest, through teal, green, yellow, orange and red, to purple. The **Feerate** legend in
   the side panel gives the bands in sat/vB, from under 0.1 up to 500 and over.
 - **Hover a block** for its transaction id, size and fee rate. Hover works when the

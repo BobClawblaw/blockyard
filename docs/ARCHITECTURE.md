@@ -637,7 +637,7 @@ responsibility:
 | File | Responsibility | Canvas? |
 |---|---|---|
 | `blockpack.js` | the square packer (`packBlock`, `BlockLayout`, `packStable`, `sideFor`, `vsizeForSide`), an original implementation | no, pure |
-| `feepalette.js` | the 65 feerate bands (a geometric series from 0.1 to 2,000 sat/vB; sky blue to purple, neighbours stepped in tone) and their colour ramp (`feeColor`, `feeShade`) | no, pure |
+| `feepalette.js` | the 128 feerate bands (a geometric series from 0.1 to 2,000 sat/vB; sky blue to purple, neighbours stepped in tone) and their colour ramp (`feeColor`, `feeShade`) | no, pure |
 | `blockscene3d.js` | projection, the sphere, transition planning, sampling, scene building (faces, paint order, shadows, idle-effect lighting) | no, pure |
 | `goggles3d.js` | the renderer: canvas sizing, the fit, ground and grid, axes, stars, the rAF loop, idle-effect scheduling, hover, public entry points | yes |
 

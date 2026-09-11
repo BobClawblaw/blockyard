@@ -28,7 +28,7 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
 
 - A 3D board of the next block's worth of the mempool: square tiles sized by vbytes and
   coloured by feerate, on a curved, neon-gridded board.
-- 65 feerate colours from under 0.1 to 2,000 sat/vB, sky blue through green, yellow, orange
+- 128 feerate colours from under 0.1 to 2,000 sat/vB, sky blue through green, yellow, orange
   and red to purple, with neighbouring bands stepped in tone so they read apart.
 - Choreographed refreshes: blocks lift, travel in collision-free lanes and land under gravity
   with bounces; cube-on-cube shadows; a refresh countdown and a "refresh now" button.
