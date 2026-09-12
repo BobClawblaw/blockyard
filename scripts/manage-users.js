@@ -22,7 +22,7 @@ const cfg = loadConfig();
 // account, fail to log in, and conclude the tool is broken.
 if (!cfg.auth.enabled) {
   process.stderr.write('note: accounts are DISABLED on this config (auth.enabled=false), so the\n'
-    + 'server is open without sign-in and ignores users.json. Start with BMC_MON_AUTH=1\n'
+    + 'server is open without sign-in and ignores users.json. Start with BLOCKYARD_AUTH=1\n'
     + 'to use accounts.\n');
 }
 const file = path.join(cfg.auth.dataDir, 'users.json');

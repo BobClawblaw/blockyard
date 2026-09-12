@@ -1,4 +1,4 @@
-# bmcmonitor
+# blockyard
 
 A live, multi-user web monitor and block explorer for
 [Bitcoin Machine Code](https://github.com/BobClawblaw/bitcoinmachinecode) (`bmc`), the
@@ -35,8 +35,8 @@ You need **Node.js 22 or newer** and a running `bmc` node with JSON-RPC enabled.
 else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 
 ```bash
-git clone https://github.com/BobClawblaw/bmcmonitor.git
-cd bmcmonitor
+git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
 npm test            # optional: 684 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
@@ -100,12 +100,12 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
 
 - **Open, read-only access by default** — like a block explorer, anyone who can reach the
   port can look. Accounts, roles, sessions, CSRF protection and a per-user audit trail turn
-  on with `BMC_MON_AUTH=1`.
+  on with `BLOCKYARD_AUTH=1`.
 - **Where it listens is your decision** — bind to `127.0.0.1`, a LAN address, a VPN
-  address, or several. Built-in HTTPS with `BMC_MON_TLS_CERT` / `BMC_MON_TLS_KEY`.
+  address, or several. Built-in HTTPS with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`.
 - **Outbound connections are limited and on demand**: exchange APIs only while someone has
   the Markets or Kiosk tab open (and a cached spot price for the explorer's dollar figures).
-  `BMC_MON_MARKETS=0` turns all of it off.
+  `BLOCKYARD_MARKETS=0` turns all of it off.
 
 Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 [SECURITY.md](SECURITY.md).

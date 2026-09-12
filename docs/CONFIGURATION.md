@@ -1,10 +1,10 @@
 # Configuration reference
 
-This is the complete reference for configuring bmcmonitor: every configuration
+This is the complete reference for configuring blockyard: every configuration
 key, every environment variable, what lives in the data directory, and which
 mistakes stop the server from starting.
 
-bmcmonitor needs no configuration file to start. The built-in defaults describe
+blockyard needs no configuration file to start. The built-in defaults describe
 one particular bmc install, though, so most deployments want at least a
 `config/local.json` that says where the node is.
 
@@ -32,9 +32,9 @@ one particular bmc install, though, so most deployments want at least a
 
 Three layers, highest priority first:
 
-1. **Environment variables** (`BMC_MON_*`, see [the table](#environment-variables)).
+1. **Environment variables** (`BLOCKYARD_*`, see [the table](#environment-variables)).
 2. **The configuration file**: `config/local.json` in the repository root, or the
-   file named by `BMC_MON_CONFIG`.
+   file named by `BLOCKYARD_CONFIG`.
 3. **Built-in defaults** (`DEFAULTS` in `server/config.js`).
 
 Merge rules:
@@ -47,7 +47,7 @@ Merge rules:
 - **Unknown keys are ignored silently.** No schema check runs, so a misspelled key
   such as `"allowCIDRs"` has no effect and produces no error.
 
-`BMC_MON_CONFIG` controls which file is read:
+`BLOCKYARD_CONFIG` controls which file is read:
 
 | value | effect |
 |---|---|
@@ -60,13 +60,13 @@ counts as "no file". **It is not an error**, so a typo in the path quietly gives
 the defaults. A file that exists but is not valid JSON stops the boot (see
 [Validation](#validation-what-stops-the-boot)).
 
-`npm run dev` sets `BMC_MON_CONFIG=none`, so a development run never picks up the
+`npm run dev` sets `BLOCKYARD_CONFIG=none`, so a development run never picks up the
 machine's real configuration.
 
 ## Creating config/local.json
 
 ```bash
-cd /path/to/bmcmonitor
+cd /path/to/blockyard
 mkdir -p config
 $EDITOR config/local.json      # see the examples below
 chmod 600 config/local.json    # if it contains rpcPassword or other secrets
@@ -137,7 +137,7 @@ client looks for a credential in this order and uses the first one found:
 
 A cookie file that can be read always wins over `rpcUser`. The node rewrites its
 cookie on every restart, and the monitor picks up the new one automatically. The
-account running bmcmonitor needs read access to the cookie file, and to `logFile` if
+account running blockyard needs read access to the cookie file, and to `logFile` if
 you use one.
 
 **Skipped nodes.** A node that has `datadir`, has no `cookieFile`, and whose
@@ -161,21 +161,21 @@ whose RPC server listens on port 8331:
 | `color` | `#f7931a` |
 
 If your node lives elsewhere, override it with a `nodes` array in
-`config/local.json`, or for the first node only, with `BMC_MON_NODE_URL`,
-`BMC_MON_DATADIR`, `BMC_MON_COOKIE`, `BMC_MON_LOGFILE` and `BMC_MON_NODE_LABEL`.
+`config/local.json`, or for the first node only, with `BLOCKYARD_NODE_URL`,
+`BLOCKYARD_DATADIR`, `BLOCKYARD_COOKIE`, `BLOCKYARD_LOGFILE` and `BLOCKYARD_NODE_LABEL`.
 Note that Bitcoin Core's standard mainnet RPC port is 8332, so check your node's
 `rpcport`.
 
-**The label follows the node.** If you set `BMC_MON_NODE_URL` without also setting
-`BMC_MON_NODE_LABEL`, the first node is renamed to `node @ host:port` rather than
+**The label follows the node.** If you set `BLOCKYARD_NODE_URL` without also setting
+`BLOCKYARD_NODE_LABEL`, the first node is renamed to `node @ host:port` rather than
 keeping the built-in name — a dashboard pointed at Bitcoin Core should not announce
-itself as a BMC node. Give it a name of your own with `BMC_MON_NODE_LABEL`, or with
+itself as a BMC node. Give it a name of your own with `BLOCKYARD_NODE_LABEL`, or with
 `label` in a `nodes` entry; either one wins over both.
 
 ### rpc
 
 The node's RPC server handles one connection at a time on a single thread.
-bmcmonitor therefore sends requests one at a time, in priority order, and these
+blockyard therefore sends requests one at a time, in priority order, and these
 limits protect the node from the monitor. They apply to each node separately.
 
 | key | default | meaning |
@@ -244,7 +244,7 @@ sessions, CSRF protection and a per-user audit trail.
 | `auth.loginMaxAttempts` | `8` | Intended: failed logins per username before lockout. See [Known quirks](#known-quirks); the effective value is 8 whatever you set. |
 | `auth.loginWindowMs` | `300000` (5 min) | Intended: window in which failed attempts are counted. See [Known quirks](#known-quirks); the effective value is 5 minutes. |
 | `auth.lockoutMs` | `600000` (10 min) | How long a username stays locked after too many failures. |
-| `auth.cookieName` | `"bmcmon_sid"` | Name of the session cookie. |
+| `auth.cookieName` | `"blockyard_sid"` | Name of the session cookie. |
 | `auth.secureCookie` | `false` | Mark the session cookie `Secure`. Forced to `true` when `server.tls` is on. Set it yourself only when a TLS-terminating reverse proxy sits in front, because browsers never send a `Secure` cookie over plain HTTP. |
 
 Separately from these settings, login requests are rate-limited per client address
@@ -254,7 +254,7 @@ rate-limited too.
 **The first admin account.** When accounts are on and `users.json` holds no users, the
 server creates a user named `admin` at startup:
 
-- If `BMC_MON_ADMIN_PASSWORD` is set, that is the password. It must pass the
+- If `BLOCKYARD_ADMIN_PASSWORD` is set, that is the password. It must pass the
   password rules above; for example, it may not contain `admin`. A password that
   fails them stops the boot.
 - Otherwise a random 20-character password is generated and printed **once** in the
@@ -280,7 +280,7 @@ state.
 
 ### actions
 
-Actions are the only node **writes** bmcmonitor can make. Everything is off by
+Actions are the only node **writes** blockyard can make. Everything is off by
 default. An action runs only when all of these are true:
 
 1. `actions.enabled` is `true`;
@@ -312,7 +312,7 @@ Available actions:
 | key | default | meaning |
 |---|---|---|
 | `log.level` | `"info"` | Server log verbosity: `debug`, `info`, `warn` or `error`. The server logs to stdout. Under systemd that goes to the journal. |
-| `log.enabled` | `false` | Tail each node's `logFile` as an extra data source. Off by default: the monitor runs on RPC alone. Turn it on only if your node build writes a log format bmcmonitor parses. With it off, figures that only the log can provide (bandwidth and per-peer bytes on builds whose RPC reports zero) are shown as unavailable. |
+| `log.enabled` | `false` | Tail each node's `logFile` as an extra data source. Off by default: the monitor runs on RPC alone. Turn it on only if your node build writes a log format blockyard parses. With it off, figures that only the log can provide (bandwidth and per-peer bytes on builds whose RPC reports zero) are shown as unavailable. |
 | `log.tailBytes` | `2097152` (2 MiB) | Size of the read-back window the log tail uses. |
 | `log.staleMs` | `1800000` (30 min) | How long a tailed log may go without a single new byte before the monitor reports it as silent. A synced, idle node can legitimately stay quiet for about 20 minutes. Override per node with `logStaleMs`. |
 | `log.healthMs` | `30000` | How often that check runs. It costs no RPC. |
@@ -321,7 +321,7 @@ Available actions:
 
 The Markets tab fetches public BTC/USD prices, hourly candles and order books from
 five exchanges over HTTPS: Coinbase, Kraken, Bitstamp, Bitfinex and OKX (OKX quotes
-BTC/USDT). The fetches run on the server, not in the browser. This is bmcmonitor's
+BTC/USDT). The fetches run on the server, not in the browser. This is blockyard's
 only outbound connection other than the node. Exchanges see this server's IP
 address and a User-Agent, nothing about the node. Polling starts when someone opens
 the Markets tab and stops `idleAfterMs` after the last request from that tab, so an
@@ -346,53 +346,53 @@ Environment variables override `config/local.json`.
   value means false.
 - **Empty values**: a variable set to the empty string counts as unset.
 - **Numbers**: parsed with `Number()`. A non-numeric value becomes `NaN`. Only
-  `BMC_MON_PORT` is range-checked, so check spelling.
+  `BLOCKYARD_PORT` is range-checked, so check spelling.
 - **Lists**: comma-separated, with spaces around entries trimmed.
-- **Node variables** (`BMC_MON_NODE_URL`, `BMC_MON_DATADIR`, `BMC_MON_COOKIE`,
-  `BMC_MON_LOGFILE`, `BMC_MON_UNIT`, `BMC_MON_NODE_LABEL`) change **only the first
+- **Node variables** (`BLOCKYARD_NODE_URL`, `BLOCKYARD_DATADIR`, `BLOCKYARD_COOKIE`,
+  `BLOCKYARD_LOGFILE`, `BLOCKYARD_UNIT`, `BLOCKYARD_NODE_LABEL`) change **only the first
   entry** of `nodes`, whether that entry comes from the defaults or from your file.
 
 ### Server variables
 
 | variable | sets | type | default | meaning |
 |---|---|---|---|---|
-| `BMC_MON_CONFIG` | *(which file is read)* | path or `none` | `<repo>/config/local.json` | Configuration file to read. `none`/`off`/`no`/`-` reads no file. |
-| `BMC_MON_BIND` | `server.host` | list | `0.0.0.0` | Listen address(es), for example `127.0.0.1` or `192.0.2.10,2001:db8::10`. If both are set, this wins over `BMC_MON_HOST`. Ignored when the file sets `server.hosts` (see [Known quirks](#known-quirks)). |
-| `BMC_MON_HOST` | `server.host` | list | `0.0.0.0` | Same as `BMC_MON_BIND`. |
-| `BMC_MON_PORT` | `server.port` | number | `8088` | Listen port. |
-| `BMC_MON_ALLOW_CIDRS` | `server.allowCidrs` | list | *(empty: everyone)* | Client allowlist, for example `192.0.2.0/24,2001:db8::/32`. |
-| `BMC_MON_TRUST_PROXY` | `server.trustProxy` | boolean | `false` | Take the client address from `X-Forwarded-For`. |
-| `BMC_MON_TLS_CERT` | `server.tls.cert` | path | unset | PEM certificate. Set it together with `BMC_MON_TLS_KEY`. |
-| `BMC_MON_TLS_KEY` | `server.tls.key` | path | unset | PEM private key. Set it together with `BMC_MON_TLS_CERT`. |
-| `BMC_MON_NODE_URL` | `nodes[0].rpcUrl` | URL | `http://127.0.0.1:8331` | RPC endpoint of the first node. |
-| `BMC_MON_DATADIR` | `nodes[0].datadir` | path | `/storage/bitcoinmachinecode/data` | Data directory of the first node. It also **clears** `nodes[0].cookieFile`, so the cookie is looked up under the new datadir. |
-| `BMC_MON_COOKIE` | `nodes[0].cookieFile` | path | unset | Explicit cookie file for the first node. It is applied after `BMC_MON_DATADIR`, so it wins. |
-| `BMC_MON_LOGFILE` | `nodes[0].logFile` | path | see [defaults](#nodes) | Log file of the first node. Used only when the log source is on. |
-| `BMC_MON_UNIT` | `nodes[0].systemdUnit` | string | `bmcbitcoind.service` | systemd unit name of the first node. Informational only. |
-| `BMC_MON_NODE_LABEL` | `nodes[0].label` | string | `BMC mainnet (production)` | Display name of the first node, shown in the header. Setting `BMC_MON_NODE_URL` without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. |
-| `BMC_MON_RPC_TIMEOUT` | `rpc.timeoutMs` | number | `90000` | RPC timeout for ordinary calls. |
-| `BMC_MON_RPC_MIN_INTERVAL` | `rpc.minIntervalMs` | number | `250` | Minimum gap between RPC requests. |
-| `BMC_MON_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop poll answers older than this. |
-| `BMC_MON_DATA` | `store.dir` | path | `<repo>/data` | Data directory. Also the default `auth.dataDir`. |
-| `BMC_MON_RETENTION_HOURS` | `store.retentionHours` | number | `72` | Chart history retention. |
-| `BMC_MON_AUTH` | `auth.enabled` | boolean | `false` | Turn accounts on. |
-| `BMC_MON_SECURE_COOKIE` | `auth.secureCookie` | boolean | `false` | `Secure` session cookie. Use it behind a TLS terminator; it is automatic with built-in TLS. |
-| `BMC_MON_ADMIN_PASSWORD` | *(none)* | string | *(generated)* | Password for the `admin` account created on first boot when accounts are on and no users exist. It is ignored once any user exists. It is a secret, so do not leave it in a unit file after first boot. |
-| `BMC_MON_ENABLE_ACTIONS` | `actions.enabled` | boolean | `false` | Master switch for node writes. |
-| `BMC_MON_ACTIONS` | `actions.allow` | list | *(empty)* | Actions to enable, for example `testmempoolaccept,savemempool`. |
-| `BMC_MON_ALLOW_WRITES_WITHOUT_AUTH` | `actions.allowWritesWithoutAuth` | boolean | `false` | Permit actions while accounts are off. |
-| `BMC_MON_LOG_SOURCE` | `log.enabled` | boolean | `false` | `1` tails node log files; `0` (or unset) runs on RPC alone. |
-| `BMC_MON_LOG_LEVEL` | `log.level` | string | `info` | `debug`, `info`, `warn` or `error`. |
-| `BMC_MON_MARKETS` | `markets.enabled` | boolean | `true` | `0` turns the Markets feed off. |
-| `BMC_MON_MINING` | *(none)* | `0` or anything | on | `0` turns off miner attribution, which decodes each block's coinbase to show the pool tag. Block sizes, fees and weights are unaffected. Only the literal `0` disables it. |
-| `BMC_MON_MINING_BACKFILL` | *(none)* | number | `36` | How many recent blocks are attributed to miners at startup. |
-| `BMC_MON_MINING_TEMPLATE` | *(none)* | `0` or anything | on | `0` stops the Mining page from requesting `getblocktemplate`, a call that occupies the node's RPC thread for over a second. It is only ever fetched on demand, never on a timer. Only the literal `0` disables it. |
-| `BMC_MON_POOL_MAP` | *(none)* | path | `<store.dir>/pool-map.json` | Pool label map to load (see [The data directory](#the-data-directory)). |
-| `BMC_MON_FAKE_NODE` | *(none)* | boolean | `false` | Development mode: start a built-in simulated node and monitor **only** that. Every configured node is replaced. Never set this in production. |
-| `FAKE_PORT` | *(none)* | number | `18331` | Port of the simulated node, with `BMC_MON_FAKE_NODE`. It is also used by `npm run fake-node`. |
+| `BLOCKYARD_CONFIG` | *(which file is read)* | path or `none` | `<repo>/config/local.json` | Configuration file to read. `none`/`off`/`no`/`-` reads no file. |
+| `BLOCKYARD_BIND` | `server.host` | list | `0.0.0.0` | Listen address(es), for example `127.0.0.1` or `192.0.2.10,2001:db8::10`. If both are set, this wins over `BLOCKYARD_HOST`. Ignored when the file sets `server.hosts` (see [Known quirks](#known-quirks)). |
+| `BLOCKYARD_HOST` | `server.host` | list | `0.0.0.0` | Same as `BLOCKYARD_BIND`. |
+| `BLOCKYARD_PORT` | `server.port` | number | `8088` | Listen port. |
+| `BLOCKYARD_ALLOW_CIDRS` | `server.allowCidrs` | list | *(empty: everyone)* | Client allowlist, for example `192.0.2.0/24,2001:db8::/32`. |
+| `BLOCKYARD_TRUST_PROXY` | `server.trustProxy` | boolean | `false` | Take the client address from `X-Forwarded-For`. |
+| `BLOCKYARD_TLS_CERT` | `server.tls.cert` | path | unset | PEM certificate. Set it together with `BLOCKYARD_TLS_KEY`. |
+| `BLOCKYARD_TLS_KEY` | `server.tls.key` | path | unset | PEM private key. Set it together with `BLOCKYARD_TLS_CERT`. |
+| `BLOCKYARD_NODE_URL` | `nodes[0].rpcUrl` | URL | `http://127.0.0.1:8331` | RPC endpoint of the first node. |
+| `BLOCKYARD_DATADIR` | `nodes[0].datadir` | path | `/storage/bitcoinmachinecode/data` | Data directory of the first node. It also **clears** `nodes[0].cookieFile`, so the cookie is looked up under the new datadir. |
+| `BLOCKYARD_COOKIE` | `nodes[0].cookieFile` | path | unset | Explicit cookie file for the first node. It is applied after `BLOCKYARD_DATADIR`, so it wins. |
+| `BLOCKYARD_LOGFILE` | `nodes[0].logFile` | path | see [defaults](#nodes) | Log file of the first node. Used only when the log source is on. |
+| `BLOCKYARD_UNIT` | `nodes[0].systemdUnit` | string | `bmcbitcoind.service` | systemd unit name of the first node. Informational only. |
+| `BLOCKYARD_NODE_LABEL` | `nodes[0].label` | string | `BMC mainnet (production)` | Display name of the first node, shown in the header. Setting `BLOCKYARD_NODE_URL` without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. |
+| `BLOCKYARD_RPC_TIMEOUT` | `rpc.timeoutMs` | number | `90000` | RPC timeout for ordinary calls. |
+| `BLOCKYARD_RPC_MIN_INTERVAL` | `rpc.minIntervalMs` | number | `250` | Minimum gap between RPC requests. |
+| `BLOCKYARD_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop poll answers older than this. |
+| `BLOCKYARD_DATA` | `store.dir` | path | `<repo>/data` | Data directory. Also the default `auth.dataDir`. |
+| `BLOCKYARD_RETENTION_HOURS` | `store.retentionHours` | number | `72` | Chart history retention. |
+| `BLOCKYARD_AUTH` | `auth.enabled` | boolean | `false` | Turn accounts on. |
+| `BLOCKYARD_SECURE_COOKIE` | `auth.secureCookie` | boolean | `false` | `Secure` session cookie. Use it behind a TLS terminator; it is automatic with built-in TLS. |
+| `BLOCKYARD_ADMIN_PASSWORD` | *(none)* | string | *(generated)* | Password for the `admin` account created on first boot when accounts are on and no users exist. It is ignored once any user exists. It is a secret, so do not leave it in a unit file after first boot. |
+| `BLOCKYARD_ENABLE_ACTIONS` | `actions.enabled` | boolean | `false` | Master switch for node writes. |
+| `BLOCKYARD_ACTIONS` | `actions.allow` | list | *(empty)* | Actions to enable, for example `testmempoolaccept,savemempool`. |
+| `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH` | `actions.allowWritesWithoutAuth` | boolean | `false` | Permit actions while accounts are off. |
+| `BLOCKYARD_LOG_SOURCE` | `log.enabled` | boolean | `false` | `1` tails node log files; `0` (or unset) runs on RPC alone. |
+| `BLOCKYARD_LOG_LEVEL` | `log.level` | string | `info` | `debug`, `info`, `warn` or `error`. |
+| `BLOCKYARD_MARKETS` | `markets.enabled` | boolean | `true` | `0` turns the Markets feed off. |
+| `BLOCKYARD_MINING` | *(none)* | `0` or anything | on | `0` turns off miner attribution, which decodes each block's coinbase to show the pool tag. Block sizes, fees and weights are unaffected. Only the literal `0` disables it. |
+| `BLOCKYARD_MINING_BACKFILL` | *(none)* | number | `36` | How many recent blocks are attributed to miners at startup. |
+| `BLOCKYARD_MINING_TEMPLATE` | *(none)* | `0` or anything | on | `0` stops the Mining page from requesting `getblocktemplate`, a call that occupies the node's RPC thread for over a second. It is only ever fetched on demand, never on a timer. Only the literal `0` disables it. |
+| `BLOCKYARD_POOL_MAP` | *(none)* | path | `<store.dir>/pool-map.json` | Pool label map to load (see [The data directory](#the-data-directory)). |
+| `BLOCKYARD_FAKE_NODE` | *(none)* | boolean | `false` | Development mode: start a built-in simulated node and monitor **only** that. Every configured node is replaced. Never set this in production. |
+| `FAKE_PORT` | *(none)* | number | `18331` | Port of the simulated node, with `BLOCKYARD_FAKE_NODE`. It is also used by `npm run fake-node`. |
 | `FAKE_IBD` | *(none)* | `0` or anything | on | `0` starts the simulated node already synced instead of in initial block download. |
 | `FAKE_RATE` | *(none)* | number | `9` | Blocks per second the simulated node catches up while "syncing". |
-| `BMC_MON_LEDGER_ENGINE` | *(none)* | `sqlite` or `jsonl` | `sqlite` | Storage engine for the mining ledger module (`node:sqlite` with an append-only-file fallback). The running server does not currently open a ledger, so this has no effect today. |
+| `BLOCKYARD_LEDGER_ENGINE` | *(none)* | `sqlite` or `jsonl` | `sqlite` | Storage engine for the mining ledger module (`node:sqlite` with an append-only-file fallback). The running server does not currently open a ledger, so this has no effect today. |
 
 ### Development and tooling variables
 
@@ -400,10 +400,10 @@ These are read only by scripts under `scripts/`, never by the server.
 
 | variable | used by | meaning |
 |---|---|---|
-| `FAKE_LOG` | `scripts/fake-node.js` (standalone) | Log file the standalone simulated node writes. Default `/tmp/bmcmonitor-fake/bitcoin.main.log`. |
-| `BMC_MON_CA_FILE` | `scripts/pool-map.js` | CA certificate used for the optional `--check` against a TLS-serving monitor. Default `/etc/ssl/bmc-local/ca.crt`. |
-| `BMC_MON_BASE` | browser and render check scripts | Base URL of the monitor to test. |
-| `BMC_MON_CA` | `live-render-check.mjs`, `motion-check.mjs` | CA certificate for a TLS-serving monitor. |
+| `FAKE_LOG` | `scripts/fake-node.js` (standalone) | Log file the standalone simulated node writes. Default `/tmp/blockyard-fake/bitcoin.main.log`. |
+| `BLOCKYARD_CA_FILE` | `scripts/pool-map.js` | CA certificate used for the optional `--check` against a TLS-serving monitor. Default `/etc/ssl/bmc-local/ca.crt`. |
+| `BLOCKYARD_BASE` | browser and render check scripts | Base URL of the monitor to test. |
+| `BLOCKYARD_CA` | `live-render-check.mjs`, `motion-check.mjs` | CA certificate for a TLS-serving monitor. |
 | `BROWSER_CDP` | browser probe scripts | Chrome DevTools Protocol endpoint of the browser to drive. |
 | `MOTION_OUT` | `motion-check.mjs` | Output PNG path. |
 | `PROBE_ID`, `PROBE_GAP` | canvas probe scripts | Element id to probe, and the gap between samples. |
@@ -414,7 +414,7 @@ These are read only by scripts under `scripts/`, never by the server.
 | command | what it runs |
 |---|---|
 | `npm start` | `node server/main.js`, with your configuration |
-| `npm run dev` | The server with `BMC_MON_CONFIG=none BMC_MON_BIND=127.0.0.1 BMC_MON_PORT=18088 BMC_MON_FAKE_NODE=1`: a self-contained development run on `http://127.0.0.1:18088` against a simulated node |
+| `npm run dev` | The server with `BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_PORT=18088 BLOCKYARD_FAKE_NODE=1`: a self-contained development run on `http://127.0.0.1:18088` against a simulated node |
 | `npm run fake-node` | The simulated node on its own |
 | `npm run user -- <command>` | Account administration (see [auth](#auth)) |
 | `npm test` | The test suite |
@@ -428,7 +428,7 @@ addresses; substitute your own.
 
 ### A single node on the same machine
 
-The usual case: the node runs on this machine, and bmcmonitor reads its cookie from
+The usual case: the node runs on this machine, and blockyard reads its cookie from
 the data directory. The node here keeps its data in `/var/lib/bmc`, with the mainnet
 cookie at `/var/lib/bmc/main/.cookie`:
 
@@ -449,7 +449,7 @@ cookie at `/var/lib/bmc/main/.cookie`:
 The same thing without a file, using only the environment:
 
 ```bash
-BMC_MON_NODE_URL=http://127.0.0.1:8332 BMC_MON_DATADIR=/var/lib/bmc npm start
+BLOCKYARD_NODE_URL=http://127.0.0.1:8332 BLOCKYARD_DATADIR=/var/lib/bmc npm start
 ```
 
 Without `chainHint`, the monitor tries `<datadir>/.cookie` and then every
@@ -532,7 +532,7 @@ On first boot the banner prints the generated `admin` password once. To choose i
 instead:
 
 ```bash
-BMC_MON_ADMIN_PASSWORD='choose-a-long-passphrase' npm start
+BLOCKYARD_ADMIN_PASSWORD='choose-a-long-passphrase' npm start
 ```
 
 Then create personal accounts with `npm run user -- create <name> <role>`. Without
@@ -560,15 +560,15 @@ Built-in HTTPS on every listener:
 {
   "server": {
     "tls": {
-      "cert": "/etc/bmcmon/cert.pem",
-      "key": "/etc/bmcmon/key.pem"
+      "cert": "/etc/blockyard/cert.pem",
+      "key": "/etc/blockyard/key.pem"
     }
   },
   "auth": { "enabled": true }
 }
 ```
 
-Both files must be readable by the account running bmcmonitor. The certificate
+Both files must be readable by the account running blockyard. The certificate
 must be valid PEM X.509 and not expired. A self-signed certificate works, but the
 browser warns on first visit to each address.
 
@@ -629,7 +629,7 @@ No outbound connections except to the node:
 }
 ```
 
-or `BMC_MON_MARKETS=0`.
+or `BLOCKYARD_MARKETS=0`.
 
 ### RPC-only mode, and turning the log source on
 
@@ -642,7 +642,7 @@ ignored. To make it explicit, and to survive a future default change:
 }
 ```
 
-or `BMC_MON_LOG_SOURCE=0`.
+or `BLOCKYARD_LOG_SOURCE=0`.
 
 To tail the node's log as well, which fills in bandwidth and per-peer figures on
 builds whose RPC reports zeros:
@@ -664,23 +664,23 @@ builds whose RPC reports zeros:
 
 ### Running under systemd
 
-`systemd/bmcmonitor.service` is a template. Edit `User=`, `Group=`,
+`systemd/blockyard.service` is a template. Edit `User=`, `Group=`,
 `WorkingDirectory=` and the path to a Node.js 22+ binary before installing it.
 
-**The shipped unit sets `Environment=` lines for `BMC_MON_PORT`, `BMC_MON_NODE_URL`,
-`BMC_MON_DATADIR`, `BMC_MON_LOGFILE` and `BMC_MON_LOG_LEVEL`.** Environment
+**The shipped unit sets `Environment=` lines for `BLOCKYARD_PORT`, `BLOCKYARD_NODE_URL`,
+`BLOCKYARD_DATADIR`, `BLOCKYARD_LOGFILE` and `BLOCKYARD_LOG_LEVEL`.** Environment
 variables beat `config/local.json`, so those lines override the first node in your
 file. Either edit them to match, or delete them and keep everything in
 `config/local.json`. To add settings without editing the unit, use a drop-in:
 
 ```bash
-sudo systemctl edit bmcmonitor
+sudo systemctl edit blockyard
 ```
 
 ```ini
 [Service]
-Environment=BMC_MON_AUTH=1
-Environment=BMC_MON_DATA=/var/lib/bmcmonitor
+Environment=BLOCKYARD_AUTH=1
+Environment=BLOCKYARD_DATA=/var/lib/blockyard
 ```
 
 The service account needs read access to the node's cookie file (and log file, if
@@ -690,7 +690,7 @@ used), and write access to the data directory.
 
 ## The data directory
 
-`store.dir` (`BMC_MON_DATA`, default `<repo>/data`) holds runtime state. The server
+`store.dir` (`BLOCKYARD_DATA`, default `<repo>/data`) holds runtime state. The server
 creates it at startup. The account files live in `auth.dataDir`, which defaults to
 the same directory. `<repo>/data/` is in `.gitignore`. Back it up if you care about
 accounts and chart history, and never commit or publish it.
@@ -703,15 +703,15 @@ accounts and chart history, and never commit or publish it.
 | `audit.1.jsonl` … `audit.N.jsonl` | the server | sensitive | Rotated audit files, newest first. There are at most `store.auditKeep` of them, and rotation happens at `store.auditMaxBytes`. |
 | `history.json` | the server | no, but reveals node details | Snapshot of chart series, events and recent blocks, restored on startup and pruned to `store.retentionHours`. Can be tens of MB. |
 | `pool-aliases.json` | **you**, optionally | no | Hand-written display names for mining pools: a JSON object from pool key to label, for example `{"examplepool": "Example Pool"}`. The pool key is the lowercased coinbase tag the Mining page shows, or `unknown:<hex>` for blocks without a readable tag. Absent by default, in which case the coinbase text is shown as written. |
-| `pool-map.json` | `node scripts/pool-map.js` | no | Coinbase-tag-to-pool-name map built from the public mempool/mining-pools data set, with source URL and content hash. Absent until you run the script, which needs network access. The server reads it from `BMC_MON_POOL_MAP` if set, otherwise from `<store.dir>/pool-map.json`. The script always writes `<repo>/data/pool-map.json`, so move it, or set `BMC_MON_POOL_MAP`, if you use a different `store.dir`. `--file <pools-v2.json>` builds it offline. |
-| `fake-node.log` | development mode only | no | Log of the simulated node when `BMC_MON_FAKE_NODE=1`. |
+| `pool-map.json` | `node scripts/pool-map.js` | no | Coinbase-tag-to-pool-name map built from the public mempool/mining-pools data set, with source URL and content hash. Absent until you run the script, which needs network access. The server reads it from `BLOCKYARD_POOL_MAP` if set, otherwise from `<store.dir>/pool-map.json`. The script always writes `<repo>/data/pool-map.json`, so move it, or set `BLOCKYARD_POOL_MAP`, if you use a different `store.dir`. `--file <pools-v2.json>` builds it offline. |
+| `fake-node.log` | development mode only | no | Log of the simulated node when `BLOCKYARD_FAKE_NODE=1`. |
 | `*.tmp` | the server | as the target file | Short-lived files from atomic writes (write, fsync, rename). A leftover one after a crash is safe to delete. |
 
 Other secrets outside the data directory:
 
 - `config/local.json`, if it contains `rpcPassword`.
 - The TLS private key named by `server.tls.key`.
-- The node's own cookie file, which bmcmonitor reads but never copies or logs.
+- The node's own cookie file, which blockyard reads but never copies or logs.
 
 The server's own log (stdout, or the journal under systemd) masks credentials that
 look like passwords, cookies or URL passwords. The banner line that prints a
@@ -734,7 +734,7 @@ Error: Invalid configuration:
 |---|---|
 | The configuration file is not valid JSON | `config: cannot parse <file>: <parser message>` (reported on its own, before any other check) |
 | `nodes` is empty or not an array | `nodes must be non-empty` |
-| Port missing, not an integer, or out of range (including a non-numeric `BMC_MON_PORT`) | `server.port invalid` |
+| Port missing, not an integer, or out of range (including a non-numeric `BLOCKYARD_PORT`) | `server.port invalid` |
 | Empty host list | `server.hosts is empty; nothing would be served` |
 | A hostname in the host list | `server.hosts entry "<name>" is not an address literal; use an IPv4/IPv6 address, 0.0.0.0, or localhost` |
 | None of the listed addresses exists on this machine | `none of the configured bind addresses (<list>) exist on this machine; refusing to start with nothing to serve` |
@@ -746,7 +746,7 @@ Error: Invalid configuration:
 | The certificate is not X.509 PEM | `server.tls.cert is not a parseable X.509 certificate: <details>` |
 | The certificate has no usable validity dates | `server.tls.cert has no parseable validity window` |
 | The certificate has expired | `server.tls.cert expired <date>; the browser will refuse the connection, and the dashboard cannot tell you so from behind that refusal` |
-| Actions enabled while accounts are off, without the explicit override | `node actions are enabled while accounts are OFF, which would let any address that can reach the port call them (there is no role to check). Either set BMC_MON_AUTH=1, or set BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1 deliberately alongside BMC_MON_ACTIONS.` |
+| Actions enabled while accounts are off, without the explicit override | `node actions are enabled while accounts are OFF, which would let any address that can reach the port call them (there is no role to check). Either set BLOCKYARD_AUTH=1, or set BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1 deliberately alongside BLOCKYARD_ACTIONS.` |
 | `store.blockMapCap` not an integer of at least 100 | `store.blockMapCap must be an integer >= 100; …` |
 | `store.auditMaxBytes` below 65536 | `store.auditMaxBytes must be >= 65536; below that the audit rotates on every write` |
 | A node's `rpcUrl` missing or not `http(s)://` | `node <id>: rpcUrl must be http(s)://host:port` |
@@ -757,8 +757,8 @@ Failures after validation, while the server starts:
 | situation | what happens |
 |---|---|
 | A listed address is taken, or the port is privileged | Exit 1. The log explains the cause: already in use (probably a second instance), permission denied (ports below 1024), or no such address, and lists the addresses the machine has. |
-| `BMC_MON_ADMIN_PASSWORD` fails the password rules on first boot | The boot throws with the rule it broke, for example `password must be at least 12 characters` or `password must not contain the username`. |
-| `BMC_MON_FAKE_NODE=1` and the simulated node cannot start (for example, `FAKE_PORT` in use) | `dev mode needs a local fake node: <error>` |
+| `BLOCKYARD_ADMIN_PASSWORD` fails the password rules on first boot | The boot throws with the rule it broke, for example `password must be at least 12 characters` or `password must not contain the username`. |
+| `BLOCKYARD_FAKE_NODE=1` and the simulated node cannot start (for example, `FAKE_PORT` in use) | `dev mode needs a local fake node: <error>` |
 
 Reported but **not** fatal:
 
@@ -784,12 +784,12 @@ about.
 - **`rpcUser`/`rpcPassword` alone fail validation.** Every node must name `datadir`
   or `cookieFile`. For a password-only node, set `cookieFile` to a path that does not
   exist, as in [the remote node example](#a-remote-node-with-a-username-and-password).
-- **`server.hosts` in the file beats `BMC_MON_BIND`/`BMC_MON_HOST`.** The
+- **`server.hosts` in the file beats `BLOCKYARD_BIND`/`BLOCKYARD_HOST`.** The
   environment variables set `server.host`, but a `server.hosts` array takes
   precedence over `server.host`. If your file uses `hosts`, change the bind there,
-  or run with `BMC_MON_CONFIG=none`.
+  or run with `BLOCKYARD_CONFIG=none`.
 - **Node environment variables change only `nodes[0]`.** With several nodes in the
-  file, `BMC_MON_NODE_URL` and friends rewrite the first one and leave the rest
+  file, `BLOCKYARD_NODE_URL` and friends rewrite the first one and leave the rest
   alone. The shipped systemd unit sets several of them.
 - **`auth.loginMaxAttempts` and `auth.loginWindowMs` are not read.** The login guard
   takes its limits from keys named `maxAttempts` and `windowMs` and otherwise falls
@@ -799,5 +799,5 @@ about.
 - **`actions.requireAdmin` is not consulted.** Each action's minimum role is fixed in
   code (see [actions](#actions)).
 - **`systemdUnit` is informational.** The server does not query or control systemd.
-- **A missing `BMC_MON_CONFIG` file is silent.** A path that does not exist gives you
+- **A missing `BLOCKYARD_CONFIG` file is silent.** A path that does not exist gives you
   the defaults without an error.

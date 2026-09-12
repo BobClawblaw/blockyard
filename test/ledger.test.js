@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { openLedger, aggregate } from '../server/store/ledger.js';
 
-const tmp = (n) => fs.mkdtempSync(path.join(os.tmpdir(), `bmcmon-ledger-${n}-`));
+const tmp = (n) => fs.mkdtempSync(path.join(os.tmpdir(), `blockyard-ledger-${n}-`));
 const row = (h, pool = 'antpool', label = 'AntPool') => ({
   height: h, hash: `${h}`.padStart(64, '0'), poolKey: pool, poolLabel: label, poolLabelKey: pool,
   matchedTag: 'Mined By AntPool', tagText: 'Mined by AntPool971', tagSource: 'push',
@@ -108,9 +108,9 @@ test('a torn final line in the append-only file is ignored, not fatal', async ()
 
 test('engine=auto falls back rather than failing when sqlite is refused', async () => {
   const l = await openLedger({ file: path.join(tmp('auto'), 'x.db'), engine: 'auto', log: () => {} });
-  process.env.BMC_MON_LEDGER_ENGINE = 'jsonl';
+  process.env.BLOCKYARD_LEDGER_ENGINE = 'jsonl';
   const forced = await openLedger({ file: path.join(tmp('forced'), 'x.jsonl'), engine: 'auto', log: () => {} });
   assert.equal(forced.kind, 'jsonl');
-  delete process.env.BMC_MON_LEDGER_ENGINE;
+  delete process.env.BLOCKYARD_LEDGER_ENGINE;
   l.close(); forced.close();
 });

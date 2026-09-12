@@ -1,6 +1,6 @@
-# bmcmonitor HTTP API
+# blockyard HTTP API
 
-bmcmonitor serves its browser UI and a JSON API from the same port. Everything the dashboard draws comes from the endpoints documented here, so any script can read the same data. This reference is derived from `server/http/api.js` (the route table), `server/http/server.js` (routing, auth, limits), `server/http/sse.js` (the event stream), `server/http/explorer.js`, `server/collect/markets.js`, `server/collect/monitor.js` and `server/rpc/allowlist.js`.
+blockyard serves its browser UI and a JSON API from the same port. Everything the dashboard draws comes from the endpoints documented here, so any script can read the same data. This reference is derived from `server/http/api.js` (the route table), `server/http/server.js` (routing, auth, limits), `server/http/sse.js` (the event stream), `server/http/explorer.js`, `server/collect/markets.js`, `server/collect/monitor.js` and `server/rpc/allowlist.js`.
 
 Contents
 
@@ -29,13 +29,13 @@ Contents
 
 ### Base URL
 
-The server listens on port `8088` by default (`BMC_MON_PORT`), on the addresses in `server.host` / `BMC_MON_BIND`. The examples below use:
+The server listens on port `8088` by default (`BLOCKYARD_PORT`), on the addresses in `server.host` / `BLOCKYARD_BIND`. The examples below use:
 
 ```
 http://127.0.0.1:8088
 ```
 
-When TLS is configured (`BMC_MON_TLS_CERT` + `BMC_MON_TLS_KEY`), every listener speaks HTTPS and the scheme becomes `https`. `/api/build` and `/api/health` report which one is in effect (`scheme`, `tls`).
+When TLS is configured (`BLOCKYARD_TLS_CERT` + `BLOCKYARD_TLS_KEY`), every listener speaks HTTPS and the scheme becomes `https`. `/api/build` and `/api/health` report which one is in effect (`scheme`, `tls`).
 
 ### JSON everywhere
 
@@ -89,7 +89,7 @@ Other statuses: `204` for `OPTIONS` on any path (`Allow: GET,POST,DELETE,HEAD`).
 
 Each route in the table has one of three auth levels:
 
-| Level | Accounts off (default) | Accounts on (`BMC_MON_AUTH=1`) |
+| Level | Accounts off (default) | Accounts on (`BLOCKYARD_AUTH=1`) |
 |---|---|---|
 | `none` | Open. | Open. No session needed. |
 | `any` | Served as the built-in anonymous user (`role: "viewer"`). | Any valid, non-disabled session. Without one: `401`. |
@@ -100,11 +100,11 @@ The roles are `viewer` < `operator` < `admin`. No route in the table requires `v
 **Open mode (the default, `auth.enabled=false`).** No sign-in. Anyone who can reach the port can read everything (state, charts, events, peers, mempool, explorer, markets, the read-only RPC console) as `viewer`. The ceiling is fixed and nothing can raise it. As a result:
 
 - user administration, `/api/audit` and password changes are closed;
-- node writes (`/api/action`) are refused unless `BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1` was set deliberately;
+- node writes (`/api/action`) are refused unless `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1` was set deliberately;
 - `/api/login` answers `403 accounts_disabled`;
 - `GET /login` redirects (`302`) to `/`.
 
-**Accounts mode (`BMC_MON_AUTH=1`).** Sign-in, roles, sessions, CSRF protection and a per-user audit trail. On first start with no users, an `admin` account is created. Its password comes from `BMC_MON_ADMIN_PASSWORD`, or is generated and printed once to the server log.
+**Accounts mode (`BLOCKYARD_AUTH=1`).** Sign-in, roles, sessions, CSRF protection and a per-user audit trail. On first start with no users, an `admin` account is created. Its password comes from `BLOCKYARD_ADMIN_PASSWORD`, or is generated and printed once to the server log.
 
 ### Session cookie
 
@@ -112,14 +112,14 @@ The roles are `viewer` < `operator` < `admin`. No route in the table requires `v
 
 | Cookie | Attributes | Purpose |
 |---|---|---|
-| `bmcmon_sid` (configurable as `auth.cookieName`) | `HttpOnly; SameSite=Strict; Path=/; Max-Age=28800` (+ `Secure` over TLS or with `BMC_MON_SECURE_COOKIE=1`) | The session token. Only its SHA-256 is stored server-side. |
-| `bmcmon_csrf` | Same, but **not** `HttpOnly` | The CSRF double-submit value, readable by page JavaScript. |
+| `blockyard_sid` (configurable as `auth.cookieName`) | `HttpOnly; SameSite=Strict; Path=/; Max-Age=28800` (+ `Secure` over TLS or with `BLOCKYARD_SECURE_COOKIE=1`) | The session token. Only its SHA-256 is stored server-side. |
+| `blockyard_csrf` | Same, but **not** `HttpOnly` | The CSRF double-submit value, readable by page JavaScript. |
 
 Sessions expire 8 hours after creation (`auth.sessionTtlMs`). A role change or a disable takes effect on the next request, not at next login.
 
 ### CSRF: the `X-CSRF-Token` header
 
-With accounts on, every mutating route (`POST /api/logout`, `/api/logout-all`, `/api/rpc`, `/api/action`, `/api/password`, and all `POST /api/users*`) needs the session's CSRF token. Send it in the `X-CSRF-Token` header, or as a `csrf` field in the body. The cookie alone is **not** accepted, because a cross-site request would carry it too. The value is returned by `/api/login` as `csrf` and is also in the `bmcmon_csrf` cookie.
+With accounts on, every mutating route (`POST /api/logout`, `/api/logout-all`, `/api/rpc`, `/api/action`, `/api/password`, and all `POST /api/users*`) needs the session's CSRF token. Send it in the `X-CSRF-Token` header, or as a `csrf` field in the body. The cookie alone is **not** accepted, because a cross-site request would carry it too. The value is returned by `/api/login` as `csrf` and is also in the `blockyard_csrf` cookie.
 
 `/api/login` itself is exempt. In open mode there is no session, so no CSRF check runs.
 
@@ -136,13 +136,13 @@ With accounts on, every mutating route (`POST /api/logout`, `/api/logout-all`, `
 
 ### The CIDR gate
 
-When `server.allowCidrs` / `BMC_MON_ALLOW_CIDRS` is set (comma-separated IPv4/IPv6 CIDRs, for example `192.0.2.0/24,127.0.0.1/32`), every request is checked first: API, static files and the stream, before any KDF or session work. An address outside the list gets:
+When `server.allowCidrs` / `BLOCKYARD_ALLOW_CIDRS` is set (comma-separated IPv4/IPv6 CIDRs, for example `192.0.2.0/24,127.0.0.1/32`), every request is checked first: API, static files and the stream, before any KDF or session work. An address outside the list gets:
 
 ```json
 { "error": { "message": "this address is not permitted", "kind": "forbidden" } }
 ```
 
-The reason is logged server-side only. The client IP is the socket peer, unless `server.trustProxy` / `BMC_MON_TRUST_PROXY=1` is set, in which case the first `X-Forwarded-For` entry is used. Enable that only behind a proxy you control.
+The reason is logged server-side only. The client IP is the socket peer, unless `server.trustProxy` / `BLOCKYARD_TRUST_PROXY=1` is set, in which case the first `X-Forwarded-For` entry is used. Enable that only behind a proxy you control.
 
 ### Security headers
 
@@ -414,7 +414,7 @@ Each point is `{ t, v }`. `t` is the **end** of the bucket, and empty buckets ar
 | `rpc` | `latencyMs avgLatencyMs ratePerSec queued errors breakerTrips busyMsPerSec` |
 | `self` | `rssMb heapMb sseClients usersActive cpuPct eventRate` |
 
-Many fields only fill when the node log source is on (`BMC_MON_LOG_SOURCE=1`). In RPC-only mode they stay empty, not zero.
+Many fields only fill when the node log source is on (`BLOCKYARD_LOG_SOURCE=1`). In RPC-only mode they stay empty, not zero.
 
 #### Snapshot series windows
 
@@ -785,7 +785,7 @@ This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`
 
 ### `GET /api/mining`
 
-Pool attribution over the observed window of recent blocks, plus the cached block template. Attribution costs two cheap reads per block and can be turned off with `BMC_MON_MINING=0`.
+Pool attribution over the observed window of recent blocks, plus the cached block template. Attribution costs two cheap reads per block and can be turned off with `BLOCKYARD_MINING=0`.
 
 ```json
 {
@@ -855,7 +855,7 @@ The block being built right now, from `getblocktemplate`. It is fetched **on dem
 }
 ```
 
-When no template is available, the answer is `{ "node": "...", "unavailable": "<reason>" }`. The reasons are: disabled with `BMC_MON_MINING_TEMPLATE=0`, the node is in initial download, or the node's error. If a refresh fails after an earlier success, the last template is returned with a `lastError` field.
+When no template is available, the answer is `{ "node": "...", "unavailable": "<reason>" }`. The reasons are: disabled with `BLOCKYARD_MINING_TEMPLATE=0`, the node is in initial download, or the node's error. If a refresh fails after an earlier success, the last template is returned with a `lastError` field.
 
 ---
 
@@ -884,7 +884,7 @@ When no template is available, the answer is `{ "node": "...", "unavailable": "<
 ```
 
 - `rpcPeers` is the node's `getpeerinfo` reply, passed through as-is.
-- `activity`, `identity`, `ranking`, `wanted`, `budget` and `banned` come from the node log, and stay empty or `null` unless `BMC_MON_LOG_SOURCE=1`.
+- `activity`, `identity`, `ranking`, `wanted`, `budget` and `banned` come from the node log, and stay empty or `null` unless `BLOCKYARD_LOG_SOURCE=1`.
 - `identitySource` names the source in use.
 
 ### `GET /api/net`
@@ -944,10 +944,10 @@ To poll incrementally, keep `maxSeq` and pass it back as `since`. The filters ar
 
 ## 12. Markets
 
-Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex and OKX. **This is the only outbound connection bmcmonitor makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
+Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex and OKX. **This is the only outbound connection blockyard makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
 
 - **On demand.** Nothing is fetched until someone calls `/api/markets` or `/api/markets/depth`. Each call "touches" the feed. While touched, it polls tickers every 15 s, hourly candles every 5 min and order books every 30 s. It stops 10 minutes after the last touch.
-- `BMC_MON_MARKETS=0` (or `markets.enabled=false`) turns it off. Both endpoints then answer `{ "ok": true, "enabled": false, "note": "market data is off on this monitor (...)" }`.
+- `BLOCKYARD_MARKETS=0` (or `markets.enabled=false`) turns it off. Both endpoints then answer `{ "ok": true, "enabled": false, "note": "market data is off on this monitor (...)" }`.
 - An exchange that fails keeps its last data and reports `error`. It is never dropped or zero-filled.
 
 ### `GET /api/markets`
@@ -1089,7 +1089,7 @@ A small, fixed set of node writes. They are off by default, each one must be lis
 | `testmempoolaccept` | `testmempoolaccept` | viewer | `rawtxs`, `maxfeerate?` |
 | `verifychain_l1` | `verifychain` | admin | fixed to `[2, 6]` (checklevel 2, depth 6) |
 
-To enable them: `BMC_MON_ENABLE_ACTIONS=1` and `BMC_MON_ACTIONS=broadcast,testmempoolaccept` (or `actions.enabled` / `actions.allow`). With accounts off they also need `BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1`. Enabling actions in open mode without that setting is a fatal configuration error at startup.
+To enable them: `BLOCKYARD_ENABLE_ACTIONS=1` and `BLOCKYARD_ACTIONS=broadcast,testmempoolaccept` (or `actions.enabled` / `actions.allow`). With accounts off they also need `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1`. Enabling actions in open mode without that setting is a fatal configuration error at startup.
 
 ### `GET /api/actions`
 
@@ -1139,7 +1139,7 @@ If the node refuses, the answer is `200` with `{ "ok": false, "action", "method"
 
 ## 15. Accounts, sessions, users and audit
 
-These routes are meaningful only with `BMC_MON_AUTH=1`. In open mode they answer as noted.
+These routes are meaningful only with `BLOCKYARD_AUTH=1`. In open mode they answer as noted.
 
 The user object returned by these routes (`publicUser`):
 
@@ -1156,7 +1156,7 @@ Auth `none`, no CSRF. Body: `{ "username": "...", "password": "..." }` (JSON or 
   "csrf": "Zk2c...base64url" }
 ```
 
-It also sets the `bmcmon_sid` and `bmcmon_csrf` cookies. Errors:
+It also sets the `blockyard_sid` and `blockyard_csrf` cookies. Errors:
 
 | Status | `code` | Meaning |
 |---|---|---|
@@ -1349,7 +1349,7 @@ GET /api/stream?node=bmc-main
 Accept: text/event-stream
 ```
 
-- **Auth.** Open mode: anyone. Accounts on: a valid `bmcmon_sid` cookie, otherwise `401` `{ "error": { "message": "authentication required", "kind": "auth" } }`.
+- **Auth.** Open mode: anyone. Accounts on: a valid `blockyard_sid` cookie, otherwise `401` `{ "error": { "message": "authentication required", "kind": "auth" } }`.
 - **Limit.** Each connection attempt spends one token from the stream bucket (section 1). An empty bucket answers `429` `{ "error": { "message": "too many streams", "kind": "ratelimited" } }`.
 - **Node.** `?node=<id>` scopes the stream to one node. An unknown id is refused with `404` (`kind: "unknown_node"`), so a client pointed at a removed node gets a visible failure instead of a silent stream. Only `node` works here, not `nodeId`.
 - **Headers.** `Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-cache, no-store, must-revalidate`, `Connection: keep-alive`, `X-Accel-Buffering: no` (so nginx does not buffer the stream).

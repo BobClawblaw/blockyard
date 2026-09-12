@@ -49,7 +49,7 @@ test('a bind failure names the address asked for, the ones present, and where to
   const msg = bindProblemMessage({ err: { code: 'EADDRNOTAVAIL' }, host: '192.0.2.99', port: 8088, ifaces: IFACES });
   assert.match(msg, /no address 192\.0\.2\.99/, 'says which address failed');
   assert.match(msg, /192\.0\.2\.10 \(enp14s0\)/, 'lists what the box actually has');
-  assert.match(msg, /BMC_MON_BIND|local\.json/, 'and where to fix it');
+  assert.match(msg, /BLOCKYARD_BIND|local\.json/, 'and where to fix it');
 
   // The wildcard alternative is offered, with its cost stated rather than hidden.
   assert.match(msg, /0\.0\.0\.0[\s\S]{0,120}(every interface|whatever the box has)/);
@@ -67,7 +67,7 @@ test('an in-use port says whether it is us double-binding or someone else', () =
 });
 
 test('the config accepts the LAN bind and rejects a non-address', () => {
-  const dir = fs.mkdtempSync('/tmp/bmcmon-bind-');
+  const dir = fs.mkdtempSync('/tmp/blockyard-bind-');
   const write = (obj) => {
     const f = `${dir}/local.json`;
     fs.writeFileSync(f, JSON.stringify(obj));
@@ -102,18 +102,18 @@ test('a bind plan separates what can be served from what is merely absent', () =
 });
 
 test('a comma list and an array mean the same thing', () => {
-  const dir = fs.mkdtempSync('/tmp/bmcmon-bind2-');
+  const dir = fs.mkdtempSync('/tmp/blockyard-bind2-');
   const f = `${dir}/local.json`;
   fs.writeFileSync(f, JSON.stringify({ server: { hosts: ['192.0.2.10', '198.51.100.7'] } }));
   const fromArray = loadConfig({ configFile: f, ifaces: IFACES });
   assert.deepEqual(fromArray.server.hosts, ['192.0.2.10', '198.51.100.7']);
   assert.equal(fromArray.server.host, '192.0.2.10', 'the legacy single-address field still points at the first');
 
-  process.env.BMC_MON_BIND = '192.0.2.10,198.51.100.7';
+  process.env.BLOCKYARD_BIND = '192.0.2.10,198.51.100.7';
   try {
     const fromEnv = loadConfig({ configFile: f, ifaces: IFACES });
     assert.deepEqual(fromEnv.server.hosts, ['192.0.2.10', '198.51.100.7']);
-  } finally { delete process.env.BMC_MON_BIND; }
+  } finally { delete process.env.BLOCKYARD_BIND; }
 
   // A hostname anywhere in the list is refused at load, not at listen().
   fs.writeFileSync(f, JSON.stringify({ server: { hosts: ['192.0.2.10', 'box.example'] } }));

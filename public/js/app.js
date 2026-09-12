@@ -24,7 +24,7 @@ initPanels(F);
 export const state = {
   snap: null,
   // the Block space viewer's mode (mining.js VIEWER_MODES), remembered per browser
-  viewerMode: (() => { try { return globalThis.localStorage?.getItem('bmc.viewerMode') === '2' ? '2' : '1'; } catch { return '1'; } })(),
+  viewerMode: (() => { try { return globalThis.localStorage?.getItem('blockyard.viewerMode') === '2' ? '2' : '1'; } catch { return '1'; } })(),
   denseBlock: null,
   series: null,
   events: [],
@@ -113,7 +113,7 @@ function resetAllCharts() {
 // ------------------------------------------------------------------ api
 
 const csrf = () => {
-  const m = /(?:^|;\s*)bmcmon_csrf=([^;]+)/.exec(document.cookie);
+  const m = /(?:^|;\s*)blockyard_csrf=([^;]+)/.exec(document.cookie);
   return m ? decodeURIComponent(m[1]) : null;
 };
 
@@ -789,14 +789,14 @@ async function recoverMissingNode() {
 /**
  * Say which build this tab is running, and complain when it is not the current one.
  *
- * The page carries `data-bmc-build`, stamped per response by the static layer, and
+ * The page carries `data-blockyard-build`, stamped per response by the static layer, and
  * asks /api/build whether that string is still current. If it is not, this tab is
  * executing code that has been replaced -- and nothing else on screen would ever
  * reveal that. Every "did the fix land?" on 2026-09-08 cost fifteen minutes for want
  * of exactly this comparison.
  */
 export async function checkBuild() {
-  const served = document.documentElement?.dataset?.bmcBuild ?? null;
+  const served = document.documentElement?.dataset?.blockyardBuild ?? null;
   const verEl = document.getElementById('ver');
   const note = document.getElementById('buildNote');
   let info = null;
@@ -885,7 +885,7 @@ async function boot() {
     pill.hidden = !open;
     const b = pill.querySelector?.('b');
     if (b) b.textContent = 'open access';
-    pill.title = 'No account is required: anyone who can reach this monitor reads it as role "viewer" (reads only — user admin, the audit trail and node writes stay closed). Start the server with BMC_MON_AUTH=1 to require sign-in.';
+    pill.title = 'No account is required: anyone who can reach this monitor reads it as role "viewer" (reads only — user admin, the audit trail and node writes stay closed). Start the server with BLOCKYARD_AUTH=1 to require sign-in.';
   }
   document.getElementById('navAdmin').hidden = me.user.role !== 'admin';
   const [nodes, cfg] = await Promise.all([api('/api/nodes'), api('/api/config')]);
@@ -1116,7 +1116,7 @@ async function boot() {
     const b = e.target.closest?.('[data-vmode]');
     if (!b) return;
     state.viewerMode = b.dataset.vmode;
-    try { localStorage.setItem('bmc.viewerMode', state.viewerMode); } catch { /* storage refused */ }
+    try { localStorage.setItem('blockyard.viewerMode', state.viewerMode); } catch { /* storage refused */ }
     mempoolDetail(true);
     render();
   });

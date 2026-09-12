@@ -47,7 +47,7 @@ function selfSigned(dir, days = 20) {
   const cert = path.join(dir, 'cert.pem');
   const key = path.join(dir, 'key.pem');
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-    '-keyout', key, '-out', cert, '-days', String(days), '-subj', '/CN=bmcmon-test'], { stdio: 'pipe' });
+    '-keyout', key, '-out', cert, '-days', String(days), '-subj', '/CN=blockyard-test'], { stdio: 'pipe' });
   return { cert, key };
 }
 
@@ -66,7 +66,7 @@ test('defaults load with TLS off and say the scheme is http', () => {
 
 test('cert or key alone stops the boot, naming which one is missing', (t) => {
   if (!opensslOrSkip(t)) return;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-tls-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-tls-'));
   try {
     const { cert, key } = selfSigned(dir);
     assert.throws(() => loadConfig({ configFile: cfgWith({ cert, key: null }, dir), ifaces }),
@@ -79,7 +79,7 @@ test('cert or key alone stops the boot, naming which one is missing', (t) => {
 });
 
 test('an unreadable cert or key is a config error, not a listen-time surprise', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-tls-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-tls-'));
   try {
     assert.throws(
       () => loadConfig({ configFile: cfgWith({ cert: path.join(dir, 'nope.pem'), key: path.join(dir, 'nope-key.pem') }, dir), ifaces }),
@@ -91,7 +91,7 @@ test('an unreadable cert or key is a config error, not a listen-time surprise', 
 });
 
 test('a certificate that is not a certificate is refused at load', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-tls-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-tls-'));
   try {
     fs.writeFileSync(path.join(dir, 'cert.pem'), '-----BEGIN CERTIFICATE-----\nnot base64 at all\n-----END CERTIFICATE-----\n');
     fs.writeFileSync(path.join(dir, 'key.pem'), 'x');
@@ -106,7 +106,7 @@ test('a certificate that is not a certificate is refused at load', () => {
 
 test('an expired certificate stops the boot; a near-expiry one warns', (t) => {
   if (!opensslOrSkip(t)) return;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-tls-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-tls-'));
   try {
     const { cert, key } = selfSigned(dir, 20);
     const file = cfgWith({ cert, key }, dir);
@@ -134,7 +134,7 @@ test('an expired certificate stops the boot; a near-expiry one warns', (t) => {
 
 test('with TLS on: HTTPS serves, HTTP does not, the cookie is Secure and HSTS is sent', async (t) => {
   if (!opensslOrSkip(t)) return;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-tls-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-tls-'));
   try {
     const { cert, key } = selfSigned(dir);
     // The one env var this test must own itself: Node's fetch has no per-request
@@ -165,7 +165,7 @@ test('with TLS on: HTTPS serves, HTTP does not, the cookie is Secure and HSTS is
       const login = await client.login('admin');
       assert.equal(login.status, 200);
       const setCookies = (await client.raw('/api/login', { method: 'POST', body: { username: 'admin', password: client.adminPassword } })).headers.getSetCookie();
-      assert.ok(setCookies.some((c) => /bmcmon_sid=/.test(c) && /\bSecure\b/.test(c)),
+      assert.ok(setCookies.some((c) => /blockyard_sid=/.test(c) && /\bSecure\b/.test(c)),
         `a Secure cookie over TLS: ${setCookies.join(' | ')}`);
 
       assert.match((await client.get('/api/build')).body.scheme, /^https$/);

@@ -30,7 +30,7 @@ const scan = scanTests({ root: ROOT });
 // variable is removed deliberately and the parse below stays strict enough to
 // fail on an empty stream rather than default to zero.
 function runFile(file) {
-  const env = { ...process.env, BMC_MON_CONFIG: 'none' };
+  const env = { ...process.env, BLOCKYARD_CONFIG: 'none' };
   delete env.NODE_TEST_CONTEXT;
   return execFileSync(process.execPath, ['--test', file], { cwd: ROOT, encoding: 'utf8', env, timeout: 60_000 });
 }

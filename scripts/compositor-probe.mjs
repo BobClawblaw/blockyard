@@ -7,7 +7,7 @@
 // result decides the draw path (direct fills / strips / offscreen-state + single blit),
 // instead of guessing again.
 const CDP = 'http://127.0.0.1:9333';
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const targets = JSON.parse(await (await fetch(CDP + '/json/list')).text());
 const page = targets.find(t => t.type === 'page');

@@ -66,11 +66,11 @@ form.addEventListener('submit', async (ev) => {
       btn.textContent = 'sign in';
       return;
     }
-    // The server set two cookies: the HttpOnly session id, and `bmcmon_csrf`,
+    // The server set two cookies: the HttpOnly session id, and `blockyard_csrf`,
     // readable here on purpose. Mutating calls must echo that value in an
     // X-CSRF-Token header -- reading it is the thing a cross-origin page cannot
     // do, which is what makes the check mean anything.
-    void /(?:^|;\s*)bmcmon_csrf=/.test(document.cookie);
+    void /(?:^|;\s*)blockyard_csrf=/.test(document.cookie);
     const back = new URLSearchParams(location.search).get('next');
     window.location.replace(back && back.startsWith('/') ? back : '/');
   } catch (e) {

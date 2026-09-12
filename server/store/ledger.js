@@ -57,7 +57,7 @@ export async function openLedger({ file, engine = 'auto', keepHeights = 52_594, 
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let chosen = engine;
   if (engine === 'auto') {
-    chosen = (process.env.BMC_MON_LEDGER_ENGINE ?? 'sqlite').trim().toLowerCase();
+    chosen = (process.env.BLOCKYARD_LEDGER_ENGINE ?? 'sqlite').trim().toLowerCase();
     if (chosen === 'sqlite') {
       const DatabaseSync = await sqliteEngine();
       if (!DatabaseSync) {

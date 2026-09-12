@@ -17,7 +17,7 @@ import { classifyMethod } from '../server/rpc/allowlist.js';
 import { routes, netView } from '../server/http/api.js';
 
 function makeMonitor({ logFile = null } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-rpconly-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-rpconly-'));
   const store = { ringCapacity: 500, maxEventLog: 200, retentionHours: 1, snapshotEveryMs: 1e9 };
   const logger = () => {}; logger.child = () => logger;
   return new NodeMonitor(
@@ -27,22 +27,22 @@ function makeMonitor({ logFile = null } = {}) {
       store, log: logger, history: new History(dir, store, { log: logger }), logCfg: {} });
 }
 
-test('BMC_MON_LOG_SOURCE=0 turns the log source off in config', () => {
-  process.env.BMC_MON_LOG_SOURCE = '0';
+test('BLOCKYARD_LOG_SOURCE=0 turns the log source off in config', () => {
+  process.env.BLOCKYARD_LOG_SOURCE = '0';
   try {
     const cfg = loadConfig({ configFile: '/nonexistent-local.json' });
     assert.equal(cfg.log.enabled, false);
-  } finally { delete process.env.BMC_MON_LOG_SOURCE; }
+  } finally { delete process.env.BLOCKYARD_LOG_SOURCE; }
   const dflt = loadConfig({ configFile: '/nonexistent-local.json' });
   // The posture flipped on 2026-09-09: the UI reads RPC only, so the default is OFF.
   // Tailing a file the node rewrites between releases is a grammar dependency that has
   // already produced two silent-outage incidents, and every panel that needed it has
-  // been removed rather than left showing dashes. BMC_MON_LOG_SOURCE=1 still turns it on.
+  // been removed rather than left showing dashes. BLOCKYARD_LOG_SOURCE=1 still turns it on.
   assert.equal(dflt.log.enabled, false, 'RPC only by default');
-  process.env.BMC_MON_LOG_SOURCE = '1';
+  process.env.BLOCKYARD_LOG_SOURCE = '1';
   try {
     assert.equal(loadConfig({ configFile: '/nonexistent-local.json' }).log.enabled, true, 'still switchable for parser work');
-  } finally { delete process.env.BMC_MON_LOG_SOURCE; }
+  } finally { delete process.env.BLOCKYARD_LOG_SOURCE; }
 });
 
 test('a monitor with no logFile has no tail and says which figures lose their source', async () => {
@@ -59,7 +59,7 @@ test('a monitor with no logFile has no tail and says which figures lose their so
 });
 
 test('a monitor with a logFile does not claim the mode is on', async () => {
-  const file = path.join(fs.mkdtempSync('/tmp/bmcmon-log-'), 'bitcoin.main.log');
+  const file = path.join(fs.mkdtempSync('/tmp/blockyard-log-'), 'bitcoin.main.log');
   fs.writeFileSync(file, '2026-09-08 05:45:47.799 [dlc] -- recv 81.2MB/s (avg 108.7MB/s) | write 62.8MB/s (avg 80.4MB/s) | floor 32.0 KB/s (median 5.1) | banned 8/114 | staged 1 --\n');
   const m = makeMonitor({ logFile: file });
   assert.equal(m.logEnabled, true);

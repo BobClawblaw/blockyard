@@ -30,11 +30,11 @@ test('the served page is stamped with the build, and says whether it is current'
     const nonce = /\bnonce-([^';]+)'/.exec(csp)?.[1];
     assert.ok(nonce, `a per-response script nonce is offered: ${csp}`);
 
-    assert.match(html, /data-bmc-build="[\d.]+-[0-9a-f]{10}"/, 'the page carries the build it was served with');
+    assert.match(html, /data-blockyard-build="[\d.]+-[0-9a-f]{10}"/, 'the page carries the build it was served with');
     assert.match(html, /src="\/js\/app\.js\?v=[\d.]+-[0-9a-f]{10}"/, 'the entry module is cache-busted by build');
     assert.match(html, /href="\/css\/app\.css\?v=/, 'the stylesheet too');
 
-    const served = /data-bmc-build="([^"]+)"/.exec(html)[1];
+    const served = /data-blockyard-build="([^"]+)"/.exec(html)[1];
     const build = await client.get(`/api/build?build=${encodeURIComponent(served)}`);
     assert.equal(build.body.matchesClient, true, 'the page can ask whether it is running current code');
 
@@ -54,7 +54,7 @@ test('the build id tracks the files, which is what makes /api/build answerable l
   // The live-digest answer in /api/build is only honest if the digest actually moves
   // when an asset moves. Assert that directly, on a temp tree -- not on public/, which
   // a test must never edit.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmc-build-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-build-'));
   try {
     fs.mkdirSync(path.join(dir, 'js'), { recursive: true });
     const f = path.join(dir, 'js', 'app.js');
@@ -84,7 +84,7 @@ test('/api/build reports the live digest and keeps the boot value separate', asy
   await withApp({}, async ({ client }) => {
     await client.login('admin');
     const page = await client.raw('/');
-    const served = /data-bmc-build="([^"]+)"/.exec(await page.text())[1];
+    const served = /data-blockyard-build="([^"]+)"/.exec(await page.text())[1];
     const res = await client.get(`/api/build?build=${encodeURIComponent(served)}`);
     assert.equal(res.body.build, served, 'the answer is the build on disk right now, not the one booted');
     assert.equal(res.body.matchesClient, true);
@@ -148,7 +148,7 @@ test('a correct password still logs in through the throttle bucket', async () =>
     assert.ok(r.csrf, 'the CSRF double-submit token is handed to the page that needs it');
     const me = await client.get('/api/me');
     assert.equal(me.body.user.role, 'admin');
-    assert.ok(client.cookies().includes('bmcmon_sid'));
+    assert.ok(client.cookies().includes('blockyard_sid'));
   });
 });
 

@@ -39,7 +39,7 @@ option either.)
 
 ## 3. Never accept a CSRF token from the cookie
 
-The first version read `header ?? body ?? cookies.bmcmon_csrf`. Testing it with
+The first version read `header ?? body ?? cookies.blockyard_csrf`. Testing it with
 `curl -b cookies.txt` — i.e. a request carrying **only** the cookie — returned
 200. The check was decorative: a cross-site request carries the cookie just as
 happily, and the whole point of double-submit is the part a cross-origin page
@@ -366,8 +366,8 @@ passed: 2   failed: 54
 Nothing about passwords or audit was wrong. Nothing had answered. Two things made that
 expensive, and both are now fixed in code:
 
-- **The machine config had no opt-out.** `BMC_MON_CONFIG=none` now exists, and both
-  `scripts/smoke.sh` and `npm run dev` set it *and* pin `BMC_MON_BIND=127.0.0.1` — so
+- **The machine config had no opt-out.** `BLOCKYARD_CONFIG=none` now exists, and both
+  `scripts/smoke.sh` and `npm run dev` set it *and* pin `BLOCKYARD_BIND=127.0.0.1` — so
   neither inherits a laptop's or a server's notion of where it should be reachable.
   Asserted in `test/config-nodes.test.js` against the scripts' own source, because a
   convention nobody checks is a wish.
@@ -379,7 +379,7 @@ expensive, and both are now fixed in code:
 
 Same incident, quieter lesson: the log line that would have explained all of it —
 *"not on 127.0.0.1 either"* — was logged at **info**, and smoke runs at
-`BMC_MON_LOG_LEVEL=warn`, so it was invisible in exactly the situation it existed for.
+`BLOCKYARD_LOG_LEVEL=warn`, so it was invisible in exactly the situation it existed for.
 A diagnostic's level is part of the diagnostic.
 
 <!-- Renumbered 2026-09-09: this heading said "15", which is already the log-canary
@@ -425,9 +425,9 @@ wrong shape, in the direction that matters:
 
 | variable | intended shape | what it actually became | consequence |
 |---|---|---|---|
-| `BMC_MON_ALLOW_CIDRS` | list of networks | the string `"203.0.113.0/24"` | the gate iterated it character by character, parsed nothing, and refused **every** address — the documented way to restrict the monitor to a LAN was a deny-all that also locked out the operator |
-| `BMC_MON_ACTIONS` | list of action names | a string | `allow.includes(name)` became a substring test on a string, i.e. permissions decided by substring matching instead of set membership |
-| `BMC_MON_HOST` / `_BIND` | list of addresses | a string | survived by luck only, because `validate()` re-splits a string there |
+| `BLOCKYARD_ALLOW_CIDRS` | list of networks | the string `"203.0.113.0/24"` | the gate iterated it character by character, parsed nothing, and refused **every** address — the documented way to restrict the monitor to a LAN was a deny-all that also locked out the operator |
+| `BLOCKYARD_ACTIONS` | list of action names | a string | `allow.includes(name)` became a substring test on a string, i.e. permissions decided by substring matching instead of set membership |
+| `BLOCKYARD_HOST` / `_BIND` | list of addresses | a string | survived by luck only, because `validate()` re-splits a string there |
 
 Found by `test/cidr.test.js` on 2026-09-09, which was written to test CIDR matching,
 not config parsing. That is typical: the bug surfaced as a side effect of testing the
@@ -511,8 +511,8 @@ anonymous visitor makes themselves admin. The fix is structural, not a careful `
   to raise it. The admin routes keep asking for `admin`, and the role check runs on
   **both** branches — authenticated and anonymous.
 - **Refuse the vacuous gate.** With no roles to check, `role: 'admin'` on an action is
-  a comment. So `BMC_MON_ENABLE_ACTIONS=1` while accounts are off is a **boot error**,
-  and the deliberate way around it (`BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1`) has to be
+  a comment. So `BLOCKYARD_ENABLE_ACTIONS=1` while accounts are off is a **boot error**,
+  and the deliberate way around it (`BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1`) has to be
   chosen twice.
 - **Re-derive the checks that assumed a cookie.** CSRF exists because a cross-site
   request can ride a session cookie; with no session there is nothing to ride, and
@@ -538,7 +538,7 @@ would have passed against the vulnerable version above.
 Two test files "proved" the server was broken and neither bug existed.
 
 `test/open-access.test.js` had a test asserting the default config, which sets
-`BMC_MON_AUTH=1` for the duration. A sibling test in the same file booted the server
+`BLOCKYARD_AUTH=1` for the duration. A sibling test in the same file booted the server
 and got **401** — it had read the other test's environment. Same variable, same
 process, overlapping in time. Verified directly:
 
@@ -554,7 +554,7 @@ over. `test/helpers/http.js` now touches **no** environment: configuration goes 
 temp config file passed explicitly to `boot({ configFile })` (which is also what keeps
 this box's `config/local.json` out of a run — rule 18), and the bootstrap admin's
 password is read back from `app.bootstrap` instead of injected via
-`BMC_MON_ADMIN_PASSWORD`. Env-var assertions live in `test/config-env.test.js`, which
+`BLOCKYARD_ADMIN_PASSWORD`. Env-var assertions live in `test/config-env.test.js`, which
 boots nothing at all, so nothing can read the wrong config.
 
 Two related traps hit on the same path:

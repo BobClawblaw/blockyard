@@ -8,7 +8,7 @@
 //
 // This helper boots with a fake node (or several), talks to it over loopback, and
 // always tears down. It writes nothing outside a temp directory, and it never reads
-// config/local.json: BMC_MON_CONFIG=none keeps a deployment's bind addresses out of a
+// config/local.json: BLOCKYARD_CONFIG=none keeps a deployment's bind addresses out of a
 // hermetic run (that leak is what broke 54 smoke assertions on 2026-09-08).
 import fs from 'node:fs';
 import net from 'node:net';
@@ -47,7 +47,7 @@ export async function freePort() {
  * the real path.
  */
 export async function withApp({ nodes = 1, config = {}, adminPassword = null, tlsFiles = null, log = null, auth = true } = {}, fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-app-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-app-'));
   const { boot } = await import('../../server/main.js');
   const fakes = [];
   const port = await freePort();

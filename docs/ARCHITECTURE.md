@@ -1,6 +1,6 @@
 # Architecture
 
-This guide is for contributors. It explains how bmcmonitor is put together, where
+This guide is for contributors. It explains how blockyard is put together, where
 state lives, how data moves from the node to the screen, and which rules the code
 depends on. It covers the reasoning as well as the structure, because most of the
 unusual choices here are responses to measured behaviour of the node being
@@ -17,7 +17,7 @@ Companion documents:
 
 ## 1. The big picture
 
-bmcmonitor is a single Node.js process (Node 22 or later) with **no dependencies**.
+blockyard is a single Node.js process (Node 22 or later) with **no dependencies**.
 It sits between one or more Bitcoin Machine Code (`bmc`) nodes and any number of
 browsers:
 
@@ -33,7 +33,7 @@ flowchart LR
     LOG["log file<br/>(optional)"]
   end
 
-  subgraph server["bmcmonitor server (Node, no deps)"]
+  subgraph server["blockyard server (Node, no deps)"]
     LANE["RPC lane<br/>server/rpc/client.js"]
     MON["NodeMonitor<br/>server/collect/monitor.js"]
     TAIL["LogTail + logparse"]
@@ -77,7 +77,7 @@ flowchart LR
 ### What is persisted
 
 Everything lives under `store.dir`. The default is `data/` in the repo;
-`BMC_MON_DATA` overrides it.
+`BLOCKYARD_DATA` overrides it.
 
 - **`history.json`** holds every ring plus the event log. `History.save()` writes
   it with tmp, `fsync`, then rename, so a crash leaves either the old file or the
@@ -129,7 +129,7 @@ If it doesn't, it doesn't go in the snapshot (RULES 6).
 ```
 server/
   main.js            boot, wiring, shutdown, logger
-  config.js          defaults + config/local.json + BMC_MON_* env overrides, validation
+  config.js          defaults + config/local.json + BLOCKYARD_* env overrides, validation
   netinfo.js         bind planning, CIDR parsing and membership
   rpc/client.js      the serialized RPC lane and the JSON-RPC client
   rpc/allowlist.js   which RPC methods the web UI may call; gated node actions
@@ -158,9 +158,9 @@ server/
 `boot({ configFile, log })` builds a single `app` object and returns it. Tests call
 it directly; running the file as a script calls it and prints the banner.
 
-1. `loadConfig()` merges defaults, the config file, and `BMC_MON_*` environment
+1. `loadConfig()` merges defaults, the config file, and `BLOCKYARD_*` environment
    variables, then validates the result. The config file is `config/local.json`
-   unless `BMC_MON_CONFIG` names another file or `none`. Invalid or unsafe
+   unless `BLOCKYARD_CONFIG` names another file or `none`. Invalid or unsafe
    combinations are fatal. One example: enabling node write actions while accounts
    are off, unless that is also explicitly allowed.
 2. TLS is decided before any listener exists. If a certificate and key are
@@ -170,7 +170,7 @@ it directly; running the file as a script calls it and prints the banner.
    first admin is created and its password is printed once.
 5. In open mode, a warning is logged that names the bound addresses and what an
    anonymous viewer can read.
-6. `npm run dev` (`BMC_MON_FAKE_NODE=1`) starts an in-process fake node and
+6. `npm run dev` (`BLOCKYARD_FAKE_NODE=1`) starts an in-process fake node and
    replaces the node list with it, so a dev run never polls a real node.
 7. One `NodeMonitor` is created per configured node. A node whose datadir is
    missing is skipped with a logged reason rather than kept as a permanently
@@ -301,7 +301,7 @@ Bitstamp, Bitfinex and OKX.
   with its error, never zero-filled. Tickers older than three intervals are marked
   `stale`.
 
-`BMC_MON_MARKETS=0` (or `markets.enabled: false`) disables all of it.
+`BLOCKYARD_MARKETS=0` (or `markets.enabled: false`) disables all of it.
 
 ### 2.4 The RPC lane (`server/rpc/client.js`)
 
@@ -388,10 +388,10 @@ The read-only console (`POST /api/rpc`) may only call methods that
 4. **Anything else is denied.** The reply says which file to edit.
 
 Node **writes** do not go through this file. They are named `ACTIONS` behind
-`POST /api/action`. An action must be enabled (`BMC_MON_ENABLE_ACTIONS=1`) and
+`POST /api/action`. An action must be enabled (`BLOCKYARD_ENABLE_ACTIONS=1`) and
 listed in `actions.allow`. The caller must hold the action's role and send a
 typed confirmation equal to the action's name. With accounts off, actions also
-need `BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1`, which is checked again inside the
+need `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1`, which is checked again inside the
 route. Every action is audited.
 
 ### 2.6 HTTP (`server/http/*`)
@@ -440,7 +440,7 @@ flowchart LR
   - **Containment** is checked on the `realpath`, so both `../` traversal and
     symlinks planted inside `public/` are refused.
   - **HTML is rewritten per response** (`renderHtml`): a fresh script nonce
-    replaces `%BMCNONCE%`, the build id replaces `%BMCBUILD%`, and asset URLs get
+    replaces `%BLOCKYARD_NONCE%`, the build id replaces `%BLOCKYARD_BUILD%`, and asset URLs get
     `?v=<build>`.
   - **The build id** is computed from the sizes and mtimes of files under
     `public/`. The page compares the build it loaded with `/api/build` and tells
@@ -464,7 +464,7 @@ flowchart LR
   served as a frozen anonymous user with role `viewer`. That ceiling is hardcoded,
   not configurable. Admin routes return 403 in both modes, CSRF is not needed
   because there is no cookie to ride, and rate limits apply per client address.
-- **Accounts.** `BMC_MON_AUTH=1` turns on:
+- **Accounts.** `BLOCKYARD_AUTH=1` turns on:
   - scrypt password hashes (upgraded to current parameters on login)
   - session tokens that are stored hashed, with idle and absolute TTLs
   - double-submit CSRF (the token in a header or body is compared with the
@@ -1055,7 +1055,7 @@ test is written with `node:test` and `node:assert`, with nothing to install.
   frame, the RPC guard, headers, the nonce, the build id, the login throttle, and
   open mode. It refuses to run if a port is already taken (otherwise it could test
   someone else's server), uses a single cleanup trap for exit and signals, and pins
-  `BMC_MON_CONFIG=none` and `BMC_MON_BIND=127.0.0.1` so it never inherits a
+  `BLOCKYARD_CONFIG=none` and `BLOCKYARD_BIND=127.0.0.1` so it never inherits a
   deployment's config.
 - **`scripts/doc-counts.js`** (`npm run counts`, `counts:check`, `counts:fix`):
   derives the test count quoted in the docs by scanning top-level `test(...)`

@@ -523,7 +523,7 @@ export async function startFakeNode(opts) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.FAKE_PORT || 18331);
-  const logFile = process.env.FAKE_LOG || '/tmp/bmcmonitor-fake/bitcoin.main.log';
+  const logFile = process.env.FAKE_LOG || '/tmp/blockyard-fake/bitcoin.main.log';
   const node = await startFakeNode({ port, logFile, ibd: process.env.FAKE_IBD !== '0' });
   process.stdout.write(`fake node on ${node.url} (cookie ${node.authUser}:${node.authPass}; log ${logFile}; ibd=${node.ibd})\n`);
   const bye = () => node.stop().then(() => process.exit(0));

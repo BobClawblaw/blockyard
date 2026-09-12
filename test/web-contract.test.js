@@ -66,7 +66,7 @@ test('the login page uses an external script, matching script-src self', () => {
 test('the login page exists and posts to the login endpoint', () => {
   assert.ok(fs.existsSync(path.join(HERE, 'login.html')), 'login.html missing: /api/login has no page to call it');
   assert.match(login.js, /\/api\/login/, 'login page never calls the login endpoint');
-  assert.match(login.js, /bmcmon_csrf/, 'login page must handle the CSRF cookie that later mutations echo');
+  assert.match(login.js, /blockyard_csrf/, 'login page must handle the CSRF cookie that later mutations echo');
   assert.match(login.js, /429/, 'login page must handle the lockout response, not just bad credentials');
 });
 

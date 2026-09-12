@@ -56,7 +56,7 @@ export class NodeMonitor extends EventEmitter {
     // have been silently undefined too. Found 2026-09-08.
     this.logCfg = logCfg || {};
     this.tail = nodeCfg.logFile ? new LogTail(nodeCfg.logFile, { pollMs: 1000, tailBytes: this.logCfg.tailBytes, log: this.log }) : null;
-    // RPC-only mode (`log.enabled: false` / BMC_MON_LOG_SOURCE=0): no tail at all.
+    // RPC-only mode (`log.enabled: false` / BLOCKYARD_LOG_SOURCE=0): no tail at all.
     // Measured 2026-09-08 on the build then running the bench node: getnettotals'
     // delta-rate was 11.56 MB/s against the node's own stated 11.2 MB/s over 90 s
     // (3% apart), and getpeerinfo answered 21 rows naming up to 201,608,074 bytes
@@ -837,7 +837,7 @@ export class NodeMonitor extends EventEmitter {
    * shares the first one's call rather than paying the node again.
    */
   async fetchTemplate({ staleMs = this.nextBlockCfg.freshMs, force = false } = {}) {
-    if (!this.nextBlockCfg.enabled) return { unavailable: 'disabled (BMC_MON_MINING_TEMPLATE=0)' };
+    if (!this.nextBlockCfg.enabled) return { unavailable: 'disabled (BLOCKYARD_MINING_TEMPLATE=0)' };
     if (this.state.chainInfo?.initialblockdownload === true) {
       return { unavailable: 'node is in initial download; a block template would be built from a chain that is not there yet' };
     }

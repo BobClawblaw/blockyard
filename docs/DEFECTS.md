@@ -43,7 +43,7 @@ Kept as checked rather than deleted, so nobody re-derives them.
   now takes a `logCfg` of its own.
 
 - [x] **RPC-only mode exists and is honest about what it loses.** `log.enabled: false`
-  / `BMC_MON_LOG_SOURCE=0`: the monitor opens no log file at all (verified — the
+  / `BLOCKYARD_LOG_SOURCE=0`: the monitor opens no log file at all (verified — the
   process has no log fd), states the mode in `health.quality` (`log-source-disabled`)
   naming the figures that lose their source, and `/api/config`'s provenance table is
   generated per mode so no row can name a log source while the log is off. Two new
@@ -134,7 +134,7 @@ Kept as checked rather than deleted, so nobody re-derives them.
   machines; the deployment decision lives in `config/local.json` (gitignored) and the
   unit, which means *a new machine gets the wildcard until someone says otherwise*.
 - [x] **TLS exists now; the lack of it stops being a documented shrug.** Serving
-  HTTPS was an option (`server.tls.cert`/`key`, `BMC_MON_TLS_CERT`/`_KEY`), and the
+  HTTPS was an option (`server.tls.cert`/`key`, `BLOCKYARD_TLS_CERT`/`_KEY`), and the
   settings that must not be independent are wired together: turning TLS on forces the
   session cookie `Secure` (a Secure cookie over HTTP is never sent, which reads as a
   login that will not stick), HSTS is sent only over TLS (2 days, no `includeSubDomains`,
@@ -164,7 +164,7 @@ Kept as checked rather than deleted, so nobody re-derives them.
   someone added an inline script, at which point it would fail in the browser with
   nothing recorded server-side — the same silently-dead shape as the module-scope
   ReferenceError that blanked this UI for a day. HTML is now rewritten per response
-  (`%BMCNONCE%` placeholder + asset versioning), measured at 0.009 ms per request
+  (`%BLOCKYARD_NONCE%` placeholder + asset versioning), measured at 0.009 ms per request
   (MEASUREMENTS §22), so the cost of the option is nil. The nonce lands in `script-src`
   only — never in `style-src`, which would reopen the thing fixed below — and
   `test/csp.test.js` asserts it differs between responses, because a constant nonce is
@@ -195,11 +195,11 @@ Kept as checked rather than deleted, so nobody re-derives them.
 
 - [x] **A latent one, found while testing something else: env vars whose cast was a
   function were never cast.** `env()` implemented `Number` and `Boolean` and returned
-  the raw string otherwise, so `BMC_MON_ALLOW_CIDRS=a/24,b/8` arrived as a **string** —
+  the raw string otherwise, so `BLOCKYARD_ALLOW_CIDRS=a/24,b/8` arrived as a **string** —
   and the gate iterated it character by character, parsed nothing, and refused every
   address including the operator's. The documented way to restrict the monitor to a LAN
-  was a deny-all. `BMC_MON_ACTIONS` was the same shape, making `allow.includes(name)` a
-  *substring* test on a string. `BMC_MON_HOST`/`_BIND` survived only because `validate()`
+  was a deny-all. `BLOCKYARD_ACTIONS` was the same shape, making `allow.includes(name)` a
+  *substring* test on a string. `BLOCKYARD_HOST`/`_BIND` survived only because `validate()`
   re-splits a string there. Found by `test/cidr.test.js`, which was written to test CIDR
   matching — the bug surfaced one layer below where the mistake was. Fixed in
   `env()` (rule 20), with regressions for both variables.
@@ -216,7 +216,7 @@ Kept as checked rather than deleted, so nobody re-derives them.
   is no cookie to ride (with the two checks that make that safe asserted next to it);
   rate limits key per **address**, so one chatty tab cannot spend the LAN's bucket; and
   node writes are refused twice over — fatal at config load, again at the route — unless
-  `BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1` is chosen deliberately. The boot line names the
+  `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1` is chosen deliberately. The boot line names the
   readable addresses, what "read" grants, and the switch that closes it. Rules 23, 24;
   `test/open-access.test.js`, 19 new smoke checks against a second, open instance.
 
@@ -409,7 +409,7 @@ Kept as checked rather than deleted, so nobody re-derives them.
   The stub is a parser of the markup this app writes, not a layout engine; do not read
   its green as "the page renders".
 - [x] **The page says which build it is running, and complains when it is not
-  current.** The static layer stamps `data-bmc-build` and rewrites asset URLs to
+  current.** The static layer stamps `data-blockyard-build` and rewrites asset URLs to
   `?v=<build>` (build id = version + digest of asset sizes and mtimes, `0.1.0-3faef7bb00`
   form — not a git SHA, because this box deploys by copy and a SHA would describe a tree
   that was never committed at boot). `/api/build?build=` answers `matchesClient`,

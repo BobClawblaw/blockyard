@@ -1,4 +1,4 @@
-# Installing bmcmonitor
+# Installing blockyard
 
 This guide takes you from nothing to a monitor running as a service, reachable from the
 machines you choose. Every setting mentioned here is described in full in
@@ -59,8 +59,8 @@ to your node. See [SECURITY.md](SECURITY.md#outbound-connections).
 ## 2. Get the code
 
 ```bash
-git clone https://github.com/BobClawblaw/bmcmonitor.git
-cd bmcmonitor
+git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
 ```
 
 There is **no `npm install`** — the project has no dependencies. Optionally confirm your
@@ -126,7 +126,7 @@ every chart, table and stream is per node.
 
 **The node's log (optional).** By default the monitor works from RPC alone. If your node
 build reports bandwidth and peer detail only in its log, add `"logFile"` to the node entry
-and turn the log source on with `"log": { "enabled": true }` (or `BMC_MON_LOG_SOURCE=1`).
+and turn the log source on with `"log": { "enabled": true }` (or `BLOCKYARD_LOG_SOURCE=1`).
 The Node & RPC page lists exactly which figures each source provides.
 
 ## 5. First run
@@ -153,23 +153,23 @@ If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-s
    Usually that means adding it to the node's group:
 
    ```bash
-   sudo useradd --system --home /opt/bmcmonitor --shell /usr/sbin/nologin bmcmon
-   sudo usermod -aG <node-group> bmcmon
+   sudo useradd --system --home /opt/blockyard --shell /usr/sbin/nologin blockyard
+   sudo usermod -aG <node-group> blockyard
    ```
 
-2. **Put the code somewhere stable**, for example `/opt/bmcmonitor`, owned by that account:
+2. **Put the code somewhere stable**, for example `/opt/blockyard`, owned by that account:
 
    ```bash
-   sudo git clone https://github.com/BobClawblaw/bmcmonitor.git /opt/bmcmonitor
-   sudo cp config/local.json /opt/bmcmonitor/config/   # the file from step 4
-   sudo chown -R bmcmon:bmcmon /opt/bmcmonitor
+   sudo git clone https://github.com/BobClawblaw/blockyard.git /opt/blockyard
+   sudo cp config/local.json /opt/blockyard/config/   # the file from step 4
+   sudo chown -R blockyard:blockyard /opt/blockyard
    ```
 
-3. **Install the unit** shipped in `systemd/bmcmonitor.service` and edit it:
+3. **Install the unit** shipped in `systemd/blockyard.service` and edit it:
 
    ```bash
-   sudo cp /opt/bmcmonitor/systemd/bmcmonitor.service /etc/systemd/system/
-   sudo systemctl edit --full bmcmonitor
+   sudo cp /opt/blockyard/systemd/blockyard.service /etc/systemd/system/
+   sudo systemctl edit --full blockyard
    ```
 
    Set `User=` / `Group=` to the account from step 1, `WorkingDirectory=` to where the code
@@ -185,17 +185,17 @@ If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-s
 
    ```bash
    sudo systemctl daemon-reload
-   sudo systemctl enable --now bmcmonitor
-   journalctl -u bmcmonitor -f
+   sudo systemctl enable --now blockyard
+   journalctl -u blockyard -f
    ```
 
 The unit restarts the monitor if it ever exits and gives it time to save its history on
-shutdown. Stop and start with `systemctl stop|start bmcmonitor`.
+shutdown. Stop and start with `systemctl stop|start blockyard`.
 
 ## 7. Decide who can reach it
 
 Where the monitor listens is a security decision. Set `server.host` in `config/local.json`
-(a string or a list) or `BMC_MON_BIND`:
+(a string or a list) or `BLOCKYARD_BIND`:
 
 | bind | who can connect | typical use |
 |---|---|---|
@@ -217,7 +217,7 @@ Notes:
   sudo ufw allow from 192.0.2.0/24 to any port 8088 proto tcp
   ```
 
-- `server.allowCidrs` (or `BMC_MON_ALLOW_CIDRS=192.0.2.0/24,2001:db8::/32`) makes the
+- `server.allowCidrs` (or `BLOCKYARD_ALLOW_CIDRS=192.0.2.0/24,2001:db8::/32`) makes the
   monitor itself refuse clients outside those networks, as a second line of defence.
 
 ## 8. Accounts (optional)
@@ -226,9 +226,9 @@ By default anyone who can reach the port reads the monitor as a `viewer` — cha
 explorer, the event stream, the read-only RPC console. User administration, the audit trail
 and every node write stay closed.
 
-To require sign-in, set `"auth": { "enabled": true }` or `BMC_MON_AUTH=1` and restart. The
+To require sign-in, set `"auth": { "enabled": true }` or `BLOCKYARD_AUTH=1` and restart. The
 first start with an empty data directory creates an `admin` account and prints its password
-**once** in the log. Set your own instead with `BMC_MON_ADMIN_PASSWORD` for that first start.
+**once** in the log. Set your own instead with `BLOCKYARD_ADMIN_PASSWORD` for that first start.
 
 Manage accounts from the Admin page, or from the shell — for example, to reset the admin
 password:
@@ -246,7 +246,7 @@ explicitly — see [SECURITY.md](SECURITY.md#node-writes).
 Name a certificate and key and every listener serves HTTPS:
 
 ```bash
-BMC_MON_TLS_CERT=/etc/bmcmonitor/cert.pem BMC_MON_TLS_KEY=/etc/bmcmonitor/key.pem npm start
+BLOCKYARD_TLS_CERT=/etc/blockyard/cert.pem BLOCKYARD_TLS_KEY=/etc/blockyard/key.pem npm start
 ```
 
 or in `config/local.json`: `"server": { "tls": { "cert": "...", "key": "..." } }`.
@@ -254,11 +254,11 @@ or in `config/local.json`: `"server": { "tls": { "cert": "...", "key": "..." } }
 A self-signed certificate is fine on a LAN (expect one browser warning per address):
 
 ```bash
-sudo mkdir -p /etc/bmcmonitor
+sudo mkdir -p /etc/blockyard
 sudo openssl req -x509 -newkey rsa:3072 -nodes -days 825 \
-  -keyout /etc/bmcmonitor/key.pem -out /etc/bmcmonitor/cert.pem \
-  -subj "/CN=bmcmonitor" -addext "subjectAltName=IP:192.0.2.10,DNS:bmcmonitor.lan.example"
-sudo chown bmcmon:bmcmon /etc/bmcmonitor/*.pem && sudo chmod 600 /etc/bmcmonitor/key.pem
+  -keyout /etc/blockyard/key.pem -out /etc/blockyard/cert.pem \
+  -subj "/CN=blockyard" -addext "subjectAltName=IP:192.0.2.10,DNS:blockyard.lan.example"
+sudo chown blockyard:blockyard /etc/blockyard/*.pem && sudo chmod 600 /etc/blockyard/key.pem
 ```
 
 With TLS on, the session cookie is marked `Secure` and a short HSTS header is sent. A
@@ -295,15 +295,15 @@ server {
 ```
 
 Then set `"server": { "trustProxy": true }` so the monitor uses the forwarded client
-address for rate limits and the CIDR gate, and `BMC_MON_SECURE_COOKIE=1` so the session
+address for rate limits and the CIDR gate, and `BLOCKYARD_SECURE_COOKIE=1` so the session
 cookie is marked `Secure` behind the proxy's TLS.
 
 ## 11. Updating
 
 ```bash
-cd /opt/bmcmonitor
-sudo -u bmcmon git pull
-sudo systemctl restart bmcmonitor
+cd /opt/blockyard
+sudo -u blockyard git pull
+sudo systemctl restart blockyard
 ```
 
 Your `config/local.json` and `data/` directory are untouched by updates. Read
@@ -314,10 +314,10 @@ have open is older than the server.
 ## 12. Uninstalling
 
 ```bash
-sudo systemctl disable --now bmcmonitor
-sudo rm /etc/systemd/system/bmcmonitor.service && sudo systemctl daemon-reload
-sudo rm -rf /opt/bmcmonitor        # includes data/: history, accounts and the audit trail
-sudo userdel bmcmon
+sudo systemctl disable --now blockyard
+sudo rm /etc/systemd/system/blockyard.service && sudo systemctl daemon-reload
+sudo rm -rf /opt/blockyard        # includes data/: history, accounts and the audit trail
+sudo userdel blockyard
 ```
 
 ## Checklist
@@ -328,4 +328,4 @@ sudo userdel bmcmon
 - [ ] you have decided who can reach the port (bind, firewall, `allowCidrs`)
 - [ ] accounts on if the port is reachable by people who should not see your node
 - [ ] HTTPS on, or a proxy / tunnel in front, if the network is not trusted
-- [ ] `BMC_MON_MARKETS=0` if the machine must make no outbound connections
+- [ ] `BLOCKYARD_MARKETS=0` if the machine must make no outbound connections

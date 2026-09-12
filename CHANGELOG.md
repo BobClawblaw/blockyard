@@ -188,5 +188,5 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
 Internal first version: multi-user monitor with charts, sync viewer, mempool view, peers and
 event feed.
 
-[0.9.0]: https://github.com/BobClawblaw/bmcmonitor/releases/tag/v0.9.0
-[0.1.0]: https://github.com/BobClawblaw/bmcmonitor/commits/main
+[0.9.0]: https://github.com/BobClawblaw/blockyard/releases/tag/v0.9.0
+[0.1.0]: https://github.com/BobClawblaw/blockyard/commits/main

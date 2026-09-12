@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../server/config.js';
 
-// Why the BMC_MON_AUTH / BMC_MON_ACTIONS *environment* assertions live in
+// Why the BLOCKYARD_AUTH / BLOCKYARD_ACTIONS *environment* assertions live in
 // test/config-env.test.js instead of here: Node runs a file's top-level tests
 // concurrently, and process.env is process-global. A test that sets an env var while
 // another test in the same file boots the server makes that boot read the wrong
@@ -28,12 +28,12 @@ const ifaces = { lo: [{ address: '127.0.0.1', family: 'IPv4' }] };
 // ------------------------------------------------------------------ default
 
 test('enabling node writes while accounts are off refuses to boot', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-open-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-open-'));
   try {
     const f = path.join(dir, 'c.json');
     fs.writeFileSync(f, JSON.stringify({ actions: { enabled: true, allow: ['savemempool'] } }));
     assert.throws(() => loadConfig({ configFile: f, ifaces }),
-      /accounts are OFF[\s\S]*BMC_MON_ALLOW_WRITES_WITHOUT_AUTH/,
+      /accounts are OFF[\s\S]*BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH/,
       'the error has to name both ways out, not just the refusal');
     // The override exists so that the dangerous combination has to be chosen twice.
     fs.writeFileSync(f, JSON.stringify({
@@ -191,7 +191,7 @@ test('the boot says, in words, who can now read the node', async () => {
     const out = log.text();
     assert.match(out, /warn NO SIGN-IN/, 'the posture is announced at boot, not a footnote');
     assert.match(out, /can reach 127\.0\.0\.1:\d+ reads this monitor/, 'it names the address and port now readable to anyone');
-    assert.match(out, /BMC_MON_AUTH=1/, 'and the one switch that closes it');
+    assert.match(out, /BLOCKYARD_AUTH=1/, 'and the one switch that closes it');
     assert.match(out, /read-only RPC console/, 'including what "read" actually grants');
     assert.equal(app.bootstrap, null, 'no admin account is minted when accounts are off');
   });
@@ -206,7 +206,7 @@ test('with accounts ON, every one of those doors is a session again', async () =
     assert.equal(anon.body.login, '/login');
     const login = await client.login('admin');
     assert.equal(login.status, 200);
-    assert.ok(client.cookies().includes('bmcmon_sid'));
+    assert.ok(client.cookies().includes('blockyard_sid'));
     const me = await client.get('/api/me');
     assert.equal(me.body.accounts, true);
     assert.equal(me.body.user.role, 'admin');

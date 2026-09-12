@@ -75,7 +75,7 @@ test('renderHtml versions assets and nothing else', () => {
     <link rel="icon" href="data:image/svg+xml,%3Csvg%3E">
     </head><body>
     <a href="/">dashboard</a> <a href="/login">login</a>
-    <script type="module" src="/js/app.js" nonce="%BMCNONCE%"></script>
+    <script type="module" src="/js/app.js" nonce="%BLOCKYARD_NONCE%"></script>
     </body></html>`;
   const out = renderHtml(html, { nonce: 'NONCE123', build: '9.9.9-abc' });
   assert.ok(out.includes('href="/css/app.css?v=9.9.9-abc"'), 'css must be cache-busted by build');
@@ -94,7 +94,7 @@ test('no shipped HTML file carries a style attribute', () => {
     const src = read(`public/${f}`);
     const hits = src.match(/<[a-zA-Z][^>]*\sstyle\s*=\s*["'][^"']*["']/g) ?? [];
     assert.deepEqual(hits, [], `${f} has style attribute(s): ${hits.join(' | ')} — use a class from css/app.css`);
-    assert.ok(!/%BMCNONCE%/.test(src) || /nonce="%BMCNONCE%"/.test(src), `${f}: the nonce placeholder must be on a tag`);
+    assert.ok(!/%BLOCKYARD_NONCE%/.test(src) || /nonce="%BLOCKYARD_NONCE%"/.test(src), `${f}: the nonce placeholder must be on a tag`);
   }
 });
 

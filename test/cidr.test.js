@@ -117,49 +117,49 @@ test('the decision names the entry that matched, for the log line', () => {
 });
 
 test('config load refuses a broken allowlist entry instead of shipping an inert rule', () => {
-  process.env.BMC_MON_ALLOW_CIDRS = '192.0.2.0/24,198.51.100.0/33';
+  process.env.BLOCKYARD_ALLOW_CIDRS = '192.0.2.0/24,198.51.100.0/33';
   try {
     assert.throws(() => loadConfig({ configFile: '/nonexistent.json' }), /server\.allowCidrs entry "198\.51\.100\.0\/33"/);
   } finally {
-    delete process.env.BMC_MON_ALLOW_CIDRS;
+    delete process.env.BLOCKYARD_ALLOW_CIDRS;
   }
   const ok = loadConfig({ configFile: '/nonexistent.json', ifaces: { eth0: [{ address: '127.0.0.1', family: 'IPv4' }] } });
   assert.deepEqual(ok.server.allowCidrs, [], 'default is no gate at all');
 });
 
-test('BMC_MON_ALLOW_CIDRS arrives as a list of networks, not a string of characters', () => {
+test('BLOCKYARD_ALLOW_CIDRS arrives as a list of networks, not a string of characters', () => {
   // The regression this test exists for: env() ignored function casts and returned
   // the raw string, so the gate iterated "192.0.2.0/24" character by character,
   // parsed none of it, and refused every address -- including the operator's. The
   // documented way to restrict the monitor to a LAN was a deny-all.
-  process.env.BMC_MON_ALLOW_CIDRS = '192.0.2.0/24, 203.0.113.0/24';
+  process.env.BLOCKYARD_ALLOW_CIDRS = '192.0.2.0/24, 203.0.113.0/24';
   try {
     const cfg = loadConfig({ configFile: '/nonexistent.json' });
     assert.deepEqual(cfg.server.allowCidrs, ['192.0.2.0/24', '203.0.113.0/24']);
     assert.equal(typeof cfg.server.allowCidrs, 'object');
     assert.ok(cfg.server.allowCidrs.every((c) => parseCidr(c).ok), 'every entry the env parser produced must parse');
   } finally {
-    delete process.env.BMC_MON_ALLOW_CIDRS;
+    delete process.env.BLOCKYARD_ALLOW_CIDRS;
   }
 });
 
-test('BMC_MON_ACTIONS is a set, so a permission is never a substring match', () => {
+test('BLOCKYARD_ACTIONS is a set, so a permission is never a substring match', () => {
   // `allow.includes(name)` on a STRING is a substring test. On an array it is
   // membership -- which is the only defensible reading of an allowlist of writes.
-  // BMC_MON_AUTH=1 here because enabling actions while accounts are off is refused at
+  // BLOCKYARD_AUTH=1 here because enabling actions while accounts are off is refused at
   // config load by design (see test/config-env.test.js); this test is about the
   // SHAPE the list arrives in, not the posture.
-  process.env.BMC_MON_ACTIONS = 'broadcast,savemempool';
-  process.env.BMC_MON_ENABLE_ACTIONS = '1';
-  process.env.BMC_MON_AUTH = '1';
+  process.env.BLOCKYARD_ACTIONS = 'broadcast,savemempool';
+  process.env.BLOCKYARD_ENABLE_ACTIONS = '1';
+  process.env.BLOCKYARD_AUTH = '1';
   try {
     const cfg = loadConfig({ configFile: '/nonexistent.json' });
     assert.deepEqual(cfg.actions.allow, ['broadcast', 'savemempool']);
     assert.equal(cfg.actions.allow.includes('roadcast'), false, 'substring reachability is how allowlists leak');
   } finally {
-    delete process.env.BMC_MON_ACTIONS;
-    delete process.env.BMC_MON_ENABLE_ACTIONS;
-    delete process.env.BMC_MON_AUTH;
+    delete process.env.BLOCKYARD_ACTIONS;
+    delete process.env.BLOCKYARD_ENABLE_ACTIONS;
+    delete process.env.BLOCKYARD_AUTH;
   }
 });
 

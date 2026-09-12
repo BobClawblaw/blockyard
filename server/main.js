@@ -54,7 +54,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     }
     app.log({ level: 'warn', msg: `TLS on (fingerprint ${String(cfg.server.tls.fingerprint).slice(0, 17)}…${cfg.server.tls.selfSigned ? ', self-signed: expect a browser warning the first time per address' : ''})${cfg.__tlsExpiring ? `; WARNING ${cfg.__tlsExpiring}` : ''}` });
   } else if (cfg.auth.enabled) {
-    app.log({ level: 'warn', msg: 'serving HTTP, not HTTPS: the session cookie and every RPC reply cross the LAN in the clear. Either put a TLS terminator in front (then BMC_MON_SECURE_COOKIE=1), name server.tls.cert/key, or bind 127.0.0.1 and use an SSH tunnel -- see README, "TLS, or the lack of it".' });
+    app.log({ level: 'warn', msg: 'serving HTTP, not HTTPS: the session cookie and every RPC reply cross the LAN in the clear. Either put a TLS terminator in front (then BLOCKYARD_SECURE_COOKIE=1), name server.tls.cert/key, or bind 127.0.0.1 and use an SSH tunnel -- see README, "TLS, or the lack of it".' });
   }
   app.scheme = app.tls ? 'https' : 'http';
 
@@ -89,10 +89,10 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   // one is generated, used once and never persisted in recoverable form.
   let bootstrap = null;
   if (cfg.auth.enabled && app.users.count === 0) {
-    const pw = process.env.BMC_MON_ADMIN_PASSWORD || randomPassword(20);
+    const pw = process.env.BLOCKYARD_ADMIN_PASSWORD || randomPassword(20);
     const created = await app.users.createUser('admin', pw, { role: 'admin' });
-    bootstrap = { username: created.username, password: pw, generated: !process.env.BMC_MON_ADMIN_PASSWORD };
-    app.log({ level: 'warn', msg: `created the first admin account (${created.username}) -- ${bootstrap.generated ? 'generated password below is shown once' : 'password from BMC_MON_ADMIN_PASSWORD'}` });
+    bootstrap = { username: created.username, password: pw, generated: !process.env.BLOCKYARD_ADMIN_PASSWORD };
+    app.log({ level: 'warn', msg: `created the first admin account (${created.username}) -- ${bootstrap.generated ? 'generated password below is shown once' : 'password from BLOCKYARD_ADMIN_PASSWORD'}` });
   }
   app.bootstrap = bootstrap;
 
@@ -104,7 +104,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     const where = (cfg.server.hosts ?? [cfg.server.host]).join(', ') || '(wildcard)';
     app.log({
       level: 'warn',
-      msg: `NO SIGN-IN (auth.enabled=false, the default): anyone who can reach ${where}:${cfg.server.port} reads this monitor — charts, the event feed, peer and mempool detail, and the read-only RPC console — as role "viewer". Not open to them: user administration, the audit trail, password changes, and node writes (set BMC_MON_AUTH=1 for accounts, roles, sessions and CSRF).`,
+      msg: `NO SIGN-IN (auth.enabled=false, the default): anyone who can reach ${where}:${cfg.server.port} reads this monitor — charts, the event feed, peer and mempool detail, and the read-only RPC console — as role "viewer". Not open to them: user administration, the audit trail, password changes, and node writes (set BLOCKYARD_AUTH=1 for accounts, roles, sessions and CSRF).`,
     });
   }
 
@@ -142,7 +142,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   // stays declarative and this line is the one place that says what is lost.
   if (!cfg.log.enabled) {
     for (const n of cfg.nodes) {
-      if (n.logFile) app.log({ level: 'info', msg: `node "${n.id}": ignoring logFile ${n.logFile} because the log source is disabled (BMC_MON_LOG_SOURCE=0)` });
+      if (n.logFile) app.log({ level: 'info', msg: `node "${n.id}": ignoring logFile ${n.logFile} because the log source is disabled (BLOCKYARD_LOG_SOURCE=0)` });
       n.logFile = null;
     }
     app.log({ level: 'warn', msg: 'log source DISABLED: running on RPC only. Bandwidth and per-peer bytes work only on node builds that publish them (measured 2026-09-08: bench build 11.56 MB/s via getnettotals against 11.2 MB/s stated in its log; production build 0 bytes and getpeerinfo [] with 16 connections). Per-peer relay legs, served-block attribution, tx accept/reject counts, disk-write rate, worker bans, the node\'s own ETA, compaction/validation stalls and sync_failing have no RPC source at all.' });
@@ -160,18 +160,18 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     }
     const m = new NodeMonitor(nodeCfg, { rpc: cfg.rpc, poll: cfg.poll, store: cfg.store, log: app.log, history: app.history, logCfg: cfg.log, miningCfg: {
       // Two cheap reads per block on the shared lane (measured 2026-09-09: 8 ms + 63 ms).
-      // BMC_MON_MINING=0 turns attribution off entirely; the sizes, fees and weights stay.
-      enabled: process.env.BMC_MON_MINING !== '0',
-      backfill: Number(process.env.BMC_MON_MINING_BACKFILL ?? 36),
+      // BLOCKYARD_MINING=0 turns attribution off entirely; the sizes, fees and weights stay.
+      enabled: process.env.BLOCKYARD_MINING !== '0',
+      backfill: Number(process.env.BLOCKYARD_MINING_BACKFILL ?? 36),
       // getblocktemplate is fetched on demand by the Mining page (1.3-1.5 s of the node's
-      // own RPC thread per call), never on a timer. BMC_MON_MINING_TEMPLATE=0 turns it off.
-      template: process.env.BMC_MON_MINING_TEMPLATE !== '0',
+      // own RPC thread per call), never on a timer. BLOCKYARD_MINING_TEMPLATE=0 turns it off.
+      template: process.env.BLOCKYARD_MINING_TEMPLATE !== '0',
       perTick: 1,
       // A human-edited tag -> label map. Absent by default, which is the correct state:
       // the coinbase text is shown as the pool wrote it.
       aliasesFile: path.join(cfg.store.dir, 'pool-aliases.json'),
       // Written by `node scripts/pool-map.js`; absent until someone runs it.
-      poolMapFile: process.env.BMC_MON_POOL_MAP ?? path.join(cfg.store.dir, 'pool-map.json'),
+      poolMapFile: process.env.BLOCKYARD_POOL_MAP ?? path.join(cfg.store.dir, 'pool-map.json'),
     } });
     m.node = nodeCfg;
     // Deliberately NOT `m.history = app.history`: the monitor wraps the shared store
@@ -282,7 +282,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     });
   }
   const served = plan.bindable.map((h) => `${app.scheme}://${h}:${cfg.server.port}`);
-  app.log({ level: 'info', msg: `bmcmonitor ${VERSION} listening on ${served.join(' and ')}` });
+  app.log({ level: 'info', msg: `Blockyard ${VERSION} listening on ${served.join(' and ')}` });
   if (!plan.bindable.includes('0.0.0.0') && !plan.bindable.includes('::')) {
     const v4 = localAddresses().filter((a) => a.family === 'IPv4' && !plan.bindable.includes(a.address) && !a.internal);
     const v6 = localAddresses().filter((a) => a.family === 'IPv6' && !plan.bindable.includes(a.address) && !a.internal).length;
@@ -438,18 +438,18 @@ export function banner(app) {
   const lines = [];
   const host = app.cfg.server.host;
   lines.push('');
-  lines.push('  bmcmonitor is up');
+  lines.push('  Blockyard is up');
   lines.push(`    URL      ${app.scheme}://${host === '0.0.0.0' ? 'localhost' : host}:${app.cfg.server.port}  (build ${app.build})`);
   if (app.bootstrap) {
     lines.push(`    login    ${app.bootstrap.username} / ${app.bootstrap.password}`);
-    lines.push(`             ${app.bootstrap.generated ? 'generated now, shown once, stored only as a scrypt hash' : 'taken from BMC_MON_ADMIN_PASSWORD'}`);
+    lines.push(`             ${app.bootstrap.generated ? 'generated now, shown once, stored only as a scrypt hash' : 'taken from BLOCKYARD_ADMIN_PASSWORD'}`);
   } else if (app.cfg.auth.enabled) {
     lines.push('    login    your usual account');
   } else {
     // Same content as the boot warning, in the banner: the first thing on screen
     // after `npm start` should be the sentence about who can read the node.
     lines.push('    login    DISABLED — open to anyone who can reach the addresses above (role: viewer, read-only)');
-    lines.push('             user admin, the audit trail and node writes stay closed; BMC_MON_AUTH=1 turns accounts on');
+    lines.push('             user admin, the audit trail and node writes stay closed; BLOCKYARD_AUTH=1 turns accounts on');
   }
   lines.push(`    nodes    ${[...app.monitors.values()].map((m) => `${m.id} -> ${m.rpc.url}`).join(', ')}`);
   if (app.cfg.server.allowCidrs.length) lines.push(`    CIDRs    ${app.cfg.server.allowCidrs.join(', ')}`);

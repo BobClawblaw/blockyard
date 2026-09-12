@@ -84,7 +84,7 @@ export function newNonce() {
 
 /**
  * Rewrite an HTML document: nonce into the placeholders, build id into the asset
- * URLs and the `data-bmc-build` attribute.
+ * URLs and the `data-blockyard-build` attribute.
  *
  * The cache-busting is the point of the build stamp, not a side effect: a tab that
  * quietly runs yesterday's app.js was indistinguishable from one running today's,
@@ -94,8 +94,8 @@ export function newNonce() {
  */
 export function renderHtml(src, { nonce, build }) {
   return String(src)
-    .replace(/%BMCNONCE%/g, nonce ?? '')
-    .replace(/%BMCBUILD%/g, build ?? 'dev')
+    .replace(/%BLOCKYARD_NONCE%/g, nonce ?? '')
+    .replace(/%BLOCKYARD_BUILD%/g, build ?? 'dev')
     // Only assets get a version. Pages are `Cache-Control: no-cache` already, and
     // stamping `href="/"` would put `?v=` on the dashboard link, where the query
     // string is reserved for `?node=` and `?range=` -- a cosmetic rewrite that

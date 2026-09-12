@@ -77,10 +77,10 @@ test('no shipped source carries a raw control character inside a string', () => 
 test('the user CLI actually runs, and says so when accounts are off', () => {
   // Parsing is necessary, not sufficient: this file is the documented password
   // recovery path, so run it the way an operator in trouble would.
-  const dir = fs.mkdtempSync(path.join('/tmp', 'bmcmon-cli-'));
+  const dir = fs.mkdtempSync(path.join('/tmp', 'blockyard-cli-'));
   try {
     const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'manage-users.js'), 'list'], {
-      cwd: ROOT, encoding: 'utf8', env: { ...process.env, BMC_MON_CONFIG: 'none', BMC_MON_DATA: dir }, stdio: 'pipe',
+      cwd: ROOT, encoding: 'utf8', env: { ...process.env, BLOCKYARD_CONFIG: 'none', BLOCKYARD_DATA: dir }, stdio: 'pipe',
     });
     assert.match(out, /no users/, 'an empty store reports no users rather than crashing');
   } finally {

@@ -1,8 +1,8 @@
 {
-  "name": "bmcmonitor",
+  "name": "blockyard",
   "version": "0.9.0",
   "private": true,
-  "description": "Live web monitor, 3D block-space viewer, block explorer and markets view for the Bitcoin Machine Code node",
+  "description": "Live web monitor, 3D block-space viewer, block explorer and markets view for a Bitcoin node (Bitcoin Core or Bitcoin Machine Code)",
   "license": "Apache-2.0",
   "keywords": [
     "bitcoin",
@@ -12,13 +12,13 @@
     "block-explorer",
     "dashboard"
   ],
-  "homepage": "https://github.com/BobClawblaw/bmcmonitor#readme",
+  "homepage": "https://github.com/BobClawblaw/blockyard#readme",
   "bugs": {
-    "url": "https://github.com/BobClawblaw/bmcmonitor/issues"
+    "url": "https://github.com/BobClawblaw/blockyard/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/BobClawblaw/bmcmonitor.git"
+    "url": "https://github.com/BobClawblaw/blockyard.git"
   },
   "type": "module",
   "engines": {
@@ -27,7 +27,7 @@
   "main": "server/main.js",
   "scripts": {
     "start": "node server/main.js",
-    "dev": "BMC_MON_CONFIG=none BMC_MON_BIND=127.0.0.1 BMC_MON_PORT=18088 BMC_MON_FAKE_NODE=1 node server/main.js",
+    "dev": "BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_PORT=18088 BLOCKYARD_FAKE_NODE=1 node server/main.js",
     "fake-node": "node scripts/fake-node.js",
     "user": "node scripts/manage-users.js",
     "test": "node --test \"test/**/*.test.js\"",

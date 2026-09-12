@@ -171,7 +171,7 @@ test('the high-score table keeps ten, ranks a new score, and survives a corrupt 
   assert.equal(rankOf(1250, list), 1, 'a new best is #1');
   assert.equal(rankOf(350, list), 10, 'just above the tenth is #10');
   assert.equal(rankOf(50, list), null, 'below the table does not make it');
-  map.set('bmc.tetrust.scores', '{not json');
+  map.set('blockyard.tetrust.scores', '{not json');
   assert.deepEqual(loadScores(store), [], 'a corrupt store is an empty table, not a crash');
 });
 

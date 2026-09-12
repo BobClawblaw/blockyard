@@ -1,4 +1,4 @@
-# AGENTS.md — resuming work on bmcmonitor
+# AGENTS.md — resuming work on blockyard
 
 Read this first, then `docs/MEASUREMENTS.md` (and, on a working copy that keeps one, the
 latest file in the local `worklog/`).
@@ -11,9 +11,9 @@ and serves charts plus a live event feed to several users at once.
 
 ```bash
 npm start                     # port 8088, NO sign-in by default; bound to config/local.json server.hosts (this box: 0.0.0.0 since 2026-09-11; bmc-port-guard admits the LAN interface and lo, and tailscale0 for 8088 only)
-BMC_MON_AUTH=1 npm start      # accounts on: login, roles, sessions, CSRF, per-user audit
-BMC_MON_TLS_CERT=… BMC_MON_TLS_KEY=… npm start  # HTTPS on every listener; cookie becomes Secure
-BMC_MON_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it lost
+BLOCKYARD_AUTH=1 npm start      # accounts on: login, roles, sessions, CSRF, per-user audit
+BLOCKYARD_TLS_CERT=… BLOCKYARD_TLS_KEY=… npm start  # HTTPS on every listener; cookie becomes Secure
+BLOCKYARD_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it lost
 npm run dev                   # port 18088 + an in-process fake node doing IBD
 npm test                      # node:test, zero dependencies; the count in this file is generated -- see "Counts" below
 node scripts/manage-users.js  # CLI user admin (list/create/passwd/role)
@@ -26,7 +26,7 @@ v22.23.2 `node --test test/` dies with `Cannot find module '<root>/test'` — th
 positional is resolved as a module instead of searched for `*.test.js`. Measured
 2026-09-08; `test/*.test.js` and `test/**/*.test.js` both run the whole suite.
 
-`BMC_MON_LOG_SOURCE=0` is not a neutral switch. The monitor then opens no log file
+`BLOCKYARD_LOG_SOURCE=0` is not a neutral switch. The monitor then opens no log file
 at all, raises `log-source-disabled` naming every figure that loses its source, and
 regenerates the `/api/config` provenance table so no row can claim a log source.
 Whether bandwidth survives depends on the **node**, not on us — and not on which
@@ -49,7 +49,7 @@ No npm install step exists **by design** — see Rule 1.
 addresses reads everything, as role `viewer`. That role is a hard ceiling, not a config
 value — user admin, the audit trail, password changes and every node write stay closed,
 and node writes refuse to be enabled at all while accounts are off unless
-`BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1` says so deliberately. Rule 23.
+`BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1` says so deliberately. Rule 23.
 
 **Since 2026-09-11 this box binds `0.0.0.0`** (operator: "Rebind the server to 0.0.0.0").
 Measured after the restart: one socket, `0.0.0.0:8088`; `/api/health` 200 over `lo` and
@@ -71,7 +71,7 @@ day against the real config: exactly one socket, on that address. Consequences t
 like faults and are not:
 
 - `curl http://127.0.0.1:8088/...` **refuses**, twice over: the address is not bound, and
-  since 2026-09-09 the port speaks TLS only (`BMC_MON_TLS_CERT`/`_KEY` in the unit), so a
+  since 2026-09-09 the port speaks TLS only (`BLOCKYARD_TLS_CERT`/`_KEY` in the unit), so a
   plaintext request fails on scheme before it fails on bind. Every local check is
   `curl --cacert /etc/ssl/bmc-local/ca.crt https://192.0.2.10:8088/api/health`.
 - **The bridges needed a packet filter; the bind did not do it.** The sentence that used
@@ -313,7 +313,7 @@ more likely ARP flux on a dual-homed host than anything about certificates.
 ## Current state (2026-09-09)
 
 Later on 2026-09-09 the access posture changed: **sign-in is opt-in**
-(`BMC_MON_AUTH=1`), anonymous visitors read as `viewer`, node writes need two explicit
+(`BLOCKYARD_AUTH=1`), anonymous visitors read as `viewer`, node writes need two explicit
 yeses, and the CLI this file documents for password recovery turned out not to parse —
 fixed, with a guard so no shipped file can hide that again (rules 23 and 24).
 

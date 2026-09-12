@@ -187,7 +187,7 @@ export function createAppServer(app) {
       // required, and anyone may create accounts".
       if (route.auth === 'admin' && user.role !== 'admin') {
         return sendJson(req, res, 403, openAccess
-          ? { error: { message: 'accounts are disabled, so this endpoint has no one to authorise; start with BMC_MON_AUTH=1 to enable sign-in, users and the audit trail', kind: 'forbidden' }, accounts: false }
+          ? { error: { message: 'accounts are disabled, so this endpoint has no one to authorise; start with BLOCKYARD_AUTH=1 to enable sign-in, users and the audit trail', kind: 'forbidden' }, accounts: false }
           : { error: { message: 'administrator role required', kind: 'forbidden' } });
       }
     }

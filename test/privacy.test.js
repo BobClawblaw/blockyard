@@ -126,14 +126,14 @@ test('committed text carries no overlay-network address and no unreviewed host a
 });
 
 test('the unit file names no real account and no real address', () => {
-  const file = path.join(ROOT, 'systemd', 'bmcmonitor.service');
+  const file = path.join(ROOT, 'systemd', 'blockyard.service');
   if (!fs.existsSync(file)) return;
   const text = fs.readFileSync(file, 'utf8');
   const identity = machineIdentity();
   for (const id of identity) assert.ok(!id.re.test(text), `the unit would publish ${id.kind} "${id.shown}"`);
-  assert.match(text, /User=bmcmon/, 'a neutral placeholder service account');
+  assert.match(text, /User=blockyard/, 'a neutral placeholder service account');
   assert.match(text, /EDIT ME/, 'and it must be obvious that it is a placeholder');
   // Regression: two Environment= assignments once ended up on one line, which
-  // silently discarded BMC_MON_PORT.
+  // silently discarded BLOCKYARD_PORT.
   assert.doesNotMatch(text, /Environment=\S+=\S*Environment=/, 'one assignment per line');
 });

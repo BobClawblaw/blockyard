@@ -29,7 +29,7 @@ const { History } = await import('../server/store/history.js');
 const { parseLine } = await import('../server/collect/logparse.js');
 
 function monitorWith(rpcFixture, logLines) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-render-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-render-'));
   const logger = () => {}; logger.child = () => logger;
   const store = { ringCapacity: 500, maxEventLog: 100, retentionHours: 1, snapshotEveryMs: 1e9 };
   const m = new NodeMonitor(

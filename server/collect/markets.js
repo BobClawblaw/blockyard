@@ -9,7 +9,7 @@
 //
 // ON DEMAND: polling starts when someone opens the Markets tab (GET /api/markets calls touch())
 // and stops ten minutes after the last such request, so a monitor nobody is looking at makes no
-// exchange traffic at all. BMC_MON_MARKETS=0 (or markets.enabled=false) turns it off entirely.
+// exchange traffic at all. BLOCKYARD_MARKETS=0 (or markets.enabled=false) turns it off entirely.
 // Binance was tried and answers HTTP 451 from here (geo-blocked, 2026-09-11), so it is not listed.
 //
 // Every figure keeps its age, and an exchange that fails is reported failing with its error --
@@ -135,7 +135,7 @@ export function depthOf(book, p0, n, step = DEPTH_STEP) {
   return { bids: B, asks: A };
 }
 
-const UA = 'bmcmonitor (self-hosted Bitcoin node monitor)';
+const UA = 'Blockyard (self-hosted Bitcoin node monitor)';
 const median = (xs) => (xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2) : null);
 
 export class MarketFeed {

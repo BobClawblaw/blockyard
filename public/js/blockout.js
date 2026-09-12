@@ -15,7 +15,7 @@ import {
 import { loadSettings, setSetting, blockoutOptions } from './settings.js';
 import * as sound from './tetsound.js';
 
-const SCORES_KEY = 'bmc.blockout.scores';
+const SCORES_KEY = 'blockyard.blockout.scores';
 const KEEP = 10;
 
 // the court: the Block space look on a board as wide as it is tall enough to fall through.

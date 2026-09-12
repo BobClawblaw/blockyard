@@ -3,7 +3,7 @@
 // same block with a pattern made from a red-tile canvas on that same context, and read
 // the pixels back. A canvas context that silently drops pattern fills returns 0.
 const CDP = 'http://127.0.0.1:9333';
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const targets = JSON.parse(await (await fetch(`${CDP}/json/list`)).text());
 const page = targets.find((t) => t.type === 'page');

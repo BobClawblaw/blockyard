@@ -2,12 +2,12 @@
 // refresh — and a crop each time. For the questions a hash cannot answer: is the map
 // still on screen after updates, is the aggregate readable, did the frontier move.
 import { execFileSync } from 'node:child_process';
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
 const ID = process.env.PROBE_ID ?? 'gnMempoolTreemap';
 const GAP_MS = Number(process.env.PROBE_GAP ?? 30000);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-if (!BASE) { console.log('usage: BMC_MON_BASE=... node scripts/probe-canvas.mjs'); process.exit(2); }
+if (!BASE) { console.log('usage: BLOCKYARD_BASE=... node scripts/probe-canvas.mjs'); process.exit(2); }
 const targets = JSON.parse(await (await fetch(`${CDP}/json/list`)).text());
 const page = targets.find((t) => t.type === 'page');
 const ws = new WebSocket(page.webSocketDebuggerUrl);

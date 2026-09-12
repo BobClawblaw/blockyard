@@ -73,7 +73,7 @@ test('the feed: every exchange polled, figures derived, one failure reported wit
   await feed.pollTickers();
   await feed.pollCandles();
   assert.equal(calls.length, 10);
-  assert.match(calls[0].init.headers['user-agent'], /bmcmonitor/);
+  assert.match(calls[0].init.headers['user-agent'], /Blockyard/);
   assert.ok(calls[0].init.signal, 'every request has a timeout');
   const v = feed.view();
   const cb = v.exchanges.find((e) => e.id === 'coinbase');
@@ -121,7 +121,7 @@ test('a tile can stand taller than its footprint (the market towers)', () => {
   assert.equal(typeof board3d, 'function');
 });
 
-test('markets are wired, on by default, and switch off with BMC_MON_MARKETS=0', () => {
+test('markets are wired, on by default, and switch off with BLOCKYARD_MARKETS=0', () => {
   const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
   assert.match(read('../server/http/api.js'), /path: '\/api\/markets'/);
   const html = read('../public/index.html');
@@ -129,8 +129,8 @@ test('markets are wired, on by default, and switch off with BMC_MON_MARKETS=0', 
   assert.match(html, /id="mkBoard"/);
   assert.match(read('../public/js/app.js'), /case 'markets'/);
   assert.equal(loadConfig({ configFile: '/nonexistent-local.json' }).markets.enabled, true);
-  process.env.BMC_MON_MARKETS = '0';
-  try { assert.equal(loadConfig({ configFile: '/nonexistent-local.json' }).markets.enabled, false); } finally { delete process.env.BMC_MON_MARKETS; }
+  process.env.BLOCKYARD_MARKETS = '0';
+  try { assert.equal(loadConfig({ configFile: '/nonexistent-local.json' }).markets.enabled, false); } finally { delete process.env.BLOCKYARD_MARKETS; }
 });
 
 import { layoutChart, timeTicks, readout } from '../public/js/pricechart.js';

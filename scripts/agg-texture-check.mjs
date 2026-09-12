@@ -3,7 +3,7 @@
 // Textured => many distinct values / scattered variation. Flat => one value.
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync } from 'node:fs';
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
 const ID = process.env.PROBE_ID ?? 'gnMempoolTreemap';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -68,6 +68,6 @@ const shot = await send('Page.captureScreenshot', { format: 'png', clip: { x: cx
 const out = `/tmp/agg-40px-${process.pid}.png`;
 writeFileSync(out, Buffer.from(shot.data, 'base64'));
 console.log('40x40 crop inside the aggregate:', out);
-const decoded = execFileSync('python3', ['/storage/bmcmonitor/scripts/png-hist.py', out], { encoding: 'utf8' });
+const decoded = execFileSync('python3', ['/storage/blockyard/scripts/png-hist.py', out], { encoding: 'utf8' });
 console.log(decoded.trim());
 ws.close();

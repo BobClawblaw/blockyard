@@ -1,6 +1,6 @@
 # Security and privacy
 
-bmcmonitor watches a Bitcoin node and shows what it sees to the people you let in. This
+blockyard watches a Bitcoin node and shows what it sees to the people you let in. This
 page describes the access model, what protects it, and exactly what leaves your machine.
 To report a vulnerability, see [SECURITY.md](../SECURITY.md) at the repository root.
 
@@ -42,7 +42,7 @@ The `viewer` ceiling cannot be raised by configuration or by any credential whil
 are off. The start-up log states which addresses are readable and how to close them, so
 "anyone on the LAN can read your node" is never a surprise.
 
-Set `BMC_MON_AUTH=1` (or `"auth": { "enabled": true }`) to require sign-in. Roles:
+Set `BLOCKYARD_AUTH=1` (or `"auth": { "enabled": true }`) to require sign-in. Roles:
 
 | role | may |
 |---|---|
@@ -87,10 +87,10 @@ The last enabled admin cannot be demoted, disabled or deleted.
 
 Node actions (for example `savemempool`) are **off**. Enabling one requires all of:
 
-1. `BMC_MON_ENABLE_ACTIONS=1`,
-2. the action named in `BMC_MON_ACTIONS` (a comma-separated list),
+1. `BLOCKYARD_ENABLE_ACTIONS=1`,
+2. the action named in `BLOCKYARD_ACTIONS` (a comma-separated list),
 3. accounts on and a role of at least `operator` — or the deliberate
-   `BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1`, which exists so that the combination can only ever
+   `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1`, which exists so that the combination can only ever
    be chosen on purpose,
 4. a typed confirmation that matches the action's name, per call.
 
@@ -143,7 +143,7 @@ Everything in the monitor talks only to your node, **except**:
 
 Nothing is fetched when nobody is looking. Your machine's public address is visible to those
 exchanges when a request is made, as with any web request. To make **no** outbound connections
-at all, set `BMC_MON_MARKETS=0` (or `"markets": { "enabled": false }`): the Markets and Kiosk
+at all, set `BLOCKYARD_MARKETS=0` (or `"markets": { "enabled": false }`): the Markets and Kiosk
 tabs then say that market data is off, and the explorer shows no dollar figures.
 
 The monitor sends no telemetry, checks for no updates, and phones home to no one.
@@ -151,7 +151,7 @@ The monitor sends no telemetry, checks for no updates, and phones home to no one
 ## What is stored, and where
 
 Everything the monitor writes lives in its data directory (`./data` by default,
-`BMC_MON_DATA` to move it):
+`BLOCKYARD_DATA` to move it):
 
 | file | contents | sensitivity |
 |---|---|---|
@@ -174,6 +174,6 @@ and errors; they never contain passwords, session tokens or RPC credentials.
 - Turn accounts on if anyone who can reach the port should not see your node.
 - Use HTTPS, a reverse proxy, or an SSH tunnel on untrusted networks.
 - Leave node actions off unless you have a specific need, and then enable only that action.
-- Set `BMC_MON_MARKETS=0` on machines that must not make outbound connections.
+- Set `BLOCKYARD_MARKETS=0` on machines that must not make outbound connections.
 - Keep `config/local.json` and `data/` readable only by the service account.
 - Keep Node.js current within the 22.x line or later.

@@ -140,7 +140,7 @@ test('a node shutdown in the log is surfaced, not left to look like a network fa
 test('323 handshake failures aggregate instead of flooding the feed', async () => {
   const { NodeMonitor } = await import('../server/collect/monitor.js');
   const { History } = await import('../server/store/history.js');
-  const dir = fs.mkdtempSync('/tmp/bmcmon-hs-');
+  const dir = fs.mkdtempSync('/tmp/blockyard-hs-');
   const store = { ringCapacity: 500, maxEventLog: 100, retentionHours: 1, snapshotEveryMs: 1e9 };
   const logger = () => {}; logger.child = () => logger;
   const m = new NodeMonitor({ id: 't', label: 't', rpcUrl: 'http://127.0.0.1:1', datadir: dir, chainHint: 'main', logFile: null },

@@ -1,10 +1,10 @@
-# bmcmonitor user guide
+# blockyard user guide
 
-This guide covers what you see after opening bmcmonitor in a browser: what each tab
+This guide covers what you see after opening blockyard in a browser: what each tab
 shows, how to read it, and which controls do what. For installation, configuration
 and the security posture, see the [README](../README.md).
 
-bmcmonitor is read-only. Nothing in this guide changes your node. The only exceptions
+blockyard is read-only. Nothing in this guide changes your node. The only exceptions
 are node actions, which are off unless an operator explicitly enables them (see
 [Admin](#admin)).
 
@@ -58,7 +58,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 
 | Item | What it tells you |
 |---|---|
-| **bmcmonitor v… · build** | The version and build this tab is running. |
+| **blockyard v… · build** | The version and build this tab is running. |
 | **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The two games live at the end, under the **Diversions** pop-down. |
 | **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. |
 | **stream** | The live link to the server. `connecting` on load, then `live`. `reconnecting` means the link dropped and the browser is retrying. `stale` means the link is up but no fresh data has arrived for more than 90 seconds. |
@@ -630,7 +630,7 @@ How the monitor treats your node, and where every number comes from.
 
 ## Admin
 
-Visible only when accounts are enabled (`BMC_MON_AUTH=1`) and you are signed in as an
+Visible only when accounts are enabled (`BLOCKYARD_AUTH=1`) and you are signed in as an
 admin.
 
 - **Users**: every account with its role, creation date and last login, with buttons
@@ -646,7 +646,7 @@ admin.
 
 ## Reading the data honestly
 
-bmcmonitor never shows a number it did not measure, and it tells you when a figure is
+blockyard never shows a number it did not measure, and it tells you when a figure is
 old or missing.
 
 **Stale is marked, not hidden.** If a chart already has data and fresh samples stop

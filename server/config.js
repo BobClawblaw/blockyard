@@ -29,7 +29,7 @@ Defaults reflect the deployment inspected when this project was created:
 const DEFAULTS = {
   server: {
     // Multi-user means the LAN has to reach it, so it binds broadly by default.
-    // Set BMC_MON_BIND=127.0.0.1 to keep it on this machine only.
+    // Set BLOCKYARD_BIND=127.0.0.1 to keep it on this machine only.
     host: '0.0.0.0',
     port: 8088,
     // Defense in depth: only these CIDRs may connect. Empty = any.
@@ -44,8 +44,8 @@ const DEFAULTS = {
     // cookie and every RPC reply over plain HTTP on a LAN is not a gap you get to
     // call "documented, therefore fine".
     tls: {
-      cert: null,   // PEM; BMC_MON_TLS_CERT
-      key: null,    // PEM; BMC_MON_TLS_KEY
+      cert: null,   // PEM; BLOCKYARD_TLS_CERT
+      key: null,    // PEM; BLOCKYARD_TLS_KEY
       // Sent over TLS responses only. Two days, not the usual year: a LAN address
       // can be reissued to something else, and HSTS is the header that cannot be
       // unsent. Deliberately no includeSubDomains and no preload.
@@ -202,7 +202,7 @@ const DEFAULTS = {
     //     should discover by accident);
     //   * rate limits key on the IP, so one noisy tab cannot spend everyone's bucket.
     //
-    // Set BMC_MON_AUTH=1 (or auth.enabled in config/local.json) for accounts, roles,
+    // Set BLOCKYARD_AUTH=1 (or auth.enabled in config/local.json) for accounts, roles,
     // sessions, CSRF and the audit trail-by-user.
     enabled: false,
     dataDir: null,
@@ -213,7 +213,7 @@ const DEFAULTS = {
     loginMaxAttempts: 8,
     loginWindowMs: 300000,
     lockoutMs: 600000,
-    cookieName: 'bmcmon_sid',
+    cookieName: 'blockyard_sid',
     secureCookie: false, // forced true at boot when TLS is on
   },
   actions: {
@@ -233,7 +233,7 @@ const DEFAULTS = {
     // node rewrites between releases is a grammar dependency that has already cost
     // this project two silent-outage incidents, and every panel that needed it has
     // been removed rather than left showing dashes.
-    // Turning it on (BMC_MON_LOG_SOURCE=1) still works and is still honest about
+    // Turning it on (BLOCKYARD_LOG_SOURCE=1) still works and is still honest about
     // what it bought: on the build deployed to production RPC answers getnettotals
     // 0/0 and getpeerinfo [] while getconnectioncount says 16, so "RPC only" there
     // means "no bandwidth and no peer names at all" -- and both builds report
@@ -252,7 +252,7 @@ const DEFAULTS = {
   },
   // The Markets tab (server/collect/markets.js): public exchange APIs over HTTPS -- the one
   // outbound connection that is not the node. Polled only while someone has the tab open, and
-  // parked idleAfterMs after the last request. BMC_MON_MARKETS=0 turns it off.
+  // parked idleAfterMs after the last request. BLOCKYARD_MARKETS=0 turns it off.
   markets: {
     enabled: true,
     tickerMs: 15000,
@@ -290,12 +290,12 @@ function hostList(v) {
  * string for every *function* cast -- and half the entries in the table below pass a
  * function. Measured consequence, found by test/cidr.test.js on 2026-09-09:
  *
- *   BMC_MON_ALLOW_CIDRS=203.0.113.0/24  ->  the string "203.0.113.0/24", not a list.
+ *   BLOCKYARD_ALLOW_CIDRS=203.0.113.0/24  ->  the string "203.0.113.0/24", not a list.
  *   The gate then iterated it CHARACTER by character, matched nothing, and refused
  *   every address -- so the documented way to restrict the monitor to a LAN was a
  *   deny-all firewall that also locked out the operator.
  *
- *   BMC_MON_ACTIONS=broadcast  ->  a string, and `allow.includes(name)` is a substring
+ *   BLOCKYARD_ACTIONS=broadcast  ->  a string, and `allow.includes(name)` is a substring
  *   test on a string: permissions decided by substring matching instead of set
  *   membership. It happened not to grant anything today only because the action names
  *   do not contain each other.
@@ -322,7 +322,7 @@ function env(name, cast) {
  * give it a way to say "no file".
  */
 function defaultConfigFile() {
-  const e = process.env.BMC_MON_CONFIG;
+  const e = process.env.BLOCKYARD_CONFIG;
   if (e === undefined || e === '') return path.join(ROOT, 'config', 'local.json');
   // A literal device path (e.g. /dev/null) is not a config file either; treat the
   // sentinel and a non-regular file the same way rather than throwing on parse.
@@ -351,35 +351,35 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
   let cfg = deepMerge(structuredClone(DEFAULTS), fileCfg);
 
   const e = {
-    'BMC_MON_HOST': ['server.host', hostList],
-    'BMC_MON_PORT': ['server.port', Number],
-    'BMC_MON_BIND': ['server.host', hostList],
-    'BMC_MON_ALLOW_CIDRS': ['server.allowCidrs', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
-    'BMC_MON_TRUST_PROXY': ['server.trustProxy', Boolean],
-    'BMC_MON_NODE_URL': ['__nodeUrl', String],
-    'BMC_MON_DATADIR': ['__datadir', String],
-    'BMC_MON_LOGFILE': ['__logfile', String],
-    'BMC_MON_COOKIE': ['__cookie', String],
-    'BMC_MON_UNIT': ['__unit', String],
-    'BMC_MON_NODE_LABEL': ['__label', String],
-    'BMC_MON_RPC_TIMEOUT': ['rpc.timeoutMs', Number],
-    'BMC_MON_RPC_MIN_INTERVAL': ['rpc.minIntervalMs', Number],
-    'BMC_MON_RPC_STALE_DROP': ['rpc.staleDropMs', Number],
-    'BMC_MON_DATA': ['store.dir', String],
-    'BMC_MON_AUTH': ['auth.enabled', Boolean],
-    'BMC_MON_ALLOW_WRITES_WITHOUT_AUTH': ['actions.allowWritesWithoutAuth', Boolean],
+    'BLOCKYARD_HOST': ['server.host', hostList],
+    'BLOCKYARD_PORT': ['server.port', Number],
+    'BLOCKYARD_BIND': ['server.host', hostList],
+    'BLOCKYARD_ALLOW_CIDRS': ['server.allowCidrs', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
+    'BLOCKYARD_TRUST_PROXY': ['server.trustProxy', Boolean],
+    'BLOCKYARD_NODE_URL': ['__nodeUrl', String],
+    'BLOCKYARD_DATADIR': ['__datadir', String],
+    'BLOCKYARD_LOGFILE': ['__logfile', String],
+    'BLOCKYARD_COOKIE': ['__cookie', String],
+    'BLOCKYARD_UNIT': ['__unit', String],
+    'BLOCKYARD_NODE_LABEL': ['__label', String],
+    'BLOCKYARD_RPC_TIMEOUT': ['rpc.timeoutMs', Number],
+    'BLOCKYARD_RPC_MIN_INTERVAL': ['rpc.minIntervalMs', Number],
+    'BLOCKYARD_RPC_STALE_DROP': ['rpc.staleDropMs', Number],
+    'BLOCKYARD_DATA': ['store.dir', String],
+    'BLOCKYARD_AUTH': ['auth.enabled', Boolean],
+    'BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH': ['actions.allowWritesWithoutAuth', Boolean],
     // Run on RPC alone: 0 turns the log tail off for every node. Measured why is
     // in server/collect/monitor.js and MEASUREMENTS 3/4 -- bandwidth and per-peer
     // bytes work on builds that publish them and do not on the deployed one.
-    'BMC_MON_LOG_SOURCE': ['log.enabled', Boolean],
-    'BMC_MON_MARKETS': ['markets.enabled', Boolean],
-    'BMC_MON_SECURE_COOKIE': ['auth.secureCookie', Boolean],
-    'BMC_MON_TLS_CERT': ['server.tls.cert', String],
-    'BMC_MON_TLS_KEY': ['server.tls.key', String],
-    'BMC_MON_ACTIONS': ['actions.allow', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
-    'BMC_MON_ENABLE_ACTIONS': ['actions.enabled', Boolean],
-    'BMC_MON_LOG_LEVEL': ['log.level', String],
-    'BMC_MON_RETENTION_HOURS': ['store.retentionHours', Number],
+    'BLOCKYARD_LOG_SOURCE': ['log.enabled', Boolean],
+    'BLOCKYARD_MARKETS': ['markets.enabled', Boolean],
+    'BLOCKYARD_SECURE_COOKIE': ['auth.secureCookie', Boolean],
+    'BLOCKYARD_TLS_CERT': ['server.tls.cert', String],
+    'BLOCKYARD_TLS_KEY': ['server.tls.key', String],
+    'BLOCKYARD_ACTIONS': ['actions.allow', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
+    'BLOCKYARD_ENABLE_ACTIONS': ['actions.enabled', Boolean],
+    'BLOCKYARD_LOG_LEVEL': ['log.level', String],
+    'BLOCKYARD_RETENTION_HOURS': ['store.retentionHours', Number],
   };
   // Sentinel keys gathered below (they address nodes[0], a fixed path would not).
   const sentinels = {};
@@ -423,7 +423,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     }
   }
 
-  if (env('BMC_MON_FAKE_NODE', Boolean)) cfg.__fakeNode = true;
+  if (env('BLOCKYARD_FAKE_NODE', Boolean)) cfg.__fakeNode = true;
 
   cfg.store.dir = cfg.store.dir || path.join(ROOT, 'data');
   cfg.auth.dataDir = cfg.auth.dataDir || cfg.store.dir;
@@ -535,7 +535,7 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   // boot on that configuration rather than trusting that the operator meant it; the
   // override exists precisely so it has to be chosen twice.
   if (cfg.actions.enabled && !cfg.auth.enabled && !cfg.actions.allowWritesWithoutAuth) {
-    problems.push('node actions are enabled while accounts are OFF, which would let any address that can reach the port call them (there is no role to check). Either set BMC_MON_AUTH=1, or set BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1 deliberately alongside BMC_MON_ACTIONS.');
+    problems.push('node actions are enabled while accounts are OFF, which would let any address that can reach the port call them (there is no role to check). Either set BLOCKYARD_AUTH=1, or set BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1 deliberately alongside BLOCKYARD_ACTIONS.');
   }
   if (!cfg.auth.enabled) {
     // Not a problem, a fact the operator should see once at boot.

@@ -8,7 +8,7 @@
 // clamps them, persists them per browser, and hands the renderers their options. A setting that
 // did not change what is drawn would be a lie told in a checkbox.
 //
-// Stored per browser under `bmc.settings` (like `bmc.viewerMode`), because these are view
+// Stored per browser under `blockyard.settings` (like `blockyard.viewerMode`), because these are view
 // preferences, not node state: a kiosk screen and a laptop looking at the same monitor want
 // different answers, and neither should need an account to have one.
 //
@@ -18,7 +18,7 @@
 // silently discarded the operator's stored choice. A version and a migration chain make a move
 // survivable, and `sky` below is the first one to take it.
 
-export const SETTINGS_KEY = 'bmc.settings';
+export const SETTINGS_KEY = 'blockyard.settings';
 export const SCHEMA_VERSION = 3;
 
 export const DEFAULTS = Object.freeze({

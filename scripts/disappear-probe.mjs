@@ -5,7 +5,7 @@
 // one colour.
 import { execFileSync } from 'node:child_process';
 const CDP = 'http://127.0.0.1:9333';
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const targets = JSON.parse(await (await fetch(CDP + '/json/list')).text());
 const page = targets.find(t => t.type === 'page');
@@ -20,7 +20,7 @@ await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1900, de
 await send('Page.navigate', { url: `${BASE}/?t=${Date.now()}#overview` });
 await sleep(7000);
 
-const histOf = (pngPath) => execFileSync('python3', ['/storage/bmcmonitor/scripts/png-hist.py', pngPath], { encoding: 'utf8' });
+const histOf = (pngPath) => execFileSync('python3', ['/storage/blockyard/scripts/png-hist.py', pngPath], { encoding: 'utf8' });
 
 const check = async (tag, id) => {
   const b = JSON.parse(await evl(`(() => { const c=document.getElementById(${JSON.stringify(id)}); if(!c) return '{}'; const r=c.getBoundingClientRect(); return JSON.stringify({x:r.x,y:r.y,w:r.width,h:r.height, vis: r.width>10}) })()`));

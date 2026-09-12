@@ -89,7 +89,7 @@ import { execFileSync } from 'node:child_process';
 
 function getOverHttps(url, redirectsLeft = 3, extra = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { family: 4, ...extra, headers: { 'user-agent': 'bmcmonitor pool-map/1' }, timeout: 20_000 }, (res) => {
+    const req = https.get(url, { family: 4, ...extra, headers: { 'user-agent': 'blockyard pool-map/1' }, timeout: 20_000 }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
         res.resume();
         return resolve(getOverHttps(new URL(res.headers.location, url).toString(), redirectsLeft - 1));
@@ -132,7 +132,7 @@ try {
   // Same family:4 path as the fetch above, plus the box's own CA: the monitor serves TLS
   // from a local CA that is not in the system trust store, and "could not verify" is a
   // different fact from "could not reach".
-  const caFile = process.env.BMC_MON_CA_FILE ?? '/etc/ssl/bmc-local/ca.crt';
+  const caFile = process.env.BLOCKYARD_CA_FILE ?? '/etc/ssl/bmc-local/ca.crt';
   const body = await getOverHttps(`https://${host}:8088/api/mining?node=bmc-main`, 0, fs.existsSync(caFile) ? { ca: fs.readFileSync(caFile) } : {});
   const d = JSON.parse(body);
   const rows = d.recent ?? [];

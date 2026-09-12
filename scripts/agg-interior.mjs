@@ -1,6 +1,6 @@
 // Pixel truth with CDP's own capture (the Page.captureScreenshot path, which has always
 // matched what a user sees) — sample the aggregate's interior, and crop it.
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
 const ID = process.env.PROBE_ID ?? 'gnMempoolTreemap';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

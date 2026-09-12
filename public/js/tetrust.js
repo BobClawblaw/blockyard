@@ -12,7 +12,7 @@ import { newGame, tick, move, rotate, softDrop, hardDrop, tiles, previewTiles, p
 import { loadSettings, setSetting, tetrustOptions } from './settings.js';
 import * as sound from './tetsound.js';
 
-const SCORES_KEY = 'bmc.tetrust.scores';
+const SCORES_KEY = 'blockyard.tetrust.scores';
 const KEEP = 10;
 
 // the well's camera: the Block space look (an oblique board, cubes with height, the sphere) on a

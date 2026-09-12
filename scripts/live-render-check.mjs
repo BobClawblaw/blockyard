@@ -9,16 +9,16 @@ import { execFileSync } from 'node:child_process';
 import { installDom } from '../test/dom-stub.js';
 
 // No address is written here. Point it at whatever is running:
-//   BMC_MON_BASE=https://<address>:8088 BMC_MON_CA=/path/ca.crt npm run render:live
-// With no BMC_MON_BASE it boots its own server against the fake node, so the check runs
+//   BLOCKYARD_BASE=https://<address>:8088 BLOCKYARD_CA=/path/ca.crt npm run render:live
+// With no BLOCKYARD_BASE it boots its own server against the fake node, so the check runs
 // on any machine with no host identity to leak and no assumption about this one.
-const CA = process.env.BMC_MON_CA;
-const BASE = process.env.BMC_MON_BASE;
+const CA = process.env.BLOCKYARD_CA;
+const BASE = process.env.BLOCKYARD_BASE;
 const curlArgs = (p) => ['--max-time', '20', ...(CA ? ['--cacert', CA] : []), `${BASE}${p}`];
 const get = (p) => JSON.parse(execFileSync('curl', ['-s', ...curlArgs(p)], { encoding: 'utf8', maxBuffer: 1 << 26 }));
 
 if (!BASE) {
-  console.log('usage: BMC_MON_BASE=https://<address>:8088 [BMC_MON_CA=<ca.pem>] npm run render:live');
+  console.log('usage: BLOCKYARD_BASE=https://<address>:8088 [BLOCKYARD_CA=<ca.pem>] npm run render:live');
   console.log('       (point it at a running monitor; no address is baked into this script)');
   process.exit(2);
 }

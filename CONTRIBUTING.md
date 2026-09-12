@@ -1,4 +1,4 @@
-# Contributing to bmcmonitor
+# Contributing to blockyard
 
 Thank you for helping. This project has a small set of firm rules; most of them exist because
 breaking them once caused a real, hard-to-see failure. They are listed with their reasons in
@@ -7,8 +7,8 @@ breaking them once caused a real, hard-to-see failure. They are listed with thei
 ## Getting started
 
 ```bash
-git clone https://github.com/BobClawblaw/bmcmonitor.git
-cd bmcmonitor
+git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
 npm run dev        # the full app against a built-in fake node, http://127.0.0.1:18088
 npm test           # the unit suite
 ```
@@ -84,5 +84,5 @@ header), your browser, and the relevant part of the start-up log. For security p
 
 ## License of contributions
 
-bmcmonitor is licensed under the Apache License 2.0. By contributing you agree that your
+blockyard is licensed under the Apache License 2.0. By contributing you agree that your
 contribution is licensed under the same terms (see [LICENSE](LICENSE)).

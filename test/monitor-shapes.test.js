@@ -14,7 +14,7 @@ import { NodeMonitor } from '../server/collect/monitor.js';
 import { History } from '../server/store/history.js';
 
 function makeMonitor({ blockMapCap, state = {} } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-shape-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-shape-'));
   const store = { ringCapacity: 500, maxEventLog: 200, retentionHours: 1, snapshotEveryMs: 1e9, blockMapCap, auditMaxBytes: 1 << 20, auditKeep: 2 };
   const logger = () => {}; logger.child = () => logger;
   const m = new NodeMonitor(

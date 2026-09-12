@@ -22,7 +22,7 @@ import path from 'node:path';
 import { AuditLog } from '../server/store/audit.js';
 import { UserStore, needsRehash } from '../server/auth/users.js';
 
-const tmp = (tag) => fs.mkdtempSync(path.join(os.tmpdir(), `bmcmon-${tag}-`));
+const tmp = (tag) => fs.mkdtempSync(path.join(os.tmpdir(), `blockyard-${tag}-`));
 
 function mkAudit({ maxBytes = 4096, keep = 3 } = {}) {
   const dir = tmp('audit');

@@ -13,11 +13,11 @@ import { NodeMonitor } from '../server/collect/monitor.js';
 import { routes } from '../server/http/api.js';
 
 const mkHistory = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-nodeseries-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-nodeseries-'));
   return new History(dir, { ringCapacity: 500, maxEventLog: 100, retentionHours: 24, snapshotEveryMs: 1e9 }, { log: () => {} });
 };
 const mkMonitor = (id, history) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-nodeseries-m-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-nodeseries-m-'));
   const logger = () => {}; logger.child = () => logger;
   return new NodeMonitor({ id, label: id, rpcUrl: `http://127.0.0.1:1`, datadir: dir, chainHint: 'main', logFile: null },
     { rpc: { maxInFlight: 1, minIntervalMs: 250, timeoutMs: 500 }, poll: {}, store: { ringCapacity: 500, maxEventLog: 50, retentionHours: 1, snapshotEveryMs: 1e9 }, log: logger, history });

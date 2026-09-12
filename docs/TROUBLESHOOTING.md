@@ -19,12 +19,12 @@ RPC** page usually name the problem. This page collects the cases people actuall
 
 ## The service does not start
 
-Read the journal first: `journalctl -u bmcmonitor -n 100 --no-pager`.
+Read the journal first: `journalctl -u blockyard -n 100 --no-pager`.
 
 | message or symptom | cause and fix |
 |---|---|
 | a syntax error at start-up | the runtime is older than Node 22. Check `node -v` **as the service account**, and give `ExecStart` an absolute path to a Node 22 binary. |
-| `EADDRINUSE` | something else holds the port. Change `server.port` / `BMC_MON_PORT`, or stop the other process (`ss -ltnp | grep 8088`). |
+| `EADDRINUSE` | something else holds the port. Change `server.port` / `BLOCKYARD_PORT`, or stop the other process (`ss -ltnp | grep 8088`). |
 | none of the configured addresses exist | the bind names addresses this machine does not have (for example after a DHCP change). The log prints the addresses it does have; fix `server.host`. |
 | `Invalid configuration` followed by a list | each line names the setting and why — for example a certificate without a key, an expired certificate, a malformed CIDR, or node writes enabled without accounts. |
 | `config: cannot parse …/local.json` | the JSON has a syntax error (a trailing comma is the usual one). |
@@ -73,7 +73,7 @@ check the node's own load; the monitor never runs more than one request at a tim
 
 ## Markets or Kiosk show no prices
 
-- **"market data is off"** — `BMC_MON_MARKETS=0` or `markets.enabled: false` is set.
+- **"market data is off"** — `BLOCKYARD_MARKETS=0` or `markets.enabled: false` is set.
 - **"asking the exchanges…" for a long time** — the server cannot reach the exchanges. Test
   from the server: `curl -sI https://api.exchange.coinbase.com/products/BTC-USD/ticker`. Check
   outbound firewall rules and DNS.
@@ -142,7 +142,7 @@ browser in kiosk mode pointed at `http://<host>:8088/#kiosk`.
 
 - **Lost the admin password** — `node scripts/manage-users.js passwd admin` on the server.
 - **"too many attempts"** — the lockout lasts 10 minutes per username and per address.
-- **Sign-in does not stick** — over plain HTTP, make sure `BMC_MON_SECURE_COOKIE` is not set
+- **Sign-in does not stick** — over plain HTTP, make sure `BLOCKYARD_SECURE_COOKIE` is not set
   (a `Secure` cookie is never sent over HTTP). Behind a TLS proxy, set it.
 
 ## Tests fail on a fresh clone

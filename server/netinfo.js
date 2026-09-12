@@ -85,7 +85,7 @@ export function bindProblemMessage({ err, host, port, ifaces = networkInterfaces
   const code = err?.code ?? '';
   const have = localAddresses(ifaces).filter((a) => a.family === 'IPv4');
   const listed = have.map((a) => `${a.address} (${a.name})`).join(', ') || 'no unicast IPv4 at all';
-  const where = 'config/local.json → server.host, or BMC_MON_BIND';
+  const where = 'config/local.json → server.host, or BLOCKYARD_BIND';
 
   if (code === 'EADDRNOTAVAIL') {
     return `cannot bind http://${host}:${port} — this machine has no address ${host}. `

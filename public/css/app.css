@@ -1,4 +1,4 @@
-/* bmcmonitor -- dark instrument panel.
+/* Blockyard -- dark instrument panel.
    No webfonts, no CDN: this runs on a LAN box and must look identical with no
    network. Numbers are monospaced and tabular so they do not jitter as they
    change, which matters more in a live panel than typography opinions. */

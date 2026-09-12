@@ -6,9 +6,9 @@
 # Exits non-zero on the first failure and always reaps the server it started.
 set -uo pipefail
 
-PORT="${BMC_SMOKE_PORT:-18099}"
-FAKE_PORT="${BMC_SMOKE_FAKE:-18461}"
-DIR="$(mktemp -d /tmp/bmcmon-smoke.XXXXXX)"
+PORT="${BLOCKYARD_SMOKE_PORT:-18099}"
+FAKE_PORT="${BLOCKYARD_SMOKE_FAKE:-18461}"
+DIR="$(mktemp -d /tmp/blockyard-smoke.XXXXXX)"
 PW='smoke-test password length ok'
 BASE="http://127.0.0.1:${PORT}"
 PASS=0; FAIL=0
@@ -44,22 +44,22 @@ cd "$(dirname "$0")/.."
 # instance from an earlier run -- which is how a script that "passed" was really
 # testing a server whose login bucket was already drained.
 port_free() { ! ss -ltn 2>/dev/null | grep -q ":$1 "; }
-for p in "$PORT" "$FAKE_PORT" "${BMC_SMOKE_OPEN_PORT:-18199}" "$((FAKE_PORT + 1))"; do
+for p in "$PORT" "$FAKE_PORT" "${BLOCKYARD_SMOKE_OPEN_PORT:-18199}" "$((FAKE_PORT + 1))"; do
   port_free "$p" || { echo "FAIL port $p is already in use -- refusing to test someone else's server."; echo "     look for a leftover: pgrep -af 'server/main.js'"; exit 1; }
 done
 
 echo "== booting server on :${PORT} (fake node :${FAKE_PORT}) =="
-# BMC_MON_CONFIG=none: do not read config/local.json. It holds this box's deployment
+# BLOCKYARD_CONFIG=none: do not read config/local.json. It holds this box's deployment
 # choices -- including which addresses to bind -- and inheriting them made this script
 # curl 127.0.0.1 against a server listening elsewhere (54 failures, 2 passes).
-# BMC_MON_BIND: pin it explicitly anyway, so a future default cannot repeat that.
-# BMC_MON_AUTH=1: accounts are OFF by default now, and this script's bulk is the
+# BLOCKYARD_BIND: pin it explicitly anyway, so a future default cannot repeat that.
+# BLOCKYARD_AUTH=1: accounts are OFF by default now, and this script's bulk is the
 # signed-in contract (sessions, CSRF, per-user audit, RBAC). The open posture gets its
 # own instance further down, on its own port, so both are asserted rather than one
 # replacing the other.
-BMC_MON_CONFIG=none BMC_MON_BIND=127.0.0.1 BMC_MON_AUTH=1 \
-BMC_MON_DATA="$DIR" BMC_MON_FAKE_NODE=1 BMC_MON_PORT="$PORT" BMC_MON_ADMIN_PASSWORD="$PW" \
-BMC_MON_LOG_LEVEL=warn FAKE_PORT="$FAKE_PORT" node server/main.js >"$DIR/server.log" 2>&1 &
+BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_AUTH=1 \
+BLOCKYARD_DATA="$DIR" BLOCKYARD_FAKE_NODE=1 BLOCKYARD_PORT="$PORT" BLOCKYARD_ADMIN_PASSWORD="$PW" \
+BLOCKYARD_LOG_LEVEL=warn FAKE_PORT="$FAKE_PORT" node server/main.js >"$DIR/server.log" 2>&1 &
 SRV=$!
 
 READY=0
@@ -73,7 +73,7 @@ done
 if [ "$READY" != "1" ]; then
   echo "FAIL server never answered at $BASE -- not a contract failure, a wiring one."
   echo "     The process is alive, so most likely it is not listening on loopback."
-  echo "     This script sets BMC_MON_BIND=127.0.0.1 and BMC_MON_CONFIG=none; if that"
+  echo "     This script sets BLOCKYARD_BIND=127.0.0.1 and BLOCKYARD_CONFIG=none; if that"
   echo "     changed, server.hosts from config/local.json is pointing elsewhere."
   echo "     --- server log ---"; cat "$DIR/server.log"; exit 1
 fi
@@ -105,8 +105,8 @@ CODE=$(curl -s -o "$DIR/login.json" -w '%{http_code}' -c "$DIR/ck" -X POST "$BAS
   -H 'content-type: application/json' -d "{\"username\":\"admin\",\"password\":\"$PW\"}")
 check "correct password accepted" "$CODE" "200"
 check "session cookie is HttpOnly" "$(grep -c '#HttpOnly_' "$DIR/ck")" "1"
-check "csrf cookie is readable by design" "$(grep -c 'bmcmon_csrf' "$DIR/ck")" "1"
-CSRF=$(awk '/bmcmon_csrf/{print $7}' "$DIR/ck")
+check "csrf cookie is readable by design" "$(grep -c 'blockyard_csrf' "$DIR/ck")" "1"
+CSRF=$(awk '/blockyard_csrf/{print $7}' "$DIR/ck")
 [ -n "$CSRF" ] && ok "csrf token present" || bad "csrf token present" "empty"
 check "wrong password rejected" "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/login" -H 'content-type: application/json' -d '{"username":"admin","password":"not the password at all"}')" "401"
 check "unknown user gives the same message" "$(curl -s -X POST "$BASE/api/login" -H 'content-type: application/json' -d '{"username":"nosuchuser","password":"whatever whatever"}' | grep -c 'invalid username or password')" "1"
@@ -226,7 +226,7 @@ echo "== the served page knows which build it is =="
 BUILD=$(curl -s "$BASE/api/build" | sed -n 's/.*"build":"\([^"]*\)".*/\1/p')
 [ -n "$BUILD" ] && ok "/api/build reports a build id ($BUILD)" || bad "/api/build reports a build id" "empty"
 PAGE=$(curl -s "$BASE/")
-check "the page carries that build id" "$(echo "$PAGE" | grep -c "data-bmc-build=\"$BUILD\"")" "1"
+check "the page carries that build id" "$(echo "$PAGE" | grep -c "data-blockyard-build=\"$BUILD\"")" "1"
 check "the entry module is cache-busted by build" "$(echo "$PAGE" | grep -c "js/app.js?v=$BUILD")" "1"
 check "the stylesheet is cache-busted too" "$(echo "$PAGE" | grep -c "css/app.css?v=$BUILD")" "1"
 check "a stale tab can be told it is stale" "$(curl -s "$BASE/api/build?build=0.0.0-deadbeef" | grep -c '"matchesClient":false')" "1"
@@ -281,13 +281,13 @@ echo "== open access: the default posture, no sign-in =="
 # grants (reads, the read-only RPC console, the stream) and, more importantly, what it
 # does NOT: user admin, the audit trail, node writes. Keeping this a separate boot is
 # the point -- the signed-in checks above must not be quietly replaced by open ones.
-OPEN_PORT="${BMC_SMOKE_OPEN_PORT:-18199}"
-OPEN_DIR="$(mktemp -d /tmp/bmcmon-open.XXXXXX)"
+OPEN_PORT="${BLOCKYARD_SMOKE_OPEN_PORT:-18199}"
+OPEN_DIR="$(mktemp -d /tmp/blockyard-open.XXXXXX)"
 OPID=""
 OPID is reaped by the single cleanup trap at the top
-BMC_MON_CONFIG=none BMC_MON_BIND=127.0.0.1 \
-BMC_MON_DATA="$OPEN_DIR" BMC_MON_FAKE_NODE=1 BMC_MON_PORT="$OPEN_PORT" \
-BMC_MON_LOG_LEVEL=warn FAKE_PORT="$((FAKE_PORT + 1))" node server/main.js >"$OPEN_DIR/server.log" 2>&1 &
+BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 \
+BLOCKYARD_DATA="$OPEN_DIR" BLOCKYARD_FAKE_NODE=1 BLOCKYARD_PORT="$OPEN_PORT" \
+BLOCKYARD_LOG_LEVEL=warn FAKE_PORT="$((FAKE_PORT + 1))" node server/main.js >"$OPEN_DIR/server.log" 2>&1 &
 OPID=$!
 OBASE="http://127.0.0.1:$OPEN_PORT"
 for _ in $(seq 1 60); do curl -fs --max-time 1 "$OBASE/api/health" >/dev/null 2>&1 && break; sleep 0.3; done
@@ -313,7 +313,7 @@ check "node writes are refused with no identity" "$(curl -s -o /dev/null -w '%{h
 # "at least one", not "==1": the switch is named in the boot warning AND the banner,
 # and an exact-count assertion here would just track how many places mention it.
 N=$(grep -c 'NO SIGN-IN' "$OPEN_DIR/server.log"); [ "$N" -ge 1 ] && ok "the boot announces the posture" || bad "the boot announces the posture" "0 lines"
-N=$(grep -c 'BMC_MON_AUTH=1' "$OPEN_DIR/server.log"); [ "$N" -ge 1 ] && ok "and names the switch that closes it" || bad "and names the switch that closes it" "0 lines"
+N=$(grep -c 'BLOCKYARD_AUTH=1' "$OPEN_DIR/server.log"); [ "$N" -ge 1 ] && ok "and names the switch that closes it" || bad "and names the switch that closes it" "0 lines"
 
 echo
 echo "passed: $PASS   failed: $FAIL"

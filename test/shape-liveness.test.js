@@ -20,7 +20,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROD = fs.readFileSync(path.join(HERE, 'fixtures', 'log-samples.txt'), 'utf8').split('\n').filter(Boolean);
 
 const mk = ({ gates = null, logFile = '/tmp/shapes-fake.log' } = {}) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-shapes-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-shapes-'));
   fs.writeFileSync(logFile, '');
   const store = { ringCapacity: 500, maxEventLog: 100, retentionHours: 1, snapshotEveryMs: 1e9 };
   const logger = () => {}; logger.child = () => logger;

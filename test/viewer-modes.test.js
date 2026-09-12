@@ -48,7 +48,7 @@ test('viewer modes are wired: the endpoint, the switch, the remembered choice', 
   assert.match(read('../server/http/api.js'), /path: '\/api\/mempool\/dense'/);
   const app = read('../public/js/app.js');
   assert.match(app, /closest\?\.\('\[data-vmode\]'\)/);
-  assert.match(app, /localStorage\.setItem\('bmc\.viewerMode'/);
+  assert.match(app, /localStorage\.setItem\('blockyard\.viewerMode'/);
   assert.match(app, /\/api\/mempool\/dense/);
   assert.match(read('../public/js/mining.js'), /data-vmode="\$\{m\.id\}"/);
 });

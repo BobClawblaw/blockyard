@@ -209,7 +209,7 @@ test('a checklevel run that found problems is a warning', () => {
 // --------------------------------------------------- what reaches the feed
 
 function makeMonitor() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-test-'));
   const storeCfg = { ringCapacity: 500, maxEventLog: 200, retentionHours: 1, snapshotEveryMs: 1e9 };
   const nodeCfg = { id: 't', label: 't', rpcUrl: 'http://127.0.0.1:1', datadir: dir, chainHint: 'main', logFile: null };
   // The app passes a logger with .child(); the monitor calls log.child({node}).

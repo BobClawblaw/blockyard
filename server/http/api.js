@@ -34,7 +34,7 @@ function needRole(ctx, role) {
     // changes it instead of telling an anonymous visitor they lack a role they have
     // no way to acquire.
     if (ctx.app?.cfg?.auth?.enabled === false) {
-      throw new HttpError(403, 'accounts are disabled, so this endpoint has no one to authorise; start with BMC_MON_AUTH=1 to enable sign-in, users and the audit trail');
+      throw new HttpError(403, 'accounts are disabled, so this endpoint has no one to authorise; start with BLOCKYARD_AUTH=1 to enable sign-in, users and the audit trail');
     }
     throw new HttpError(403, `this needs role "${role}"; you are "${ctx.user?.role ?? 'anonymous'}"`);
   }
@@ -161,7 +161,7 @@ export const routes = [
       // also the honest answer — "accounts are disabled" beats "invalid username or
       // password", which implies a credential exists to be wrong about.
       if (!app.cfg.auth.enabled) {
-        throw new HttpError(403, 'accounts are disabled on this monitor; it is open without sign-in (start it with BMC_MON_AUTH=1 to require accounts)', { code: 'accounts_disabled' });
+        throw new HttpError(403, 'accounts are disabled on this monitor; it is open without sign-in (start it with BLOCKYARD_AUTH=1 to require accounts)', { code: 'accounts_disabled' });
       }
       // Per-address throttle in front of the KDF. LoginGuard answers "this username
       // keeps failing", and the per-user token bucket cannot apply here (there is no
@@ -202,7 +202,7 @@ export const routes = [
       await app.audit({ type: 'login', ok: true, username, ip: ctx.ip });
       ctx.setCookie(app.cfg.auth.cookieName, token, { maxAgeMs: app.cfg.auth.sessionTtlMs, secure: app.cfg.auth.secureCookie });
       // Readable by JS on purpose: it is the CSRF double-submit value.
-      ctx.setCookie('bmcmon_csrf', session.csrf, { httpOnly: false, maxAgeMs: app.cfg.auth.sessionTtlMs, secure: app.cfg.auth.secureCookie });
+      ctx.setCookie('blockyard_csrf', session.csrf, { httpOnly: false, maxAgeMs: app.cfg.auth.sessionTtlMs, secure: app.cfg.auth.secureCookie });
       return { ok: true, user: publicUser(result.user), csrf: session.csrf };
     },
   },
@@ -215,7 +215,7 @@ export const routes = [
       if (ctx.token) app.sessions.destroy(ctx.token);
       await app.sessions.save().catch(() => {});
       ctx.clearCookie(app.cfg.auth.cookieName);
-      ctx.clearCookie('bmcmon_csrf');
+      ctx.clearCookie('blockyard_csrf');
       await app.audit({ type: 'logout', ok: true, username: ctx.user.username, ip: ctx.ip });
       return { ok: true };
     },
@@ -258,7 +258,7 @@ export const routes = [
   {
     method: 'POST', path: '/api/logout-all', auth: 'any', csrf: true,
     handler: async (ctx, app) => {
-      if (!app.cfg.auth.enabled) throw new HttpError(403, 'accounts are disabled (start with BMC_MON_AUTH=1 to enable them)');
+      if (!app.cfg.auth.enabled) throw new HttpError(403, 'accounts are disabled (start with BLOCKYARD_AUTH=1 to enable them)');
       const n = app.sessions.destroyForUser(ctx.user.id);
       await app.sessions.save().catch(() => {});
       ctx.clearCookie(app.cfg.auth.cookieName);
@@ -341,7 +341,7 @@ export const routes = [
   {
     method: 'GET', path: '/api/markets', auth: 'any',
     handler: (ctx, app) => {
-      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BMC_MON_MARKETS=0 or markets.enabled=false)' };
+      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BLOCKYARD_MARKETS=0 or markets.enabled=false)' };
       app.markets.touch();
       return app.markets.view();
     },
@@ -350,7 +350,7 @@ export const routes = [
   {
     method: 'GET', path: '/api/markets/depth', auth: 'any',
     handler: (ctx, app) => {
-      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BMC_MON_MARKETS=0 or markets.enabled=false)' };
+      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BLOCKYARD_MARKETS=0 or markets.enabled=false)' };
       app.markets.touch();
       return app.markets.depthView(Number(ctx.query.ago) || 600);
     },
@@ -596,7 +596,7 @@ export const routes = [
   {
     method: 'POST', path: '/api/password', auth: 'any', csrf: true, body: true,
     handler: async (ctx, app) => {
-      if (!app.cfg.auth.enabled) throw new HttpError(403, 'accounts are disabled, so there are no passwords to change (start with BMC_MON_AUTH=1)');
+      if (!app.cfg.auth.enabled) throw new HttpError(403, 'accounts are disabled, so there are no passwords to change (start with BLOCKYARD_AUTH=1)');
       const current = String(ctx.body?.current ?? '');
       const next = String(ctx.body?.password ?? '');
       const who = ctx.user.role === 'admin' && ctx.body?.username ? String(ctx.body.username) : ctx.user.username;
@@ -622,7 +622,7 @@ export const routes = [
     method: 'GET', path: '/api/audit', auth: 'admin',
     handler: async (ctx, app) => {
       if (!app.cfg.auth.enabled) {
-        return { entries: [], disabled: true, note: 'accounts are off, so audit entries could name nobody; start with BMC_MON_AUTH=1 to record per-user activity' };
+        return { entries: [], disabled: true, note: 'accounts are off, so audit entries could name nobody; start with BLOCKYARD_AUTH=1 to record per-user activity' };
       }
       const limit = clampInt(ctx.query.limit, 1, 500, 100);
       // `log` is the state of the audit file itself. An audit trail that silently

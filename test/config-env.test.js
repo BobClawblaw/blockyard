@@ -1,7 +1,7 @@
 // Environment-variable config, asserted in a file that boots nothing.
 //
 // Node runs a file's top-level tests CONCURRENTLY, and process.env is process-global:
-// a test here that sets BMC_MON_AUTH while another test in the same file boots the
+// a test here that sets BLOCKYARD_AUTH while another test in the same file boots the
 // server makes *that* boot read the wrong configuration (observed as a 401 in an
 // open-access test and as "Invalid configuration" in an innocent one). So env
 // assertions live apart from boots, in this file, which only ever calls loadConfig().
@@ -23,27 +23,27 @@ async function withEnv(vars, fn) {
   }
 }
 
-test('accounts are OFF by default, and BMC_MON_AUTH is the switch back', () => {
+test('accounts are OFF by default, and BLOCKYARD_AUTH is the switch back', () => {
   assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.enabled, false,
     'the default posture: open reads, no sign-in');
   assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces, env: undefined }).auth.enabled, false);
-  return withEnv({ BMC_MON_AUTH: '1' }, () => {
+  return withEnv({ BLOCKYARD_AUTH: '1' }, () => {
     assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.enabled, true);
-  }).then(() => withEnv({ BMC_MON_AUTH: '0' }, () => {
+  }).then(() => withEnv({ BLOCKYARD_AUTH: '0' }, () => {
     assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.enabled, false);
   }));
 });
 
 test('the writes-while-open guard is a boot error with both ways out named', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-env-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-env-'));
   try {
     const f = path.join(dir, 'c.json');
     fs.writeFileSync(f, JSON.stringify({}));
-    return withEnv({ BMC_MON_ENABLE_ACTIONS: '1', BMC_MON_ACTIONS: 'savemempool' }, () => {
+    return withEnv({ BLOCKYARD_ENABLE_ACTIONS: '1', BLOCKYARD_ACTIONS: 'savemempool' }, () => {
       assert.throws(() => loadConfig({ configFile: f, ifaces }),
-        /accounts are OFF[\s\S]*BMC_MON_AUTH=1[\s\S]*BMC_MON_ALLOW_WRITES_WITHOUT_AUTH/);
+        /accounts are OFF[\s\S]*BLOCKYARD_AUTH=1[\s\S]*BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH/);
       // The override exists so the dangerous combination has to be chosen twice.
-      return withEnv({ BMC_MON_ALLOW_WRITES_WITHOUT_AUTH: '1' }, () => {
+      return withEnv({ BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH: '1' }, () => {
         const cfg = loadConfig({ configFile: f, ifaces });
         assert.equal(cfg.actions.enabled, true);
         assert.deepEqual(cfg.actions.allow, ['savemempool']);
@@ -56,18 +56,18 @@ test('the writes-while-open guard is a boot error with both ways out named', () 
   }
 });
 
-test('a node reached over BMC_MON_NODE_URL is not still called the built-in node', () =>
+test('a node reached over BLOCKYARD_NODE_URL is not still called the built-in node', () =>
   // Operator, 2026-09-12, looking at a second instance pointed at Bitcoin Core:
   // "we're not on BMC Mainnet. We're using Core Mainnet there". The header said
   // "BMC mainnet (production)" while the endpoint was Core on :8335 answering
-  // /Satoshi:31.99.0/ -- because BMC_MON_NODE_URL, DATADIR and COOKIE all existed
+  // /Satoshi:31.99.0/ -- because BLOCKYARD_NODE_URL, DATADIR and COOKIE all existed
   // and there was no way to say the node's NAME. The line whose only job is to say
   // which node you are looking at must not be the line that is wrong.
-  withEnv({ BMC_MON_NODE_URL: 'http://127.0.0.1:8335' }, () => {
+  withEnv({ BLOCKYARD_NODE_URL: 'http://127.0.0.1:8335' }, () => {
     const cfg = loadConfig({ configFile: '/nonexistent.json', ifaces });
     assert.equal(cfg.nodes[0].label, 'node @ 127.0.0.1:8335',
       'a redirected node is named by the endpoint it actually answers on');
-    return withEnv({ BMC_MON_NODE_LABEL: 'Core mainnet (oracle)' }, () => {
+    return withEnv({ BLOCKYARD_NODE_LABEL: 'Core mainnet (oracle)' }, () => {
       assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
         'Core mainnet (oracle)', 'an explicit label is the operator speaking, and wins');
     });
@@ -75,12 +75,12 @@ test('a node reached over BMC_MON_NODE_URL is not still called the built-in node
 
 test('restating the built-in address is not redirecting the node, so the name stands', () =>
   // Regression, 2026-09-12, caught on the running deployment within minutes of the fallback
-  // shipping: systemd/bmcmonitor.service carries Environment=BMC_MON_NODE_URL=http://127.0.0.1:8331,
+  // shipping: systemd/blockyard.service carries Environment=BLOCKYARD_NODE_URL=http://127.0.0.1:8331,
   // the SAME address as the built-in default. Production booted with __urlOverridden true and
   // renamed ITSELF "node @ 127.0.0.1:8331". The flag says the variable was set, never that it
   // points anywhere new -- and the test that was supposed to cover this used :8335, which differs
   // from the default, so it sailed straight past the case that actually runs in production.
-  withEnv({ BMC_MON_NODE_URL: 'http://127.0.0.1:8331' }, () => {
+  withEnv({ BLOCKYARD_NODE_URL: 'http://127.0.0.1:8331' }, () => {
     assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
       'BMC mainnet (production)', 'same address, same node, same name');
   }));
@@ -88,13 +88,13 @@ test('restating the built-in address is not redirecting the node, so the name st
 test('a label in the file survives a URL override, and an untouched node keeps its built-in name', () => {
   assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
     'BMC mainnet (production)', 'nobody redirected this node, so nothing renames it');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-label-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-label-'));
   try {
     const f = path.join(dir, 'c.json');
     fs.writeFileSync(f, JSON.stringify({
       nodes: [{ id: 'mine', label: 'my node', rpcUrl: 'http://127.0.0.1:8331', datadir: dir, chainHint: 'main' }],
     }));
-    return withEnv({ BMC_MON_NODE_URL: 'http://127.0.0.1:8335' }, () => {
+    return withEnv({ BLOCKYARD_NODE_URL: 'http://127.0.0.1:8335' }, () => {
       const cfg = loadConfig({ configFile: f, ifaces });
       assert.equal(cfg.nodes[0].rpcUrl, 'http://127.0.0.1:8335', 'the URL override still applies');
       assert.equal(cfg.nodes[0].label, 'my node', 'a name the operator typed is not overwritten');
@@ -105,12 +105,12 @@ test('a label in the file survives a URL override, and an untouched node keeps i
   }
 });
 
-test('BMC_MON_DATA and the node sentinels still arrive as the types config expects', () =>
+test('BLOCKYARD_DATA and the node sentinels still arrive as the types config expects', () =>
   // Regression cover for rule 20 (env vars are strings until code decides otherwise),
   // extended to the variables the open-by-default change made more visible.
-  withEnv({ BMC_MON_DATA: '/tmp/bmcmon-env-store', BMC_MON_PORT: '18123', BMC_MON_TRUST_PROXY: '1' }, () => {
+  withEnv({ BLOCKYARD_DATA: '/tmp/blockyard-env-store', BLOCKYARD_PORT: '18123', BLOCKYARD_TRUST_PROXY: '1' }, () => {
     const cfg = loadConfig({ configFile: '/nonexistent.json', ifaces });
-    assert.equal(cfg.store.dir, '/tmp/bmcmon-env-store');
+    assert.equal(cfg.store.dir, '/tmp/blockyard-env-store');
     assert.equal(cfg.server.port, 18123, 'a port that arrived as a string would fail listen() later, not here');
     assert.equal(cfg.server.trustProxy, true);
     assert.equal(typeof cfg.server.trustProxy, 'boolean');

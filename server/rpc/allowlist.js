@@ -123,12 +123,12 @@ export const ACTIONS = {
 export function actionAllowed(cfg, name, role) {
   const def = ACTIONS[name];
   if (!def) return { ok: false, reason: `unknown action "${name}"` };
-  if (!cfg.actions.enabled) return { ok: false, reason: 'node actions are disabled (set BMC_MON_ENABLE_ACTIONS=1 and list BMC_MON_ACTIONS)' };
+  if (!cfg.actions.enabled) return { ok: false, reason: 'node actions are disabled (set BLOCKYARD_ENABLE_ACTIONS=1 and list BLOCKYARD_ACTIONS)' };
   // With accounts off there is no role to check, so the role gate below is vacuous
   // and every listed action would be reachable by whoever can open a socket. Writes
   // therefore need a second, explicit acknowledgement in open mode.
   if (!cfg.auth.enabled && !cfg.actions.allowWritesWithoutAuth) {
-    return { ok: false, reason: 'accounts are off, so there is no identity to hold a node write accountable (enable BMC_MON_AUTH=1, or BMC_MON_ALLOW_WRITES_WITHOUT_AUTH=1 deliberately)' };
+    return { ok: false, reason: 'accounts are off, so there is no identity to hold a node write accountable (enable BLOCKYARD_AUTH=1, or BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1 deliberately)' };
   }
   if (!cfg.actions.allow.includes(name)) return { ok: false, reason: `"${name}" is not in config.actions.allow` };
   const rank = { viewer: 0, operator: 1, admin: 2 };

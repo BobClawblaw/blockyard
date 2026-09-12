@@ -8,15 +8,15 @@
 // against a warm document is a no-op and every such reading this repo has had was the
 // wrong page measured.
 //
-//   BMC_MON_BASE=https://<lan>:8088 [CDP=http://127.0.0.1:9333] node scripts/motion-check.mjs
+//   BLOCKYARD_BASE=https://<lan>:8088 [CDP=http://127.0.0.1:9333] node scripts/motion-check.mjs
 import { execFileSync } from 'node:child_process';
 
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
-const CA = process.env.BMC_MON_CA ?? '/etc/ssl/bmc-local/ca.crt';
+const CA = process.env.BLOCKYARD_CA ?? '/etc/ssl/bmc-local/ca.crt';
 const OUT = process.env.MOTION_OUT ?? `/tmp/motion-check-${process.pid}.png`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-if (!BASE) { console.log('usage: BMC_MON_BASE=https://<address>:8088 node scripts/motion-check.mjs'); process.exit(2); }
+if (!BASE) { console.log('usage: BLOCKYARD_BASE=https://<address>:8088 node scripts/motion-check.mjs'); process.exit(2); }
 
 const servedSha = (p) => execFileSync('curl', ['-sk', '--cacert', CA, `${BASE}${p}`], { encoding: 'utf8', maxBuffer: 1 << 24 })
   .split('').reduce((h, c) => (h * 33 ^ c.charCodeAt(0)) >>> 0, 5381).toString(16);

@@ -11,18 +11,18 @@
 //
 // Zero dependencies: Chromium speaks CDP over a plain WebSocket, and Node 22 ships one.
 //
-//   BMC_MON_BASE=https://<lan>:8088 [BROWSER_CDP=http://127.0.0.1:9333] \
+//   BLOCKYARD_BASE=https://<lan>:8088 [BROWSER_CDP=http://127.0.0.1:9333] \
 //   [VISION_BASE=http://198.51.100.20:8888 VISION_MODEL=<model-id>] \
 //     node scripts/browser-check.mjs [overview|mining]
 import { execFileSync } from 'node:child_process';
 
-const BASE = process.env.BMC_MON_BASE;
+const BASE = process.env.BLOCKYARD_BASE;
 const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
 const VISION_BASE = process.env.VISION_BASE;   // the local vision model, e.g. vLLM on the bench host
 const VISION_MODEL = process.env.VISION_MODEL ?? 'qwen3.8-flash-next';
 const PAGE = process.argv[2] ?? 'mining';
 if (!BASE) {
-  console.log('usage: BMC_MON_BASE=https://<address>:8088 node scripts/browser-check.mjs [overview|mining]');
+  console.log('usage: BLOCKYARD_BASE=https://<address>:8088 node scripts/browser-check.mjs [overview|mining]');
   console.log('       needs a headless chromium with --remote-debugging-port and --ignore-certificate-errors');
   process.exit(2);
 }
@@ -134,7 +134,7 @@ if (onPage.page && onPage.page !== PAGE) {
 }
 
 // Refuse to review a page that did not load. Without this guard a broken invocation
-// (an empty BMC_MON_BASE once sent it to https://:8088) produced a blank screenshot,
+// (an empty BLOCKYARD_BASE once sent it to https://:8088) produced a blank screenshot,
 // the vision model confidently reported "the page is completely empty", and that read
 // would have been believed. Check the document before asking anyone to judge it.
 const sanity = await send('Runtime.evaluate', {
@@ -152,7 +152,7 @@ try { sanityObj = JSON.parse(sanity.result?.value ?? '{}'); } catch { /* reporte
 if (!sanityObj.nav || !sanityObj.nodes) {
   console.log(`\n== ${URL} ==`);
   console.log(`ABORT: nothing to look at. href=${sanityObj.href} title=${JSON.stringify(sanityObj.title)} bodyChildren=${sanityObj.nodes}`);
-  console.log('The browser reached a document with no app in it. Check BMC_MON_BASE (and that the service is up) before reading anything into a screenshot.');
+  console.log('The browser reached a document with no app in it. Check BLOCKYARD_BASE (and that the service is up) before reading anything into a screenshot.');
   if (consoleErrors.length) consoleErrors.slice(0, 5).forEach((e) => console.log(`   ! ${e}`));
   ws.close();
   process.exit(3);

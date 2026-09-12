@@ -23,7 +23,7 @@ const IFACES = {
 };
 
 const load = (obj, opts = {}) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-cfg-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-cfg-'));
   const file = path.join(dir, 'local.json');
   if (obj !== undefined) fs.writeFileSync(file, JSON.stringify(obj));
   return loadConfig({ configFile: file, ifaces: IFACES, ...opts });
@@ -39,14 +39,14 @@ test('the default configuration watches production and nothing else', () => {
 });
 
 test('the benchmark node is not reachable by accident (env overrides point nodes[0] only)', () => {
-  // BMC_MON_NODE_URL/BMC_MON_DATADIR re-point the first node; they must not smuggle
+  // BLOCKYARD_NODE_URL/BLOCKYARD_DATADIR re-point the first node; they must not smuggle
   // a second one back in.
-  process.env.BMC_MON_NODE_URL = 'http://127.0.0.1:8331';
+  process.env.BLOCKYARD_NODE_URL = 'http://127.0.0.1:8331';
   try {
     const cfg = load(undefined);
     assert.equal(cfg.nodes.length, 1);
     assert.equal(cfg.nodes[0].rpcUrl, 'http://127.0.0.1:8331');
-  } finally { delete process.env.BMC_MON_NODE_URL; }
+  } finally { delete process.env.BLOCKYARD_NODE_URL; }
 });
 
 test('multi-node is a supported configuration, not a removed feature', () => {
@@ -83,19 +83,19 @@ test("a hermetic run can opt out of this machine's config file", () => {
   // (bind LAN + tailnet) leaked into the run and the script curled 127.0.0.1 against a
   // server listening elsewhere. 2 assertions passed, 54 failed, and nothing said
   // "nothing is listening there".
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-cfgfile-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-cfgfile-'));
   const file = path.join(dir, 'local.json');
   fs.writeFileSync(file, JSON.stringify({ server: { hosts: ['192.0.2.10', '198.51.100.7'] } }));
   const withFile = loadConfig({ configFile: file, ifaces: IFACES });
   assert.deepEqual(withFile.server.hosts, ['192.0.2.10', '198.51.100.7']);
 
-  const prev = process.env.BMC_MON_CONFIG;
-  process.env.BMC_MON_CONFIG = 'none';
+  const prev = process.env.BLOCKYARD_CONFIG;
+  process.env.BLOCKYARD_CONFIG = 'none';
   try {
     const hermetic = loadConfig({ configFile: undefined, ifaces: IFACES });
-    assert.deepEqual(hermetic.server.hosts, ['0.0.0.0'], 'BMC_MON_CONFIG=none must ignore the machine file entirely');
+    assert.deepEqual(hermetic.server.hosts, ['0.0.0.0'], 'BLOCKYARD_CONFIG=none must ignore the machine file entirely');
   } finally {
-    if (prev === undefined) delete process.env.BMC_MON_CONFIG; else process.env.BMC_MON_CONFIG = prev;
+    if (prev === undefined) delete process.env.BLOCKYARD_CONFIG; else process.env.BLOCKYARD_CONFIG = prev;
   }
 
   // A non-regular file must not throw on parse either (the old /dev/null trap).
@@ -105,11 +105,11 @@ test("a hermetic run can opt out of this machine's config file", () => {
 test('the smoke and dev scripts are hermetic about the bind, in their source', () => {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
   const smoke = fs.readFileSync(path.join(root, 'scripts/smoke.sh'), 'utf8');
-  assert.match(smoke, /BMC_MON_CONFIG=none/, 'smoke must not inherit this box config');
-  assert.match(smoke, /BMC_MON_BIND=127\.0\.0\.1/, 'and must say where it expects the server');
+  assert.match(smoke, /BLOCKYARD_CONFIG=none/, 'smoke must not inherit this box config');
+  assert.match(smoke, /BLOCKYARD_BIND=127\.0\.0\.1/, 'and must say where it expects the server');
   // The readiness loop must diagnose an unreachable port instead of cascading.
   assert.match(smoke, /never answered at/, 'a dead port is a wiring fact, not 54 contract failures');
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  assert.match(pkg.scripts.dev, /BMC_MON_CONFIG=none/);
-  assert.match(pkg.scripts.dev, /BMC_MON_BIND=127\.0\.0\.1/);
+  assert.match(pkg.scripts.dev, /BLOCKYARD_CONFIG=none/);
+  assert.match(pkg.scripts.dev, /BLOCKYARD_BIND=127\.0\.0\.1/);
 });

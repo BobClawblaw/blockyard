@@ -482,7 +482,7 @@ So on the build production runs *now*, RPC-only mode can back the bandwidth and 
 panels. Two caveats the data still shows: rows (4) were fewer than
 `getconnectioncount` (6), and `subversion` is still `/BitcoinMachineCode:0.0.1/` on
 every build including the two that reported 0 bytes — so the log banner remains the
-only way to know which regime you are in, which is why `BMC_MON_LOG_SOURCE=0` states
+only way to know which regime you are in, which is why `BLOCKYARD_LOG_SOURCE=0` states
 its losses instead of assuming they are gone.
 
 **Update 2026-09-11 (§27):** on `deploy-20260910ag` both caveats moved. Rows equal
@@ -712,7 +712,7 @@ audit", it is "no node".
 
 ## 23. The node started publishing getnettotals without restarting (2026-09-09)
 
-Switched this monitor to RPC-only (`BMC_MON_LOG_SOURCE=0`) at 17:31Z to settle what the
+Switched this monitor to RPC-only (`BLOCKYARD_LOG_SOURCE=0`) at 17:31Z to settle what the
 mode actually costs on the running build. Two claims died in the next few minutes, one of
 them mine.
 
