@@ -953,6 +953,53 @@ export const GALAXY_AT_DEFAULT = 'bottom-left';
 // placement), and the draw loop skips the ones outside.
 const GALAXY_MAX = 24000;                              // the count scales with area; 4K must not run away
 
+/**
+ * NEBULAE (operator, 2026-09-12: "We need to improve the star fields. nebulas, more stars between
+ * arms. I needs to look awe-inspiring at the majesty and grandness of the universe with all it's
+ * details").
+ *
+ * Clouds of gas sit ON the arms, because that is where they are: a spiral's colour comes from the
+ * star-forming lanes, so placing them by the same logarithmic rule as the arm stars makes the
+ * colour follow the structure instead of floating over it.
+ *
+ * Each cloud is a heap of overlapping low-alpha ellipses. The natural way to draw a nebula is one
+ * soft radial gradient, and this renderer cannot: no globalAlpha, no composite modes, no
+ * shadowBlur (viewer-canvas-rules.test.js). Many faint fills add up to the same soft edge and
+ * cannot be silently dropped by a software rasteriser -- the same reason the star halos are built
+ * this way, and the reason the painted galactic core had to be deleted rather than tuned.
+ *
+ * They carry polar coordinates like the stars, so they turn with the disc for free.
+ */
+export function nebulaClouds(pw, ph, at = GALAXY_AT_DEFAULT, seed = 11) {
+  let s = seed >>> 0;
+  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const { maxR, inner } = galaxyGeometry(pw, ph, at);
+  // dusty magenta, cold blue, teal, warm rose: a sky of one colour looks painted
+  const TINTS = [[142, 88, 214], [48, 122, 196], [58, 168, 156], [198, 84, 142]];
+  const out = [];
+  for (let i = 0; i < 6; i++) {
+    const t = 0.16 + 0.72 * rnd();
+    const rad = inner + (maxR - inner) * t;
+    const arm = Math.floor(rnd() * GALAXY_ARMS) * ((Math.PI * 2) / GALAXY_ARMS);
+    const ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() - 0.5) * 0.55;
+    const size = maxR * (0.09 + 0.11 * rnd());
+    const tint = TINTS[Math.floor(rnd() * TINTS.length)].join(',');
+    const puffs = [];
+    const n = 18 + Math.floor(rnd() * 12);
+    for (let k = 0; k < n; k++) {
+      puffs.push({
+        dx: (rnd() - 0.5) * size * 2.0,
+        dy: (rnd() - 0.5) * size * 1.3,
+        rx: size * (0.30 + 0.55 * rnd()),
+        sq: 0.65 + 0.7 * rnd(),               // not circles: a cloud has a shape
+        a: 0.009 + 0.015 * rnd(),
+      });
+    }
+    out.push({ gr: rad, ga: ang, tint, puffs });
+  }
+  return out;
+}
+
 /** Where the disc sits and how big it is. One source, so the renderer and the tests agree. */
 export function galaxyGeometry(pw, ph, at = GALAXY_AT_DEFAULT) {
   const [fx, fy, reach, oversample] = GALAXY_PLACEMENTS[at] ?? GALAXY_PLACEMENTS[GALAXY_AT_DEFAULT];
@@ -1005,7 +1052,7 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
         rad = maxR * 0.17 * Math.sqrt(rnd());
         ang = rnd() * Math.PI * 2;
         lit = 1;
-      } else if (roll < 0.94) {
+      } else if (roll < 0.86) {
         const t = Math.pow(rnd(), 0.62);                 // crowded toward the middle
         rad = inner + (maxR - inner) * t;
         const arm = Math.floor(rnd() * GALAXY_ARMS) * ((Math.PI * 2) / GALAXY_ARMS);
@@ -1015,9 +1062,14 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
         ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() + rnd() + rnd() - 1.5) * width;
         lit = 1.2 - 0.35 * (rad / maxR);
       } else {
-        rad = maxR * (0.25 + 0.75 * rnd());
+        // BETWEEN THE ARMS (operator, 2026-09-12: "more stars between arms. I needs to look
+        // awe-inspiring at the majesty and grandness of the universe"). This population was 6% of
+        // the sky and it showed: the space between the arms went to black, which reads as a
+        // pinwheel on a void rather than a galaxy standing in a star field. 14% now, and a little
+        // brighter, so the dark lanes still read as lanes but are not empty.
+        rad = maxR * (0.16 + 0.84 * rnd());
         ang = rnd() * Math.PI * 2;
-        lit = 0.28;                                      // the halo sits back so the arms carry
+        lit = 0.34;                                      // still well back, so the arms carry
       }
       // fewer haloed giants than an even sky: at seven times the stars they read as clutter
       star.big = star.big && rnd() < 0.4;
@@ -1056,11 +1108,30 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
   // stars carry polar coordinates and only the angle advances, once per frame for all of them.
   if (!f || f.pw !== pw || f.ph !== ph || f.density !== density || f.galaxy !== galaxy) {
     const g = galaxyGeometry(pw, ph, galaxy || undefined);
-    f = { pw, ph, density, galaxy, cx: g.cx, cy: g.cy, stars: starField(pw, ph, dpr, 7, density, galaxy) };
+    f = {
+      pw, ph, density, galaxy, cx: g.cx, cy: g.cy,
+      stars: starField(pw, ph, dpr, 7, density, galaxy),
+      // built once with the field, and turned with it: a cloud is placed in polar coordinates
+      nebulae: galaxy ? nebulaClouds(pw, ph, galaxy === true ? GALAXY_AT_DEFAULT : galaxy) : null,
+    };
     STARS.set(key, f);
   }
   ctx.__starBright = bright;
   const spin = galaxy ? now * GALAXY_SPIN : 0;
+  // the gas first: the stars stand IN it, not behind it
+  if (galaxy && f.nebulae && typeof ctx.ellipse === 'function') {
+    for (const c of f.nebulae) {
+      const ang = c.ga + spin;
+      const nx = f.cx + c.gr * Math.cos(ang);
+      const ny = f.cy + c.gr * GALAXY_FLATTEN * Math.sin(ang);
+      for (const p of c.puffs) {
+        ctx.fillStyle = `rgba(${c.tint},${(p.a * bright).toFixed(4)})`;
+        ctx.beginPath();
+        ctx.ellipse(nx + p.dx, ny + p.dy * GALAXY_FLATTEN, p.rx, p.rx * GALAXY_FLATTEN * p.sq, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
   for (const s of f.stars) {
     const px = galaxy ? f.cx + s.gr * Math.cos(s.ga + spin) : s.x;
     const py = galaxy ? f.cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga + spin) : s.y;

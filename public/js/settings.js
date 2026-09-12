@@ -47,6 +47,7 @@ export const DEFAULTS = Object.freeze({
   // and a control that must stay off is worse than no control: the board forces it off now.
   markets: Object.freeze({
     stars: true,
+    effects: true,        // the idle effects and the flight when the candles refresh
   }),
 });
 
@@ -110,6 +111,7 @@ export const PANEL = Object.freeze([
     note: 'The candle board on Markets and Kiosk.',
     rows: Object.freeze([
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
+      Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'Ripples, light cycles and the lightning ball while the board rests, and the flight when the candles refresh. Off draws the board and leaves it alone' }),
     ]),
   }),
 ]);
@@ -322,5 +324,10 @@ export function marketsOptions(s) {
     // never, at any setting: the halo under the grid lines is not wanted on this board
     neonHalo: 'rgba(0,0,0,0)',
     gridGlow: 'rgba(0,0,0,0)',
+    // One switch for everything that MOVES on this board (operator, 2026-09-12: "we need a toggle
+    // for disable effects in the market and price"). The candle board inherited idleFx from the
+    // renderer's defaults and ran the refresh flight, and neither had a control of its own: the
+    // Block space switches next to them govern a different board entirely.
+    ...(mk.effects ? {} : { idleFx: false, transition: MOTION.still }),
   };
 }
