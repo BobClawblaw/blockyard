@@ -73,6 +73,25 @@ test('every panel control names a real setting, and every setting has a control'
   }
 });
 
+test('shadows off removes the cube-on-cube shadows too, not just the floor ones', () => {
+  // operator, 2026-09-12: "still see shadows being cast from higher blocks onto lower blocks".
+  // Cast shadows are built by a separate path (`casters` -> face: 'cast') from the floor shadows,
+  // and the first version of the setting gated only the floor ones. This needs a real overlap: a
+  // stone in flight directly above a resting stone, under the oblique camera.
+  // the flyer has to be above the lower cube's TOP, not merely above the board: the projection
+  // skips any caster whose gap to that top is negative (blockscene3d, `gap < -1e-6`), and a wide
+  // stone is a tall cube. So: a small stone below, and a flyer well clear of it.
+  const tiles = [
+    { txid: 'under', x: 4, y: 4, s: 2, z: 0, color: '#3c9' },
+    { txid: 'over', x: 4, y: 4, s: 2, z: 8, color: '#3c9' },      // straight above it, clear of its top
+  ];
+  const o = { unit: 6, zUnit: 6, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5, gridW: 20, gridH: 20 };
+  const castOf = (opts) => buildScene(tiles, opts).ops.filter((op) => op.face === 'cast');
+  assert.ok(castOf(o).length > 0, 'by default a flyer marks the top of the cube beneath it');
+  assert.equal(castOf({ ...o, ...spaceOptions({ space: { shadows: false } }) }).length, 0,
+    'with shadows off, not one cube-on-cube shadow is built');
+});
+
 test('shadows off really removes the shadow polygons from the scene', () => {
   const tiles = [
     { txid: 'a', x: 0, y: 0, s: 4, z: 0, color: '#3c9' },

@@ -767,7 +767,7 @@ export function buildScene(tiles, o = {}) {
   // included -- paints over it. Darker the nearer the flyer, and fading exactly as
   // its floor shadow does: across the last 1.5 units of a landing, and with it as it
   // flies off (or falls in from) off screen.
-  const casters = o.oblique && !viewerLit && o.order !== 'diagonal' ? tiles.filter((c) => (c.z ?? 0) > 0.02).map((c) => ({
+  const casters = o.shadows !== false && o.oblique && !viewerLit && o.order !== 'diagonal' ? tiles.filter((c) => (c.z ?? 0) > 0.02).map((c) => ({
     c, x0: c.x, y0: c.y, x1: c.x + c.s, y1: c.y + c.s, z0: c.z,
     k: (c.alpha ?? 1) * Math.min(1, c.z / 1.5) * (1 - (c.entry ?? 0)),
   })).filter((e) => e.k > 0.01) : [];
