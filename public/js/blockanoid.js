@@ -37,7 +37,7 @@ const DEBRIS_RISE = 70;
 
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0,
-  bound: false, state: null, h: null, held: { left: false, right: false, fire: false },
+  bound: false, state: null, h: null, held: { left: false, right: false },
   debris: [], nextDebris: 1,
 };
 
@@ -184,7 +184,11 @@ function frame(t) {
 
   if (G.held.left) nudge(g, -KEY_NUDGE * Math.min(3, dt / 16));
   if (G.held.right) nudge(g, KEY_NUDGE * Math.min(3, dt / 16));
-  if (G.held.fire && fire(g).length) sound.play('laser');
+  // IT FIRES ITSELF while armed (operator, 2026-09-12: "laser doesn't auto fire when in laser
+  // mode"). Holding a key to use a power-up you already caught is friction: the capsule IS the
+  // decision, and `fire()` has its own cooldown, so this is a rate, not a stream. The keys still
+  // work and simply arrive inside the same cooldown.
+  if (g.laser && fire(g).length) sound.play('laser');
 
   const r = step(g, dt);
   for (const h of r.hits) {
@@ -279,7 +283,7 @@ function onKey(e) {
   switch (e.key) {
     case 'ArrowLeft': case 'a': case 'A': G.held.left = true; nudge(G.game, -KEY_NUDGE); break;
     case 'ArrowRight': case 'd': case 'D': G.held.right = true; nudge(G.game, KEY_NUDGE); break;
-    case 'ArrowUp': case 'w': case 'W': G.held.fire = true; if (fire(G.game).length) sound.play('laser'); break;
+    case 'ArrowUp': case 'w': case 'W': if (fire(G.game).length) sound.play('laser'); break;
     case ' ': serve(); break;
     default: return;
   }
@@ -289,7 +293,6 @@ function onKey(e) {
 function onKeyUp(e) {
   if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') G.held.left = false;
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') G.held.right = false;
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') G.held.fire = false;
 }
 
 function onPointer(e) {

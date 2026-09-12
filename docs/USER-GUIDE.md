@@ -570,14 +570,14 @@ dig a channel up the side.
 
 ### Playing
 
-**Vaus follows your mouse.** Click to serve, or use **←** **→** / **A** **D** and **space**. With
-the laser capsule, **↑** or a right-click fires.
+**Vaus follows your mouse.** Click to serve, or use **←** **→** / **A** **D** and **space**. The
+laser, once you have caught it, **fires itself**.
 
 | Keys | |
 |---|---|
 | **mouse**, **←** **→**, or **A** **D** | move Vaus |
 | **click** or **space** | serve the ball |
-| **↑**, **W**, or **right-click** | fire, when the laser is up |
+| **↑**, **W**, or **right-click** | fire early — the laser fires on its own anyway |
 | **P** or **Esc** | pause and resume |
 | **Enter** | start, or resume when paused |
 
@@ -588,7 +588,7 @@ Three kinds of brick, and telling them apart is most of the game:
 | Brick | What it does |
 |---|---|
 | **Coloured** | Breaks in one hit and pays by colour, 50 for white up to 120 for yellow. |
-| **Silver** | Takes **two** hits, and one more every four levels. It stands lower once damaged, so the wall shows its own wear. Pays 50 times the level. |
+| **Silver** | Takes **two** hits, and one more every four levels. It starts dark and **lightens with every hit**; at its lightest, the next strike breaks it. It sinks as it wears, too, so the cue survives a screen you cannot read colour on. Pays 50 times the level. |
 | **Gold** | Never breaks and pays nothing. It is scenery — a wall is cleared when the breakable bricks are gone, so gold never traps you. |
 
 Six walls ship, and past the sixth they cycle with tougher silver each time.
@@ -606,15 +606,20 @@ taking it a decision rather than a reflex. Catch it with Vaus. Every capsule pay
 | **S** | Slow | Takes the pace off the ball already in play. |
 | **D** | Disrupt | Three balls at once, all at the same speed. |
 | **P** | Player | An extra life. |
-| **B** | Break | Skips the rest of the wall. |
 
-Laser and Catch put each other away: Vaus does one thing at a time. Losing a ball puts Vaus back
-to stock.
+Laser and Catch put each other away: Vaus does one thing at a time. **The laser fires by itself**
+while it is up — you caught it, you should not also have to hold a key down. Losing a ball, or a
+minion reaching Vaus, puts Vaus back to stock.
 
 ### The minions
 
-Shapes drift down the court to spoil your aim. The ball or the laser destroys one, and so does
-touching Vaus; each pays 200. Turn them off in the settings if you would rather practise.
+Four kinds of shape drift down the court, each with its own silhouette and its own way of moving —
+a swinging cone, a tumbling cube, a wobbling orb, a zig-zagging molecule.
+
+They **cannot pass through bricks**. On a solid wall they pace along the top hunting for a way
+down, so breaking the wall opens their path as well as yours. The ball and the laser destroy one for
+200 points — but **a minion that reaches Vaus costs you a life**. Turn them off in the settings if
+you would rather practise.
 
 ### Scoring
 

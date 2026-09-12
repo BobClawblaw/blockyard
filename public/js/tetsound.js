@@ -38,9 +38,18 @@ export const SFX = Object.freeze({
   // rows -- a wall a duller tap, and a lost ball a drop. The module is the games' sound, not
   // Tetrust's alone; both set `sfx` from their own switch as they render, and only one plays at a
   // time because only one tab is on screen.
-  paddle: [300, 240, 0.055, 'square', 0.06],
-  brick: [680, 760, 0.05, 'square', 0.05],
-  brickhard: [900, 1050, 0.06, 'square', 0.055],
+  // PING AND PONG (operator, 2026-09-12: "make sure to have distinct 'Ping' and 'Pong' sounds like
+  // Arkanoid does for the paddle and block impacts"). They were 300 Hz and 680 Hz, both falling
+  // square blips -- close enough in timbre that with the ball moving you could not tell which had
+  // happened without looking. Now they are opposite in every dimension a listener actually uses:
+  //
+  //   PONG (bat)    low, and it FALLS     -- a soft wooden knock under you
+  //   PING (brick)  high, and it RISES    -- a bright strike up at the wall
+  //
+  // Pitch alone is a weak cue on small speakers; the direction of the sweep survives them.
+  paddle: [200, 150, 0.075, 'triangle', 0.075],
+  brick: [1046, 1245, 0.042, 'square', 0.05],
+  brickhard: [1396, 1760, 0.05, 'square', 0.055],
   wall: [420, 400, 0.04, 'triangle', 0.04],
   life: [320, 90, 0.42, 'sawtooth', 0.08],
   levelup: [520, 1180, 0.3, 'triangle', 0.07],

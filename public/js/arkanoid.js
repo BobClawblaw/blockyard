@@ -57,16 +57,49 @@ export const LEVELS = Object.freeze([
   Object.freeze(['S.G.S.G.S.G.S', '.wwwwwwwwwww.', '.w.c.c.c.c.w.', '.w.ccccccc.w.', '.wwwwwwwwwww.', 'S.G.S.G.S.G.S']),
 ]);
 
+// A BRICK THAT SURVIVES A HIT SHOWS IT (operator, 2026-09-12: "The blocks that take more than 1
+// hit to break, need to start darker in color. Every successive hit ... makes it lighter colored,
+// signalling it's closer to breaking. When it's the lightest color it can be, it will signal the
+// next impact will break that block").
+//
+// The ramp is anchored at both ends so the LAST step is unmistakable: fresh is DAMAGE_DARK, and
+// one-hit-from-breaking is DAMAGE_LIGHT, whatever the durability happens to be. A brick with three
+// lives and a brick with five both end on the same bright colour, so "next one does it" is a
+// colour you learn once rather than a shade you have to compare against its neighbours.
+export const DAMAGE_DARK = '#4a5361';
+export const DAMAGE_LIGHT = '#f2f7ff';
+
+const hex2 = (h, i) => parseInt(h.slice(i, i + 2), 16);
+/** Mix two six-digit hexes, t = 0 gives `a`, t = 1 gives `b`. Pure, so the ramp is assertable. */
+export function mixHex(a, b, t) {
+  const k = Math.max(0, Math.min(1, t));
+  const ch = (i) => Math.round(hex2(a.replace('#', ''), i) + (hex2(b.replace('#', ''), i) - hex2(a.replace('#', ''), i)) * k);
+  return `#${[ch(0), ch(2), ch(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * The colour of a brick with `left` hits remaining out of `max`. Dark when fresh, lightest when one
+ * hit remains. A single-hit brick keeps its own colour -- there is no wear to show.
+ */
+export function damageShade(left, max, base) {
+  if (!Number.isFinite(max) || max <= 1) return base;
+  const p = (max - Math.max(1, left)) / (max - 1);   // 0 fresh .. 1 about to break
+  return mixHex(DAMAGE_DARK, DAMAGE_LIGHT, p);
+}
+
 /** How many hits a silver brick takes at this level: two, and one more every four levels. */
 export function silverHits(level) { return 2 + Math.floor(Math.max(0, level - 1) / 4); }
 
 // ------------------------------------------------------------------ the capsules
 // One capsule at a time is the arcade's rule and it matters: it is what makes "do I take it?" a
 // decision rather than a reflex.
-export const CAPSULES = Object.freeze(['laser', 'enlarge', 'catch', 'slow', 'disrupt', 'player', 'break']);
+// `break` (skip the wall) was removed on the operator's word, 2026-09-12. It was the one capsule
+// that took the game away from you: clearing a wall you had not cleared is a reward for catching a
+// pill rather than for playing, and it made the level you were in the middle of pointless.
+export const CAPSULES = Object.freeze(['laser', 'enlarge', 'catch', 'slow', 'disrupt', 'player']);
 export const CAPSULE_COLOR = Object.freeze({
   laser: '#ef5a5a', enlarge: '#4d7cff', catch: '#2ecc8f', slow: '#f7931a',
-  disrupt: '#3ec9ff', player: '#b07cff', break: '#e8eefc',
+  disrupt: '#3ec9ff', player: '#b07cff',
 });
 // EACH CAPSULE HAS ITS OWN SILHOUETTE, not just its own colour (operator, 2026-09-12: "Blockanoid
 // needs unique block graphics and styling for each of the different powerups that drop down").
@@ -76,14 +109,20 @@ export const CAPSULE_COLOR = Object.freeze({
 // monochrome. `trim` is the glyph sitting on the body.
 export const CAPSULE_TRIM = Object.freeze({
   laser: '#ffd0c4', enlarge: '#cfe0ff', catch: '#d8ffe9', slow: '#ffe0b0',
-  disrupt: '#d6f4ff', player: '#ecdcff', break: '#9fb3d9',
+  disrupt: '#d6f4ff', player: '#ecdcff',
 });
 export const CAPSULE_LETTER = Object.freeze({
-  laser: 'L', enlarge: 'E', catch: 'C', slow: 'S', disrupt: 'D', player: 'P', break: 'B',
+  laser: 'L', enlarge: 'E', catch: 'C', slow: 'S', disrupt: 'D', player: 'P',
 });
 export const CAPSULE_POINTS = 1000;
-const CAPSULE_FALL = 6;             // grid units a second
-const CAPSULE_S = 0.9;
+const CAPSULE_FALL = 5;             // grid units a second
+// DRAWN SIZE AND HIT BOX ARE TWO DIFFERENT MEASUREMENTS (operator, 2026-09-12: "the blockanoid
+// minions and pills need to be AT LEAST 4 times larger ... shrink the bounding box if necessary to
+// compensate for visual"). They used to be one number, which is why they could not both be right: a
+// capsule big enough to read across a room is a capsule you cannot miss, and a minion that size
+// could never thread a gap in the wall. So the sprite is large and the box it collides with is not.
+export const CAPSULE_S = 2.16;      // DRAWN: 2.4x the old 0.9 (4x was a bit large -- operator)
+export const CAPSULE_BOX = 1.9;     // CAUGHT: generous, but you can still miss it
 const CAPSULE_ODDS = 0.28;          // of a broken brick
 
 const BASE_SPEED = 12;
@@ -93,10 +132,16 @@ const MAX_BOUNCE = 1.05;
 const MAX_STEP = 0.3;
 const LASER_SPEED = 26;
 const LASER_COOLDOWN = 260;         // ms between shots
-const ENEMY_SPEED = 2.4;
+// Slower than before: a minion is now looking for a way through rather than falling past you.
+const ENEMY_SPEED = 1.25;           // descent, grid units a second
+const ENEMY_SIDE = 2.4;             // sideways, while feeling along the wall for a gap
 const ENEMY_EVERY = 9000;           // ms between arrivals while a level runs
 const ENEMY_POINTS = 200;
-const ENEMY_S = 0.86;
+export const ENEMY_S = 2.06;        // DRAWN: 2.4x the old 0.86 (4x was a bit large -- operator, 2026-09-12)
+// The hit box must fit the gaps it has to navigate. Measured on the shipped walls: levels 3 and 6
+// leave one-unit gaps, so anything wider than a unit could never pass and would sit at the top
+// for ever. This is also the box the ball and the laser must hit, and the box that costs a life.
+export const ENEMY_BOX = 0.92;
 export const ENEMY_COLOR = '#7de3c8';
 
 // ---------------------------------------------------------------- the minions
@@ -186,12 +231,12 @@ function layout(g) {
     for (let x = 0; x < Math.min(COLS, line.length); x++) {
       const ch = line[x];
       if (ch === '.') continue;
-      if (ch === 'G') g.bricks.push({ id: g.nextId++, x, y, kind: 'gold', color: GOLD.color, points: 0, hits: Infinity });
-      else if (ch === 'S') g.bricks.push({ id: g.nextId++, x, y, kind: 'silver', color: SILVER.color, points: SILVER.points * g.level, hits });
+      if (ch === 'G') g.bricks.push({ id: g.nextId++, x, y, kind: 'gold', color: GOLD.color, points: 0, hits: Infinity, maxHits: Infinity });
+      else if (ch === 'S') g.bricks.push({ id: g.nextId++, x, y, kind: 'silver', color: SILVER.color, points: SILVER.points * g.level, hits, maxHits: hits });
       else {
         const spec = BRICK[ch];
         if (!spec) continue;
-        g.bricks.push({ id: g.nextId++, x, y, kind: 'plain', color: spec.color, points: spec.points, hits: 1 });
+        g.bricks.push({ id: g.nextId++, x, y, kind: 'plain', color: spec.color, points: spec.points, hits: 1, maxHits: 1 });
       }
     }
   }
@@ -330,7 +375,6 @@ export function applyCapsule(g, kind) {
       break;
     }
     case 'player': g.lives += 1; break;
-    case 'break': g.cleared = true; break;
     default: break;
   }
   return g;
@@ -372,13 +416,13 @@ function moveCapsules(g, dt, hits) {
   for (let i = g.capsules.length - 1; i >= 0; i--) {
     const c = g.capsules[i];
     c.y -= CAPSULE_FALL * dt;
-    const caught = c.y <= PADDLE_Y + PADDLE_D && c.y + CAPSULE_S >= PADDLE_Y
-      && c.x + CAPSULE_S >= p.x && c.x <= p.x + p.w;
+    const caught = c.y <= PADDLE_Y + PADDLE_D && c.y + CAPSULE_BOX >= PADDLE_Y
+      && c.x + CAPSULE_BOX >= p.x && c.x <= p.x + p.w;
     if (caught) {
       g.capsules.splice(i, 1);
       applyCapsule(g, c.kind);
       hits.push({ kind: 'capsule', capsule: c.kind });
-    } else if (c.y + CAPSULE_S < 0) g.capsules.splice(i, 1);
+    } else if (c.y + CAPSULE_BOX < 0) g.capsules.splice(i, 1);
   }
 }
 
@@ -390,7 +434,7 @@ function moveBolts(g, dt, hits) {
     let spent = false;
     for (let e = g.enemies.length - 1; e >= 0 && !spent; e--) {
       const m = g.enemies[e];
-      if (z.x >= m.x && z.x <= m.x + ENEMY_S && z.y >= m.y && z.y <= m.y + ENEMY_S) {
+      if (z.x >= m.x && z.x <= m.x + ENEMY_BOX && z.y >= m.y && z.y <= m.y + ENEMY_BOX) {
         g.enemies.splice(e, 1); g.score += ENEMY_POINTS;
         hits.push({ kind: 'enemy', x: m.x, y: m.y });
         spent = true;
@@ -407,6 +451,27 @@ function moveBolts(g, dt, hits) {
   }
 }
 
+/** Does a box of side `s` at (x,y) overlap any brick? A brick is exactly one grid cell. */
+export function boxHitsBrick(g, x, y, s) {
+  for (const k of g.bricks) {
+    if (x + s > k.x && x < k.x + 1 && y + s > k.y && y < k.y + 1) return k;
+  }
+  return null;
+}
+
+/**
+ * A life goes. TWO things cost one now -- the last ball through the floor, and a minion reaching
+ * Vaus -- so the consequences live in one place rather than being written twice and drifting apart.
+ */
+export function loseLife(g, hits, kind) {
+  g.lives -= 1;
+  hits.push({ kind });
+  resetVaus(g);
+  g.capsules = []; g.bolts = []; g.enemies = []; g.sinceEnemy = 0;
+  if (g.lives <= 0) { g.over = true; resetBall(g); g.balls[0].stuck = true; g.balls[0].vx = 0; g.balls[0].vy = 0; }
+  else resetBall(g);
+}
+
 function moveEnemies(g, dt, dtMs, hits) {
   if (g.opts?.enemies === false) { g.sinceEnemy = 0; return; }
   g.sinceEnemy += dtMs;
@@ -421,24 +486,43 @@ function moveEnemies(g, dt, dtMs, hits) {
     hits.push({ kind: 'enemyin', x: lane, minion: kind });
   }
   const p = g.paddle;
+  const lim = COLS - ENEMY_BOX;
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const m = g.enemies[i];
     m.t += dt;
-    m.y -= ENEMY_SPEED * dt;
-    m.x = Math.max(0, Math.min(COLS - ENEMY_S, m.x + minionDrift(m.kind, m.phase, m.t) * dt));
-    const onBat = m.y <= PADDLE_Y + PADDLE_D && m.y + ENEMY_S >= PADDLE_Y && m.x + ENEMY_S >= p.x && m.x <= p.x + p.w;
-    if (onBat || m.y + ENEMY_S < 0) {
-      g.enemies.splice(i, 1);
-      if (onBat) { g.score += ENEMY_POINTS; hits.push({ kind: 'enemy', x: m.x, y: m.y }); }
+
+    // IT LOOKS FOR A WAY THROUGH (operator: "the minions should slowly try to find a path out").
+    // A wall-follower, not a pathfinder: descend when the space below is clear; when it is not,
+    // feel sideways in one direction for a gap; at a dead end, turn round. On a solid wall that
+    // reads as a minion pacing the top until the player opens a hole -- the arcade behaviour, and
+    // what makes breaking the wall feel like relief rather than bookkeeping.
+    const down = ENEMY_SPEED * dt;
+    if (!boxHitsBrick(g, m.x, m.y - down, ENEMY_BOX)) {
+      m.y -= down;
+      const nx = Math.max(0, Math.min(lim, m.x + minionDrift(m.kind, m.phase, m.t) * dt));
+      if (!boxHitsBrick(g, nx, m.y, ENEMY_BOX)) m.x = nx;
+    } else {
+      if (m.dir == null) m.dir = hash01(`dir:${m.id}`) < 0.5 ? -1 : 1;
+      const nx = m.x + m.dir * ENEMY_SIDE * dt;
+      if (nx >= 0 && nx <= lim && !boxHitsBrick(g, nx, m.y, ENEMY_BOX)) m.x = nx;
+      else m.dir = -m.dir;
     }
+
+    // AND IT IS FATAL (operator: "kill the player if the player hits it"). It used to PAY 200 for
+    // touching Vaus, which had it backwards: the ball and the laser destroy a minion for points,
+    // but a minion that reaches the bat destroys the bat.
+    const onBat = m.y <= PADDLE_Y + PADDLE_D && m.y + ENEMY_BOX >= PADDLE_Y
+      && m.x + ENEMY_BOX >= p.x && m.x <= p.x + p.w;
+    if (onBat) { hits.push({ kind: 'vaus', x: m.x, y: m.y }); loseLife(g, hits, 'life'); return; }
+    if (m.y + ENEMY_BOX < 0) g.enemies.splice(i, 1);
   }
 }
 
 function ballEnemy(g, b, hits) {
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const m = g.enemies[i];
-    const ox = Math.min(b.x + b.r, m.x + ENEMY_S) - Math.max(b.x - b.r, m.x);
-    const oy = Math.min(b.y + b.r, m.y + ENEMY_S) - Math.max(b.y - b.r, m.y);
+    const ox = Math.min(b.x + b.r, m.x + ENEMY_BOX) - Math.max(b.x - b.r, m.x);
+    const oy = Math.min(b.y + b.r, m.y + ENEMY_BOX) - Math.max(b.y - b.r, m.y);
     if (ox <= 0 || oy <= 0) continue;
     g.enemies.splice(i, 1);
     g.score += ENEMY_POINTS;
@@ -496,12 +580,9 @@ export function step(g, dtMs) {
   let lost = false;
   if (!g.balls.length) {                      // every ball gone: a life, and Vaus back to stock
     lost = true;
-    g.lives -= 1;
-    hits.push({ kind: 'life' });
-    resetVaus(g);
-    g.capsules = []; g.bolts = [];
-    if (g.lives <= 0) { g.over = true; resetBall(g); g.balls[0].stuck = true; }
-    else resetBall(g);
+    // ONE implementation, not two. This was a line-for-line copy of loseLife() until a minion
+    // reaching Vaus became the second way to lose one -- and two copies of a rule drift.
+    loseLife(g, hits, 'life');
   }
 
   if (standing && !breakable(g).length) g.cleared = true;
@@ -531,15 +612,15 @@ export function capsuleTiles(c, now = 0) {
   // two capsules at the same height look the same and a test can say what a frame contains --
   // the rules stay free of time, exactly as the launch angle is an argument rather than a roll.
   const rot = (c.y * 1.5 + (c.id % 7) * 0.9) % (Math.PI * 2);
-  const out = [
+  // drawn large, CENTRED on the catch box, so what you aim at is under what you see
+  const off = (CAPSULE_S - CAPSULE_BOX) / 2;
+  const x = c.x - off, y = c.y - off;
+  return [
     // the pill: an elongated stadium, wider than it is tall, turning end over end
-    { txid: id('p'), x: c.x, y: c.y, s: CAPSULE_S, tall: 0.44, color: body, capsule: true,
-      poly: PILL, rot },
+    { txid: id('p'), x, y, s: CAPSULE_S, tall: 0.44, color: body, capsule: true, poly: PILL, rot },
     // the band across it, in the capsule's trim colour, so the letter-colour still reads
-    { txid: id('b'), x: c.x, y: c.y, s: CAPSULE_S, tall: 0.46, color: trim, capsule: true,
-      poly: spec.band, rot },
+    { txid: id('b'), x, y, s: CAPSULE_S, tall: 0.46, color: trim, capsule: true, poly: spec.band, rot },
   ];
-  return out;
 }
 
 // A STADIUM, drawn once. Unit space (-0.5..0.5), so it scales with the tile: a flat-ended
@@ -563,7 +644,6 @@ const CAPSULE_SHAPE = Object.freeze({
   slow:    { band: Object.freeze([[-0.05, -0.17], [0.05, -0.17], [0.05, 0.17], [-0.05, 0.17]]) },        // a thin upright
   disrupt: { band: Object.freeze([[-0.28, -0.07], [-0.10, -0.07], [-0.10, 0.07], [-0.28, 0.07]]) },      // small, far left
   player:  { band: Object.freeze([[-0.07, -0.20], [0.07, -0.20], [0.07, 0.20], [-0.07, 0.20]]) },        // a tall bar
-  break:   { band: Object.freeze([[-0.20, -0.05], [0.20, -0.05], [0.20, 0.05], [-0.20, 0.05]]) },        // a wide slot
 });
 
 /**
@@ -574,9 +654,15 @@ const CAPSULE_SHAPE = Object.freeze({
 export function tiles(g) {
   const out = [];
   for (const k of g.bricks) {
-    // a damaged silver brick stands lower: the wall shows its own wear
-    const tall = k.kind === 'silver' && Number.isFinite(k.hits) && k.hits < silverHits(g.level) ? 0.7 : 1;
-    out.push({ txid: `b${k.id}`, x: k.x, y: k.y, s: 1, tall, color: k.color });
+    // Wear is shown TWICE, on purpose: the brick lightens toward white as it nears breaking, and
+    // it also sinks. Colour is the signal the operator asked for; height carries it for anyone who
+    // cannot separate these shades, and survives a monochrome screenshot.
+    const max = k.maxHits ?? (k.kind === 'silver' ? silverHits(g.level) : 1);
+    const multi = Number.isFinite(max) && max > 1;
+    const wear = multi ? (max - Math.max(1, k.hits)) / (max - 1) : 0;   // 0 fresh .. 1 about to break
+    out.push({ txid: `b${k.id}`, x: k.x, y: k.y, s: 1,
+      tall: multi ? 1 - 0.28 * wear : 1,
+      color: damageShade(k.hits, max, k.color) });
   }
   // VAUS MORPHS WHEN IT IS ARMED. Stock it is a row of flat stones. With the laser it grows a
   // cannon at each end and a raised housing between them -- the bat itself says what it can do,
@@ -605,7 +691,9 @@ export function tiles(g) {
   }
   for (const m of g.enemies) {
     const spec = MINIONS[m.kind] ?? MINIONS.cone;
-    out.push({ txid: `foe${m.id}`, x: m.x, y: m.y, s: ENEMY_S, tall: ENEMY_S,
+    // drawn large, CENTRED on the small box it actually collides with
+    const off = (ENEMY_S - ENEMY_BOX) / 2;
+    out.push({ txid: `foe${m.id}`, x: m.x - off, y: m.y - off, s: ENEMY_S, tall: ENEMY_S,
       color: spec.color, enemy: true, minion: m.kind,
       poly: spec.poly, eyes: spec.eyes, rot: (m.phase + m.t * spec.spin) % (Math.PI * 2) });
   }

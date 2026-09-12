@@ -11,8 +11,10 @@ import {
   LEVELS, CAPSULES, CAPSULE_POINTS, GOLD, SILVER,
   newGame, advance, step, movePaddle, nudge, launch, fire, tiles, remaining, powers,
   speed, resetBall, resetVaus, setOptions, breakable, silverHits, capsuleFor, hash01,
-  layoutFor, applyCapsule, capsuleTiles,
+  layoutFor, applyCapsule, capsuleTiles, damageShade, mixHex, boxHitsBrick, loseLife, CAPSULE_LETTER,
+  ENEMY_S, ENEMY_BOX, CAPSULE_S, CAPSULE_BOX, MINION_KINDS, DAMAGE_DARK, DAMAGE_LIGHT,
 } from '../public/js/arkanoid.js';
+import { SFX } from '../public/js/tetsound.js';
 
 /** Put a ball just under a brick, travelling up hard enough to reach it in one step. */
 const aimAt = (g, k, v = speed(g.level)) => {
@@ -131,8 +133,10 @@ test('each capsule keeps its own promise', () => {
   assert.ok(three.balls.every((b) => Math.abs(Math.hypot(b.vx, b.vy) - Math.hypot(three.balls[0].vx, three.balls[0].vy)) < 1e-6),
     'all at the same speed: a split, not a slow-down');
 
-  const skip = newGame(); applyCapsule(skip, 'break');
-  assert.equal(skip.cleared, true, 'B ends the wall');
+  // `break` (skip the wall) was removed 2026-09-12: a capsule that clears a wall you did not
+  // clear rewards catching a pill rather than playing, and voids the level you are in.
+  assert.ok(!CAPSULES.includes('break'), 'skip-the-wall is gone');
+  assert.ok(!Object.values(CAPSULE_LETTER).includes('B'), 'and its letter with it');
 
   const paid = newGame(); const s0 = paid.score; applyCapsule(paid, 'player');
   assert.equal(paid.score, s0 + CAPSULE_POINTS, 'and taking one always pays');
@@ -378,4 +382,111 @@ test('resetVaus and resetBall put the court back to stock', () => {
   assert.ok(g.paddle.x >= 0, 'and Vaus cannot be shoved off the court');
   movePaddle(g, COLS + 5);
   assert.equal(g.paddle.x, COLS - g.paddle.w, 'nor off the other side');
+});
+
+test('a brick that survives a hit gets lighter, and the last shade means "next one breaks it"', () => {
+  // (operator, 2026-09-12: "start darker in color. Every successive hit ... makes it lighter
+  // colored ... When it's the lightest color it can be, it will signal the next impact will break
+  // that block".) Anchored at BOTH ends, so the final shade is the same whatever the durability --
+  // "one more" is a colour you learn once, not a shade you compare against the brick next to it.
+  const lum = (h) => parseInt(h.slice(1, 3), 16) + parseInt(h.slice(3, 5), 16) + parseInt(h.slice(5, 7), 16);
+  for (const max of [2, 3, 5]) {
+    const shades = [];
+    for (let left = max; left >= 1; left--) shades.push(damageShade(left, max, SILVER.color));
+    assert.equal(shades[0], DAMAGE_DARK, `${max}: a fresh brick is the dark end`);
+    assert.equal(shades.at(-1), DAMAGE_LIGHT, `${max}: one hit left is the light end, whatever the durability`);
+    for (let i = 1; i < shades.length; i++) {
+      assert.ok(lum(shades[i]) > lum(shades[i - 1]), `${max}: hit ${i} must be lighter than hit ${i - 1}`);
+    }
+  }
+  assert.equal(damageShade(1, 1, '#f5d142'), '#f5d142', 'a one-hit brick has no wear to show, so it keeps its colour');
+  assert.equal(mixHex('#000000', '#ffffff', 0.5), '#808080', 'the mix is linear');
+
+  // and it reaches the engine: the tile lightens AND sinks, so the cue survives monochrome
+  const g = newGame(2);
+  const brick = g.bricks.find((b) => b.kind === 'silver');
+  const fresh = tiles(g).find((t) => t.txid === `b${brick.id}`);
+  brick.hits -= 1;
+  const worn = tiles(g).find((t) => t.txid === `b${brick.id}`);
+  assert.ok(lum(worn.color) > lum(fresh.color), 'the damaged brick is lighter');
+  assert.ok(worn.tall < fresh.tall, 'and stands lower');
+});
+
+test('a minion cannot pass through bricks, and paces a solid wall looking for a way out', () => {
+  // (operator: "Minions should not be able to pass through bricks. Just like the real arcade game"
+  // and "the minions should slowly try to find a path out".) Level 1 is a full-width wall with no
+  // gap at all; level 2 leaves a nine-unit one. One algorithm, two opposite behaviours.
+  const run = (level) => {
+    const g = newGame(level, { capsules: false, enemies: true });
+    g.enemies = [{ id: 7, kind: MINION_KINDS[0], x: 6, y: 23.2, phase: 0.4, t: 0 }];
+    const y0 = g.enemies[0].y;
+    let low = y0, overlapped = false;
+    for (let i = 0; i < 400 && g.enemies.length; i++) {
+      step(g, 50);
+      const m = g.enemies[0];
+      if (!m) break;
+      low = Math.min(low, m.y);
+      if (boxHitsBrick(g, m.x, m.y, ENEMY_BOX)) overlapped = true;
+    }
+    return { fell: y0 - low, overlapped };
+  };
+  const solid = run(1), gapped = run(2);
+  assert.equal(solid.overlapped, false, 'it never stands inside a brick');
+  assert.equal(gapped.overlapped, false, 'nor on the wall with a gap');
+  assert.ok(solid.fell < 1, `a solid wall holds it at the top (fell ${solid.fell.toFixed(2)})`);
+  assert.ok(gapped.fell > 10, `a gap lets it through (fell ${gapped.fell.toFixed(2)})`);
+});
+
+test('a minion reaching Vaus COSTS a life -- it does not pay for the privilege', () => {
+  // This inverted an existing rule, and the suite stayed green when it changed: nothing covered it.
+  // (operator: "kill the player if the player hits it".) The ball and the laser destroy a minion
+  // for points; a minion that reaches the bat destroys the bat.
+  const g = newGame(1, { capsules: false, enemies: true });
+  movePaddle(g, 6);
+  g.bricks = [];
+  g.enemies = [{ id: 3, kind: MINION_KINDS[1], x: g.paddle.x, y: PADDLE_Y + PADDLE_D + 0.05, phase: 0, t: 0 }];
+  const r = step(g, 50);
+  assert.equal(g.lives, LIVES - 1, 'a life is gone');
+  assert.equal(g.score, 0, 'and nothing was paid for it');
+  assert.ok(r.hits.some((h) => h.kind === 'vaus'), 'the screen is told why');
+  assert.equal(g.enemies.length, 0, 'the court is cleared');
+});
+
+test('the sprites are four times larger than their hit boxes are wide, and centred on them', () => {
+  // (operator: "need to be AT LEAST 4 times larger" and "shrink the bounding box if necessary to
+  // compensate for visual".) Drawn size and collision size are separate measurements now; if the
+  // sprite were not centred on the box, you would aim at a shape whose edge is not where it looks.
+  // 4x first, then "reduce those minions 40% in size. a bit large" -- so the minion is no longer
+  // pinned to a multiple, only to being much bigger than the box it collides with. The pill keeps
+  // its 4x, which was never the complaint.
+  assert.ok(ENEMY_S > ENEMY_BOX * 2, `minion sprite ${ENEMY_S} dwarfs its ${ENEMY_BOX} box`);
+  assert.ok(ENEMY_S > 0.86 * 2, `and is well up on the old ${0.86} sprite (${(ENEMY_S / 0.86).toFixed(2)}x)`);
+  assert.ok(CAPSULE_S > CAPSULE_BOX, `pill sprite ${CAPSULE_S} is bigger than its ${CAPSULE_BOX} catch box`);
+  assert.ok(CAPSULE_S > 0.9 * 2, `and well up on the old sprite (${(CAPSULE_S / 0.9).toFixed(2)}x)`);
+  assert.ok(ENEMY_BOX < 1, 'the minion box fits a one-unit gap, or it could never pass the wall');
+  assert.ok(CAPSULE_BOX < CAPSULE_S, 'the catch box is smaller than the pill, so it can still be missed');
+
+  const g = newGame(2);
+  g.enemies = [{ id: 1, kind: MINION_KINDS[0], x: 5, y: 14, phase: 0, t: 0 }];
+  g.capsules = [{ id: 2, kind: 'laser', x: 5, y: 10 }];
+  const t = tiles(g);
+  const centred = (tile, bx, by, box) =>
+    Math.abs((tile.x + tile.s / 2) - (bx + box / 2)) < 1e-9 && Math.abs((tile.y + tile.s / 2) - (by + box / 2)) < 1e-9;
+  assert.ok(centred(t.find((x) => x.enemy), 5, 14, ENEMY_BOX), 'the minion sprite is centred on its box');
+  assert.ok(centred(t.find((x) => x.capsule), 5, 10, CAPSULE_BOX), 'and the pill on its catch box');
+});
+
+test('the bat and a brick sound like opposites: a low falling pong, a high rising ping', () => {
+  // (operator: "make sure to have distinct 'Ping' and 'Pong' sounds like Arkanoid does for the
+  // paddle and block impacts".) They were 300 Hz and 680 Hz, both falling square blips -- too alike
+  // to tell apart while the ball is moving. Pitch separation alone is weak on small speakers, so
+  // the SWEEP DIRECTION is opposite too, which survives them.
+  const [pFrom, pTo, , pWave] = SFX.paddle;
+  const [bFrom, bTo, , bWave] = SFX.brick;
+  assert.ok(pTo < pFrom, 'the bat FALLS');
+  assert.ok(bTo > bFrom, 'the brick RISES');
+  assert.ok(Math.log2(bFrom / pFrom) >= 2, `at least two octaves apart (${Math.log2(bFrom / pFrom).toFixed(1)})`);
+  assert.notEqual(pWave, bWave, 'and a different timbre, not just a different pitch');
+  const [hFrom] = SFX.brickhard;
+  assert.ok(hFrom > bFrom, 'a dearer brick rings higher still');
 });
