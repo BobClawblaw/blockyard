@@ -405,12 +405,18 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
   // overridden is named by the endpoint it actually answers on, which cannot be wrong. Keeping
   // the built-in label there would state something false about a node nobody said was BMC; the
   // fallback states only what was measured. Nodes nobody redirected keep their built-in name.
-  const fileLabel = Array.isArray(fileCfg.nodes) && fileCfg.nodes[0] && fileCfg.nodes[0].label;
+  const fileNode0 = Array.isArray(fileCfg.nodes) ? fileCfg.nodes[0] : null;
+  const fileLabel = fileNode0 && fileNode0.label;
+  // The address this node was already configured for, before the environment spoke. An override
+  // that names this same address has redirected nothing, so the built-in name still describes the
+  // node being polled and must stand.
+  const baseUrl = (fileNode0 && fileNode0.rpcUrl) || DEFAULTS.nodes[0].rpcUrl;
+  const movedNode = !!sentinels.nodeUrl && sentinels.nodeUrl !== baseUrl;
   // Guarded, because `nodes: []` is refused by validate() below with a sentence that names the
   // mistake, and reaching into nodes[0] before then would replace that sentence with a TypeError.
   if (cfg.nodes[0]) {
     if (sentinels.label) cfg.nodes[0].label = sentinels.label;
-    else if (cfg.nodes[0].__urlOverridden && !fileLabel) {
+    else if (movedNode && !fileLabel) {
       let host = cfg.nodes[0].rpcUrl;
       try { host = new URL(cfg.nodes[0].rpcUrl).host; } catch { /* validate() reports a bad URL */ }
       cfg.nodes[0].label = `node @ ${host}`;
