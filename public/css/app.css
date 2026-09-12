@@ -730,6 +730,15 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
 /* Three columns: the figures and the fee histogram, the time series, and the viewer with the age
    histogram tucked under it. The last is narrowest because the viewer is square -- its width is its
    height, which is the lever for keeping the page on one screen. */
+/* THE FEE HISTOGRAM FILLS THE COLUMN IT SITS IN (operator, repeatedly: "too much wasted space",
+   and the void under this card survived every other change). Measured at 2000px: its column held
+   385px against a 629px neighbour, so ~240px went spare -- while this chart, the one that most
+   rewards height, was a single spike squeezed into the shared 130px default. It is the only chart
+   given its own height, because it is the only one with a column to fill.
+   `clamp` rather than a flat value: at narrower windows the figures above it fall back to one
+   column and grow tall by themselves, and a fixed 300px would then push the page off the screen. */
+#mpHistChart { height: clamp(130px, 26vh, 300px); }
+
 .mpcols { grid-column: 1 / -1; display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(300px, 0.45fr);
   gap: 12px; align-items: start; }
@@ -864,6 +873,16 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
    narrower than its contents, so wrap had nothing to act on and `min-width: 0` was moot with
    shrinking switched off. Allowed to shrink, the header narrows it and its three parts wrap. */
 .card:has(> .treemapwrap.sq) > h3 .viewer-ctl { flex: 0 1 auto; flex-wrap: wrap; row-gap: 4px; min-width: 0; }
+/* ...and on a NARROW viewer card the countdown goes, rather than the row becoming three rows.
+   Measured at a 358px card: the strip wrapped into mode / countdown / button on separate lines and
+   stood the header 71px tall, pushing the picture down. Wrapping is not overflow, so the spill
+   check called it clean -- it was not. Without the countdown the toggle and the button sit beside
+   the title in ~324px of a 330px box, which is one row again. The countdown is the least
+   load-bearing thing in the row: the viewer refreshes itself regardless, and the button says so. */
+.card:has(> .treemapwrap.sq) { container-type: inline-size; }
+@container (max-width: 430px) {
+  .card:has(> .treemapwrap.sq) > h3 .viewer-ctl .refresh-in { display: none; }
+}
 .card:has(> .treemapwrap.sq) > .note { flex: 0 1 auto; min-height: 0; overflow: hidden; }
 /* The wrapper keeps its OWN aspect-ratio and full width from the base rule.
    An earlier cut set width:auto here to centre it; the canvas inside is
