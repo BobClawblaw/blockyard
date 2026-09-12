@@ -573,17 +573,45 @@ export class NodeMonitor extends EventEmitter {
     return { ok: true, mempool: this.state.mempoolDist?.count ?? 0 };
   }
 
+  // COINSTATS IS AN INDEX, AND WITHOUT IT THE SUMMARY IS A FULL SCAN (2026-09-11, pointing this
+  // app at Bitcoin Core v31.99 for the first time). `gettxoutsetinfo` with no argument means
+  // hash_type "hash_serialized_3", which walks the whole UTXO set: measured 41.47 s on Core with
+  // 165.2 M UTXOs, against 0.003 s for "muhash" and 0.002 s for the bare call on the bmc node.
+  // One 41 s call in a lane that holds one request at a time is not one slow poll: it poisoned the
+  // latency average, stretched every tier's cadence (60 s -> 75 s), dropped 43 polls as stale, and
+  // switched off coinbase attribution and the block template with it -- while the page told the
+  // operator the NODE was slow, which was false. So the hash type is always explicit.
+  //
+  // "muhash" is answered from the coinstats index on both node types and keeps the three fields
+  // this app records (txouts, total_amount, muhash). Where that index is absent the same call is a
+  // full scan again, so a node that says so in getindexinfo is not asked at all: the UTXO figures
+  // read as unknown (the panel already draws "–") and the reason is stated, which is cheaper and
+  // more honest than 41 s of someone else's node every minute.
+  utxoStatsWanted() {
+    const ix = this.state.indexes;
+    if (!ix || typeof ix !== 'object') return true;          // not known yet: ask once
+    const cs = ix.coinstatsindex;
+    if (cs === undefined) return true;                        // node does not report indexes at all
+    return !!cs?.synced;
+  }
+
   async tier_slow() {
     // The heavy reads: the UTXO-set summary, the indexes and the chain tx stats.
     // (The verbose mempool map moved to tier_pool on 2026-09-11.)
     const t0 = performance.now();
+    const wantUtxo = this.utxoStatsWanted();
     const m = await this.callList([
       { method: 'getindexinfo' },
-      { method: 'gettxoutsetinfo' },
+      ...(wantUtxo ? [{ method: 'gettxoutsetinfo', params: ['muhash'] }] : []),
       { method: 'getchaintxstats', params: [120] },
     ], { key: `${this.id}:slow`, priority: 5 });
     const ok = (k) => { const v = m.get(k); return v instanceof RpcError || v === undefined ? null : v; };
     this.state.indexes = ok('getindexinfo') ?? this.state.indexes;
+    if (this.utxoStatsWanted()) this.clearQuality('utxo-unindexed');
+    else {
+      this.flagQuality('utxo-unindexed', 'UTXO-set figures (coins, total amount, muhash) are not read from this node: it reports no synced coinstatsindex, and without that index gettxoutsetinfo walks the whole UTXO set -- measured at 41 s on a 165 M-output chain, on an RPC server that answers one request at a time. Start the node with -coinstatsindex to have them; until then they are shown as unknown rather than bought at that price', 'info');
+      this.state.utxo = null;
+    }
     const txo = ok('gettxoutsetinfo');
     if (txo) this.state.utxo = txo;
     const stats = ok('getchaintxstats');
