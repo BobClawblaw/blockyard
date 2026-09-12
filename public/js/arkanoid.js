@@ -68,6 +68,16 @@ export const CAPSULE_COLOR = Object.freeze({
   laser: '#ef5a5a', enlarge: '#4d7cff', catch: '#2ecc8f', slow: '#f7931a',
   disrupt: '#3ec9ff', player: '#b07cff', break: '#e8eefc',
 });
+// EACH CAPSULE HAS ITS OWN SILHOUETTE, not just its own colour (operator, 2026-09-12: "Blockanoid
+// needs unique block graphics and styling for each of the different powerups that drop down").
+// Colour alone is a poor signal here: the capsule is small, it is moving, and roughly one player in
+// twelve cannot separate the red from the green at all. So SHAPE carries the meaning and colour
+// only reinforces it -- the seven differ in part count, height and profile, and stay readable in
+// monochrome. `trim` is the glyph sitting on the body.
+export const CAPSULE_TRIM = Object.freeze({
+  laser: '#ffd0c4', enlarge: '#cfe0ff', catch: '#d8ffe9', slow: '#ffe0b0',
+  disrupt: '#d6f4ff', player: '#ecdcff', break: '#9fb3d9',
+});
 export const CAPSULE_LETTER = Object.freeze({
   laser: 'L', enlarge: 'E', catch: 'C', slow: 'S', disrupt: 'D', player: 'P', break: 'B',
 });
@@ -452,6 +462,76 @@ export function step(g, dtMs) {
 }
 
 /**
+ * ONE CAPSULE, AS SEVERAL TILES -- its own little machine rather than a coloured slab.
+ *
+ * Pure, and separate from tiles(), so the seven silhouettes can be asserted without a canvas. Each
+ * is built from parts offset inside the capsule's own footprint (CAPSULE_S wide), with `floor`
+ * lifting a glyph to stand ON the body. Deliberately different part counts and heights:
+ *
+ *   laser   two cannons standing tall        slow     the only HOLLOW one (a wire box)
+ *   enlarge the flattest, with end caps      disrupt  three small spheres in a row
+ *   catch   a ball cradled between posts     player   the tallest: a tower with a bead on top
+ *   break   a doorway: two posts and a lintel, and the only one with no full-width base
+ */
+export function capsuleTiles(c) {
+  const k = c.kind;
+  const body = CAPSULE_COLOR[k] ?? '#e8eefc';
+  const trim = CAPSULE_TRIM[k] ?? '#ffffff';
+  const W = CAPSULE_S;
+  const id = (n) => `cap${c.id}${n}`;
+  const at = (n, dx, dy, s, tall, color, extra = {}) =>
+    ({ txid: id(n), x: c.x + dx, y: c.y + dy, s, tall, color, capsule: true, ...extra });
+
+  switch (k) {
+    case 'laser':                                   // twin cannons
+      return [
+        at('b', 0, 0.16, W, 0.26, body),
+        at('l', 0.10, 0.24, 0.20, 0.52, trim, { floor: 0.26 }),
+        at('r', 0.58, 0.24, 0.20, 0.52, trim, { floor: 0.26 }),
+      ];
+    case 'enlarge':                                 // the flattest, stretched at both ends
+      return [
+        at('b', 0, 0.22, W, 0.16, body),
+        at('l', -0.02, 0.18, 0.18, 0.34, trim, { floor: 0.16 }),
+        at('r', 0.72, 0.18, 0.18, 0.34, trim, { floor: 0.16 }),
+      ];
+    case 'catch':                                   // a ball cradled between two posts
+      return [
+        at('b', 0, 0.18, W, 0.20, body),
+        at('l', 0.02, 0.22, 0.14, 0.38, body, { floor: 0.20 }),
+        at('r', 0.72, 0.22, 0.14, 0.38, body, { floor: 0.20 }),
+        at('o', 0.26, 0.24, 0.38, 0.38, trim, { floor: 0.20, sphere: true }),
+      ];
+    case 'slow':                                    // the only hollow one
+      return [
+        at('w', 0, 0.10, W, 0.44, body, { wire: body }),
+        at('o', 0.32, 0.30, 0.26, 0.26, trim, { floor: 0.10, sphere: true }),
+      ];
+    case 'disrupt':                                 // three balls
+      return [
+        at('b', 0, 0.22, W, 0.16, body),
+        at('1', 0.04, 0.26, 0.24, 0.24, trim, { floor: 0.16, sphere: true }),
+        at('2', 0.33, 0.26, 0.24, 0.24, trim, { floor: 0.16, sphere: true }),
+        at('3', 0.62, 0.26, 0.24, 0.24, trim, { floor: 0.16, sphere: true }),
+      ];
+    case 'player':                                  // the tallest: a tower with a bead on top
+      return [
+        at('b', 0, 0.18, W, 0.20, body),
+        at('c', 0.32, 0.22, 0.26, 0.62, body, { floor: 0.20 }),
+        at('o', 0.34, 0.24, 0.22, 0.22, trim, { floor: 0.82, sphere: true }),
+      ];
+    case 'break':                                   // a doorway, and no full-width base
+      return [
+        at('l', 0.02, 0.20, 0.20, 0.58, body),
+        at('r', 0.68, 0.20, 0.20, 0.58, body),
+        at('t', 0, 0.20, W, 0.16, trim, { floor: 0.58 }),
+      ];
+    default:
+      return [at('b', 0, 0.16, W, 0.32, body)];
+  }
+}
+
+/**
  * The board as tiles for the engine. A brick is exactly one grid cell, so a brick IS a tile -- the
  * same reason Blockout needed no translation layer. Vaus turns red while the laser is up, so the
  * bat itself says what it can do rather than only the HUD saying it.
@@ -468,9 +548,7 @@ export function tiles(g) {
   for (let i = 0; i < Math.round(p.w); i++) {
     out.push({ txid: `pad${i}`, x: p.x + i, y: PADDLE_Y, s: 1, tall: PADDLE_H, color: padColor, paddle: true });
   }
-  for (const c of g.capsules) {
-    out.push({ txid: `cap${c.id}`, x: c.x, y: c.y, s: CAPSULE_S, tall: 0.42, color: CAPSULE_COLOR[c.kind], capsule: true });
-  }
+  for (const c of g.capsules) out.push(...capsuleTiles(c));
   for (const z of g.bolts) {
     out.push({ txid: `bolt${z.id}`, x: z.x - 0.09, y: z.y, s: 0.18, tall: 0.7, color: BOLT_COLOR, bolt: true });
   }

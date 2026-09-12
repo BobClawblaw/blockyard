@@ -409,7 +409,17 @@
           <h3>Score</h3>
           <div class="tetstats" id="baStats"></div>
           <h3>Capsules</h3>
-          <div class="tetkeys">L laser · E wide · C catch · S slow · D three balls · P a life · B skip the wall</div>
+          <!-- Each capsule has its own SHAPE on the court, not just its own colour, so the legend
+               names the shape too -- the swatch is a class, never a style attribute (CSP). -->
+          <ul class="caplegend">
+            <li><i class="capsw cap-laser">L</i><b>laser</b><span>twin cannons</span></li>
+            <li><i class="capsw cap-enlarge">E</i><b>wide</b><span>flat bar, capped ends</span></li>
+            <li><i class="capsw cap-catch">C</i><b>catch</b><span>ball in a cradle</span></li>
+            <li><i class="capsw cap-slow">S</i><b>slow</b><span>hollow frame</span></li>
+            <li><i class="capsw cap-disrupt">D</i><b>three balls</b><span>three beads</span></li>
+            <li><i class="capsw cap-player">P</i><b>a life</b><span>tall tower</span></li>
+            <li><i class="capsw cap-break">B</i><b>skip the wall</b><span>a doorway</span></li>
+          </ul>
           <h3>Keys</h3>
           <div class="tetkeys">move the mouse over the court, or ← → / A D · space or click serves · ↑ or right-click fires · P pause · Enter play</div>
           <h3>Switches</h3>

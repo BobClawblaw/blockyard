@@ -11,7 +11,7 @@ import {
   LEVELS, CAPSULES, CAPSULE_POINTS, GOLD, SILVER,
   newGame, advance, step, movePaddle, nudge, launch, fire, tiles, remaining, powers,
   speed, resetBall, resetVaus, setOptions, breakable, silverHits, capsuleFor, hash01,
-  layoutFor, applyCapsule,
+  layoutFor, applyCapsule, capsuleTiles,
 } from '../public/js/arkanoid.js';
 
 /** Put a ball just under a brick, travelling up hard enough to reach it in one step. */
@@ -280,6 +280,55 @@ test('the tiles for the engine: a brick IS a grid cell, and every colour is a he
   assert.ok(t.find((x) => x.ball)?.sphere === true, 'and so is the ball');
   assert.ok(t.every((x) => /^#[0-9a-f]{6}$/i.test(x.color)), 'every colour is a six-digit hex, as the engine requires');
   assert.ok(t.every((x) => x.x >= -0.5 && x.x <= COLS && x.y >= -1 && x.y <= ROWS), 'and everything is on the board');
+});
+
+test('every capsule has its OWN silhouette, not just its own colour', () => {
+  // (operator, 2026-09-12: "Blockanoid needs unique block graphics and styling for each of the
+  // different powerups that drop down".) Colour alone is a poor signal on a small moving object,
+  // and useless to a colourblind player, so the shapes must differ in a way that survives
+  // monochrome. This asserts that as a property rather than trusting my eye.
+  const sig = (kind) => {
+    const parts = capsuleTiles({ id: 1, kind, x: 3, y: 9 });
+    // a shape signature that ignores colour entirely: part count, and each part's box and flags
+    return JSON.stringify(parts
+      .map((p) => [+(p.x - 3).toFixed(2), +(p.y - 9).toFixed(2), p.s, p.tall, +(p.floor ?? 0), !!p.sphere, !!p.wire])
+      .sort());
+  };
+  const sigs = new Map();
+  for (const kind of CAPSULES) {
+    const s = sig(kind);
+    assert.ok(!sigs.has(s), `${kind} and ${sigs.get(s)} are the same shape: colour is doing all the work`);
+    sigs.set(s, kind);
+  }
+  assert.equal(sigs.size, CAPSULES.length, 'all seven are distinct in monochrome');
+
+  // and each is well formed: inside its own footprint, real hexes, its own tile ids
+  for (const kind of CAPSULES) {
+    const parts = capsuleTiles({ id: 42, kind, x: 3, y: 9 });
+    assert.ok(parts.length >= 2, `${kind} is built from several parts, not one slab`);
+    const ids = parts.map((p) => p.txid);
+    assert.equal(new Set(ids).size, ids.length, `${kind}: every part has its own id, or the engine's paint order collapses them`);
+    assert.ok(ids.every((i) => i.startsWith('cap42')), `${kind}: parts belong to their capsule`);
+    for (const p of parts) {
+      assert.match(p.color, /^#[0-9a-f]{6}$/i, `${kind}: every colour is a six-digit hex`);
+      assert.ok(p.s > 0 && p.s <= 1, `${kind}: a part stays within a grid cell`);
+      assert.ok(p.x >= 3 - 0.1 && p.x + p.s <= 3 + 1.05, `${kind}: stays inside its own footprint (hit box is ${0.9})`);
+      assert.equal(p.capsule, true, `${kind}: parts are still flagged as capsule`);
+    }
+  }
+
+  // the distinguishing features, named individually so a redesign cannot quietly lose one
+  const has = (kind, pred) => capsuleTiles({ id: 1, kind, x: 0, y: 0 }).some(pred);
+  assert.ok(has('slow', (p) => p.wire), 'slow is the hollow one');
+  assert.ok(!has('laser', (p) => p.wire), 'and the only hollow one');
+  assert.equal(capsuleTiles({ id: 1, kind: 'disrupt', x: 0, y: 0 }).filter((p) => p.sphere).length, 3,
+    'disrupt shows three balls, because that is what it gives you');
+  assert.ok(has('catch', (p) => p.sphere), 'catch cradles a ball');
+  const top = (kind) => Math.max(...capsuleTiles({ id: 1, kind, x: 0, y: 0 }).map((p) => (p.floor ?? 0) + p.tall));
+  assert.ok(top('player') > top('enlarge'), 'the extra life stands tallest');
+  assert.ok(top('enlarge') < top('laser'), 'and the wide bar is the flattest');
+  assert.ok(!capsuleTiles({ id: 1, kind: 'break', x: 0, y: 0 }).some((p) => (p.floor ?? 0) === 0 && p.s === 0.9),
+    'break is a doorway: no full-width base');
 });
 
 test('Vaus reports what it is carrying, and a cleared wall advances', () => {

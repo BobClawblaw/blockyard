@@ -1520,6 +1520,22 @@ body { font-variant-numeric: tabular-nums; }
 .treemapwrap.tetnext { position: relative; width: 132px; aspect-ratio: 1 / 1; margin-bottom: 10px; }
 .tetnext canvas { width: 100%; height: 100%; display: block; border-radius: var(--radius-sm); }
 .tetkeys { font-size: 11px; color: var(--fg-dim); line-height: 1.7; margin-bottom: 10px; }
+/* THE CAPSULE LEGEND. Each capsule has its own silhouette on the court (arkanoid.js
+   capsuleTiles), so the legend names the shape as well as the letter -- colour is the last of the
+   three cues, not the only one. Swatch colours match CAPSULE_COLOR in arkanoid.js. */
+.caplegend { list-style: none; margin: 0 0 10px; padding: 0; font-size: 11px; }
+.caplegend li { display: grid; grid-template-columns: 18px auto 1fr; gap: 6px; align-items: baseline; padding: 1.5px 0; }
+.caplegend b { font-weight: 600; color: var(--fg); }
+.caplegend span { color: var(--fg-faint); text-align: right; }
+.capsw { display: inline-block; width: 18px; font-style: normal; font-family: var(--mono); font-size: 10px;
+  font-weight: 700; text-align: center; border-radius: 3px; color: #06080d; }
+.cap-laser { background: #ef5a5a; }
+.cap-enlarge { background: #4d7cff; color: #eaf1ff; }
+.cap-catch { background: #2ecc8f; }
+.cap-slow { background: #f7931a; }
+.cap-disrupt { background: #3ec9ff; }
+.cap-player { background: #b07cff; }
+.cap-break { background: #e8eefc; }
 .tetscores { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
 .tetscores td, .tetscores th { padding: 3px 4px; text-align: right; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
 .tetscores th { color: var(--fg-faint); font-weight: 500; text-transform: uppercase; font-size: 9.5px; letter-spacing: .06em; }
