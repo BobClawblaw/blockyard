@@ -866,6 +866,36 @@ export function buildScene(tiles, o = {}) {
         out.push({ txid: t.txid, face: 'rim', points: E, fill: 'rgba(0,0,0,0)', stroke: lift(c, 0.7, round3(0.7 * a)) });
       }
     }
+    // THE FINISH (operator, 2026-09-12: "consider neon-izing each of teh blocks, and adding an
+    // optional specular metallic sheen to the blocks. Have it toggle. I want to be able to apply
+    // the sheen onto simple cube mode if I want"). Both are laid over the top face every tile
+    // has, so they work at every level of detail. What was tried and rejected before is recorded
+    // at the head of this section -- diagonal streaks -- and neither of these is a streak.
+    if (o.sheen === true) {
+      // a specular band hugging the LIT edge of the top: the far edge under the upper-left lamp,
+      // the near edge when the light sits at the viewer. Two nested bands, the inner one hotter:
+      // a metallic gleam along an edge, not a gloss stripe across the face.
+      const [BL, BR, TR, TL] = f.top;
+      const litFar = !viewerLit;
+      const e0 = litFar ? (flip > 0 ? TL : BL) : (flip > 0 ? BL : TL);
+      const e1 = litFar ? (flip > 0 ? TR : BR) : (flip > 0 ? BR : TR);
+      const o0 = litFar ? (flip > 0 ? BL : TL) : (flip > 0 ? TL : BL);
+      const o1 = litFar ? (flip > 0 ? BR : TR) : (flip > 0 ? TR : BR);
+      const L = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
+      const band = (k) => [e0, e1, L(e1, o1, k), L(e0, o0, k)];
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.26), fill: lift(c, 0.85, round3(0.26 * lit * a)) });
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.11), fill: lift(c, 1.0, round3(0.42 * lit * a)) });
+    }
+    if (o.neon === true) {
+      // every edge the camera sees, stroked in the block's own colour lit up: a wide faint halo
+      // under a thin bright line, the way a neon tube reads. `always`: drawn even with the dark
+      // seam (Stone edges) switched off, because it is the seam's replacement, not its companion.
+      const halo = lift(c, 0.6, round3(0.22 * a)), tube = lift(c, 0.9, round3(0.95 * a));
+      for (const poly of [f.top, ...f.sides.map((sd) => sd.points)]) {
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 4.5, always: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 1.4, always: true });
+      }
+    }
     // the lock: the whole cell flashes white for a moment, then settles
     if (pulse > 0.03) out.push({ txid: t.txid, face: 'glow', points: f.top, fill: `rgba(${fxv.color.join(',')},${round3(0.5 * pulse * a)})` });
     if (fxv.outline > 0.03) {

@@ -133,16 +133,23 @@ function sizeCanvas(canvas) {
 // board costs nothing between them. Only with a real DOM (the unit harness and
 // the DOM stub never get one), never under prefers-reduced-motion, never while
 // a transition runs, and it retries later while the board is not on screen.
-const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600, pulse: 8000 };
+const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600, pulse: 6000 };
 const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from
 // one end to the other leaving a electric blue tint on the yellow line that starts fading back to
-// normal yellow after 3 seconds"). Its life: travel, then the tint SITS for three seconds, then it
-// bleeds back to yellow. 0.3 of 8000 ms is a 2.4 s run end to end.
-const PULSE_TRAVEL = 0.3;
-const PULSE_HOLD_MS = 3000;
-const PULSE_FADE_MS = 2500;
+// normal yellow after 3 seconds"), then, watching it: "the blue line just changes color back to
+// yellow, it doesn't fade out along a path from left to right. Shorten the blue tail ... it should
+// fade out blue and fade back into yellow".
+//
+// So the tint is a TAIL, not a timer. The first cut held every segment blue for three seconds
+// after the head passed -- and the head crosses the line in under three, so the whole line went
+// blue together and snapped back together. Now the blue is strongest at the head and fades to
+// yellow over the quarter of the line behind it, and the head takes most of the effect to cross
+// (0.8 of 6000 ms) so the tail can be watched sliding along. The head runs on past the far end
+// until its tail has left too, which is why PULSE_TRAVEL is less than 1.
+const PULSE_TRAVEL = 0.8;
+const PULSE_TAIL = 0.25;
 // A board with a price line is not a grid to sweep across. The straight-front effects (outline,
 // scan, tide), the light cycles and the lightning ball all travel the FLOOR, which on the candle
 // board is empty space -- which is what "through space on an invisible grid" describes. Where a
@@ -875,27 +882,32 @@ function priceLine(ctx, view, axes) {
     ctx.lineWidth = lw;
     return;
   }
-  // THE PULSE RUNS THE WIRE (operator, 2026-09-12: "travel the yellow line from one end to the
-  // other leaving a electric blue tint on the yellow line that starts fading back to normal yellow
-  // after 3 seconds"). The tint is per SEGMENT, by how long ago the head went past it: it holds
-  // for PULSE_HOLD_MS and only then bleeds back to yellow -- so the charge is left ON the line,
-  // not drawn across the floor beside it.
+  // THE PULSE RUNS THE WIRE, trailing a short tail (operator, 2026-09-12: "it should fade out
+  // blue and fade back into yellow"). The tint is per SEGMENT, by how far behind the head it
+  // sits: full blue at the head, eased down to yellow a quarter of the line back -- so the charge
+  // is left ON the line and seen leaving it, left to right, rather than drawn across the floor.
   const n = pts.length - 1;
-  const headAt = Math.min(1, fx.u / PULSE_TRAVEL);           // 0..1 along the line
+  const headAt = fx.u / PULSE_TRAVEL;                        // 0..1 along the line, then past it
   const BLUE = [110, 200, 255];
+  const HOT = [255, 255, 215];                               // the flash: whiter than the wire
   for (const [w, c, a] of CORE) {
     ctx.lineWidth = lw * w;
     for (let i = 0; i < n; i++) {
       const at = n > 1 ? i / (n - 1) : 0;
       const passed = headAt - at;
-      let tint = 0;
-      if (passed >= 0) {
-        const ageMs = passed * PULSE_TRAVEL * fx.ms;
-        tint = ageMs < PULSE_HOLD_MS ? 1 : Math.max(0, 1 - (ageMs - PULSE_HOLD_MS) / PULSE_FADE_MS);
-      }
-      const r = Math.round(c[0] + (BLUE[0] - c[0]) * tint);
-      const g = Math.round(c[1] + (BLUE[1] - c[1]) * tint);
-      const b = Math.round(c[2] + (BLUE[2] - c[2]) * tint);
+      // eased, so the tail fades rather than steps: blue right behind the head, most of the
+      // yellow back by half the tail's length
+      const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
+      // ...and a FLASH behind the tail (operator: "Maybe even a higher color pulse for a brighter
+      // yellow before it bounces back to normal yellow"): as the blue lets go, the wire overshoots
+      // to a hotter, whiter yellow and settles back. A sine bump over the stretch just past the
+      // tail, scaled by how little blue is left so the two never fight.
+      const past = passed - PULSE_TAIL * 0.55;
+      const hot = past > 0 && past < PULSE_TAIL ? Math.sin((past / PULSE_TAIL) * Math.PI) * (1 - tint) : 0;
+      const mix = (i) => c[i] + (BLUE[i] - c[i]) * tint + (HOT[i] - c[i]) * hot * 0.85;
+      const r = Math.round(Math.min(255, mix(0)));
+      const g = Math.round(Math.min(255, mix(1)));
+      const b = Math.round(Math.min(255, mix(2)));
       ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
       ctx.beginPath();
       ctx.moveTo(pts[i].x, pts[i].y);
@@ -1093,6 +1105,62 @@ export function farGalaxies(pw, ph, seed = 23) {
   return out;
 }
 
+/**
+ * DUST LANES. The most recognisable thing about a real spiral after the arms themselves: a dark
+ * ribbon runs along the INNER (concave) edge of each arm, where the gas is thickest and hides
+ * the stars behind it. Drawn over the nebulae and under the stars, as heaps of faint black
+ * ellipses -- the same layered-fill technique everything else in this sky uses, for the same
+ * canvas-rules reason. Polar, so they turn with the disc.
+ */
+export function dustLanes(pw, ph, at = GALAXY_AT_DEFAULT, seed = 17) {
+  let s = seed >>> 0;
+  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const { maxR, inner } = galaxyGeometry(pw, ph, at);
+  const out = [];
+  for (let i = 0; i < 14; i++) {
+    const t = 0.06 + 0.5 * rnd();
+    const rad = inner + (maxR - inner) * t;
+    const arm = Math.floor(rnd() * GALAXY_ARMS) * ((Math.PI * 2) / GALAXY_ARMS);
+    // a little INSIDE the arm's centre line: the concave edge, trailing the rotation
+    const ang = arm + Math.log(rad / inner) / GALAXY_TWIST - 0.16 + (rnd() - 0.5) * 0.08;
+    const size = maxR * (0.05 + 0.06 * rnd());
+    const puffs = [];
+    const n = 12 + Math.floor(rnd() * 8);
+    for (let k = 0; k < n; k++) {
+      puffs.push({ dx: (rnd() - 0.5) * size * 2.6, dy: (rnd() - 0.5) * size * 0.8, rx: size * (0.25 + 0.4 * rnd()), sq: 0.5 + 0.5 * rnd(), a: 0.05 + 0.06 * rnd() });
+    }
+    out.push({ gr: rad, ga: ang, puffs });
+  }
+  return out;
+}
+
+/**
+ * STAR CLUSTERS. Globular clusters live in the halo: tight, ancient knots of a few hundred
+ * thousand stars, seen as a dense speck with a fuzzy edge. Six of them, out past the arms, each
+ * a heap of tiny warm-white points crowded to the middle. Drawn over the stars, turning with the
+ * disc, and NOT twinkling -- a cluster is too far for its stars to scintillate one by one.
+ */
+export function starClusters(pw, ph, at = GALAXY_AT_DEFAULT, seed = 29) {
+  let s = seed >>> 0;
+  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const { maxR } = galaxyGeometry(pw, ph, at);
+  const out = [];
+  for (let i = 0; i < 6; i++) {
+    const rad = maxR * (0.28 + 0.6 * rnd());
+    const ang = rnd() * Math.PI * 2;
+    const size = 6 + rnd() * 9;
+    const stars = [];
+    const n = 26 + Math.floor(rnd() * 22);
+    for (let k = 0; k < n; k++) {
+      // crowded to the middle: radius drawn as the square of a uniform, angle uniform
+      const rr = size * rnd() * rnd(), aa = rnd() * Math.PI * 2;
+      stars.push({ dx: Math.cos(aa) * rr, dy: Math.sin(aa) * rr, r: 0.35 + rnd() * 0.5, b: 0.35 + rnd() * 0.5 });
+    }
+    out.push({ gr: rad, ga: ang, size, stars });
+  }
+  return out;
+}
+
 /** Where the disc sits and how big it is. One source, so the renderer and the tests agree. */
 export function galaxyGeometry(pw, ph, at = GALAXY_AT_DEFAULT) {
   const [fx, fy, reach, oversample] = GALAXY_PLACEMENTS[at] ?? GALAXY_PLACEMENTS[GALAXY_AT_DEFAULT];
@@ -1150,6 +1218,7 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
         // OLD STARS: a bulge is warm. The colour of a real spiral is not one colour -- its middle
         // is yellow with age and its arms are blue with youth, and giving each population its own
         // temperature is most of what makes the picture read as a galaxy rather than a pattern.
+        star.c0 = star.c;                                 // the neutral colour, for the switch
         star.c = tint < 0.55 ? [255, 214, 150] : [255, 234, 196];
       } else if (roll < 0.78) {
         const t = Math.pow(rnd(), 0.62);                 // crowded toward the middle
@@ -1161,6 +1230,7 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
         ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() + rnd() + rnd() - 1.5) * width;
         lit = 1.2 - 0.35 * (rad / maxR);
         // YOUNG STARS: the arms are where stars are born, and they burn blue-white
+        star.c0 = star.c;
         star.c = tint < 0.35 ? [160, 198, 255] : tint < 0.72 ? [205, 224, 255] : [242, 246, 255];
       } else {
         // BETWEEN THE ARMS (operator, 2026-09-12: "more stars between arms. I needs to look
@@ -1218,13 +1288,15 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
       nebulae: galaxy ? nebulaClouds(pw, ph, galaxy === true ? GALAXY_AT_DEFAULT : galaxy) : null,
       // and the deep field behind everything, galaxy or not
       far: farGalaxies(pw, ph),
+      dust: galaxy ? dustLanes(pw, ph, galaxy === true ? GALAXY_AT_DEFAULT : galaxy) : null,
+      clusters: galaxy ? starClusters(pw, ph, galaxy === true ? GALAXY_AT_DEFAULT : galaxy) : null,
     };
     STARS.set(key, f);
   }
   ctx.__starBright = bright;
   const spin = galaxy ? now * GALAXY_SPIN : 0;
   // the deep field first: distant galaxies, small and still
-  if (f.far && typeof ctx.ellipse === 'function') {
+  if (f.far && opts.galaxies !== false && typeof ctx.ellipse === 'function') {
     for (const g of f.far) {
       for (const [k, a] of [[1, 0.035], [0.72, 0.05], [0.48, 0.08], [0.22, 0.16]]) {
         ctx.fillStyle = `rgba(${g.tint},${(a * bright).toFixed(3)})`;
@@ -1235,7 +1307,7 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
     }
   }
   // then the gas: the stars stand IN it, not behind it
-  if (galaxy && f.nebulae && typeof ctx.ellipse === 'function') {
+  if (galaxy && f.nebulae && opts.nebulae !== false && typeof ctx.ellipse === 'function') {
     for (const c of f.nebulae) {
       const ang = c.ga + spin;
       const nx = f.cx + c.gr * Math.cos(ang);
@@ -1248,6 +1320,20 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
       }
     }
   }
+  // the dust over the gas and under the stars: dark ribbons on the inner edge of each arm
+  if (galaxy && f.dust && opts.dust !== false && typeof ctx.ellipse === 'function') {
+    for (const d of f.dust) {
+      const ang = d.ga + spin;
+      const dx0 = f.cx + d.gr * Math.cos(ang), dy0 = f.cy + d.gr * GALAXY_FLATTEN * Math.sin(ang);
+      for (const p of d.puffs) {
+        ctx.fillStyle = `rgba(0,0,0,${p.a.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(dx0 + p.dx, dy0 + p.dy * GALAXY_FLATTEN, p.rx, p.rx * GALAXY_FLATTEN * p.sq, ang, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  const colours = opts.starColours !== false, glints = opts.starGlints !== false;
   for (const s of f.stars) {
     const px = galaxy ? f.cx + s.gr * Math.cos(s.ga + spin) : s.x;
     const py = galaxy ? f.cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga + spin) : s.y;
@@ -1255,8 +1341,8 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
     // screen at any moment, and the cheapest thing to do with those stars is nothing
     if (galaxy && (px < -4 || px > pw + 4 || py < -4 || py > ph + 4)) continue;
     const a = starAlpha(s, now) * (ctx.__starBright ?? 1);
-    const c = s.c.join(',');
-    if (s.big) {
+    const c = (colours || !s.c0 ? s.c : s.c0).join(',');
+    if (s.big && glints) {
       ctx.fillStyle = `rgba(${c},${(a * 0.12).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(px, py, s.r * 4, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = `rgba(${c},${(a * 0.5).toFixed(3)})`;
@@ -1268,6 +1354,20 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
     }
     ctx.fillStyle = `rgba(${c},${a.toFixed(3)})`;
     ctx.fillRect(px - s.r, py - s.r, s.r * 2, s.r * 2);
+  }
+  // the clusters last, over the field: dense specks with a fuzzy edge, steady (no twinkle)
+  if (galaxy && f.clusters && opts.clusters !== false) {
+    for (const k of f.clusters) {
+      const ang = k.ga + spin;
+      const kx = f.cx + k.gr * Math.cos(ang), ky = f.cy + k.gr * GALAXY_FLATTEN * Math.sin(ang);
+      if (kx < -30 || kx > pw + 30 || ky < -30 || ky > ph + 30) continue;
+      ctx.fillStyle = `rgba(255,240,215,${(0.05 * bright).toFixed(3)})`;
+      ctx.fillRect(kx - k.size, ky - k.size, k.size * 2, k.size * 2);
+      for (const q of k.stars) {
+        ctx.fillStyle = `rgba(255,244,222,${Math.min(1, q.b * bright).toFixed(3)})`;
+        ctx.fillRect(kx + q.dx - q.r, ky + q.dy - q.r, q.r * 2, q.r * 2);
+      }
+    }
   }
 }
 
@@ -1332,7 +1432,9 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
     // The seam's colour comes from the op, already scaled by the tile's
     // alpha, so an outline fades exactly as its tile does. A fixed colour
     // here is what left black frames hanging where departing blocks had been.
-    if (op.stroke && opts.edges) {
+    // `always`: an op whose stroke IS the point (the neon edge) draws whether or not the dark
+    // seam (Stone edges) is on -- it replaces the seam rather than accompanying it
+    if (op.stroke && (opts.edges || op.always)) {
       ctx.strokeStyle = op.stroke;
       if (op.lw) { const lw0 = ctx.lineWidth; ctx.lineWidth = lw0 * op.lw; ctx.stroke(); ctx.lineWidth = lw0; }
       else ctx.stroke();
@@ -1652,6 +1754,9 @@ export function render3d(canvas, cells, options = {}) {
     starsOn(opts),
     opts.seamAlpha, opts.facetPx, opts.crownPx, opts.dome, opts.idleFx !== false,
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
+    opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
+    opts.starColours !== false, opts.starGlints !== false,
+    opts.neon === true, opts.sheen === true,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;

@@ -27,6 +27,13 @@ export const DEFAULTS = Object.freeze({
     idleFx: true,         // the effects at rest: ripples, light cycles, the lightning ball
     edges: true,          // the dark seam around each stone
     grid: true,           // the neon grid on the board
+    // THE FINISH (operator, 2026-09-12: "consider neon-izing each of teh blocks, and adding an
+    // optional specular metallic sheen to the blocks. Have it toggle. I want to be able to apply
+    // the sheen onto simple cube mode if I want. think maximum configuration options"). Both
+    // opt-in: the shipped look is the deliberate one, these are finishes laid over it, and they
+    // work at every level of detail -- a Simple cube takes the sheen as well as a full one.
+    neon: false,          // the edges of every block stroked in its own colour, lit
+    sheen: false,         // a metallic highlight along the lit edge of each top face
     stars: false,         // opt-in: a star field twinkles, so the board never stops repainting
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
     detail: 'full',       // 'full' | 'simple' | 'flat' -- facet and crown thresholds below
@@ -41,6 +48,15 @@ export const DEFAULTS = Object.freeze({
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
     galaxy: false,        // opt-in: the same stars laid on spiral arms, turning once a quarter hour
     galaxyAt: 'bottom-left',   // where its middle sits: behind the board, or any of the corners
+    // THE LAYERS OF THE SKY, each its own switch (operator, 2026-09-12: "We should have toggles for
+    // all these sub-options in preferences"). All on: they were asked for, and a feature shipped
+    // behind an off switch is not shipped.
+    nebulae: true,        // gas clouds on the arms
+    galaxies: true,       // distant galaxies in the deep field behind everything
+    dust: true,           // dark lanes along the inner edge of each arm
+    clusters: true,       // tight knots of stars out in the halo
+    colours: true,        // stars coloured by population: warm bulge, blue-white arms
+    glints: true,         // the halo and cross glint on the brightest stars
   }),
   // `glow` was here and is gone (operator, 2026-09-12: "on markets and price. we should never show
   // the grid glow. that's just terrible"). Never-show makes the switch a control nobody may use,
@@ -78,6 +94,8 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'Ripples, scans, light cycles and the lightning ball while the board rests' }),
       Object.freeze({ key: 'edges', label: 'Stone edges', kind: 'toggle', hint: 'The dark seam around each stone' }),
       Object.freeze({ key: 'grid', label: 'Neon grid', kind: 'toggle', hint: 'The glowing grid on the board' }),
+      Object.freeze({ key: 'neon', label: 'Neon blocks', kind: 'toggle', hint: 'Every block’s edges stroked in its own colour, lit. Works at any level of detail' }),
+      Object.freeze({ key: 'sheen', label: 'Metallic sheen', kind: 'toggle', hint: 'A specular highlight along the lit edge of each block’s top face. Works on Simple cubes too' }),
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'Stars behind the board. They twinkle, so the board keeps repainting while they are on' }),
       Object.freeze({
         key: 'detail', label: 'Level of detail', kind: 'choice', hint: 'Simpler cubes draw fewer polygons at the same size',
@@ -101,6 +119,12 @@ export const PANEL = Object.freeze([
         hint: 'Where its middle sits. A corner crowds the bright centre there and sweeps the arms across; behind the board shows the whole spiral',
         options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
+      Object.freeze({ key: 'nebulae', label: 'Nebulae', kind: 'toggle', hint: 'Clouds of gas along the spiral arms, in the colours of star-forming lanes' }),
+      Object.freeze({ key: 'dust', label: 'Dust lanes', kind: 'toggle', hint: 'Dark ribbons along the inner edge of each arm, the way a real spiral carries them' }),
+      Object.freeze({ key: 'clusters', label: 'Star clusters', kind: 'toggle', hint: 'Tight knots of stars out in the halo, turning with the galaxy' }),
+      Object.freeze({ key: 'galaxies', label: 'Distant galaxies', kind: 'toggle', hint: 'Other galaxies, small and faint and far, behind everything else' }),
+      Object.freeze({ key: 'colours', label: 'Star colours', kind: 'toggle', hint: 'Warm old stars in the middle, blue-white young ones in the arms. Off is one colour of starlight' }),
+      Object.freeze({ key: 'glints', label: 'Star glints', kind: 'toggle', hint: 'The halo and cross glint on the brightest stars' }),
       Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 8, step: 0.1, hint: 'How many stars, against the shipped number. High values are a lot of drawing on a big panel' }),
       Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
     ]),
@@ -283,6 +307,8 @@ export function spaceOptions(s) {
     shadows: sp.shadows,
     idleFx: sp.idleFx,
     grid: sp.grid,
+    neon: sp.neon,
+    sheen: sp.sheen,
     // `space` is the board STYLE (no deck texture, a translucent floor); `stars` is the sky. They
     // travel together here, which is the block-space board's shipped behaviour, but they are two
     // options now so the markets board can keep its style while turning its sky off.
@@ -296,6 +322,8 @@ export function spaceOptions(s) {
     starBrightness: n.sky.brightness,
     galaxy: n.sky.galaxy,
     galaxyAt: n.sky.galaxyAt,
+    nebulae: n.sky.nebulae, galaxies: n.sky.galaxies, dust: n.sky.dust, clusters: n.sky.clusters,
+    starColours: n.sky.colours, starGlints: n.sky.glints,
   };
   // the seam belongs to the Stone edges switch at every level of detail: a control that does
   // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
@@ -321,6 +349,8 @@ export function marketsOptions(s) {
     starBrightness: n.sky.brightness,
     galaxy: n.sky.galaxy,
     galaxyAt: n.sky.galaxyAt,
+    nebulae: n.sky.nebulae, galaxies: n.sky.galaxies, dust: n.sky.dust, clusters: n.sky.clusters,
+    starColours: n.sky.colours, starGlints: n.sky.glints,
     // never, at any setting: the halo under the grid lines is not wanted on this board
     neonHalo: 'rgba(0,0,0,0)',
     gridGlow: 'rgba(0,0,0,0)',

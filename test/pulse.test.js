@@ -56,7 +56,13 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   assert.ok(h.pending(), 'triggering woke the loop');
   h.step(1400);                                           // ...and this frame is 400 ms into it
   const after = h.ops.slice(before);
-  const blue = after.filter((o) => o.startsWith('set:strokeStyle=rgba(110,200,255'));
-  assert.ok(blue.length > 0, `at least one segment behind the head is stroked blue (${after.filter((o) => o.startsWith('set:strokeStyle')).slice(0, 6).join(' | ')})`);
+  // a TAIL, not a hold (operator: "it should fade out blue and fade back into yellow"): the segment
+  // just behind the head is bluer than yellow, and the blend is a gradient, so the exact head
+  // colour is not what to look for -- a stroke whose blue channel beats its red is
+  const tube = after.filter((o) => o.startsWith('set:strokeStyle=rgba(') && o.endsWith(',0.78)'))
+    .map((o) => o.match(/rgba\((\d+),(\d+),(\d+),/)).filter(Boolean).map((m) => m.slice(1, 4).map(Number));
+  assert.ok(tube.length >= 3, `the tube is stroked per segment (${tube.length})`);
+  assert.ok(tube.some(([r, , b]) => b > r), `a segment behind the head is tinted blue (${tube.map((c) => c.join('/')).join(' ')})`);
+  assert.ok(tube.some(([r, , b]) => r > b), 'and a segment ahead of it is still yellow: the tint is a tail, not the whole line');
   assert.ok(after.some((o) => o.startsWith('set:fillStyle=rgba(235,250,255')), 'and the head bead is drawn');
 });
