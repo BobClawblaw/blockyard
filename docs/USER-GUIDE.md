@@ -479,8 +479,9 @@ are the same stones, and the sky behind them is the same turning galaxy.
 | **P** or **Esc** | pause and resume |
 | **Enter** | start, or resume when paused |
 
-A neon-blue wireframe on the floor of the well shows where the falling piece will land.
-Cleared lines fly up off the top of the screen.
+A wireframe on the floor of the well shows where the falling piece will land — neon blue until
+you change it under **Display settings → Tetrust → Landing marker**. Cleared lines fly up off the
+top of the screen.
 
 **It pauses when you look away** — another browser tab, or another tab of this monitor —
 and waits on a **resume** button, so a game is never lost to reading the Mempool page.
@@ -753,6 +754,16 @@ way the page opens where you left it.
 
 ### Tetrust
 
-The game's own switches — **star field**, **spiral galaxy** and where its centre sits, **music**
-and **sound effects** — the same four that appear on the game's panel. What the sky is *made of*
-comes from the **Sky** tab.
+The game's own settings. Four of them — **star field**, **spiral galaxy**, **music** and **sound
+effects** — are the same switches that appear on the game's own panel, so a change in either place
+shows in both. The rest are here only:
+
+| setting | what it does |
+|---|---|
+| **Galaxy centre** | Where the spiral's nucleus sits on the panel: behind the title, or any corner. |
+| **Landing marker** | The colour of the wireframe showing where the falling piece will land. It has its own colour because the marker is drawn *instead of* a block rather than over one, so the neon finish below never touches it. |
+| **Neon pieces** | The pieces and the stack as dim solid bodies under lit tubes, the same finish as the Block space board. |
+| **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each piece's own colour, or all in one colour of your choosing, at the brightness you set. |
+
+What the sky is *made of* — density, brightness, nebulae, dust and the rest — comes from the
+**Sky** tab, which every board shares.

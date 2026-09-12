@@ -211,7 +211,7 @@ function draw(now = performance.now()) {
   const g = G.game;
   const well = el('tetWell');
   el('tetWellWrap')?.classList.toggle('idle', !g);   // the board is drawn when you hit play
-  if (well && g) board3d(well, [...tiles(g), ...driftTiles(G.drift, now)], opts(WELL));
+  if (well && g) board3d(well, [...tiles(g, tetrustOptions(loadSettings()).ghostColour), ...driftTiles(G.drift, now)], opts(WELL));
   // the preview only when the next piece changes: it is a second board, and redrawing it on
   // every key press was paying for two scenes per move
   const nk = g ? peekNext(g) : null;

@@ -490,9 +490,9 @@ test('the parse is memoised, and a write invalidates it', () => {
 test('tetrust: its own group, its own switches on the panel, and tetrustOptions carries the display sky when its stars are on', () => {
   // (operator, 2026-09-12: "Add teh starfield simulation as a toggle for teh game" ... "Tetris music
   // and sound effects ... Toggle for each in the game display")
-  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title');
+  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#3d8bff', music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title');
   const rows = PANEL.find((g) => g.group === 'tetrust')?.rows.map((r) => r.key);
-  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness']);
+  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness']);
   const off = tetrustOptions({ tetrust: { stars: false, galaxy: false, music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
   assert.equal(off.stars, false); assert.equal(off.galaxy, false, 'the game decides its own galaxy, not the Sky group'); assert.equal(off.music, false); assert.equal(off.sfx, true);
   const on = tetrustOptions({ tetrust: { stars: true, galaxyAt: 'top-right' }, sky: { galaxy: false, density: 4, galaxyAt: 'bottom-left', dust: false } });
@@ -518,5 +518,5 @@ test('the neon tubes are tunable: source, one colour (a hex, validated), brightn
   assert.equal(t.neon, true); assert.equal(t.neonSource, 'colour'); assert.equal(t.neonColour, '#123456'); assert.equal(t.neonBrightness, 0.2);
   assert.equal(tetrustOptions({ tetrust: { neonSource: 'piece' } }).neonSource, 'temperature', 'the piece\'s colour is the engine\'s "temperature" source');
   const colourRows = PANEL.flatMap((g) => g.rows.filter((r) => r.kind === 'colour').map((r) => `${g.group}.${r.key}`));
-  assert.deepEqual(colourRows, ['space.neonColour', 'tetrust.neonColour'], 'a colour control for each');
+  assert.deepEqual(colourRows, ['space.neonColour', 'tetrust.ghostColour', 'tetrust.neonColour'], 'a colour control for each, and one for the landing marker');
 });

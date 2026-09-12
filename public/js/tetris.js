@@ -191,9 +191,11 @@ export function hardDrop(g) {
  */
 // medium neon blue (operator, 2026-09-12: first "neon yellow wireframes", then "maybe medium neon
 // blue at the bottom instead of bright neon yellow for tetrust block landing locations")
+// The default. The colour is the CALLER's to choose (operator, 2026-09-12: "I want to be able to
+// set the ghost wireframe color") -- this file stays pure and knows nothing of the settings store.
 export const GHOST_WIRE = '#3d8bff';
 
-export function tiles(g) {
+export function tiles(g, wire = GHOST_WIRE) {
   const out = [];
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     const cell = g.board[y][x];
@@ -207,7 +209,7 @@ export function tiles(g) {
       // playfield, to show where the pieces are going to drop. The solid dark colored stuff is
       // too difficult to see"): the outline of a full cube, no fill, in a colour nothing else on
       // the board uses
-      cellsOf(c.kind, c.rot, c.x, gy).forEach(([x, y], i) => out.push({ txid: `g${i}`, x, y, s: 1, tall: 1, color: PIECES[c.kind].color, wire: GHOST_WIRE }));
+      cellsOf(c.kind, c.rot, c.x, gy).forEach(([x, y], i) => out.push({ txid: `g${i}`, x, y, s: 1, tall: 1, color: PIECES[c.kind].color, wire }));
     }
     // the falling piece carries the ids its cells will get when it locks (lock() hands them out in
     // cellsOf order from nextId), so locking is the same four tiles settling, not four vanishing

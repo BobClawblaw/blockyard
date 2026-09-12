@@ -29,6 +29,10 @@ All notable changes to this project are documented here. The format follows
   tubes can take the block's own colour or one colour of your choosing, at a brightness you set.
 - **A movable lamp**: `Light` chooses straight above (now the default for Block space), upper
   left, upper right, or from the viewer.
+- **The Tetrust landing marker's colour is a setting.** The wireframe showing where the falling
+  piece will land is drawn instead of a block rather than over one, so the neon finish never
+  applied to it and it stayed the shipped blue whatever else was changed; it has its own colour
+  now, and `tiles()` takes it as an argument so the rules file still knows nothing of the store.
 - **A tabbed Display settings panel** with a live preview that redraws on every change, and
   all-on / all-off for tabs that are only switches.
 - **Markets remembers its toolbar**: the exchange and the range are settings now, so the page

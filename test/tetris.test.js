@@ -143,6 +143,17 @@ test('the tiles for the engine: the stack in its colours, the piece standing tal
   const after = tiles(g).filter((x) => ['c1', 'c2', 'c3', 'c4'].includes(x.txid));
   assert.equal(after.length, 4); assert.ok(after.every((x) => x.tall === 1 && !x.piece), 'locked: the same four ids, settled');
   assert.equal(ghost.length, 4); assert.ok(ghost.every((x) => x.wire === GHOST_WIRE), 'the ghost is a neon wireframe, not a dark plate');
+  // (operator, 2026-09-12: "I want to be able to set the ghost wireframe color") -- the colour is
+  // the caller's, so tetris.js stays pure and the settings store never reaches in here. On a board
+  // of its own: by this point in the test the piece above has been dropped and locked, so `g.cur`
+  // is whatever spawned next.
+  const h = newGame(21);
+  h.board = empty();
+  h.cur = { kind: 'O', rot: 0, x: 4, y: 12 };
+  const pink = tiles(h, '#ff44cc').filter((x) => x.wire);
+  assert.equal(pink.length, 4); assert.ok(pink.every((x) => x.wire === '#ff44cc'), 'the caller chooses the marker colour');
+  assert.ok(pink.every((x) => x.color === PIECES.O.color), 'and the piece keeps its own colour underneath');
+  assert.ok(tiles(h).every((x) => !x.wire || x.wire === GHOST_WIRE), 'and the shipped blue is the default');
   assert.ok(ghost.every((x) => x.y < 12), 'below the piece, where it will land');
   assert.equal(previewTiles(peekNext(g)).length, 4);
   assert.ok(t.every((x) => x.x >= 0 && x.x < COLS && x.y >= 0 && x.y < ROWS), 'nothing outside the well');

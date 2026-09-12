@@ -99,6 +99,10 @@ export const DEFAULTS = Object.freeze({
     stars: true,          // the star field across the whole panel
     galaxy: true,         // the spiral galaxy in it
     galaxyAt: 'center',   // where its centre sits: behind the title
+    // the landing marker's colour (operator: "I want to be able to set the ghost wireframe
+    // color"). Its own setting, not the neon tubes': the wireframe is drawn instead of a block,
+    // so the neon finish never touches it.
+    ghostColour: '#3d8bff',
     music: true,          // the tune
     sfx: true,            // the effects: move, rotate, drop, clear, game over
     neon: false,          // neon tubes on the pieces and the stack
@@ -241,6 +245,7 @@ export const PANEL = Object.freeze([
         key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy’s centre sits on the panel: behind the title, or a corner',
         options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
+      Object.freeze({ key: 'ghostColour', label: 'Landing marker', kind: 'colour', hint: 'The wireframe on the floor of the well showing where the falling piece will land. Its own colour: the neon finish below never touches it, because the marker is drawn instead of a block rather than over one' }),
       Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'Korobeiniki, on oscillators' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Move, rotate, drop, clear, game over' }),
       Object.freeze({ key: 'neon', label: 'Neon pieces', kind: 'toggle', hint: 'The pieces and the stack as dim bodies under lit tubes' }),
@@ -469,6 +474,7 @@ export function tetrustOptions(s) {
   const sky = spaceOptions(s);
   return {
     stars: n.tetrust.stars, galaxy: n.tetrust.galaxy, galaxyAt: n.tetrust.galaxyAt, music: n.tetrust.music, sfx: n.tetrust.sfx,
+    ghostColour: n.tetrust.ghostColour,
     neon: n.tetrust.neon, neonSource: n.tetrust.neonSource === 'colour' ? 'colour' : 'temperature', neonColour: n.tetrust.neonColour, neonBrightness: n.tetrust.neonBrightness,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
