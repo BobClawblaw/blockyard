@@ -1,0 +1,47 @@
+# The suite, on every push and pull request.
+#
+# There is no install step and there is nothing to cache, because there are no
+# dependencies -- that is the point of the project, so the workflow is allowed to be
+# this short. `npm ci` would fail here anyway: there is no lockfile, because there is
+# nothing to lock.
+#
+# `counts:check` runs BEFORE the tests and is not merely cosmetic: the documented test
+# count has drifted out of step three times, and each time the docs went on asserting a
+# stale number that nobody noticed. It is a --check here rather than a --fix, because CI
+# reports and does not rewrite.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # engines says ">=22". 22 is the floor the project promises; 24 catches what the
+        # next LTS changes under it before a user does.
+        node: ['22', '24']
+    name: node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: node and npm versions
+        run: node -v && npm -v
+
+      - name: the documented test count matches the suite
+        run: npm run counts:check
+
+      - name: unit tests
+        run: npm test

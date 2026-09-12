@@ -1,0 +1,62 @@
+name: Bug report
+description: Something the monitor gets wrong, or will not do.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before anything else: do not paste your RPC cookie, an auth token, a session
+        cookie, or a `config/local.json` that still has real addresses in it.** Replace
+        any address you paste with a documentation one (`192.0.2.x`, `198.51.100.x`,
+        `203.0.113.x`). Logs and screenshots leak more than people expect.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+      placeholder: The panel showed 0 EH/s; the node reports 1,097 EH/s.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: The smallest sequence that shows it. "It happens sometimes" is fine — say what you were doing when it did.
+    validations:
+      required: true
+
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: The version and build from the header, e.g. `0.0.9-9387de494d`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: node-kind
+    attributes:
+      label: Which node is it watching?
+      options:
+        - Bitcoin Core
+        - Bitcoin Machine Code
+        - The built-in fake node (npm run dev)
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Node.js version and operating system
+      placeholder: node v22.23.2, Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything in the log or the browser console
+      description: Scrubbed. This is rendered as code, so no backticks needed.
+      render: text
