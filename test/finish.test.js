@@ -36,8 +36,22 @@ test('the sheen is a hot highlight and a dark roll-off on every top face, and it
   const alpha = (fill) => Number(fill.match(/,([\d.]+)\)$/)[1]);
   const hot = s.filter((op) => op.fill.startsWith('rgba(255,255,255'));
   const dark = s.filter((op) => op.fill.startsWith('rgba(0,0,0'));
-  assert.ok(hot.length >= TILES.length && hot.every((op) => alpha(op.fill) >= 0.8), 'a white-hot core on the lit edge');
-  assert.ok(dark.length >= TILES.length && dark.every((op) => alpha(op.fill) >= 0.25), 'and a dark roll-off on the far edge');
+  assert.ok(hot.length >= TILES.length && hot.every((op) => alpha(op.fill) >= 0.8), 'a white-hot specular core on the lit edge');
+  // GRADED, NOT STEPPED (2026-09-12: "have the gradient be less coarse"). The bands are nested and
+  // painted widest-first, so the opacity ACCUMULATES toward the edge -- which means the right
+  // things to assert are how much it accumulates to, and that no single band is big enough to be
+  // seen as an edge. The old assertion demanded every dark band be >= 0.25 on its own, which a
+  // graded ramp can never satisfy: it was a pin that only a coarse gradient could pass.
+  const stack = (ops) => 1 - ops.reduce((acc, op) => acc * (1 - alpha(op.fill)), 1);
+  const bigDark = dark.filter((op) => op.txid === 'big');
+  const bigRamp = s.filter((op) => op.txid === 'big' && !op.fill.startsWith('rgba(0,0,0') && !op.fill.startsWith('rgba(255,255,255'));
+  assert.ok(bigDark.length >= 6, `the roll-off is a ramp, not a stripe (${bigDark.length} bands)`);
+  assert.ok(bigRamp.length >= 12, `and so is the highlight (${bigRamp.length} bands)`);
+  assert.ok(stack(bigDark) >= 0.25, `the roll-off still reaches the far edge (${stack(bigDark).toFixed(2)})`);
+  assert.ok(stack(bigRamp) >= 0.35, `and the highlight is worth seeing (${stack(bigRamp).toFixed(2)})`);
+  for (const op of [...bigDark, ...bigRamp]) {
+    assert.ok(alpha(op.fill) <= 0.12, `no single band may read as a step: ${op.fill}`);
+  }
 });
 
 test('neon strokes every visible edge in the block\'s own colour, seam or no seam', () => {

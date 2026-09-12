@@ -1135,21 +1135,52 @@ export function buildScene(tiles, o = {}) {
       const o1 = litFar ? (flip > 0 ? BR : TR) : (flip > 0 ? TR : BR);
       const L = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
       const band = (k) => [e0, e1, L(e1, o1, k), L(e0, o0, k)];
-      // (2026-09-12, second cut: the first was two bands at a quarter and a tenth of the face at
-      // 26 % and 42 % -- "I don't see ... the metallic sheen". Metal is CONTRAST: a hot highlight
-      // on the lit edge, a dark roll-off on the far one, and the lit side face bright with it.)
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.42), fill: lift(c, 0.55, round3(0.4 * a)) });
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.2), fill: lift(c, 0.92, round3(0.75 * a)) });
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.07), fill: `rgba(255,255,255,${round3(0.9 * a)})` });
+      // A RAMP, NOT STEPS (2026-09-12, operator: "we need more specular on the metallic sheen, and
+      // have the gradient be less coarse"). The first cut was two bands, the second three, and three
+      // wide bands read as three stripes because that is what they are.
+      //
+      // The bands are NESTED and all anchored on the lit edge, so drawing them widest-first lets
+      // each narrower one lay over the last and the alpha ACCUMULATE toward the edge: n translucent
+      // quads are an n-step ramp, and the fineness of the gradient is just n. Each step is kept
+      // under a tenth of full opacity so no single one of them can be seen as an edge. (A real
+      // canvas gradient is not forbidden here -- the rules ban clip, globalAlpha, composite modes
+      // and shadowBlur, not gradients -- but an op's `fill` is a plain rgba STRING that paintFrame
+      // assigns straight to fillStyle, and which the recording-canvas tests read; a CanvasGradient
+      // would need a new op shape and would blind them. Layered fills are the house idiom.)
+      const SHEEN_STEPS = 14;
+      for (let k = 0; k < SHEEN_STEPS; k++) {
+        const t2 = 1 - k / SHEEN_STEPS;                 // 1 (widest) down to one step's width
+        const w = 0.5 * Math.pow(t2, 1.5);              // bunched toward the lit edge
+        const hot = 1 - t2;                             // 0 at the sheen's inner edge, 1 at the lit one
+        out.push({ txid: t.txid, face: 'sheen', points: band(w),
+          fill: lift(c, 0.4 + 0.55 * hot, round3((0.03 + 0.075 * Math.pow(hot, 1.8)) * a)) });
+      }
+      // THE SPECULAR ITSELF: a tight near-white sliver right on the edge, which is the part that
+      // reads as polished metal rather than as a lit surface
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.055), fill: `rgba(255,255,255,${round3(0.9 * a)})` });
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.022), fill: `rgba(255,255,255,${round3(0.96 * a)})` });
+      // and the roll-off into shadow on the far edge, graded the same way
       const dark = (k) => [o0, o1, L(o1, e1, k), L(o0, e0, k)];
-      out.push({ txid: t.txid, face: 'sheen', points: dark(0.3), fill: `rgba(0,0,0,${round3(0.28 * a)})` });
-      out.push({ txid: t.txid, face: 'sheen', points: dark(0.1), fill: `rgba(0,0,0,${round3(0.4 * a)})` });
+      const DARK_STEPS = 8;
+      for (let k = 0; k < DARK_STEPS; k++) {
+        const t2 = 1 - k / DARK_STEPS;
+        const w = 0.34 * Math.pow(t2, 1.4);
+        const deep = 1 - t2;
+        out.push({ txid: t.txid, face: 'sheen', points: dark(w), fill: `rgba(0,0,0,${round3((0.035 + 0.06 * deep) * a)})` });
+      }
       for (const side of f.sides) {
-        // the side turned to the lamp carries a highlight up its outer edge
+        // the side turned to the lamp carries the same ramp up its outer edge
         const d = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * lampSide[0] + side.ny * lampSide[1]);
         if (d < 0.3) continue;
         const [p0, p1, p2, p3] = side.points;
-        out.push({ txid: t.txid, face: 'sheen', points: [p0, L(p0, p1, 0.22), L(p3, p2, 0.22), p3], fill: lift(c, 0.9, round3(0.55 * d * a)) });
+        const SIDE_STEPS = 6;
+        for (let k = 0; k < SIDE_STEPS; k++) {
+          const t2 = 1 - k / SIDE_STEPS;
+          const w = 0.32 * Math.pow(t2, 1.4);
+          const hot = 1 - t2;
+          out.push({ txid: t.txid, face: 'sheen', points: [p0, L(p0, p1, w), L(p3, p2, w), p3],
+            fill: lift(c, 0.55 + 0.4 * hot, round3((0.05 + 0.12 * hot) * d * a)) });
+        }
       }
     }
     if (o.neon === true) {
