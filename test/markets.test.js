@@ -210,13 +210,14 @@ test('the 3D chart: each hour a body floating open to close, wicks below and abo
   assert.ok(c.tiles.every((t) => /^#[0-9a-f]{6}$/.test(t.color) && t.label.startsWith('Coinbase BTC-USD')));
   assert.equal(chart3d(null).tiles.length, 0);
   const week = { base: ser.base, candles: Array.from({ length: 168 }, (_, i) => k(i, 1, 2, 3, 0, 1)) };
-  // The week is drawn WHOLE now. This asserted a 72-hour cap, with the note "168 towers is a
-  // comb" -- a considered judgement the operator overruled after seeing the measured cost, because
-  // the 7 d button drew three days without saying so. Note the first assertion passes either way,
-  // since it is expressed in terms of MAX_3D_HOURS: on its own it would guard nothing. The second
-  // is the one that would fail if the cap came back.
-  assert.equal(chart3d(week).gridW, MAX_3D_HOURS * C3.slot);
-  assert.equal(chart3d(week).hours, 168, 'the whole week, not the last three days');
+  // CAPPED AT 72, and the number is asserted literally on purpose. Expressed only as
+  // `MAX_3D_HOURS * C3.slot` this passes for ANY cap -- it guarded nothing, which is how the cap
+  // could be raised to 168 with the suite staying green while the chart broke (zMax ran to 101 and
+  // the bodies collapsed into the floor). The literal is the guard; the derived one checks the
+  // board is built from it.
+  assert.equal(chart3d(week).gridW, MAX_3D_HOURS * C3.slot, 'the board is built from the cap');
+  assert.equal(chart3d(week).hours, 72, 'a week is drawn as its most recent 72 hours');
+  assert.ok(MAX_3D_HOURS < 168, 'raising this needs fitZ fixed first: past ~72 h the price band stops describing the data');
 });
 
 test('the chart camera faces the board and parks it along the bottom of the panel', () => {

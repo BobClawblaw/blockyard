@@ -24,15 +24,22 @@ import { renderDepth } from './depthchart.js';
 
 export const REFRESH_MS = 15_000;
 export const RANGES = [[24, '24 h'], [48, '48 h'], [168, '7 d']];
-// THE WHOLE RANGE, NOT THE LAST THREE DAYS (operator, 2026-09-12, choosing this over fattening the
-// candles or merely disclosing the cap). This was 72, with the note "168 towers on the board is a
-// comb, not a chart" -- a deliberate judgement, overruled deliberately: the 7 d button said seven
-// days and the board drew three, which is a truncation the reader was never told about, and this
-// project states what it cannot show rather than quietly showing less.
-// The cost is real and was measured first: 168 candles is 336 grid units, which drives the price
-// band taller, which shrinks the scale -- so each candle is thinner than it was at 72. If that
-// reads as a comb, the answer is to lower this number again, in the open.
-export const MAX_3D_HOURS = 168;
+// 72, AND THE 168 EXPERIMENT IS WHY (2026-09-12). The original note here read "168 towers on the
+// board is a comb, not a chart". The operator chose to overrule it -- the 7 d button said seven
+// days and the board drew three, undisclosed -- so the cap went to 168 and the result was worse
+// than the truncation: not a comb, a broken chart. Measured and seen: gridW 336 units drove
+// fitZ to zMax 101 (from 37), so the vertical scale spanned far more than the week's actual price
+// movement and every body collapsed into a strip along the floor, in two disconnected bands, while
+// the close line still ran the full width. Reverted by the operator's call: "back to 72".
+//
+// So the old note was right about the outcome and imprecise about the cause. The limit is not
+// really "168 candles look like a comb" -- it is that widening the board drives the price band
+// taller (fitZ solves zMax from the panel's aspect), and past roughly 72 hours the scale stops
+// describing the data. Raising this number again means fixing that coupling first.
+//
+// The truncation is now STATED rather than silent: renderMarkets says so whenever the chosen range
+// is longer than this, which is the thing the operator was right to object to.
+export const MAX_3D_HOURS = 72;
 // the 3D candle: two units a slot, a 1.4-unit body, a 0.4-unit wick, prices over 28 units
 // zBase: the price band starts above the volume band -- from a low camera the volume in the
 // front row would otherwise stand in front of the lowest candles
@@ -337,5 +344,14 @@ export function renderMarkets(s, state, h) {
   renderDepth(h);
   // one view, chosen in the toolbar; the other is neither shown nor drawn
   drawPrice();
-  put('mkNote', `Public REST APIs of ${d.exchanges.map((e) => h.fmt.esc(e.name)).join(', ')}, fetched by this server every ${Math.round((d.tickerMs ?? REFRESH_MS) / 1000)} s while this tab is open and never otherwise. OKX quotes USDT, so it is left out of the USD median and spread.${d.warming ? ' Warming up…' : ''}`);
+  // THE BOARD'S RANGE, SAID OUT LOUD when it is shorter than the one chosen. The 3D view caps at
+  // MAX_3D_HOURS (see the note on that constant), so at 7 d it draws the most recent three. That
+  // was true before and went unmentioned, which is the one part of it the operator was right to
+  // object to: a button that says seven days while the picture shows three is a truncation the
+  // reader cannot see. Only shown when it actually applies, and only for the view it applies to.
+  const capped = prefs().view !== '2d' && M.range > MAX_3D_HOURS;
+  const capNote = capped
+    ? ` The 3D board draws the most recent ${MAX_3D_HOURS} hours of the ${M.range} you picked — the price band is solved from the panel's shape, and a wider board stops describing the prices. The flat chart draws the whole range.`
+    : '';
+  put('mkNote', `Public REST APIs of ${d.exchanges.map((e) => h.fmt.esc(e.name)).join(', ')}, fetched by this server every ${Math.round((d.tickerMs ?? REFRESH_MS) / 1000)} s while this tab is open and never otherwise. OKX quotes USDT, so it is left out of the USD median and spread.${capNote}${d.warming ? ' Warming up…' : ''}`);
 }
