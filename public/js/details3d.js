@@ -898,11 +898,59 @@ const NO_CANVAS = {};
 //   - An arm is drawn BY its stars, and at the scattered sky's count there were not enough of
 //     them to make one. Hence GALAXY_BOOST.
 export const GALAXY_FLATTEN = 0.80;                    // seen from above the disc, not along it
-export const GALAXY_SPIN = (Math.PI * 2) / 900_000;    // one turn in fifteen minutes: "slowly"
+// NEGATIVE, so the arms TRAIL (operator, 2026-09-12: "galaxy is rotating in wrong direction for
+// the astrophysics to work"). The arms wind outward in +theta -- ang = arm + ln(r/inner)/TWIST --
+// so an arm's outer end sits ahead of its root in +theta. Turning the disc in +theta as well put
+// the tips in FRONT of the rotation: leading arms, which is not what disc galaxies do. A density
+// wave leaves the arms trailing, so the disc has to turn against the way they wind.
+export const GALAXY_SPIN = -(Math.PI * 2) / 900_000;   // one turn in fifteen minutes: "slowly"
 export const GALAXY_ARMS = 4;
 export const GALAXY_TWIST = 0.30;                      // how tightly the arms wind
 const GALAXY_BOOST = 7;                                // an arm needs many more stars than a scatter
-const GALAXY_MAX = 9000;                               // the count scales with area; 4K must not run away
+// LOW AND LEFT (operator, 2026-09-12: "We should have the spiral galaxy centers on the lower left
+// grid location. That should cluster things up enough to be interesting"). The nucleus sits down
+// in that corner and the arms sweep up across the panel, which crowds the interesting part of the
+// picture into one place instead of spreading it evenly around the middle.
+// [x, y, reach, oversample] as fractions of the panel. A corner placement REACHES past the panel
+// so the arms cross it; the centred one stays inside, so the whole spiral is visible behind the
+// board.
+//
+// `oversample` is how many stars must be MADE for each one that lands on the panel, and it has to
+// be per placement or the density setting means two different things: measured, a centred disc
+// puts all of itself on screen while a corner one puts about 40% off it, so generating the same
+// number either way made the centred galaxy twice as dense for the same slider position.
+// REACH 3.0 (operator, 2026-09-12: "The spiral galaxy arms need to extend out way farther than
+// they do, I want to see long arms on the far side of the board"). Measured on a 1265px board with
+// the middle in a corner: at 1.6 the arm tips died at x=876, well short of the far edge; at 3.0
+// they carry to x=1400, across it and out. 3.8 was tried and overshoots -- three quarters of the
+// stars then live off-panel for no more picture.
+//
+// The number of WINDINGS does not change with reach, because `inner` scales with maxR: a bigger
+// disc shows less than one full winding across the panel, which is what makes the arcs read as
+// long sweeps rather than a tight coil.
+//
+// The oversample figures are the measured inverse of "what fraction of this disc lands on the
+// panel", per placement -- 36% centred, 34% from a corner.
+export const GALAXY_PLACEMENTS = Object.freeze({
+  'center': [0.50, 0.50, 3.00, 2.76],
+  'top-left': [0.22, 0.22, 3.00, 2.95],
+  'top-right': [0.78, 0.22, 3.00, 2.95],
+  'bottom-left': [0.22, 0.78, 3.00, 2.97],
+  'bottom-right': [0.78, 0.78, 3.00, 2.97],
+});
+export const GALAXY_AT_DEFAULT = 'bottom-left';
+// An off-centre disc puts much of itself off-panel, and it must still be generated there: a
+// rotating field cannot be sampled to the visible rectangle, or turning it would drag bare gaps
+// into view. So more stars are made than are ever drawn (see `oversample` above, which is per
+// placement), and the draw loop skips the ones outside.
+const GALAXY_MAX = 24000;                              // the count scales with area; 4K must not run away
+
+/** Where the disc sits and how big it is. One source, so the renderer and the tests agree. */
+export function galaxyGeometry(pw, ph, at = GALAXY_AT_DEFAULT) {
+  const [fx, fy, reach, oversample] = GALAXY_PLACEMENTS[at] ?? GALAXY_PLACEMENTS[GALAXY_AT_DEFAULT];
+  const maxR = (Math.min(pw, ph / GALAXY_FLATTEN) / 2) * reach;
+  return { cx: pw * fx, cy: ph * fy, maxR, inner: maxR * 0.08, oversample };
+}
 export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false) {
   let s = seed >>> 0;
   const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
@@ -910,13 +958,13 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
   // this board and the markets board read -- it used to live under `markets` and reach only one)
   const d = Number.isFinite(density) ? Math.min(3, Math.max(0, density)) : 1;
   const base = ((pw * ph) / (2400 * dpr * dpr)) * d;
-  const n = Math.round(galaxy ? Math.min(GALAXY_MAX, base * GALAXY_BOOST) : base);
-  // The disc is sized so no star LEAVES the panel as it turns: the widest orbit still fits across,
-  // and the flattened one still fits down. A galaxy sized to the corners would sweep stars off the
-  // canvas and back, thinning and thickening the sky every few minutes.
-  const cx = pw / 2, cy = ph / 2;
-  const maxR = Math.min(pw, ph / GALAXY_FLATTEN) / 2;
-  const inner = maxR * 0.08;
+  // `galaxy` is false, or WHERE the galaxy goes: a placement key. Carrying the placement in the
+  // same argument keeps it part of what the field is built from, so moving the galaxy rebuilds
+  // the field exactly the way turning it on does.
+  const { cx, cy, maxR, inner, oversample } = galaxy
+    ? galaxyGeometry(pw, ph, galaxy === true ? GALAXY_AT_DEFAULT : galaxy)
+    : { cx: 0, cy: 0, maxR: 0, inner: 0, oversample: 1 };
+  const n = Math.round(galaxy ? Math.min(GALAXY_MAX, base * GALAXY_BOOST * oversample) : base);
   const out = [];
   for (let i = 0; i < n; i++) {
     const big = rnd() > 0.965;
@@ -925,7 +973,12 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
       x: rnd() * pw, y: rnd() * ph,
       r: (big ? 1.1 + rnd() * 0.9 : 0.35 + rnd() * 0.6) * dpr,
       b: big ? 0.85 + rnd() * 0.15 : 0.25 + rnd() * 0.55,
-      f: 0.0006 + rnd() * 0.0024,
+      // TWINKLE RATE, in radians per millisecond (operator, 2026-09-12: "Some of the large stars
+      // are pulsing relatively quickly. Need to slow all that shit down"). It was 0.0006-0.0030,
+      // which is a cycle every 2.1 to 10.5 seconds -- at the fast end that is a blink, not a
+      // twinkle, and the big stars wear a halo and a cross glint that make it impossible to miss.
+      // Now 10.5 to 39 seconds, and a big star runs slower still.
+      f: (0.00016 + rnd() * 0.00044) * (big ? 0.6 : 1),
       p: rnd() * Math.PI * 2,
       c: tint < 0.12 ? [255, 226, 180] : tint < 0.3 ? [180, 205, 255] : [235, 242, 255],
       big,
@@ -973,28 +1026,41 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
 }
 export function starAlpha(star, now) {
   const w = 0.5 + 0.5 * Math.sin(now * star.f + star.p);
-  return star.b * (0.3 + 0.7 * w * w);
+  // How DEEP the pulse goes, not just how fast. A small star may fade to a third of itself and
+  // still read as a twinkle; a big one doing that reads as a light being switched on and off,
+  // because its halo and glint swing with it. So the giants shimmer between roughly half and
+  // full, and the faint ones keep the wider swing that makes a sky look alive.
+  const floor = star.big ? 0.55 : 0.3;
+  return star.b * (floor + (1 - floor) * w * w);
 }
 function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
   const key = ctx.canvas ?? NO_CANVAS;
   const density = Number.isFinite(opts.starDensity) ? opts.starDensity : 1;
   const bright = Number.isFinite(opts.starBrightness) ? Math.min(1.5, Math.max(0, opts.starBrightness)) : 1;
-  const galaxy = opts.galaxy === true;
+  // false when off, otherwise WHERE it sits -- so the cache key below rebuilds the field when the
+  // operator moves it, the same way it does when they turn it on
+  const galaxy = opts.galaxy
+    ? (GALAXY_PLACEMENTS[opts.galaxyAt] ? opts.galaxyAt : GALAXY_AT_DEFAULT)
+    : false;
   let f = STARS.get(key);
   // the field is rebuilt when the density or the SHAPE changes as well as the size: it is a seeded
   // scatter, so the same density always gives the same sky back. Turning is NOT a rebuild -- the
   // stars carry polar coordinates and only the angle advances, once per frame for all of them.
   if (!f || f.pw !== pw || f.ph !== ph || f.density !== density || f.galaxy !== galaxy) {
-    f = { pw, ph, density, galaxy, cx: pw / 2, cy: ph / 2, stars: starField(pw, ph, dpr, 7, density, galaxy) };
+    const g = galaxyGeometry(pw, ph, galaxy || undefined);
+    f = { pw, ph, density, galaxy, cx: g.cx, cy: g.cy, stars: starField(pw, ph, dpr, 7, density, galaxy) };
     STARS.set(key, f);
   }
   ctx.__starBright = bright;
   const spin = galaxy ? now * GALAXY_SPIN : 0;
   for (const s of f.stars) {
-    const a = starAlpha(s, now) * (ctx.__starBright ?? 1);
-    const c = s.c.join(',');
     const px = galaxy ? f.cx + s.gr * Math.cos(s.ga + spin) : s.x;
     const py = galaxy ? f.cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga + spin) : s.y;
+    // the disc reaches past the panel now that its middle is in the corner: most of it is off
+    // screen at any moment, and the cheapest thing to do with those stars is nothing
+    if (galaxy && (px < -4 || px > pw + 4 || py < -4 || py > ph + 4)) continue;
+    const a = starAlpha(s, now) * (ctx.__starBright ?? 1);
+    const c = s.c.join(',');
     if (s.big) {
       ctx.fillStyle = `rgba(${c},${(a * 0.12).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(px, py, s.r * 4, 0, Math.PI * 2); ctx.fill();
@@ -1389,7 +1455,7 @@ export function render3d(canvas, cells, options = {}) {
   // some unrelated poll happened to replan the board, which reads exactly like a broken switch.
   const optSig = [opts.shadows !== false, opts.edges !== false, opts.grid !== false, !!opts.space,
     opts.seamAlpha, opts.facetPx, opts.crownPx, opts.dome, opts.idleFx !== false,
-    opts.starDensity, opts.starBrightness, opts.galaxy === true,
+    opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;

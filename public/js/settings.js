@@ -40,6 +40,7 @@ export const DEFAULTS = Object.freeze({
     density: 1,           // multiplies the star count (0.2 .. 3)
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
     galaxy: false,        // opt-in: the same stars laid on spiral arms, turning once a quarter hour
+    galaxyAt: 'bottom-left',   // where its middle sits: behind the board, or any of the corners
   }),
   markets: Object.freeze({
     stars: true,
@@ -92,6 +93,11 @@ export const PANEL = Object.freeze([
     note: 'The star field itself, wherever it is drawn — behind the Block space board and behind the candles. Each board decides whether to show it; this decides what it looks like.',
     rows: Object.freeze([
       Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes' }),
+      Object.freeze({
+        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice',
+        hint: 'Where its middle sits. A corner crowds the bright centre there and sweeps the arms across; behind the board shows the whole spiral',
+        options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
+      }),
       Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 3, step: 0.1, hint: 'How many stars, against the shipped number' }),
       Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
     ]),
@@ -274,6 +280,7 @@ export function spaceOptions(s) {
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     galaxy: n.sky.galaxy,
+    galaxyAt: n.sky.galaxyAt,
   };
   // the seam belongs to the Stone edges switch at every level of detail: a control that does
   // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
@@ -294,6 +301,7 @@ export function marketsOptions(s) {
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     galaxy: n.sky.galaxy,
+    galaxyAt: n.sky.galaxyAt,
     ...(mk.glow ? {} : { neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' }),
   };
 }

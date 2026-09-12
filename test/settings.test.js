@@ -337,7 +337,7 @@ test('the galaxy is a toggle: off is the shipped sky, on lays the same stars on 
   // to make one: the first cut passed its structure tests and still looked like a faint sprinkle.
   // The galaxy is sampled several times harder; the density preference scales both.
   assert.ok(spiral.length > flat.length * 4, `the galaxy is sampled far harder (${flat.length} -> ${spiral.length})`);
-  assert.ok(spiral.length <= 9000, 'but bounded: the count scales with area, and a 4K panel must not run away');
+  assert.ok(spiral.length <= 24000, 'but bounded: the count scales with area, and a 4K panel must not run away');
   assert.ok(flat.every((s) => s.gr === undefined), 'a scattered star has no orbit to turn on');
   assert.ok(spiral.every((s) => Number.isFinite(s.gr) && Number.isFinite(s.ga)), 'every galaxy star has one');
   assert.ok(spiral.some((s) => s.big), 'the bright ones survive the change of shape');
@@ -346,40 +346,79 @@ test('the galaxy is a toggle: off is the shipped sky, on lays the same stars on 
   assert.ok(starField(W, H, 1, 7, 0.3, true).length < spiral.length / 2, 'sparser galaxy');
 });
 
-test('the galaxy turns, slowly, and never sweeps a star off the panel', async () => {
-  const { starField, GALAXY_FLATTEN, GALAXY_SPIN } = await import('../public/js/details3d.js');
+test('the galaxy sits low and left, and turning it does not thin the sky', async () => {
+  // operator, 2026-09-12: "We should have the spiral galaxy centers on the lower left grid
+  // location. That should cluster things up enough to be interesting."
+  //
+  // The earlier disc was centred and sized so no star ever left the panel. Off-centre that is not
+  // possible -- the arms have to cross the edges, which is the point -- so the guarantee is
+  // replaced by the property that actually matters: the number of stars ON the panel must stay
+  // steady as it turns, or the sky would visibly thin and thicken every few minutes.
+  const { starField, galaxyGeometry, GALAXY_FLATTEN, GALAXY_SPIN } = await import('../public/js/details3d.js');
   const [W, H] = [1200, 800];
   const spiral = starField(W, H, 1, 7, 1, true);
-  const cx = W / 2, cy = H / 2;
-  const at = (s, t) => {
-    const ang = s.ga + t * GALAXY_SPIN;
-    return [cx + s.gr * Math.cos(ang), cy + s.gr * GALAXY_FLATTEN * Math.sin(ang)];
-  };
-  // A disc sized to the corners would sweep stars off the canvas and back, thinning and
-  // thickening the sky every few minutes. Checked right around a full turn and beyond.
-  for (const t of [0, 60_000, 225_000, 450_000, 900_000, 3_600_000]) {
+  const { cx, cy } = galaxyGeometry(W, H);
+  assert.ok(cx < W / 2, `the middle is left of centre (${Math.round(cx)} of ${W})`);
+  assert.ok(cy > H / 2, `and below it (${Math.round(cy)} of ${H})`);
+
+  const visibleAt = (t) => {
+    let seen = 0;
     for (const s of spiral) {
-      const [x, y] = at(s, t);
-      assert.ok(x >= -1e-6 && x <= W + 1e-6 && y >= -1e-6 && y <= H + 1e-6, `star stays in frame at ${t} ms`);
+      const ang = s.ga + t * GALAXY_SPIN;
+      const x = cx + s.gr * Math.cos(ang), y = cy + s.gr * GALAXY_FLATTEN * Math.sin(ang);
+      if (x >= 0 && x <= W && y >= 0 && y <= H) seen++;
     }
-  }
-  assert.ok(GALAXY_SPIN * 60_000 < 0.5, 'slowly: well under a tenth of a turn in a minute');
-  assert.ok(GALAXY_SPIN * 900_000 >= Math.PI * 2 - 1e-9, 'but it does come all the way round');
+    return seen;
+  };
+  const counts = [0, 112_500, 225_000, 337_500, 450_000, 675_000, 900_000].map(visibleAt);
+  const lo = Math.min(...counts), hi = Math.max(...counts);
+  assert.ok(lo > 200, `enough stars on the panel at every angle (${lo})`);
+  assert.ok(hi - lo < lo * 0.35, `and the count barely moves as it turns (${lo}..${hi})`);
+
+  // TRAILING, not leading: the arms wind outward in +theta, so the disc must turn in -theta or the
+  // arm tips run ahead of the rotation -- which disc galaxies do not do (operator: "galaxy is
+  // rotating in wrong direction for the astrophysics to work").
+  assert.ok(GALAXY_SPIN < 0, 'the disc turns against the way the arms wind, so the arms trail');
+  assert.ok(Math.abs(GALAXY_SPIN) * 60_000 < 0.5, 'slowly: well under a tenth of a turn in a minute');
+  assert.ok(Math.abs(GALAXY_SPIN) * 900_000 >= Math.PI * 2 - 1e-9, 'but it does come all the way round');
   const s0 = spiral.find((s) => s.gr > 100);
-  const [x0, y0] = at(s0, 0);
-  const [x1, y1] = at(s0, 120_000);
+  const pos = (t) => { const a = s0.ga + t * GALAXY_SPIN; return [cx + s0.gr * Math.cos(a), cy + s0.gr * GALAXY_FLATTEN * Math.sin(a)]; };
+  const [x0, y0] = pos(0), [x1, y1] = pos(120_000);
   assert.ok(Math.hypot(x1 - x0, y1 - y0) > 5, 'two minutes moves a star visibly');
+});
+
+test('the density setting means the same thing wherever the galaxy sits', async () => {
+  // Measured when the placements went in: a centred disc lies entirely on the panel while a
+  // corner one puts about 40% of itself off it. Generating the same number either way made the
+  // centred galaxy more than twice as dense as a corner one at the SAME slider position -- one
+  // control quietly meaning two different things depending on an unrelated setting.
+  const { starField, galaxyGeometry, GALAXY_PLACEMENTS, GALAXY_FLATTEN } = await import('../public/js/details3d.js');
+  const [W, H] = [1265, 598];
+  const onPanel = (at) => {
+    const stars = starField(W, H, 1, 7, 1, at);
+    const { cx, cy } = galaxyGeometry(W, H, at);
+    let seen = 0;
+    for (const s of stars) {
+      const x = cx + s.gr * Math.cos(s.ga), y = cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga);
+      if (x >= 0 && x <= W && y >= 0 && y <= H) seen++;
+    }
+    return seen;
+  };
+  const counts = Object.keys(GALAXY_PLACEMENTS).map((at) => [at, onPanel(at)]);
+  const seen = counts.map(([, c]) => c);
+  const lo = Math.min(...seen), hi = Math.max(...seen);
+  assert.ok(lo > 500, `every placement fills the panel (${JSON.stringify(counts)})`);
+  assert.ok(hi - lo < lo * 0.3, `and fills it comparably: ${JSON.stringify(counts)}`);
 });
 
 test('the arms are arms: the stars bunch along the spiral instead of spreading evenly', async () => {
   // The structural claim behind the effect. On a logarithmic arm the angle tracks log(radius), so
   // undoing that twist should collapse most stars onto a couple of headings; a uniform scatter
   // would stay uniform under the same transform.
-  const { starField, GALAXY_ARMS, GALAXY_TWIST, GALAXY_FLATTEN } = await import('../public/js/details3d.js');
+  const { starField, galaxyGeometry, GALAXY_ARMS, GALAXY_TWIST } = await import('../public/js/details3d.js');
   const [W, H] = [1200, 800];
   const spiral = starField(W, H, 1, 7, 1, true);
-  const maxR = Math.min(W, H / GALAXY_FLATTEN) / 2;
-  const inner = maxR * 0.08;
+  const { maxR, inner } = galaxyGeometry(W, H);
   const period = (Math.PI * 2) / GALAXY_ARMS;
   const wrap = (v) => { const m = ((v % period) + period) % period; return Math.min(m, period - m); };
   const mid = spiral.filter((s) => s.gr > inner * 2 && s.gr < maxR * 0.95);
