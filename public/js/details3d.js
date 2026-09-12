@@ -1354,6 +1354,148 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
   }
   return out;
 }
+// THE GAS, BAKED (operator, 2026-09-12: "It really slows down rendering when enabled, I have to
+// turn galaxy off to get decent framerate"). The nebulae are a few hundred translucent ellipses
+// hundreds of pixels across, and the dust lanes a few hundred more; filled afresh every frame
+// they were tens of megapixels of blending -- THAT was the frame, not the stars. The galaxy turns
+// as a rigid body, so the gas is painted ONCE into an offscreen bitmap in the disc's own
+// coordinates (unturned, unflattened) and each frame is one drawImage through a matrix that
+// turns, squashes and places it. The bitmap covers only the part of the disc that can ever
+// reach the panel (centre to the farthest corner), at a scale that keeps it under GAS_MAX
+// pixels a side -- the gas is soft, and a quarter-scale bitmap of it drawn up is the same gas.
+// Rebuilt when the field is (a new f), and when the brightness or a layer switch changes.
+// A canvas that cannot make an offscreen one (the tests' recording canvas) gets the live loops.
+const GAS_MAX = 2048;
+function gasLayer(f, pw, ph, bright, opts) {
+  const nebulae = opts.nebulae !== false && !!f.nebulae, dust = opts.dust !== false && !!f.dust;
+  if (!nebulae && !dust) return null;
+  const key = `${bright.toFixed(3)}|${nebulae}|${dust}`;
+  if (f.gas && f.gas.key === key) return f.gas;
+  if (f.gas === null) return null;                        // tried once and could not
+  let bmp = null;
+  try {
+    bmp = typeof globalThis.document?.createElement === 'function' ? document.createElement('canvas') : null;
+    if (!bmp && typeof globalThis.OffscreenCanvas === 'function') bmp = new OffscreenCanvas(1, 1);
+  } catch { bmp = null; }
+  const g = bmp?.getContext?.('2d');
+  if (!g || typeof g.ellipse !== 'function') { f.gas = null; return null; }
+  const { cx, cy } = f;
+  const reach = Math.max(Math.hypot(cx, cy), Math.hypot(pw - cx, cy), Math.hypot(cx, ph - cy), Math.hypot(pw - cx, ph - cy)) / GALAXY_FLATTEN + 64;
+  const q = Math.min(1, GAS_MAX / (2 * reach));
+  const D = Math.ceil(2 * reach * q);
+  bmp.width = D; bmp.height = D;
+  g.setTransform(q, 0, 0, q, D / 2, D / 2);
+  if (nebulae) {
+    for (const c of f.nebulae) {
+      const nx = c.gr * Math.cos(c.ga), ny = c.gr * Math.sin(c.ga);
+      for (const p of c.puffs) {
+        g.fillStyle = `rgba(${c.tint},${(p.a * bright).toFixed(4)})`;
+        g.beginPath();
+        g.ellipse(nx + p.dx, ny + p.dy, p.rx, p.rx * p.sq, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+  if (dust) {
+    for (const d of f.dust) {
+      const dx0 = d.gr * Math.cos(d.ga), dy0 = d.gr * Math.sin(d.ga);
+      for (const p of d.puffs) {
+        g.fillStyle = `rgba(0,0,0,${p.a.toFixed(3)})`;
+        g.beginPath();
+        g.ellipse(dx0 + p.dx, dy0 + p.dy, p.rx, p.rx * p.sq, d.ga, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  f.gas = { key, bmp, q, D };
+  return f.gas;
+}
+
+// THE STARS, BATCHED (operator, 2026-09-12: "is there any way to improve the galaxy speed behind
+// the game? ... I have to turn galaxy off to get decent framerate. nothing we can optimize
+// there?"). There was. The first cut set ctx.fillStyle once PER STAR -- a colour string built
+// and parsed forty thousand times a frame -- and that, not the arithmetic, was the frame. Now a
+// star's brightness is rounded to one of STAR_LEVELS steps (a thirtieth of the range, under any
+// eye's notice on a one-pixel point) and the field is sorted into colour x level BUCKETS with a
+// counting sort over preallocated typed arrays (no allocation a frame), so the canvas hears one
+// fillStyle and one fill() per bucket -- a few hundred at most -- with every star of that shade
+// as one rect() in the path. The picture is the same; the giants keep their halo and glint drawn
+// one by one, since there are few of them.
+const STAR_LEVELS = 48;
+function starBuckets(f, colours) {
+  // built once per field (and once per colour switch): the palette, each star's palette index,
+  // and the scratch arrays the per-frame sort runs in
+  const key = colours ? 'ci' : 'ci0';
+  if (f.bk?.key === key) return f.bk;
+  const pal = [], idx = new Map();
+  const ci = new Int16Array(f.stars.length);
+  f.stars.forEach((s, i) => {
+    const c = (colours || !s.c0 ? s.c : s.c0).join(',');
+    let k = idx.get(c);
+    if (k === undefined) { k = pal.length; idx.set(c, k); pal.push(c); }
+    ci[i] = k;
+  });
+  const B = pal.length * STAR_LEVELS;
+  const styles = new Array(B);
+  for (let b = 0; b < B; b++) styles[b] = `rgba(${pal[b / STAR_LEVELS | 0]},${((b % STAR_LEVELS) / (STAR_LEVELS - 1)).toFixed(3)})`;
+  const n = f.stars.length;
+  f.bk = { key, pal, ci, styles, B, px: new Float32Array(n), py: new Float32Array(n), bucket: new Int32Array(n), count: new Int32Array(B + 1), order: new Int32Array(n) };
+  return f.bk;
+}
+function drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, opts) {
+  const colours = opts.starColours !== false, glints = opts.starGlints !== false;
+  const stars = f.stars, n = stars.length;
+  const bk = starBuckets(f, colours);
+  const { px, py, bucket, count, order, styles, ci, B } = bk;
+  count.fill(0);
+  const cs = Math.cos(spin), sn = Math.sin(spin);
+  for (let i = 0; i < n; i++) {
+    const s = stars[i];
+    let x, y;
+    if (galaxy) {
+      // one rotation for the whole field: cos(a + spin) expanded, so no trig per star
+      const ca = s.ca ?? (s.ca = Math.cos(s.ga)), sa = s.sa ?? (s.sa = Math.sin(s.ga));
+      x = f.cx + s.gr * (ca * cs - sa * sn);
+      y = f.cy + s.gr * GALAXY_FLATTEN * (sa * cs + ca * sn);
+      // the disc reaches past the panel now that its middle is in the corner: most of it is off
+      // screen at any moment, and the cheapest thing to do with those stars is nothing
+      if (x < -4 || x > pw + 4 || y < -4 || y > ph + 4) { bucket[i] = -1; continue; }
+    } else { x = s.x; y = s.y; }
+    px[i] = x; py[i] = y;
+    const a = Math.min(1, starAlpha(s, now) * bright);
+    const b = ci[i] * STAR_LEVELS + Math.round(a * (STAR_LEVELS - 1));
+    bucket[i] = b;
+    count[b + 1]++;
+  }
+  for (let b = 0; b < B; b++) count[b + 1] += count[b];   // prefix sums: where each bucket starts
+  const at = count.slice(0, B);
+  for (let i = 0; i < n; i++) { const b = bucket[i]; if (b >= 0) order[at[b]++] = i; }
+  for (let b = 0; b < B; b++) {
+    const from = count[b], to = count[b + 1];
+    if (from === to) continue;
+    ctx.fillStyle = styles[b];
+    ctx.beginPath();
+    for (let k = from; k < to; k++) { const i = order[k]; const r = stars[i].r; ctx.rect(px[i] - r, py[i] - r, r * 2, r * 2); }
+    ctx.fill();
+  }
+  if (!glints) return;
+  // the giants' halo and cross, one by one: a few hundred at most
+  for (let i = 0; i < n; i++) {
+    const s = stars[i];
+    if (!s.big || bucket[i] < 0) continue;
+    const a = Math.min(1, starAlpha(s, now) * bright);
+    const c = colours || !s.c0 ? s.c : s.c0;
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${(a * 0.12).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(px[i], py[i], s.r * 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${(a * 0.5).toFixed(3)})`;
+    ctx.lineWidth = dpr * 0.6;
+    ctx.beginPath();
+    ctx.moveTo(px[i] - s.r * 5, py[i]); ctx.lineTo(px[i] + s.r * 5, py[i]);
+    ctx.moveTo(px[i], py[i] - s.r * 5); ctx.lineTo(px[i], py[i] + s.r * 5);
+    ctx.stroke();
+  }
+}
 export function starAlpha(star, now) {
   const w = 0.5 + 0.5 * Math.sin(now * star.f + star.p);
   // How DEEP the pulse goes, not just how fast. A small star may fade to a third of itself and
@@ -1403,8 +1545,18 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
       }
     }
   }
-  // then the gas: the stars stand IN it, not behind it
-  if (galaxy && f.nebulae && opts.nebulae !== false && typeof ctx.ellipse === 'function') {
+  // then the gas: the stars stand IN it, not behind it. Baked to a bitmap where the page can
+  // make one (gasLayer) and drawn turned in one call; the live loops below are the fallback.
+  const gas = galaxy ? gasLayer(f, pw, ph, bright, opts) : null;
+  if (gas) {
+    const q = gas.q, cs = Math.cos(spin), sn = Math.sin(spin);
+    // local (unflattened, unturned) disc -> panel: turn by the spin, squash y by the flatten,
+    // scale up by 1/q, land on the centre -- the same map the stars go through, as one matrix
+    ctx.setTransform(cs / q, (GALAXY_FLATTEN * sn) / q, -sn / q, (GALAXY_FLATTEN * cs) / q, f.cx, f.cy);
+    ctx.drawImage(gas.bmp, -gas.D / 2, -gas.D / 2);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (!gas && galaxy && f.nebulae && opts.nebulae !== false && typeof ctx.ellipse === 'function') {
     for (const c of f.nebulae) {
       const ang = c.ga + spin;
       const nx = f.cx + c.gr * Math.cos(ang);
@@ -1418,7 +1570,7 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
     }
   }
   // the dust over the gas and under the stars: dark ribbons on the inner edge of each arm
-  if (galaxy && f.dust && opts.dust !== false && typeof ctx.ellipse === 'function') {
+  if (!gas && galaxy && f.dust && opts.dust !== false && typeof ctx.ellipse === 'function') {
     for (const d of f.dust) {
       const ang = d.ga + spin;
       const dx0 = f.cx + d.gr * Math.cos(ang), dy0 = f.cy + d.gr * GALAXY_FLATTEN * Math.sin(ang);
@@ -1430,28 +1582,7 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
       }
     }
   }
-  const colours = opts.starColours !== false, glints = opts.starGlints !== false;
-  for (const s of f.stars) {
-    const px = galaxy ? f.cx + s.gr * Math.cos(s.ga + spin) : s.x;
-    const py = galaxy ? f.cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga + spin) : s.y;
-    // the disc reaches past the panel now that its middle is in the corner: most of it is off
-    // screen at any moment, and the cheapest thing to do with those stars is nothing
-    if (galaxy && (px < -4 || px > pw + 4 || py < -4 || py > ph + 4)) continue;
-    const a = starAlpha(s, now) * (ctx.__starBright ?? 1);
-    const c = (colours || !s.c0 ? s.c : s.c0).join(',');
-    if (s.big && glints) {
-      ctx.fillStyle = `rgba(${c},${(a * 0.12).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(px, py, s.r * 4, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = `rgba(${c},${(a * 0.5).toFixed(3)})`;
-      ctx.lineWidth = dpr * 0.6;
-      ctx.beginPath();
-      ctx.moveTo(px - s.r * 5, py); ctx.lineTo(px + s.r * 5, py);
-      ctx.moveTo(px, py - s.r * 5); ctx.lineTo(px, py + s.r * 5);
-      ctx.stroke();
-    }
-    ctx.fillStyle = `rgba(${c},${a.toFixed(3)})`;
-    ctx.fillRect(px - s.r, py - s.r, s.r * 2, s.r * 2);
-  }
+  drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, opts);
   // the clusters last, over the field: dense specks with a fuzzy edge, steady (no twinkle)
   if (galaxy && f.clusters && opts.clusters !== false) {
     for (const k of f.clusters) {
@@ -1884,7 +2015,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
-    opts.neon === true, opts.sheen === true,
+    opts.neon === true, opts.sheen === true, opts.overheadLight === true,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;
@@ -1948,6 +2079,7 @@ export function render3d(canvas, cells, options = {}) {
       // in buildScene from the first cut, but not HERE, so a flipped switch repainted the same
       // picture (2026-09-12: "I don't see neon blocks working, nor the metallic sheen")
       neon: opts.neon === true, sheen: opts.sheen === true,
+      overheadLight: opts.overheadLight === true,   // the lamp straight above (Tetrust)
     };
     // the panel's extent in grid units, from the same constant fit paintFrame
     // uses: the textured sphere is laid over all of it (drawGrid), and an

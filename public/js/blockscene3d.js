@@ -627,6 +627,11 @@ const flipOf = (o) => (o.flipY === false ? -1 : 1);
 // as a curve. 1 on a flat board, so nothing changes when the dome is off.
 export function domeLight(t, o = {}) {
   const { dome = 0, gridW = 0, gridH = 0 } = o;
+  // OVERHEAD LIGHT (Tetrust, operator 2026-09-12: "The bottom of the tetrust board is too
+  // [dark]. We need direct overhead lighting in teh 3d scene for the game"): the lamp straight
+  // above, so the slope of the dome shades nothing -- the bottom rows, which lean away from the
+  // upper-left lamp and sat at the 0.6 floor, read as bright as the middle
+  if (o.overheadLight === true) return 1;
   if (!dome || !gridW || !gridH) return 1;
   const u = (2 * (t.x + t.s / 2)) / gridW - 1, v = (2 * (t.y + t.s / 2)) / gridH - 1;
   const gx = (dome * -2 * u * (1 - v * v) * 2) / gridW;      // dz/dx in grid units
@@ -814,7 +819,8 @@ export function buildScene(tiles, o = {}) {
   })).filter((e) => e.k > 0.01) : [];
   for (const t of ordered) {
     const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
-    const f = tileFaces(fxv.lift > 0.001 ? { ...t, fxz: fxv.lift } : t, o, t.s >= facetMin);
+    // NEON is a flat cube: no facets, no crown -- solid faces and the tubes on their edges
+    const f = tileFaces(fxv.lift > 0.001 ? { ...t, fxz: fxv.lift } : t, o, t.s >= facetMin && o.neon !== true);
     const a = t.alpha ?? 1;
     const airborne = (t.z ?? 0) > 0.02;
     const out = airborne && !o.oblique ? air : ground;
@@ -825,10 +831,13 @@ export function buildScene(tiles, o = {}) {
     const pulse = fxv.glow;
     // the pointer's glow (details3d setHover): lit up, outlined, fading when released
     const hover = o.hoverGlow?.get(t.txid) ?? 0;
-    // NEON (o.neon, below) is a dark body under bright tubes -- a sign is black glass and light --
-    // so the faces themselves are dimmed, or the tubes have nothing to stand out from
-    const body = o.neon === true ? 0.55 : 1;
-    const lit = (1 + 0.55 * lock + 0.45 * pulse + 0.6 * hover) * domeLight(t, o) * reachOf(t) * body;
+    // NEON (o.neon, below) is a dim SOLID body in the block's own colour under bright tubes: the
+    // faces keep their hue -- the feerate -- at a constant half light, no dome or lamp shading
+    // (2026-09-12: the first cut dimmed the lit shading and the faces went near black, "don't
+    // have any suitable color fill for their temperature. Need solid dim neon colored faces")
+    const lit = o.neon === true
+      ? 0.55 * (1 + 0.55 * lock + 0.45 * pulse + 0.6 * hover)
+      : (1 + 0.55 * lock + 0.45 * pulse + 0.6 * hover) * domeLight(t, o) * reachOf(t);
     const c = t.color;
     // A WIREFRAME (Tetrust's ghost, operator 2026-09-12: "wireframes on teh bottom of the tetrust
     // playfield ... The solid dark colored stuff is too difficult to see"): the cube's
@@ -924,7 +933,7 @@ export function buildScene(tiles, o = {}) {
       // (2026-09-12, second cut: the first stroked a 1.4 x tube over a 0.6-pixel base line --
       // under a pixel, and half of it under the next cube's fill -- "I don't see neon blocks
       // working". `lw` multiplies paintFrame's base width, so these are device pixels x 1.7.)
-      const halo = lift(c, 0.25, round3(0.3 * a)), tube = lift(c, 0.3, round3(1 * a)), core = lift(c, 0.85, round3(0.85 * a));   // the tube keeps the block's hue; only the core goes white
+      const halo = lift(c, 0.25, round3(0.3 * a)), tube = lift(c, 0.3, round3(1 * a)), core = lift(c, 0.75, round3(0.7 * a));   // the tube keeps the block's hue; only the thin core goes toward white
       for (const poly of [f.top, ...f.sides.map((sd) => sd.points)]) {
         out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 11, always: true });
         out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 4, always: true });

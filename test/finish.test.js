@@ -49,8 +49,16 @@ test('neon strokes every visible edge in the block\'s own colour, seam or no sea
   const alpha = (col) => Number(col.match(/,([\d.]+)\)$/)[1]);
   assert.ok(n.filter((op) => op.lw >= 3 && op.lw < 6).every((op) => alpha(op.stroke) >= 0.95), 'the tube is opaque');
   const tops = (opts) => buildScene(TILES, { ...O, ...opts }).ops.filter((op) => op.face === 'top');
-  const lum = (fill) => fill.match(/rgba\((\d+),(\d+),(\d+)/).slice(1).reduce((a, v) => a + Number(v), 0);
-  assert.ok(lum(tops({ neon: true })[0].fill) < lum(tops({})[0].fill) * 0.7, 'the body is dimmed under the tubes: a sign is dark glass and light');
+  // ...but SOLID and in the block's colour (2026-09-12: "Need solid dim neon colored faces to the
+  // block sides, and keep the brighter glow in the outline"): the hue is the feerate
+  const rgb = (fill) => fill.match(/rgba\((\d+),(\d+),(\d+)/).slice(1).map(Number);
+  const bigTop = tops({ neon: true }).find((op) => op.txid === 'big');
+  const [r, g, b] = rgb(bigTop.fill);                            // #33cc99: green-dominant
+  assert.ok(g > r * 2 && g > b && g >= 90, `a dim green, not black or grey: ${bigTop.fill}`);
+  const sides = buildScene(TILES, { ...O, neon: true }).ops.filter((op) => op.face === 'side' && op.txid === 'big');
+  assert.ok(sides.every((op) => { const [sr, sg] = rgb(op.fill); return sg > sr * 2 && sg >= 35; }), 'the sides too (the shadow side darkest, still green)');
+  const flat = buildScene(TILES, { ...O, neon: true }).ops.map((op) => op.face);
+  assert.ok(!flat.includes('bevel') && !flat.includes('rim'), 'a neon cube is flat: no facets or crown under the tubes');
   // the paint pass honours `always`: the seam gate used to swallow every stroke when edges were off
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /op\.stroke && \(opts\.edges \|\| op\.always\)/, 'neon draws whether or not the dark seam is on');
@@ -125,4 +133,18 @@ test('maxDpr draws a canvas at fewer device pixels than the screen has (Tetrust\
   const k = harness();
   board3d(k.canvas, E2E, { gridW: 6, gridH: 6, still: true, transition: { rise: 0, travel: 1, drop: 0 }, maxDpr: 1 });
   assert.equal(k.canvas.width, 600, 'capped at 1x: a quarter of the pixels, and of the stars');
+});
+
+test('overheadLight: the dome shades nothing, and it reaches the picture through render3d', () => {
+  // (Tetrust, operator 2026-09-12: "The bottom of the tetrust board is too [dark]. We need direct
+  // overhead lighting in teh 3d scene for the game")
+  const low = { txid: 'low', x: 4, y: 0, s: 1, z: 0, color: '#33cc99' }, mid = { txid: 'mid', x: 4, y: 9, s: 1, z: 0, color: '#33cc99' };
+  const tops = (extra) => buildScene([low, mid], { ...O, gridW: 10, gridH: 20, ...extra }).ops.filter((op) => op.face === 'top');
+  const g = (fill) => Number(fill.match(/rgba\((\d+),(\d+)/)[2]);
+  const shaded = tops({});
+  assert.ok(g(shaded.find((o) => o.txid === 'low').fill) < g(shaded.find((o) => o.txid === 'mid').fill), 'under the dome lamp the bottom row is darker than the middle');
+  const flat = tops({ overheadLight: true });
+  assert.equal(g(flat.find((o) => o.txid === 'low').fill), g(flat.find((o) => o.txid === 'mid').fill), 'under the overhead lamp they are the same');
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(src, /overheadLight: opts\.overheadLight === true/, 'render3d hands it to the scene (the finishes were once left out of that object)');
 });

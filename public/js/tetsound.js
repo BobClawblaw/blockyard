@@ -97,8 +97,14 @@ export function setSfx(on) { S.sfx = !!on; }
 // frame took longer than that ("the music is glitching out and not playing at a steady state").
 // A stop takes at most the lookahead to fall silent, which a pause can afford. Melody on a square
 // wave, the same note an octave down on a soft triangle underneath.
-const LOOKAHEAD_S = 1.5;
-const TIMER_MS = 200;
+// (second cut, same day: "The song wobbles and is not consistent ... lock that shit down". The
+// wobble was not the lookahead: the HUD redraw called setMusic(true) on every app render, and
+// each call restarted the scheduler from "now" over the notes already queued -- so the tune
+// stuttered on itself every few seconds. setMusic is idempotent now, and the lookahead is a
+// generous four seconds: the notes are on the audio thread's clock the moment they are queued,
+// and nothing the page does after that can move them.)
+const LOOKAHEAD_S = 4;
+const TIMER_MS = 500;
 function schedule() {
   const c = S.ctx;
   if (!c || !S.music) return;
@@ -121,7 +127,9 @@ function schedule() {
 }
 
 export function setMusic(on) {
-  S.music = !!on;
+  const want = !!on;
+  if (want === S.music && (!want || S.timer)) return;    // already so: never restart a running tune
+  S.music = want;
   if (S.timer) { clearTimeout(S.timer); S.timer = null; }
   if (!S.music) { hush(); return; }
   const c = context();

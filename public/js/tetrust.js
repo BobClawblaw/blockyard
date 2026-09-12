@@ -21,6 +21,7 @@ const WELL = {
   gridW: COLS, gridH: ROWS,
   oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 },
   dome: 5,                              // the default board's sphere (operator: "spherical like our default display")
+  overheadLight: true,                  // the lamp straight above, so the bottom rows are not in the dome's shade
   gridStep: 1,
   space: true,
   background: 'rgba(0,0,0,0)',          // clear: the panel's sky shows through ("Fill the entire panel with black")

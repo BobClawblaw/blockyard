@@ -3,6 +3,7 @@
 // every rule here is asserted on a plain board object with a seeded piece order.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   COLS, ROWS, KINDS, PIECES, LINE_SCORE, newGame, cellsOf, collides, spawn, move, rotate, ghostY,
   tick, softDrop, hardDrop, tiles, previewTiles, peekNext, gravityMs, kindAt, GHOST_WIRE,
@@ -185,4 +186,14 @@ test('the sound: the tune is only notes the table knows, and everything is a no-
   assert.equal(globalThis.AudioContext, undefined, 'node has no audio');
   assert.doesNotThrow(() => { setSfx(true); play('drop'); play('nope'); setMusic(true); holdMusic(true); holdMusic(false); setMusic(false); unlock(); });
   assert.equal(soundState().live, false, 'and no context was made');
+});
+
+test('setMusic is idempotent: the HUD may ask for the tune on every render without restarting it', () => {
+  // (operator, 2026-09-12: "The song wobbles and is not consistent" -- each render restarted the
+  // scheduler over the notes already queued). Without an AudioContext the scheduler never starts,
+  // so this pins the guard on the state, not the timer.
+  setMusic(false);
+  const src = readFileSync(new URL('../public/js/tetsound.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(want === S\.music && \(!want \|\| S\.timer\)\) return;/, 'a second setMusic(true) is a no-op while the tune runs');
+  assert.match(src, /const LOOKAHEAD_S = 4;/, 'four seconds of notes are queued on the audio clock ahead of the page');
 });
