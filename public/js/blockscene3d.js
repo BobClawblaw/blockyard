@@ -1037,11 +1037,18 @@ export function obliqueOrder(tiles, o = {}) {
   // the camera looks along (-ox, -oy/dy, 1): a squeezed depth weighs a row further back more
   const oby = (o.oblique?.oy ?? 0.36) / (o.oblique?.dy ?? 1);
   const depth = info.map((e2) => {
-    const t = e2.t, h = cubeHeight(t), cx = t.x + t.s / 2, cy = t.y + t.s / 2;
+    const t = e2.t, h = cubeHeight(t), cxRest = t.x + t.s / 2, cy = t.y + t.s / 2;
     const zb = (t.z ?? 0) > 0 || t.entry > 0 ? visualBase(t, o) : 0;
-    // the camera leans per column now (obliqueLean), so depth is measured along the direction it
-    // actually looks at this block, not along one board-wide constant
-    return -obliqueLean(cx, o) * cx - (flipped ? 1 : -1) * oby * cy + capZ(cx, cy, o) + zb + (t.floor ?? 0) + h / 2;
+    // where this cube is actually DRAWN: its slot, plus the flight along the sphere's normal,
+    // plus the camera's own sideways push -- settled the same way liftProjector settles it, so
+    // the order and the geometry are measured at the same point (obliqueLean is radial, so a
+    // block that has travelled leans by where it has got to, not by the slot it left)
+    const drift = zb * flightDir(cxRest, cy, o).x;
+    const height = zb + capZ(cxRest + drift, cy, o) + (t.floor ?? 0) + h / 2;
+    let lean = obliqueLean(cxRest + drift, o);
+    for (let i = 0; i < 2; i++) lean = obliqueLean(cxRest + drift + height * lean, o);
+    const cx = cxRest + drift;
+    return -lean * cx - (flipped ? 1 : -1) * oby * cy + capZ(cx, cy, o) + zb + (t.floor ?? 0) + h / 2;
   });
   const index = new Array(n).fill(-1), low = new Array(n).fill(0), onStack = new Array(n).fill(false), comp = new Array(n).fill(-1);
   const stack = [];
