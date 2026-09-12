@@ -895,7 +895,15 @@ Options are merged over `DEFAULTS` in `details3d.js`.
 | `dome` | 5 | sphere rise at the board centre, in grid units (0 is flat) |
 | `space` | off | star field and a translucent black board instead of the textured deck; the loop keeps running (about 30 fps) for the twinkle while the canvas is visible |
 | `floorLine` | off | with `space`: no board grid, just one neon line along the front edge |
-| `light` | (upper-left light) | `'viewer'`: lit from the camera, light edges, no bevel, no shadows |
+| `light` | `'upper-left'` | where the lamp hangs, for both the dome's slope shading and the side faces: `'overhead'` (straight above: no slope in shade, every side alike), `'upper-left'`, `'upper-right'`, `'front'` — see `LIGHTS` in `blockscene3d.js`. `'viewer'` is the separate camera-lit mode: light edges, no bevel, no shadows. `settings.js` sets this from `space.light`, and Block space ships `'overhead'`. |
+| `neon` | off | each block a dim solid body in its own colour under lit tubes on every visible edge — a halo, a tube in the block's hue and a thin near-white core. Flattens the tile (no facets, no crown): the tubes are the detail. |
+| `neonSource`, `neonColour`, `neonBrightness` | `'temperature'`, `'#3d8bff'`, 1 | the tubes take the block's own colour or one chosen hex; brightness (0.2–2) scales both their alpha and their width |
+| `sheen` | off | a specular highlight on the lit edge of each top face and a dark roll-off on the far one, plus a highlight up the lit side. Works at every level of detail. |
+| `stars`, `galaxy`, `galaxyAt` | off, off, `'bottom-left'` | the star field, whether it is laid on turning spiral arms, and where the nucleus sits (`'center'` or a corner). `starDensity`, `starBrightness`, `nebulae`, `galaxies`, `dust`, `clusters`, `starColours`, `starGlints` tune it. `stars` defaults to `space` when unset. |
+| `fxKinds` | all | which idle effects may play, as a list of `FX_KINDS`. An empty list schedules none. `settings.js` builds it from the 26 per-effect switches. |
+| `still` | off | draw the tiles where they are, with no choreography at all — not even the planner's per-tile stagger. It governs the **tiles**; a board with a sky keeps its loop regardless (see 4.7). |
+| `maxDpr` | none | cap the device-pixel ratio for this canvas. The star count follows the pixel count, so a panel-sized galaxy at 1x is a quarter of the work of one at 2x. |
+| `orderMemo` | none | a `Map` the caller keeps per canvas; `obliqueOrder` uses it to hold a tangle's relative order steady between frames (see 4.7). `render3d` supplies its own. |
 | `slab` | off | cap every tile's height at this value (low slabs for dense boards) |
 | `order` | (oblique order) | `'diagonal'`: the fast diagonal paint order for non-overlapping slabs |
 | `gridW`, `gridH` | `resolution` | board size in grid units; used with laid tiles (`board3d`) |
@@ -960,10 +968,30 @@ Each of these has a test that fails if it is violated.
 - **Idle effects only at rest.** A transition cancels the current effect. `fxAt`
   never touches airborne tiles. Effects are scheduled only with a real DOM, never
   under `prefers-reduced-motion`, and never while the canvas is hidden or moving.
-- **The loop parks when still.** When a frame is settled, nothing is dirty, and
-  no effect is running, the rAF loop stops (repainting a still picture only uses
-  power). `space` boards keep a throttled loop for the twinkle and stop while the
-  canvas is not displayed.
+  There are 26 (`FX_KINDS`), each a pure function of the tile and the effect's
+  clock — board-level choices are hashed from the effect's seed, never from
+  `Math.random`, so an effect replays identically and is asserted rather than
+  watched. Every one has a switch in `settings.js`, and a test holds the effect
+  list, the defaults and the panel rows to the same list in the same order.
+- **The loop parks when — and only when — nothing is moving.** When a frame is
+  settled, nothing is dirty and no effect is running, the rAF loop stops:
+  repainting a still picture only burns power. Boards with a star field keep a
+  throttled loop (about 30 fps) for the twinkle and the galaxy's turn, and stop
+  while the canvas is not displayed. **`still` governs the tiles, never the sky.**
+  It once also returned before `requestAnimationFrame` — and the wake that revives
+  a parked loop was gated behind it too — so Tetrust's sky, which sets `still`
+  because it has no tiles to choreograph, repainted only when its page happened to
+  call `board3d` again: measured at zero repaints in three seconds, and 87 after
+  the fix. Test: `test/still-sky.test.js`.
+- **A tangle keeps the order it had last frame.** Where drawn outlines overlap,
+  paint order is a constraint graph; contradictory cycles are resolved as groups
+  (strongly connected components). Ordering a group by depth alone threw away the
+  pair decisions inside it, so a cube flying past could pull a settled pair into a
+  tangle — or let it out — and the pair swapped without either of them moving.
+  With `orderMemo` the members of a tangle keep their previous relative order, and
+  only cubes with no previous frame fall in by depth. Replayed over a 634-frame
+  transition of 90 cubes: 19 order flickers to none. Test:
+  `test/order-memo.test.js`.
 - **A layout does not restart a transition.** An unchanged layout leaves the
   running plan alone. A changed layout that arrives mid-flight waits as `pending`.
   The first paint never animates.

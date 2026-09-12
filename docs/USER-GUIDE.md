@@ -17,6 +17,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Explorer](#explorer)
 - [Markets](#markets)
 - [Kiosk](#kiosk)
+- [Tetrust](#tetrust)
 - [Peers](#peers)
 - [Network](#network)
 - [Mining](#mining)
@@ -207,13 +208,29 @@ both modes move to their new places rather than disappearing and reappearing.
 
 ### Idle effects
 
-While the board is at rest, an effect plays every few seconds, with the first one
-about a second after the board lands. The effects include ripples across the grid,
-scan lines, outlines, a tide, a cascade in fee-rate order, twinkles, a TRON-style
-light-cycle race in blue and orange, and a lightning ball that enters from off-screen,
-runs along the grid lines and lights the cubes it passes. They are decoration only,
-so they carry no data, they never play during a refresh, and they are switched off
-under `prefers-reduced-motion`.
+While the board is at rest, one effect plays every seven to thirteen seconds — the first
+about a second after the board lands — and never the same one twice running. There are
+**26**, and each has its own switch under **Display settings → Effects**:
+
+| | |
+|---|---|
+| **Ripple**, **Outline sweep**, **Scan line**, **Tide** | fronts crossing the board: a spreading ring, traced edges, a tight line, a swell that lifts the cubes it passes under |
+| **Cascade**, **Twinkle**, **Sparkle** | the blocks light in fee-rate order; scattered flashes; a constellation, each block its own colour |
+| **Light cycles** | a TRON-style race in blue and orange from opposite edges, leaving light walls, until one crashes and de-rezzes |
+| **Lightning ball** | a plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
+| **Shockwave**, **Nova**, **Fireworks**, **Solar flare** | a hard ring that throws blocks into the air; an implosion then a brighter blast; three bursts; one block going supernova |
+| **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
+| **Code rain**, **Radar**, **Vortex**, **Laser** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward; a white cutting beam |
+| **Power-up**, **Aurora**, **Plasma**, **Glitch** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma; data corruption, hard on and hard off |
+| **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head |
+
+They are decoration only: they carry no data, they never play during a refresh, and they
+are switched off entirely under `prefers-reduced-motion`. The price board only ever plays
+the two that have a line to follow (**Energy pulse** and **Twinkle**).
+
+The more you leave switched on, the less often you see any particular one — there is still
+only one effect every seven to thirteen seconds. The **all off** button on that tab leaves
+the board completely still without touching anything else.
 
 ### The side panel
 
@@ -442,6 +459,60 @@ it is on screen.
 
 ---
 
+## Tetrust
+
+A playable Tetris, built on the same 3D engine as everything else — *trust, but verify*:
+every line you clear is a block you verified. The well is the block-space board, the pieces
+are the same stones, and the sky behind them is the same turning galaxy.
+
+![Tetrust](images/tetrust.jpg)
+
+### Playing
+
+| Keys | |
+|---|---|
+| **←** **→** or **A** **D** | move left and right |
+| **↑**, **W** or **X** | rotate |
+| **Z** or **Q** | rotate the other way |
+| **↓** or **S** | soft drop (one row, one point) |
+| **space** | hard drop (straight down, two points a row) |
+| **P** or **Esc** | pause and resume |
+| **Enter** | start, or resume when paused |
+
+A neon-blue wireframe on the floor of the well shows where the falling piece will land.
+Cleared lines fly up off the top of the screen.
+
+**It pauses when you look away** — another browser tab, or another tab of this monitor —
+and waits on a **resume** button, so a game is never lost to reading the Mempool page.
+
+### Scoring
+
+The classic table, multiplied by the level: **100 / 300 / 500 / 800** for one, two, three or
+four lines at once. Four at once is worth well over four singles, which is the whole reason
+to leave a column open and wait for the long piece. Soft drops pay a point a row, hard drops
+two. Every ten lines is a level, and each level drops the pieces 65 ms a row faster, down to
+a floor of 80 ms.
+
+**High scores** are kept in your browser — top ten, with the lines, level and date. Nothing
+is sent to the server, and they are not shared between browsers or machines.
+
+### The switches on the panel
+
+Four buttons under the score, which are the same settings as **Display settings → Tetrust**,
+so a change in either place shows in both:
+
+| | |
+|---|---|
+| **★ stars** | the star field across the whole panel |
+| **🌀 galaxy** | the spiral galaxy in it, turning |
+| **♪ music** | Korobeiniki, the folk tune everyone knows as the Tetris theme, synthesised in the browser with oscillators — there is no audio file to download |
+| **♫ sound** | move, rotate, drop, lock, line clear, level up and game over |
+
+Browsers only allow sound to start after you interact with the page, so the music begins
+when you press **play**, not when the tab opens.
+
+---
+
 ## Peers
 
 | Panel | What it shows |
@@ -622,6 +693,13 @@ every one back to the shipped default.
 They change how the pages are *drawn*, never what is measured: every figure on the page reads the
 same whatever you choose here.
 
+![Display settings](images/settings.jpg)
+
+The panel is **tabbed** — Block space, Sky, Markets & Price, Effects, Tetrust — with a **live
+preview** at the top that redraws on every change, so you can see a setting before you go looking
+for it on a board. Tabs that are nothing but switches (Effects, Tetrust) also get **all on** and
+**all off**.
+
 ### Block space
 
 The 3D board on Overview, Block space, Mempool and Kiosk. If the board is heavy on your machine,
@@ -632,13 +710,49 @@ these are the settings that buy it back, roughly most expensive first:
 | **Shadows** | Cubes casting shadows on the board and on each other. The costliest single effect on a full board: one shadow per resting stone, more in flight. |
 | **Level of detail** | *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
 | **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
-| **Idle effects** | The ripples, scans, light cycles and lightning ball that play while the board rests. |
+| **Idle effects** | The master switch for all 26 effects that play while the board rests. Which of them may play is the **Effects** tab. |
 | **Stone edges** | The dark seam drawn around each stone. |
 | **Neon grid** | The glowing grid on the board. |
-| **Star field** | Off by default here: the stars twinkle, so the board keeps repainting while they are on. |
+| **Neon blocks** | Each block becomes a dim solid body in its own fee-rate colour under lit neon tubes along every edge it shows. Works at every level of detail, Simple cubes included. |
+| **Neon colour from** | *The block's fee-rate colour* keeps the palette, so the tubes still tell you what the block costs. *One colour* lights every block the same. |
+| **Neon colour** / **Neon brightness** | The one colour, when you have chosen it, and how hard the tubes glow (0.2x to 2x). |
+| **Metallic sheen** | A specular highlight along the lit edge of each block's top face and a dark roll-off on the far one. Works on Simple cubes too. |
+| **Star field** | Off by default here: the stars twinkle, so the board keeps repainting while they are on. What the stars *look* like is the **Sky** tab. |
 | **Board curve** | How far the board bows toward you. 0 is flat. |
+| **Light** | Where the lamp hangs: *straight above* (the default) lights the whole board evenly, which keeps the front rows as bright as the middle; a corner shades the far slope of the curve and the sides turned away from it. |
+
+### Sky
+
+One sky, shared by every board that shows stars — so the density you choose applies to Block
+space, Markets and Tetrust alike. Whether a given board shows it stays that board's own switch.
+
+| setting | what it does |
+|---|---|
+| **Density** / **Brightness** | How many stars (up to 8x the shipped number) and how strongly they burn. |
+| **Spiral galaxy** | Lays the same stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about a quarter of an hour. |
+| **Galaxy centre** | Behind the board, or any of the four corners. A corner crowds the bright nucleus there and sweeps the arms across the panel. |
+| **Nebulae**, **Dust lanes**, **Star clusters**, **Distant galaxies** | The layers of the sky, each its own switch: gas clouds along the arms, dark ribbons on their inner edges, tight knots out in the halo, and small faint galaxies in the deep field behind everything. |
+| **Star colours** | Warm old stars in the nucleus, blue-white young ones in the arms. Off is one colour of starlight. |
+| **Glints** | The halo and cross glint on the brightest stars. |
+
+### Effects
+
+A switch for each of the **26** idle effects, listed under [Idle effects](#idle-effects) above,
+plus **all on** and **all off**. Turning them all off leaves the board still; so does the single
+**Idle effects** switch on the Block space tab.
 
 ### Markets & Price
 
-The candle board on Markets and Kiosk: the **star field** on or off, its **density** (0.2x to 3x the
-shipped number of stars) and **brightness**, and the **grid glow** under the neon lines.
+The candle board on Markets and Kiosk: the **star field** on or off, and **board effects** — one
+switch for everything that moves on this board, both the idle effects and the flight when the
+candles refresh.
+
+Your toolbar choices are remembered too: the **exchange** whose candles are drawn and the
+**range** (24 hours, 48 hours or 7 days). Click them on the Markets page or set them here; either
+way the page opens where you left it.
+
+### Tetrust
+
+The game's own switches — **star field**, **spiral galaxy** and where its centre sits, **music**
+and **sound effects** — the same four that appear on the game's panel. What the sky is *made of*
+comes from the **Sky** tab.

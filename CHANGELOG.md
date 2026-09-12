@@ -4,6 +4,65 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Tetrust**: a playable Tetris on the 3D engine (`public/js/tetris.js` for the rules,
+  `public/js/tetrust.js` for the screen). The well is the block-space board with its oblique
+  camera and curved surface; a neon-blue wireframe marks where the piece will land; cleared
+  lines fly up off the top of the canvas. Seven-bag piece order, wall kicks, the classic score
+  table times the level, ten lines a level, and a top-ten high score table kept per browser.
+  Pauses when the tab or the page loses focus. Arrows or WASD.
+- **Music and sound effects for Tetrust**, synthesised in the browser with the Web Audio API —
+  no audio files and no dependencies. Korobeiniki on a lookahead scheduler running on the audio
+  clock, and nine shaped tones for move, rotate, soft drop, hard drop, lock, line clear, tetris,
+  level up and game over. A switch for each.
+- **Seventeen new idle effects**, bringing the total to **26**, each with its own switch:
+  shockwave, nova, fireworks, solar flare, wave, quake, code rain, sparkle, checkerboard, radar,
+  vortex, laser, power-up, combo chain, aurora, plasma and glitch. All are pure functions of the
+  tile and the effect's clock, so each replays identically and is covered by tests rather than
+  by watching.
+- **Block finishes**: **neon blocks** (a dim solid body in the block's fee-rate colour under lit
+  tubes on every visible edge) and a **metallic sheen** (a specular highlight on the lit edge of
+  each top face, a dark roll-off on the far one). Both work at every level of detail. The neon
+  tubes can take the block's own colour or one colour of your choosing, at a brightness you set.
+- **A movable lamp**: `Light` chooses straight above (now the default for Block space), upper
+  left, upper right, or from the viewer.
+- **A tabbed Display settings panel** with a live preview that redraws on every change, and
+  all-on / all-off for tabs that are only switches.
+- **Markets remembers its toolbar**: the exchange and the range are settings now, so the page
+  opens where you left it.
+
+### Changed
+
+- The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
+  tail that fades back to yellow, with an expanding nebula, crackle, shimmer and particle motes.
+  The lightning ball trails the same charge across the block-space board.
+- The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
+  the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
+- Pool attribution moved out of the block card's body into a readable pill beneath it.
+
+### Fixed
+
+- **The star field never animated on a board that asked for no tile choreography.** `still` is
+  about the tiles; it was also returning before the animation loop started, so Tetrust's galaxy
+  repainted only when the page happened to redraw — measured at zero repaints in three seconds.
+  The loop now parks only when there is genuinely nothing moving. Measured after: 87 repaints in
+  three seconds, idle and in play.
+- **Blocks swapped in front of each other during refreshes.** Where cubes overlap, the paint
+  order is solved as a graph; a cube flying past could pull a settled pair into a tangle and the
+  tangle was ordered by depth alone, discarding the pair's own decision. A tangle now keeps the
+  relative order it had in the previous frame. Replayed over a 634-frame transition: 19 flickers
+  to none.
+- **Neon and the metallic sheen did nothing when switched on** — `render3d` never passed either
+  option through to the scene builder.
+- The galaxy is much cheaper to draw: its gas is painted once into an offscreen bitmap and drawn
+  turned, and the stars are batched by colour and brightness instead of setting a fill style per
+  star.
+- Blocks with no pool attribution showed no statistics at all.
+- Taller cubes no longer clip the neighbour they lean over on a settled board.
+
 ## [0.9.0] — 2026-09-11
 
 The first public release, licensed Apache-2.0. The block-space packer and feerate palette

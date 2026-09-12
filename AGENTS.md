@@ -232,6 +232,49 @@ silently ate another test's result line — rule 22.
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
 
+## Current state (2026-09-12)
+
+A long day on the 3D engine and the browser. Everything below is committed, tested and live.
+
+**Tetrust** (`public/js/tetris.js` rules, `public/js/tetrust.js` screen, `public/js/tetsound.js`
+audio). A playable Tetris on the block-space engine. The rules file knows nothing of the screen —
+no DOM, no canvas, no clock — so the whole game runs under `node:test`. The well is a `board3d`
+with `still: true`; the panel behind it is a second canvas carrying the star field and galaxy at
+`maxDpr: 1`. Sound is synthesised with the Web Audio API (no files, no deps) on a lookahead
+scheduler that runs on the audio clock, because the page's timers are not reliable enough to keep
+a tempo.
+
+**The arcade.** 26 idle effects (was 9). The seventeen new ones are pure functions in `fxAt`;
+board-level choices come from `fxHash(seed)`, never `Math.random`, so they replay identically and
+are tested rather than watched. Each has a switch in `settings.js`; a test holds `FX_KINDS`, the
+defaults and the panel rows to the same list in the same order.
+
+**Finishes and lighting.** `neon` (dim solid body, lit tubes) and `sheen`, both tunable
+(`neonSource` / `neonColour` / `neonBrightness`), and a `LIGHTS` table for where the lamp hangs —
+Block space now ships `'overhead'`.
+
+**The settings panel is tabbed**, with a live preview canvas that redraws on every change.
+
+### Two bugs here that are worth remembering
+
+1. **`render3d`'s view object is a second place options must be listed.** `neon` and `sheen` were
+   in `buildScene` and in the look signature, but not in the object `render3d` builds per frame —
+   so the switches drew nothing and the tests, which called `buildScene` directly, could not see
+   it. If you add a render option, add it there too, and test it *through* `render3d`.
+2. **`still` governs the tiles, never the sky.** It also used to return before
+   `requestAnimationFrame`, so a board with a star field and no tile choreography never animated
+   at all. Measured at zero repaints in three seconds before, 87 after. Ask "is it slow or is it
+   stopped?" before optimising anything — the galaxy had already been optimised twice while it
+   was not being drawn.
+
+### Paint order
+
+Tangles (strongly connected components of the overlap graph) now keep their previous frame's
+relative order via an `orderMemo` the renderer keeps per canvas. Ordering them by depth alone
+discarded the pair decisions inside, so a cube flying past made settled pairs swap. Replayed over
+a 634-frame transition: 19 order flickers to none. The probes are in the session scratchpad
+(`flicker*.mjs`, `contradict.mjs`) and want `blockpack.js` / `details3d.js` imports.
+
 ## Current state (2026-09-11)
 
 The block-space viewer was rebuilt over 2026-09-10/11: a square packing with the

@@ -15,15 +15,18 @@ read-only toward your node by default.
 
 | | |
 |---|---|
-| **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with ripples, light cycles and a lightning ball. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
+| **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with **26 idle effects**, from ripples and light cycles to a lightning ball, fireworks, code rain and a demoscene plasma. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
+| **A board you can tune.** Neon-tube blocks and a metallic sheen, a movable lamp, a spiral galaxy behind the board, and a switch for every one of the 26 effects — in a tabbed settings panel with a live preview. Kept in your browser; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
 | **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
 | **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
 | **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, full screen with one click. | ![Kiosk](docs/images/kiosk.jpg) |
+| **Tetrust.** A playable Tetris built on the same 3D engine — trust, but verify. The well is the block-space board, the pieces are the same stones, the sky behind it is the same turning galaxy, and the music is synthesised in the browser. Pauses when you look away; high scores kept per browser. | ![Tetrust](docs/images/tetrust.jpg) |
 
 Also on board: a sync viewer with an honest ETA, Block flow (projected blocks, the block
 being built, recent blocks), mempool and fee charts, a peer table, bandwidth, the node's
-event stream, a provenance table for every figure, and a read-only RPC console behind a
-default-deny allowlist.
+event stream, a provenance table for every figure, a read-only RPC console behind a
+default-deny allowlist, and a tabbed **Display settings** panel (the gear) that tunes every
+board without a reload.
 
 ## Quick start
 
