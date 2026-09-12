@@ -124,8 +124,8 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.9.0** — the first public release. The feature set is complete and covered by
-the test suite; expect polish and fixes before 1.0. Known limits are listed in
+Version **0.0.9** — pre-release. The feature set is complete and covered by the test
+suite; expect polish and fixes before 1.0. Known limits are listed in
 [docs/DEFECTS.md](docs/DEFECTS.md).
 
 ## Acknowledgements

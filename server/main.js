@@ -13,7 +13,7 @@ import { computeBuildId } from './http/static.js';
 import { NodeMonitor } from './collect/monitor.js';
 import { localAddresses, bindProblemMessage, planBinds } from './netinfo.js';
 
-const VERSION = '0.9.0';
+const VERSION = '0.0.9';
 
 export async function boot({ configFile, log: logOverride = null } = {}) {
   const cfg = loadConfig({ configFile });
