@@ -74,7 +74,9 @@ function opts(base) {
     hover: false,                           // a playfield does not light up under the pointer
     // no sky on the well itself: the sky is the panel's canvas behind it (drawSky)
     stars: false, galaxy: false,
-    neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)', neonCell: 'rgba(60,200,140,0.06)',
+    // the grid is the operator's now (settings tetrust.grid and its colour and intensity rows).
+    // The glow and the halo stay silenced: a lit lattice under the stack is noise, not a board.
+    ...t.gridOpts, grid: t.grid,
     edges: true, facetPx: Infinity, crownPx: Infinity, sheen: false,
     // neon on the pieces is the game's own switch (settings tetrust.neon and its colour rows)
     neon: t.neon, neonSource: t.neonSource, neonColour: t.neonColour, neonBrightness: t.neonBrightness,

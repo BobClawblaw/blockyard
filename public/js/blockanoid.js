@@ -65,7 +65,8 @@ function opts(base) {
     ...base,
     space: true, stars: false, galaxy: false, idleFx: false, shadows: false,
     hover: false,                           // the pointer is holding Vaus, not picking out a stone
-    neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)',
+    // the grid is the operator's now; spread after `base` so it overrides COURT's own neonCell
+    ...b.gridOpts, grid: b.grid,
     edges: true, facetPx: Infinity, crownPx: Infinity, sheen: false,
     neon: b.neon, neonSource: b.neonSource, neonColour: b.neonColour, neonBrightness: b.neonBrightness,
     still: true,

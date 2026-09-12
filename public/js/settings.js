@@ -30,6 +30,13 @@ export const DEFAULTS = Object.freeze({
     idleFx: true,         // the effects at rest: ripples, light cycles, the lightning ball
     edges: true,          // the dark seam around each stone
     grid: true,           // the neon grid on the board
+    // ITS COLOUR AND ITS BRIGHTNESS (operator, 2026-09-12: "Also add a color selector and
+    // brightness setting for the grid lighting for blockspace"). One hex drives the core, the
+    // halo, the glow and the bright edge line together -- see gridColours() for why it cannot be
+    // a single value. The shipped pair reproduces the hand-tuned green exactly, so the board does
+    // not change appearance until someone changes it.
+    gridColour: '#32be7d',
+    gridBrightness: 1,
     // THE FINISH (operator, 2026-09-12: "consider neon-izing each of teh blocks, and adding an
     // optional specular metallic sheen to the blocks. Have it toggle. I want to be able to apply
     // the sheen onto simple cube mode if I want. think maximum configuration options"). Both
@@ -105,6 +112,10 @@ export const DEFAULTS = Object.freeze({
     neonSource: 'brick',  // 'brick' (each row's own colour) | 'colour'
     neonColour: '#3d8bff',
     neonBrightness: 1,
+    // the grid under the court, its own now rather than the engine's hardcoded green
+    grid: true,
+    gridColour: '#3cc88c',
+    gridBrightness: 1,
     sfx: true,
   }),
   // BLOCKANOID (operator, 2026-09-12: "Take blockout, and make rip off of Arkanoid using our
@@ -120,6 +131,9 @@ export const DEFAULTS = Object.freeze({
     neonBrightness: 1,
     capsules: true,       // the falling letters
     enemies: true,        // the minions drifting down the court
+    grid: true,           // the grid under the court
+    gridColour: '#3cc88c',
+    gridBrightness: 1,
     sfx: true,
   }),
   // TETRUST (operator, 2026-09-12: "Have this entire panel filled black and rendering the spiral
@@ -141,6 +155,9 @@ export const DEFAULTS = Object.freeze({
     neonSource: 'piece',  // 'piece' (each piece's colour) | 'colour' (neonColour)
     neonColour: '#3d8bff',
     neonBrightness: 1,
+    grid: true,           // the grid under the well
+    gridColour: '#3cc88c',
+    gridBrightness: 1,
   }),
 });
 
@@ -171,6 +188,8 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'Ripples, scans, light cycles and the lightning ball while the board rests' }),
       Object.freeze({ key: 'edges', label: 'Stone edges', kind: 'toggle', hint: 'The dark seam around each stone' }),
       Object.freeze({ key: 'grid', label: 'Neon grid', kind: 'toggle', hint: 'The glowing grid on the board' }),
+      Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The grid’s colour: its lit core, and the halo and glow around it, all take it together' }),
+      Object.freeze({ key: 'gridBrightness', label: 'Grid brightness', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How hard the grid burns; 1 is the shipped grid, 0 leaves the lines unlit' }),
       Object.freeze({ key: 'neon', label: 'Neon blocks', kind: 'toggle', hint: 'Every block a dim solid body under lit tubes on its edges. Works at any level of detail' }),
       Object.freeze({
         key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'The tubes in each block’s own feerate colour, or all in one colour',
@@ -251,6 +270,9 @@ export const PANEL = Object.freeze([
       }),
       Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
       Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
+      Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'The grid under the court' }),
+      Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of the grid under the court' }),
+      Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 1 is the shipped weight, 0 hides it' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The bat, the bricks, the walls and a lost ball' }),
     ]),
   }),
@@ -274,6 +296,9 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
       Object.freeze({ key: 'capsules', label: 'Capsules', kind: 'toggle', hint: 'The letters that fall out of broken bricks: laser, wide, catch, slow, three balls, a life, skip' }),
       Object.freeze({ key: 'enemies', label: 'Minions', kind: 'toggle', hint: 'The drifting shapes that spoil your aim, and pay when you hit one' }),
+      Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'The grid under the court' }),
+      Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of the grid under the court' }),
+      Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 1 is the shipped weight, 0 hides it' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Vaus, the bricks, the capsules, the laser and a lost ball' }),
     ]),
   }),
@@ -332,6 +357,9 @@ export const PANEL = Object.freeze([
       }),
       Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
       Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
+      Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'The grid under the well' }),
+      Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of the grid under the well' }),
+      Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 1 is the shipped weight, 0 hides it' }),
     ]),
   }),
 ]);
@@ -356,6 +384,76 @@ function pickRow(row, v, fallback) {
   if (row?.kind === 'colour') return typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : fallback;
   const allowed = (row?.options ?? []).map(([val]) => val);
   return allowed.includes(v) ? v : fallback;
+}
+
+// THE GRID'S COLOUR (operator, 2026-09-12: "we need to break out the green grid settings per game.
+// We should also add a grid color picker, and a transparency slider. I don't want to see the grid
+// in bitlaga for example, and I really want to turn down the intensity on blockanoid", and "Also
+// add a color selector and brightness setting for the grid lighting for blockspace").
+//
+// A picker CANNOT simply overwrite one value. The board draws its grid as a family: an OPAQUE core
+// with a translucent halo and glow around it and a brighter edge line over it, and that
+// relationship is deliberate -- a see-through core reads dimmer wherever the floor beneath it is
+// shadowed, and composite modes are off the table (details3d.js, "I want that neon light cutting
+// through darkness entirely"). So one hex recolours the whole family while each layer keeps its
+// RELATIVE alpha and lift toward white, and brightness multiplies those alphas together.
+//
+// [lift toward white, alpha at brightness 1, brighten first?] -- reverse-engineered from
+// details3d.js's own tuned defaults, and MEASURED against them rather than guessed.
+//
+// The first cut lifted the base hue toward WHITE for the rings and got
+// rgba(122,213,171) where the board draws rgba(40,255,140): the whole grid came out greyer. The
+// palette does not lighten, it SATURATES -- every ring layer has its green channel pinned at 255 --
+// so the ring colours brighten to full first, and only then lift toward white. Checked against the
+// originals that puts gridEdgeColor at (123,255,194) against (120,255,190), and neonLine at
+// (170,255,216) against (170,255,210). The core alone is the base hue untouched, which is exact.
+const GRID_LAYERS = Object.freeze({
+  neonCell: [0, 1, false],          // the opaque core: the chosen colour itself
+  neonHalo: [0, 0.07, true],
+  neonGlow: [0, 0.2, true],
+  gridGlow: [0, 0.05, true],
+  gridColor: [0, 0.16, true],
+  gridEdgeColor: [0.3, 1, true],
+  neonLine: [0.55, 1, true],
+});
+const rgbOf = (hex, fallback) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(String(hex ?? ''));
+  if (!m) return fallback;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const liftRgb = ([r, g, b], t) => [r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t].map((v) => Math.round(v));
+const rgbaOf = ([r, g, b], a) => `rgba(${r},${g},${b},${Math.round(Math.max(0, Math.min(1, a)) * 1000) / 1000})`;
+
+/** The neon form of a colour: the same hue with its brightest channel pushed to full. */
+const brighten = ([r, g, b]) => {
+  const m = Math.max(r, g, b) || 1;
+  return [r, g, b].map((v) => Math.min(255, Math.round((v * 255) / m)));
+};
+
+/** The block-space board's grid layers, from one colour and a brightness. */
+export function gridColours(hex, brightness = 1) {
+  const base = rgbOf(hex, [50, 190, 125]);
+  const k = clamp(brightness, 0, 2, 1);
+  const lit = brighten(base);
+  const out = {};
+  for (const [key, [lift, alpha, saturate]] of Object.entries(GRID_LAYERS)) {
+    const c = saturate ? lit : base;
+    out[key] = rgbaOf(lift ? liftRgb(c, lift) : c, alpha * k);
+  }
+  return out;
+}
+
+/**
+ * A game court's grid. The courts deliberately suppress the halo and the glow -- a playfield wants
+ * a quiet grid under the pieces, not a lit one -- so only the core is coloured and the two ring
+ * layers stay off. `alpha` is the court's own weight: Tetrust draws its grid fainter (0.06) than
+ * the brick games do (0.18), which is how they were hand-tuned before this was configurable.
+ */
+export function courtGridColours(hex, brightness = 1, alpha = 0.18) {
+  const base = rgbOf(hex, [60, 200, 140]);
+  const k = clamp(brightness, 0, 2, 1);
+  return { neonCell: rgbaOf(base, alpha * k), neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' };
 }
 
 /**
@@ -533,6 +631,10 @@ export function spaceOptions(s) {
   out.light = sp.light;
   out.fxKinds = enabledEffects(n);
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;
+  // THE GRID'S OWN COLOUR. Until now these were never set here at all, so the board fell through to
+  // the hand-tuned greens in details3d.js and there was no way to change them. The shipped values
+  // reproduce those greens, so this is a new control rather than a new look.
+  Object.assign(out, gridColours(sp.gridColour, sp.gridBrightness));
   return out;
 }
 
@@ -556,6 +658,10 @@ export function blockoutOptions(s) {
     // the engine calls the data-coloured source "temperature"; here that is the brick's own row
     neonSource: n.blockout.neonSource === 'colour' ? 'colour' : 'temperature',
     neonColour: n.blockout.neonColour, neonBrightness: n.blockout.neonBrightness,
+    grid: n.blockout.grid, gridColour: n.blockout.gridColour, gridBrightness: n.blockout.gridBrightness,
+    // composed here rather than in the screen, so the court needs no new import and the renderer
+    // keys stay in one place. 0.18 is the weight this court was hand-tuned at.
+    gridOpts: courtGridColours(n.blockout.gridColour, n.blockout.gridBrightness, 0.18),
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
     starColours: sky.starColours, starGlints: sky.starGlints,
@@ -572,6 +678,8 @@ export function blockanoidOptions(s) {
     neon: n.blockanoid.neon,
     neonSource: n.blockanoid.neonSource === 'colour' ? 'colour' : 'temperature',
     neonColour: n.blockanoid.neonColour, neonBrightness: n.blockanoid.neonBrightness,
+    grid: n.blockanoid.grid, gridColour: n.blockanoid.gridColour, gridBrightness: n.blockanoid.gridBrightness,
+    gridOpts: courtGridColours(n.blockanoid.gridColour, n.blockanoid.gridBrightness, 0.18),
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
     starColours: sky.starColours, starGlints: sky.starGlints,
@@ -585,6 +693,10 @@ export function tetrustOptions(s) {
     stars: n.tetrust.stars, galaxy: n.tetrust.galaxy, galaxyAt: n.tetrust.galaxyAt, music: n.tetrust.music, sfx: n.tetrust.sfx,
     ghostColour: n.tetrust.ghostColour, ghostWidth: n.tetrust.ghostWidth,
     neon: n.tetrust.neon, neonSource: n.tetrust.neonSource === 'colour' ? 'colour' : 'temperature', neonColour: n.tetrust.neonColour, neonBrightness: n.tetrust.neonBrightness,
+    grid: n.tetrust.grid, gridColour: n.tetrust.gridColour, gridBrightness: n.tetrust.gridBrightness,
+    // 0.06, not 0.18: the well draws its grid fainter than the brick courts do, because the stack
+    // sits on top of it. That difference was hardcoded in tetrust.js; it lives here now.
+    gridOpts: courtGridColours(n.tetrust.gridColour, n.tetrust.gridBrightness, 0.06),
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
   };

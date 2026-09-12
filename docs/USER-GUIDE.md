@@ -822,9 +822,9 @@ same whatever you choose here.
 
 ![Display settings](images/settings.jpg)
 
-The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Effects and Tetrust. The
-**Effects** tab is nothing but switches, so it also gets **all on** and **all off**; twenty-six of
-them is a lot of clicking otherwise.
+The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Blockanoid, Effects and
+Tetrust. The **Effects** tab is nothing but switches, so it also gets **all on** and **all off**;
+twenty-six of them is a lot of clicking otherwise.
 
 ### Block space
 
@@ -839,6 +839,8 @@ these are the settings that buy it back, roughly most expensive first:
 | **Idle effects** | The master switch for all 26 effects that play while the board rests. Which of them may play is the **Effects** tab. |
 | **Stone edges** | The dark seam drawn around each stone. |
 | **Neon grid** | The glowing grid on the board. |
+| **Grid colour** | The grid's colour. One choice drives the whole grid: its lit core, the halo and glow around it, and the brighter line along the board's edge, so they stay a family rather than drifting apart. |
+| **Grid brightness** | How hard the grid burns, from 0 to 2. 1 is the shipped grid; 0 leaves the lines drawn but unlit. |
 | **Neon blocks** | Each block becomes a dim solid body in its own fee-rate colour under lit neon tubes along every edge it shows. Works at every level of detail, Simple cubes included. |
 | **Neon colour from** | *The block's fee-rate colour* keeps the palette, so the tubes still tell you what the block costs. *One colour* lights every block the same. |
 | **Neon colour** / **Neon brightness** | The one colour, when you have chosen it, and how hard the tubes glow (0.2x to 2x). |
@@ -887,6 +889,7 @@ shows in both. The rest are here only:
 |---|---|
 | **Galaxy centre** | Where the spiral's nucleus sits on the panel: behind the court, or any corner. |
 | **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each brick row's own colour, or all in one colour of your choosing, at the brightness you set. |
+| **Grid** / **Grid colour** / **Grid intensity** | The grid under the court: whether it is drawn at all, what colour it is, and how strongly it shows. Turn the intensity down for a quieter court, or the switch off for none. |
 
 What the sky is *made of* — density, brightness, nebulae, dust and the rest — comes from the
 **Sky** tab, which every board shares.
@@ -902,6 +905,7 @@ same switches that sit on the game's own panel. Two more are here only, and they
 | **Minions** | Whether the drifting shapes turn up. Off clears the ones already on the court. |
 | **Galaxy centre** | Where the spiral's nucleus sits on the panel. |
 | **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each brick's own colour, or all in one colour of your choosing, at the brightness you set. |
+| **Grid** / **Grid colour** / **Grid intensity** | The grid under the court: whether it is drawn at all, what colour it is, and how strongly it shows. |
 
 ### Tetrust
 
@@ -916,6 +920,7 @@ shows in both. The rest are here only:
 | **Landing marker thickness** | How heavy that outline is, from 0.3 to 2.5 times the shipped weight. Thinner keeps it out of the way of the stack showing through it. |
 | **Neon pieces** | The pieces and the stack as dim solid bodies under lit tubes, the same finish as the Block space board. |
 | **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each piece's own colour, or all in one colour of your choosing, at the brightness you set. |
+| **Grid** / **Grid colour** / **Grid intensity** | The grid under the well: whether it is drawn at all, what colour it is, and how strongly it shows. The well draws its grid fainter than the brick courts do, because the stack sits on top of it. |
 
 What the sky is *made of* — density, brightness, nebulae, dust and the rest — comes from the
 **Sky** tab, which every board shares.

@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The grid is yours, per board** (operator: "we need to break out the green grid settings per
+  game. We should also add a grid color picker, and a transparency slider ... I really want to turn
+  down the intensity on blockanoid", and "add a color selector and brightness setting for the grid
+  lighting for blockspace"). Block space, Tetrust, Blockout and Blockanoid each get a **grid
+  colour** and a **grid intensity**, and the three games get a **grid** switch as well; Block space
+  already had one. Every board is independent, so a court can be turned right down while the board
+  stays bright. Until now the colour was hardcoded green in four separate files and could not be
+  changed at all.
+- One colour drives the whole grid rather than a single value. The board does not draw its grid in
+  one colour: it lays an opaque core under a translucent halo and glow with a brighter line along
+  the edge, and that relationship is deliberate — a see-through core reads dimmer wherever the
+  floor beneath it is shadowed, and composite modes are off the table. The picker recolours the
+  family and keeps each layer's relative weight; intensity multiplies them together.
+
 - **Tetrust**: a playable Tetris on the 3D engine (`public/js/tetris.js` for the rules,
   `public/js/tetrust.js` for the screen). The well is the block-space board with its oblique
   camera and curved surface; a neon-blue wireframe marks where the piece will land; cleared

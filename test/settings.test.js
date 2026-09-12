@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import {
   DEFAULTS, PANEL, SETTINGS_KEY, SCHEMA_VERSION, normalise, loadSettings, saveSettings, setSetting,
   resetSettings, isDefault, spaceOptions, marketsOptions, tetrustOptions, onSettingsChange,
+  gridColours, courtGridColours, blockanoidOptions,
 } from '../public/js/settings.js';
 import { buildScene } from '../public/js/blockscene3d.js';
 import { starField } from '../public/js/details3d.js';
@@ -496,9 +497,9 @@ test('the parse is memoised, and a write invalidates it', () => {
 test('tetrust: its own group, its own switches on the panel, and tetrustOptions carries the display sky when its stars are on', () => {
   // (operator, 2026-09-12: "Add teh starfield simulation as a toggle for teh game" ... "Tetris music
   // and sound effects ... Toggle for each in the game display")
-  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#3d8bff', ghostWidth: 1, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title');
+  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#3d8bff', ghostWidth: 1, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1, grid: true, gridColour: '#3cc88c', gridBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title, and the well has its own grid');
   const rows = PANEL.find((g) => g.group === 'tetrust')?.rows.map((r) => r.key);
-  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'ghostWidth', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness']);
+  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'ghostWidth', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness', 'grid', 'gridColour', 'gridBrightness']);
   const off = tetrustOptions({ tetrust: { stars: false, galaxy: false, music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
   assert.equal(off.stars, false); assert.equal(off.galaxy, false, 'the game decides its own galaxy, not the Sky group'); assert.equal(off.music, false); assert.equal(off.sfx, true);
   const on = tetrustOptions({ tetrust: { stars: true, galaxyAt: 'top-right' }, sky: { galaxy: false, density: 4, galaxyAt: 'bottom-left', dust: false } });
@@ -524,6 +525,92 @@ test('the neon tubes are tunable: source, one colour (a hex, validated), brightn
   assert.equal(t.neon, true); assert.equal(t.neonSource, 'colour'); assert.equal(t.neonColour, '#123456'); assert.equal(t.neonBrightness, 0.2);
   assert.equal(tetrustOptions({ tetrust: { neonSource: 'piece' } }).neonSource, 'temperature', 'the piece\'s colour is the engine\'s "temperature" source');
   const colourRows = PANEL.flatMap((g) => g.rows.filter((r) => r.kind === 'colour').map((r) => `${g.group}.${r.key}`));
-  assert.deepEqual([...colourRows].sort(), ['blockanoid.neonColour', 'blockout.neonColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.neonColour'],
-    'a colour control for each finish, one for the landing marker, and one for each brick game');
+  assert.deepEqual([...colourRows].sort(), ['blockanoid.gridColour', 'blockanoid.neonColour', 'blockout.gridColour', 'blockout.neonColour', 'space.gridColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.gridColour', 'tetrust.neonColour'],
+    'a colour for each finish and each game, the landing marker, and the grid on every board that draws one');
+});
+
+// THE GRID'S COLOUR (operator, 2026-09-12: "we need to break out the green grid settings per game
+// ... a grid color picker, and a transparency slider", and "add a color selector and brightness
+// setting for the grid lighting for blockspace").
+//
+// This guard exists because the derivation was written WRONG and shipped green. The first cut
+// lifted the chosen hue toward white for the halo and glow, producing rgba(122,213,171) where the
+// board draws rgba(40,255,140) -- the entire grid came out greyer, and nothing in the suite
+// noticed, because "the settings round-trip" and "the grid looks right" are different claims. Only
+// measuring the composed output against details3d.js's own values caught it. So they are measured
+// here, every time.
+const chans = (s) => (String(s).match(/\d+/g) ?? []).slice(0, 3).map(Number);
+
+test('a court\'s grid keeps the exact colour it was hand-tuned to, at its own weight', () => {
+  // These are the literals that were hardcoded in blockout.js, blockanoid.js and tetrust.js before
+  // the setting existed. The brick courts draw at 0.18 and the Tetrust well at 0.06 -- the well is
+  // fainter because the stack sits on top of it -- and a refactor that "kept the look" must
+  // reproduce them exactly, not approximately.
+  assert.equal(courtGridColours('#3cc88c', 1, 0.18).neonCell, 'rgba(60,200,140,0.18)');
+  assert.equal(courtGridColours('#3cc88c', 1, 0.06).neonCell, 'rgba(60,200,140,0.06)');
+  // the courts silence the ring layers outright: a lit lattice under the pieces is noise
+  const c = courtGridColours('#3cc88c', 1, 0.18);
+  assert.equal(c.neonHalo, 'rgba(0,0,0,0)');
+  assert.equal(c.gridGlow, 'rgba(0,0,0,0)');
+});
+
+test('the board\'s grid saturates rather than greys, and its solid lines stay where they were', () => {
+  const g = gridColours('#32be7d', 1);
+  // the core is the chosen colour untouched -- this one IS exact
+  assert.equal(g.neonCell, 'rgba(50,190,125,1)', 'the opaque core is the colour you picked');
+  // THE BUG THIS CATCHES. Every ring layer in details3d.js has its green channel at full; a
+  // derivation that lifts toward white instead drops it to ~213 and the grid reads grey.
+  for (const key of ['neonHalo', 'neonGlow', 'gridGlow', 'gridColor', 'neonLine', 'gridEdgeColor']) {
+    assert.equal(chans(g[key])[1], 255, `${key} brightens to full, it does not wash out to white`);
+  }
+  // the two OPAQUE layers are what the eye reads as lines, so they are held close to the
+  // hand-tuned originals; the rest are glows at 5-20% alpha where a channel or two cannot be seen
+  const near = (got, want, tol, what) => {
+    const a = chans(got), b = chans(want);
+    const d = Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+    assert.ok(d <= tol, `${what}: ${got} is ${d} off ${want}, more than ${tol}`);
+  };
+  near(g.gridEdgeColor, 'rgba(120,255,190,1)', 8, 'the bright edge line');
+  near(g.neonLine, 'rgba(170,255,210,1)', 8, 'the plate line');
+});
+
+test('grid brightness multiplies the layers, and 0 leaves the lines unlit rather than gone', () => {
+  const one = gridColours('#32be7d', 1), two = gridColours('#32be7d', 2), none = gridColours('#32be7d', 0);
+  const alpha = (s) => Number(String(s).split(',')[3]?.replace(')', ''));
+  assert.ok(Math.abs(alpha(two.neonGlow) - alpha(one.neonGlow) * 2) < 1e-9, 'twice as bright is twice the alpha');
+  assert.equal(alpha(none.neonGlow), 0);
+  assert.equal(chans(none.neonGlow)[1], 255, 'unlit, but still the same colour: 0 is a dimmer, not a delete');
+  assert.equal(alpha(gridColours('#32be7d', 99).neonGlow), alpha(two.neonGlow), 'clamped to the slider it is given');
+  assert.equal(alpha(courtGridColours('#3cc88c', 0, 0.18).neonCell), 0);
+});
+
+test('a colour the picker could never produce is refused, and nothing ever composes to NaN', () => {
+  // the picker is an <input type="color">, but a hand-edited store is not, and a NaN in an rgba()
+  // string is a silently invisible grid rather than a loud failure
+  assert.equal(gridColours('zzz', 1).neonCell, 'rgba(50,190,125,1)', 'junk falls back to the shipped board colour');
+  assert.equal(courtGridColours('#12', 1, 0.18).neonCell, 'rgba(60,200,140,0.18)', 'and to the shipped court colour');
+  // black has no brightest channel to divide by: the guard against 255/0
+  assert.equal(gridColours('#000000', 1).neonHalo, 'rgba(0,0,0,0.07)');
+  for (const src of [gridColours('#000000', 1), gridColours('#ffffff', 2), gridColours('#32be7d', 0.05), courtGridColours('#000000', 2, 0.18)]) {
+    for (const [k, v] of Object.entries(src)) {
+      assert.ok(!/NaN|undefined/.test(v), `${k} composed to "${v}"`);
+      assert.match(v, /^rgba\(\d+,\d+,\d+,[\d.]+\)$/, `${k} is a colour the canvas understands`);
+    }
+  }
+});
+
+test('the grid settings actually reach the boards that draw them', () => {
+  // a control that persists a value nobody reads is worse than no control -- the point of this
+  // whole file. spaceOptions never set these keys at all before, so the board fell through to the
+  // engine's hardcoded greens and the picker would have been decorative.
+  const s = spaceOptions({ space: { gridColour: '#ff0000', gridBrightness: 1 } });
+  assert.equal(s.neonCell, 'rgba(255,0,0,1)', 'the board takes the colour');
+  assert.equal(s.grid, true);
+  assert.equal(spaceOptions({ space: { grid: false } }).grid, false, 'and the switch still switches');
+  // the courts carry theirs as a ready-made set, so the screen needs no colour code of its own
+  const b = blockanoidOptions({ blockanoid: { gridColour: '#0000ff', gridBrightness: 1 } });
+  assert.equal(b.gridOpts.neonCell, 'rgba(0,0,255,0.18)');
+  assert.equal(blockanoidOptions({ blockanoid: { grid: false } }).grid, false);
+  assert.equal(tetrustOptions({ tetrust: { gridColour: '#0000ff' } }).gridOpts.neonCell, 'rgba(0,0,255,0.06)',
+    'the well keeps its own fainter weight');
 });
