@@ -17,6 +17,14 @@ export const ROWS = 24;
 
 export const PADDLE_W = 4;        // grid units; drawn as four 1x1 stones
 export const PADDLE_Y = 1;        // the row the paddle stands on
+// TWO DIFFERENT MEASUREMENTS, and confusing them put the ball inside the bat (operator,
+// 2026-09-12: "the ball is inset on the paddle. It needs to rest cleanly on the top of the
+// paddle"). PADDLE_D is the bat's DEPTH across the board -- it is drawn as 1x1 stones, so it
+// covers one whole grid row, from PADDLE_Y to PADDLE_Y + 1. PADDLE_H is how tall those stones
+// STAND, which is a height off the board and has nothing to do with where the ball rests. The
+// rules used the height as the depth, so the ball sat 0.4 of a unit inside the bat and the
+// collision box was little over half the bat's real footprint.
+export const PADDLE_D = 1;
 export const PADDLE_H = 0.55;
 export const BALL_S = 0.84;       // the ball is a small cube, like everything else here
 export const BALL_R = BALL_S / 2;
@@ -57,7 +65,8 @@ function layout(g) {
 
 /** Park the ball on the paddle, waiting for a launch. */
 export function resetBall(g) {
-  g.ball = { x: g.paddle.x + g.paddle.w / 2, y: PADDLE_Y + PADDLE_H + BALL_R + 0.05, vx: 0, vy: 0, r: BALL_R, stuck: true };
+  // exactly one radius clear of the bat's far edge: resting ON it, touching, not sunk into it
+  g.ball = { x: g.paddle.x + g.paddle.w / 2, y: PADDLE_Y + PADDLE_D + BALL_R, vx: 0, vy: 0, r: BALL_R, stuck: true };
   return g.ball;
 }
 
@@ -118,7 +127,7 @@ function offPaddle(g) {
   const a = off * MAX_BOUNCE;
   b.vx = Math.sin(a) * s;
   b.vy = Math.abs(Math.cos(a) * s);        // always upward: a graze must never drag it down
-  b.y = PADDLE_Y + PADDLE_H + b.r;
+  b.y = PADDLE_Y + PADDLE_D + b.r;         // put it back on top of the bat, not inside it
 }
 
 function hitBrick(g, hits) {
@@ -149,7 +158,7 @@ function substep(g, h, hits) {
   if (b.y + b.r > ROWS) { b.y = ROWS - b.r; b.vy = -Math.abs(b.vy); hits.push({ kind: 'wall' }); }
 
   const p = g.paddle;
-  if (b.vy < 0 && b.y - b.r <= PADDLE_Y + PADDLE_H && b.y + b.r >= PADDLE_Y
+  if (b.vy < 0 && b.y - b.r <= PADDLE_Y + PADDLE_D && b.y + b.r >= PADDLE_Y
       && b.x + b.r >= p.x && b.x - b.r <= p.x + p.w) {
     offPaddle(g);
     hits.push({ kind: 'paddle' });

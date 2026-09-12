@@ -114,8 +114,15 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
    1150 px the nav held 868 px of tabs in a 650 px box -- 218 px of them unreachable: it does scroll
    sideways, but with the scrollbar hidden nothing said so, and a wheel scrolls the page, not the bar.
    Under 1400 px the bar wraps and the nav takes a full row of its own (every tab fits at 1150), and
-   where it still overflows -- a phone -- its scrollbar is visible and it can be dragged. */
-@media (max-width: 1400px) {
+   where it still overflows -- a phone -- its scrollbar is visible and it can be dragged.
+
+   2026-09-12: 1400 was far too low, and adding the Diversions menu made it show. Measured across
+   the inline range -- the nav wants 979 px of tabs (1031 above 1760 px, where the buttons regain
+   their padding and the user chip comes back), and the inline bar gives it 828 px at 1500, 747 at
+   1600, 841 at 1800 and 961 at 1920. So between 1400 and 2000 the last two or three tabs were past
+   the fold at EVERY width, behind a hidden scrollbar. It first genuinely fits at 2000 (1031 in
+   1031), so that is where the bar stops wrapping. */
+@media (max-width: 1999px) {
   header.top { flex-wrap: wrap; height: auto; padding-bottom: 6px; row-gap: 2px; }
   nav.pages { order: 10; flex: 1 0 100%; margin-left: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
   nav.pages::-webkit-scrollbar { display: block; height: 6px; }

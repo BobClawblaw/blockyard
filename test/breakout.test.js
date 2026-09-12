@@ -4,8 +4,9 @@
 // played here and asserted step by step.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
-  COLS, ROWS, LIVES, PADDLE_W, PADDLE_Y, PADDLE_H, BALL_R, BRICK_ROWS, ROW_SPEC,
+  COLS, ROWS, LIVES, PADDLE_W, PADDLE_Y, PADDLE_D, PADDLE_H, BALL_R, BRICK_ROWS, ROW_SPEC,
   newGame, advance, step, movePaddle, nudge, launch, tiles, remaining, speed, resetBall,
 } from '../public/js/breakout.js';
 
@@ -18,7 +19,9 @@ test('a new game: a full wall, three lives, the bat centred and the ball resting
   assert.equal(g.score, 0);
   assert.equal(g.paddle.x + g.paddle.w / 2, COLS / 2, 'the bat starts in the middle');
   assert.equal(g.ball.stuck, true, 'the ball waits to be served');
-  assert.ok(g.ball.y > PADDLE_Y, 'and it sits on top of the bat, not inside it');
+  assert.equal(g.ball.y - BALL_R, PADDLE_Y + PADDLE_D,
+    'it rests exactly ON the bat: the near edge of the ball touches the far edge of the bat, with no overlap');
+  assert.ok(PADDLE_H < PADDLE_D, 'the bat\'s height and its depth are different things; using the height as the depth sank the ball into it');
   assert.ok(g.bricks.every((b) => b.y > PADDLE_Y + 4), 'the wall is well clear of the bat');
   const rows = [...new Set(g.bricks.map((b) => b.y))].sort((a, b) => a - b);
   assert.equal(rows.length, BRICK_ROWS);
@@ -77,7 +80,7 @@ test('where the ball lands on the bat decides where it goes: that is the whole g
     resetBall(g);
     g.ball.stuck = false;
     g.ball.x = 8 + offset;
-    g.ball.y = PADDLE_Y + PADDLE_H + BALL_R + 0.2;
+    g.ball.y = PADDLE_Y + PADDLE_D + BALL_R + 0.2;
     g.ball.vx = 0; g.ball.vy = -speed(1);
     // step until it bounces: at eleven units a second it covers 0.18 of a unit in a 16 ms frame,
     // so a single frame does not carry it the last fifth of a unit onto the bat
@@ -183,4 +186,22 @@ test('the tiles for the engine: a brick IS a grid cell, the bat is four stones, 
   assert.equal(remaining(newGame()), 1, 'a full wall is all of it');
   const h = newGame(); h.bricks = h.bricks.slice(0, h.bricks.length / 2);
   assert.equal(remaining(h), 0.5);
+});
+
+test('a playfield refuses hover: the pointer does not light the bat, tooltip it, or navigate', () => {
+  // (operator, 2026-09-12: "In blockout, don't highlite the paddle block controller when I mouse
+  // over it".) On a data board the pointer picks out a transaction and a click opens it in the
+  // explorer; on a playfield the pointer is holding the bat and a click serves the ball, so the
+  // whole hover behaviour is switched off for both games.
+  const read = (f) => readFileSync(new URL(`../public/js/${f}`, import.meta.url), 'utf8');
+  const engine = read('details3d.js');
+  assert.match(engine, /st\.noHover = opts\.hover === false;/, 'the engine reads the option onto the canvas state');
+  // gated in the move handler AND the click handler, or the bat still glows / the board navigates
+  const move = engine.match(/addEventListener\('pointermove'[\s\S]*?\n  \}\);/)?.[0] ?? '';
+  const click = engine.match(/addEventListener\('click'[\s\S]*?\n  \}\);/)?.[0] ?? '';
+  assert.match(move, /if \(st\.noHover\) return;/, 'no glow, no tooltip, no pointer cursor');
+  assert.match(click, /if \(st\.noHover\) return;/, 'and no navigation off a playfield');
+  for (const game of ['blockout.js', 'tetrust.js']) {
+    assert.match(read(game), /hover: false/, `${game} asks for it`);
+  }
 });

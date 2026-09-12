@@ -71,6 +71,7 @@ function opts(base) {
     // space off and got the textured deck back, and its per-cell neon glow turned the well into a
     // loud green lattice: the glow and the halo are silenced here, and the grid is a quiet line.
     space: true, idleFx: false, shadows: false,
+    hover: false,                           // a playfield does not light up under the pointer
     // no sky on the well itself: the sky is the panel's canvas behind it (drawSky)
     stars: false, galaxy: false,
     neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)', neonCell: 'rgba(60,200,140,0.06)',

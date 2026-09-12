@@ -48,6 +48,7 @@ function opts(base) {
     // effects, no shadows, and every frame drawn exactly as laid -- a ball that lags the rules is
     // a ball you cannot aim
     space: true, stars: false, galaxy: false, idleFx: false, shadows: false,
+    hover: false,                           // the pointer is holding the bat, not picking out a stone
     neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)',
     edges: true, facetPx: Infinity, crownPx: Infinity, sheen: false,
     neon: b.neon, neonSource: b.neonSource, neonColour: b.neonColour, neonBrightness: b.neonBrightness,

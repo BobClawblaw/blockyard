@@ -8,8 +8,12 @@ import { readFileSync } from 'node:fs';
 
 const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
 
-test('below 1400 px the tabs take a row of their own, and can still be scrolled', () => {
-  const at = css.slice(css.indexOf('@media (max-width: 1400px) {'));
+test('below 2000 px the tabs take a row of their own, and can still be scrolled', () => {
+  // 2026-09-12: the threshold was 1400, and measurement showed that far too low -- the nav wants
+  // 979 px of tabs (1031 above 1760) and the inline bar gives it 747 px at 1600 and 961 at 1920, so
+  // two or three tabs sat past the fold at every width between 1400 and 2000, behind a scrollbar
+  // that is not drawn. It first fits inline at 2000 (1031 in 1031).
+  const at = css.slice(css.indexOf('@media (max-width: 1999px) {'));
   assert.match(at, /header\.top \{ flex-wrap: wrap; height: auto;/, 'the bar may wrap');
   assert.match(at, /nav\.pages \{ order: 10; flex: 1 0 100%;/, 'the nav takes the full row');
   assert.match(at, /nav\.pages::-webkit-scrollbar \{ display: block;/, 'and shows its scrollbar where it still overflows');

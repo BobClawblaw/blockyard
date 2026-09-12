@@ -1908,6 +1908,12 @@ function bindHover(canvas, st) {
   const tip = canvas.parentElement?.querySelector?.('.goggles-tip') ?? null;
   const hide = () => tip?.classList?.add('hidden');
   canvas.addEventListener('pointermove', (e) => {
+    // A BOARD CAN REFUSE HOVER (`hover: false`; operator, 2026-09-12: "In blockout, don't highlite
+    // the paddle block controller when I mouse over it"). On a data board the pointer picks out a
+    // transaction; on a playfield it is holding the bat, so lighting whatever is under it -- and
+    // offering a tooltip and a pointer cursor for it -- is noise. The flag is read from the state
+    // rather than captured here, so it follows the option rather than whichever draw bound first.
+    if (st.noHover) return;
     const hit = hitTest(canvas, e.clientX ?? 0, e.clientY ?? 0);
     const hid = hit ? String(hit.txid) : null;
     if (hid !== (st.hoverId ?? null)) setHover(st, hid);
@@ -1926,6 +1932,7 @@ function bindHover(canvas, st) {
   canvas.addEventListener('pointerleave', () => { hide(); setHover(st, null); if (canvas.style) canvas.style.cursor = ''; });
   // a transaction opens in the explorer; aggregate pieces and market candles only glow
   canvas.addEventListener('click', (e) => {
+    if (st.noHover) return;                 // a click on a playfield serves the ball, it does not navigate
     const hit = hitTest(canvas, e.clientX ?? 0, e.clientY ?? 0);
     if (hit && TXID.test(String(hit.txid)) && globalThis.location) globalThis.location.hash = `#explorer/tx/${String(hit.txid).toLowerCase()}`;
   });
@@ -1943,6 +1950,7 @@ export function render3d(canvas, cells, options = {}) {
     st = { prev: [], raf: null, plan: null, dirty: false };
     STATE.set(canvas, st);
   }
+  st.noHover = opts.hover === false;        // see bindHover: playfields do not light up under the pointer
 
   // FLUSH WITH THE VIEWPORT (operator, 2026-09-11: "Blocks are being shown
   // off the viewport. I want the grid bounds flush with the viewport"). One
