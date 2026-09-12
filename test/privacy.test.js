@@ -27,12 +27,33 @@ function trackedFiles() {
   }
 }
 
+// ACCOUNTS THAT NAME A MACHINE, NOT A PERSON. A GitHub runner's username is `runner`; a
+// container's is often `root` or `ubuntu`. Those are ordinary English words, and "the test
+// runner's own TAP output" -- which appears in three tracked files -- is not a privacy leak.
+//
+// This file already reasons exactly this way about the bare hostname ("a common English word,
+// and matching it would flag ordinary prose"). Usernames never got the same treatment, because
+// on the machine this was written on the username is distinctive, so it never fired. The first
+// CI run found it immediately: three sentences about test runners, reported as identity leaks.
+//
+// The guard stays ON in CI -- a push is exactly when leaked identity would escape. What changes
+// is that a generic account name is not an identity worth guarding.
+export const GENERIC_ACCOUNTS = new Set([
+  'runner', 'root', 'user', 'users', 'admin', 'administrator', 'build', 'builder',
+  'ubuntu', 'debian', 'centos', 'fedora', 'alpine', 'node', 'nobody', 'default',
+  'ci', 'github', 'gitlab', 'jenkins', 'travis', 'circleci', 'vsts', 'azureuser',
+  'docker', 'vagrant', 'codespace', 'devcontainer', 'runneradmin',
+]);
+export const isGenericAccount = (u) => GENERIC_ACCOUNTS.has(String(u ?? '').toLowerCase());
+
 /** Identifiers that say "this particular person's machine". */
 function machineIdentity() {
   const out = [];
   const user = os.userInfo().username;
   // A short username can sit inside an ordinary word, so matches are word-bounded.
-  if (user && user.length >= 3) out.push({ kind: 'username', re: new RegExp(`\\b${esc(user)}\\b`, 'i'), shown: user });
+  if (user && user.length >= 3 && !isGenericAccount(user)) {
+    out.push({ kind: 'username', re: new RegExp(`\\b${esc(user)}\\b`, 'i'), shown: user });
+  }
 
   // The bare hostname here is a common English word, and matching it would flag
   // ordinary prose. The resolvable forms are specific enough to be worth checking.
@@ -60,7 +81,7 @@ function esc(s) {
 test('no tracked file contains this machine username, hostname or addresses', () => {
   const files = trackedFiles();
   if (files === null) return; // skip outside a git checkout
-  const identity = machineIdentity().filter((i) => i.kind !== 'username' || true);
+  const identity = machineIdentity();
 
   const hits = [];
   for (const f of files) {
@@ -136,4 +157,21 @@ test('the unit file names no real account and no real address', () => {
   // Regression: two Environment= assignments once ended up on one line, which
   // silently discarded BLOCKYARD_PORT.
   assert.doesNotMatch(text, /Environment=\S+=\S*Environment=/, 'one assignment per line');
+});
+
+test('the privacy guard ignores accounts that name a machine rather than a person', () => {
+  // Found by the first CI run this repository ever had: it runs as `runner`, and three tracked
+  // files say "the test runner's own TAP output". The guard reported all three as leaked
+  // identity and failed the build -- loudly, and for nothing. Word boundaries did not help,
+  // because `runner` really is a whole word in that sentence.
+  for (const u of ['runner', 'root', 'ubuntu', 'RUNNER', 'Build', 'codespace']) {
+    assert.equal(isGenericAccount(u), true, `"${u}" names a machine, not a person`);
+  }
+  for (const u of ['bobclawblaw', 'j.smith', 'alice']) {
+    assert.equal(isGenericAccount(u), false, `"${u}" could identify a person`);
+  }
+  // and nothing else was weakened to achieve it: addresses and resolvable hostnames still count
+  const src = fs.readFileSync(new URL('./privacy.test.js', import.meta.url), 'utf8');
+  assert.ok(src.includes('kind: `interface ${name}`'), 'interface addresses are still checked');
+  assert.ok(src.includes("`${host}.local`"), 'resolvable hostnames are still checked');
 });
