@@ -44,6 +44,14 @@ export const SFX = Object.freeze({
   wall: [420, 400, 0.04, 'triangle', 0.04],
   life: [320, 90, 0.42, 'sawtooth', 0.08],
   levelup: [520, 1180, 0.3, 'triangle', 0.07],
+  // BLOCKANOID (arkanoid.js): a silver brick RINGS rather than breaks and gold rings harder and
+  // lower, so the ear learns which bricks are worth hitting before the eye does. A capsule is a
+  // rising chime (it is always good news), the laser a short zap, a minion a dull pop.
+  silver: [560, 620, 0.06, 'triangle', 0.055],
+  gold: [240, 210, 0.07, 'square', 0.05],
+  capsule: [620, 1560, 0.22, 'triangle', 0.075],
+  laser: [1200, 420, 0.05, 'sawtooth', 0.045],
+  enemy: [380, 140, 0.12, 'sawtooth', 0.06],
 });
 
 const S = { ctx: null, music: false, sfx: false, timer: null, at: 0, i: 0, gain: null, live: new Set() };

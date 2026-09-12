@@ -25,6 +25,17 @@ All notable changes to this project are documented here. The format follows
   table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
   the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
   a brick on a slow frame.
+- **Blockanoid**: Arkanoid on the 3D engine, the third Diversion (`public/js/arkanoid.js` for the
+  rules, `public/js/blockanoid.js` for the screen). Six hand-built walls that cycle; **silver**
+  bricks that take two hits and one more every four levels, standing lower once damaged; **gold**
+  that never breaks and never blocks a level, since a wall is cleared when its *breakable* bricks
+  are gone. Seven **capsules** fall out of broken bricks — laser, enlarge, catch, slow, disrupt
+  (three balls), player (a life) and break (skip the wall) — one on the court at a time, as the
+  arcade did it. Vaus turns red while the laser is up, so the bat says what it can do. Minions
+  drift down the court and pay when destroyed. Which brick carries a capsule is a **hash of the
+  brick and the level, never `Math.random`**, so a wall always drops the same letters and the
+  whole thing is assertable under `node:test`. Capsules and minions each have a switch, and
+  because they change the rules rather than the look, flipping one reaches the game in play.
 - **Seventeen new idle effects**, bringing the total to **26**, each with its own switch:
   shockwave, nova, fireworks, solar flare, wave, quake, code rain, sparkle, checkerboard, radar,
   vortex, laser, power-up, combo chain, aurora, plasma and glitch. All are pure functions of the

@@ -1489,6 +1489,9 @@ body { font-variant-numeric: tabular-nums; }
 /* Blockout's court is 16 x 24 rather than 10 x 20, so it is wider than the Tetris well; the rest
    of the furniture (the sky canvas, the overlay, the HUD) is shared with it. */
 .tetcard .treemapwrap.tetwell.bowell { aspect-ratio: 17 / 25; }
+/* Blockanoid's court is 13 x 26: narrower than Blockout's and taller, which is what gives Vaus a
+   court you can dig a channel up the side of. Same furniture, its own shape. */
+.tetcard .treemapwrap.tetwell.banwell { aspect-ratio: 14 / 27; }
 .tetwell canvas { width: 100%; height: 100%; display: block; background: transparent; border: 0; }   /* the sky shows through */
 /* THE PANEL IS THE SKY (operator: "Have this entire panel filled black and rendering the spiral
    galaxy for this display. Have the text floating over the spiral galaxy, and then the playboard

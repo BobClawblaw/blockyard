@@ -17,11 +17,11 @@ const read = (f) => readFileSync(new URL(`../public/${f}`, import.meta.url), 'ut
 const html = read('index.html'), css = read('css/app.css'), app = read('js/app.js');
 const rule = (sel) => css.match(new RegExp(`\\${sel} \\{([^}]*)\\}`))?.[1] ?? '';
 
-test('the two games live in the menu, at the end of the nav, and nowhere else', () => {
+test('the games live in the menu, at the end of the nav, and nowhere else', () => {
   const pop = html.match(/<div class="navmenu-pop[\s\S]*?<\/div>/)?.[0] ?? '';
   assert.ok(pop, 'the panel exists');
   const inPop = [...pop.matchAll(/data-page="([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(inPop, ['tetrust', 'blockout'], 'both games are in it');
+  assert.deepEqual(inPop, ['tetrust', 'blockout', 'blockanoid'], 'every game is in it');
   // exactly once in the whole page: they were moved, not copied
   for (const page of inPop) {
     assert.equal(html.match(new RegExp(`<button data-page="${page}"`, 'g')).length, 1, `${page} has one nav button`);

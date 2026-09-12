@@ -244,6 +244,16 @@ with `still: true`; the panel behind it is a second canvas carrying the star fie
 scheduler that runs on the audio clock, because the page's timers are not reliable enough to keep
 a tempo.
 
+**Blockanoid** (`public/js/arkanoid.js` rules, `public/js/blockanoid.js` screen). Arkanoid on the
+same engine, the third Diversion. Same split as Tetrust and Blockout: the rules file has no DOM, no
+canvas, no clock and no `Math.random`, so a whole run is reproducible under `node:test`. The part
+worth knowing: **which brick carries a capsule is `hash01(brick, level)`, not a roll** — that is the
+only reason "this wall drops a laser from that brick" can be a test rather than a hope. Silver
+counts down, gold is scenery (`breakable()` is what `cleared` is measured against, so gold can never
+trap a level), and the `capsules` / `enemies` switches live ON THE GAME (`setOptions`) rather than in
+the renderer's options, because they change the rules; `blockanoid.js` re-applies them on a flip so
+the control is not dead until the next life.
+
 **The arcade.** 26 idle effects (was 9). The seventeen new ones are pure functions in `fxAt`;
 board-level choices come from `fxHash(seed)`, never `Math.random`, so they replay identically and
 are tested rather than watched. Each has a switch in `settings.js`; a test holds `FX_KINDS`, the
@@ -355,7 +365,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 684 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 699 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

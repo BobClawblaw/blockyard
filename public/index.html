@@ -39,6 +39,7 @@
         <div class="navmenu-pop hidden" id="navDivPop" role="menu">
           <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
           <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
+          <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
         </div>
       </div>
     </nav>
@@ -384,6 +385,42 @@
           </div>
           <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
           <table class="tetscores" id="boScores"></table>
+        </div>
+      </div>
+    </section>
+    <!-- BLOCKANOID (public/js/blockanoid.js, rules in arkanoid.js): Arkanoid on the block engine.
+         A narrower, taller court than Blockout's; silver bricks survive a hit, gold survives every
+         hit, and a broken brick may drop a capsule. Vaus turns red while the laser is up. -->
+    <section class="page" data-page="blockanoid">
+      <div class="tetrust" id="blockanoid">
+        <div class="card tetcard bacard">
+          <canvas class="tetsky" id="baSky"></canvas>
+          <h3>Blockanoid <span class="sp"></span><span class="src">catch the capsules — Vaus follows your mouse</span></h3>
+          <div class="treemapwrap tetwell banwell idle" id="baWellWrap">
+            <canvas class="treemap" id="baWell"></canvas>
+          </div>
+          <div class="tetover" id="baOver">
+            <div class="tetmsg" id="baMsg">Blockanoid</div>
+            <div class="tetsub" id="baSub"></div>
+            <button type="button" class="btn primary" id="baResume">play</button>
+          </div>
+        </div>
+        <div class="card tethud">
+          <h3>Score</h3>
+          <div class="tetstats" id="baStats"></div>
+          <h3>Capsules</h3>
+          <div class="tetkeys">L laser · E wide · C catch · S slow · D three balls · P a life · B skip the wall</div>
+          <h3>Keys</h3>
+          <div class="tetkeys">move the mouse over the court, or ← → / A D · space or click serves · ↑ or right-click fires · P pause · Enter play</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="baStars" aria-pressed="false" title="the star field across the panel">★ stars</button>
+            <button type="button" class="tetsw" id="baGalaxy" aria-pressed="false" title="the spiral galaxy in that sky">🌀 galaxy</button>
+            <button type="button" class="tetsw" id="baNeon" aria-pressed="false" title="the wall under lit neon tubes">◉ neon</button>
+            <button type="button" class="tetsw" id="baSfx" aria-pressed="false" title="Vaus, bricks, capsules, the laser and a lost ball">♫ sound</button>
+          </div>
+          <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
+          <table class="tetscores" id="baScores"></table>
         </div>
       </div>
     </section>

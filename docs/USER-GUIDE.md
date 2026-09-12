@@ -557,6 +557,75 @@ place shows in both; the colour and brightness of the neon live on that tab.
 
 ---
 
+## Blockanoid
+
+Arkanoid, on the same 3D engine, under **Diversions**. Blockout with the arcade's own ideas put
+back: a different wall every level, bricks that survive being hit, and capsules that fall out of
+what you break. The court is narrower and taller than Blockout's, which is what gives you room to
+dig a channel up the side.
+
+### Playing
+
+**Vaus follows your mouse.** Click to serve, or use **←** **→** / **A** **D** and **space**. With
+the laser capsule, **↑** or a right-click fires.
+
+| Keys | |
+|---|---|
+| **mouse**, **←** **→**, or **A** **D** | move Vaus |
+| **click** or **space** | serve the ball |
+| **↑**, **W**, or **right-click** | fire, when the laser is up |
+| **P** or **Esc** | pause and resume |
+| **Enter** | start, or resume when paused |
+
+### The wall
+
+Three kinds of brick, and telling them apart is most of the game:
+
+| Brick | What it does |
+|---|---|
+| **Coloured** | Breaks in one hit and pays by colour, 50 for white up to 120 for yellow. |
+| **Silver** | Takes **two** hits, and one more every four levels. It stands lower once damaged, so the wall shows its own wear. Pays 50 times the level. |
+| **Gold** | Never breaks and pays nothing. It is scenery — a wall is cleared when the breakable bricks are gone, so gold never traps you. |
+
+Six walls ship, and past the sixth they cycle with tougher silver each time.
+
+### Capsules
+
+A broken brick may drop one, and only **one is on the court at a time** — which is what makes
+taking it a decision rather than a reflex. Catch it with Vaus. Every capsule pays 1000 points.
+
+| | Capsule | What it does |
+|---|---|---|
+| **L** | Laser | Vaus turns red and can shoot. The bat itself tells you what it can do. |
+| **E** | Enlarge | A wider Vaus. |
+| **C** | Catch | The ball sticks on landing; serve it again when you have aimed. |
+| **S** | Slow | Takes the pace off the ball already in play. |
+| **D** | Disrupt | Three balls at once, all at the same speed. |
+| **P** | Player | An extra life. |
+| **B** | Break | Skips the rest of the wall. |
+
+Laser and Catch put each other away: Vaus does one thing at a time. Losing a ball puts Vaus back
+to stock.
+
+### The minions
+
+Shapes drift down the court to spoil your aim. The ball or the laser destroys one, and so does
+touching Vaus; each pays 200. Turn them off in the settings if you would rather practise.
+
+### Scoring
+
+Where the ball lands on Vaus decides where it goes, exactly as in Blockout. You get **three
+balls**; clearing a wall starts the next with a faster ball and your score kept. High scores are
+kept in your browser, top ten, and are not sent anywhere.
+
+### The switches on the panel
+
+**★ stars**, **🌀 galaxy**, **◉ neon** and **♫ sound**, as in Blockout. **Capsules** and **minions**
+have switches too, on **Display settings → Blockanoid** — and because those two change the rules
+rather than the look, flipping them reaches the game you are playing, not just the next one.
+
+---
+
 ## Peers
 
 | Panel | What it shows |
@@ -807,6 +876,18 @@ shows in both. The rest are here only:
 
 What the sky is *made of* — density, brightness, nebulae, dust and the rest — comes from the
 **Sky** tab, which every board shares.
+
+### Blockanoid
+
+The Arkanoid court. **Star field**, **spiral galaxy**, **neon bricks** and **sound effects** are the
+same switches that sit on the game's own panel. Two more are here only, and they change the *rules*:
+
+| setting | what it does |
+|---|---|
+| **Capsules** | Whether broken bricks drop the falling letters at all. Off makes it a pure Breakout. |
+| **Minions** | Whether the drifting shapes turn up. Off clears the ones already on the court. |
+| **Galaxy centre** | Where the spiral's nucleus sits on the panel. |
+| **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each brick's own colour, or all in one colour of your choosing, at the brightness you set. |
 
 ### Tetrust
 

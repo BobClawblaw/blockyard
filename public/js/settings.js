@@ -107,6 +107,21 @@ export const DEFAULTS = Object.freeze({
     neonBrightness: 1,
     sfx: true,
   }),
+  // BLOCKANOID (operator, 2026-09-12: "Take blockout, and make rip off of Arkanoid using our
+  // engine, and make it a new Diversion called 'Blockanoid'"). Blockout's shape plus the two
+  // switches Arkanoid earns: whether capsules fall at all, and whether the minions turn up.
+  blockanoid: Object.freeze({
+    stars: true,
+    galaxy: true,
+    galaxyAt: 'center',
+    neon: false,
+    neonSource: 'brick',  // 'brick' (the brick's own colour) | 'colour'
+    neonColour: '#3d8bff',
+    neonBrightness: 1,
+    capsules: true,       // the falling letters
+    enemies: true,        // the minions drifting down the court
+    sfx: true,
+  }),
   // TETRUST (operator, 2026-09-12: "Have this entire panel filled black and rendering the spiral
   // galaxy for this display. Have the text floating over the spiral galaxy ... add toggles for
   // those settings in the game and have them persistent in settings"). The sky is the panel's own
@@ -237,6 +252,29 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
       Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The bat, the bricks, the walls and a lost ball' }),
+    ]),
+  }),
+  Object.freeze({
+    group: 'blockanoid',
+    title: 'Blockanoid',
+    note: 'The Arkanoid court: silver bricks that take more than one hit, gold that takes none, and capsules that fall out of what you break. These switches are also on the game’s own panel.',
+    rows: Object.freeze([
+      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the court' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
+      Object.freeze({
+        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy’s centre sits on the panel',
+        options: Object.freeze([['center', 'Behind the court'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
+      }),
+      Object.freeze({ key: 'neon', label: 'Neon bricks', kind: 'toggle', hint: 'The wall, Vaus and the ball as dim bodies under lit tubes' }),
+      Object.freeze({
+        key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'Each brick’s own colour, or all in one colour',
+        options: Object.freeze([['brick', 'The brick’s colour'], ['colour', 'One colour']]),
+      }),
+      Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
+      Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
+      Object.freeze({ key: 'capsules', label: 'Capsules', kind: 'toggle', hint: 'The letters that fall out of broken bricks: laser, wide, catch, slow, three balls, a life, skip' }),
+      Object.freeze({ key: 'enemies', label: 'Minions', kind: 'toggle', hint: 'The drifting shapes that spoil your aim, and pay when you hit one' }),
+      Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Vaus, the bricks, the capsules, the laser and a lost ball' }),
     ]),
   }),
   Object.freeze({
@@ -518,6 +556,22 @@ export function blockoutOptions(s) {
     // the engine calls the data-coloured source "temperature"; here that is the brick's own row
     neonSource: n.blockout.neonSource === 'colour' ? 'colour' : 'temperature',
     neonColour: n.blockout.neonColour, neonBrightness: n.blockout.neonBrightness,
+    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
+    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
+    starColours: sky.starColours, starGlints: sky.starGlints,
+  };
+}
+
+/** Blockanoid's switches. Blockout's shape, plus the two that are Arkanoid's own. */
+export function blockanoidOptions(s) {
+  const n = normalise(s);
+  const sky = spaceOptions(s);
+  return {
+    stars: n.blockanoid.stars, galaxy: n.blockanoid.galaxy, galaxyAt: n.blockanoid.galaxyAt, sfx: n.blockanoid.sfx,
+    capsules: n.blockanoid.capsules, enemies: n.blockanoid.enemies,
+    neon: n.blockanoid.neon,
+    neonSource: n.blockanoid.neonSource === 'colour' ? 'colour' : 'temperature',
+    neonColour: n.blockanoid.neonColour, neonBrightness: n.blockanoid.neonBrightness,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
     starColours: sky.starColours, starGlints: sky.starGlints,
