@@ -36,6 +36,7 @@ export const DEFAULTS = Object.freeze({
     sheen: false,         // a metallic highlight along the lit edge of each top face
     stars: false,         // opt-in: a star field twinkles, so the board never stops repainting
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
+    light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     detail: 'full',       // 'full' | 'simple' | 'flat' -- facet and crown thresholds below
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
   }),
@@ -117,6 +118,10 @@ export const PANEL = Object.freeze([
         options: Object.freeze([['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
       }),
       Object.freeze({ key: 'dome', label: 'Board curve', kind: 'range', min: 0, max: 12, step: 1, hint: 'How far the board bows toward you; 0 is flat' }),
+      Object.freeze({
+        key: 'light', label: 'Light', kind: 'choice', hint: 'Where the lamp hangs. Straight above lights the whole board evenly; a corner shades the far slope of the curve and the sides turned away',
+        options: Object.freeze([['overhead', 'Straight above'], ['upper-left', 'Upper left'], ['upper-right', 'Upper right'], ['front', 'From the viewer']]),
+      }),
     ]),
   }),
   Object.freeze({
@@ -358,6 +363,7 @@ export function spaceOptions(s) {
   if (!sp.edges) out.seamAlpha = 0;
   const motion = MOTION[sp.motion];
   if (motion) out.transition = motion;
+  out.light = sp.light;
   return out;
 }
 

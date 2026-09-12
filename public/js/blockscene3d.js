@@ -625,21 +625,36 @@ const flipOf = (o) => (o.flipY === false ? -1 : 1);
 // On the curved board each block is lit by the SLOPE of the surface under it
 // -- light from the upper left and above -- which is what makes a curve read
 // as a curve. 1 on a flat board, so nothing changes when the dome is off.
+// WHERE THE LAMP IS (operator, 2026-09-12: "The bottom of the tetrust board is too [dark]. We
+// need direct overhead lighting in teh 3d scene for the game" ... "Move the block space light to
+// be directly above the board centered ... we should add configurable light locations in
+// settings"). Each lamp is a direction over the board for the dome's slope shading (grid x,
+// screen-up rows, up) and a direction across the screen for the side faces (x right, y down);
+// `overhead` is straight above, so no slope is in shade and every side takes the same light.
+export const LIGHTS = Object.freeze({
+  'overhead': { L: [0, 0, 1], side: [0, 0] },
+  'upper-left': { L: [-0.55, 0.55, 0.63], side: [-0.7071, -0.7071] },
+  'upper-right': { L: [0.55, 0.55, 0.63], side: [0.7071, -0.7071] },
+  'front': { L: [0, -0.55, 0.63], side: [0, 0.9] },
+});
+export const LIGHT_DEFAULT = 'upper-left';
+export function lightOf(o = {}) {
+  return LIGHTS[o.light] ? o.light : o.overheadLight === true ? 'overhead' : LIGHT_DEFAULT;
+}
 export function domeLight(t, o = {}) {
   const { dome = 0, gridW = 0, gridH = 0 } = o;
-  // OVERHEAD LIGHT (Tetrust, operator 2026-09-12: "The bottom of the tetrust board is too
-  // [dark]. We need direct overhead lighting in teh 3d scene for the game"): the lamp straight
-  // above, so the slope of the dome shades nothing -- the bottom rows, which lean away from the
-  // upper-left lamp and sat at the 0.6 floor, read as bright as the middle
-  if (o.overheadLight === true) return 1;
   if (!dome || !gridW || !gridH) return 1;
+  const lamp = LIGHTS[lightOf(o)];
+  // straight above: the slope shades nothing -- the bottom rows, which lean away from a corner
+  // lamp and sat at the 0.6 floor, read as bright as the middle
+  if (lamp.L[0] === 0 && lamp.L[1] === 0) return 1;
   const u = (2 * (t.x + t.s / 2)) / gridW - 1, v = (2 * (t.y + t.s / 2)) / gridH - 1;
   const gx = (dome * -2 * u * (1 - v * v) * 2) / gridW;      // dz/dx in grid units
   const gy = (dome * (1 - u * u) * -2 * v * 2) / gridH;      // dz/dy
   const up = o.flipY === false ? -1 : 1;                     // screen-up in grid rows
-  const L = [-0.55, 0.55 * up, 0.63];
+  const L = [lamp.L[0], lamp.L[1] * up, lamp.L[2]];
   const d = (-gx * L[0] + -gy * L[1] + L[2]) / Math.hypot(gx, gy, 1);
-  return Math.max(0.6, Math.min(1.35, d / 0.63));
+  return Math.max(0.6, Math.min(1.35, d / L[2]));
 }
 
 // THE BOARD AT REST (operator, 2026-09-11: "There needs to be an occasional
@@ -817,6 +832,9 @@ export function buildScene(tiles, o = {}) {
     c, x0: c.x, y0: c.y, x1: c.x + c.s, y1: c.y + c.s, z0: c.z,
     k: (c.alpha ?? 1) * Math.min(1, c.z / 1.5) * (1 - (c.entry ?? 0)),
   })).filter((e) => e.k > 0.01) : [];
+  // the lamp's direction across the screen, for the side faces (LIGHTS); under the overhead
+  // lamp every side takes the same light, a shade under the top
+  const lampSide = LIGHTS[lightOf(o)].side;
   for (const t of ordered) {
     const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
     // NEON is a flat cube: no facets, no crown -- solid faces and the tubes on their edges
@@ -856,7 +874,7 @@ export function buildScene(tiles, o = {}) {
     for (const side of f.sides) {
       // lit from the upper left of the screen: a side turned that way is
       // brighter, one turned away falls into shadow
-      const d = side.nx * -0.7071 + side.ny * -0.7071;
+      const d = side.nx * lampSide[0] + side.ny * lampSide[1];
       // from the viewer: a face pointing down the screen (toward the camera) takes the most light
       const k = viewerLit ? 0.6 + 0.42 * Math.max(0, side.ny) + 0.3 * Math.max(0, side.nx) - 0.16 * Math.max(0, -side.nx) : 0.34 + 0.26 * (d + 1);
       out.push({ txid: t.txid, face: 'side', key: side.key, points: side.points, fill: shade(c, k * lit, a), ...(viewerLit ? { stroke: lift(c, 0.45, round3(0.5 * a)) } : {}) });
@@ -920,7 +938,7 @@ export function buildScene(tiles, o = {}) {
       out.push({ txid: t.txid, face: 'sheen', points: dark(0.1), fill: `rgba(0,0,0,${round3(0.4 * a)})` });
       for (const side of f.sides) {
         // the side turned to the lamp carries a highlight up its outer edge
-        const d = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * -0.7071 + side.ny * -0.7071);
+        const d = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * lampSide[0] + side.ny * lampSide[1]);
         if (d < 0.3) continue;
         const [p0, p1, p2, p3] = side.points;
         out.push({ txid: t.txid, face: 'sheen', points: [p0, L(p0, p1, 0.22), L(p3, p2, 0.22), p3], fill: lift(c, 0.9, round3(0.55 * d * a)) });

@@ -170,10 +170,10 @@ test('a cleared line drifts up and away: rising on its floor, sliding outward, f
   const at = (now) => driftTiles(drift, now, 700);
   const start = at(1000), mid = at(1350), late = at(1650);
   assert.equal(start.length, 2); assert.equal(start[0].floor, 0); assert.equal(start[0].color, '#ef5a5a', 'just lifted: on the board, full colour');
-  assert.ok(mid[0].floor > 2 && mid[0].floor < 9, 'halfway: well off the board');
+  assert.ok(mid[0].floor > 8 && mid[0].floor < 60, `halfway: well off the board (${mid[0].floor})`);
+  assert.equal(mid[0].color, '#ef5a5a', 'and still in full colour: it leaves the screen, it does not fade out over the well');
   assert.ok(mid[0].x < 0 && mid[1].x > 9, 'and sliding to its own side');
-  assert.ok(late[0].floor > mid[0].floor, 'still rising');
-  assert.ok(parseInt(late[0].color.slice(1, 3), 16) < parseInt(mid[0].color.slice(1, 3), 16), 'and darker: fading to the black');
+  assert.ok(late[0].floor > mid[0].floor && late[0].floor > 60, 'still rising, past the top of any canvas');
   assert.deepEqual(at(1700), [], 'gone at the end');
   assert.ok(start.every((t) => t.txid.startsWith('d') && t.tall === 1 && t.s === 1), 'ordinary cubes with their own ids');
 });

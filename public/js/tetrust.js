@@ -21,7 +21,7 @@ const WELL = {
   gridW: COLS, gridH: ROWS,
   oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 },
   dome: 5,                              // the default board's sphere (operator: "spherical like our default display")
-  overheadLight: true,                  // the lamp straight above, so the bottom rows are not in the dome's shade
+  light: 'overhead',                    // the lamp straight above, so the bottom rows are not in the dome's shade
   gridStep: 1,
   space: true,
   background: 'rgba(0,0,0,0)',          // clear: the panel's sky shows through ("Fill the entire panel with black")
@@ -42,10 +42,12 @@ const PREVIEW = { gridW: 4, gridH: 4, oblique: { ox: 0.10, oy: 0.30, headroom: 2
 // teh game display. smooth that shit out"). Stars are points; nobody can tell.
 const SKY = { gridW: COLS, gridH: ROWS, oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 }, dome: 0, space: false, grid: false, background: 'rgba(0,0,0,1)', idleFx: false, shadows: false, still: true, transition: { rise: 0, travel: 1, drop: 0 }, maxDpr: 1 };
 
-// THE DRIFT (operator: "have the block pieces drift up and away and completing lines"): a cleared
-// line's cells rise off the board and fade to the black behind them over this long
-const DRIFT_MS = 720;
-const DRIFT_RISE = 9;                   // units of height at the end of the drift
+// THE DRIFT (operator: "have the block pieces drift up and away and completing lines", then
+// "have teh blocks fly up off the screen entirely. Not dissapear just above the playfield"): a
+// cleared line's cells launch off the board -- gathering speed, full colour all the way -- and
+// leave through the top of the canvas
+const DRIFT_MS = 1100;
+const DRIFT_RISE = 80;                  // units of height at the end: well past the canvas top from any row
 
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, acc: 0, dirty: true, bound: false,
@@ -111,8 +113,8 @@ export function driftTiles(drift, now, ms = DRIFT_MS) {
   for (const d of drift) {
     const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
     if (t >= 1) continue;
-    const e = 1 - (1 - t) * (1 - t);                  // ease out: quick off the board, slowing as it goes
-    const k = 1 - t * t;                              // the fade: full colour on the way up, gone at the end
+    const e = t * t * (3 - 2 * t) * 0.35 + t * t * 0.65;   // a launch: slow off the board, then away
+    const k = t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15;     // full colour until the last stretch, off screen by then
     out.push({ txid: `d${d.id}`, x: d.x + d.dx * e, y: d.y, s: 1, tall: 1, floor: DRIFT_RISE * e, color: fade(d.color, k) });
   }
   return out;
