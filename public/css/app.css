@@ -1407,3 +1407,30 @@ body { font-variant-numeric: tabular-nums; }
 .btn.gear svg { display: block; }
 .btn.gear.on { color: var(--accent); border-color: var(--accent); }
 @media (max-width: 560px) { .cfg { width: 100%; border-left: 0; } }
+
+/* ==========================================================================
+   TETRUST (operator, 2026-09-12: "a playable tetris game using our 3d Engine ...
+   absolutely beautiful leveraging our framework"). The well is a board3d in a tall
+   frame; the HUD sits beside it. No inline styles anywhere: the overlay is a class.
+   ========================================================================== */
+.tetrust { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+.tetcard .treemapwrap.tetwell { position: relative; width: 100%; max-width: 560px; margin: 0 auto; aspect-ratio: 11 / 21; }
+.tetwell canvas { width: 100%; height: 100%; display: block; border-radius: var(--radius-sm); }
+.tetover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: rgba(2, 6, 10, 0.74); border-radius: var(--radius-sm); text-align: center; padding: 20px; }
+.tetover.hidden { display: none; }
+.tetmsg { font-size: 24px; font-weight: 650; letter-spacing: .04em; color: var(--accent); }
+.tetsub { font-size: 12.5px; color: var(--fg-dim); max-width: 340px; line-height: 1.5; }
+.tetstats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-family: var(--mono); font-size: 13px; margin-bottom: 10px; }
+.tetstats i { font-style: normal; color: var(--fg-dim); }
+.tetstats b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.tethud h3 { margin-top: 8px; }
+.treemapwrap.tetnext { position: relative; width: 132px; aspect-ratio: 1 / 1; margin-bottom: 10px; }
+.tetnext canvas { width: 100%; height: 100%; display: block; border-radius: var(--radius-sm); }
+.tetkeys { font-size: 11px; color: var(--fg-dim); line-height: 1.7; margin-bottom: 10px; }
+.tetscores { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+.tetscores td, .tetscores th { padding: 3px 4px; text-align: right; border-bottom: 1px solid var(--line-soft); font-variant-numeric: tabular-nums; }
+.tetscores th { color: var(--fg-faint); font-weight: 500; text-transform: uppercase; font-size: 9.5px; letter-spacing: .06em; }
+.tetscores td:first-child, .tetscores th:first-child { text-align: left; }
+.tetscores tr.now td { color: var(--accent); font-weight: 600; }
+@media (max-width: 900px) { .tetrust { grid-template-columns: 1fr; } }

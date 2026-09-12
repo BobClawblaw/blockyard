@@ -911,12 +911,21 @@ function priceLine(ctx, view, axes) {
     if (tint < 0.04) continue;
     const age = passed / PULSE_TAIL;
     const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
-    const grow = 1 + 2.6 * age;
-    // radii in line-widths, and the line is under a pixel wide at board scale: the first cut's
-    // 26 was a smudge a few pixels across. Big enough to be a cloud the line runs through.
-    for (const [k, al] of [[70, 0.09], [44, 0.14], [22, 0.22]]) {
-      ctx.fillStyle = `rgba(70,130,255,${(al * tint * (1 - 0.7 * age)).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(mx, my, lw * k * grow, 0, Math.PI * 2); ctx.fill();
+    void mx; void my;
+    // AN EMITTER, NOT PAINTED RINGS (operator, 2026-09-12: "I can see concentric rings
+    // overlapping as it travels ... have it be an emitter instead of painting maybe?"). The first
+    // cut stacked three discs per segment, and with neighbours at slightly different ages their
+    // edges lined up into rings. Now each charged segment sheds a cloud of small soft puffs at
+    // hashed angles, distances and sizes -- no two edges coincide, so they read as gas. Each puff
+    // drifts outward and thins as its stretch of the line ages: the cloud expands and dies to
+    // black. Hashed, not random, so a puff holds its place frame to frame.
+    for (let k = 0; k < 16; k++) {
+      const a1 = hash01(i * 47 + k * 11 + 3) * Math.PI * 2;
+      const spread = lw * (6 + 64 * age) * (0.35 + 0.65 * hash01(i * 13 + k * 5 + 29));
+      const rad = lw * (9 + 20 * hash01(i * 7 + k * 17 + 61)) * (1 + 1.4 * age);
+      const al = 0.085 * tint * (1 - 0.65 * age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
+      ctx.fillStyle = `rgba(70,130,255,${al.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(mx + Math.cos(a1) * spread, my + Math.sin(a1) * spread, rad, 0, Math.PI * 2); ctx.fill();
     }
   }
   for (const [w, c, a, kind] of [...GLOW, ...CORE]) {

@@ -13,6 +13,7 @@ import { loadSettings, setSetting, resetSettings, PANEL as SETTINGS_PANEL } from
 import { renderExplorer } from './explorer.js';
 import { renderMarkets } from './markets.js';
 import { renderKiosk } from './kiosk.js';
+import { renderTetrust } from './tetrust.js';
 import { renderChain, renderMempool, renderPeers, renderNetwork, renderLogs, renderNode, renderAdmin, ensureLogsLoaded, init as initPanels, initChainDrill } from './panels.js';
 
 // panels.js needs the formatters but must not import them from here (circular);
@@ -464,6 +465,7 @@ export function render() {
     case 'explorer': renderExplorer(s, state, helpers); break;
     case 'markets': renderMarkets(s, state, helpers); break;
     case 'kiosk': renderKiosk(s, state, helpers); break;
+    case 'tetrust': renderTetrust(s, state, helpers); break;
   }
 }
 
