@@ -243,7 +243,7 @@ function scheduleFx(canvas, st, opts, soon = false) {
     st.fxTimer = null;
     if (canvas.isConnected === false) return;
     const now = (globalThis.performance && performance.now()) || 0;
-    const busy = st.raf != null || (st.plan && now < st.plan.settleAt);
+    const busy = (st.plan && now < st.plan.settleAt) || st.dirty || !!st.pending;
     if (busy || !canvas.clientWidth) { scheduleFx(canvas, st, opts, soon); return; }
     const pool = FX_KINDS.filter((k) => k !== st.lastFx);
     // the first one after the board lands is a light-cycle race half the time

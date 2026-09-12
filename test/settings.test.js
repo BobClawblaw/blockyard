@@ -194,6 +194,17 @@ test('idle effects are armed when the board rests, star field or not', () => {
   assert.ok(edgeAt > 0 && armedAt > edgeAt && armedAt - edgeAt < 300, 'the arming sits inside the edge test');
 });
 
+test('an idle effect starts on a board at rest, even while the loop runs for the stars', () => {
+  // operator, 2026-09-12: "i don't see any idle effects going off when the starfield background is
+  // on the block space". Measured in the browser: the timer armed and fired (38/36, none
+  // cancelled) and then declined to start, because "busy" tested st.raf -- and a star field keeps
+  // the loop awake for ever. Busy has to mean the BOARD is moving.
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /const busy = st\.raf != null/, 'a running loop is not the same as a moving board');
+  assert.match(src, /const busy = \(st\.plan && now < st\.plan\.settleAt\) \|\| st\.dirty \|\| !!st\.pending;/,
+    'busy is: the choreography is running, a repaint is owed, or a newer layout waits');
+});
+
 test('the renderer honours the option names the settings hand it', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /drawStars\(ctx, pw, ph, dpr \|\| 1, view\.now \?\? 0, opts\)/, 'star options reach drawStars');
