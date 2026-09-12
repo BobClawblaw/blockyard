@@ -334,9 +334,15 @@
         </div>
         <!-- the price text in a panel of its own (operator: "Create a new panel for the price text to
              exist in, and keep the markets in it's own panel") -->
+        <!-- PRICE AND THE BOOK, in one panel of its own (operator, 2026-09-12: "Make it a new
+             panel with price, obviously"). The chart needs real height, which it cannot get as a
+             strip under the markets board, so the panel is sized like the Block flow one. -->
         <div class="kpanel kpp">
-          <div class="khead"><b>Price</b><span class="faint">five exchanges' public tickers</span></div>
+          <div class="khead"><b>Price &amp; order book depth</b><span class="faint">five exchanges' tickers, and their books</span></div>
           <div class="kprice" id="kPrice"></div>
+          <!-- The depth chart is a SIBLING of #kPrice, not a child: renderPriceInfo replaces that
+               element's innerHTML on every refresh, which would destroy a canvas inside it. -->
+          <div class="kdepthwrap"><canvas class="kdepth" id="kDepth"></canvas></div>
         </div>
         </div>
         <div class="kcol">

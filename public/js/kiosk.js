@@ -5,6 +5,7 @@
 // same data, the same camera, the Block space panel's mode switch and refresh countdown.
 import { poolViewer, blockFlow, flowArgs, applyMiningStyles } from './mining.js';
 import { renderMarketsBoard, renderPriceInfo } from './markets.js';
+import { renderDepthInto } from './depthchart.js';
 
 let bound = false;
 
@@ -15,6 +16,10 @@ export function renderKiosk(s, state, h) {
   const text = mk?.label ?? 'asking the exchanges…';
   if (lab && lab.textContent !== text) lab.textContent = text;
   renderPriceInfo('kPrice', h);
+  // THE ORDER BOOK, NOT A SPREAD FIGURE (operator, 2026-09-12). Compact and toolbar-less: there is
+  // nobody at a wall display to click a zoom, so it is fixed at +-2.5% -- the band where the book
+  // actually decides the price. It shares depthchart's single poll with the Markets tab.
+  renderDepthInto('kDepth', h);
   const sp = document.getElementById('kSpace');
   if (sp) poolViewer(sp, s, state);
   // THE CHAIN (operator, 2026-09-11: "There is absolutely no block chain/tip information in the

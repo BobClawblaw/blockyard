@@ -265,23 +265,16 @@ export function priceInfoHtml(d, fmt, now = Date.now()) {
   const med = d.summary?.median ?? null;
   const chs = usd.map((e) => e.change24).filter((v) => v != null).sort((a, b) => a - b);
   const ch = chs.length ? chs[Math.floor((chs.length - 1) / 2)] : null;
-  const hi = usd.reduce((m, e) => (e.high24 != null ? Math.max(m, e.high24) : m), -Infinity);
-  const lo = usd.reduce((m, e) => (e.low24 != null ? Math.min(m, e.low24) : m), Infinity);
   const pct = (v) => (v == null ? '–' : `${v > 0 ? '+' : ''}${(v * 100).toFixed(2)}%`);
   const cls = (v) => (v > 0 ? 'xpos' : v < 0 ? 'xneg' : '');
   const newest = d.exchanges.reduce((m, e) => Math.max(m, e.at ?? 0), 0);
-  const rows = d.exchanges.map((e) => `<tr><td>${fmt.esc(e.name)}${e.quote !== 'USD' ? ` <span class="faint">${fmt.esc(e.quote)}</span>` : ''}</td>`
-    + `<td class="r">${e.last == null ? '–' : money(e.last)}</td>`
-    + `<td class="r ${cls(e.change24)}">${pct(e.change24)}</td>`
-    + `<td class="r faint">${e.error && e.last == null ? 'no reply' : e.spread != null && e.last ? `${((e.spread / e.last) * 1e4).toFixed(1)} bp` : '–'}</td></tr>`).join('');
+  // THE KIOSK KEEPS THE PRICE AND LOSES THE 24 h BOOK DETAIL (operator, 2026-09-12: "swap out 24
+  // hour order book spread and details, keep the price, but change to market order depth chart that
+  // fits within the view"). The high/low/volume/spread block and the per-exchange table are gone:
+  // the depth chart that replaces them says far more about the book than a single spread figure,
+  // and a four-column table is unreadable from across the room a kiosk is meant to be seen from.
+  // The median, its day's change and the provenance line stay -- that is "keep the price".
   return `<div class="kp-main"><span class="kp-pair">BTC / USD</span><b class="kp-price">${med == null ? '–' : `$${money(med)}`}</b><span class="kp-chg ${cls(ch)}">${pct(ch)} <small>24 h</small></span></div>
-    <div class="kp-stats">
-      <div><span>24 h high</span><b>${Number.isFinite(hi) ? `$${money(hi, 0)}` : '–'}</b></div>
-      <div><span>24 h low</span><b>${Number.isFinite(lo) ? `$${money(lo, 0)}` : '–'}</b></div>
-      <div><span>24 h volume</span><b>${d.summary?.vol24 == null ? '–' : `${fmt.num(Math.round(d.summary.vol24))} BTC`}</b></div>
-      <div><span>spread across books</span><b>${d.summary?.spread == null ? '–' : `$${money(d.summary.spread)}`}</b></div>
-    </div>
-    <table class="kp-ex"><tbody>${rows}</tbody></table>
     <div class="kp-foot">median of ${usd.length} USD book${usd.length === 1 ? '' : 's'}${newest ? ` · updated ${fmt.ago(newest, now)}` : ''} · OKX quotes USDT</div>`;
 }
 

@@ -19,7 +19,12 @@ const D = { data: null, at: 0, busy: false, key: null, ago: 600, zoom: 0.05, hov
 const BID = '#3dff7a', ASK = '#ff4545';
 const BID_T = 'rgba(61,255,122,0.32)', ASK_T = 'rgba(255,69,69,0.32)';
 const BID_THEN = 'rgba(61,255,122,0.55)', ASK_THEN = 'rgba(255,69,69,0.55)';
-const PAD = { top: 28, right: 62, bottom: 22, left: 56 };
+const PAD_FULL = { top: 28, right: 62, bottom: 22, left: 56 };
+// COMPACT, for the kiosk. The full chart spends 62 px on the right purely to label the change
+// bars' axis and 56 on the left for the cumulative-BTC labels plus a rotated caption -- on a wall
+// panel a couple of hundred pixels tall that is most of the picture. Compact keeps the curves and
+// the price axis, which are what carry the meaning across a room, and drops the annotation.
+const PAD_COMPACT = { top: 15, right: 10, bottom: 17, left: 42 };
 
 const money = (v, dp = 0) => (v == null ? '–' : v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }));
 const btc = (v) => (v == null ? '–' : Math.abs(v) >= 100 ? Math.round(v).toLocaleString('en-US') : v.toFixed(Math.abs(v) >= 10 ? 1 : 2));
@@ -85,8 +90,9 @@ export function depthSums(ser, pct) {
   return { bids: ser.bid[ib] ?? null, asks: ser.ask[ia] ?? null, atLeast: Boolean(ser.bidPart?.[ib] || ser.askPart?.[ia]) };
 }
 
-export function drawDepth(canvas, ser, { zoom = 0.05, hover = null } = {}) {
+export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = false } = {}) {
   if (!canvas?.getContext) return null;
+  const PAD = compact ? PAD_COMPACT : PAD_FULL;
   const { ctx, w, h } = prep(canvas);
   if (!ser) {
     ctx.fillStyle = '#6a7484'; ctx.textAlign = 'center';
@@ -117,10 +123,12 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null } = {}) {
     ctx.strokeStyle = '#1a2029'; line(PAD.left, y, w - PAD.right, y);
     ctx.fillStyle = '#7d8898'; ctx.fillText(btc(v), PAD.left - 6, y);
   }
-  ctx.save?.();
-  ctx.translate(12, PAD.top + plotH / 2); ctx.rotate(-Math.PI / 2);
-  ctx.textAlign = 'center'; ctx.fillStyle = '#56606e'; ctx.fillText('BTC, cumulative', 0, 0);
-  ctx.restore?.();
+  if (!compact) {
+    ctx.save?.();
+    ctx.translate(12, PAD.top + plotH / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#56606e'; ctx.fillText('BTC, cumulative', 0, 0);
+    ctx.restore?.();
+  }
   ctx.setTransform(Math.min(globalThis.devicePixelRatio || 1, 2), 0, 0, Math.min(globalThis.devicePixelRatio || 1, 2), 0, 0);
   // right axis: the change bars' symmetric log scale
   if (ser.change) {
@@ -128,8 +136,10 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null } = {}) {
     for (let e = -F; e <= F; e++) {
       const v = e === 0 ? 0 : Math.sign(e) * 10 ** Math.abs(e);
       const y = Math.round(YC(v)) + 0.5;
-      ctx.fillStyle = '#7d8898';
-      ctx.fillText(v === 0 ? '0' : `${v > 0 ? '' : '-'}${shortN(Math.abs(v))}`, w - PAD.right + 6, y);
+      if (!compact) {
+        ctx.fillStyle = '#7d8898';
+        ctx.fillText(v === 0 ? '0' : `${v > 0 ? '' : '-'}${shortN(Math.abs(v))}`, w - PAD.right + 6, y);
+      }
       if (v === 0) { ctx.strokeStyle = '#2a323d'; line(PAD.left, y, w - PAD.right, y); }
     }
   }
@@ -188,8 +198,10 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null } = {}) {
       if (p == null || p < pmin || p > pmax) continue;
       const x = Math.round(X(p)) + 0.5;
       ctx.strokeStyle = 'rgba(200,210,225,0.5)'; line(x, PAD.top + plotH - 8, x, PAD.top + plotH);
-      ctx.fillStyle = '#8994a3'; ctx.textAlign = 'center';
-      ctx.fillText(`${r.name} ends`, x, PAD.top + plotH - 14 - 11 * (lane++ % 3));
+      if (!compact) {
+        ctx.fillStyle = '#8994a3'; ctx.textAlign = 'center';
+        ctx.fillText(`${r.name} ends`, x, PAD.top + plotH - 14 - 11 * (lane++ % 3));
+      }
     }
   }
   ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -211,7 +223,10 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null } = {}) {
   } else {
     const s1 = depthSums(ser, 0.01), s5 = depthSums(ser, 0.05);
     const al = (s) => (s.atLeast ? '≥ ' : '');
-    ctx.fillText(`mid $${money(ser.mid)} · within 1%: ${al(s1)}bids ${btc(s1.bids)} / asks ${btc(s1.asks)} BTC · within 5%: ${al(s5)}bids ${btc(s5.bids)} / asks ${btc(s5.asks)} BTC   (dotted: a book has ended, so at least)`, PAD.left + 2, 12);
+    ctx.fillText(compact
+      ? `mid $${money(ser.mid)} · 1%: ${al(s1)}${btc(s1.bids)} / ${btc(s1.asks)} BTC`
+      : `mid $${money(ser.mid)} · within 1%: ${al(s1)}bids ${btc(s1.bids)} / asks ${btc(s1.asks)} BTC · within 5%: ${al(s5)}bids ${btc(s5.bids)} / asks ${btc(s5.asks)} BTC   (dotted: a book has ended, so at least)`,
+      PAD.left + 2, compact ? 8 : 12);
   }
   return { pmin, pmax, vmax, F };
 }
@@ -240,7 +255,13 @@ function draw() {
   drawDepth(canvas, depthSeries(D.data), { zoom: D.zoom, hover: D.hover });
 }
 
-export function renderDepth(h) {
+/**
+ * ONE FETCH, HOWEVER MANY VIEWS. The Markets tab and the Kiosk both want the books; this is the
+ * shared poll, so opening both does not double the traffic to five exchanges. The server's route
+ * calls markets.touch(), so a Kiosk polling on its own keeps the collector out of its idle park --
+ * a wall display needs no special handling.
+ */
+function ensureDepth(h) {
   const now = Date.now();
   const key = String(D.ago);
   if (!D.busy && (D.key !== key || now - D.at >= (D.data && !D.data.warming ? DEPTH_MS : 4000))) {
@@ -250,6 +271,22 @@ export function renderDepth(h) {
       .catch((err) => { D.error = err.message; })
       .finally(() => { D.busy = false; h.render(); });
   }
+}
+
+/**
+ * The chart into a canvas of the caller's choosing, compact and with no toolbar -- for the Kiosk.
+ * It deliberately does NOT touch D.hover or D.zoom: those belong to the Markets tab's chart, and
+ * sharing them would make a pointer on one view redraw the other.
+ */
+export function renderDepthInto(canvasId, h, { zoom = 0.025, compact = true } = {}) {
+  ensureDepth(h);
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+  return drawDepth(canvas, depthSeries(D.data), { zoom, compact });
+}
+
+export function renderDepth(h) {
+  ensureDepth(h);
   const bar = document.getElementById('mkDepthBar'), canvas = document.getElementById('mkDepth'), note = document.getElementById('mkDepthNote');
   if (!bar || !canvas) return;
   const html = depthBarHtml();

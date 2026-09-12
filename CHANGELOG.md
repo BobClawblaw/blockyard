@@ -25,6 +25,13 @@ All notable changes to this project are documented here. The format follows
   table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
   the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
   a brick on a slow frame.
+- **The Kiosk's price panel becomes Price & order book depth.** The 24 h high, low, volume,
+  spread across books and the per-exchange table are gone; in their place is the depth chart,
+  compact and toolbar-less, fixed at ±2.5% around the mid. A wall display is read from across a
+  room, where a four-column table is unreadable and the shape of the book says more than a spread
+  figure — all of it is still on the Markets tab. The chart shares the Markets tab's single poll,
+  so having both open does not double the traffic to five exchanges, and the depth endpoint marks
+  the collector as watched, so an unattended kiosk keeps its books fresh by itself.
 - **Blockanoid**: Arkanoid on the 3D engine, the third Diversion (`public/js/arkanoid.js` for the
   rules, `public/js/blockanoid.js` for the screen). Six hand-built walls that cycle; **silver**
   bricks that take two hits and one more every four levels, standing lower once damaged; **gold**

@@ -431,21 +431,30 @@ test('the markets board has no ground grid -- one line between the candles and t
 
 import { priceInfoHtml } from '../public/js/markets.js';
 
-test('the kiosk price panel: the USD median, its day, the books, and how fresh', async () => {
+test('the kiosk price panel keeps the price and drops the 24 h book detail', async () => {
   const { feed } = stubFeed(new Set(['bitfinex']));
   await feed.pollTickers();
   await feed.pollCandles();
   const html = priceInfoHtml(feed.view(), fmt);
+  // KEPT: the price itself, its day, and where the figure came from
   assert.match(html, /<b class="kp-price">\$77,309\.00<\/b>/, 'the median of the fresh USD books');
-  assert.match(html, /24 h high/);
-  assert.match(html, /<td>Coinbase<\/td><td class="r">77,300\.00<\/td>/);
-  assert.match(html, /<td>Bitfinex<\/td><td class="r">–<\/td>[^]*?no reply/, 'a failed book says so');
-  assert.match(html, /OKX <span class="faint">USDT<\/span>/);
-  assert.match(html, /median of 3 USD books/);
+  assert.match(html, /median of 3 USD books/, 'and the provenance line');
   assert.doesNotMatch(html, /style="/);
   assert.match(priceInfoHtml(null, fmt), /asking the exchanges/);
+  // DROPPED (operator, 2026-09-12: "swap out 24 hour order book spread and details, keep the
+  // price, but change to market order depth chart that fits within the view"). Asserted as
+  // absences so the table cannot creep back in.
+  assert.doesNotMatch(html, /24 h high|24 h low|24 h volume|spread across books/, 'the 24 h block is gone');
+  assert.doesNotMatch(html, /kp-stats|kp-ex/, 'and so is the per-exchange table');
+  assert.doesNotMatch(html, /<td>Coinbase<\/td>/);
   const k = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(k, /id="kPrice"/);
+  // the chart that replaced it, and the reason it is a SIBLING of #kPrice: renderPriceInfo
+  // rewrites that element's innerHTML, which would destroy a canvas inside it
+  assert.match(k, /id="kPrice"><\/div>[^]*?<canvas class="kdepth" id="kDepth">/, 'the depth canvas sits beside the price, not inside it');
+  assert.match(readFileSync(new URL('../public/js/kiosk.js', import.meta.url), 'utf8'), /renderDepthInto\('kDepth', h\)/);
+  const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+  assert.match(css, /\.kdepthwrap \{[^}]*flex: 1 1 auto[^}]*min-height: 0?90px/, 'it takes the rest of the panel and can shrink');
 });
 
 test('a near-square panel gets the price height it can hold -- no empty top quarter', () => {

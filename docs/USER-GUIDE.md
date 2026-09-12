@@ -440,16 +440,20 @@ cross-exchange spread. It is included in the depth total.
 
 ## Kiosk
 
-A wall display. Three panels fill the screen: the **3D Markets board**, a **Price**
-panel, and the **Block space** board.
+A wall display. Four panels fill the screen: the **3D Markets board**, a **Price &
+order book depth** panel, the **Block space** board and **Block flow**.
 
 ![Kiosk](images/kiosk.jpg)
 
 - **Markets** is the same 3D board as the Markets tab. Its title names the exchange,
   pair, hours shown and last price.
-- **Price** shows the **USD median** in neon yellow with its 24 h change, the 24 h
-  high, low and volume, the spread across books, a row for each exchange (last, 24 h
-  change, spread), and how recently the data updated.
+- **Price & order book depth** shows the **USD median** in neon yellow with its 24 h
+  change and how recently the data updated, and under it the **order book depth chart**:
+  cumulative bids in green and asks in red against price, every exchange's book faintly
+  and their total brightly, fixed at ±2.5% around the mid. The 24 h high, low, volume,
+  spread and the per-exchange table are deliberately *not* here — a wall display is read
+  from across a room, where a four-column table is unreadable and the shape of the book
+  says more than a spread figure. All of that is still on the **Markets** tab.
 - **Block space** is the same viewer as everywhere else, with its countdown,
   **refresh now** button and mode switch.
 - **full screen** in the corner puts the kiosk into browser full screen. Press it
