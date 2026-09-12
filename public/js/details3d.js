@@ -876,18 +876,52 @@ function axisLabels(ctx, view, axes, n, k, dpr) {
 // ones carry a halo and a cross glint. Plain rgba fills and strokes, in device pixels.
 const STARS = new WeakMap();
 const NO_CANVAS = {};
-export function starField(pw, ph, dpr = 1, seed = 7, density = 1) {
+// THE GALAXY (operator, 2026-09-12: "I want all the starts slowly rotating to form a spiral
+// galaxy in the background ... Make it a toggle").
+//
+// Off, this is the shipped uniform scatter, untouched down to the order the random numbers are
+// drawn in. On, the same stars are laid on logarithmic arms and carry POLAR coordinates, so the
+// sky turns by advancing ONE angle at draw time rather than by being rebuilt: the field stays
+// seeded, the cache stays valid, and each star's own twinkle is unaffected.
+//
+// The rotation is RIGID -- the whole pattern turns as one. Differential rotation (inner stars
+// faster, as a real disc moves) shears spiral arms apart within a few minutes of real time, which
+// would destroy the one thing being asked for.
+// Every number here was chosen by rendering the variants side by side and looking at them, after
+// the first attempt shipped structure without a picture: the tests said the stars clustered on
+// arms (they did) while the screen showed a faint streak. What the comparison settled:
+//   - FLATTEN 0.42 was the single biggest fault. Edge-on, a spiral reads as a smear across the
+//     frame; from well above the disc it reads as a spiral. 0.80.
+//   - Two arms at that angle fold into one S through the middle. Four are unmistakable.
+//   - The arms were far too wide (+/-0.55 rad of scatter). A wide arm is a smudge; 0.18, and
+//     narrowing outward, draws a line.
+//   - An arm is drawn BY its stars, and at the scattered sky's count there were not enough of
+//     them to make one. Hence GALAXY_BOOST.
+export const GALAXY_FLATTEN = 0.80;                    // seen from above the disc, not along it
+export const GALAXY_SPIN = (Math.PI * 2) / 900_000;    // one turn in fifteen minutes: "slowly"
+export const GALAXY_ARMS = 4;
+export const GALAXY_TWIST = 0.30;                      // how tightly the arms wind
+const GALAXY_BOOST = 7;                                // an arm needs many more stars than a scatter
+const GALAXY_MAX = 9000;                               // the count scales with area; 4K must not run away
+export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false) {
   let s = seed >>> 0;
   const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
   // density: the operator's multiplier on the shipped count (settings.js sky.density, which both
   // this board and the markets board read -- it used to live under `markets` and reach only one)
   const d = Number.isFinite(density) ? Math.min(3, Math.max(0, density)) : 1;
-  const n = Math.round(((pw * ph) / (2400 * dpr * dpr)) * d);
+  const base = ((pw * ph) / (2400 * dpr * dpr)) * d;
+  const n = Math.round(galaxy ? Math.min(GALAXY_MAX, base * GALAXY_BOOST) : base);
+  // The disc is sized so no star LEAVES the panel as it turns: the widest orbit still fits across,
+  // and the flattened one still fits down. A galaxy sized to the corners would sweep stars off the
+  // canvas and back, thinning and thickening the sky every few minutes.
+  const cx = pw / 2, cy = ph / 2;
+  const maxR = Math.min(pw, ph / GALAXY_FLATTEN) / 2;
+  const inner = maxR * 0.08;
   const out = [];
   for (let i = 0; i < n; i++) {
     const big = rnd() > 0.965;
     const tint = rnd();
-    out.push({
+    const star = {
       x: rnd() * pw, y: rnd() * ph,
       r: (big ? 1.1 + rnd() * 0.9 : 0.35 + rnd() * 0.6) * dpr,
       b: big ? 0.85 + rnd() * 0.15 : 0.25 + rnd() * 0.55,
@@ -895,7 +929,45 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1) {
       p: rnd() * Math.PI * 2,
       c: tint < 0.12 ? [255, 226, 180] : tint < 0.3 ? [180, 205, 255] : [235, 242, 255],
       big,
-    });
+    };
+    if (galaxy) {
+      // Three populations, because arms alone read as a pinwheel drawn on black: a crowded bulge,
+      // the arms themselves, and a thin halo that keeps the outskirts from going empty. Each
+      // carries its own brightness, so the density difference becomes a BRIGHTNESS difference --
+      // without that the arms were only slightly-closer dots of the same value as everything else.
+      const roll = rnd();
+      let rad, ang, lit;
+      if (roll < 0.12) {
+        // the nucleus. Crowded and bright enough to be the middle on its own: the painted core
+        // this replaced was six stacked ellipses that read as hard grey banding, because the
+        // gradient that would have smoothed them is exactly what the canvas rules forbid.
+        rad = maxR * 0.17 * Math.sqrt(rnd());
+        ang = rnd() * Math.PI * 2;
+        lit = 1;
+      } else if (roll < 0.94) {
+        const t = Math.pow(rnd(), 0.62);                 // crowded toward the middle
+        rad = inner + (maxR - inner) * t;
+        const arm = Math.floor(rnd() * GALAXY_ARMS) * ((Math.PI * 2) / GALAXY_ARMS);
+        // three rolls make a rough bell: an arm with soft edges rather than a hard stripe,
+        // narrowing outward so the arm stays a line instead of fanning into a smudge
+        const width = 0.18 * (1.35 - 0.75 * (rad / maxR));
+        ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() + rnd() + rnd() - 1.5) * width;
+        lit = 1.2 - 0.35 * (rad / maxR);
+      } else {
+        rad = maxR * (0.25 + 0.75 * rnd());
+        ang = rnd() * Math.PI * 2;
+        lit = 0.28;                                      // the halo sits back so the arms carry
+      }
+      // fewer haloed giants than an even sky: at seven times the stars they read as clutter
+      star.big = star.big && rnd() < 0.4;
+      star.r *= 0.85;
+      star.b = Math.min(1, star.b * lit);
+      star.gr = rad;
+      star.ga = ang;
+      star.x = cx + rad * Math.cos(ang);
+      star.y = cy + rad * GALAXY_FLATTEN * Math.sin(ang);
+    }
+    out.push(star);
   }
   return out;
 }
@@ -907,28 +979,42 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
   const key = ctx.canvas ?? NO_CANVAS;
   const density = Number.isFinite(opts.starDensity) ? opts.starDensity : 1;
   const bright = Number.isFinite(opts.starBrightness) ? Math.min(1.5, Math.max(0, opts.starBrightness)) : 1;
+  const galaxy = opts.galaxy === true;
   let f = STARS.get(key);
-  // the field is rebuilt when the density changes as well as the size: it is a seeded scatter,
-  // so the same density always gives the same sky back
-  if (!f || f.pw !== pw || f.ph !== ph || f.density !== density) { f = { pw, ph, density, stars: starField(pw, ph, dpr, 7, density) }; STARS.set(key, f); }
+  // the field is rebuilt when the density or the SHAPE changes as well as the size: it is a seeded
+  // scatter, so the same density always gives the same sky back. Turning is NOT a rebuild -- the
+  // stars carry polar coordinates and only the angle advances, once per frame for all of them.
+  if (!f || f.pw !== pw || f.ph !== ph || f.density !== density || f.galaxy !== galaxy) {
+    f = { pw, ph, density, galaxy, cx: pw / 2, cy: ph / 2, stars: starField(pw, ph, dpr, 7, density, galaxy) };
+    STARS.set(key, f);
+  }
   ctx.__starBright = bright;
+  const spin = galaxy ? now * GALAXY_SPIN : 0;
   for (const s of f.stars) {
     const a = starAlpha(s, now) * (ctx.__starBright ?? 1);
     const c = s.c.join(',');
+    const px = galaxy ? f.cx + s.gr * Math.cos(s.ga + spin) : s.x;
+    const py = galaxy ? f.cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga + spin) : s.y;
     if (s.big) {
       ctx.fillStyle = `rgba(${c},${(a * 0.12).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, s.r * 4, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = `rgba(${c},${(a * 0.5).toFixed(3)})`;
       ctx.lineWidth = dpr * 0.6;
       ctx.beginPath();
-      ctx.moveTo(s.x - s.r * 5, s.y); ctx.lineTo(s.x + s.r * 5, s.y);
-      ctx.moveTo(s.x, s.y - s.r * 5); ctx.lineTo(s.x, s.y + s.r * 5);
+      ctx.moveTo(px - s.r * 5, py); ctx.lineTo(px + s.r * 5, py);
+      ctx.moveTo(px, py - s.r * 5); ctx.lineTo(px, py + s.r * 5);
       ctx.stroke();
     }
     ctx.fillStyle = `rgba(${c},${a.toFixed(3)})`;
-    ctx.fillRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+    ctx.fillRect(px - s.r, py - s.r, s.r * 2, s.r * 2);
   }
 }
+
+// There is deliberately NO painted core. The first cut stacked six faint ellipses at the middle,
+// and rendered they read as hard grey rings rather than a glow -- the gradient that would smooth
+// them is exactly what the canvas rules here forbid (no globalAlpha, no composite modes, no
+// shadowBlur: viewer-canvas-rules.test.js). The nucleus is stars instead: the bulge population is
+// dense and at full brightness, which looks like a core because it is one.
 
 function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
   const { pw, ph, dpr } = geom;
@@ -1297,8 +1383,13 @@ export function render3d(canvas, cells, options = {}) {
   const sig = tiles.map((t) => `${t.txid}:${t.x},${t.y},${t.s}${t.tall != null ? `^${t.tall}${t.color}` : ''}${t.floor != null ? `_${t.floor}` : ''}`).join('|');
   // how it is DRAWN, not what is drawn: the display settings (settings.js). A change here has to
   // reach the board without waiting for the next poll, and without setting every block flying.
+  // The sky belongs in here too. It was missing, so every star control was a latent dead control:
+  // the field is cached on density and shape (drawStars), and nothing asked for a repaint when
+  // either changed -- the galaxy toggle and both sliders would have sat there doing nothing until
+  // some unrelated poll happened to replan the board, which reads exactly like a broken switch.
   const optSig = [opts.shadows !== false, opts.edges !== false, opts.grid !== false, !!opts.space,
     opts.seamAlpha, opts.facetPx, opts.crownPx, opts.dome, opts.idleFx !== false,
+    opts.starDensity, opts.starBrightness, opts.galaxy === true,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;

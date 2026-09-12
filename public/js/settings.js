@@ -39,6 +39,7 @@ export const DEFAULTS = Object.freeze({
   sky: Object.freeze({
     density: 1,           // multiplies the star count (0.2 .. 3)
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
+    galaxy: false,        // opt-in: the same stars laid on spiral arms, turning once a quarter hour
   }),
   markets: Object.freeze({
     stars: true,
@@ -90,6 +91,7 @@ export const PANEL = Object.freeze([
     title: 'Sky',
     note: 'The star field itself, wherever it is drawn — behind the Block space board and behind the candles. Each board decides whether to show it; this decides what it looks like.',
     rows: Object.freeze([
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes' }),
       Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 3, step: 0.1, hint: 'How many stars, against the shipped number' }),
       Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
     ]),
@@ -271,6 +273,7 @@ export function spaceOptions(s) {
     // the same sky the markets board draws: this board had stars and no way to thin them
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
+    galaxy: n.sky.galaxy,
   };
   // the seam belongs to the Stone edges switch at every level of detail: a control that does
   // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
@@ -290,6 +293,7 @@ export function marketsOptions(s) {
     space: mk.stars,
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
+    galaxy: n.sky.galaxy,
     ...(mk.glow ? {} : { neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' }),
   };
 }

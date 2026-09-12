@@ -231,7 +231,9 @@ test('cubes lean away from the middle of the board, not all one way', async () =
 test('the renderer honours the option names the settings hand it', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /drawStars\(ctx, pw, ph, dpr \|\| 1, view\.now \?\? 0, opts\)/, 'star options reach drawStars');
-  assert.match(src, /starField\(pw, ph, dpr, 7, density\)/, 'density reaches the field');
+  // the galaxy joins density as something the FIELD is built from, not something painted over it
+  // afterwards: the stars are laid on arms at generation, and only the angle moves per frame
+  assert.match(src, /starField\(pw, ph, dpr, 7, density, galaxy\)/, 'density and the galaxy reach the field');
   const scene = readFileSync(new URL('../public/js/blockscene3d.js', import.meta.url), 'utf8');
   assert.match(scene, /if \(o\.shadows !== false\)/, 'shadows are optional in the scene builder');
   const mining = readFileSync(new URL('../public/js/mining.js', import.meta.url), 'utf8');
@@ -319,6 +321,109 @@ test('a change reaches a subscriber without waiting for the next paint', () => {
   setSetting(loadSettings(s), 'space.dome', 7, s);
   assert.deepEqual(seen, [2, DEFAULTS.space.dome], 'the save and the reset both announced themselves');
   assert.equal(loadSettings(s).space.dome, 7, 'and unsubscribing stops the telling, not the storing');
+});
+
+test('the galaxy is a toggle: off is the shipped sky, on lays the same stars on arms', async () => {
+  // operator, 2026-09-12: "I want all the starts slowly rotating to form a spiral galaxy in the
+  // background. We should have a preference to increase or decrease star/galaxy density. Make it
+  // a toggle."
+  const { starField } = await import('../public/js/details3d.js');
+  const [W, H] = [1200, 800];
+  const flat = starField(W, H, 1, 7, 1, false);
+  const spiral = starField(W, H, 1, 7, 1, true);
+  assert.deepEqual(starField(W, H, 1, 7, 1, false), flat, 'off is still the seeded scatter, unchanged');
+  assert.deepEqual(starField(W, H, 1, 7, 1, true), spiral, 'and the galaxy is seeded too: the same sky every time');
+  // An arm is drawn BY its stars, and at the scattered sky's count there were never enough of them
+  // to make one: the first cut passed its structure tests and still looked like a faint sprinkle.
+  // The galaxy is sampled several times harder; the density preference scales both.
+  assert.ok(spiral.length > flat.length * 4, `the galaxy is sampled far harder (${flat.length} -> ${spiral.length})`);
+  assert.ok(spiral.length <= 9000, 'but bounded: the count scales with area, and a 4K panel must not run away');
+  assert.ok(flat.every((s) => s.gr === undefined), 'a scattered star has no orbit to turn on');
+  assert.ok(spiral.every((s) => Number.isFinite(s.gr) && Number.isFinite(s.ga)), 'every galaxy star has one');
+  assert.ok(spiral.some((s) => s.big), 'the bright ones survive the change of shape');
+  // density still reaches it with the galaxy on -- the preference the operator asked for
+  assert.ok(starField(W, H, 1, 7, 2.5, true).length > spiral.length * 2, 'denser galaxy');
+  assert.ok(starField(W, H, 1, 7, 0.3, true).length < spiral.length / 2, 'sparser galaxy');
+});
+
+test('the galaxy turns, slowly, and never sweeps a star off the panel', async () => {
+  const { starField, GALAXY_FLATTEN, GALAXY_SPIN } = await import('../public/js/details3d.js');
+  const [W, H] = [1200, 800];
+  const spiral = starField(W, H, 1, 7, 1, true);
+  const cx = W / 2, cy = H / 2;
+  const at = (s, t) => {
+    const ang = s.ga + t * GALAXY_SPIN;
+    return [cx + s.gr * Math.cos(ang), cy + s.gr * GALAXY_FLATTEN * Math.sin(ang)];
+  };
+  // A disc sized to the corners would sweep stars off the canvas and back, thinning and
+  // thickening the sky every few minutes. Checked right around a full turn and beyond.
+  for (const t of [0, 60_000, 225_000, 450_000, 900_000, 3_600_000]) {
+    for (const s of spiral) {
+      const [x, y] = at(s, t);
+      assert.ok(x >= -1e-6 && x <= W + 1e-6 && y >= -1e-6 && y <= H + 1e-6, `star stays in frame at ${t} ms`);
+    }
+  }
+  assert.ok(GALAXY_SPIN * 60_000 < 0.5, 'slowly: well under a tenth of a turn in a minute');
+  assert.ok(GALAXY_SPIN * 900_000 >= Math.PI * 2 - 1e-9, 'but it does come all the way round');
+  const s0 = spiral.find((s) => s.gr > 100);
+  const [x0, y0] = at(s0, 0);
+  const [x1, y1] = at(s0, 120_000);
+  assert.ok(Math.hypot(x1 - x0, y1 - y0) > 5, 'two minutes moves a star visibly');
+});
+
+test('the arms are arms: the stars bunch along the spiral instead of spreading evenly', async () => {
+  // The structural claim behind the effect. On a logarithmic arm the angle tracks log(radius), so
+  // undoing that twist should collapse most stars onto a couple of headings; a uniform scatter
+  // would stay uniform under the same transform.
+  const { starField, GALAXY_ARMS, GALAXY_TWIST, GALAXY_FLATTEN } = await import('../public/js/details3d.js');
+  const [W, H] = [1200, 800];
+  const spiral = starField(W, H, 1, 7, 1, true);
+  const maxR = Math.min(W, H / GALAXY_FLATTEN) / 2;
+  const inner = maxR * 0.08;
+  const period = (Math.PI * 2) / GALAXY_ARMS;
+  const wrap = (v) => { const m = ((v % period) + period) % period; return Math.min(m, period - m); };
+  const mid = spiral.filter((s) => s.gr > inner * 2 && s.gr < maxR * 0.95);
+  assert.ok(mid.length > 100, `enough stars to judge (${mid.length})`);
+  const onArm = mid.filter((s) => wrap(s.ga - Math.log(s.gr / inner) / GALAXY_TWIST) < 0.5).length / mid.length;
+  assert.ok(onArm > 0.5, `most mid-disc stars sit on an arm (${(onArm * 100).toFixed(0)}%)`);
+  // the same measure on the scattered sky, which has no arms to find
+  const flat = starField(W, H, 1, 7, 1, false);
+  const fake = flat.map((s) => ({ gr: Math.hypot(s.x - W / 2, s.y - H / 2) || 1, ga: Math.atan2(s.y - H / 2, s.x - W / 2) }));
+  const fakeOnArm = fake.filter((s) => wrap(s.ga - Math.log(s.gr / inner) / GALAXY_TWIST) < 0.5).length / fake.length;
+  assert.ok(onArm > fakeOnArm * 1.4, `and far more than an even scatter would (${(fakeOnArm * 100).toFixed(0)}%)`);
+});
+
+test('the galaxy reaches both boards, because the sky belongs to neither', async () => {
+  assert.equal(spaceOptions({ sky: { galaxy: true } }).galaxy, true, 'the block-space board');
+  assert.equal(marketsOptions({ sky: { galaxy: true } }).galaxy, true, 'and the candle board');
+  assert.equal(spaceOptions({}).galaxy, false, 'off by default: it is an opt-in effect');
+  assert.equal(marketsOptions({}).galaxy, false);
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(src, /f\.galaxy !== galaxy/, 'the field is rebuilt when the shape changes, not every frame');
+  // The forbidden canvas shortcuts are NOT re-checked here. viewer-canvas-rules.test.js owns that
+  // rule, and the runtime op recorders in details3d.test.js and never-clip.test.js back it up. A
+  // source grep for the names cannot tell a call from a comment -- the first cut of this line
+  // failed on the comment in drawGalacticCore explaining why those shortcuts are not used.
+});
+
+test('every sky control repaints the board at once, not at the next poll', () => {
+  // operator, 2026-09-12: "checking the boxes needs to apply the new effects immediately, and
+  // refresh the panels if need-be". render3d skips a board whose layout signature is unchanged, so
+  // a display setting only lands if it is part of the LOOK signature beside it. The sky was not:
+  // the star field is cached on its density and its shape, and nothing asked for a repaint when
+  // either changed, so the galaxy toggle and both sliders would have looked broken until some
+  // unrelated poll replanned the board.
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const sig = src.slice(src.indexOf('const optSig = ['), src.indexOf('const lookChanged'));
+  assert.ok(sig.length > 0, 'the look signature is still built here');
+  for (const opt of ['opts.starDensity', 'opts.starBrightness', 'opts.galaxy']) {
+    assert.ok(sig.includes(opt), `${opt} is part of the look, so changing it repaints`);
+  }
+  // and the settings actually produce those option names, or the signature watches nothing
+  const fromSpace = spaceOptions({ sky: { galaxy: true, density: 2, brightness: 0.5 } });
+  assert.equal(fromSpace.galaxy, true);
+  assert.equal(fromSpace.starDensity, 2);
+  assert.equal(fromSpace.starBrightness, 0.5);
 });
 
 test('the parse is memoised, and a write invalidates it', () => {
