@@ -137,7 +137,12 @@ const LASER_COOLDOWN = 260;         // ms between shots
 // aim every single shot, which removes the rally. Thirty seconds is long enough to set up the shots
 // you caught it for. Counted in ms off `step`'s own dtMs, like the laser cooldown and the minion
 // timer: the rules still have no clock of their own, so a run stays reproducible.
-const CATCH_MS = 30_000;
+// NOTHING LASTS FOR EVER (operator, 2026-09-12: "All the powerups need 30 second timers max for
+// each. they are not infinite"). Four of the six are STATES and so can expire; disrupt and the
+// extra life are one-shot and have nothing to run down. One table and one expiry loop, because
+// four hand-written countdowns are four chances to drift apart -- the same reason loseLife() exists.
+const POWER_MS = 30_000;
+export const TIMED_POWERS = Object.freeze(['laser', 'catch', 'slow', 'wide']);
 // Slower than before: a minion is now looking for a way through rather than falling past you.
 const ENEMY_SPEED = 1.25;           // descent, grid units a second
 const ENEMY_SIDE = 2.4;             // sideways, while feeling along the wall for a gap
@@ -263,7 +268,8 @@ function layout(g) {
 export function breakable(g) { return g.bricks.filter((b) => b.kind !== 'gold'); }
 
 export function resetBall(g) {
-  g.balls = [{ x: g.paddle.x + g.paddle.w / 2, y: PADDLE_Y + PADDLE_D + BALL_R, vx: 0, vy: 0, r: BALL_R, stuck: true }];
+  // `hold` is the grip: how far along the bat the ball sits. A stuck ball is placed FROM it.
+  g.balls = [{ x: g.paddle.x + g.paddle.w / 2, y: PADDLE_Y + PADDLE_D + BALL_R, vx: 0, vy: 0, r: BALL_R, stuck: true, hold: g.paddle.w / 2 }];
   return g.balls[0];
 }
 
@@ -272,9 +278,10 @@ export function resetVaus(g) {
   g.paddle.w = PADDLE_W;
   g.laser = false;
   g.catch = false;
-  g.catchLeft = 0;
   g.slow = false;
   g.cooldown = 0;
+  // a stale countdown must not survive into the next ball
+  g.timers = { laser: 0, catch: 0, slow: 0, wide: 0 };
   g.paddle.x = Math.max(0, Math.min(COLS - g.paddle.w, g.paddle.x));
 }
 
@@ -296,7 +303,8 @@ export function newGame(level = 1, opts = {}) {
     level, score: 0, lives: LIVES, over: false, cleared: false,
     paddle: { x: (COLS - PADDLE_W) / 2, w: PADDLE_W },
     balls: [], bricks: [], capsules: [], bolts: [], enemies: [],
-    laser: false, catch: false, slow: false, cooldown: 0, catchLeft: 0,
+    laser: false, catch: false, slow: false, cooldown: 0,
+    timers: { laser: 0, catch: 0, slow: 0, wide: 0 },
     sinceEnemy: 0, nextId: 1, breakableAtStart: 0,
     opts: { capsules: true, enemies: true },
   };
@@ -321,7 +329,17 @@ export function movePaddle(g, centreX) {
   if (g.over) return g.paddle.x;
   const half = g.paddle.w / 2;
   g.paddle.x = Math.max(0, Math.min(COLS - g.paddle.w, centreX - half));
-  for (const b of g.balls) if (b.stuck) b.x = Math.max(g.paddle.x, Math.min(g.paddle.x + g.paddle.w, b.x));
+  // LOCKED TO THE BAT, not merely kept inside it (operator, 2026-09-12: "the ball needs to stick to
+  // the paddle location when it lands ... It should not shift around while the paddle moves beneath
+  // it"). This used to CLAMP a stuck ball into the bat's span, so the ball held its absolute place
+  // while the bat slid underneath and only moved when an edge caught up with it -- which is exactly
+  // the drift that was reported. It is placed from its grip instead.
+  for (const b of g.balls) {
+    if (!b.stuck) continue;
+    if (b.hold == null) b.hold = b.x - g.paddle.x;
+    b.hold = Math.max(0, Math.min(g.paddle.w, b.hold));
+    b.x = g.paddle.x + b.hold;
+  }
   return g.paddle.x;
 }
 export function nudge(g, dx) { return movePaddle(g, g.paddle.x + g.paddle.w / 2 + dx); }
@@ -358,24 +376,28 @@ function offPaddle(g, b) {
   b.vx = Math.sin(a) * s;
   b.vy = Math.abs(Math.cos(a) * s);
   b.y = PADDLE_Y + PADDLE_D + b.r;
-  if (g.catch) { b.stuck = true; b.vx = 0; b.vy = 0; }
+  // caught: remember WHERE on the bat, so it rides along rather than being shoved by an edge
+  if (g.catch) { b.stuck = true; b.vx = 0; b.vy = 0; b.hold = Math.max(0, Math.min(p.w, b.x - p.x)); }
 }
 
 /** Take a capsule. Each one is a different promise, so each is written out rather than table-driven. */
 export function applyCapsule(g, kind) {
   g.score += CAPSULE_POINTS;
   switch (kind) {
-    case 'laser': g.laser = true; g.catch = false; break;
+    case 'laser': g.laser = true; g.timers.laser = POWER_MS; g.catch = false; g.timers.catch = 0; break;
     case 'enlarge': {
       const mid = g.paddle.x + g.paddle.w / 2;
       g.paddle.w = PADDLE_W_WIDE;
       g.paddle.x = Math.max(0, Math.min(COLS - g.paddle.w, mid - g.paddle.w / 2));
+      g.timers.wide = POWER_MS;
       break;
     }
-    case 'catch': g.catch = true; g.catchLeft = CATCH_MS; g.laser = false; break;
+    case 'catch': g.catch = true; g.timers.catch = POWER_MS; g.laser = false; g.timers.laser = 0; break;
     case 'slow': {
+      // only slow what is not already slowed, or two capsules would compound into a crawl
+      if (!g.slow) for (const b of g.balls) if (!b.stuck) { b.vx *= SLOW_FACTOR; b.vy *= SLOW_FACTOR; }
       g.slow = true;
-      for (const b of g.balls) if (!b.stuck) { b.vx *= SLOW_FACTOR; b.vy *= SLOW_FACTOR; }
+      g.timers.slow = POWER_MS;
       break;
     }
     case 'disrupt': {
@@ -543,7 +565,13 @@ function ballEnemy(g, b, hits) {
     if (ox <= 0 || oy <= 0) continue;
     g.enemies.splice(i, 1);
     g.score += ENEMY_POINTS;
-    b.vy = -Math.abs(b.vy);
+    // BOUNCE OFF IT (operator: "If a ball hits a minion from above, it should bounce off it when it
+    // dies instead of passing through"). This forced the ball DOWNWARD whatever direction it had
+    // arrived from, so a ball descending onto a minion was pushed further down and read as passing
+    // straight through. Reflected on the axis it is least buried in, exactly as a brick does it --
+    // which gives the side bounces for free too.
+    if (ox < oy) b.vx = b.x < m.x + ENEMY_BOX / 2 ? -Math.abs(b.vx) : Math.abs(b.vx);
+    else b.vy = b.y < m.y + ENEMY_BOX / 2 ? -Math.abs(b.vy) : Math.abs(b.vy);
     hits.push({ kind: 'enemy', x: m.x, y: m.y });
     return true;
   }
@@ -579,9 +607,25 @@ export function step(g, dtMs) {
   const dt = Math.min(60, Math.max(0, dtMs)) / 1000;
   const ms = Math.min(60, Math.max(0, dtMs));
   g.cooldown = Math.max(0, g.cooldown - ms);
-  if (g.catch) {
-    g.catchLeft = Math.max(0, (g.catchLeft ?? 0) - ms);
-    if (g.catchLeft === 0) {
+  for (const power of TIMED_POWERS) {
+    if (!(g.timers?.[power] > 0)) continue;
+    g.timers[power] = Math.max(0, g.timers[power] - ms);
+    if (g.timers[power] > 0) continue;
+    hits.push({ kind: 'powerover', power });
+    if (power === 'laser') g.laser = false;
+    if (power === 'wide') {
+      // back to stock about its OWN centre, and a held ball re-gripped into the narrower bat
+      const mid = g.paddle.x + g.paddle.w / 2;
+      g.paddle.w = PADDLE_W;
+      g.paddle.x = Math.max(0, Math.min(COLS - g.paddle.w, mid - g.paddle.w / 2));
+      for (const b of g.balls) if (b.stuck) { b.hold = Math.max(0, Math.min(g.paddle.w, b.hold ?? g.paddle.w / 2)); b.x = g.paddle.x + b.hold; }
+    }
+    if (power === 'slow') {
+      // put the pace BACK, or "slow" is permanent by omission
+      g.slow = false;
+      for (const b of g.balls) if (!b.stuck) { b.vx /= SLOW_FACTOR; b.vy /= SLOW_FACTOR; }
+    }
+    if (power === 'catch') {
       g.catch = false;
       hits.push({ kind: 'catchover' });
       // A ball still held has to GO, or it sits on the bat with nothing left to explain why.
@@ -753,10 +797,11 @@ export function remaining(g) {
 /** What Vaus is carrying, for the HUD. */
 export function powers(g) {
   const on = [];
-  if (g.laser) on.push('laser');
-  if (g.catch) on.push(`catch ${Math.ceil((g.catchLeft ?? 0) / 1000)}s`);
-  if (g.slow) on.push('slow');
-  if (g.paddle.w > PADDLE_W) on.push('wide');
+  const left = (k) => Math.ceil((g.timers?.[k] ?? 0) / 1000);
+  if (g.laser) on.push(`laser ${left('laser')}s`);
+  if (g.catch) on.push(`catch ${left('catch')}s`);
+  if (g.slow) on.push(`slow ${left('slow')}s`);
+  if (g.paddle.w > PADDLE_W) on.push(`wide ${left('wide')}s`);
   if (g.balls.length > 1) on.push(`${g.balls.length} balls`);
   return on;
 }

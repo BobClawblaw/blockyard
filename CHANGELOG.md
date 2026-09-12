@@ -25,6 +25,19 @@ All notable changes to this project are documented here. The format follows
   table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
   the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
   a brick on a slow frame.
+- **Every timed power expires after 30 seconds** — laser, wide, catch and slow, each counted down on
+  the heads-up display. Three balls and the extra life are one-shot and have nothing to run out. One
+  timer table and one expiry loop rather than four hand-written countdowns, for the same reason
+  `loseLife()` exists: separate copies of a rule drift apart. Slow puts the pace back when it lapses
+  (or "slow" would be permanent by omission) and wide restores the bat about its own centre,
+  re-gripping a held ball into the narrower span.
+- **A caught ball is locked to the bat.** It recorded no grip, so a stuck ball held its absolute
+  position while the bat slid underneath and moved only when an edge caught up with it — which read
+  as the ball drifting around. It remembers where along the bat it landed and is placed from that.
+- **The ball bounces off a minion** instead of passing through. The collision forced the ball
+  downward whatever direction it had arrived from, so dropping onto a minion pushed it further down.
+  It reflects on the axis of least penetration now, exactly as a brick does, which gives the side
+  bounces as well.
 - **Catch expires after 30 seconds.** Held indefinitely it stopped being a power-up and became a
   different game: park the ball, aim every shot, and the rally ceases to exist. The countdown runs
   off `step`'s own elapsed milliseconds, like the laser cooldown and the minion timer, so the rules

@@ -598,11 +598,15 @@ Six walls ship, and past the sixth they cycle with tougher silver each time.
 A broken brick may drop one, and only **one is on the court at a time** — which is what makes
 taking it a decision rather than a reflex. Catch it with Vaus. Every capsule pays 1000 points.
 
+**Nothing lasts for ever.** Laser, wide, catch and slow each run for **30 seconds**, and the
+heads-up display counts each one down. Three balls and the extra life are one-shot — they have
+nothing to expire. Losing a ball, or a minion reaching Vaus, clears everything you were carrying.
+
 | | Capsule | What it does |
 |---|---|---|
 | **L** | Laser | Vaus turns red and can shoot. The bat itself tells you what it can do. |
 | **E** | Enlarge | A wider Vaus. |
-| **C** | Catch | The ball sticks on landing; serve it again when you have aimed. Lasts **30 seconds**, and the heads-up display counts it down. When it runs out, a ball still held is released rather than left sitting on the bat. |
+| **C** | Catch | The ball sticks where it lands and **rides the bat** as you move — it does not drift while the bat slides under it. Serve it again when you have aimed. When the 30 seconds run out, a ball still held is released rather than left sitting there. |
 | **S** | Slow | Takes the pace off the ball already in play. |
 | **D** | Disrupt | Three balls at once, all at the same speed. |
 | **P** | Player | An extra life. |
@@ -618,8 +622,9 @@ a swinging cone, a tumbling cube, a wobbling orb, a zig-zagging molecule.
 
 They **cannot pass through bricks**. On a solid wall they pace along the top hunting for a way
 down, so breaking the wall opens their path as well as yours. The ball and the laser destroy one for
-200 points — but **a minion that reaches Vaus costs you a life**. Turn them off in the settings if
-you would rather practise.
+200 points, and the ball **bounces off** it rather than carrying on through — drop onto one from
+above and you come straight back up. But **a minion that reaches Vaus costs you a life**. Turn them
+off in the settings if you would rather practise.
 
 ### Scoring
 

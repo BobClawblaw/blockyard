@@ -13,6 +13,7 @@ import {
   speed, resetBall, resetVaus, setOptions, breakable, silverHits, capsuleFor, hash01,
   layoutFor, applyCapsule, capsuleTiles, damageShade, mixHex, boxHitsBrick, loseLife, CAPSULE_LETTER,
   ENEMY_S, ENEMY_BOX, CAPSULE_S, CAPSULE_BOX, MINION_KINDS, DAMAGE_DARK, DAMAGE_LIGHT,
+  TIMED_POWERS,
 } from '../public/js/arkanoid.js';
 import { SFX } from '../public/js/tetsound.js';
 
@@ -347,7 +348,8 @@ test('Vaus reports what it is carrying, and a cleared wall advances', () => {
   assert.deepEqual(powers(g), [], 'stock Vaus carries nothing');
   applyCapsule(g, 'laser'); applyCapsule(g, 'enlarge');
   const on = powers(g);
-  assert.ok(on.includes('laser') && on.includes('wide'));
+  // powers() carries countdowns now ("laser 30s"), not bare names
+  assert.ok(on.some((x) => x.startsWith('laser')) && on.some((x) => x.startsWith('wide')));
   assert.equal(remaining(newGame()), 1, 'a full wall is all of it');
 
   const h = newGame();
@@ -522,5 +524,79 @@ test('catch runs out after thirty seconds, and never strands a ball on the bat',
   applyCapsule(h, 'catch');
   resetVaus(h);
   assert.equal(h.catch, false);
-  assert.equal(h.catchLeft, 0, 'the countdown is cleared with the rest of Vaus');
+  assert.equal(h.timers.catch, 0, 'the countdown is cleared with the rest of Vaus');
+});
+
+test('a caught ball is LOCKED to the bat, not merely kept inside it', () => {
+  // (operator, 2026-09-12: "the ball needs to stick to the paddle location when it lands ... It
+  // should not shift around while the paddle moves beneath it".) The bug was that a stuck ball had
+  // no grip: movePaddle only CLAMPED it into the bat's span, so it held its absolute place while
+  // the bat slid under it and moved only when an edge caught up. The property that matters is not
+  // a coordinate -- it is that the gap never changes.
+  const g = newGame(1, { capsules: false, enemies: false });
+  applyCapsule(g, 'catch');
+  movePaddle(g, 6);
+  const b = g.balls[0];
+  b.stuck = false; b.x = g.paddle.x + 0.7; b.y = PADDLE_Y + PADDLE_D + BALL_R + 0.2; b.vx = 0; b.vy = -12;
+  for (let i = 0; i < 40 && !b.stuck; i++) step(g, 16);
+  assert.equal(b.stuck, true, 'catch held it');
+
+  const gaps = [];
+  for (const centre of [3, 9, 5, 11, 2]) { movePaddle(g, centre); gaps.push(+(b.x - g.paddle.x).toFixed(6)); }
+  assert.equal(new Set(gaps).size, 1, `the gap to the bat must never change: saw ${gaps.join(', ')}`);
+  assert.ok(b.x >= g.paddle.x && b.x <= g.paddle.x + g.paddle.w, 'and it stays on the bat');
+});
+
+test('the ball bounces OFF a minion rather than carrying on through it', () => {
+  // (operator: "If a ball hits a minion from above, it should bounce off it when it dies instead of
+  // passing through".) The collision forced vy downward whatever direction the ball arrived from,
+  // so a descending ball was pushed further down -- indistinguishable from passing through.
+  const shot = (falling) => {
+    const g = newGame(1, { capsules: false, enemies: true });
+    g.bricks = [];
+    const b = g.balls[0];
+    b.stuck = false; b.vx = 0; b.x = 6.4;
+    b.y = falling ? 15.2 : 12.8;
+    b.vy = falling ? -12 : 12;
+    g.enemies = [{ id: 1, kind: MINION_KINDS[0], x: 6, y: 14, phase: 0, t: 0 }];
+    for (let i = 0; i < 20 && g.enemies.length; i++) step(g, 16);
+    return { killed: g.enemies.length === 0, vy: b.vy };
+  };
+  const down = shot(true), up = shot(false);
+  assert.equal(down.killed, true, 'dropping onto one destroys it');
+  assert.ok(down.vy > 0, `and sends the ball back UP (vy ${down.vy})`);
+  assert.equal(up.killed, true, 'rising into one destroys it');
+  assert.ok(up.vy < 0, `and sends the ball back DOWN (vy ${up.vy})`);
+});
+
+test('every timed power runs out at thirty seconds and gives back what it changed', () => {
+  // (operator: "All the powerups need 30 second timers max for each. they are not infinite".)
+  //
+  // THE BAT IS KEPT UNDER THE BALL ON PURPOSE. Without that the ball reaches the floor in about six
+  // seconds, loseLife() runs, resetVaus() clears every timer, and the countdown never fires -- which
+  // is correct behaviour that looks exactly like a broken timer. It fooled me once already.
+  const g = newGame(1, { capsules: false, enemies: false });
+  g.bricks = [];
+  launch(g, 0.05);
+  const speedNow = () => Math.hypot(g.balls[0].vx, g.balls[0].vy);
+  const normal = speedNow();
+
+  for (const k of ['laser', 'enlarge', 'slow']) applyCapsule(g, k);
+  assert.ok(speedNow() < normal, 'slow actually slowed it');
+  assert.equal(g.paddle.w, PADDLE_W_WIDE, 'and wide widened the bat');
+  for (const p of ['laser', 'slow', 'wide']) assert.ok(g.timers[p] > 0, `${p} started its clock`);
+
+  const tick = () => { const b = g.balls[0]; if (b) movePaddle(g, Math.max(0, Math.min(COLS, b.x))); return step(g, 50); };
+  for (let i = 0; i < 300; i++) tick();                       // 15 s
+  assert.ok(powers(g).some((x) => x.startsWith('laser ')), 'the HUD counts it down rather than just saying it is on');
+  assert.ok(g.timers.laser > 0 && g.timers.laser < 30_000, 'and the clock is genuinely running');
+
+  const fired = new Set();
+  for (let i = 0; i < 400; i++) for (const h of tick().hits) if (h.kind === 'powerover') fired.add(h.power);
+  for (const p of ['laser', 'slow', 'wide']) assert.ok(fired.has(p), `${p} announced that it expired`);
+  assert.equal(g.laser, false, 'the laser is off');
+  assert.equal(g.slow, false, 'slow is off');
+  assert.equal(g.paddle.w, PADDLE_W, 'the bat is back to stock width');
+  assert.ok(Math.abs(speedNow() - normal) < 0.01, 'and the pace is BACK -- otherwise slow is permanent by omission');
+  assert.deepEqual(TIMED_POWERS, ['laser', 'catch', 'slow', 'wide'], 'the one-shot capsules have nothing to expire');
 });
