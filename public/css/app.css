@@ -1340,6 +1340,9 @@ table.peertbl td { padding: 3px 7px; white-space: nowrap; }
 .mksum { display: flex; flex-wrap: wrap; gap: 6px 22px; font-family: var(--mono); font-size: 12px; align-items: baseline; }
 .mksum .k { color: var(--fg-faint); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin-right: 7px; }
 .mksum b { font-size: 16px; color: var(--fg); font-weight: 650; }
+/* `[hidden]`-style collapse for whichever price view is off: .hidden is display:none elsewhere in
+   this sheet, but .mklayout sets `display: grid` on the same element, and a later display wins. */
+.mklayout.hidden { display: none; }
 .mklayout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 12px; }
 @media (max-width: 1000px) { .mklayout { grid-template-columns: minmax(0, 1fr); } }
 .treemapwrap.mkboard { height: min(58vh, 620px); min-height: 340px; }

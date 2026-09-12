@@ -579,7 +579,12 @@
           <div class="mkbar" id="mkBar"></div>
           <!-- THE VISUALIZER FIRST (operator: "move the 3D View to the top of the markets display. That
                should be our main selling point, is the spectacular visualizer") -->
-          <div class="mklayout">
+          <!-- ONE PRICE VIEW AT A TIME (operator, 2026-09-12: "have a selector for either the 3D
+               view or 2D view for price. Not both at the same time. Too much waste of space for
+               that screen"). Both elements stay in the page -- the toolbar switches between them
+               live, and markets.js skips the DRAW for whichever is hidden, so the unseen one costs
+               nothing per refresh. The 3D board keeps its place first; a test pins that order. -->
+          <div class="mklayout" id="mkLayout">
             <div class="treemapwrap mkboard"><canvas class="treemap" id="mkBoard"></canvas><div class="goggles-tip hidden"></div></div>
             <aside class="mkside"><div class="hud" id="mkLegend"></div></aside>
           </div>

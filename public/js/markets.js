@@ -59,15 +59,26 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 // the Markets page"). The exchange and the range were a click that lasted until the tab closed.
 // They are seeded from the store on first use and written back on every click, so the page opens
 // where it was left -- on this browser, like every other display setting.
-const M = { data: null, at: 0, busy: false, error: null, ex: null, range: null, hover: null, bound: false };
+const M = { data: null, at: 0, busy: false, error: null, ex: null, range: null, view: null, hover: null, bound: false };
 function prefs() {
-  if (M.ex === null || M.range === null) {
+  if (M.ex === null || M.range === null || M.view === null) {
     const mk = loadSettings().markets;
     M.ex = mk.exchange;
     M.range = Number(mk.range);
+    M.view = mk.priceView;
   }
   return M;
 }
+
+// ONE VIEW OR THE OTHER (operator, 2026-09-12: "have a selector for either the 3D view or 2D view
+// for price. Not both at the same time. Too much waste of space for that screen"). The two views
+// draw the SAME hours from the same series -- that is the point of the pair, and also why showing
+// both spent two tall panels saying one thing. The Kiosk is unaffected: renderMarketsBoard draws
+// the board on its own canvas and does not consult this.
+export const PRICE_VIEWS = Object.freeze([
+  Object.freeze({ id: '3d', label: '3D', title: '3D: each hour a candle floating at its price, over the star field' }),
+  Object.freeze({ id: '2d', label: '2D', title: '2D: the flat chart -- axes, volume and a crosshair' }),
+]);
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const money = (v, dp = 2) => (v == null ? '–' : v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }));
@@ -183,7 +194,8 @@ export function toolbarHtml(d) {
   const exs = (d?.exchanges ?? []).filter((e) => e.candles?.length);
   const b = (attr, v, label, on) => `<button type="button" class="mkbtn${on ? ' on' : ''}" ${attr}="${v}">${label}</button>`;
   return `<div class="mkgrp">${exs.map((e) => b('data-mkex', e.id, `<i class="mkdot" data-ex="${e.id}"></i>${e.name}`, e.id === M.ex)).join('')}</div>
-    <div class="mkgrp">${RANGES.map(([n, l]) => b('data-mkrange', n, l, n === M.range)).join('')}</div>`;
+    <div class="mkgrp">${RANGES.map(([n, l]) => b('data-mkrange', n, l, n === M.range)).join('')}</div>
+    <div class="mkgrp">${PRICE_VIEWS.map((v) => b('data-mkview', v.id, v.label, v.id === M.view)).join('')}</div>`;
 }
 
 // The selected exchange's candles (the live hour closing at its ticker), the rest as lines.
@@ -224,6 +236,29 @@ function drawBoard(id = 'mkBoard') {
   return { c3, ser };
 }
 
+/**
+ * Draw the chosen price view, and NOT the other one.
+ *
+ * The saving is the WORK, not the pixels. Hiding a canvas in CSS would still pay for a full
+ * board3d pass or a candlestick render on every 15 s refresh, for something nobody can see. So the
+ * container is hidden AND its draw is skipped. Both elements stay in the document: the toolbar
+ * switches between them live, and markets.test.js addresses them by id.
+ */
+function drawPrice() {
+  const { view } = prefs();
+  const three = view !== '2d';
+  document.getElementById('mkLayout')?.classList?.toggle('hidden', !three);
+  document.getElementById('mkChart')?.classList?.toggle('hidden', three);
+  if (!three) { drawChart(); return null; }
+  const b = drawBoard();
+  const legend = document.getElementById('mkLegend');
+  if (b && legend) {
+    const html = legend3dHtml(b.c3, b.ser);
+    if (legend.__html !== html) { legend.innerHTML = html; legend.__html = html; }
+  }
+  return b;
+}
+
 function bindChart() {
   if (M.bound) return;
   const bar = document.getElementById('mkBar'), canvas = document.getElementById('mkChart');
@@ -234,10 +269,10 @@ function bindChart() {
     if (!btn) return;
     if (btn.dataset.mkex) setSetting(loadSettings(), 'markets.exchange', (M.ex = btn.dataset.mkex));
     if (btn.dataset.mkrange) setSetting(loadSettings(), 'markets.range', String((M.range = Number(btn.dataset.mkrange))));
+    if (btn.dataset.mkview) setSetting(loadSettings(), 'markets.priceView', (M.view = btn.dataset.mkview));
     const html = toolbarHtml(M.data);
     bar.innerHTML = html; bar.__html = html;
-    drawChart();
-    drawBoard();
+    drawPrice();
   });
   canvas.addEventListener('pointermove', (e) => { const r = canvas.getBoundingClientRect(); M.hover = { x: e.clientX - r.left, y: e.clientY - r.top }; drawChart(); });
   canvas.addEventListener('pointerleave', () => { M.hover = null; drawChart(); });
@@ -305,10 +340,9 @@ export function renderMarkets(s, state, h) {
   put('mkSummary', summaryHtml(d, h.fmt));
   put('mkBar', toolbarHtml(d));
   bindChart();
-  drawChart();
   put('mkTable', tableHtml(d, h.fmt, now));
   renderDepth(h);
-  const b = drawBoard();
-  if (b) put('mkLegend', legend3dHtml(b.c3, b.ser));
+  // one view, chosen in the toolbar; the other is neither shown nor drawn
+  drawPrice();
   put('mkNote', `Public REST APIs of ${d.exchanges.map((e) => h.fmt.esc(e.name)).join(', ')}, fetched by this server every ${Math.round((d.tickerMs ?? REFRESH_MS) / 1000)} s while this tab is open and never otherwise. OKX quotes USDT, so it is left out of the USD median and spread.${d.warming ? ' Warming up…' : ''}`);
 }

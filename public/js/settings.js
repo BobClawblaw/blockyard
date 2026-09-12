@@ -88,6 +88,13 @@ export const DEFAULTS = Object.freeze({
     // back a string and a number that arrives as "48" must still match its own control.
     exchange: 'coinbase',
     range: '48',
+    // ONE VIEW OR THE OTHER, never both (operator, 2026-09-12: "For markets page, have a selector
+    // for either the 3D view or 2D view for price. Not both at the same time. Too much waste of
+    // space for that screen"). The page drew the 3D board AND the flat candlestick chart on every
+    // render, one above the other, which is two tall panels of the same hours. A string for the
+    // same reason `range` is one: a control hands back a string, and a remembered choice has to
+    // match what its own control offers.
+    priceView: '3d',     // '3d' (the candle board) | '2d' (the flat chart)
   }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
   // toggleable"). The keys are exactly details3d's FX_KINDS -- a test asserts the two lists match,
@@ -249,6 +256,10 @@ export const PANEL = Object.freeze([
       Object.freeze({
         key: 'range', label: 'Range', kind: 'choice', hint: 'How many hours the chart covers when the page opens',
         options: Object.freeze([['24', '24 hours'], ['48', '48 hours'], ['168', '7 days']]),
+      }),
+      Object.freeze({
+        key: 'priceView', label: 'Price view', kind: 'choice', hint: 'Which one the Markets page draws. Only one at a time — they show the same hours, and two tall panels of it filled the screen',
+        options: Object.freeze([['3d', '3D candle board'], ['2d', 'Flat chart']]),
       }),
     ]),
   }),
