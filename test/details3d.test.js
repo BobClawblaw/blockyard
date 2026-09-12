@@ -186,9 +186,15 @@ test('the aggregate tail becomes a field of tiles, not one grid-swallowing slab'
   assert.ok(pieces.length > 1, 'the tail is many tiles');
   const biggest = Math.max(...r.tiles.map((t) => t.s));
   assert.ok(biggest < DEFAULTS.resolution * 0.5, `no single tile swallows the grid, biggest side ${biggest} of ${DEFAULTS.resolution}`);
-  // equal pieces: we do not know their individual sizes and must not pretend to
+  // The pieces WERE strictly equal here -- "we do not know their individual sizes and must not
+  // pretend to" -- and that principle is traded, deliberately, 2026-09-12: equal squares cannot
+  // fill a grid flush, and the operator's Simple board "needs to be fucking perfect". The exact
+  // fill (blockpack.js packExact) tiles the remainder with squares no wider than THREE, so the
+  // pretence stays small: a piece is at most nine times its neighbour, never a slab claiming to be
+  // a transaction. A 14-wide tail piece was tried and rejected for exactly that.
   const sides = new Set(pieces.map((t) => t.s));
-  assert.equal(sides.size, 1, 'the pieces are equal, claiming nothing about sizes we do not have');
+  assert.ok([...sides].every((s) => s <= 3), `every tail piece is small (sides ${[...sides].join(',')})`);
+  assert.ok(sides.size <= 3, 'and of at most three sizes: a field of small pieces, not a size claim per piece');
 });
 
 test('an empty mempool paints a background rather than throwing', () => {

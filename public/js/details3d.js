@@ -13,7 +13,7 @@
 //     one's loop.
 //  3. Zero dependencies, no CDN.
 
-import { packBlock, vbytesPerUnit, vsizeForSide } from './blockpack.js';
+import { packBlock, packExact, vbytesPerUnit, vsizeForSide } from './blockpack.js';
 import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cyclePath, ballPath, cycleCrashes, cellTops, pathHeights } from './blockscene3d.js';
 
 const STATE = new WeakMap();
@@ -1765,6 +1765,15 @@ export function render3d(canvas, cells, options = {}) {
   // its square), fresh where it must be -- and only at the scale the previous
   // layout was made at, since at another scale every square's side changes.
   const laid = Array.isArray(opts.laid) ? opts.laid : null;   // board3d: tiles the caller laid out
+  // THE EXACT FILL for the Simple board (operator, 2026-09-12: "Simple viewer mode is what I use
+  // as default. It needs to be fucking perfect" ... "packer is still fucked up"). One block's
+  // worth with a summed tail is packed to the last cell with the scale SOLVED (blockpack.js
+  // packExact) instead of shrunk 5% at a time until it happened to fit -- which left the last row
+  // partial by construction: measured, the top row 55% full and 92 cells stranded. Chosen by the
+  // presence of the tail, which only the Simple board carries; the dithered per-transaction
+  // Detailed board has no tail to fill with and keeps its own pack below, as does a board the
+  // caller laid out (Markets).
+  const agg = laid || opts.dither ? null : ((cells || []).find((c) => (Number(c?.aggregate) || 0) > 1) ?? null);
   const pack = (k) => {
     const txs = toTxs(cells, vbytesPerUnit(opts.blockVbytes * k, opts.resolution));
     const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k, dither: !!opts.dither };   // dither: Detailed, area-true sides
@@ -1776,12 +1785,24 @@ export function render3d(canvas, cells, options = {}) {
   };
   const tallest = (p) => p.tiles.reduce((m, t) => Math.max(m, t.y + t.s), 0);
   let fitK = st.fitK ?? 1;
-  let packed = laid ? { tiles: laid, vbytesPerUnit: 0, gridWidth: 1 } : pack(fitK);
-  while (!laid && tallest(packed) > opts.resolution && fitK < 2) { fitK *= 1.05; packed = pack(fitK); }
-  while (!laid && fitK > 1.0001) {
-    const smaller = pack(fitK / 1.05);
-    if (tallest(smaller) > opts.resolution) break;
-    fitK /= 1.05; packed = smaller;
+  let packed;
+  if (agg) {
+    const plain = (cells || []).filter((c) => c !== agg).map((c, i) => ({
+      txid: c.txid || `cell-${i}`, vsize: Math.max(1, Number(c.vbytes ?? c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0),
+    }));
+    // the tail's pieces take the feerate of the stratum they fall in, richest first -- the same
+    // rule toTxs applies, so the colours are unchanged; only the layout is
+    const tail = { vbytes: Math.max(1, Number(agg.vbytes ?? agg.vsize) || 0), rateAt: strataRates(agg.strata, Math.max(0, Number(agg.rate) || 0)) };
+    packed = packExact(plain, tail, { resolution: opts.resolution, cap: 3 });
+    fitK = 1;                                            // nothing to shrink: the scale was solved
+  } else {
+    packed = laid ? { tiles: laid, vbytesPerUnit: 0, gridWidth: 1 } : pack(fitK);
+    while (!laid && tallest(packed) > opts.resolution && fitK < 2) { fitK *= 1.05; packed = pack(fitK); }
+    while (!laid && fitK > 1.0001) {
+      const smaller = pack(fitK / 1.05);
+      if (tallest(smaller) > opts.resolution) break;
+      fitK /= 1.05; packed = smaller;
+    }
   }
   st.fitK = fitK;
   const tiles0 = laid ?? packed.tiles.filter((t) => t.y + t.s <= opts.resolution);
@@ -1829,7 +1850,14 @@ export function render3d(canvas, cells, options = {}) {
     : 0;
 
   const now = (globalThis.performance && performance.now()) || 0;
-  const still = reducedMotion();
+  // STILL, by request as well as by preference (Tetrust, 2026-09-12: "Treat as groupings of blocks
+  // making up a shape that move in unison. not drop at different rates. This is a different
+  // application of our engine"). The choreography schedules every tile on its own -- a stagger of
+  // seconds between one cube's drop and the next is the whole point of the block board's
+  // reshuffle -- so a tetromino handed to it came down one cell at a time. A still board is drawn
+  // AS LAID, every frame, with nothing planned: a piece moves as one shape because nothing moves
+  // it, the frame simply changes.
+  const still = reducedMotion() || opts.still === true;
 
   // THE BUG THIS GUARDS (2026-09-10, operator: "redrawn instead of ...
   // smoothly moving"): mining.js calls this on every fast-tier paint, about

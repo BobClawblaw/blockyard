@@ -1413,8 +1413,15 @@ body { font-variant-numeric: tabular-nums; }
    absolutely beautiful leveraging our framework"). The well is a board3d in a tall
    frame; the HUD sits beside it. No inline styles anywhere: the overlay is a class.
    ========================================================================== */
-.tetrust { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
-.tetcard .treemapwrap.tetwell { position: relative; width: 100%; max-width: 560px; margin: 0 auto; aspect-ratio: 11 / 21; }
+.tetrust { display: grid; grid-template-columns: auto 290px; justify-content: center; gap: 14px; align-items: start; }
+/* .card carries grid-column: span 4 for the page's twelve-column layout; inside this two-column
+   grid that span forced four tracks and stacked the HUD under the well (measured: both cards
+   "span 4" in a 72/290/72/72 px grid). The other multi-column panels reset it the same way. */
+.tetrust > .card { grid-column: auto !important; }
+/* SIZED TO THE SCREEN, not the card (operator: "the playfield needs to be shrunk so it fits on a
+   single screen with room. it's way too large now"): the well's HEIGHT comes from the viewport,
+   and its width follows from the 10x20 shape -- about 330px wide on a 1000px-tall window. */
+.tetcard .treemapwrap.tetwell { position: relative; height: min(calc(100vh - 230px), 600px); width: auto; aspect-ratio: 11 / 21; margin: 0 auto; }
 .tetwell canvas { width: 100%; height: 100%; display: block; border-radius: var(--radius-sm); }
 .tetover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   background: rgba(2, 6, 10, 0.74); border-radius: var(--radius-sm); text-align: center; padding: 20px; }

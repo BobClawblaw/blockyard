@@ -9,7 +9,6 @@
 // sheen -- because it spreads spaceOptions(loadSettings()) exactly as the Block space board does.
 // The game inherits the whole framework rather than imitating it.
 import { board3d } from './details3d.js';
-import { loadSettings, spaceOptions } from './settings.js';
 import { newGame, tick, move, rotate, softDrop, hardDrop, tiles, previewTiles, peekNext, gravityMs, COLS, ROWS } from './tetris.js';
 
 const SCORES_KEY = 'bmc.tetrust.scores';
@@ -28,11 +27,30 @@ const WELL = {
 };
 const PREVIEW = { gridW: 4, gridH: 4, oblique: { ox: 0.10, oy: 0.30, headroom: 2, flight: 0 }, dome: 0, gridStep: 1, space: false, background: 'rgba(2,6,10,1)', grid: false };
 
-const G = { game: null, running: false, paused: false, why: '', raf: null, last: 0, acc: 0, dirty: true, bound: false, state: null, h: null, celebrate: 0 };
+const G = { game: null, running: false, paused: false, why: '', raf: null, last: 0, acc: 0, dirty: true, bound: false, state: null, h: null, celebrate: 0, nextKind: undefined };
 
 function opts(base) {
-  // the operator's display settings, then the game's own non-negotiables on top
-  return { ...base, ...spaceOptions(loadSettings()), transition: { rise: 0, travel: 1, drop: 0 }, idleFx: false, dome: base.dome, gridStep: base.gridStep, grid: base.grid ?? true };
+  // FAST AND PLAIN (operator, 2026-09-12: "the movement is way too slow. We need to stop all
+  // effects, and just treat the blocks differently ... Smaller, faster, playable! No effects for
+  // in-motion blocks"). The first cut inherited every display setting, and a forty-thousand-star
+  // galaxy behind a 2.4-megapixel well is not a game. The well draws NOTHING but the well: no sky,
+  // no idle effects, no shadows, flat cubes with their edges, no finishes on the pieces, and every
+  // move lands at once.
+  return {
+    ...base,
+    // `space: true` is the plain translucent floor (no deck texture, no dots); `stars: false`
+    // keeps the sky off it. The first cut had space off and got the textured deck back, and its
+    // per-cell neon glow turned the well into a loud green lattice: the glow and the halo are
+    // silenced here, and the grid is a quiet line.
+    space: true, stars: false, galaxy: false, idleFx: false, shadows: false,
+    neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)', neonCell: 'rgba(60,200,140,0.06)',
+    edges: true, facetPx: Infinity, crownPx: Infinity, neon: false, sheen: false,
+    // STILL: drawn as laid, no choreography at all. A transition of zero was not enough -- the
+    // planner's per-tile stagger (seconds between one cube's drop and the next) still applied,
+    // and a piece's four cells came down one after another instead of as one shape.
+    still: true,
+    transition: { rise: 0, travel: 1, drop: 0 },
+  };
 }
 
 // ------------------------------------------------------------------ scores, this browser's
@@ -94,8 +112,14 @@ function draw() {
   const g = G.game;
   const well = el('tetWell');
   if (well && g) board3d(well, tiles(g), opts(WELL));
-  const nx = el('tetNext');
-  if (nx) board3d(nx, previewTiles(g ? peekNext(g) : null), opts(PREVIEW));
+  // the preview only when the next piece changes: it is a second board, and redrawing it on
+  // every key press was paying for two scenes per move
+  const nk = g ? peekNext(g) : null;
+  if (nk !== G.nextKind) {
+    G.nextKind = nk;
+    const nx = el('tetNext');
+    if (nx) board3d(nx, previewTiles(nk), opts(PREVIEW));
+  }
   drawStats();
 }
 
@@ -167,12 +191,13 @@ function onKey(e) {
   if (!G.running || G.paused || !G.game || G.game.over) return;
   const g = G.game;
   let used = true;
+  // arrows or WASD (operator: "Add WASD for tetris controls as well")
   switch (e.key) {
-    case 'ArrowLeft': move(g, -1); break;
-    case 'ArrowRight': move(g, 1); break;
-    case 'ArrowUp': case 'x': case 'X': rotate(g, 1); break;
-    case 'z': case 'Z': rotate(g, -1); break;
-    case 'ArrowDown': softDrop(g); break;
+    case 'ArrowLeft': case 'a': case 'A': move(g, -1); break;
+    case 'ArrowRight': case 'd': case 'D': move(g, 1); break;
+    case 'ArrowUp': case 'w': case 'W': case 'x': case 'X': rotate(g, 1); break;
+    case 'z': case 'Z': case 'q': case 'Q': rotate(g, -1); break;
+    case 'ArrowDown': case 's': case 'S': softDrop(g); break;
     case ' ': hardDrop(g); break;
     default: used = false;
   }

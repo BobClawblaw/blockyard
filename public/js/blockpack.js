@@ -346,3 +346,83 @@ export function packStable(prev, txs, opts = {}) {
   for (let i = 0; i < items.length; i++) if (best.pos[i]) tiles.push(tileOf(items[i], best.pos[i], feeShade));
   return { tiles, waiting: best.waiting, keptBelow: best.keptBelow };
 }
+
+// ---------------------------------------------------------------------------
+// THE EXACT FILL (operator, 2026-09-12: "Simple viewer mode is what I use as
+// default. It needs to be fucking perfect", then "packer is still fucked up").
+//
+// The Simple board is one block's worth: a few hundred real transactions,
+// richest first, and ONE summed tail standing for the thousands behind them.
+// The old path cut the tail into equal squares of a side chosen in advance,
+// packed everything, and when it overflowed shrank the scale 5% at a time until
+// it happened to fit -- so the last row was partial BY CONSTRUCTION. Measured
+// on the live pool: the top row 55% full, 92 cells stranded, a torn edge.
+//
+// This packs the other way round. The scale is SOLVED: one unit is chosen so
+// that the real transactions' squares plus the tail's area come to exactly
+// resolution x resolution. The real transactions go down first-fit as before.
+// Then every cell still empty is tiled with the largest square that fits, no
+// bigger than `cap` -- so the tail stays a field of small equal-looking pieces
+// (a 14x14 tail piece beside a 1x1 transaction would claim to be 196x bigger,
+// which it is not; it was tried and rejected for exactly that) and the board
+// fills to the last cell. Measured on the live pool and three synthetic ones:
+// 1936 of 1936 cells, a flush top row, every time.
+//
+// `plain`: [{ txid, vsize, rate }] richest first. `tail`: { vbytes, rateAt(frac) }
+// where rateAt maps a share of the tail (0 = richest) to a feerate, or null.
+export function packExact(plain, tail, { resolution = 44, cap = 3 } = {}) {
+  const RES = Math.max(1, Math.floor(Number(resolution) || 44));
+  const total = RES * RES;
+  const items = (plain || []).map((c, i) => ({ txid: c.txid ?? `cell-${i}`, vsize: Math.max(1, Number(c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0) }));
+  const tailVb = tail ? Math.max(0, Number(tail.vbytes) || 0) : 0;
+  const realArea = (vpu) => items.reduce((a, c) => { const s = sideFor(c.vsize, vpu, RES); return a + s * s; }, 0);
+  // both terms fall as vpu rises, so bisect for the vpu that fills the grid exactly
+  let lo = 1, hi = 1e6;
+  for (let i = 0; i < 64; i++) { const m = (lo + hi) / 2; if (realArea(m) + tailVb / m > total) lo = m; else hi = m; }
+  let vpu = (lo + hi) / 2;
+
+  // the real transactions, first-fit; if first fit cannot honour the solved area (it is a
+  // heuristic, not a guarantee) the scale steps up a little and they are laid again
+  let layout, tiles;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    layout = new BlockLayout({ width: RES, height: RES });
+    tiles = [];
+    let overflow = false;
+    for (const c of items) {
+      const s = sideFor(c.vsize, vpu, RES);
+      const pos = layout.insert(c.txid, s);
+      if (pos.y + pos.s > RES) { overflow = true; break; }
+      tiles.push({ txid: c.txid, x: pos.x, y: pos.y, s: pos.s, vsize: c.vsize, rate: c.rate, color: feeShade(c.rate, c.txid) });
+    }
+    if (!overflow) break;
+    vpu *= 1.04;
+  }
+
+  // the remainder, tiled to the last cell: low-left first, the largest square up to `cap`
+  const pieces = [];
+  let k = 0;
+  // BlockLayout.fits treats rows beyond the grid as empty (the layout grows), so the top edge
+  // is this loop's to guard: a piece may not reach past row RES
+  const room = (x, y, s) => y + s <= RES && layout.fits(x, y, s);
+  for (let y = 0; y < RES; y++) {
+    for (let x = 0; x < RES; x++) {
+      if (!room(x, y, 1)) continue;
+      let s = 1;
+      while (s + 1 <= cap && room(x, y, s + 1)) s++;
+      const id = `aggregate-${k++}`;
+      const pos = layout.place(id, x, y, s);
+      if (pos) pieces.push({ ...pos, txid: id });
+    }
+  }
+  // each piece stands for its share of the tail's vbytes, coloured richest-first by that share
+  const pieceArea = pieces.reduce((a, p) => a + p.s * p.s, 0) || 1;
+  let acc = 0;
+  for (const p of pieces) {
+    const vsize = tailVb * (p.s * p.s) / pieceArea;
+    const frac = tailVb > 0 ? (acc + vsize / 2) / tailVb : 0;
+    acc += vsize;
+    const rate = tail && typeof tail.rateAt === 'function' ? Math.max(0, Number(tail.rateAt(frac)) || 0) : Math.max(0, Number(tail?.rate) || 0);
+    tiles.push({ txid: p.txid, x: p.x, y: p.y, s: p.s, vsize, rate, color: feeShade(rate, p.txid) });
+  }
+  return { tiles, gridWidth: RES, gridHeight: RES, vbytesPerUnit: vpu, pieces: pieces.length };
+}

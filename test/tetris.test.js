@@ -106,7 +106,8 @@ test('four at once is a tetris, and ten lines is a level', () => {
   assert.equal(g.level, 2, 'past ten lines: level two');
   assert.ok(g.score >= LINE_SCORE[4], 'a tetris pays like one');
   assert.ok(gravityMs(2) < gravityMs(1), 'and the game gets faster');
-  assert.equal(gravityMs(99), 90, 'but never absurdly so');
+  assert.equal(gravityMs(99), 80, 'but never absurdly so');
+  assert.ok(gravityMs(1) <= 700, 'and brisk from the first level');
 });
 
 test('the game is over when a piece cannot appear', () => {

@@ -34,7 +34,9 @@ export const LINES_PER_LEVEL = 10;
 
 /** How long a piece rests on a row before gravity takes it down one, at this level. */
 export function gravityMs(level) {
-  return Math.max(90, 850 - (level - 1) * 75);
+  // brisk from the first level (operator: "Smaller, faster, playable!"): 700 ms a row at level
+  // one, 65 ms quicker each level, never under 80
+  return Math.max(80, 700 - (level - 1) * 65);
 }
 
 // A small seeded generator, so a game's piece order is reproducible under test.
