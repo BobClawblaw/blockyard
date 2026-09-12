@@ -1314,7 +1314,12 @@ table.xtable tr:hover td { background: #16202c; }
 section.page:has(> .kiosk) { height: 100%; }
 .kiosk { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; height: 100%; min-height: min(calc(100vh - 130px), 900px); }   /* 100% of main: the bar wraps below 1400 px, so its height is not a constant */
 .kiosk:fullscreen { height: 100vh; padding: 10px; box-sizing: border-box; background: #010306; }
-@media (max-width: 1100px) { .kiosk { grid-template-columns: minmax(0, 1fr); height: auto; } .treemapwrap.kboard { height: 70vh; } }
+/* THE WALL STAYS A WALL DOWN TO 900 px (operator, 2026-09-12: "Try to improve kiosk view for this
+   resolution", at 1066x760). At 1100 the kiosk dropped to ONE column and `height: auto`, so the
+   panels stacked at 70vh each: measured at 1066x760 the grid came out 1730 px tall in a 760 px
+   viewport -- 1052 px past the fold, a scroll rather than a display. Two columns fit that window
+   with room, so the stack is for genuinely narrow screens now. */
+@media (max-width: 900px) { .kiosk { grid-template-columns: minmax(0, 1fr); height: auto; } .treemapwrap.kboard { height: 70vh; } }
 .kpanel { display: flex; flex-direction: column; min-height: 0; background: #04080c; border: 1px solid #16222c; border-radius: 10px; overflow: hidden; }
 .khead { padding: 8px 12px; font: 12px var(--sans); color: #c3cfdb; letter-spacing: .06em; text-transform: uppercase; }
 .khead .faint { text-transform: none; letter-spacing: 0; margin-left: 10px; }
@@ -1347,13 +1352,13 @@ section.page:has(> .kiosk) { height: 100%; }
 .kiosk .kpp { grid-area: pp; }
 .kiosk .ksp { grid-area: sp; }
 .kpp .kprice { border-top: 0; padding-top: 4px; }
-@media (max-width: 1100px) { .kiosk { grid-template-rows: auto; grid-template-areas: "mk" "pp" "sp"; } }
+@media (max-width: 900px) { .kiosk { grid-template-rows: auto; grid-template-areas: "mk" "pp" "sp"; } }
 
 /* the kiosk's fourth panel: Block flow under Block space */
 .kiosk { grid-template-areas: "mk sp" "pp bf"; }
 .kiosk .kbf { grid-area: bf; }
 .kbf .flowwrap { padding: 4px 10px 10px; overflow-x: auto; }
-@media (max-width: 1100px) { .kiosk { grid-template-areas: "mk" "pp" "sp" "bf"; } }
+@media (max-width: 900px) { .kiosk { grid-template-areas: "mk" "pp" "sp" "bf"; } }
 
 /* THE KIOSK AS TWO INDEPENDENT COLUMNS (operator, 2026-09-11: "Kiosk mode needs to shrink down that
    particular block flow vertically, and prevent it from resizing when text overflows bounds").
@@ -1374,7 +1379,7 @@ section.page:has(> .kiosk) { height: 100%; }
    tall column that had to be scrolled. It stacks below 1100 px as it always did; between 1100 and
    1400 it stays two columns and gives the space back instead -- tighter gaps and a shorter Block
    flow strip -- which is what "doesn't look proper on a smaller window" was about. */
-@media (max-width: 1400px) and (min-width: 1101px) {
+@media (max-width: 1400px) and (min-width: 901px) {
   .kiosk { gap: 8px; }
   .kcol { gap: 8px; }
   .kcol > .kbf { height: 200px; }
