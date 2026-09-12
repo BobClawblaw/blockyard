@@ -62,6 +62,7 @@ function opts(base) {
   // galaxy behind a 2.4-megapixel well is not a game. The well draws the well and -- only when
   // the game's own switch says so -- the sky behind it: no idle effects, no shadows, flat cubes
   // with their edges, no finishes on the pieces, and every move lands at once.
+  const t = tetrustOptions(loadSettings());
   return {
     ...base,
     // `space: true` is the plain translucent floor (no deck texture, no dots). The first cut had
@@ -71,7 +72,9 @@ function opts(base) {
     // no sky on the well itself: the sky is the panel's canvas behind it (drawSky)
     stars: false, galaxy: false,
     neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)', neonCell: 'rgba(60,200,140,0.06)',
-    edges: true, facetPx: Infinity, crownPx: Infinity, neon: false, sheen: false,
+    edges: true, facetPx: Infinity, crownPx: Infinity, sheen: false,
+    // neon on the pieces is the game's own switch (settings tetrust.neon and its colour rows)
+    neon: t.neon, neonSource: t.neonSource, neonColour: t.neonColour, neonBrightness: t.neonBrightness,
     // STILL: drawn as laid, no choreography at all. A transition of zero was not enough -- the
     // planner's per-tile stagger (seconds between one cube's drop and the next) still applied,
     // and a piece's four cells came down one after another instead of as one shape.

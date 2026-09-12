@@ -155,3 +155,14 @@ test('the lamp: overhead shades no slope, a corner does, and the choice reaches 
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /light: opts\.light,/, 'render3d hands it to the scene (the finishes were once left out of that object)');
 });
+
+test('the neon tubes take one colour and a brightness when asked, the block\'s own colour otherwise', () => {
+  const rgb = (col) => col.match(/rgba\((\d+),(\d+),(\d+),([\d.]+)/).slice(1).map(Number);
+  const tubes = (extra) => buildScene(TILES, { ...O, neon: true, ...extra }).ops.filter((op) => op.face === 'neon' && op.txid === 'big' && op.lw > 2.5 && op.lw < 6);   // the tube: between the core and the halo at any brightness
+  const own = rgb(tubes({})[0].stroke), one = rgb(tubes({ neonSource: 'colour', neonColour: '#ff2020' })[0].stroke);
+  assert.ok(own[1] > own[0], 'the block\'s green');
+  assert.ok(one[0] > 200 && one[1] < 120, `the one colour, red: ${tubes({ neonSource: 'colour', neonColour: '#ff2020' })[0].stroke}`);
+  assert.deepEqual(rgb(tubes({ neonSource: 'colour', neonColour: 'nope' })[0].stroke), own, 'a bad colour falls back to the block\'s own');
+  const dim = tubes({ neonBrightness: 0.3 })[0], loud = tubes({ neonBrightness: 2 })[0];
+  assert.ok(rgb(dim.stroke)[3] < rgb(loud.stroke)[3] && dim.lw < loud.lw, 'brightness into alpha and width');
+});

@@ -638,6 +638,7 @@ export const LIGHTS = Object.freeze({
   'front': { L: [0, -0.55, 0.63], side: [0, 0.9] },
 });
 export const LIGHT_DEFAULT = 'upper-left';
+const NEON_HEX = /^#[0-9a-f]{6}$/i;
 export function lightOf(o = {}) {
   return LIGHTS[o.light] ? o.light : o.overheadLight === true ? 'overhead' : LIGHT_DEFAULT;
 }
@@ -951,10 +952,14 @@ export function buildScene(tiles, o = {}) {
       // (2026-09-12, second cut: the first stroked a 1.4 x tube over a 0.6-pixel base line --
       // under a pixel, and half of it under the next cube's fill -- "I don't see neon blocks
       // working". `lw` multiplies paintFrame's base width, so these are device pixels x 1.7.)
-      const halo = lift(c, 0.25, round3(0.3 * a)), tube = lift(c, 0.3, round3(1 * a)), core = lift(c, 0.75, round3(0.7 * a));   // the tube keeps the block's hue; only the thin core goes toward white
+      // tuned (settings.js neonSource / neonColour / neonBrightness): the tube in the block's own
+      // colour or one chosen colour, glowing as hard as asked -- brightness into alpha and width
+      const nc = o.neonSource === 'colour' && NEON_HEX.test(o.neonColour || '') ? o.neonColour : c;
+      const nb = Math.max(0.2, Math.min(2, Number(o.neonBrightness) || 1));
+      const halo = lift(nc, 0.25, round3(Math.min(1, 0.3 * nb) * a)), tube = lift(nc, 0.3, round3(Math.min(1, nb) * a)), core = lift(nc, 0.75, round3(Math.min(1, 0.7 * nb) * a));   // the tube keeps the hue; only the thin core goes toward white
       for (const poly of [f.top, ...f.sides.map((sd) => sd.points)]) {
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 11, always: true });
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 4, always: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: round3(11 * (0.6 + 0.4 * nb)), always: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: round3(4 * (0.7 + 0.3 * nb)), always: true });
         out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: core, lw: 1.6, always: true });
       }
     }

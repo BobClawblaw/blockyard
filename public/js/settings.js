@@ -33,6 +33,13 @@ export const DEFAULTS = Object.freeze({
     // opt-in: the shipped look is the deliberate one, these are finishes laid over it, and they
     // work at every level of detail -- a Simple cube takes the sheen as well as a full one.
     neon: false,          // the edges of every block stroked in its own colour, lit
+    // THE NEON TUBES TUNED (operator, 2026-09-12: "preferences for tuning the neon outline colors
+    // ... Slider for brightness, color selection, realtime preview ... optionally have the neon
+    // color tied to the block temperature"): the tube takes the block's feerate colour, or one
+    // colour of the operator's choosing, at a brightness of their choosing
+    neonSource: 'temperature',   // 'temperature' (the block's own colour) | 'colour' (neonColour)
+    neonColour: '#3d8bff',       // the one colour, when chosen
+    neonBrightness: 1,           // multiplies the tubes' alpha and width (0.2 .. 2)
     sheen: false,         // a metallic highlight along the lit edge of each top face
     stars: false,         // opt-in: a star field twinkles, so the board never stops repainting
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
@@ -76,6 +83,10 @@ export const DEFAULTS = Object.freeze({
     galaxyAt: 'center',   // where its centre sits: behind the title
     music: true,          // the tune
     sfx: true,            // the effects: move, rotate, drop, clear, game over
+    neon: false,          // neon tubes on the pieces and the stack
+    neonSource: 'piece',  // 'piece' (each piece's colour) | 'colour' (neonColour)
+    neonColour: '#3d8bff',
+    neonBrightness: 1,
   }),
 });
 
@@ -106,7 +117,13 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'Ripples, scans, light cycles and the lightning ball while the board rests' }),
       Object.freeze({ key: 'edges', label: 'Stone edges', kind: 'toggle', hint: 'The dark seam around each stone' }),
       Object.freeze({ key: 'grid', label: 'Neon grid', kind: 'toggle', hint: 'The glowing grid on the board' }),
-      Object.freeze({ key: 'neon', label: 'Neon blocks', kind: 'toggle', hint: 'Every block’s edges stroked in its own colour, lit. Works at any level of detail' }),
+      Object.freeze({ key: 'neon', label: 'Neon blocks', kind: 'toggle', hint: 'Every block a dim solid body under lit tubes on its edges. Works at any level of detail' }),
+      Object.freeze({
+        key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'The tubes in each block’s own feerate colour, or all in one colour',
+        options: Object.freeze([['temperature', 'The block’s feerate colour'], ['colour', 'One colour']]),
+      }),
+      Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
+      Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow; 1 is the shipped glow' }),
       Object.freeze({ key: 'sheen', label: 'Metallic sheen', kind: 'toggle', hint: 'A specular highlight along the lit edge of each block’s top face. Works on Simple cubes too' }),
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'Stars behind the board. They twinkle, so the board keeps repainting while they are on' }),
       Object.freeze({
@@ -167,6 +184,13 @@ export const PANEL = Object.freeze([
       }),
       Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'Korobeiniki, on oscillators' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Move, rotate, drop, clear, game over' }),
+      Object.freeze({ key: 'neon', label: 'Neon pieces', kind: 'toggle', hint: 'The pieces and the stack as dim bodies under lit tubes' }),
+      Object.freeze({
+        key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'Each piece’s own colour, or all in one colour',
+        options: Object.freeze([['piece', 'The piece’s colour'], ['colour', 'One colour']]),
+      }),
+      Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
+      Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
     ]),
   }),
 ]);
@@ -186,7 +210,9 @@ function clampRow(row, v, fallback) {
   return clamp(v, row?.min ?? -Infinity, row?.max ?? Infinity, fallback);
 }
 /** Accept a choice only if its own control offers it. */
+const HEX = /^#[0-9a-f]{6}$/i;
 function pickRow(row, v, fallback) {
+  if (row?.kind === 'colour') return typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : fallback;
   const allowed = (row?.options ?? []).map(([val]) => val);
   return allowed.includes(v) ? v : fallback;
 }
@@ -364,6 +390,7 @@ export function spaceOptions(s) {
   const motion = MOTION[sp.motion];
   if (motion) out.transition = motion;
   out.light = sp.light;
+  out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;
   return out;
 }
 
@@ -377,6 +404,7 @@ export function tetrustOptions(s) {
   const sky = spaceOptions(s);
   return {
     stars: n.tetrust.stars, galaxy: n.tetrust.galaxy, galaxyAt: n.tetrust.galaxyAt, music: n.tetrust.music, sfx: n.tetrust.sfx,
+    neon: n.tetrust.neon, neonSource: n.tetrust.neonSource === 'colour' ? 'colour' : 'temperature', neonColour: n.tetrust.neonColour, neonBrightness: n.tetrust.neonBrightness,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
   };

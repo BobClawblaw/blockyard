@@ -2016,6 +2016,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
     opts.neon === true, opts.sheen === true, opts.overheadLight === true, opts.light,
+    opts.neonSource, opts.neonColour, opts.neonBrightness,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;
@@ -2081,6 +2082,7 @@ export function render3d(canvas, cells, options = {}) {
       neon: opts.neon === true, sheen: opts.sheen === true,
       overheadLight: opts.overheadLight === true,   // the lamp straight above (Tetrust)
       light: opts.light,                            // or wherever settings.js space.light puts it
+      neonSource: opts.neonSource, neonColour: opts.neonColour, neonBrightness: opts.neonBrightness,
     };
     // the panel's extent in grid units, from the same constant fit paintFrame
     // uses: the textured sphere is laid over all of it (drawGrid), and an
