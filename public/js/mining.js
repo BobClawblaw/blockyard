@@ -381,6 +381,7 @@ function nextCard(nb, mempool, drift = {}, fmt, freshClass = '', fresh = null, m
   const cap = Math.min(100, Math.max(pct, 0.6));
   const q = mempool?.bytes;
   return `<div class="bcard next${ring}" title="${fmt.esc(nb.note ?? '')}">
+    <i class="bstack" data-h="${Math.max(0, Math.min(100, pct)).toFixed(1)}" aria-hidden="true"></i>
     <div class="bh"><span class="live"></span><b>#${nb.height ?? '?'}</b><span class="bpool">${drift.stale ? 'stale template' : 'being built'}</span>${since != null ? `<span class="bage">${since}m</span>` : ''}</div>
     ${drift.stale ? `<div class="note tiny warn">this reading is ${Math.abs(drift.behind)} height(s) behind the tip — the node has since mined a block</div>` : ''}
     <div class="bgap">${ageSec != null ? `${ageSec}s old · answered in ${nb.ms ?? '?'}ms` : ''}</div>
@@ -630,10 +631,13 @@ function projectedCards(proj, { avgGapSec, tipAgeSec } = {}, fmt) {
   const since = Number.isFinite(tipAgeSec) && tipAgeSec > 0 ? tipAgeSec : 0;
   const eta = (k) => Math.max(1, Math.round(((k + 1) * gap - since) / 60));
   const r = (v) => (v == null ? '–' : v >= 10 ? String(Math.round(v)) : v.toFixed(2));
+  const vcap = Number(proj.blockVsize) > 0 ? Number(proj.blockVsize) : 1_000_000;
+  const fillPct = (v) => Math.max(0, Math.min(100, ((Number(v) || 0) / vcap) * 100));
   // READABLE (operator, 2026-09-11: "The forecast block text is unreadable. Do better !!!"):
   // light text on a dark card, the fee colour as a bar and a band, one fact per line and no
   // line wrapping -- the first cut put grey 10.5 px text on a saturated fill
   const card = (b, k) => `<div class="bcard proj" data-pfee="${Number(b.medianRate ?? 0)}" title="projected from the mempool by feerate: ${fmt.num(b.n)} transactions, ${fmt.bytes(b.vsize)}">
+      <i class="bstack" data-h="${fillPct(b.vsize).toFixed(1)}" aria-hidden="true"></i>
       <div class="ph">+${k}</div>
       <div class="pm">~${r(b.medianRate)} sat/vB</div>
       <div class="pr">${r(b.minRate)} – ${r(b.maxRate)}</div>

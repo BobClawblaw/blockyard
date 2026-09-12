@@ -38,6 +38,40 @@ test('projected blocks sit left of the one being built, furthest future first', 
   assert.ok(/data-pfee="1\.2"/.test(todo) && !/ data-fee=/.test(todo), 'its own attribute -- [data-fee] is the fee swatches\', whose style pass paints the whole background');
 });
 
+test('the block being built and the projected blocks show how full they are, bottom to top', async () => {
+  // Operator, 2026-09-12: "I want a subtle transparent background fill from bottom to top across
+  // the current and estimated blocks, that visualize how full they are. A full block should have
+  // the entire subtle 'full background' applied, where the building blocks should obviously show
+  // lesser fill rates". .bstack is the element a MINED card already uses for exactly this; these
+  // two were the only cards without it, so the one row where fullness changes while you watch was
+  // the one row not drawing it.
+  const { blockFlow } = await import('../public/js/mining.js');
+  const FMT = { num: (n) => String(n ?? '-'), bytes: (n) => String(n ?? '-'), esc: (s) => String(s ?? ''), ago: () => '-', rate: (x) => String(x ?? '-'), satPerVb: (x) => String(x ?? '-'), ageSec: () => '-', pct: (n) => String(n ?? '-') };
+  const projected = {
+    blockVsize: 1e6,
+    blocks: [{ n: 2857, vsize: 999e3, feeSat: 1.8e6, minRate: 1.01, maxRate: 140, medianRate: 1.2 },
+      { n: 400, vsize: 250e3, feeSat: 1e6, minRate: 0.39, maxRate: 1, medianRate: 0.8 }],
+    rest: { n: 7000, vsize: 2.5e6, feeSat: 5e5, maxRate: 0.39, minRate: 0.1, blocks: 3 },
+  };
+  const el = { clientWidth: 900, innerHTML: '' };
+  const next = { height: 966295, txCount: 3, weight: 1.2e6, weightLimit: 4e6, weightPct: 30, totalFeesSat: 9e4, at: Date.now(), ms: 10, economy: {} };
+  blockFlow(el, { tipHeight: 966294, recent: [], next, mempool: { dist: { projected } }, avgGapSec: 600, tipAgeSec: 60 }, FMT);
+  const html = el.innerHTML;
+
+  const built = html.slice(html.indexOf('class="bcard next'));
+  assert.match(built.slice(0, 400), /<i class="bstack" data-h="30\.0"/,
+    'the block being built fills to the same weightPct its own "full" row prints');
+
+  // furthest future first (the row is reversed), each against the projection's OWN blockVsize
+  const fills = [...html.matchAll(/class="bcard proj[^>]*>\s*<i class="bstack" data-h="([\d.]+)"/g)].map((m) => Number(m[1]));
+  assert.deepEqual(fills, [25, 99.9], 'a half-packed projection reads short, a packed one nearly solid');
+
+  const rest = html.slice(html.indexOf('class="bcard proj rest'));
+  assert.ok(!rest.slice(0, 300).includes('bstack'),
+    'the rest card is several blocks summed, so a fill across one card would be measuring nothing');
+  assert.ok(!/style="/.test(html), 'height by a number and the CSSOM pass, never a style attribute');
+});
+
 test('the row opens with the nearest projected blocks on screen, not scrolled off the left', async () => {
   // measured on the Overview: five projected cards in the page, none visible, because the row
   // parked the divider 28% in and only the block being built fitted left of it

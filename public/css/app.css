@@ -888,6 +888,9 @@ canvas.chart.xs, .chart.xs { height: 86px }
   background: linear-gradient(180deg, var(--pool, var(--accent)) 0, rgba(0, 0, 0, 0) 140%);
   opacity: .13;
 }
+.bcard.proj .bstack { background: linear-gradient(180deg, var(--pc, var(--accent)) 0, rgba(0, 0, 0, 0) 140%); }
+/* The block being built carries a meter and a live dot in the accent; its fill joins them
+   (it sets no --pool, so the declaration above already falls back to the accent). */
 .bcard > *:not(.bstack) { position: relative; z-index: 1; }
 
 /* ==========================================================================
