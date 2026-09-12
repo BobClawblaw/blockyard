@@ -1254,8 +1254,16 @@ table.xtable tr:hover td { background: #16202c; }
 .xblk { flex: 0 0 auto; width: 128px; text-decoration: none; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 9px; }
 .xblk-h { color: #4fd1ff; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; }
 .xblk-face { position: relative; width: 124px; height: 124px; box-sizing: border-box; padding: 10px 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; background: linear-gradient(180deg, #5b6b7d, #3a4757); transition: transform .18s ease, filter .18s ease; }
-.xblk-face::before { content: ''; position: absolute; left: 5px; right: -5px; top: -10px; height: 10px; background: inherit; filter: brightness(1.3); transform: skewX(-45deg); transform-origin: bottom left; }
-.xblk-face::after { content: ''; position: absolute; top: -5px; bottom: 5px; right: -10px; width: 10px; background: inherit; filter: brightness(0.7); transform: skewY(-45deg); transform-origin: top left; }
+/* THE ISOMETRIC BLOCK: a top face and a right face, both 10px deep (2026-09-12, operator: "the
+   rendering of the blocks here is broken AF"). The two must share their edges with the card and
+   with each other, or the corner tears open:
+     top   bottom edge = the card's top edge   -> left: 0; right: 0  (skewX carries the top edge right by 10)
+     right left edge   = the card's right edge -> top: 0; bottom: 0  (skewY carries the right edge up by 10)
+   They were inset 5px on two sides each, so the top face sat 5px right of the card and the right
+   face 5px above it: a sliver at the top left, a 5px gap at the bottom right, and a dark wedge at
+   the top right where neither face reached the corner. */
+.xblk-face::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; height: 10px; background: inherit; filter: brightness(1.3); transform: skewX(-45deg); transform-origin: bottom left; }
+.xblk-face::after { content: ''; position: absolute; top: 0; bottom: 0; right: -10px; width: 10px; background: inherit; filter: brightness(0.7); transform: skewY(-45deg); transform-origin: top left; }
 .xblk:hover .xblk-face { transform: translateY(-4px); filter: brightness(1.15); }
 .xblk-face b { font-size: 15px; font-weight: 700; }
 .xblk-face em { font-style: normal; font-size: 19px; font-weight: 700; }

@@ -260,3 +260,39 @@ test('the explorer home shows the latest blocks as fee-coloured cubes', () => {
   assert.match(html, /~3 sat\/vB/);
   assert.doesNotMatch(html, /style="/);
 });
+
+test('the isometric block cubes have faces that meet: the corner cannot tear open', () => {
+  // (operator, 2026-09-12: "rendering of the blocks here is broken AF"). The cube is a card with
+  // two skewed pseudo-elements: a top face and a right face, both DEPTH deep. For them to meet
+  // each other and the card, the top face's bottom edge must be the card's full top edge and the
+  // right face's left edge its full right edge -- the skews then carry both to the same far
+  // corner. They were inset 5px on two sides each, which left a sliver at the top left, a gap at
+  // the bottom right, and a dark wedge at the top right where neither face reached.
+  const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+  const face = (which) => {
+    const m = css.match(new RegExp(`\\.xblk-face::${which} \\{([^}]*)\\}`));
+    assert.ok(m, `.xblk-face::${which} exists`);
+    return m[1];
+  };
+  const px = (decl, prop) => {
+    // the unit is optional: CSS writes a bare `0`, and `left: 0` is the same edge as `left: 0px`
+    const m = decl.match(new RegExp(`(?:^|[;{\\s])${prop}:\\s*(-?\\d+)(?:px)?\\s*;`));
+    return m ? Number(m[1]) : null;
+  };
+  const top = face('before'), right = face('after');
+  const depth = px(top, 'height');
+  assert.ok(depth > 0, 'the top face has a depth');
+  assert.equal(px(right, 'width'), depth, 'both faces are the same depth, or the cube is not a cube');
+
+  // flush with the card on the axis each face spans
+  assert.equal(px(top, 'left'), 0, 'the top face starts at the card\'s left edge');
+  assert.equal(px(top, 'right'), 0, 'and ends at its right edge');
+  assert.equal(px(right, 'top'), 0, 'the right face starts at the card\'s top edge');
+  assert.equal(px(right, 'bottom'), 0, 'and ends at its bottom edge');
+
+  // and each is pushed out by exactly the depth, so the skewed edges land on the same corner
+  assert.equal(px(top, 'top'), -depth, 'the top face sits one depth above the card');
+  assert.equal(px(right, 'right'), -depth, 'the right face one depth beside it');
+  assert.match(top, /skewX\(-45deg\)/); assert.match(top, /transform-origin: bottom left/);
+  assert.match(right, /skewY\(-45deg\)/); assert.match(right, /transform-origin: top left/);
+});
