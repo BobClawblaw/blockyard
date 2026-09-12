@@ -9,6 +9,7 @@ import { lineChart, histogram, scatter, meter, stackedBars, sparkline, paint, re
 import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
 import { viewerIdle } from './details3d.js';
+import { loadSettings, setSetting, resetSettings, PANEL as SETTINGS_PANEL } from './settings.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets } from './markets.js';
 import { renderKiosk } from './kiosk.js';
@@ -935,6 +936,51 @@ async function boot() {
     const b = e.target.closest('button[data-page]');
     if (b) setPage(b.dataset.page);
   });
+  // DISPLAY SETTINGS (settings.js). The panel is built from PANEL, so a control and its value
+  // cannot drift apart, and every change is saved and applied without a reload: the boards read
+  // loadSettings() on their next paint, and a repaint is asked for immediately.
+  const cfgWrap = document.getElementById('settingsWrap');
+  const cfgBody = document.getElementById('cfgBody');
+  const cfgGear = document.getElementById('btnSettings');
+  const drawSettings = () => {
+    const s = loadSettings();
+    cfgBody.innerHTML = SETTINGS_PANEL.map((g) => `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${g.rows.map((r) => {
+      const v = s[g.group][r.key];
+      const id = `cfg-${g.group}-${r.key}`;
+      const ctl = r.kind === 'toggle'
+        ? `<input type="checkbox" id="${id}" data-cfg="${g.group}.${r.key}"${v ? ' checked' : ''}>`
+        : r.kind === 'choice'
+          ? `<select id="${id}" data-cfg="${g.group}.${r.key}">${r.options.map(([val, label]) => `<option value="${val}"${val === v ? ' selected' : ''}>${label}</option>`).join('')}</select>`
+          : `<input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${v}</span>`;
+      return `<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
+    }).join('')}</div>`).join('');
+  };
+  const openSettings = (open) => {
+    cfgWrap.classList.toggle('hidden', !open);
+    cfgGear.classList.toggle('on', open);
+    cfgGear.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) drawSettings();
+  };
+  cfgGear.addEventListener('click', () => openSettings(cfgWrap.classList.contains('hidden')));
+  document.getElementById('cfgClose').addEventListener('click', () => openSettings(false));
+  document.getElementById('settingsScrim').addEventListener('click', () => openSettings(false));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !cfgWrap.classList.contains('hidden')) openSettings(false); });
+  document.getElementById('cfgReset').addEventListener('click', () => {
+    resetSettings();
+    drawSettings();
+    render();
+    toast('display settings back to their defaults');
+  });
+  cfgBody.addEventListener('input', (e) => {
+    const el = e.target.closest?.('[data-cfg]');
+    if (!el) return;
+    const value = el.type === 'checkbox' ? el.checked : el.type === 'range' ? Number(el.value) : el.value;
+    setSetting(loadSettings(), el.dataset.cfg, value);
+    const out = cfgBody.querySelector(`[data-val-for="${el.dataset.cfg}"]`);
+    if (out) out.textContent = String(value);
+    render();          // the boards pick the new options up on their next paint
+  });
+
   document.getElementById('btnPause').addEventListener('click', (e) => {
     state.paused = !state.paused;
     state.pausedHard = e.shiftKey ? true : state.paused ? state.pausedHard : false;

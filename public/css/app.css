@@ -1346,3 +1346,35 @@ body { font-variant-numeric: tabular-nums; }
 .flowwrap::-webkit-scrollbar { display: none; }
 .flowwrap.dragging { cursor: grabbing; scroll-snap-type: none; }
 .flowwrap.dragging a { pointer-events: none; }
+
+/* ---- display settings (settings.js, index.html #settingsWrap) ----
+   A panel over the page rather than a page of its own: it is changed while looking at the thing
+   it changes, and every control applies live. No inline styles anywhere -- CSP forbids them, and
+   the range fills are drawn by the browser's own widget. */
+.cfgwrap { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; }
+.cfgscrim { position: absolute; inset: 0; background: rgba(2, 5, 9, 0.62); }
+.cfg {
+  position: relative; width: min(420px, 100%); height: 100%; overflow: auto;
+  background: var(--bg-1); border-left: 1px solid var(--line); box-shadow: -18px 0 40px #0008;
+  padding: 14px 16px 28px;
+}
+.cfg h2 { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; font-size: 13px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-dim); }
+.cfg h2 .sp { flex: 1; }
+.cfgnote { margin: 0 0 14px; color: var(--fg-faint); font-size: 11.5px; line-height: 1.5; }
+.cfggroup { border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 10px 12px 12px; margin-bottom: 12px; background: var(--bg-2); }
+.cfggroup > h3 { margin: 0 0 4px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+.cfggroup > p { margin: 0 0 10px; color: var(--fg-faint); font-size: 11px; line-height: 1.45; }
+.cfgrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line-soft); }
+.cfgrow:first-of-type { border-top: 0; }
+.cfgrow b { font-weight: 600; font-size: 12px; }
+.cfgrow i { grid-column: 1 / -1; font-style: normal; color: var(--fg-faint); font-size: 10.5px; line-height: 1.4; }
+.cfgrow select, .cfgrow input[type="range"] { accent-color: var(--accent); }
+.cfgrow select { background: var(--bg-3, #12161c); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 3px 6px; font: inherit; font-size: 11.5px; }
+.cfgrow input[type="range"] { width: 130px; }
+.cfgrow .val { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); min-width: 3ch; text-align: right; }
+/* the toggle: a checkbox the browser draws, sized up, so it is keyboard-reachable for free */
+.cfgrow input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.btn.gear { display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; }
+.btn.gear svg { display: block; }
+.btn.gear.on { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 560px) { .cfg { width: 100%; border-left: 0; } }

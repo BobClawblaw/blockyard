@@ -1,0 +1,147 @@
+// DISPLAY SETTINGS (operator, 2026-09-12: "We need to add a configuration panel, allow persistent
+// settings ... remove shadows, simple cubes, lower level of detail ... anything to make it run
+// faster ... settings that affect the star field").
+//
+// The point of these tests is that a switch in the panel CHANGES WHAT IS DRAWN. A checkbox that
+// persists a value nobody reads is worse than no checkbox: it tells the operator the board is
+// cheaper when it is not. So each setting is followed through to the renderer's own output.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import {
+  DEFAULTS, PANEL, SETTINGS_KEY, normalise, loadSettings, saveSettings, setSetting, resetSettings,
+  isDefault, spaceOptions, marketsOptions,
+} from '../public/js/settings.js';
+import { buildScene } from '../public/js/blockscene3d.js';
+import { starField } from '../public/js/details3d.js';
+
+// a localStorage stand-in: the real one is per browser, and these tests must not need one
+function store() {
+  const map = new Map();
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => map.set(k, String(v)),
+    removeItem: (k) => map.delete(k),
+    get size() { return map.size; },
+  };
+}
+
+test('defaults are the shipped look, and an empty or corrupt store still yields them', () => {
+  assert.deepEqual(normalise(null), normalise(undefined));
+  assert.equal(normalise(null).space.shadows, true);
+  assert.equal(normalise(null).space.detail, 'full');
+  assert.equal(normalise(null).markets.starDensity, 1);
+  const s = store();
+  assert.deepEqual(loadSettings(s), normalise(null), 'empty store');
+  s.setItem(SETTINGS_KEY, '{not json');
+  assert.deepEqual(loadSettings(s), normalise(null), 'corrupt store is not a crash');
+  s.setItem(SETTINGS_KEY, JSON.stringify({ space: { detail: 'nonsense', dome: 999 }, markets: { starDensity: -5 } }));
+  const got = loadSettings(s);
+  assert.equal(got.space.detail, 'full', 'an unknown choice falls back');
+  assert.equal(got.space.dome, 12, 'out of range is clamped, not rejected');
+  assert.equal(got.markets.starDensity, 0.2, 'and clamped at the bottom too');
+});
+
+test('a setting round-trips through the store, and reset puts everything back', () => {
+  const s = store();
+  const next = setSetting(loadSettings(s), 'space.shadows', false, s);
+  assert.equal(next.space.shadows, false);
+  assert.equal(loadSettings(s).space.shadows, false, 'it persisted');
+  assert.equal(isDefault(next), false);
+  assert.deepEqual(setSetting(next, 'space.nonsense', true, s).space.shadows, false, 'an unknown key changes nothing');
+  const back = resetSettings(s);
+  assert.equal(isDefault(back), true);
+  assert.equal(loadSettings(s).space.shadows, true, 'the store is empty again');
+});
+
+test('every panel control names a real setting, and every setting has a control', () => {
+  const listed = new Set();
+  for (const g of PANEL) {
+    assert.ok(DEFAULTS[g.group], `panel group ${g.group} exists`);
+    for (const r of g.rows) {
+      assert.ok(r.key in DEFAULTS[g.group], `${g.group}.${r.key} is a real setting`);
+      assert.ok(r.label && r.hint, `${g.group}.${r.key} is labelled and explained`);
+      if (r.kind === 'choice') assert.ok(r.options?.length >= 2, 'a choice offers choices');
+      if (r.kind === 'range') assert.ok(r.min < r.max && r.step > 0, 'a range has bounds');
+      listed.add(`${g.group}.${r.key}`);
+    }
+  }
+  for (const group of Object.keys(DEFAULTS)) {
+    for (const key of Object.keys(DEFAULTS[group])) {
+      assert.ok(listed.has(`${group}.${key}`), `${group}.${key} has a control in the panel`);
+    }
+  }
+});
+
+test('shadows off really removes the shadow polygons from the scene', () => {
+  const tiles = [
+    { txid: 'a', x: 0, y: 0, s: 4, z: 0, color: '#3c9' },
+    { txid: 'b', x: 6, y: 6, s: 3, z: 2.5, color: '#3c9' },      // in flight: casts as well as rests
+  ];
+  const o = { unit: 6, zUnit: 6, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5, gridW: 20, gridH: 20 };
+  const withShadows = buildScene(tiles, o).ops.filter((op) => op.face === 'shadow' || op.face === 'cast');
+  assert.ok(withShadows.length > 0, 'the shipped board casts shadows');
+  const without = buildScene(tiles, { ...o, ...spaceOptions({ space: { shadows: false } }) }).ops
+    .filter((op) => op.face === 'shadow' || op.face === 'cast');
+  assert.equal(without.length, 0, 'with shadows off, not one shadow polygon is built');
+});
+
+test('level of detail raises the facet and crown thresholds, and flat drops the seams', () => {
+  const full = spaceOptions({ space: { detail: 'full' } });
+  const simple = spaceOptions({ space: { detail: 'simple' } });
+  const flat = spaceOptions({ space: { detail: 'flat' } });
+  assert.ok(simple.facetPx > full.facetPx && simple.crownPx > full.crownPx, 'simple cubes: fewer polygons at the same size');
+  assert.ok(flat.facetPx > simple.facetPx, 'flat is simpler still');
+  assert.equal(flat.edges, false, 'flat tiles carry no edge');
+  assert.equal(flat.seamAlpha, 0);
+  assert.equal(spaceOptions({ space: { edges: false } }).seamAlpha, 0, 'edges off means no seam');
+});
+
+test('motion settings shorten or remove the flight; the board still lands', () => {
+  assert.equal(spaceOptions({ space: { motion: 'full' } }).transition, undefined, 'full flight is the shipped choreography');
+  const quick = spaceOptions({ space: { motion: 'quick' } }).transition;
+  const still = spaceOptions({ space: { motion: 'still' } }).transition;
+  assert.ok(quick.rise + quick.travel + quick.drop < 20000, 'quick is shorter than the 20 s flight');
+  assert.ok(still.rise + still.travel + still.drop <= 1, 'still lands at once');
+});
+
+test('star density and brightness reach the field itself', () => {
+  const base = starField(1200, 800, 1, 7, 1).length;
+  const dense = starField(1200, 800, 1, 7, 2.5).length;
+  const sparse = starField(1200, 800, 1, 7, 0.3).length;
+  assert.ok(base > 0);
+  assert.ok(dense > base * 2, `denser sky: ${base} -> ${dense}`);
+  assert.ok(sparse < base / 2, `sparser sky: ${base} -> ${sparse}`);
+  assert.deepEqual(starField(1200, 800, 1, 7, 1), starField(1200, 800, 1, 7, 1), 'seeded: the same sky every time');
+  const off = marketsOptions({ markets: { stars: false } });
+  assert.equal(off.space, false, 'stars off means the board draws none');
+  const dim = marketsOptions({ markets: { starBrightness: 0.4 } });
+  assert.equal(dim.starBrightness, 0.4);
+  assert.equal(marketsOptions({ markets: { glow: false } }).neonHalo, 'rgba(0,0,0,0)', 'glow off silences the halo');
+});
+
+test('the renderer honours the option names the settings hand it', () => {
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(src, /drawStars\(ctx, pw, ph, dpr \|\| 1, view\.now \?\? 0, opts\)/, 'star options reach drawStars');
+  assert.match(src, /starField\(pw, ph, dpr, 7, density\)/, 'density reaches the field');
+  const scene = readFileSync(new URL('../public/js/blockscene3d.js', import.meta.url), 'utf8');
+  assert.match(scene, /if \(o\.shadows !== false\)/, 'shadows are optional in the scene builder');
+  const mining = readFileSync(new URL('../public/js/mining.js', import.meta.url), 'utf8');
+  assert.match(mining, /spaceOptions\(loadSettings\(\)\)/, 'the block boards read the settings');
+  const markets = readFileSync(new URL('../public/js/markets.js', import.meta.url), 'utf8');
+  assert.match(markets, /marketsOptions\(loadSettings\(\)\)/, 'the markets board reads them too');
+});
+
+test('the gear opens a panel, and none of it is styled inline (CSP)', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="btnSettings"/, 'there is a gear button');
+  assert.match(html, /<svg viewBox="0 0 24 24"[^>]*>/, 'with a gear in it');
+  assert.match(html, /id="settingsPanel"[^>]*role="dialog"/, 'and a panel it opens');
+  assert.doesNotMatch(html, /style="/, 'no inline styles: the CSP forbids them');
+  const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /btnSettings/, 'the gear is bound');
+  assert.match(app, /Escape/, 'escape closes it');
+  const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+  assert.match(css, /\.cfgwrap \{/, 'the panel is styled');
+  assert.match(css, /\.btn\.gear \{/, 'and so is the gear');
+});

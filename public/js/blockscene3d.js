@@ -866,8 +866,14 @@ export function buildScene(tiles, o = {}) {
     // and a block flying off screen -- or falling in from it -- takes its
     // shadow with it as it goes: (1 - entry).
     const zt = t.z ?? 0;
-    if (airborne && !viewerLit) shadows.push(...shadowOps(t, a * (o.oblique ? Math.min(1, zt / 1.5) * (1 - (t.entry ?? 0)) : 1), o));
-    if (o.oblique && !viewerLit && zt < 1.5) shadows.push(...restingShadowOps(t, o, 1 - zt / 1.5));
+    // SHADOWS ARE OPTIONAL (operator, 2026-09-12: "remove shadows ... anything to make it run
+    // faster"). They are the most expensive thing on a full board -- one quad per stone at rest,
+    // more in flight -- so a machine that struggles can have the scene without them. Paint order
+    // is unchanged: an empty shadow list still comes first.
+    if (o.shadows !== false) {
+      if (airborne && !viewerLit) shadows.push(...shadowOps(t, a * (o.oblique ? Math.min(1, zt / 1.5) * (1 - (t.entry ?? 0)) : 1), o));
+      if (o.oblique && !viewerLit && zt < 1.5) shadows.push(...restingShadowOps(t, o, 1 - zt / 1.5));
+    }
   }
   const ops = o.oblique ? [...shadows, ...ground] : [...ground, ...shadows, ...air];
   return { ops, bounds: ops.length ? { minX, maxX, minY, maxY } : null, count: ordered.length };

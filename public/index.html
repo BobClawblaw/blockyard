@@ -45,10 +45,28 @@
     </div>
     <div class="userchip">
       <span class="tiny faint" id="whoami"></span>
+      <button class="btn gear" id="btnSettings" title="Display settings" aria-label="Display settings" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+      </button>
       <button class="btn" id="btnPause" title="Freeze live updates (hold Shift to also stop the event feed)">pause</button>
       <button class="btn" id="btnLogout">sign out</button>
     </div>
   </header>
+
+  <!-- Display settings (settings.js). Hidden until the gear is pressed; the contents are
+       rendered from settings.js PANEL, so a value and its control cannot drift apart. -->
+  <div class="cfgwrap hidden" id="settingsWrap">
+    <div class="cfgscrim" id="settingsScrim"></div>
+    <section class="cfg" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="cfgTitle">
+      <h2 id="cfgTitle">Display settings <span class="sp"></span>
+        <button class="btn" id="cfgReset" title="Put every setting back to the shipped default">reset</button>
+        <button class="btn" id="cfgClose" aria-label="Close settings">close</button>
+      </h2>
+      <p class="cfgnote">Kept in this browser only, and applied as soon as you change them. They
+        change what is drawn, not what is measured: every number on the page is the same either way.</p>
+      <div id="cfgBody"></div>
+    </section>
+  </div>
 
   <main>
     <div id="offline" class="offline-bar hidden"></div>

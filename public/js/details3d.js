@@ -869,10 +869,12 @@ function axisLabels(ctx, view, axes, n, k, dpr) {
 // ones carry a halo and a cross glint. Plain rgba fills and strokes, in device pixels.
 const STARS = new WeakMap();
 const NO_CANVAS = {};
-export function starField(pw, ph, dpr = 1, seed = 7) {
+export function starField(pw, ph, dpr = 1, seed = 7, density = 1) {
   let s = seed >>> 0;
   const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
-  const n = Math.round((pw * ph) / (2400 * dpr * dpr));
+  // density: the operator's multiplier on the shipped count (settings.js markets.starDensity)
+  const d = Number.isFinite(density) ? Math.min(3, Math.max(0, density)) : 1;
+  const n = Math.round(((pw * ph) / (2400 * dpr * dpr)) * d);
   const out = [];
   for (let i = 0; i < n; i++) {
     const big = rnd() > 0.965;
@@ -893,12 +895,17 @@ export function starAlpha(star, now) {
   const w = 0.5 + 0.5 * Math.sin(now * star.f + star.p);
   return star.b * (0.3 + 0.7 * w * w);
 }
-function drawStars(ctx, pw, ph, dpr, now) {
+function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
   const key = ctx.canvas ?? NO_CANVAS;
+  const density = Number.isFinite(opts.starDensity) ? opts.starDensity : 1;
+  const bright = Number.isFinite(opts.starBrightness) ? Math.min(1.5, Math.max(0, opts.starBrightness)) : 1;
   let f = STARS.get(key);
-  if (!f || f.pw !== pw || f.ph !== ph) { f = { pw, ph, stars: starField(pw, ph, dpr) }; STARS.set(key, f); }
+  // the field is rebuilt when the density changes as well as the size: it is a seeded scatter,
+  // so the same density always gives the same sky back
+  if (!f || f.pw !== pw || f.ph !== ph || f.density !== density) { f = { pw, ph, density, stars: starField(pw, ph, dpr, 7, density) }; STARS.set(key, f); }
+  ctx.__starBright = bright;
   for (const s of f.stars) {
-    const a = starAlpha(s, now);
+    const a = starAlpha(s, now) * (ctx.__starBright ?? 1);
     const c = s.c.join(',');
     if (s.big) {
       ctx.fillStyle = `rgba(${c},${(a * 0.12).toFixed(3)})`;
@@ -920,7 +927,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
-  if (opts.space) drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0);
+  if (opts.space) drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
   if (!frame.bounds && !opts.oblique) return;

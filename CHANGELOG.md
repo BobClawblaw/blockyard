@@ -67,6 +67,14 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
 - The 3D markets board, a price panel and the block-space board side by side, with a
   full-screen button.
 
+### Display settings
+
+- A gear in the header opens a settings panel: shadows, idle effects, stone edges, the neon grid,
+  a star field, level of detail (full / simple cubes / flat tiles), refresh animation
+  (full / quick / none) and board curve for the block-space board; star field, density, brightness
+  and grid glow for the markets board. Kept in the browser, applied without a reload, and each one
+  changes what is drawn rather than only what is stored.
+
 ### Security
 
 - Open, read-only access by default; optional accounts with scrypt hashing, hashed sessions,

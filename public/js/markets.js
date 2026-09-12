@@ -17,6 +17,7 @@
 //     so a new hour slides the chart along and another exchange drops its own candles in.
 // The server polls five exchanges' public APIs while this tab is open (server/collect/markets.js).
 import { board3d } from './details3d.js';
+import { loadSettings, marketsOptions } from './settings.js';
 import { drawPriceChart, readout, EX_COLORS } from './pricechart.js';
 import { niceTicks } from './charts.js';
 import { renderDepth } from './depthchart.js';
@@ -204,7 +205,7 @@ function drawBoard(id = 'mkBoard') {
   const aspect = (canvas.clientHeight || 400) / Math.max(1, canvas.clientWidth || 1000);
   const c3 = chart3d(ser, { zMax: fitZ(aspect, hours * C3.slot) });
   const cam = { ...CAMERA_3D, oblique: { ...CAMERA_3D.oblique, headroom: C3.zBase + c3.zMax + 2 } };
-  if (c3.tiles.length) board3d(canvas, c3.tiles, { ...cam, gridW: c3.gridW, gridH: c3.gridH, axes: c3.axes });
+  if (c3.tiles.length) board3d(canvas, c3.tiles, { ...cam, gridW: c3.gridW, gridH: c3.gridH, axes: c3.axes, ...marketsOptions(loadSettings()) });
   return { c3, ser };
 }
 

@@ -15,6 +15,7 @@
 
 import { paint, COL } from './charts.js';
 import { blockTreemap, mempoolTreemap, rateColor as rateBucketColor } from './goggles.js';
+import { loadSettings, spaceOptions } from './settings.js';
 // 2026-09-10: the block and the pool now draw as lit solids on a square-packed
 // grid (the look of mempool.space's block view, our own packer in blockpack.js) with feerate carried
 // in HEIGHT as well as colour, and refreshes that lift, fly and land. The flat
@@ -111,7 +112,8 @@ function drawPoolViewer(canvas, s, state) {
   // drawn as a brighter line inside the grid instead.
   modeSwitch(canvas, state);
   const v = viewerSetup(s, state);
-  return mempool3d(canvas, v.args, v.opts);
+  // the operator's preferences last, over the mode's own options (settings.js)
+  return mempool3d(canvas, v.args, { ...v.opts, ...spaceOptions(loadSettings()) });
 }
 
 const WU_CAP_FALLBACK = 4_000_000;

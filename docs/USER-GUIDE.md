@@ -611,3 +611,34 @@ node the recipient's monitor picks by default.
 
 **Motion:** if your system is set to reduce motion, Block flow stops animating and
 the Block space idle effects are switched off. Every number stays.
+
+
+## Display settings
+
+The gear in the header opens **Display settings**. They are kept in your browser (nothing is sent to
+the server, and no account is needed), they apply as soon as you change them, and **reset** puts
+every one back to the shipped default.
+
+They change how the pages are *drawn*, never what is measured: every figure on the page reads the
+same whatever you choose here.
+
+### Block space
+
+The 3D board on Overview, Block space, Mempool and Kiosk. If the board is heavy on your machine,
+these are the settings that buy it back, roughly most expensive first:
+
+| setting | what it does |
+|---|---|
+| **Shadows** | Cubes casting shadows on the board and on each other. The costliest single effect on a full board: one shadow per resting stone, more in flight. |
+| **Level of detail** | *Full* draws every facet and crown. *Simple cubes* draws those extras only on much larger stones. *Flat tiles* drops them, and the seams, entirely. |
+| **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
+| **Idle effects** | The ripples, scans, light cycles and lightning ball that play while the board rests. |
+| **Stone edges** | The dark seam drawn around each stone. |
+| **Neon grid** | The glowing grid on the board. |
+| **Star field** | Off by default here: the stars twinkle, so the board keeps repainting while they are on. |
+| **Board curve** | How far the board bows toward you. 0 is flat. |
+
+### Markets & Price
+
+The candle board on Markets and Kiosk: the **star field** on or off, its **density** (0.2x to 3x the
+shipped number of stars) and **brightness**, and the **grid glow** under the neon lines.
