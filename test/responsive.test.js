@@ -37,3 +37,19 @@ test('the kiosk page section has a height, so the board fills the window', () =>
   assert.match(css, /section\.page:has\(> \.kiosk\) \{ height: 100%; \}/);
   assert.match(css, /\.kiosk \{[^}]*min-height: min\(calc\(100vh - 130px\), 900px\)/, 'and a viewport fallback where :has() is missing');
 });
+
+test('the Block space panels are tightened to fit one screen, and only those panels', () => {
+  // operator, 2026-09-12: "Shrink up the vertical size of the being built and chain tip panels so
+  // we can fit the feerate panel on one screen". Measured at 1280x700 before: Being built 262 px,
+  // Chain tip 236, Feerate 111, with the Feerate panel's bottom 62 px past the fold. Most of that
+  // is the key/value rows -- 144 px of each panel is seven rows -- so they are tightened first.
+  assert.match(css, /\.spacehud \.hudkv \{[^}]*line-height/, 'the rows carry most of the height, so they are where it is taken from');
+  assert.match(css, /\.spacehud \.hudbig \{[^}]*font-size/, 'and the big percentage comes down');
+  for (const sel of ['.spacehud .hud {', '.spacehud .hudh {', '.spacehud .hud .bmeter {', '.spacehud .hudbar {']) {
+    assert.ok(css.includes(sel), `${sel} is scoped to the Block space column`);
+  }
+  // the same classes dress the Markets legend, which is not short of room: the shared rules stand
+  assert.match(css, /^\.hudkv \{[^}]*gap: 3px 12px/m, 'the shared row rule is untouched');
+  assert.match(css, /^\.hud \{[^}]*padding: 10px 12px/m, 'and the shared padding');
+  assert.match(css, /\.mkside \.hud \{/, 'the Markets legend keeps its own sizing');
+});

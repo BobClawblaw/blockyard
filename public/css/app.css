@@ -1006,6 +1006,21 @@ canvas.chart.xs, .chart.xs { height: 86px }
 .hudpool .faint { margin-left: auto; font-size: 11.5px; }
 .hudbar { height: 6px; margin: 4px 0 8px; border-radius: 3px; overflow: hidden; background: var(--bg-3, #12161c); }
 .hudbar span { display: block; height: 100%; }
+/* THE THREE PANELS FIT ON ONE SCREEN (operator, 2026-09-12: "Shrink up the vertical size of the
+   being built and chain tip panels so we can fit the feerate panel on one screen"). Measured at
+   1280x700 before: Being built 262 px, Chain tip 236, Feerate 111, and the Feerate panel's bottom
+   62 px past the fold. Most of that height is the key/value rows -- 144 px of EACH panel is seven
+   rows at about 20.6 px -- so the rows are tightened first and the rest trimmed a little. Scoped to
+   .spacehud throughout, because these same classes dress the Markets legend (.mkside .hud), which
+   is not short of room and should not change. */
+.spacehud { gap: 9px; }
+.spacehud .hud { padding: 7px 11px; }
+.spacehud .hudh { margin-bottom: 5px; }
+.spacehud .hud .bmeter { height: 14px; margin: 1px 0 5px; }
+.spacehud .hudbig { font-size: 22px; margin-bottom: 5px; }
+.spacehud .hudkv { gap: 1px 12px; line-height: 1.35; }
+.spacehud .hudpool { font-size: 13.5px; margin-bottom: 3px; }
+.spacehud .hudbar { margin: 3px 0 5px; }
 .feelegend { display: flex; flex-wrap: wrap; gap: 5px 11px; margin-bottom: 5px; font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
 .feelegend i { display: inline-block; width: 12px; height: 12px; margin-right: 4px; border-radius: 2px; vertical-align: -2px; }
 @media (max-width: 980px) {
