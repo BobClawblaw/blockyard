@@ -132,6 +132,12 @@ const MAX_BOUNCE = 1.05;
 const MAX_STEP = 0.3;
 const LASER_SPEED = 26;
 const LASER_COOLDOWN = 260;         // ms between shots
+// CATCH RUNS OUT (operator, 2026-09-12: "The catch shouldnt last forever. Just 30 seconds max").
+// Held for ever it stops being a power-up and becomes a different game -- you can park the ball and
+// aim every single shot, which removes the rally. Thirty seconds is long enough to set up the shots
+// you caught it for. Counted in ms off `step`'s own dtMs, like the laser cooldown and the minion
+// timer: the rules still have no clock of their own, so a run stays reproducible.
+const CATCH_MS = 30_000;
 // Slower than before: a minion is now looking for a way through rather than falling past you.
 const ENEMY_SPEED = 1.25;           // descent, grid units a second
 const ENEMY_SIDE = 2.4;             // sideways, while feeling along the wall for a gap
@@ -256,6 +262,7 @@ export function resetVaus(g) {
   g.paddle.w = PADDLE_W;
   g.laser = false;
   g.catch = false;
+  g.catchLeft = 0;
   g.slow = false;
   g.cooldown = 0;
   g.paddle.x = Math.max(0, Math.min(COLS - g.paddle.w, g.paddle.x));
@@ -279,7 +286,7 @@ export function newGame(level = 1, opts = {}) {
     level, score: 0, lives: LIVES, over: false, cleared: false,
     paddle: { x: (COLS - PADDLE_W) / 2, w: PADDLE_W },
     balls: [], bricks: [], capsules: [], bolts: [], enemies: [],
-    laser: false, catch: false, slow: false, cooldown: 0,
+    laser: false, catch: false, slow: false, cooldown: 0, catchLeft: 0,
     sinceEnemy: 0, nextId: 1, breakableAtStart: 0,
     opts: { capsules: true, enemies: true },
   };
@@ -355,7 +362,7 @@ export function applyCapsule(g, kind) {
       g.paddle.x = Math.max(0, Math.min(COLS - g.paddle.w, mid - g.paddle.w / 2));
       break;
     }
-    case 'catch': g.catch = true; g.laser = false; break;
+    case 'catch': g.catch = true; g.catchLeft = CATCH_MS; g.laser = false; break;
     case 'slow': {
       g.slow = true;
       for (const b of g.balls) if (!b.stuck) { b.vx *= SLOW_FACTOR; b.vy *= SLOW_FACTOR; }
@@ -560,7 +567,26 @@ export function step(g, dtMs) {
   if (g.over) return { hits, lost: false, cleared: g.cleared };
   const standing = breakable(g).length > 0;
   const dt = Math.min(60, Math.max(0, dtMs)) / 1000;
-  g.cooldown = Math.max(0, g.cooldown - Math.min(60, Math.max(0, dtMs)));
+  const ms = Math.min(60, Math.max(0, dtMs));
+  g.cooldown = Math.max(0, g.cooldown - ms);
+  if (g.catch) {
+    g.catchLeft = Math.max(0, (g.catchLeft ?? 0) - ms);
+    if (g.catchLeft === 0) {
+      g.catch = false;
+      hits.push({ kind: 'catchover' });
+      // A ball still held has to GO, or it sits on the bat with nothing left to explain why.
+      // Released at the angle its own position on the bat implies -- the same rule a bounce uses,
+      // so this is deterministic and the run stays reproducible.
+      for (const b of g.balls) {
+        if (!b.stuck) continue;
+        b.stuck = false;
+        const off = Math.max(-1, Math.min(1, (b.x - (g.paddle.x + g.paddle.w / 2)) / (g.paddle.w / 2)));
+        const sp = speed(g.level) * (g.slow ? SLOW_FACTOR : 1);
+        b.vx = Math.sin(off * MAX_BOUNCE) * sp;
+        b.vy = Math.abs(Math.cos(off * MAX_BOUNCE) * sp);
+      }
+    }
+  }
 
   moveCapsules(g, dt, hits);
   moveBolts(g, dt, hits);
@@ -713,7 +739,7 @@ export function remaining(g) {
 export function powers(g) {
   const on = [];
   if (g.laser) on.push('laser');
-  if (g.catch) on.push('catch');
+  if (g.catch) on.push(`catch ${Math.ceil((g.catchLeft ?? 0) / 1000)}s`);
   if (g.slow) on.push('slow');
   if (g.paddle.w > PADDLE_W) on.push('wide');
   if (g.balls.length > 1) on.push(`${g.balls.length} balls`);

@@ -490,3 +490,37 @@ test('the bat and a brick sound like opposites: a low falling pong, a high risin
   const [hFrom] = SFX.brickhard;
   assert.ok(hFrom > bFrom, 'a dearer brick rings higher still');
 });
+
+test('catch runs out after thirty seconds, and never strands a ball on the bat', () => {
+  // (operator, 2026-09-12: "The catch shouldnt last forever. Just 30 seconds max".) Held for ever
+  // it is not a power-up, it is a different game: you park the ball and aim every shot, and the
+  // rally stops existing.
+  const g = newGame(1, { capsules: false, enemies: false });
+  launch(g, 0.2);
+  applyCapsule(g, 'catch');
+  assert.equal(g.catch, true);
+  assert.ok(powers(g).some((x) => x.startsWith('catch ')), 'the HUD shows it draining, not just that it is on');
+
+  // hold a ball on the bat, the way catching one does
+  g.balls[0].stuck = true; g.balls[0].vx = 0; g.balls[0].vy = 0;
+
+  // 20 seconds in: still ours
+  for (let i = 0; i < 400; i++) step(g, 50);
+  assert.equal(g.catch, true, 'still held at 20s');
+
+  // past 30: gone, and the ball is moving again
+  let over = false;
+  for (let i = 0; i < 400 && !over; i++) over = step(g, 50).hits.some((h) => h.kind === 'catchover');
+  assert.equal(over, true, 'it announces that it expired');
+  assert.equal(g.catch, false, 'and is off');
+  assert.equal(g.balls[0].stuck, false, 'the held ball was released, not stranded');
+  assert.ok(g.balls[0].vy > 0, 'and it went upward, back into play');
+  assert.ok(!powers(g).some((x) => x.startsWith('catch')), 'the HUD stops claiming it');
+
+  // a lost life does not carry a stale timer into the next ball
+  const h = newGame(1, { capsules: false, enemies: false });
+  applyCapsule(h, 'catch');
+  resetVaus(h);
+  assert.equal(h.catch, false);
+  assert.equal(h.catchLeft, 0, 'the countdown is cleared with the rest of Vaus');
+});

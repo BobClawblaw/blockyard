@@ -25,6 +25,11 @@ All notable changes to this project are documented here. The format follows
   table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
   the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
   a brick on a slow frame.
+- **Catch expires after 30 seconds.** Held indefinitely it stopped being a power-up and became a
+  different game: park the ball, aim every shot, and the rally ceases to exist. The countdown runs
+  off `step`'s own elapsed milliseconds, like the laser cooldown and the minion timer, so the rules
+  still carry no clock and a run stays reproducible. A ball still held when it lapses is released at
+  the angle its position on the bat implies, rather than stranded there with nothing to explain it.
 - **Minions, pill capsules and a bat that morphs.** The engine gained a rotated-polygon tile kind
   (`poly` + `rot`, with optional `eyes`), built the way the sphere is — nested filled polygons,
   since the op format has no arcs and gradients are forbidden — and claiming its own face name so
@@ -57,7 +62,7 @@ All notable changes to this project are documented here. The format follows
   rules, `public/js/blockanoid.js` for the screen). Six hand-built walls that cycle; **silver**
   bricks that take two hits and one more every four levels, standing lower once damaged; **gold**
   that never breaks and never blocks a level, since a wall is cleared when its *breakable* bricks
-  are gone. Seven **capsules** fall out of broken bricks — laser, enlarge, catch, slow, disrupt
+  are gone. Six **capsules** fall out of broken bricks — laser, enlarge, catch, slow, disrupt
   (three balls) and player (a life) — one on the court at a time, as the
   arcade did it. Vaus turns red while the laser is up, so the bat says what it can do. Minions
   drift down the court and pay when destroyed. Which brick carries a capsule is a **hash of the

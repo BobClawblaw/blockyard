@@ -602,7 +602,7 @@ taking it a decision rather than a reflex. Catch it with Vaus. Every capsule pay
 |---|---|---|
 | **L** | Laser | Vaus turns red and can shoot. The bat itself tells you what it can do. |
 | **E** | Enlarge | A wider Vaus. |
-| **C** | Catch | The ball sticks on landing; serve it again when you have aimed. |
+| **C** | Catch | The ball sticks on landing; serve it again when you have aimed. Lasts **30 seconds**, and the heads-up display counts it down. When it runs out, a ball still held is released rather than left sitting on the bat. |
 | **S** | Slow | Takes the pace off the ball already in play. |
 | **D** | Disrupt | Three balls at once, all at the same speed. |
 | **P** | Player | An extra life. |
