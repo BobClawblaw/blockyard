@@ -65,6 +65,17 @@ export const DEFAULTS = Object.freeze({
     stars: true,
     effects: true,        // the idle effects and the flight when the candles refresh
   }),
+  // TETRUST (operator, 2026-09-12: "Have this entire panel filled black and rendering the spiral
+  // galaxy for this display. Have the text floating over the spiral galaxy ... add toggles for
+  // those settings in the game and have them persistent in settings"). The sky is the panel's own
+  // canvas behind the well, so it costs the game nothing per key press.
+  tetrust: Object.freeze({
+    stars: true,          // the star field across the whole panel
+    galaxy: true,         // the spiral galaxy in it
+    galaxyAt: 'center',   // where its centre sits: behind the title
+    music: true,          // the tune
+    sfx: true,            // the effects: move, rotate, drop, clear, game over
+  }),
 });
 
 const DETAIL = {
@@ -136,6 +147,21 @@ export const PANEL = Object.freeze([
     rows: Object.freeze([
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
       Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'Ripples, light cycles and the lightning ball while the board rests, and the flight when the candles refresh. Off draws the board and leaves it alone' }),
+    ]),
+  }),
+  Object.freeze({
+    group: 'tetrust',
+    title: 'Tetrust',
+    note: 'The game. These switches are also on the game’s own panel; the sky takes the star field’s density, brightness and layers from Sky above.',
+    rows: Object.freeze([
+      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the well' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
+      Object.freeze({
+        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy’s centre sits on the panel: behind the title, or a corner',
+        options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
+      }),
+      Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'Korobeiniki, on oscillators' }),
+      Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Move, rotate, drop, clear, game over' }),
     ]),
   }),
 ]);
@@ -333,6 +359,21 @@ export function spaceOptions(s) {
   const motion = MOTION[sp.motion];
   if (motion) out.transition = motion;
   return out;
+}
+
+/**
+ * The game's switches, with the sky's density, brightness and layers from the Sky group: the game
+ * decides whether there is a sky and a galaxy and where the galaxy sits; what the sky is made of
+ * is one preference for every board.
+ */
+export function tetrustOptions(s) {
+  const n = normalise(s);
+  const sky = spaceOptions(s);
+  return {
+    stars: n.tetrust.stars, galaxy: n.tetrust.galaxy, galaxyAt: n.tetrust.galaxyAt, music: n.tetrust.music, sfx: n.tetrust.sfx,
+    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
+    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
+  };
 }
 
 /** The renderer options for the markets board (markets.js board3d). */

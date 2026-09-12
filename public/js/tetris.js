@@ -55,12 +55,16 @@ function fillBag(g) {
 
 export function newGame(seed = Date.now()) {
   const g = {
-    board: Array.from({ length: ROWS }, () => new Array(COLS).fill(null)),   // board[y][x] = kind | null
+    // board[y][x] = { k: kind, id } | null. Every locked cell carries an ID it keeps as rows
+    // shift down after a clear: the renderer animates a vanished id as a departure (the cleared
+    // line drifting away) and a moved id as a move, so only the cleared cells leave.
+    board: Array.from({ length: ROWS }, () => new Array(COLS).fill(null)),
     queue: [], rnd: rng(seed), seed,
     cur: null,            // { kind, rot, x, y }
-    score: 0, lines: 0, level: 1, pieces: 0,
+    score: 0, lines: 0, level: 1, pieces: 0, nextId: 1,
     over: false,
     cleared: [],          // rows cleared by the last lock, for the renderer to celebrate
+    clearedCells: [],     // ...and the cells that were on them: { x, y, k, id }
   };
   fillBag(g);
   spawn(g);
@@ -127,12 +131,18 @@ export function ghostY(g) {
   return y;
 }
 
+/** The piece kind at a cell, or null. */
+export function kindAt(g, x, y) { return g.board[y]?.[x]?.k ?? null; }
+
 function lock(g) {
   const c = g.cur;
-  for (const [x, y] of cellsOf(c.kind, c.rot, c.x, c.y)) g.board[y][x] = c.kind;
+  for (const [x, y] of cellsOf(c.kind, c.rot, c.x, c.y)) g.board[y][x] = { k: c.kind, id: g.nextId++ };
   // LINES: every full row goes, and everything above it comes down one
   const full = [];
   for (let y = 0; y < ROWS; y++) if (g.board[y].every(Boolean)) full.push(y);
+  // the cells of the lines, kept for the screen: they DRIFT UP AND AWAY (tetrust.js) while the
+  // rows above come down, so the board here has already forgotten them
+  g.clearedCells = full.flatMap((y) => g.board[y].map((cell, x) => ({ x, y, k: cell.k, id: cell.id })));
   for (const y of [...full].reverse()) { g.board.splice(y, 1); g.board.push(new Array(COLS).fill(null)); }
   g.cleared = full;
   if (full.length) {
@@ -179,19 +189,30 @@ export function hardDrop(g) {
  * thin dim plate on the floor. Ids are positional for the stack and fixed for the piece, so the
  * renderer sees a still board that changes, not a board that reshuffles.
  */
+// medium neon blue (operator, 2026-09-12: first "neon yellow wireframes", then "maybe medium neon
+// blue at the bottom instead of bright neon yellow for tetrust block landing locations")
+export const GHOST_WIRE = '#3d8bff';
+
 export function tiles(g) {
   const out = [];
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-    const k = g.board[y][x];
-    if (k) out.push({ txid: `c${x}_${y}`, x, y, s: 1, tall: 1, color: PIECES[k].color });
+    const cell = g.board[y][x];
+    if (cell) out.push({ txid: `c${cell.id}`, x, y, s: 1, tall: 1, color: PIECES[cell.k].color });
   }
   if (g.cur && !g.over) {
     const c = g.cur;
     const gy = ghostY(g);
     if (gy !== c.y) {
-      cellsOf(c.kind, c.rot, c.x, gy).forEach(([x, y], i) => out.push({ txid: `g${i}`, x, y, s: 1, tall: 0.14, color: dim(PIECES[c.kind].color) }));
+      // THE GHOST IS A WIREFRAME (operator, 2026-09-12: "wireframes on teh bottom of the tetrust
+      // playfield, to show where the pieces are going to drop. The solid dark colored stuff is
+      // too difficult to see"): the outline of a full cube, no fill, in a colour nothing else on
+      // the board uses
+      cellsOf(c.kind, c.rot, c.x, gy).forEach(([x, y], i) => out.push({ txid: `g${i}`, x, y, s: 1, tall: 1, color: PIECES[c.kind].color, wire: GHOST_WIRE }));
     }
-    cellsOf(c.kind, c.rot, c.x, c.y).forEach(([x, y], i) => out.push({ txid: `p${i}`, x, y, s: 1, tall: 1.18, color: PIECES[c.kind].color }));
+    // the falling piece carries the ids its cells will get when it locks (lock() hands them out in
+    // cellsOf order from nextId), so locking is the same four tiles settling, not four vanishing
+    // and four appearing
+    cellsOf(c.kind, c.rot, c.x, c.y).forEach(([x, y], i) => out.push({ txid: `c${g.nextId + i}`, x, y, s: 1, tall: 1.18, color: PIECES[c.kind].color, piece: true }));
   }
   return out;
 }
@@ -200,11 +221,4 @@ export function tiles(g) {
 export function previewTiles(kind) {
   if (!kind) return [];
   return cellsOf(kind, 0, 0, 0).map(([x, y], i) => ({ txid: `n${i}`, x, y, s: 1, tall: 1, color: PIECES[kind].color }));
-}
-
-// a colour pulled most of the way to the dark floor, for the ghost
-function dim(hex) {
-  const h = hex.replace('#', '');
-  const ch = (i) => Math.round(parseInt(h.slice(i, i + 2), 16) * 0.38 + 14);
-  return `#${[ch(0), ch(2), ch(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }

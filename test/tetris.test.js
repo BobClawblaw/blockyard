@@ -5,9 +5,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   COLS, ROWS, KINDS, PIECES, LINE_SCORE, newGame, cellsOf, collides, spawn, move, rotate, ghostY,
-  tick, softDrop, hardDrop, tiles, previewTiles, peekNext, gravityMs,
+  tick, softDrop, hardDrop, tiles, previewTiles, peekNext, gravityMs, kindAt, GHOST_WIRE,
 } from '../public/js/tetris.js';
-import { loadScores, recordScore, rankOf } from '../public/js/tetrust.js';
+import { loadScores, recordScore, rankOf, driftTiles } from '../public/js/tetrust.js';
+import { THEME, SFX, play, setSfx, setMusic, holdMusic, unlock, state as soundState } from '../public/js/tetsound.js';
 
 const empty = () => Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
 
@@ -79,25 +80,28 @@ test('a full row clears, everything above comes down, and the score follows the 
   const g = newGame(11);
   // hand-build: rows 0 full except column 4, a marker block on row 1 above column 0
   g.board = empty();
-  for (let x = 0; x < COLS; x++) if (x !== 4) g.board[0][x] = 'O';
-  g.board[1][0] = 'T';
+  for (let x = 0; x < COLS; x++) if (x !== 4) g.board[0][x] = { k: 'O', id: 900 + x };
+  g.board[1][0] = { k: 'T', id: 999 };
   // drop a vertical I into column 4: it fills the gap in row 0 and stands in rows 1..3
   g.cur = { kind: 'I', rot: 1, x: 2, y: 0 };            // column at x = 4
   assert.equal(collides(g, cellsOf('I', 1, 2, 0)), false);
   const level = g.level;
   hardDrop(g);
   assert.deepEqual(g.cleared, [0], 'row 0 was the line');
+  assert.equal(g.clearedCells.length, COLS, 'the cells of the line are kept for the screen to fly away');
+  assert.ok(g.clearedCells.every((c) => c.y === 0 && c.k && c.id), 'with their place, kind and id');
   assert.equal(g.lines, 1);
   assert.equal(g.score, LINE_SCORE[1] * level, 'a single, times the level');
-  assert.equal(g.board[0][0], 'T', 'the marker came down from row 1 to row 0');
-  assert.equal(g.board[0][4], 'I', 'and the I piece dropped a row with it');
+  assert.equal(kindAt(g, 0, 0), 'T', 'the marker came down from row 1 to row 0');
+  assert.equal(g.board[0][0].id, 999, 'and kept its id on the way: the renderer sees a move, not a vanish-and-appear');
+  assert.equal(kindAt(g, 4, 0), 'I', 'and the I piece dropped a row with it');
   assert.equal(g.board[ROWS - 1].every((c) => c === null), true, 'a fresh empty row arrived at the top');
 });
 
 test('four at once is a tetris, and ten lines is a level', () => {
   const g = newGame(13);
   g.board = empty();
-  for (let y = 0; y < 4; y++) for (let x = 0; x < COLS; x++) if (x !== 9) g.board[y][x] = 'O';
+  for (let y = 0; y < 4; y++) for (let x = 0; x < COLS; x++) if (x !== 9) g.board[y][x] = { k: 'O', id: 100 + y * COLS + x };
   g.cur = { kind: 'I', rot: 1, x: 7, y: 0 };            // column at x = 9
   g.lines = 8;
   hardDrop(g);
@@ -113,7 +117,7 @@ test('four at once is a tetris, and ten lines is a level', () => {
 test('the game is over when a piece cannot appear', () => {
   const g = newGame(17);
   g.board = empty();
-  for (let y = 0; y < ROWS; y++) for (let x = 3; x < 7; x++) g.board[y][x] = 'O';   // a tower under the spawn
+  for (let y = 0; y < ROWS; y++) for (let x = 3; x < 7; x++) g.board[y][x] = { k: 'O', id: 1 };   // a tower under the spawn
   spawn(g);
   assert.equal(g.over, true);
   assert.equal(g.cur, null);
@@ -121,18 +125,23 @@ test('the game is over when a piece cannot appear', () => {
   assert.equal(hardDrop(g), 0);
 });
 
-test('the tiles for the engine: the stack in its colours, the piece standing taller, the ghost a plate on the floor', () => {
+test('the tiles for the engine: the stack in its colours, the piece standing taller, the ghost a wireframe where it lands', () => {
   const g = newGame(21);
   g.board = empty();
-  g.board[0][0] = 'Z';
+  g.board[0][0] = { k: 'Z', id: 7 };
   g.cur = { kind: 'O', rot: 0, x: 4, y: 12 };
   const t = tiles(g);
-  const stack = t.filter((x) => x.txid.startsWith('c'));
-  const piece = t.filter((x) => x.txid.startsWith('p'));
+  const stack = t.filter((x) => !x.piece && !x.wire);
+  const piece = t.filter((x) => x.piece);
   const ghost = t.filter((x) => x.txid.startsWith('g'));
   assert.equal(stack.length, 1); assert.equal(stack[0].color, PIECES.Z.color); assert.equal(stack[0].tall, 1);
+  assert.equal(stack[0].txid, 'c7', 'a locked cell is named by its id, not its place');
   assert.equal(piece.length, 4); assert.ok(piece.every((x) => x.tall > 1), 'the falling piece stands taller');
-  assert.equal(ghost.length, 4); assert.ok(ghost.every((x) => x.tall < 0.3), 'the ghost is a plate');
+  assert.deepEqual(piece.map((x) => x.txid), ['c1', 'c2', 'c3', 'c4'], 'and already carries the ids it locks with');
+  hardDrop(g);
+  const after = tiles(g).filter((x) => ['c1', 'c2', 'c3', 'c4'].includes(x.txid));
+  assert.equal(after.length, 4); assert.ok(after.every((x) => x.tall === 1 && !x.piece), 'locked: the same four ids, settled');
+  assert.equal(ghost.length, 4); assert.ok(ghost.every((x) => x.wire === GHOST_WIRE), 'the ghost is a neon wireframe, not a dark plate');
   assert.ok(ghost.every((x) => x.y < 12), 'below the piece, where it will land');
   assert.equal(previewTiles(peekNext(g)).length, 4);
   assert.ok(t.every((x) => x.x >= 0 && x.x < COLS && x.y >= 0 && x.y < ROWS), 'nothing outside the well');
@@ -152,4 +161,28 @@ test('the high-score table keeps ten, ranks a new score, and survives a corrupt 
   assert.equal(rankOf(50, list), null, 'below the table does not make it');
   map.set('bmc.tetrust.scores', '{not json');
   assert.deepEqual(loadScores(store), [], 'a corrupt store is an empty table, not a crash');
+});
+
+test('a cleared line drifts up and away: rising on its floor, sliding outward, fading to the black behind it', () => {
+  // (operator, 2026-09-12: "have the block pieces drift up and away and completing lines")
+  const drift = [{ id: 1, x: 0, y: 4, color: '#ef5a5a', dx: -0.5, t0: 1000 }, { id: 2, x: 9, y: 4, color: '#ef5a5a', dx: 0.5, t0: 1000 }];
+  const at = (now) => driftTiles(drift, now, 700);
+  const start = at(1000), mid = at(1350), late = at(1650);
+  assert.equal(start.length, 2); assert.equal(start[0].floor, 0); assert.equal(start[0].color, '#ef5a5a', 'just lifted: on the board, full colour');
+  assert.ok(mid[0].floor > 2 && mid[0].floor < 9, 'halfway: well off the board');
+  assert.ok(mid[0].x < 0 && mid[1].x > 9, 'and sliding to its own side');
+  assert.ok(late[0].floor > mid[0].floor, 'still rising');
+  assert.ok(parseInt(late[0].color.slice(1, 3), 16) < parseInt(mid[0].color.slice(1, 3), 16), 'and darker: fading to the black');
+  assert.deepEqual(at(1700), [], 'gone at the end');
+  assert.ok(start.every((t) => t.txid.startsWith('d') && t.tall === 1 && t.s === 1), 'ordinary cubes with their own ids');
+});
+
+test('the sound: the tune is only notes the table knows, and everything is a no-op without an AudioContext', () => {
+  // (operator, 2026-09-12: "add Tetris music and sound effects to teh gameplay. Toggle for each")
+  assert.ok(THEME.length > 30 && THEME.every(([n, b]) => typeof n === 'string' && b > 0));
+  assert.ok(Object.keys(SFX).length >= 8, 'move, rotate, soft, drop, lock, clear, tetris, over, level');
+  assert.ok(Object.values(SFX).every(([f0, f1, secs, wave, gain]) => f0 > 0 && f1 > 0 && secs > 0 && secs < 1 && typeof wave === 'string' && gain > 0 && gain <= 0.12), 'short, shaped, quiet');
+  assert.equal(globalThis.AudioContext, undefined, 'node has no audio');
+  assert.doesNotThrow(() => { setSfx(true); play('drop'); play('nope'); setMusic(true); holdMusic(true); holdMusic(false); setMusic(false); unlock(); });
+  assert.equal(soundState().live, false, 'and no context was made');
 });

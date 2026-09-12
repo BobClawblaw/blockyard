@@ -345,14 +345,15 @@
     <section class="page" data-page="tetrust">
       <div class="tetrust" id="tetrust">
         <div class="card tetcard">
+          <canvas class="tetsky" id="tetSky"></canvas>
           <h3>Tetrust <span class="sp"></span><span class="src">trust, but verify — every line you clear is a block you verified</span></h3>
-          <div class="treemapwrap tetwell">
+          <div class="treemapwrap tetwell idle" id="tetWellWrap">
             <canvas class="treemap" id="tetWell"></canvas>
-            <div class="tetover" id="tetOver">
-              <div class="tetmsg" id="tetMsg">Tetrust</div>
-              <div class="tetsub" id="tetSub"></div>
-              <button type="button" class="btn primary" id="tetResume">play</button>
-            </div>
+          </div>
+          <div class="tetover" id="tetOver">
+            <div class="tetmsg" id="tetMsg">Tetrust</div>
+            <div class="tetsub" id="tetSub"></div>
+            <button type="button" class="btn primary" id="tetResume">play</button>
           </div>
         </div>
         <div class="card tethud">
@@ -362,6 +363,13 @@
           <div class="treemapwrap tetnext"><canvas class="treemap" id="tetNext"></canvas></div>
           <h3>Keys</h3>
           <div class="tetkeys">← → or A D move · ↑ W or X rotate · Z or Q rotate back · ↓ or S soft drop · space hard drop · P pause · Enter play</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="tetStars" aria-pressed="false" title="the star field across the panel">★ stars</button>
+            <button type="button" class="tetsw" id="tetGalaxy" aria-pressed="false" title="the spiral galaxy in that sky">🌀 galaxy</button>
+            <button type="button" class="tetsw" id="tetMusic" aria-pressed="false" title="Korobeiniki, on oscillators">♪ music</button>
+            <button type="button" class="tetsw" id="tetSfx" aria-pressed="false" title="move, rotate, drop, clear, game over">♫ sound</button>
+          </div>
           <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
           <table class="tetscores" id="tetScores"></table>
         </div>

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   DEFAULTS, PANEL, SETTINGS_KEY, SCHEMA_VERSION, normalise, loadSettings, saveSettings, setSetting,
-  resetSettings, isDefault, spaceOptions, marketsOptions, onSettingsChange,
+  resetSettings, isDefault, spaceOptions, marketsOptions, tetrustOptions, onSettingsChange,
 } from '../public/js/settings.js';
 import { buildScene } from '../public/js/blockscene3d.js';
 import { starField } from '../public/js/details3d.js';
@@ -485,4 +485,23 @@ test('the parse is memoised, and a write invalidates it', () => {
   assert.equal(reads, 2, 'it still checks the store each time; it just does not re-parse it');
   setSetting(a, 'space.dome', 1, counting);
   assert.equal(loadSettings(counting).space.dome, 1, 'a write is seen immediately after it lands');
+});
+
+test('tetrust: its own group, its own switches on the panel, and tetrustOptions carries the display sky when its stars are on', () => {
+  // (operator, 2026-09-12: "Add teh starfield simulation as a toggle for teh game" ... "Tetris music
+  // and sound effects ... Toggle for each in the game display")
+  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', music: true, sfx: true }, 'the panel is the sky, galaxy centred behind the title');
+  const rows = PANEL.find((g) => g.group === 'tetrust')?.rows.map((r) => r.key);
+  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'music', 'sfx']);
+  const off = tetrustOptions({ tetrust: { stars: false, galaxy: false, music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
+  assert.equal(off.stars, false); assert.equal(off.galaxy, false, 'the game decides its own galaxy, not the Sky group'); assert.equal(off.music, false); assert.equal(off.sfx, true);
+  const on = tetrustOptions({ tetrust: { stars: true, galaxyAt: 'top-right' }, sky: { galaxy: false, density: 4, galaxyAt: 'bottom-left', dust: false } });
+  assert.equal(on.stars, true);
+  assert.equal(on.galaxy, true); assert.equal(on.starDensity, 4); assert.equal(on.galaxyAt, 'top-right'); assert.equal(on.dust, false, 'the display sky, layer for layer');
+  assert.equal(normalise({ tetrust: { galaxyAt: 'nowhere' } }).tetrust.galaxyAt, 'center', 'an unknown placement is the default');
+  const map = new Map();
+  const store = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v), removeItem: (k) => map.delete(k) };
+  assert.throws(() => setSetting({}, 'tetrust.volume', 1, store), /unknown setting/);
+  setSetting({}, 'tetrust.music', false, store);
+  assert.equal(loadSettings(store).tetrust.music, false, 'persisted like every other setting');
 });

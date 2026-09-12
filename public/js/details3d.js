@@ -116,8 +116,10 @@ export function toTxs(cells, vpu = 0) {
   return out;
 }
 
-function sizeCanvas(canvas) {
-  const dpr = (globalThis.window && window.devicePixelRatio) || 1;
+function sizeCanvas(canvas, maxDpr = Infinity) {
+  // maxDpr: a canvas that may draw at fewer device pixels than the screen has -- Tetrust's sky,
+  // where the star count follows the pixel count and a panel-sized galaxy at 2x was a slow game
+  const dpr = Math.min(maxDpr, (globalThis.window && window.devicePixelRatio) || 1);
   const w = canvas.clientWidth || canvas.width || 0;
   const h = canvas.clientHeight || canvas.height || 0;
   const pw = Math.max(1, Math.round(w * dpr));
@@ -1475,6 +1477,9 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
 function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
   const { pw, ph, dpr } = geom;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // cleared first, so a TRANSPARENT background (Tetrust's well, laid over its own sky canvas) shows
+  // what is behind the canvas rather than the last frame
+  ctx.clearRect(0, 0, pw, ph);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
   if (starsOn(opts)) drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
@@ -1923,7 +1928,7 @@ export function render3d(canvas, cells, options = {}) {
   if (st.raf != null && globalThis.cancelAnimationFrame) cancelAnimationFrame(st.raf);
   st.raf = null;
 
-  const geom = sizeCanvas(canvas);
+  const geom = sizeCanvas(canvas, Number.isFinite(opts.maxDpr) ? Math.max(0.5, opts.maxDpr) : Infinity);
   // Device pixels per grid unit, from the CONSTANT board transform (pw across
   // gridW units), so a stone's level of detail can never flicker mid-flight.
   const pxPerUnit = geom.pw / Math.max(1, st.gridW);
@@ -1939,6 +1944,10 @@ export function render3d(canvas, cells, options = {}) {
       seamAlpha: opts.seamAlpha, fx: fxNow(st, t), oblique: opts.oblique, now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
       facetMinUnits: opts.facetPx / pxPerUnit, crownMinUnits: opts.crownPx / pxPerUnit,
       shadows: opts.shadows !== false,   // settings.js: the board can be drawn without them
+      // the finishes (settings.js space.neon / space.sheen). They were in the look signature and
+      // in buildScene from the first cut, but not HERE, so a flipped switch repainted the same
+      // picture (2026-09-12: "I don't see neon blocks working, nor the metallic sheen")
+      neon: opts.neon === true, sheen: opts.sheen === true,
     };
     // the panel's extent in grid units, from the same constant fit paintFrame
     // uses: the textured sphere is laid over all of it (drawGrid), and an

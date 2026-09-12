@@ -825,8 +825,25 @@ export function buildScene(tiles, o = {}) {
     const pulse = fxv.glow;
     // the pointer's glow (details3d setHover): lit up, outlined, fading when released
     const hover = o.hoverGlow?.get(t.txid) ?? 0;
-    const lit = (1 + 0.55 * lock + 0.45 * pulse + 0.6 * hover) * domeLight(t, o) * reachOf(t);
+    // NEON (o.neon, below) is a dark body under bright tubes -- a sign is black glass and light --
+    // so the faces themselves are dimmed, or the tubes have nothing to stand out from
+    const body = o.neon === true ? 0.55 : 1;
+    const lit = (1 + 0.55 * lock + 0.45 * pulse + 0.6 * hover) * domeLight(t, o) * reachOf(t) * body;
     const c = t.color;
+    // A WIREFRAME (Tetrust's ghost, operator 2026-09-12: "wireframes on teh bottom of the tetrust
+    // playfield ... The solid dark colored stuff is too difficult to see"): the cube's
+    // outline in `t.wire` and nothing else -- no fill, so what is behind shows through, and a wide
+    // faint halo under a bright line so it reads as a lit tube. `always`: the seam switch (Stone
+    // edges) does not govern it, the outline IS the tile.
+    if (t.wire) {
+      const halo = lift(t.wire, 0.2, round3(0.3 * a)), tube = lift(t.wire, 0.1, round3(0.98 * a));
+      for (const poly of [...f.sides.map((sd) => sd.points), f.top]) {
+        out.push({ txid: t.txid, face: 'wire', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 9, always: true });
+        out.push({ txid: t.txid, face: 'wire', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 3, always: true });
+        poly.forEach(note);
+      }
+      continue;
+    }
     for (const side of f.sides) {
       // lit from the upper left of the screen: a side turned that way is
       // brighter, one turned away falls into shadow
@@ -883,17 +900,35 @@ export function buildScene(tiles, o = {}) {
       const o1 = litFar ? (flip > 0 ? BR : TR) : (flip > 0 ? TR : BR);
       const L = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
       const band = (k) => [e0, e1, L(e1, o1, k), L(e0, o0, k)];
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.26), fill: lift(c, 0.85, round3(0.26 * lit * a)) });
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.11), fill: lift(c, 1.0, round3(0.42 * lit * a)) });
+      // (2026-09-12, second cut: the first was two bands at a quarter and a tenth of the face at
+      // 26 % and 42 % -- "I don't see ... the metallic sheen". Metal is CONTRAST: a hot highlight
+      // on the lit edge, a dark roll-off on the far one, and the lit side face bright with it.)
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.42), fill: lift(c, 0.55, round3(0.4 * a)) });
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.2), fill: lift(c, 0.92, round3(0.75 * a)) });
+      out.push({ txid: t.txid, face: 'sheen', points: band(0.07), fill: `rgba(255,255,255,${round3(0.9 * a)})` });
+      const dark = (k) => [o0, o1, L(o1, e1, k), L(o0, e0, k)];
+      out.push({ txid: t.txid, face: 'sheen', points: dark(0.3), fill: `rgba(0,0,0,${round3(0.28 * a)})` });
+      out.push({ txid: t.txid, face: 'sheen', points: dark(0.1), fill: `rgba(0,0,0,${round3(0.4 * a)})` });
+      for (const side of f.sides) {
+        // the side turned to the lamp carries a highlight up its outer edge
+        const d = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * -0.7071 + side.ny * -0.7071);
+        if (d < 0.3) continue;
+        const [p0, p1, p2, p3] = side.points;
+        out.push({ txid: t.txid, face: 'sheen', points: [p0, L(p0, p1, 0.22), L(p3, p2, 0.22), p3], fill: lift(c, 0.9, round3(0.55 * d * a)) });
+      }
     }
     if (o.neon === true) {
       // every edge the camera sees, stroked in the block's own colour lit up: a wide faint halo
       // under a thin bright line, the way a neon tube reads. `always`: drawn even with the dark
       // seam (Stone edges) switched off, because it is the seam's replacement, not its companion.
-      const halo = lift(c, 0.6, round3(0.22 * a)), tube = lift(c, 0.9, round3(0.95 * a));
+      // (2026-09-12, second cut: the first stroked a 1.4 x tube over a 0.6-pixel base line --
+      // under a pixel, and half of it under the next cube's fill -- "I don't see neon blocks
+      // working". `lw` multiplies paintFrame's base width, so these are device pixels x 1.7.)
+      const halo = lift(c, 0.25, round3(0.3 * a)), tube = lift(c, 0.3, round3(1 * a)), core = lift(c, 0.85, round3(0.85 * a));   // the tube keeps the block's hue; only the core goes white
       for (const poly of [f.top, ...f.sides.map((sd) => sd.points)]) {
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 4.5, always: true });
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 1.4, always: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 11, always: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 4, always: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: core, lw: 1.6, always: true });
       }
     }
     // the lock: the whole cell flashes white for a moment, then settles

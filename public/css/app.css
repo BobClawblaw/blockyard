@@ -1421,11 +1421,26 @@ body { font-variant-numeric: tabular-nums; }
 /* SIZED TO THE SCREEN, not the card (operator: "the playfield needs to be shrunk so it fits on a
    single screen with room. it's way too large now"): the well's HEIGHT comes from the viewport,
    and its width follows from the 10x20 shape -- about 330px wide on a 1000px-tall window. */
-.tetcard .treemapwrap.tetwell { position: relative; height: min(calc(100vh - 230px), 600px); width: auto; aspect-ratio: 11 / 21; margin: 0 auto; }
-.tetwell canvas { width: 100%; height: 100%; display: block; border-radius: var(--radius-sm); }
-.tetover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-  background: rgba(2, 6, 10, 0.74); border-radius: var(--radius-sm); text-align: center; padding: 20px; }
+.tetcard .treemapwrap.tetwell { position: relative; z-index: 1; height: min(calc(100vh - 230px), 600px); width: auto; aspect-ratio: 11 / 21; margin: 0 auto; }
+.tetwell canvas { width: 100%; height: 100%; display: block; background: transparent; border: 0; }   /* the sky shows through */
+/* THE PANEL IS THE SKY (operator: "Have this entire panel filled black and rendering the spiral
+   galaxy for this display. Have the text floating over the spiral galaxy, and then the playboard
+   gets drawn when you hit play"): the card is black edge to edge, a canvas behind everything in it
+   carries the star field and the galaxy, the title and the well sit over it, and the well is not
+   shown until a game is on. The overlay covers the whole card; idle it is clear (text over the
+   galaxy), paused or over it dims what is under it. */
+.tetcard { position: relative; background: #000; overflow: hidden; }
+.tetcard > h3 { position: relative; z-index: 1; color: var(--fg-dim); }
+.tetsky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.tetwell.idle { visibility: hidden; }
+.tetswitches { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.tetsw { font: inherit; font-size: 11.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg-dim); cursor: pointer; }
+.tetsw.on { border-color: var(--accent); color: var(--accent); background: rgba(247, 147, 26, 0.1); }
+.tetover { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: transparent; text-align: center; padding: 20px; }
+.tetover.dim { background: rgba(0, 0, 0, 0.74); }
 .tetover.hidden { display: none; }
+.tetmsg, .tetsub { text-shadow: 0 1px 8px #000, 0 0 2px #000; }
 .tetmsg { font-size: 24px; font-weight: 650; letter-spacing: .04em; color: var(--accent); }
 .tetsub { font-size: 12.5px; color: var(--fg-dim); max-width: 340px; line-height: 1.5; }
 .tetstats { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-family: var(--mono); font-size: 13px; margin-bottom: 10px; }
