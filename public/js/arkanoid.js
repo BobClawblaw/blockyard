@@ -199,7 +199,17 @@ export function minionDrift(kind, phase, t) {
 export const PADDLE_COLOR = '#3ec9ff';
 export const PADDLE_LASER_COLOR = '#ef5a5a';
 export const BALL_COLOR = '#f2f7ff';
-export const BOLT_COLOR = '#ff8b6b';
+// A LASER EMITS; IT DOES NOT REFLECT (operator, 2026-09-12: "The lasers need to be much brighter.
+// They are too dark to be visible"). A bolt used to be an ordinary cube, so the engine lit it like
+// masonry: measured, its darkest side came out at luminance 70 and its unlit walls at 84, from a
+// declared colour of 167. And a bolt is a sliver -- under the oblique camera it is almost entirely
+// SIDE face, which is the darkest surface a cube has. It was being shaded into the background.
+//
+// Drawn the way the neon finish draws a lit tube instead: a wide translucent halo and a hot thin
+// core, both `always: true` so they survive the edges switch, with the colour lifted toward white
+// rather than shaded away from it.
+export const BOLT_COLOR = '#fff0a8';        // the beam: hot, near-white yellow
+export const BOLT_GLOW = '#ff5a3c';         // the halo around it
 
 /**
  * A stable 0..1 from a string. The same brick on the same level always yields the same number, so
@@ -713,7 +723,12 @@ export function tiles(g) {
   }
   for (const c of g.capsules) out.push(...capsuleTiles(c));
   for (const z of g.bolts) {
-    out.push({ txid: `bolt${z.id}`, x: z.x - 0.09, y: z.y, s: 0.18, tall: 0.7, color: BOLT_COLOR, bolt: true });
+    // the halo: a wider, softer tube around the beam, drawn as a glowing outline
+    out.push({ txid: `bolt${z.id}h`, x: z.x - 0.17, y: z.y - 0.05, s: 0.34, tall: 0.9,
+      color: BOLT_GLOW, wire: BOLT_GLOW, bolt: true });
+    // the beam itself: a hot core, also an outline so the engine never shades it down
+    out.push({ txid: `bolt${z.id}`, x: z.x - 0.07, y: z.y, s: 0.14, tall: 0.8,
+      color: BOLT_COLOR, wire: BOLT_COLOR, bolt: true });
   }
   for (const m of g.enemies) {
     const spec = MINIONS[m.kind] ?? MINIONS.cone;
