@@ -162,7 +162,14 @@ export class BlockLayout {
     }
   }
 
-  // first fit: the lowest row, then the leftmost column, where s x s is free
+  // first fit: the lowest row, then the leftmost column, where s x s is free.
+  //
+  // TRIED AND REVERTED (2026-09-12): alternating the scan direction by row, to stop every row's
+  // leftover space landing on the same side. It reads well in Detailed, where a tile is one unit
+  // and the leftover is a cell or two -- and badly in Simple, where a row holds a few EQUAL pieces
+  // and the wide leftover then sat at opposite ends on alternate rows: a staircase with stranded
+  // columns ("why is packing messed up again"). The board's rightward lean is dealt with in the
+  // FLIGHT instead (blockscene3d flightDir), which is where it came from.
   find(s) {
     const W = this.width;
     for (let y = this.floor; ; y++) {

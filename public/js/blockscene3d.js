@@ -104,6 +104,17 @@ export function capZ(gx, gy, o = {}) {
 // "straight up relative to their position on the sphere" (operator,
 // 2026-09-11): the outward normal there, in grid units -- radial from the
 // sphere's centre, so blocks leaving the board fan outward from its middle.
+// The direction a block travels, as drawn. Under the oblique camera project() adds ox per unit
+// of height, which is a constant rightward push on every block whatever its place on the board;
+// taking it out of the path leaves motion that is symmetric about the middle -- what the sphere's
+// normal was meant to give. Off the oblique camera there is no such term and this is the normal.
+export function flightDir(gx, gy, o = {}) {
+  const n = surfaceNormal(gx, gy, o);
+  if (!o.oblique) return n;
+  const { ox = 0.15 } = o.oblique;
+  return { x: n.x - ox * n.z, y: n.y, z: n.z };
+}
+
 export function surfaceNormal(gx, gy, o = {}) {
   const s = sphereOf(o);
   if (!s) return { x: 0, y: 0, z: 1 };
@@ -333,7 +344,7 @@ function flightFrame(tile, o = {}) {
   const W = o.gridW || 0, H = o.gridH || 0;
   const v = o.viewRect ?? { x0: -head * ox, x1: W + head * ox, y0: -head * oy, y1: H + head * oy };
   const cx = tile.x + tile.s / 2, cy = tile.y + tile.s / 2;
-  const n = surfaceNormal(cx, cy, o);
+  const n = flightDir(cx, cy, o);
   const flip = o.flipY === false ? -1 : 1;
   const dX = n.x + ox * n.z, dY = flip * n.y + oy * n.z;
   const c = capZ(cx, cy, o), s = tile.s, reach = cubeHeight(tile);
@@ -366,7 +377,7 @@ export function liftProjector(tile, o = {}) {
     // is DRAWN, so the difference to where it stands is put back: the flight
     // is measured from the block's own spot on the sphere.
     const zv = visualBase(tile, o);
-    const n = surfaceNormal(tile.x + tile.s / 2, tile.y + tile.s / 2, o);
+    const n = flightDir(tile.x + tile.s / 2, tile.y + tile.s / 2, o);
     const sx = zv * n.x, sy = zv * n.y, sz = zv * n.z;
     if (!sx && !sy) return (gx, gy, gz) => project(gx, gy, sz + (gz - z), o);
     return (gx, gy, gz) => project(gx + sx, gy + sy, sz + (gz - z) + capZ(gx, gy, o) - capZ(gx + sx, gy + sy, o), o);

@@ -174,6 +174,26 @@ test('simple cubes carry no divot at any size, and flat carries nothing at all',
   assert.equal(flat.edges, true, 'flat still honours the edges switch, which defaults to on');
 });
 
+test('idle effects are armed when the board rests, star field or not', () => {
+  // operator, 2026-09-12: "i don't see any idle effects going off when the starfield background is
+  // on the block space". scheduleFx was called only where the loop PARKS, and parking is gated on
+  // !opts.space -- so with stars on, nothing was ever scheduled.
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const rest = src.indexOf('if (frame.settled && !st.dirty && !fxNow(st, t)) {');
+  assert.ok(rest > 0, 'the rest branch no longer requires the loop to park');
+  const armed = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect)');
+  const park = src.indexOf('if (!opts.space && !glowAnimating(st, t)) {', rest);
+  assert.ok(armed > rest && armed < park, 'effects are armed before the park is even considered');
+  assert.match(src, /if \(first\.settled\) \{ st\.atRest = true; scheduleFx\(canvas, st, opts, true\); \}/, 'and on a first paint that is already at rest');
+  assert.match(src, /if \(!st\.atRest\) \{/, 'armed on the edge, not every frame');
+  assert.match(src, /else st\.atRest = false;/, 'and re-armed once something moves again');
+  // the trap this guards: scheduleFx with `soon` clears any pending timer, so calling it on
+  // every settled frame (which a star field makes certain) resets the countdown for ever
+  const armedAt = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect)');
+  const edgeAt = src.indexOf('if (!st.atRest) {');
+  assert.ok(edgeAt > 0 && armedAt > edgeAt && armedAt - edgeAt < 300, 'the arming sits inside the edge test');
+});
+
 test('the renderer honours the option names the settings hand it', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /drawStars\(ctx, pw, ph, dpr \|\| 1, view\.now \?\? 0, opts\)/, 'star options reach drawStars');

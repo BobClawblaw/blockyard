@@ -1310,6 +1310,7 @@ export function render3d(canvas, cells, options = {}) {
     return { tiles: st.prev, settled: false, deferred: true };
   }
   st.pending = null;
+  st.atRest = false;                       // a new layout: the next settle arms the next effect
 
   // The FIRST paint never animates. With arrivals no longer drawn until they
   // fall, a first render treated as "everything is arriving" would leave the
@@ -1377,14 +1378,23 @@ export function render3d(canvas, cells, options = {}) {
     if (opts.space && frame.settled && st.pending) { const p = st.pending; st.pending = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     // keep the loop alive while the choreography runs OR the camera is moving;
     // park otherwise, because repainting a still picture is a heater
-    if (frame.settled && !st.dirty && !fxNow(st, t) && !opts.space && !glowAnimating(st, t)) {
-      st.raf = null;
-      const afterEffect = st.fx != null;   // an effect just ended -- or the board just came to rest
-      st.fx = null;
-      if (st.pending) { const p = st.pending; st.pending = null; render3d(canvas, p.cells, p.options); return; }
-      scheduleFx(canvas, st, opts, !afterEffect);
-      return;
+    if (frame.settled && !st.dirty && !fxNow(st, t)) {
+      // the board is at rest: arm the next effect whether or not the loop is about to park --
+      // but ONCE, on the frame it arrives, or a running loop would re-arm the timer for ever
+      if (!st.atRest) {
+        const afterEffect = st.fx != null;   // an effect just ended -- or it has only now settled
+        st.fx = null;
+        st.atRest = true;
+        scheduleFx(canvas, st, opts, !afterEffect);
+      }
+      if (!opts.space && !glowAnimating(st, t)) {
+        st.raf = null;
+        if (st.pending) { const p = st.pending; st.pending = null; render3d(canvas, p.cells, p.options); return; }
+        return;
+      }
+      if (st.pending) { const p = st.pending; st.pending = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     }
+    else st.atRest = false;               // something is moving again: the next rest re-arms
     st.raf = requestAnimationFrame(step);
   };
   st.wake = () => {
@@ -1392,8 +1402,8 @@ export function render3d(canvas, cells, options = {}) {
   };
 
   const first = draw(now);
+  if (first.settled) { st.atRest = true; scheduleFx(canvas, st, opts, true); }   // at rest already, stars or not
   if ((first.settled && !opts.space) || still || !globalThis.requestAnimationFrame) {
-    scheduleFx(canvas, st, opts, true);
     return { tiles, settled: true };
   }
   st.raf = requestAnimationFrame(step);
