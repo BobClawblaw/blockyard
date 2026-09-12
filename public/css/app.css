@@ -731,7 +731,7 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
    histogram tucked under it. The last is narrowest because the viewer is square -- its width is its
    height, which is the lever for keeping the page on one screen. */
 .mpcols { grid-column: 1 / -1; display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(300px, 0.62fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(300px, 0.45fr);
   gap: 12px; align-items: start; }
 .mpcols .card { grid-column: auto !important; }
 /* The gauge is a glance, not a chart: 190px of it left the figures beside it 317px to fit two
