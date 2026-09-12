@@ -57,11 +57,6 @@
          the panel's own handler. -->
     <div class="navmenu" id="navDiv">
       <button type="button" class="navmenu-btn" id="navDivBtn" aria-haspopup="true" aria-expanded="false">Diversions <span class="navcaret">&#9662;</span></button>
-      <div class="navmenu-pop hidden" id="navDivPop" role="menu">
-        <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
-        <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
-        <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
-      </div>
     </div>
     <span class="spacer"></span>
     <div class="meta">
@@ -85,6 +80,26 @@
       <button class="btn" id="btnLogout">sign out</button>
     </div>
   </header>
+
+  <!-- THE DIVERSIONS PANEL, a direct child of <body> (operator, Safari on macOS: "rendering on
+       safari is still broken. It's only showing half the drop-down contents").
+       It used to sit inside `header.top`, which is `overflow: hidden` and `height: 46px`. The panel
+       opens ~32px down and stands ~88px tall, so everything past the header's 46px was cut -- about
+       half of it, in WebKit. `position: fixed` is supposed to escape an ancestor's overflow, and in
+       Chrome and Firefox it did, which is why this looked fine everywhere it was tested.
+       The settings dialog (.cfgwrap) is the proof of the right shape: also fixed, also an overlay,
+       and it renders correctly in Safari. It sits out here at the top level of .app rather than
+       inside the header, and so does this panel now -- .app is a plain grid with no overflow, no
+       transform and no filter, so nothing between this element and the viewport can clip it or
+       become its containing block. (It is NOT a child of <body>: the page is wrapped in .app. The
+       invariant that matters is "not inside the clipped header", which is what the test pins.)
+       Its button stays in the header; only the panel moved, so app.js positions it from that
+       button's rect and routes the games from here. -->
+  <div class="navmenu-pop hidden" id="navDivPop" role="menu">
+    <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
+    <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
+    <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
+  </div>
 
   <!-- Display settings (settings.js). Hidden until the gear is pressed; the contents are
        rendered from settings.js PANEL, so a value and its control cannot drift apart. -->
@@ -366,6 +381,13 @@
           </div>
         </div>
 
+        <!-- THREE TO A ROW, not two (operator, 2026-09-12: "We should really pack more panels into
+             this view", "too much wasted space", "Make the mempool page panels more dense"). Two
+             w4 cards in a twelve-column grid left FOUR columns empty across the whole width, and
+             the prose card below ran the full twelve for two lines of text. The third card here is
+             not filler: panels.js has been writing ingest and reject figures into `mpAccept` all
+             along, and nothing on this page had that id -- the data was collected from the log,
+             shipped to the browser and dropped on the floor. Same for the orphan pool below. -->
         <div class="card w4">
           <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
           <canvas class="chart" id="mpAgeChart"></canvas>
@@ -374,8 +396,18 @@
           <h3>Fee estimates over time <span class="sp"></span><span class="src">sat/vB</span></h3>
           <canvas class="chart" id="mpFeeChart"></canvas>
         </div>
+        <div class="card w4">
+          <h3>Ingest &amp; rejects <span class="sp"></span><span class="src">from the node's log</span></h3>
+          <dl class="kv" id="mpAccept"></dl>
+          <canvas class="chart short" id="mpIngestChart"></canvas>
+        </div>
 
-        <div class="card w12">
+        <div class="card w4">
+          <h3>Orphan pool <span class="sp"></span><span class="src">held, parked and resolved</span></h3>
+          <dl class="kv" id="mpOrphans"></dl>
+          <canvas class="chart short" id="mpOrphanChart"></canvas>
+        </div>
+        <div class="card w8">
           <h3>Fields this node does not report <span class="sp"></span><span class="src">getrawmempool shape</span></h3>
           <div class="note" id="mpNotReported"></div>
         </div>
@@ -740,6 +772,32 @@
         <div class="card w6">
           <h3>Panel sources <span class="sp"></span><span class="src">provenance</span></h3>
           <div id="ndSources"></div>
+        </div>
+        <!-- THE NODE CONNECTION (operator, 2026-09-12: "Still left to do is a config connection in
+             the web settings. We have no way for users to configure a connection to their rpc
+             backend"). Test first, save second: the save button is disabled until a test has
+             actually ANSWERED, so nothing is written for an endpoint nobody reached. That is the
+             operator's own ordering.
+             No credential fields, deliberately: authentication is the node's own .cookie, found
+             from the data directory (server/config.js resolveCookie). Asking for an RPC password on
+             a page that is open access by default is not something to add quietly. -->
+        <div class="card w6">
+          <h3>Node connection <span class="sp"></span><span class="src">where this monitor looks</span></h3>
+          <!-- the placeholder deliberately is NOT a URL: web-contract.test.js refuses an http(s)
+               literal outside an <a href>, because in shipped markup that reads as a resource load
+               under `script-src/img-src 'self'`. It caught this exact line. -->
+          <div class="field"><label for="cnUrl">RPC URL</label><input class="f w-full" id="cnUrl" placeholder="http(s)://host:port" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><label for="cnDatadir">data directory</label><input class="f w-full" id="cnDatadir" placeholder="/var/lib/bitcoin" autocomplete="off" spellcheck="false"></div>
+          <div class="rowform">
+            <select class="f" id="cnChain"><option value="main">main</option><option value="test">test</option><option value="signet">signet</option><option value="regtest">regtest</option></select>
+            <input class="f grow minw-140" id="cnLabel" placeholder="label, e.g. My node" autocomplete="off">
+          </div>
+          <div class="rowform">
+            <button class="btn" id="cnTest">test connection</button>
+            <button class="btn primary" id="cnSave" disabled>save</button>
+          </div>
+          <div class="note tiny" id="cnOut"></div>
+          <div class="note tiny faint">Authentication uses the node's <span class="mono">.cookie</span> from the data directory; no password is asked for or kept here. Saving writes this monitor's own configuration file and takes effect on restart.</div>
         </div>
         <div class="card w6">
           <h3>RPC console <span class="sp"></span><span class="src">read-only allowlist</span></h3>

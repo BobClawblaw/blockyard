@@ -8,6 +8,37 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A node connection form**, on **Node & RPC** (operator: "Still left to do is a config connection
+  in the web settings. We have no way for users to configure a connection to their rpc backend").
+  Enter an RPC URL, a data directory, a chain and a label; **test connection** probes it with a
+  throwaway client that never touches the live node's request lane, and **save** is disabled until
+  a test has actually answered — and goes back to disabled the moment a field changes. No password
+  field: authentication is the node's own `.cookie`, found from the data directory.
+- The save is honest about two things it would otherwise hide. It **keeps the fields the form does
+  not show** — `logFile`, `systemdUnit`, the colour — because the config merge replaces arrays
+  whole, so a naive write would quietly unconfigure the log tail. And where the environment sets
+  `BLOCKYARD_NODE_URL` (a systemd drop-in, say), it says the environment beats the file rather than
+  reporting a success the next restart contradicts.
+- **The mempool page carries two panels it was already collecting data for.** `renderMempool` has
+  been writing ingest/reject figures and orphan-pool figures into elements that did not exist —
+  collected from the node's log, sent to the browser and dropped. They have cards now, and on a
+  monitor running without a log tail they say so rather than showing a column of dashes. The page
+  also lost four dead grid columns, and Pool usage gained the pool's total vsize, average vsize and
+  total fees, all of which were computed on every sample and never drawn.
+
+### Fixed
+
+- **The display-settings sliders no longer jitter while dragging** (operator: "the grid intensity
+  slider jitters when I move it"). Every `input` event ran a full synchronous re-render; a drag
+  across the grid intensity control queued forty of them, each repainting a board. The value and
+  the readout still update on every event — only the repaint is coalesced, to one per animation
+  frame. All twelve range controls were affected; the new one merely made it visible.
+- **The Diversions menu renders correctly in Safari** (operator: "rendering on safari is still
+  broken. It's only showing half the drop-down contents"). The panel was inside `header.top`, which
+  is `overflow: hidden` and 46px tall, and WebKit clipped the fixed panel to it. It is a top-level
+  element now, like the settings dialog, which is the fixed overlay that always rendered correctly.
+  Its position is measured and set rather than pulled back by a transform.
+
 - **The grid is yours, per board** (operator: "we need to break out the green grid settings per
   game. We should also add a grid color picker, and a transparency slider ... I really want to turn
   down the intensity on blockanoid", and "add a color selector and brightness setting for the grid

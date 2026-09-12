@@ -57,5 +57,22 @@ test('the menu is outside the scrolling nav, and its panel escapes the clipping'
   // ...and the page positions it from the button's rect, through the CSSOM
   assert.match(app, /divPop\.style\.setProperty\('--x'/);
   assert.match(app, /getBoundingClientRect\(\)/);
+  // FIXED IS NOT ENOUGH IN WEBKIT. `header.top` is overflow:hidden and 46px tall; the panel opens
+  // below that and stands ~88px, and Safari clipped it to the header -- "only showing half the
+  // drop-down contents" -- while Chrome and Firefox let the fixed panel escape. So the panel must
+  // be a child of <body>, like .cfgwrap, which is the fixed overlay that always rendered correctly.
+  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+  assert.ok(!header.includes('id="navDivPop"'), 'the panel must not live inside the clipped header');
+  // ...and the element it DOES sit in must not clip or contain it either. `.app` is a plain grid;
+  // if it ever grows an overflow, a transform or a filter, this panel gets clipped again in WebKit
+  // and nothing else here would notice.
+  const appRule = css.match(/^\.app \{([^}]*)\}/m)?.[1] ?? '';
+  assert.ok(appRule, '.app must exist: it is what holds the panel');
+  for (const bad of ['overflow', 'transform', 'filter', 'perspective', 'contain']) {
+    assert.ok(!new RegExp(`(^|;)\\s*${bad}\\s*:`).test(appRule),
+      `.app must not set ${bad}: it would clip or contain the fixed panel, which is the Safari bug`);
+  }
+  assert.ok(!/\.navmenu-pop \{[^}]*transform:/.test(css),
+    'no transform either: the left edge is measured and set, not pulled back by translateX');
   assert.ok(!/navmenu-pop[^>]*style="/.test(html), 'no style attribute: the CSP forbids them');
 });

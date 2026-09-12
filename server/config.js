@@ -431,6 +431,11 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
 
   validate(cfg, ifaces, now);
   cfg.__defaultsDoc = HERE_DOC;
+  // WHICH FILE THIS CAME FROM. The path was an argument, used and then forgotten, so nothing
+  // downstream could say where the settings live -- and a UI that offers to save a connection must
+  // name the file it would write rather than guess at one. `null` is a real answer: a hermetic run
+  // (BLOCKYARD_CONFIG=none) has no file, and a save must be refused rather than invent a path.
+  cfg.__configFile = configFile ?? null;
   return cfg;
 }
 

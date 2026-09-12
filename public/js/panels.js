@@ -151,6 +151,13 @@ export function renderMempool(s, state, h, detail) {
     ['min relay', mp.minRelayFee != null ? fmt.satPerVb(mp.minRelayFee) + ' sat/vB' : '–'],
     ['unbroadcast', mp.unbroadcast ?? '–'],
     ['OP_RETURN max', mp.maxDataCarrier != null ? fmt.num(mp.maxDataCarrier) + ' B' : '–'],
+    // COMPUTED ALL ALONG, NEVER SHOWN. server/collect/monitor.js has measured these on every
+    // sample since the distribution existed; nothing on the page read them. They cost nothing to
+    // draw and they answer the obvious question the byte total does not: how big is a typical
+    // transaction in there, and what is the pool worth.
+    ['total vsize', dd?.totalVsize != null ? fmt.bytes(dd.totalVsize) : '–'],
+    ['average vsize', dd?.avgVsize != null ? fmt.num(dd.avgVsize) + ' vB' : '–'],
+    ['fees in pool', dd?.totalFeeSat != null ? fmt.num(dd.totalFeeSat) + ' sat' : '–'],
   ]));
 
   const ser = state.series?.mempool ?? {};
@@ -208,8 +215,15 @@ export function renderMempool(s, state, h, detail) {
     placeholder: 'the fee estimator has no data yet',
   });
 
+  // THESE TWO PANELS COME FROM THE NODE'S LOG, NOT FROM RPC. With the log tail off
+  // (BLOCKYARD_LOG_SOURCE=0, which is this deployment) there is no source for any of it, and a
+  // column of dashes would read as "the node has no orphans" rather than "we are not watching".
+  // Say which it is, the same way the peers page says "not reported by this build".
+  const noLog = state.cfg?.log?.enabled === false;
   const acc = mp.rejects;
-  h.setText('mpAccept', kv([
+  if (noLog) {
+    h.setText('mpAccept', '<dt>ingest &amp; rejects</dt><dd class="faint">needs the node\'s log; this monitor is running on RPC alone</dd>');
+  } else h.setText('mpAccept', kv([
     ['ingest rate', mp.ingestRate != null ? mp.ingestRate.toFixed(2) + ' tx/s' : 'measuring…'],
     ['window', acc?.windowSec != null ? `${acc.windowSec}s` : '–'],
     ['accepted', acc ? fmt.num(acc.windowSec ? Math.round((state.snap?.mempool?.ingestRate ?? 0) * acc.windowSec) : 0) : '–'],
@@ -224,7 +238,9 @@ export function renderMempool(s, state, h, detail) {
 
   const or = detail?.log?.orphans;
   const od = detail?.log?.orphanDetail;
-  h.setText('mpOrphans', kv([
+  if (noLog) {
+    h.setText('mpOrphans', '<dt>orphan pool</dt><dd class="faint">needs the node\'s log; this monitor is running on RPC alone</dd>');
+  } else h.setText('mpOrphans', kv([
     ['held', or ? fmt.num(or.held) : '–'],
     ['parked', or ? fmt.num(or.parked) : '–'],
     ['resolved', or ? fmt.num(or.resolved) : '–'],
@@ -519,6 +535,19 @@ export function renderNode(s, state, h) {
     : 'config not loaded');
 
   bindConsole(h);
+  bindConnection(h);
+  // PREFILL ONCE, and only where the operator has not typed. This page repaints every second, and
+  // rewriting an <input> under the cursor is how a form eats what is being entered. The data
+  // directory is not in the snapshot, so it is left blank on purpose -- the server reads a blank
+  // datadir as "keep the one already configured", never as "clear it".
+  const put = (id, v) => { const e = document.getElementById(id); if (e && !e.value && v) e.value = v; };
+  put('cnUrl', rpc.url);
+  put('cnLabel', s.label);
+  const chainSel = document.getElementById('cnChain');
+  if (chainSel && !chainSel.dataset.set && s.chain) {
+    chainSel.value = ['main', 'test', 'signet', 'regtest'].includes(s.chain) ? s.chain : 'main';
+    chainSel.dataset.set = '1';
+  }
 }
 
 function drawSelf(h, s) {
@@ -567,6 +596,58 @@ function bindConsole(h) {
   };
   document.getElementById('rpcRun').addEventListener('click', run);
   ['rpcMethod', 'rpcParams'].forEach((id) => document.getElementById(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); }));
+}
+
+// ---- the node connection form (index.html, Node & RPC page) --------------------------------
+// TEST FIRST, SAVE SECOND. `save` stays disabled until a test has ANSWERED, and goes back to
+// disabled the moment any field changes -- a configuration nobody reached is not one worth
+// keeping, and a green tick next to an edited field would be a lie about what was tested.
+let connBound = false;
+let connTested = false;
+function bindConnection(h) {
+  if (connBound) return;
+  connBound = true;
+  const el = (id) => document.getElementById(id);
+  const out = el('cnOut');
+  if (!out) return;
+  const fmt = F();
+  const body = () => ({
+    rpcUrl: (el('cnUrl').value || '').trim(),
+    datadir: (el('cnDatadir').value || '').trim(),
+    chainHint: el('cnChain').value,
+    label: (el('cnLabel').value || '').trim(),
+  });
+  const invalidate = () => { connTested = false; el('cnSave').disabled = true; };
+  for (const id of ['cnUrl', 'cnDatadir', 'cnLabel']) el(id).addEventListener('input', invalidate);
+  el('cnChain').addEventListener('change', invalidate);
+
+  el('cnTest').addEventListener('click', async () => {
+    out.textContent = 'testing…';
+    try {
+      const r = await h.api('/api/config/node/test', { method: 'POST', body: body() });
+      if (r.ok) {
+        connTested = true;
+        el('cnSave').disabled = false;
+        out.innerHTML = `<b class="ok">answered in ${r.ms} ms</b> — chain ${fmt.esc(String(r.chain ?? '?'))}, `
+          + `${fmt.num(r.blocks ?? 0)} blocks${r.ibd ? ', still in initial block download' : ''}`;
+      } else {
+        invalidate();
+        out.innerHTML = `<b class="bad">no answer</b> — ${fmt.esc(r.error?.message ?? 'unknown')}`;
+      }
+    } catch (err) { invalidate(); out.textContent = err.message; }
+  });
+
+  el('cnSave').addEventListener('click', async () => {
+    if (connTested !== true) return;          // belt and braces with the disabled attribute
+    out.textContent = 'saving…';
+    try {
+      const r = await h.api('/api/config/node', { method: 'POST', body: { ...body(), confirm: 'save' } });
+      // The environment is applied AFTER the file (server/config.js), so on a box whose unit sets
+      // BLOCKYARD_NODE_URL the save is real and still will not take effect. Say so loudly rather
+      // than report a success the next restart quietly contradicts.
+      out.innerHTML = `<b class="ok">saved to ${fmt.esc(r.file)}</b> — ${fmt.esc(r.note)}`;
+    } catch (err) { out.textContent = err.message; }
+  });
 }
 
 // ---------------------------------------------------------------- admin

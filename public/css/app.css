@@ -1510,7 +1510,11 @@ body { font-variant-numeric: tabular-nums; }
    overflow-x:auto clips the other axis too) and `header.top` is overflow:hidden besides, so an
    absolutely positioned panel inside either of them is invisible. app.js sets --x/--y from the
    button's own rect through the CSSOM; there are no style attributes anywhere in this project. */
-.navmenu-pop { position: fixed; left: var(--x, 0); top: var(--y, 0); transform: translateX(-100%);
+/* NO TRANSFORM. This was `left: <button's right edge>` plus `translateX(-100%)` to pull the panel
+   back by its own width. Two things I cannot test from here were riding on that, so both are gone:
+   app.js now measures the panel and sets its real left edge. See index.html for why the panel is a
+   child of <body> rather than of the header. */
+.navmenu-pop { position: fixed; left: var(--x, 0); top: var(--y, 0);
   z-index: 200; display: flex; flex-direction: column; align-items: stretch;
   min-width: 160px; padding: 5px; gap: 2px; background: var(--bg-2); border: 1px solid var(--line);
   border-radius: var(--radius); box-shadow: 0 12px 30px #000a; }

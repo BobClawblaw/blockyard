@@ -23,6 +23,8 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   const app = {
     version: VERSION,
     cfg,
+    // the file the settings were read from, or null for a run that was given none
+    configFile: cfg.__configFile ?? null,
     startedAt: Date.now(),
     publicDir: path.join(ROOT, 'public'),
     monitors: new Map(),

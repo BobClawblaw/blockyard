@@ -1,7 +1,10 @@
 // API surface. Every handler returns a plain object; the server serialises it and
 // turns thrown HttpError into a JSON envelope. Nothing here writes to the node
 // except the /action route, which is opt-in, role-gated and audited.
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import { classifyMethod, allowlistSummary, ACTIONS, actionAllowed, NODE_REFUSES } from '../rpc/allowlist.js';
+import { RpcClient } from '../rpc/client.js';
 import { SERIES } from '../store/history.js';
 import { randomPassword } from '../auth/users.js';
 import { formatEta, formatBytes } from '../util/fmt.js';
@@ -46,6 +49,53 @@ function pickNode(ctx, app) {
   const m = app.monitors.get(wanted);
   if (!m) throw new HttpError(404, `no node "${wanted}"; known: ${[...app.monitors.keys()].join(', ')}`);
   return m;
+}
+
+// ---- the node-connection form's two guards ------------------------------------------------
+// (operator, asked which posture to take: "D - Want this easy to configure and going to assume
+// it's on a safe network".)
+//
+// With accounts ON, this is an admin action like any other. With accounts OFF there is no identity
+// to check, and the operator chose to allow it rather than demand BLOCKYARD_AUTH just to point the
+// monitor at a node. CSRF still applies in both cases, so another site cannot post this on your
+// behalf, and every save is audited.
+//
+// This is deliberately NOT the /api/action posture. That gate refuses node writes while accounts
+// are off because those commands reach the NODE. This reaches only this app's own config file.
+function configWriteAllowed(app, ctx) {
+  if (app.cfg.auth.enabled) needRole(ctx, 'admin');
+}
+
+// What a form may set, and nothing else. Credentials come from the datadir's .cookie
+// (config.js resolveCookie), so rpcUser / rpcPassword / cookieFile are NOT accepted here: taking a
+// password over an endpoint that is open by default is not a thing to add quietly.
+function candidateNode(app, body) {
+  const cur = app.cfg.nodes?.[0] ?? {};
+  const rpcUrl = String(body?.rpcUrl ?? '').trim();
+  const datadir = String(body?.datadir ?? '').trim();
+  const chainHint = String(body?.chainHint ?? '').trim() || cur.chainHint || 'main';
+  const label = String(body?.label ?? '').trim();
+  // THE SAME RULES config.js applies at boot, so a save cannot write a file that then refuses to
+  // load -- a monitor that saves a configuration and will not start again is the worst outcome here.
+  if (!/^https?:\/\//.test(rpcUrl)) {
+    throw new HttpError(400, 'rpcUrl must be http(s)://host:port', { code: 'bad_rpc_url' });
+  }
+  try { new URL(rpcUrl); } catch { throw new HttpError(400, `rpcUrl is not a URL: ${rpcUrl}`, { code: 'bad_rpc_url' }); }
+  const dd = datadir || cur.datadir || '';
+  if (!dd && !cur.cookieFile) {
+    throw new HttpError(400, 'a datadir is needed so the node’s .cookie can be read for authentication', { code: 'need_datadir' });
+  }
+  // ONLY THE FOUR FIELDS THIS FORM OWNS. The save merges these onto whatever the file already
+  // says, so everything else survives by not being mentioned -- which is both simpler and safer
+  // than carrying the in-memory node across.
+  //
+  // Spreading `...cur` here was the first cut and it was wrong twice over. Measured: the running
+  // config holds `logFile: null` (the key EXISTS, with a null value), so spreading it would write
+  // null over a real path in the file and silently unconfigure the log tail -- the very regression
+  // this endpoint is supposed to avoid. And `cur` also holds values the ENVIRONMENT put there, so a
+  // save would quietly bake a systemd drop-in's override into the file as though it had been
+  // chosen here.
+  return { rpcUrl, datadir: dd, chainHint, ...(label || cur.label ? { label: label || cur.label } : {}) };
 }
 
 function parseRange(text, fallbackMs = 3600_000) {
@@ -658,6 +708,88 @@ export const routes = [
       // stopped rotating, or failed to rotate, is a disk-usage incident in progress
       // -- and an audit trail nobody can see the size of is a lie waiting to happen.
       return { entries: await app.readAudit(limit), limit, log: await app.auditLog.stats() };
+    },
+  },
+
+  // ------------------------------------------------------ node connection
+  // (operator, 2026-09-12: "Still left to do is a config connection in the web settings. We have no
+  // way for users to configure a connection to their rpc backend".)
+  //
+  // TWO ROUTES, DELIBERATELY. Testing a connection and committing it are different acts: the test
+  // writes nothing at all, and the save exists so a working answer can be kept. That is the
+  // operator's own ordering -- "We should only install the systemd after confirming a working
+  // connection to the server and everything works."
+  {
+    method: 'POST', path: '/api/config/node/test', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      configWriteAllowed(app, ctx);
+      const node = candidateNode(app, ctx.body);
+      const started = Date.now();
+      // A THROWAWAY CLIENT WITH ITS OWN LANE. The live node's client holds a serialized queue
+      // against a single-threaded RPC server; probing somewhere else must not take a slot in it.
+      // The probe inherits the CURRENT node's credentials and is then overridden by the candidate's
+      // four fields. The two routes want different things here and the difference is deliberate:
+      // a test should authenticate the way this monitor already does (cookie file, or an rpcUser
+      // the config already carries), while the SAVE writes only the four fields and never a
+      // credential. Building the probe from `node` alone left it with no credentials at all.
+      const probe = new RpcClient({ ...(app.cfg.nodes?.[0] ?? {}), ...node, id: 'probe' },
+        { ...app.cfg.rpc, timeoutMs: Math.min(app.cfg.rpc.timeoutMs ?? 8000, 8000) }, { log: () => {} });
+      try {
+        const info = await probe.call('getblockchaininfo', []);
+        return {
+          ok: true, ms: Date.now() - started,
+          chain: info?.chain ?? null, blocks: info?.blocks ?? null,
+          ibd: info?.initialblockdownload ?? null,
+        };
+      } catch (err) {
+        // A failed probe is an ANSWER, not a server error: the form needs the reason to show it.
+        return { ok: false, ms: Date.now() - started, error: { message: err.message, kind: err.kind ?? null, code: err.code ?? null } };
+      }
+    },
+  },
+  {
+    method: 'POST', path: '/api/config/node', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      configWriteAllowed(app, ctx);
+      if (!app.configFile) {
+        throw new HttpError(409, 'this process was started without a config file (BLOCKYARD_CONFIG=none), so there is nowhere to save to', { code: 'no_config_file' });
+      }
+      if (ctx.body?.confirm !== 'save') throw new HttpError(400, 'pass confirm:"save" to write the configuration', { code: 'confirm_required' });
+      const node = candidateNode(app, ctx.body);
+
+      // Merge into whatever the file already says, so keys this form does not own survive.
+      let fileCfg = {};
+      try { fileCfg = JSON.parse(await fsp.readFile(app.configFile, 'utf8')); } catch { fileCfg = {}; }
+      const nodes = Array.isArray(fileCfg.nodes) && fileCfg.nodes.length ? fileCfg.nodes.slice() : [];
+      // UNDEFINED VALUES ARE NOT CHANGES. A key present with an undefined value still spreads, and
+      // JSON.stringify then omits it -- so carrying `{...cur}` across could DELETE a field from the
+      // file rather than preserve it. Only real values take part in the merge.
+      const changes = Object.fromEntries(Object.entries(node).filter(([, v]) => v !== undefined));
+      nodes[0] = { ...(nodes[0] ?? {}), ...changes };
+      delete nodes[0].__urlOverridden;
+      const next = { ...fileCfg, nodes };
+
+      // tmp + fsync + rename: a reader sees the old file or the new one, never a half-written one.
+      await fsp.mkdir(path.dirname(app.configFile), { recursive: true });
+      const tmp = `${app.configFile}.tmp`;
+      const fh = await fsp.open(tmp, 'w', 0o600);
+      await fh.writeFile(`${JSON.stringify(next, null, 2)}\n`);
+      await fh.sync();
+      await fh.close();
+      await fsp.rename(tmp, app.configFile);
+
+      // THE HONEST PART. The environment is applied AFTER the file is merged (config.js), so on a
+      // box whose unit sets BLOCKYARD_NODE_URL the file is written and then overridden. Saying
+      // "saved" without saying that would be a lie the operator only discovers after a restart.
+      const envOverrides = ['BLOCKYARD_NODE_URL', 'BLOCKYARD_DATADIR', 'BLOCKYARD_LOGFILE', 'BLOCKYARD_COOKIE', 'BLOCKYARD_NODE_LABEL']
+        .filter((k) => process.env[k] !== undefined && process.env[k] !== '');
+      await app.audit({ type: 'config-node', username: ctx.user.username, ip: ctx.ip, rpcUrl: node.rpcUrl, file: app.configFile });
+      return {
+        ok: true, file: app.configFile, restartRequired: true, envOverrides,
+        note: envOverrides.length
+          ? `saved, but this process takes its node from ${envOverrides.join(', ')}, which the environment sets and which beats the file — change the unit or drop-in, or the restart will keep the old endpoint`
+          : 'saved; restart the monitor for it to take effect',
+      };
     },
   },
 ];

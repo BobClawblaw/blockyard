@@ -963,7 +963,16 @@ async function boot() {
   const placeDiversions = () => {
     if (!divBtn || !divPop) return;
     const r = divBtn.getBoundingClientRect();
-    divPop.style.setProperty('--x', `${Math.round(r.right)}px`);
+    // MEASURED, not transformed. The panel used to be pulled left by translateX(-100%); now its
+    // real left edge is computed so nothing depends on transform behaviour I cannot test here.
+    // It must be measurable to be measured, so it is un-hidden first if it is not already open.
+    const wasHidden = divPop.classList.contains('hidden');
+    if (wasHidden) divPop.classList.remove('hidden');
+    const w = divPop.offsetWidth || 160;
+    if (wasHidden) divPop.classList.add('hidden');
+    // right-aligned to the button, then held inside the viewport on both sides
+    const left = Math.max(6, Math.min(r.right - w, window.innerWidth - w - 6));
+    divPop.style.setProperty('--x', `${Math.round(left)}px`);
     divPop.style.setProperty('--y', `${Math.round(r.bottom + 6)}px`);
   };
   const openDiversions = (open) => {
@@ -981,7 +990,14 @@ async function boot() {
     if (b) setPage(b.dataset.page);
     openDiversions(false);
   });
-  document.addEventListener('click', (e) => { if (divWrap && !divWrap.contains(e.target)) openDiversions(false); });
+  // The panel is no longer inside divWrap (it is a child of <body> now, so the header cannot clip
+  // it), so a click INSIDE the panel is outside the wrapper. Without naming the panel too, opening
+  // the menu and clicking an item would close it before the item's own handler ran.
+  document.addEventListener('click', (e) => {
+    const inside = (divWrap && divWrap.contains(e.target)) || (divPop && divPop.contains(e.target));
+    if (!inside) openDiversions(false);
+  });
+  window.addEventListener('resize', () => { if (divPop && !divPop.classList.contains('hidden')) placeDiversions(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openDiversions(false); });
   // DISPLAY SETTINGS (settings.js). The panel is built from PANEL, so a control and its value
   // cannot drift apart, and every change is saved and applied without a reload: the boards read
@@ -1049,6 +1065,21 @@ async function boot() {
     drawSettings();
     render();
   });
+  // ONE REPAINT PER FRAME, not one per input event (operator, 2026-09-12: "the grid intensity
+  // slider jitters when I move it"). `render()` is not cheap -- it rewrites the header, toggles the
+  // offline banner and then repaints the open page's canvases -- and dragging a slider fires an
+  // `input` event per step. The grid intensity control has forty steps across its range AND
+  // recolours a board on each one, so a drag queued forty synchronous repaints and the thumb
+  // visibly stuttered behind the pointer. Every one of the twelve range controls had this; the new
+  // one only made it obvious.
+  // The VALUE is still stored and the readout still updates on every event -- those are cheap, and
+  // the number beside the slider must track the thumb exactly. Only the repaint is coalesced, so at
+  // most one runs per animation frame however fast the pointer moves.
+  let repaintQueued = 0;
+  const repaintSoon = () => {
+    if (repaintQueued) return;
+    repaintQueued = requestAnimationFrame(() => { repaintQueued = 0; render(); });
+  };
   cfgBody.addEventListener('input', (e) => {
     const el = e.target.closest?.('[data-cfg]');
     if (!el) return;
@@ -1056,7 +1087,7 @@ async function boot() {
     setSetting(loadSettings(), el.dataset.cfg, value);
     const out = cfgBody.querySelector(`[data-val-for="${el.dataset.cfg}"]`);
     if (out) out.textContent = String(value);
-    render();          // the boards pick the new options up on their next paint
+    repaintSoon();     // the boards pick the new options up on their next paint
   });
 
   document.getElementById('btnPause').addEventListener('click', (e) => {
