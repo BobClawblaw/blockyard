@@ -91,6 +91,19 @@ export const DEFAULTS = Object.freeze({
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, laser: true,
     powerup: true, combo: true, aurora: true, plasma: true, glitch: true,
   }),
+  // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
+  // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
+  // there is a sky and a galaxy; what the sky is MADE of comes from the Sky group.
+  blockout: Object.freeze({
+    stars: true,
+    galaxy: true,
+    galaxyAt: 'center',
+    neon: false,          // the bricks as dim bodies under lit tubes
+    neonSource: 'brick',  // 'brick' (each row's own colour) | 'colour'
+    neonColour: '#3d8bff',
+    neonBrightness: 1,
+    sfx: true,
+  }),
   // TETRUST (operator, 2026-09-12: "Have this entire panel filled black and rendering the spiral
   // galaxy for this display. Have the text floating over the spiral galaxy ... add toggles for
   // those settings in the game and have them persistent in settings"). The sky is the panel's own
@@ -199,6 +212,27 @@ export const PANEL = Object.freeze([
         key: 'range', label: 'Range', kind: 'choice', hint: 'How many hours the chart covers when the page opens',
         options: Object.freeze([['24', '24 hours'], ['48', '48 hours'], ['168', '7 days']]),
       }),
+    ]),
+  }),
+  Object.freeze({
+    group: 'blockout',
+    title: 'Blockout',
+    note: 'The Breakout court. These switches are also on the game\u2019s own panel; the sky takes its density, brightness and layers from Sky above.',
+    rows: Object.freeze([
+      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the court' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
+      Object.freeze({
+        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy\u2019s centre sits on the panel',
+        options: Object.freeze([['center', 'Behind the court'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
+      }),
+      Object.freeze({ key: 'neon', label: 'Neon bricks', kind: 'toggle', hint: 'The wall, the bat and the ball as dim bodies under lit tubes' }),
+      Object.freeze({
+        key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'Each brick row\u2019s own colour, or all in one colour',
+        options: Object.freeze([['brick', 'The brick\u2019s colour'], ['colour', 'One colour']]),
+      }),
+      Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
+      Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow' }),
+      Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The bat, the bricks, the walls and a lost ball' }),
     ]),
   }),
   Object.freeze({
@@ -467,6 +501,22 @@ export function spaceOptions(s) {
 export function enabledEffects(s) {
   const n = normalise(s);
   return Object.keys(n.effects).filter((k) => n.effects[k]);
+}
+
+/** Blockout's switches, with the sky's make-up from the Sky group (as tetrustOptions does). */
+export function blockoutOptions(s) {
+  const n = normalise(s);
+  const sky = spaceOptions(s);
+  return {
+    stars: n.blockout.stars, galaxy: n.blockout.galaxy, galaxyAt: n.blockout.galaxyAt, sfx: n.blockout.sfx,
+    neon: n.blockout.neon,
+    // the engine calls the data-coloured source "temperature"; here that is the brick's own row
+    neonSource: n.blockout.neonSource === 'colour' ? 'colour' : 'temperature',
+    neonColour: n.blockout.neonColour, neonBrightness: n.blockout.neonBrightness,
+    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
+    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
+    starColours: sky.starColours, starGlints: sky.starGlints,
+  };
 }
 
 export function tetrustOptions(s) {

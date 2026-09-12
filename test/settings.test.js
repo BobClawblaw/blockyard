@@ -518,5 +518,6 @@ test('the neon tubes are tunable: source, one colour (a hex, validated), brightn
   assert.equal(t.neon, true); assert.equal(t.neonSource, 'colour'); assert.equal(t.neonColour, '#123456'); assert.equal(t.neonBrightness, 0.2);
   assert.equal(tetrustOptions({ tetrust: { neonSource: 'piece' } }).neonSource, 'temperature', 'the piece\'s colour is the engine\'s "temperature" source');
   const colourRows = PANEL.flatMap((g) => g.rows.filter((r) => r.kind === 'colour').map((r) => `${g.group}.${r.key}`));
-  assert.deepEqual(colourRows, ['space.neonColour', 'tetrust.ghostColour', 'tetrust.neonColour'], 'a colour control for each, and one for the landing marker');
+  assert.deepEqual([...colourRows].sort(), ['blockout.neonColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.neonColour'],
+    'a colour control for each finish, one for the landing marker, and one for Blockout');
 });

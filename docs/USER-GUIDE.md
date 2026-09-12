@@ -18,6 +18,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Markets](#markets)
 - [Kiosk](#kiosk)
 - [Tetrust](#tetrust)
+- [Blockout](#blockout)
 - [Peers](#peers)
 - [Network](#network)
 - [Mining](#mining)
@@ -58,7 +59,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 | Item | What it tells you |
 |---|---|
 | **bmcmonitor v… · build** | The version and build this tab is running. |
-| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. |
+| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The two games live at the end, under the **Diversions** pop-down. |
 | **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. |
 | **stream** | The live link to the server. `connecting` on load, then `live`. `reconnecting` means the link dropped and the browser is retrying. `stale` means the link is up but no fresh data has arrived for more than 90 seconds. |
 | **rpc** | The node's last RPC round-trip time. It turns red when the average climbs above five seconds. |
@@ -461,8 +462,8 @@ it is on screen.
 
 ## Tetrust
 
-A playable Tetris, built on the same 3D engine as everything else — *trust, but verify*:
-every line you clear is a block you verified. The well is the block-space board, the pieces
+A playable Tetris, built on the same 3D engine as everything else, under **Diversions** at the end
+of the nav — *trust, but verify*: every line you clear is a block you verified. The well is the block-space board, the pieces
 are the same stones, and the sky behind them is the same turning galaxy.
 
 ![Tetrust](images/tetrust.jpg)
@@ -511,6 +512,48 @@ so a change in either place shows in both:
 
 Browsers only allow sound to start after you interact with the page, so the music begins
 when you press **play**, not when the tab opens.
+
+---
+
+## Blockout
+
+Breakout, on the same 3D engine, under **Diversions** at the end of the nav. The wall is made of
+block-space stones — one grid cell each, so a brick *is* an engine tile — and the panel behind it
+is the same turning galaxy as everywhere else. The ball is drawn round rather than as a block.
+
+### Playing
+
+**The bat follows your mouse.** Move the pointer across the court and the bat goes where it is;
+click to serve. If you would rather use the keyboard, **←** **→** or **A** **D** move it and
+**space** serves.
+
+| Keys | |
+|---|---|
+| **mouse**, **←** **→**, or **A** **D** | move the bat |
+| **click** or **space** | serve the ball |
+| **P** or **Esc** | pause and resume |
+| **Enter** | start, or resume when paused |
+
+Like Tetrust, it pauses when you look away — another browser tab, or another tab of this monitor.
+
+### Scoring
+
+Where the ball lands on the bat decides where it goes: dead centre sends it straight up, the edges
+fire it off at an angle. That one rule is what makes Breakout a game of aim rather than reflexes,
+and it is worth practising on purpose.
+
+The wall is six rows, cheap at the bottom and dear at the top — **1, 1, 3, 3, 5, 7** points a
+brick — so the reward for digging a channel up one side and letting the ball loose in the roof is
+the same as it was in 1976. You get **three balls**; clearing the wall starts the next level with a
+faster ball and your score kept. High scores are kept in your browser, top ten, and are not sent
+anywhere.
+
+### The switches on the panel
+
+**★ stars** and **🌀 galaxy** for the sky behind the court, **◉ neon** to draw the wall, the bat and
+the ball as dim bodies under lit tubes, and **♫ sound** for the bat, the bricks, the walls and a
+lost ball. They are the same settings as **Display settings → Blockout**, so a change in either
+place shows in both; the colour and brightness of the neon live on that tab.
 
 ---
 

@@ -34,6 +34,16 @@ export const SFX = Object.freeze({
   tetris: [330, 1760, 0.45, 'square', 0.1],
   over: [440, 90, 0.7, 'sawtooth', 0.09],
   level: [660, 1320, 0.22, 'triangle', 0.07],
+  // BLOCKOUT (breakout.js): the bat is a low knock, a brick a short blip -- higher for the dear
+  // rows -- a wall a duller tap, and a lost ball a drop. The module is the games' sound, not
+  // Tetrust's alone; both set `sfx` from their own switch as they render, and only one plays at a
+  // time because only one tab is on screen.
+  paddle: [300, 240, 0.055, 'square', 0.06],
+  brick: [680, 760, 0.05, 'square', 0.05],
+  brickhard: [900, 1050, 0.06, 'square', 0.055],
+  wall: [420, 400, 0.04, 'triangle', 0.04],
+  life: [320, 90, 0.42, 'sawtooth', 0.08],
+  levelup: [520, 1180, 0.3, 'triangle', 0.07],
 });
 
 const S = { ctx: null, music: false, sfx: false, timer: null, at: 0, i: 0, gain: null, live: new Set() };

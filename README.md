@@ -20,7 +20,7 @@ read-only toward your node by default.
 | **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
 | **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
 | **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, full screen with one click. | ![Kiosk](docs/images/kiosk.jpg) |
-| **Tetrust.** A playable Tetris built on the same 3D engine — trust, but verify. The well is the block-space board, the pieces are the same stones, the sky behind it is the same turning galaxy, and the music is synthesised in the browser. Pauses when you look away; high scores kept per browser. | ![Tetrust](docs/images/tetrust.jpg) |
+| **Tetrust, and Blockout.** Two playable games built on the same 3D engine — trust, but verify. Tetrust is Tetris: the well is the block-space board and the music is synthesised in the browser. Blockout is Breakout, where the wall is made of block-space stones and the bat follows your mouse. Both pause when you look away and keep high scores per browser. | ![Tetrust](docs/images/tetrust.jpg) |
 
 Also on board: a sync viewer with an honest ETA, Block flow (projected blocks, the block
 being built, recent blocks), mempool and fee charts, a peer table, bandwidth, the node's
@@ -35,7 +35,7 @@ You need **Node.js 22 or newer** and a running `bmc` node with JSON-RPC enabled.
 ```bash
 git clone https://github.com/BobClawblaw/bmcmonitor.git
 cd bmcmonitor
-npm test            # optional: 667 unit tests, all built in
+npm test            # optional: 681 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
 
@@ -112,7 +112,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 667 unit tests (node:test, no dependencies)
+npm test             # 681 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```

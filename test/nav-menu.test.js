@@ -1,0 +1,54 @@
+// THE DIVERSIONS MENU (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
+// options under a pop-down menu called 'Diversions'").
+//
+// Measured before this was pinned: at a 1600px window the nav ended at "Eve(nts)" and neither the
+// menu nor its open panel was on screen at all. Two separate traps, both invisible to a green
+// suite and both worth a guard:
+//
+//   1. `nav.pages` is a scroll container (overflow-x:auto, scrollbar hidden), so the LAST thing in
+//      the nav is the first to scroll out of reach. The menu is sticky to the right edge.
+//   2. A box with overflow-x:auto clips the other axis too, and `header.top` is overflow:hidden
+//      besides -- so a panel positioned inside either is simply not drawn. The panel is fixed.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = (f) => readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8');
+const html = read('index.html'), css = read('css/app.css'), app = read('js/app.js');
+const rule = (sel) => css.match(new RegExp(`\\${sel} \\{([^}]*)\\}`))?.[1] ?? '';
+
+test('the two games live in the menu, at the end of the nav, and nowhere else', () => {
+  const pop = html.match(/<div class="navmenu-pop[\s\S]*?<\/div>/)?.[0] ?? '';
+  assert.ok(pop, 'the panel exists');
+  const inPop = [...pop.matchAll(/data-page="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(inPop, ['tetrust', 'blockout'], 'both games are in it');
+  // exactly once in the whole page: they were moved, not copied
+  for (const page of inPop) {
+    assert.equal(html.match(new RegExp(`<button data-page="${page}"`, 'g')).length, 1, `${page} has one nav button`);
+  }
+  // the nav's own buttons no longer include them, and the menu sits after the last of them
+  const navRow = html.slice(html.indexOf('<nav'), html.indexOf('navmenu'));
+  assert.ok(!navRow.includes('data-page="tetrust"'), 'not among the working tabs any more');
+  assert.ok(html.indexOf('id="navAdmin"') < html.indexOf('id="navDivBtn"'), 'the menu comes last');
+});
+
+test('the toggle carries no data-page: a nav button with one must have a section behind it', () => {
+  // web-contract.test.js holds every `<button data-page>` in the nav to a matching page section.
+  const toggle = html.match(/<button type="button" class="navmenu-btn"[^>]*>/)?.[0] ?? '';
+  assert.ok(toggle, 'the toggle exists');
+  assert.ok(!toggle.includes('data-page'), 'and names no page');
+  assert.match(toggle, /aria-haspopup="true"/);
+  assert.match(toggle, /aria-expanded=/);
+});
+
+test('the menu is pinned and its panel escapes the clipping, or neither can be seen', () => {
+  const menu = rule('.navmenu'), pop = rule('.navmenu-pop');
+  assert.match(menu, /position: sticky/, 'the nav scrolls; the menu must not scroll away with it');
+  assert.match(menu, /right: 0/);
+  assert.match(pop, /position: fixed/, 'the nav and the header both clip; an absolute panel is invisible');
+  assert.match(pop, /left: var\(--x/); assert.match(pop, /top: var\(--y/);
+  // ...and the page positions it from the button's rect, through the CSSOM
+  assert.match(app, /divPop\.style\.setProperty\('--x'/);
+  assert.match(app, /getBoundingClientRect\(\)/);
+  assert.ok(!/navmenu-pop[^>]*style="/.test(html), 'no style attribute: the CSP forbids them');
+});

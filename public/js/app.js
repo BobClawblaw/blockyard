@@ -14,6 +14,7 @@ import { renderExplorer } from './explorer.js';
 import { renderMarkets } from './markets.js';
 import { renderKiosk } from './kiosk.js';
 import { renderTetrust } from './tetrust.js';
+import { renderBlockout } from './blockout.js';
 import { renderChain, renderMempool, renderPeers, renderNetwork, renderLogs, renderNode, renderAdmin, ensureLogsLoaded, init as initPanels, initChainDrill } from './panels.js';
 
 // panels.js needs the formatters but must not import them from here (circular);
@@ -466,6 +467,7 @@ export function render() {
     case 'markets': renderMarkets(s, state, helpers); break;
     case 'kiosk': renderKiosk(s, state, helpers); break;
     case 'tetrust': renderTetrust(s, state, helpers); break;
+    case 'blockout': renderBlockout(s, state, helpers); break;
   }
 }
 
@@ -831,12 +833,17 @@ function shortBuild(build) {
 
 // "explorer/tx/<txid>" -> the explorer page, subroute "tx/<txid>". Only the explorer has
 // subroutes; they stay on the URL so every explorer page is a link.
+// The games live behind the Diversions pop-down at the end of the nav; the menu shows as the
+// active tab while one of them is open, since its own button is out of sight inside the popup.
+const DIVERSION_PAGES = ['tetrust', 'blockout'];
+
 function setPage(route) {
   const [page, ...rest] = String(route).split('/');
   state.xroute = page === 'explorer' ? rest.join('/') : '';
   state.page = page;
   document.querySelectorAll('.page').forEach((el) => el.classList.toggle('on', el.dataset.page === page));
   document.querySelectorAll('nav.pages button').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
+  document.getElementById('navDivBtn')?.classList.toggle('on', DIVERSION_PAGES.includes(page));
   const want = `#${page}${state.xroute ? `/${state.xroute}` : ''}`;
   if (location.hash !== want) history.replaceState(null, '', want);
   if (page === 'mempool') refreshMempoolDetail(true);
@@ -938,6 +945,29 @@ async function boot() {
     const b = e.target.closest('button[data-page]');
     if (b) setPage(b.dataset.page);
   });
+  // the Diversions pop-down: opens on its button, closes on a choice, on a click anywhere else,
+  // and on Escape
+  const divWrap = document.getElementById('navDiv');
+  const divBtn = document.getElementById('navDivBtn');
+  const divPop = document.getElementById('navDivPop');
+  // The panel is position:fixed (see app.css), so it is placed from the button's own rect each
+  // time it opens -- the nav scrolls and the header clips, and a panel positioned inside either of
+  // them cannot be seen at all. Custom properties through the CSSOM, never a style attribute.
+  const placeDiversions = () => {
+    if (!divBtn || !divPop) return;
+    const r = divBtn.getBoundingClientRect();
+    divPop.style.setProperty('--x', `${Math.round(r.right)}px`);
+    divPop.style.setProperty('--y', `${Math.round(r.bottom + 6)}px`);
+  };
+  const openDiversions = (open) => {
+    if (open) placeDiversions();
+    divPop?.classList.toggle('hidden', !open);
+    divBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  divBtn?.addEventListener('click', (e) => { e.stopPropagation(); openDiversions(divPop?.classList.contains('hidden')); });
+  divPop?.addEventListener('click', () => openDiversions(false));
+  document.addEventListener('click', (e) => { if (divWrap && !divWrap.contains(e.target)) openDiversions(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openDiversions(false); });
   // DISPLAY SETTINGS (settings.js). The panel is built from PANEL, so a control and its value
   // cannot drift apart, and every change is saved and applied without a reload: the boards read
   // loadSettings() on their next paint, and a repaint is asked for immediately.

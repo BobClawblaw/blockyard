@@ -166,3 +166,29 @@ test('the neon tubes take one colour and a brightness when asked, the block\'s o
   const dim = tubes({ neonBrightness: 0.3 })[0], loud = tubes({ neonBrightness: 2 })[0];
   assert.ok(rgb(dim.stroke)[3] < rgb(loud.stroke)[3] && dim.lw < loud.lw, 'brightness into alpha and width');
 });
+
+test('a sphere tile is drawn round: nested discs, no cube faces', () => {
+  // (operator, 2026-09-12: "Can we have a ball for blockout instead of a block for the bouncing
+  // dot?") -- Blockout's ball. The op format has no arcs and the canvas rules forbid gradients, so
+  // roundness is polygons: enough sides to read as a circle, and three of them for shading.
+  const ops = buildScene([{ txid: 'ball', x: 4, y: 4, s: 0.84, tall: 0.84, z: 0, color: '#f2f7ff', sphere: true }], O).ops;
+  assert.ok(ops.length > 0);
+  assert.ok(ops.every((op) => op.face === 'ball'), `only ball ops: ${[...new Set(ops.map((o) => o.face))]}`);
+  assert.equal(ops.length, 3, 'a rim, a body and a highlight');
+  for (const op of ops) {
+    assert.ok(op.points.length >= 16, `${op.points.length} sides is not a circle`);
+    assert.ok(op.fill.startsWith('rgba('), 'a plain rgba fill, like every other op');
+    assert.ok(!op.stroke, 'and no outline: a ball has no edges to seam');
+    // every vertex the same distance from the centre, which is what makes it round
+    const cx = op.points.reduce((n, p) => n + p.x, 0) / op.points.length;
+    const cy = op.points.reduce((n, p) => n + p.y, 0) / op.points.length;
+    const rs = op.points.map((p) => Math.hypot(p.x - cx, p.y - cy));
+    assert.ok(Math.max(...rs) - Math.min(...rs) < 1e-6, 'every vertex on one circle');
+  }
+  const radius = (op) => Math.hypot(op.points[0].x - op.points[12].x, op.points[0].y - op.points[12].y) / 2;
+  assert.ok(radius(ops[0]) > radius(ops[1]) && radius(ops[1]) > radius(ops[2]), 'rim, then body, then a smaller highlight');
+  // and an ordinary tile is still a cube
+  const cube = buildScene([{ txid: 'c', x: 4, y: 4, s: 1, tall: 1, z: 0, color: '#f2f7ff' }], O).ops;
+  assert.ok(cube.some((op) => op.face === 'top'), 'a tile without the flag keeps its faces');
+  assert.ok(!cube.some((op) => op.face === 'ball'));
+});

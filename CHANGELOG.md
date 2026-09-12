@@ -18,6 +18,13 @@ All notable changes to this project are documented here. The format follows
   no audio files and no dependencies. Korobeiniki on a lookahead scheduler running on the audio
   clock, and nine shaped tones for move, rotate, soft drop, hard drop, lock, line clear, tetris,
   level up and game over. A switch for each.
+- **Blockout**: Breakout on the 3D engine, in its own tab beside Tetrust (`public/js/breakout.js`
+  for the rules, `public/js/blockout.js` for the screen). The bat follows the mouse — or the arrow
+  keys — the wall is six rows of block-space stones one grid cell each, and where the ball lands on
+  the bat decides where it goes. Three balls, a faster wall each level, and a per-browser high score
+  table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
+  the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
+  a brick on a slow frame.
 - **Seventeen new idle effects**, bringing the total to **26**, each with its own switch:
   shockwave, nova, fireworks, solar flare, wave, quake, code rain, sparkle, checkerboard, radar,
   vortex, laser, power-up, combo chain, aurora, plasma and glitch. All are pure functions of the
@@ -40,9 +47,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The two games sit at the end of the nav under a **Diversions** pop-down, rather than among the
+  working tabs.
 - The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
-  tail that fades back to yellow, with an expanding nebula, crackle, shimmer and particle motes.
-  The lightning ball trails the same charge across the block-space board.
+  tail that fades back to yellow behind a bright head, with a nebula of blue smoke emitted along
+  the whole charged span and a shimmer over it. The lightning ball trails the same charge across
+  the block-space board; the light cycles do not.
+- The pulse's particle motes and its jagged branches are gone, and its nebula is emitted over the
+  trail rather than per segment — emitting per segment gave neighbouring puffs the same age, so
+  they shared a radius and lined up into the concentric rings they were meant to replace.
 - The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
   the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
 - Pool attribution moved out of the block card's body into a readable pill beneath it.

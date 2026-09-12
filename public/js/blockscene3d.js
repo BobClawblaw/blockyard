@@ -1054,6 +1054,31 @@ export function buildScene(tiles, o = {}) {
       }
       continue;
     }
+    // A BALL, NOT A BLOCK (operator, 2026-09-12: "Can we have a ball for blockout instead of a
+    // block for the bouncing dot?"). An op is a filled polygon -- there are no arcs in the format,
+    // and gradients and shadows are forbidden here (see the rules at the head of details3d.js) --
+    // so a sphere is three nested many-sided discs: a dark rim, the body, and a highlight offset
+    // toward the light. At the size a ball is actually drawn, 24 sides is a circle.
+    if (t.sphere) {
+      const bcx = t.x + t.s / 2, bcy = t.y + t.s / 2;
+      const zc = (t.z ?? 0) + (t.floor ?? 0) + cubeHeight(t) / 2;
+      const mid = f.P(bcx, bcy, zc);
+      const rim = f.P(bcx + t.s / 2, bcy, zc);
+      const R = Math.hypot(rim.x - mid.x, rim.y - mid.y) || 1;
+      const disc = (r, dx, dy, fill) => {
+        const pts = [];
+        for (let i = 0; i < 24; i++) {
+          const ang = (i / 24) * Math.PI * 2;
+          pts.push({ x: mid.x + dx + Math.cos(ang) * r, y: mid.y + dy + Math.sin(ang) * r });
+        }
+        out.push({ txid: t.txid, face: 'ball', points: pts, fill });
+        return pts;
+      };
+      disc(R, 0, 0, shade(c, 0.5 * lit, a)).forEach(note);
+      disc(R * 0.84, -R * 0.08, -R * 0.1, shade(c, 1.0 * lit, a));
+      disc(R * 0.4, -R * 0.24, -R * 0.28, lift(c, 0.7, a));
+      continue;
+    }
     for (const side of f.sides) {
       // lit from the upper left of the screen: a side turned that way is
       // brighter, one turned away falls into shadow

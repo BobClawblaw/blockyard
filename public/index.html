@@ -23,13 +23,24 @@
       <button data-page="explorer">Explorer</button>
       <button data-page="markets">Markets</button>
       <button data-page="kiosk">Kiosk</button>
-      <button data-page="tetrust" title="Tetrust: trust, but verify">Tetrust</button>
       <button data-page="peers">Peers</button>
       <button data-page="network">Network</button>
       <button data-page="mining">Mining</button>
       <button data-page="logs">Events</button>
       <button data-page="node">Node &amp; RPC</button>
       <button data-page="admin" id="navAdmin" hidden>Admin</button>
+      <!-- DIVERSIONS (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
+           options under a pop-down menu called 'Diversions'"). The items keep their data-page, so
+           the nav's own click handler routes them exactly as it routes every other tab -- and the
+           toggle deliberately has none, because a nav button with a data-page is required to have
+           a page section behind it. -->
+      <div class="navmenu" id="navDiv">
+        <button type="button" class="navmenu-btn" id="navDivBtn" aria-haspopup="true" aria-expanded="false">Diversions <span class="navcaret">&#9662;</span></button>
+        <div class="navmenu-pop hidden" id="navDivPop" role="menu">
+          <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
+          <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
+        </div>
+      </div>
     </nav>
     <span class="spacer"></span>
     <div class="meta">
@@ -343,6 +354,41 @@
     </section>
     <!-- TETRUST: a Tetris on the 3D engine (operator, 2026-09-12). The well is a board3d, so it wears
          every display setting the Block space board does: stars, the galaxy, neon edges, the sheen. -->
+    <!-- BLOCKOUT (public/js/blockout.js, rules in breakout.js): Breakout on the block engine. The
+         court is a board3d, the bricks are one grid cell each, and the panel behind it is the same
+         sky the Block space board draws. -->
+    <section class="page" data-page="blockout">
+      <div class="tetrust" id="blockout">
+        <div class="card tetcard bocard">
+          <canvas class="tetsky" id="boSky"></canvas>
+          <h3>Blockout <span class="sp"></span><span class="src">break the wall — the bat follows your mouse</span></h3>
+          <div class="treemapwrap tetwell bowell idle" id="boWellWrap">
+            <canvas class="treemap" id="boWell"></canvas>
+          </div>
+          <div class="tetover" id="boOver">
+            <div class="tetmsg" id="boMsg">Blockout</div>
+            <div class="tetsub" id="boSub"></div>
+            <button type="button" class="btn primary" id="boResume">play</button>
+          </div>
+        </div>
+        <div class="card tethud">
+          <h3>Score</h3>
+          <div class="tetstats" id="boStats"></div>
+          <h3>Keys</h3>
+          <div class="tetkeys">move the mouse over the court, or ← → / A D · space or click serves · P pause · Enter play</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="boStars" aria-pressed="false" title="the star field across the panel">★ stars</button>
+            <button type="button" class="tetsw" id="boGalaxy" aria-pressed="false" title="the spiral galaxy in that sky">🌀 galaxy</button>
+            <button type="button" class="tetsw" id="boNeon" aria-pressed="false" title="the wall under lit neon tubes">◉ neon</button>
+            <button type="button" class="tetsw" id="boSfx" aria-pressed="false" title="bat, bricks, walls and a lost ball">♫ sound</button>
+          </div>
+          <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
+          <table class="tetscores" id="boScores"></table>
+        </div>
+      </div>
+    </section>
+
     <section class="page" data-page="tetrust">
       <div class="tetrust" id="tetrust">
         <div class="card tetcard">

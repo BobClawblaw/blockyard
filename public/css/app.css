@@ -1424,6 +1424,26 @@ body { font-variant-numeric: tabular-nums; }
 .cfgrow .val { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); min-width: 3ch; text-align: right; }
 /* the toggle: a checkbox the browser draws, sized up, so it is keyboard-reachable for free */
 .cfgrow input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+/* DIVERSIONS: a pop-down at the end of the nav. The buttons inside are `nav.pages button` like
+   every other tab, so they inherit the tab look and only the layout is new. */
+/* PINNED, because the nav SCROLLS. `nav.pages` is overflow-x:auto with its scrollbar hidden, so
+   at a wide window the last tabs simply leave the box -- measured at 1600px: the nav ended at
+   "Eve(nts)" and this menu was nowhere on screen. Sticky to the right edge keeps it in place while
+   the tabs scroll underneath, and the short fade stops them appearing to slide out of a hard edge
+   (the header's own gradient ends at --bg-1). */
+.navmenu { position: sticky; right: 0; z-index: 5; display: inline-flex; align-items: center; flex: 0 0 auto;
+  padding-left: 20px; background: linear-gradient(90deg, rgba(18, 21, 26, 0), var(--bg-1) 16px); }
+.navcaret { font-size: 9px; opacity: .8; }
+/* ...and the panel is FIXED, not absolute: `nav.pages` clips it on the block axis (a box with
+   overflow-x:auto clips the other axis too) and `header.top` is overflow:hidden besides, so an
+   absolutely positioned panel inside either of them is invisible. app.js sets --x/--y from the
+   button's own rect through the CSSOM; there are no style attributes anywhere in this project. */
+.navmenu-pop { position: fixed; left: var(--x, 0); top: var(--y, 0); transform: translateX(-100%);
+  z-index: 200; display: flex; flex-direction: column; align-items: stretch;
+  min-width: 160px; padding: 5px; gap: 2px; background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: 0 12px 30px #000a; }
+.navmenu-pop.hidden { display: none; }
+.navmenu-pop button { text-align: left; width: 100%; }
 .btn.gear { display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; }
 .btn.gear svg { display: block; }
 .btn.gear.on { color: var(--accent); border-color: var(--accent); }
@@ -1443,6 +1463,9 @@ body { font-variant-numeric: tabular-nums; }
    single screen with room. it's way too large now"): the well's HEIGHT comes from the viewport,
    and its width follows from the 10x20 shape -- about 330px wide on a 1000px-tall window. */
 .tetcard .treemapwrap.tetwell { position: relative; z-index: 1; height: min(calc(100vh - 230px), 600px); width: auto; aspect-ratio: 11 / 21; margin: 0 auto; }
+/* Blockout's court is 16 x 24 rather than 10 x 20, so it is wider than the Tetris well; the rest
+   of the furniture (the sky canvas, the overlay, the HUD) is shared with it. */
+.tetcard .treemapwrap.tetwell.bowell { aspect-ratio: 17 / 25; }
 .tetwell canvas { width: 100%; height: 100%; display: block; background: transparent; border: 0; }   /* the sky shows through */
 /* THE PANEL IS THE SKY (operator: "Have this entire panel filled black and rendering the spiral
    galaxy for this display. Have the text floating over the spiral galaxy, and then the playboard

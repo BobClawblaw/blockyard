@@ -992,29 +992,34 @@ function priceLine(ctx, view, axes) {
   // nested discs on every charged segment, their radius growing with that stretch's age and their
   // alpha falling with it -- tight and bright just behind the head, spread wide and gone to black
   // by the tail's end. Plain fills, layered, as every glow in this renderer is.
-  for (let i = 0; i < n; i++) {
-    const at = n > 1 ? i / (n - 1) : 0;
-    const passed = headAt - at;
-    const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
-    if (tint < 0.04) continue;
-    const age = passed / PULSE_TAIL;
-    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
-    void mx; void my;
-    // AN EMITTER, NOT PAINTED RINGS (operator, 2026-09-12: "I can see concentric rings
-    // overlapping as it travels ... have it be an emitter instead of painting maybe?"). The first
-    // cut stacked three discs per segment, and with neighbours at slightly different ages their
-    // edges lined up into rings. Now each charged segment sheds a cloud of small soft puffs at
-    // hashed angles, distances and sizes -- no two edges coincide, so they read as gas. Each puff
-    // drifts outward and thins as its stretch of the line ages: the cloud expands and dies to
-    // black. Hashed, not random, so a puff holds its place frame to frame.
-    for (let k = 0; k < 16; k++) {
-      const a1 = hash01(i * 47 + k * 11 + 3) * Math.PI * 2;
-      const spread = lw * (6 + 64 * age) * (0.35 + 0.65 * hash01(i * 13 + k * 5 + 29));
-      const rad = lw * (9 + 20 * hash01(i * 7 + k * 17 + 61)) * (1 + 1.4 * age);
-      const al = 0.085 * tint * (1 - 0.65 * age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
-      ctx.fillStyle = `rgba(70,130,255,${al.toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(mx + Math.cos(a1) * spread, my + Math.sin(a1) * spread, rad, 0, Math.PI * 2); ctx.fill();
-    }
+  // A TRUE EMITTER (operator, 2026-09-12: "make the nebula an emitter; still seeing concentric
+  // circles when the nebula's/trails are drawn behind the energy ball"). Emitting PER SEGMENT was
+  // the cause: neighbouring segments are almost the same age, so their puffs shared a distance and
+  // a radius and lined up into arcs -- rings made of many little circles are still rings. The
+  // cloud is emitted over the charged SPAN instead. Each puff picks its own place along the trail,
+  // its own angle, its own distance and its own size from four INDEPENDENT hashes, so no two share
+  // a centre or a radius and there is no common edge for the eye to join up. Hashed, not random,
+  // so a puff keeps its place from frame to frame instead of boiling.
+  const PUFFS = 130;
+  for (let k = 0; k < PUFFS; k++) {
+    const u = hash01(k * 7 + 13);                         // how far back down the tail it sits
+    const at = headAt - u * PULSE_TAIL;
+    if (at < 0 || at > 1) continue;
+    const tint = Math.pow(1 - u, 1.4);
+    const age = u;
+    const d = at * Math.max(1, n - 1);
+    const i0 = Math.max(0, Math.min(n - 1, Math.floor(d)));
+    const fr = d - i0;
+    const mx = pts[i0].x + ((pts[i0 + 1] ?? pts[i0]).x - pts[i0].x) * fr;
+    const my = pts[i0].y + ((pts[i0 + 1] ?? pts[i0]).y - pts[i0].y) * fr;
+    const a1 = hash01(k * 31 + 101) * Math.PI * 2;
+    const spread = lw * (4 + 70 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
+    const rad = lw * (7 + 26 * hash01(k * 13 + 67)) * (1 + 1.1 * age);
+    const al = 0.075 * tint * (1 - 0.55 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
+    ctx.fillStyle = `rgba(70,130,255,${al.toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(mx + Math.cos(a1) * spread, my + Math.sin(a1) * spread, rad, 0, Math.PI * 2);
+    ctx.fill();
   }
   for (const [w, c, a, kind] of [...GLOW, ...CORE]) {
     const B = kind === 'glow' ? DEEP : BLUE;
@@ -1044,14 +1049,14 @@ function priceLine(ctx, view, axes) {
       ctx.stroke();
     }
   }
-  // CRACKLE AND SHIMMER on the charged stretch (operator, 2026-09-12: "add an obvious electrical
-  // crackling and shimmer effect to the spark effect travelling across the yellow line ... Have the
-  // crackling and shimmer effects on the blue highlighted areas that then fade and as the blue
-  // fades out"). Both are scaled by the segment's own tint, so they are fiercest just behind the
-  // head and die out exactly as the blue does.
-  //   shimmer: a thin white-blue core whose brightness flickers per segment on the frame clock
-  //   crackle: short jagged branches sprouting off the wire, re-rolled EVERY frame -- electrical,
-  //            because it never draws the same twice
+  // SHIMMER on the charged stretch: a thin white-blue core whose brightness flickers per segment
+  // on the frame clock, scaled by that segment's tint so it dies out exactly as the blue does.
+  //
+  // What used to be here as well, and is gone (operator, 2026-09-12: "The particle effects behind
+  // the energy pulse on the yellow price bar looks terrible. Lets just use the nebula trail ...
+  // also, get rid of the lightning bolts effect. It looks absolutely terrible"): a spray of motes
+  // off the wire, and jagged branches re-rolled every frame. The trail is the nebula and the tinted
+  // line now, nothing else.
   const now = view.now ?? 0;
   for (let i = 0; i < n; i++) {
     const at = n > 1 ? i / (n - 1) : 0;
@@ -1063,39 +1068,6 @@ function priceLine(ctx, view, axes) {
     ctx.strokeStyle = `rgba(210,240,255,${(0.9 * tint * flick).toFixed(3)})`;
     ctx.lineWidth = lw * 2.4;
     ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-    // branches: one to three per charged segment, each a 3-4 vertex zigzag off a random point.
-    // Reach in line-widths, and the line is under a pixel wide: 5-14 was invisible.
-    const forks = 1 + ((Math.random() * 3 * tint) | 0);
-    ctx.strokeStyle = `rgba(190,232,255,${(0.8 * tint).toFixed(3)})`;
-    ctx.lineWidth = lw * 1.7;
-    for (let k = 0; k < forks; k++) {
-      const f0 = Math.random();
-      let x = p.x + (q.x - p.x) * f0, y = p.y + (q.y - p.y) * f0;
-      const ang = Math.random() * Math.PI * 2;
-      const reach = lw * (18 + Math.random() * 30) * (0.5 + tint);
-      ctx.beginPath(); ctx.moveTo(x, y);
-      const legs = 3 + ((Math.random() * 2) | 0);
-      for (let m = 0; m < legs; m++) {
-        const a2 = ang + (Math.random() - 0.5) * 1.6;
-        x += Math.cos(a2) * (reach / legs); y += Math.sin(a2) * (reach / legs);
-        ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    // PARTICLES (operator: "particle clouds following the energy surge too!!!!"): a spray of
-    // motes streaming off the charged wire, each on its own heading, spreading wider and fading
-    // as its stretch of the line ages. Placed by a HASH of segment and mote plus the age -- not
-    // Math.random -- so a mote moves coherently frame to frame instead of jittering in place.
-    const age = passed / PULSE_TAIL;                       // 0 at the head, 1 at the tail's end
-    for (let k = 0; k < 10; k++) {
-      const f0 = hash01(i * 31 + k * 7);
-      const bx = p.x + (q.x - p.x) * f0, by = p.y + (q.y - p.y) * f0;
-      const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
-      const dist = lw * (4 + 48 * age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
-      const r = lw * (1.6 + 3.2 * hash01(i * 5 + k + 41)) * (1 - 0.45 * age);
-      ctx.fillStyle = `rgba(200,236,255,${(0.75 * tint * (1 - 0.5 * age)).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
-    }
   }
   // the head: a bright bead riding the wire, gone when it reaches the far end
   if (headAt < 1) {
