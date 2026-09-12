@@ -739,10 +739,9 @@ same whatever you choose here.
 
 ![Display settings](images/settings.jpg)
 
-The panel is **tabbed** — Block space, Sky, Markets & Price, Effects, Tetrust — with a **live
-preview** at the top that redraws on every change, so you can see a setting before you go looking
-for it on a board. Tabs that are nothing but switches (Effects, Tetrust) also get **all on** and
-**all off**.
+The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Effects and Tetrust. The
+**Effects** tab is nothing but switches, so it also gets **all on** and **all off**; twenty-six of
+them is a lot of clicking otherwise.
 
 ### Block space
 
@@ -794,6 +793,20 @@ candles refresh.
 Your toolbar choices are remembered too: the **exchange** whose candles are drawn and the
 **range** (24 hours, 48 hours or 7 days). Click them on the Markets page or set them here; either
 way the page opens where you left it.
+
+### Blockout
+
+The Breakout court. Four of these — **star field**, **spiral galaxy**, **neon bricks** and **sound
+effects** — are the same switches that sit on the game's own panel, so a change in either place
+shows in both. The rest are here only:
+
+| setting | what it does |
+|---|---|
+| **Galaxy centre** | Where the spiral's nucleus sits on the panel: behind the court, or any corner. |
+| **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each brick row's own colour, or all in one colour of your choosing, at the brightness you set. |
+
+What the sky is *made of* — density, brightness, nebulae, dust and the rest — comes from the
+**Sky** tab, which every board shares.
 
 ### Tetrust
 

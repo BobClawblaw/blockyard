@@ -40,8 +40,8 @@ All notable changes to this project are documented here. The format follows
   piece will land is drawn instead of a block rather than over one, so the neon finish never
   applied to it and it stayed the shipped blue whatever else was changed; it has its own colour
   now, and `tiles()` takes it as an argument so the rules file still knows nothing of the store.
-- **A tabbed Display settings panel** with a live preview that redraws on every change, and
-  all-on / all-off for tabs that are only switches.
+- **A tabbed Display settings panel**, with all-on / all-off on the Effects tab, whose
+  twenty-six switches are a lot of clicking otherwise.
 - **Markets remembers its toolbar**: the exchange and the range are settings now, so the page
   opens where you left it.
 

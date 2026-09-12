@@ -1420,10 +1420,6 @@ body { font-variant-numeric: tabular-nums; }
 .cfg h2 { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; font-size: 13px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-dim); }
 .cfg h2 .sp { flex: 1; }
 .cfgnote { margin: 0 0 14px; color: var(--fg-faint); font-size: 11.5px; line-height: 1.5; }
-/* the live preview at the top of the panel (operator: "realtime preview") */
-.cfgpreview { position: relative; margin: 0 0 14px; border: 1px solid var(--line-soft); border-radius: var(--radius); overflow: hidden; background: #020906; }
-.cfgpreview canvas { display: block; width: 100%; height: 170px; }
-.cfgpreview span { position: absolute; left: 8px; bottom: 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-faint); }
 .cfgrow input[type="color"] { width: 44px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: transparent; cursor: pointer; }
 /* the tab strip (operator: "tabbed section panel in setup") */
 .cfgtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; }

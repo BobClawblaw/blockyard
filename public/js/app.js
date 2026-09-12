@@ -8,8 +8,8 @@
 import { lineChart, histogram, scatter, meter, stackedBars, sparkline, paint, resetCanvas, COL } from './charts.js';
 import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
-import { viewerIdle, board3d } from './details3d.js';
-import { loadSettings, setSetting, resetSettings, spaceOptions, PANEL as SETTINGS_PANEL } from './settings.js';
+import { viewerIdle } from './details3d.js';
+import { loadSettings, setSetting, resetSettings, PANEL as SETTINGS_PANEL } from './settings.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets } from './markets.js';
 import { renderKiosk } from './kiosk.js';
@@ -1004,30 +1004,6 @@ async function boot() {
       return `<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
       }).join('')}</div>`;
     }).join('');
-    drawPreview();
-  };
-  // THE PREVIEW (operator, 2026-09-12: "Slider for brightness, color selection, realtime
-  // preview"): a few blocks across the feerate palette on a small board at the top of the panel,
-  // drawn with the Block space options exactly as the boards read them, and again on every
-  // change -- so a switch shows its effect here before the operator looks for it on a board.
-  const PREVIEW_TILES = [
-    { txid: 'p1', x: 0, y: 0, s: 2, tall: 1, color: '#e0443e' }, { txid: 'p2', x: 2, y: 0, s: 1, tall: 1, color: '#f7931a' },
-    { txid: 'p3', x: 3, y: 0, s: 1, tall: 1, color: '#f5d142' }, { txid: 'p4', x: 4, y: 0, s: 2, tall: 1, color: '#15e084' },
-    { txid: 'p5', x: 0, y: 2, s: 1, tall: 1, color: '#3ec9ff' }, { txid: 'p6', x: 1, y: 2, s: 3, tall: 1, color: '#3b82f6' },
-    { txid: 'p7', x: 4, y: 2, s: 1, tall: 1, color: '#b06bff' }, { txid: 'p8', x: 5, y: 2, s: 1, tall: 1, color: '#2ecc8f' },
-    { txid: 'p9', x: 0, y: 3, s: 1, tall: 1, color: '#5fb0c9' }, { txid: 'p10', x: 6, y: 0, s: 2, tall: 1, color: '#c78bd4' },
-    { txid: 'p11', x: 6, y: 2, s: 1, tall: 1, color: '#d98b5f' }, { txid: 'p12', x: 7, y: 2, s: 1, tall: 1, color: '#8bd450' },
-  ];
-  const drawPreview = () => {
-    const c = document.getElementById('cfgPreview');
-    if (!c) return;
-    const o = spaceOptions(loadSettings());
-    board3d(c, PREVIEW_TILES, {
-      gridW: 8, gridH: 4, ...o,
-      // a still, quiet board: no sky, no idle effects, no flight -- the finishes and the lamp are the point
-      stars: false, galaxy: false, idleFx: false, still: true, transition: { rise: 0, travel: 1, drop: 0 },
-      oblique: { ox: 0.12, oy: 0.3, headroom: 2, flight: 0 }, facetPx: 9, crownPx: 18,
-    });
   };
   const openSettings = (open) => {
     cfgWrap.classList.toggle('hidden', !open);
@@ -1065,7 +1041,6 @@ async function boot() {
     setSetting(loadSettings(), el.dataset.cfg, value);
     const out = cfgBody.querySelector(`[data-val-for="${el.dataset.cfg}"]`);
     if (out) out.textContent = String(value);
-    drawPreview();
     render();          // the boards pick the new options up on their next paint
   });
 
