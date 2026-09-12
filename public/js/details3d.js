@@ -2107,7 +2107,12 @@ export function render3d(canvas, cells, options = {}) {
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;
   const unchanged = sig === st.sig && !lookChanged;
-  if (unchanged && st.plan && !still) {
+  // `still` governs the TILES, never the SKY (2026-09-12, operator: "why can't we get the galaxy
+  // smoothly animating in the background for tetrust?" -- measured: zero repaints in three
+  // seconds, frozen, not slow). A still board skipped this cheap path, and the park below
+  // returned before requestAnimationFrame, so a board that asked for no choreography also got no
+  // twinkle and no galaxy spin: it repainted only when its page happened to call board3d again.
+  if (unchanged && st.plan && (!still || starsOn(opts))) {
     if (st.raf == null && (st.dirty || starsOn(opts) || !frameAt(st.plan, now, { unit: opts.unit, zUnit: opts.zUnit, vanishX: st.gridW * opts.unit / 2, vanishY: -st.gridH * opts.unit / 2, persp: opts.persp }).settled)) st.wake?.();
     return { tiles, settled: now >= st.plan.settleAt, yaw: st.yaw, replanned: false };
   }
@@ -2226,7 +2231,9 @@ export function render3d(canvas, cells, options = {}) {
 
   const first = draw(now);
   if (first.settled) { st.atRest = true; scheduleFx(canvas, st, opts, true); }   // at rest already, stars or not
-  if ((first.settled && !starsOn(opts)) || still || !globalThis.requestAnimationFrame) {
+  // Park when nothing is moving: a settled board, or one that asked for no choreography at all.
+  // Stars are motion in their own right, so a sky keeps the loop whatever the tiles are doing.
+  if (!globalThis.requestAnimationFrame || (!starsOn(opts) && (still || first.settled))) {
     return { tiles, settled: true };
   }
   st.raf = requestAnimationFrame(step);

@@ -40,6 +40,8 @@ const PREVIEW = { gridW: 4, gridH: 4, oblique: { ox: 0.10, oy: 0.30, headroom: 2
 // star count follows the pixel count, so on a 2x screen that is a quarter of the stars a frame --
 // and a panel-sized galaxy at 2x made the game stutter ("The galaxy rendering is really slow in
 // teh game display. smooth that shit out"). Stars are points; nobody can tell.
+// `still` here means only that the (nonexistent) tiles never fly: render3d keeps the loop alive
+// for the stars themselves, which is what turns the galaxy.
 const SKY = { gridW: COLS, gridH: ROWS, oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 }, dome: 0, space: false, grid: false, background: 'rgba(0,0,0,1)', idleFx: false, shadows: false, still: true, transition: { rise: 0, travel: 1, drop: 0 }, maxDpr: 1 };
 
 // THE DRIFT (operator: "have the block pieces drift up and away and completing lines", then
