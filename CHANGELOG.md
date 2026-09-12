@@ -25,6 +25,16 @@ All notable changes to this project are documented here. The format follows
   table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
   the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
   a brick on a slow frame.
+- **Minions, pill capsules and a bat that morphs.** The engine gained a rotated-polygon tile kind
+  (`poly` + `rot`, with optional `eyes`), built the way the sphere is — nested filled polygons,
+  since the op format has no arcs and gradients are forbidden — and claiming its own face name so
+  the sphere's "nothing but ball ops" guarantee is untouched. On it: four **minion** types with
+  their own silhouettes, spin rates and drift behaviours (a swinging cone, a tumbling cube, a
+  wobbling orb, a zig-zagging molecule), each with eyes; **capsules** are now elongated pills that
+  tumble as they fall, the angle taken from their own height rather than a clock so a frame stays
+  reproducible; and **Vaus grows cannons** and a raised housing while the laser is up, so the bat
+  shows what it can do rather than only changing colour. The capsules keep their per-capsule band
+  mark, so the seven remain separable without colour even though they now share one silhouette.
 - **An About page**, reached by clicking the BlockYard monogram in the header rather than by a nav
   tab of its own — the bar is already full enough to wrap below 2000 px. It shows the version and
   live build, the host's operating system, architecture, processors, memory and runtime, and the

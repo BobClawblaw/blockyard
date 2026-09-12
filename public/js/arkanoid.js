@@ -99,6 +99,52 @@ const ENEMY_POINTS = 200;
 const ENEMY_S = 0.86;
 export const ENEMY_COLOR = '#7de3c8';
 
+// ---------------------------------------------------------------- the minions
+// Arkanoid's minions were solids that tumbled down the court -- a cone, a cube, a sphere, a
+// molecule -- so these are shapes first and behaviours second. Each is an outline in UNIT SPACE
+// (-0.5..0.5, scaled by the tile), a colour, a pair of eye positions, and a DRIFT: how it moves
+// sideways as it falls. They differ in silhouette as well as colour, for the same reason the
+// capsules do -- a small moving object is read by its shape.
+export const MINIONS = Object.freeze({
+  // a squat cone, swinging widely: the one that gets in the way
+  cone: Object.freeze({
+    color: '#7de3c8', spin: 1.7, drift: 'swing',
+    poly: Object.freeze([[0, -0.46], [0.40, 0.34], [0.22, 0.46], [-0.22, 0.46], [-0.40, 0.34]]),
+    eyes: Object.freeze([[-0.13, 0.02, 0.075], [0.13, 0.02, 0.075]]),
+  }),
+  // a tumbling cube, turning fast and falling nearly straight
+  cube: Object.freeze({
+    color: '#ffb066', spin: 3.1, drift: 'straight',
+    poly: Object.freeze([[-0.40, -0.40], [0.40, -0.40], [0.40, 0.40], [-0.40, 0.40]]),
+    eyes: Object.freeze([[-0.14, -0.04, 0.07], [0.14, -0.04, 0.07]]),
+  }),
+  // a many-sided ball that wobbles as it sinks
+  orb: Object.freeze({
+    color: '#c79bff', spin: 0.9, drift: 'wobble',
+    poly: Object.freeze([[-0.20, -0.44], [0.20, -0.44], [0.44, -0.20], [0.44, 0.20],
+      [0.20, 0.44], [-0.20, 0.44], [-0.44, 0.20], [-0.44, -0.20]]),
+    eyes: Object.freeze([[-0.15, -0.05, 0.08], [0.15, -0.05, 0.08]]),
+  }),
+  // a four-armed molecule, drifting to one side and back
+  molecule: Object.freeze({
+    color: '#ff8fa3', spin: 2.2, drift: 'zigzag',
+    poly: Object.freeze([[0, -0.48], [0.17, -0.17], [0.48, 0], [0.17, 0.17],
+      [0, 0.48], [-0.17, 0.17], [-0.48, 0], [-0.17, -0.17]]),
+    eyes: Object.freeze([[-0.11, 0, 0.065], [0.11, 0, 0.065]]),
+  }),
+});
+export const MINION_KINDS = Object.freeze(Object.keys(MINIONS));
+
+/** How far sideways a minion of this kind has drifted, in grid units a second. Pure. */
+export function minionDrift(kind, phase, t) {
+  switch (MINIONS[kind]?.drift) {
+    case 'swing': return Math.sin(phase + t * 2.2) * 3.0;
+    case 'zigzag': return (((phase + t * 0.9) % 1) < 0.5 ? 1 : -1) * 1.8;
+    case 'wobble': return Math.sin(phase + t * 5.0) * 1.1;
+    default: return Math.sin(phase + t * 0.7) * 0.35;
+  }
+}
+
 export const PADDLE_COLOR = '#3ec9ff';
 export const PADDLE_LASER_COLOR = '#ef5a5a';
 export const BALL_COLOR = '#f2f7ff';
@@ -369,15 +415,17 @@ function moveEnemies(g, dt, dtMs, hits) {
     const n = g.nextId++;
     // deterministic arrival: where it enters is a property of the level and the count, not a roll
     const lane = Math.floor(hash01(`enemy:${g.level}:${n}`) * (COLS - 1));
-    g.enemies.push({ id: n, x: lane, y: ROWS - 1, phase: hash01(`ph:${n}`) * Math.PI * 2, t: 0 });
-    hits.push({ kind: 'enemyin', x: lane });
+    // which minion turns up is a property of the level and the arrival, not a roll
+    const kind = MINION_KINDS[Math.floor(hash01(`mk:${g.level}:${n}`) * MINION_KINDS.length)];
+    g.enemies.push({ id: n, kind, x: lane, y: ROWS - 1, phase: hash01(`ph:${n}`) * Math.PI * 2, t: 0 });
+    hits.push({ kind: 'enemyin', x: lane, minion: kind });
   }
   const p = g.paddle;
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const m = g.enemies[i];
     m.t += dt;
     m.y -= ENEMY_SPEED * dt;
-    m.x = Math.max(0, Math.min(COLS - ENEMY_S, m.x + Math.sin(m.phase + m.t * 2.2) * dt * 2.2));
+    m.x = Math.max(0, Math.min(COLS - ENEMY_S, m.x + minionDrift(m.kind, m.phase, m.t) * dt));
     const onBat = m.y <= PADDLE_Y + PADDLE_D && m.y + ENEMY_S >= PADDLE_Y && m.x + ENEMY_S >= p.x && m.x <= p.x + p.w;
     if (onBat || m.y + ENEMY_S < 0) {
       g.enemies.splice(i, 1);
@@ -473,63 +521,50 @@ export function step(g, dtMs) {
  *   catch   a ball cradled between posts     player   the tallest: a tower with a bead on top
  *   break   a doorway: two posts and a lintel, and the only one with no full-width base
  */
-export function capsuleTiles(c) {
+export function capsuleTiles(c, now = 0) {
   const k = c.kind;
   const body = CAPSULE_COLOR[k] ?? '#e8eefc';
   const trim = CAPSULE_TRIM[k] ?? '#ffffff';
-  const W = CAPSULE_S;
+  const spec = CAPSULE_SHAPE[k] ?? CAPSULE_SHAPE.laser;
   const id = (n) => `cap${c.id}${n}`;
-  const at = (n, dx, dy, s, tall, color, extra = {}) =>
-    ({ txid: id(n), x: c.x + dx, y: c.y + dy, s, tall, color, capsule: true, ...extra });
-
-  switch (k) {
-    case 'laser':                                   // twin cannons
-      return [
-        at('b', 0, 0.16, W, 0.26, body),
-        at('l', 0.10, 0.24, 0.20, 0.52, trim, { floor: 0.26 }),
-        at('r', 0.58, 0.24, 0.20, 0.52, trim, { floor: 0.26 }),
-      ];
-    case 'enlarge':                                 // the flattest, stretched at both ends
-      return [
-        at('b', 0, 0.22, W, 0.16, body),
-        at('l', -0.02, 0.18, 0.18, 0.34, trim, { floor: 0.16 }),
-        at('r', 0.72, 0.18, 0.18, 0.34, trim, { floor: 0.16 }),
-      ];
-    case 'catch':                                   // a ball cradled between two posts
-      return [
-        at('b', 0, 0.18, W, 0.20, body),
-        at('l', 0.02, 0.22, 0.14, 0.38, body, { floor: 0.20 }),
-        at('r', 0.72, 0.22, 0.14, 0.38, body, { floor: 0.20 }),
-        at('o', 0.26, 0.24, 0.38, 0.38, trim, { floor: 0.20, sphere: true }),
-      ];
-    case 'slow':                                    // the only hollow one
-      return [
-        at('w', 0, 0.10, W, 0.44, body, { wire: body }),
-        at('o', 0.32, 0.30, 0.26, 0.26, trim, { floor: 0.10, sphere: true }),
-      ];
-    case 'disrupt':                                 // three balls
-      return [
-        at('b', 0, 0.22, W, 0.16, body),
-        at('1', 0.04, 0.26, 0.24, 0.24, trim, { floor: 0.16, sphere: true }),
-        at('2', 0.33, 0.26, 0.24, 0.24, trim, { floor: 0.16, sphere: true }),
-        at('3', 0.62, 0.26, 0.24, 0.24, trim, { floor: 0.16, sphere: true }),
-      ];
-    case 'player':                                  // the tallest: a tower with a bead on top
-      return [
-        at('b', 0, 0.18, W, 0.20, body),
-        at('c', 0.32, 0.22, 0.26, 0.62, body, { floor: 0.20 }),
-        at('o', 0.34, 0.24, 0.22, 0.22, trim, { floor: 0.82, sphere: true }),
-      ];
-    case 'break':                                   // a doorway, and no full-width base
-      return [
-        at('l', 0.02, 0.20, 0.20, 0.58, body),
-        at('r', 0.68, 0.20, 0.20, 0.58, body),
-        at('t', 0, 0.20, W, 0.16, trim, { floor: 0.58 }),
-      ];
-    default:
-      return [at('b', 0, 0.16, W, 0.32, body)];
-  }
+  // IT TUMBLES AS IT FALLS. The angle comes from the capsule's own height, not from a clock, so
+  // two capsules at the same height look the same and a test can say what a frame contains --
+  // the rules stay free of time, exactly as the launch angle is an argument rather than a roll.
+  const rot = (c.y * 1.5 + (c.id % 7) * 0.9) % (Math.PI * 2);
+  const out = [
+    // the pill: an elongated stadium, wider than it is tall, turning end over end
+    { txid: id('p'), x: c.x, y: c.y, s: CAPSULE_S, tall: 0.44, color: body, capsule: true,
+      poly: PILL, rot },
+    // the band across it, in the capsule's trim colour, so the letter-colour still reads
+    { txid: id('b'), x: c.x, y: c.y, s: CAPSULE_S, tall: 0.46, color: trim, capsule: true,
+      poly: spec.band, rot },
+  ];
+  return out;
 }
+
+// A STADIUM, drawn once. Unit space (-0.5..0.5), so it scales with the tile: a flat-ended
+// rectangle with a fan of points rounding each cap. Long axis across, which is what makes it read
+// as a pill rather than a lozenge.
+const PILL = Object.freeze((() => {
+  const pts = [];
+  const hw = 0.46, hh = 0.2, r = hh;
+  for (let i = 0; i <= 6; i++) { const a = -Math.PI / 2 + (i / 6) * Math.PI; pts.push([hw - r + Math.cos(a) * r, Math.sin(a) * r]); }
+  for (let i = 0; i <= 6; i++) { const a = Math.PI / 2 + (i / 6) * Math.PI; pts.push([-hw + r + Math.cos(a) * r, Math.sin(a) * r]); }
+  return pts.map(([x, y]) => Object.freeze([Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]));
+})());
+
+// EACH PILL STILL CARRIES ITS OWN MARK. The band is a different figure per capsule, so the seven
+// remain distinguishable in monochrome -- the property the capsule test asserts -- even though
+// they now share one silhouette. Colour is the third cue, not the only one.
+const CAPSULE_SHAPE = Object.freeze({
+  laser:   { band: Object.freeze([[-0.30, -0.12], [-0.18, -0.12], [-0.18, 0.12], [-0.30, 0.12]]) },      // one bar, left
+  enlarge: { band: Object.freeze([[-0.34, -0.10], [0.34, -0.10], [0.34, 0.10], [-0.34, 0.10]]) },        // a long bar
+  catch:   { band: Object.freeze([[-0.10, -0.16], [0.14, -0.16], [0.14, 0.16], [-0.10, 0.16]]) },        // a block, right of centre
+  slow:    { band: Object.freeze([[-0.05, -0.17], [0.05, -0.17], [0.05, 0.17], [-0.05, 0.17]]) },        // a thin upright
+  disrupt: { band: Object.freeze([[-0.28, -0.07], [-0.10, -0.07], [-0.10, 0.07], [-0.28, 0.07]]) },      // small, far left
+  player:  { band: Object.freeze([[-0.07, -0.20], [0.07, -0.20], [0.07, 0.20], [-0.07, 0.20]]) },        // a tall bar
+  break:   { band: Object.freeze([[-0.20, -0.05], [0.20, -0.05], [0.20, 0.05], [-0.20, 0.05]]) },        // a wide slot
+});
 
 /**
  * The board as tiles for the engine. A brick is exactly one grid cell, so a brick IS a tile -- the
@@ -543,17 +578,36 @@ export function tiles(g) {
     const tall = k.kind === 'silver' && Number.isFinite(k.hits) && k.hits < silverHits(g.level) ? 0.7 : 1;
     out.push({ txid: `b${k.id}`, x: k.x, y: k.y, s: 1, tall, color: k.color });
   }
+  // VAUS MORPHS WHEN IT IS ARMED. Stock it is a row of flat stones. With the laser it grows a
+  // cannon at each end and a raised housing between them -- the bat itself says what it can do,
+  // rather than only its colour changing.
   const p = g.paddle;
   const padColor = g.laser ? PADDLE_LASER_COLOR : PADDLE_COLOR;
-  for (let i = 0; i < Math.round(p.w); i++) {
-    out.push({ txid: `pad${i}`, x: p.x + i, y: PADDLE_Y, s: 1, tall: PADDLE_H, color: padColor, paddle: true });
+  const wide = Math.round(p.w);
+  for (let i = 0; i < wide; i++) {
+    const end = g.laser && (i === 0 || i === wide - 1);
+    out.push({ txid: `pad${i}`, x: p.x + i, y: PADDLE_Y, s: 1,
+      tall: g.laser ? (end ? 0.34 : 0.62) : PADDLE_H, color: padColor, paddle: true });
+  }
+  if (g.laser) {
+    for (const [n, dx] of [['l', 0.12], ['r', wide - 0.52]]) {
+      // NOT `paddle: true`. The cannons sit ON the bat; they are not segments OF it, and the flag
+      // means "this tile is a unit of Vaus's width" -- which the collision box and the tests both
+      // rely on. Flagging them made a 3-wide bat report 5 tiles wide.
+      out.push({ txid: `cannon${n}`, x: p.x + dx, y: PADDLE_Y + 0.05, s: 0.4, tall: 0.5,
+        color: '#ffd9cf', cannon: true,
+        poly: [[-0.16, -0.5], [0.16, -0.5], [0.22, 0.2], [0, 0.5], [-0.22, 0.2]], rot: 0 });
+    }
   }
   for (const c of g.capsules) out.push(...capsuleTiles(c));
   for (const z of g.bolts) {
     out.push({ txid: `bolt${z.id}`, x: z.x - 0.09, y: z.y, s: 0.18, tall: 0.7, color: BOLT_COLOR, bolt: true });
   }
   for (const m of g.enemies) {
-    out.push({ txid: `foe${m.id}`, x: m.x, y: m.y, s: ENEMY_S, tall: ENEMY_S, color: ENEMY_COLOR, enemy: true, sphere: true });
+    const spec = MINIONS[m.kind] ?? MINIONS.cone;
+    out.push({ txid: `foe${m.id}`, x: m.x, y: m.y, s: ENEMY_S, tall: ENEMY_S,
+      color: spec.color, enemy: true, minion: m.kind,
+      poly: spec.poly, eyes: spec.eyes, rot: (m.phase + m.t * spec.spin) % (Math.PI * 2) });
   }
   for (let i = 0; i < g.balls.length; i++) {
     const b = g.balls[i];

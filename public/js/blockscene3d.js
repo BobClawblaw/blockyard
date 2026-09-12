@@ -1083,6 +1083,59 @@ export function buildScene(tiles, o = {}) {
       disc(R * 0.4, -R * 0.24, -R * 0.28, lift(c, 0.7, a));
       continue;
     }
+    // A SHAPE WITH AN ORIENTATION (operator, 2026-09-12: "proper varied Minion graphics ...
+    // powerups to look like elongated pills rotating and dropping ... morphing the player paddle
+    // into something visually different when it's firing lasers").
+    //
+    // One primitive for all three, not three branches: a pill, a minion body and a laser cannon are
+    // each a closed outline that can be turned. `t.poly` is that outline in UNIT SPACE -- points in
+    // -0.5..0.5, so a shape is written once and scales with `s` -- and `t.rot` turns it. Built the
+    // same way the sphere is (nested filled polygons, no arcs in the op format, no gradients under
+    // the canvas rules): the outline, the body inset toward the light, and a highlight.
+    //
+    // Its own face name, because test/finish.test.js holds a sphere to emitting `ball` ops and
+    // NOTHING else; a new kind that borrowed that name would quietly break that guarantee.
+    if (t.poly && t.poly.length >= 3) {
+      const pcx = t.x + t.s / 2, pcy = t.y + t.s / 2;
+      const zc = (t.z ?? 0) + (t.floor ?? 0) + cubeHeight(t) / 2;
+      const mid = f.P(pcx, pcy, zc);
+      const rim = f.P(pcx + t.s / 2, pcy, zc);
+      // the screen radius of half a tile, so the outline scales with the camera like everything else
+      const R = Math.hypot(rim.x - mid.x, rim.y - mid.y) || 1;
+      const rot = Number(t.rot) || 0;
+      const ca = Math.cos(rot), sa = Math.sin(rot);
+      // shrink toward the shape's own centroid, which keeps a long thin pill from pinching
+      const gx = t.poly.reduce((n, q) => n + q[0], 0) / t.poly.length;
+      const gy = t.poly.reduce((n, q) => n + q[1], 0) / t.poly.length;
+      const ring = (k, dx, dy, fill) => {
+        const pts = t.poly.map(([ux, uy]) => {
+          const sx = gx + (ux - gx) * k, sy = gy + (uy - gy) * k;
+          return { x: mid.x + dx + (sx * ca - sy * sa) * 2 * R, y: mid.y + dy + (sx * sa + sy * ca) * 2 * R };
+        });
+        out.push({ txid: t.txid, face: 'poly', points: pts, fill });
+        return pts;
+      };
+      ring(1, 0, 0, shade(c, 0.45 * lit, a)).forEach(note);
+      ring(0.78, -R * 0.06, -R * 0.08, shade(c, 1.0 * lit, a));
+      ring(0.34, -R * 0.2, -R * 0.24, lift(c, 0.65, a));
+      // eyes: a minion reads as alive because something looks back. Drawn as their own small
+      // discs rather than baked into the outline, so one body can blink or look about later.
+      for (const [ex, ey, er] of t.eyes ?? []) {
+        const px = mid.x + (ex * ca - ey * sa) * 2 * R, py = mid.y + (ex * sa + ey * ca) * 2 * R;
+        const disc = (rr, fill) => {
+          const pts = [];
+          for (let i = 0; i < 12; i++) {
+            const ang = (i / 12) * Math.PI * 2;
+            pts.push({ x: px + Math.cos(ang) * rr, y: py + Math.sin(ang) * rr });
+          }
+          out.push({ txid: t.txid, face: 'poly', points: pts, fill });
+        };
+        disc(er * 2 * R, 'rgba(12,16,22,0.92)');
+        disc(er * 2 * R * 0.45, 'rgba(235,245,255,0.95)');
+      }
+      continue;
+    }
+
     for (const side of f.sides) {
       // lit from the upper left of the screen: a side turned that way is
       // brighter, one turned away falls into shadow

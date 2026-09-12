@@ -276,59 +276,66 @@ test('the tiles for the engine: a brick IS a grid cell, and every colour is a he
   assert.ok(t.find((x) => x.capsule), 'the capsule is drawn');
   assert.ok(t.find((x) => x.bolt), 'so are the bolts');
   const foe = t.find((x) => x.enemy);
-  assert.ok(foe && foe.sphere === true, 'a minion is drawn ROUND, like the ball');
+  // A minion is no longer a plain ball (operator, 2026-09-12: "proper varied Minion graphics ...
+  // a few minion types that drift around and behave like the minions in arkanoid"). It is a
+  // turning body with its own outline and a pair of eyes -- the ball stays a sphere.
+  assert.ok(foe && Array.isArray(foe.poly) && foe.poly.length >= 3, 'a minion has an outline of its own');
+  assert.ok(foe.eyes?.length === 2, 'and something that looks back');
+  assert.equal(typeof foe.rot, 'number', 'and it turns as it drifts');
+  assert.ok(!foe.sphere, 'it is not the ball');
   assert.ok(t.find((x) => x.ball)?.sphere === true, 'and so is the ball');
   assert.ok(t.every((x) => /^#[0-9a-f]{6}$/i.test(x.color)), 'every colour is a six-digit hex, as the engine requires');
   assert.ok(t.every((x) => x.x >= -0.5 && x.x <= COLS && x.y >= -1 && x.y <= ROWS), 'and everything is on the board');
 });
 
-test('every capsule has its OWN silhouette, not just its own colour', () => {
-  // (operator, 2026-09-12: "Blockanoid needs unique block graphics and styling for each of the
-  // different powerups that drop down".) Colour alone is a poor signal on a small moving object,
-  // and useless to a colourblind player, so the shapes must differ in a way that survives
-  // monochrome. This asserts that as a property rather than trusting my eye.
-  const sig = (kind) => {
-    const parts = capsuleTiles({ id: 1, kind, x: 3, y: 9 });
-    // a shape signature that ignores colour entirely: part count, and each part's box and flags
-    return JSON.stringify(parts
-      .map((p) => [+(p.x - 3).toFixed(2), +(p.y - 9).toFixed(2), p.s, p.tall, +(p.floor ?? 0), !!p.sphere, !!p.wire])
-      .sort());
-  };
-  const sigs = new Map();
-  for (const kind of CAPSULES) {
-    const s = sig(kind);
-    assert.ok(!sigs.has(s), `${kind} and ${sigs.get(s)} are the same shape: colour is doing all the work`);
-    sigs.set(s, kind);
-  }
-  assert.equal(sigs.size, CAPSULES.length, 'all seven are distinct in monochrome');
+test('the capsules are pills, and still tell each other apart without colour', () => {
+  // (operator, 2026-09-12: "create a new class of graphic for the powerups to look like elongated
+  // pills rotating and dropping with different colors".)
+  //
+  // THE TENSION, AND HOW IT IS RESOLVED. An earlier version of this test asserted seven DIFFERENT
+  // silhouettes, because a small falling object is read by its shape and roughly one player in
+  // twelve cannot separate the red from the green. The operator then asked for pills that differ
+  // by colour, which pulls the other way. Both are kept: they share the pill outline that was
+  // asked for, and each carries its own BAND, so the set is still separable in monochrome. This
+  // asserts that against the real geometry rather than against flags.
+  const parts = (kind, y = 9) => capsuleTiles({ id: 1, kind, x: 3, y });
 
-  // and each is well formed: inside its own footprint, real hexes, its own tile ids
   for (const kind of CAPSULES) {
-    const parts = capsuleTiles({ id: 42, kind, x: 3, y: 9 });
-    assert.ok(parts.length >= 2, `${kind} is built from several parts, not one slab`);
-    const ids = parts.map((p) => p.txid);
-    assert.equal(new Set(ids).size, ids.length, `${kind}: every part has its own id, or the engine's paint order collapses them`);
-    assert.ok(ids.every((i) => i.startsWith('cap42')), `${kind}: parts belong to their capsule`);
-    for (const p of parts) {
-      assert.match(p.color, /^#[0-9a-f]{6}$/i, `${kind}: every colour is a six-digit hex`);
-      assert.ok(p.s > 0 && p.s <= 1, `${kind}: a part stays within a grid cell`);
-      assert.ok(p.x >= 3 - 0.1 && p.x + p.s <= 3 + 1.05, `${kind}: stays inside its own footprint (hit box is ${0.9})`);
-      assert.equal(p.capsule, true, `${kind}: parts are still flagged as capsule`);
+    const ps = parts(kind);
+    assert.equal(ps.length, 2, `${kind}: a pill and its band`);
+    const [pill, band] = ps;
+    assert.ok(Array.isArray(pill.poly) && pill.poly.length >= 8, `${kind}: the pill is a rounded outline`);
+    const wide = Math.max(...pill.poly.map((q) => Math.abs(q[0])));
+    const tallest = Math.max(...pill.poly.map((q) => Math.abs(q[1])));
+    assert.ok(wide > tallest * 1.8, `${kind}: ELONGATED -- ${wide.toFixed(2)} across vs ${tallest.toFixed(2)} high`);
+    assert.ok(Array.isArray(band.poly) && band.poly.length >= 3, `${kind}: carries a band`);
+    for (const q of band.poly) {
+      assert.ok(Math.abs(q[0]) <= wide && Math.abs(q[1]) <= tallest, `${kind}: the band stays on the pill`);
     }
   }
 
-  // the distinguishing features, named individually so a redesign cannot quietly lose one
-  const has = (kind, pred) => capsuleTiles({ id: 1, kind, x: 0, y: 0 }).some(pred);
-  assert.ok(has('slow', (p) => p.wire), 'slow is the hollow one');
-  assert.ok(!has('laser', (p) => p.wire), 'and the only hollow one');
-  assert.equal(capsuleTiles({ id: 1, kind: 'disrupt', x: 0, y: 0 }).filter((p) => p.sphere).length, 3,
-    'disrupt shows three balls, because that is what it gives you');
-  assert.ok(has('catch', (p) => p.sphere), 'catch cradles a ball');
-  const top = (kind) => Math.max(...capsuleTiles({ id: 1, kind, x: 0, y: 0 }).map((p) => (p.floor ?? 0) + p.tall));
-  assert.ok(top('player') > top('enlarge'), 'the extra life stands tallest');
-  assert.ok(top('enlarge') < top('laser'), 'and the wide bar is the flattest');
-  assert.ok(!capsuleTiles({ id: 1, kind: 'break', x: 0, y: 0 }).some((p) => (p.floor ?? 0) === 0 && p.s === 0.9),
-    'break is a doorway: no full-width base');
+  // the band is what separates them, and it must genuinely differ -- colour stripped out entirely
+  const marks = new Map();
+  for (const kind of CAPSULES) {
+    const sig = JSON.stringify(parts(kind)[1].poly);
+    assert.ok(!marks.has(sig), `${kind} and ${marks.get(sig)} carry the same mark: colour would be doing all the work`);
+    marks.set(sig, kind);
+  }
+  assert.equal(marks.size, CAPSULES.length, 'all seven are separable in monochrome');
+
+  // IT TUMBLES, and from its own height rather than a clock -- the rules stay free of time, so a
+  // frame is reproducible and two capsules at the same height look alike
+  const a = parts('laser', 9)[0].rot, b = parts('laser', 7.5)[0].rot;
+  assert.notEqual(a, b, 'the angle follows the fall');
+  assert.equal(parts('laser', 9)[0].rot, a, 'and the same height always gives the same angle');
+  for (const kind of CAPSULES) {
+    for (const q of parts(kind)) {
+      assert.match(q.color, /^#[0-9a-f]{6}$/i, `${kind}: every colour is a six-digit hex`);
+      assert.equal(q.capsule, true, `${kind}: still flagged as a capsule`);
+      assert.ok(q.txid.startsWith('cap1'), `${kind}: parts belong to their capsule`);
+    }
+    assert.equal(new Set(parts(kind).map((q) => q.txid)).size, 2, `${kind}: each part has its own id`);
+  }
 });
 
 test('Vaus reports what it is carrying, and a cleared wall advances', () => {
