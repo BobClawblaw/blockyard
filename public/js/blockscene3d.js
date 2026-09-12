@@ -1214,14 +1214,32 @@ export function obliqueOrder(tiles, o = {}) {
   const push = (c) => { heap.push(c); let k = heap.length - 1; while (k > 0) { const p = (k - 1) >> 1; if (cRank[heap[p]] <= cRank[c]) break; heap[k] = heap[p]; k = p; } heap[k] = c; };
   const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { let k = 0; for (;;) { const l = 2 * k + 1, r = l + 1; let m = k; const vm = () => (m === k ? last : heap[m]); if (l < heap.length && cRank[heap[l]] < cRank[vm()]) m = l; if (r < heap.length && cRank[heap[r]] < cRank[vm()]) m = r; if (m === k) break; heap[k] = heap[m]; k = m; } heap[k] = last; } return top; };
   for (let c = 0; c < nComp; c++) if (cIn[c] === 0) push(c);
+  // A TANGLE REMEMBERS ITS ORDER (2026-09-12, operator: "Still showing block z-fighting during
+  // transitions"). Depth alone re-ordered a tangle every frame it was re-cut, so a pair whose
+  // decision never changed still swapped whenever a bystander flying past pulled it into a
+  // tangle or let it out (replayed: 18 of 19 flickers had the edge and the decision unchanged
+  // and the final order flipped). With `orderMemo` (render3d keeps one per canvas) the cubes of
+  // a tangle keep the relative order they had LAST frame -- the order the edges gave them before
+  // the tangle formed -- and only cubes with no last frame fall in by depth. In and out of a
+  // tangle the pair's order is then the same, so nothing can flicker; a cube genuinely passing
+  // another is decided by the edges again the moment the tangle dissolves.
+  const memo = o.orderMemo instanceof Map ? o.orderMemo : null;
+  const prev = memo ? (v) => memo.get(String(tiles[v].txid)) : () => undefined;
   const out = [];
   while (heap.length) {
     const c = pop();
     const m = members[c];
-    if (m.length > 1) m.sort((p, q) => (depth[p] - depth[q]) || (rank[p] - rank[q]));
+    if (m.length > 1) m.sort((p, q) => {
+      const a = prev(p), b = prev(q);
+      if (a !== undefined && b !== undefined && a !== b) return a - b;
+      if (a !== undefined && b === undefined) return -1;
+      if (a === undefined && b !== undefined) return 1;
+      return (depth[p] - depth[q]) || (rank[p] - rank[q]);
+    });
     for (const v of m) out.push(tiles[v]);
     for (const d of cAfter[c]) if (--cIn[d] === 0) push(d);
   }
+  if (memo) { memo.clear(); out.forEach((t, k) => memo.set(String(t.txid), k)); }
   return out;
 }
 

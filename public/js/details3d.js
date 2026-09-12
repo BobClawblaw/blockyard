@@ -2164,6 +2164,9 @@ export function render3d(canvas, cells, options = {}) {
       overheadLight: opts.overheadLight === true,   // the lamp straight above (Tetrust)
       light: opts.light,                            // or wherever settings.js space.light puts it
       neonSource: opts.neonSource, neonColour: opts.neonColour, neonBrightness: opts.neonBrightness,
+      // the paint order's memory across frames (blockscene3d obliqueOrder): a tangle keeps the
+      // relative order it had last frame, so nothing flickers in and out of one
+      orderMemo: (st.orderMemo ??= new Map()),
     };
     // the panel's extent in grid units, from the same constant fit paintFrame
     // uses: the textured sphere is laid over all of it (drawGrid), and an
