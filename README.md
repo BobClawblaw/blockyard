@@ -30,12 +30,14 @@ board without a reload.
 
 ## Quick start
 
-You need **Node.js 22 or newer** and a running `bmc` node with JSON-RPC enabled.
+You need **Node.js 22 or newer** and a running `bmc` node with JSON-RPC enabled. Set
+**`txindex=1`** on the node if you want the explorer to look up transactions by id — everything
+else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 
 ```bash
 git clone https://github.com/BobClawblaw/bmcmonitor.git
 cd bmcmonitor
-npm test            # optional: 683 unit tests, all built in
+npm test            # optional: 684 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
 
@@ -112,7 +114,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 683 unit tests (node:test, no dependencies)
+npm test             # 684 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```

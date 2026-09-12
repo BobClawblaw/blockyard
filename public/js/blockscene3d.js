@@ -1047,9 +1047,13 @@ export function buildScene(tiles, o = {}) {
     // edges) does not govern it, the outline IS the tile.
     if (t.wire) {
       const halo = lift(t.wire, 0.2, round3(0.3 * a)), tube = lift(t.wire, 0.1, round3(0.98 * a));
+      // how heavy the outline is (`wireWidth`, from settings; operator, 2026-09-12: "a way of
+      // making the ghost marker have thinner lines"). Both passes scale together so the halo stays
+      // a halo around the line rather than swallowing it.
+      const ww = Math.max(0.2, Math.min(3, Number(o.wireWidth) || 1));
       for (const poly of [...f.sides.map((sd) => sd.points), f.top]) {
-        out.push({ txid: t.txid, face: 'wire', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: 9, always: true });
-        out.push({ txid: t.txid, face: 'wire', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: 3, always: true });
+        out.push({ txid: t.txid, face: 'wire', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: round3(9 * ww), always: true });
+        out.push({ txid: t.txid, face: 'wire', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: round3(3 * ww), always: true });
         poly.forEach(note);
       }
       continue;

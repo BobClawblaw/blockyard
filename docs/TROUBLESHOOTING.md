@@ -92,6 +92,21 @@ The exchange table shows each exchange's last error next to its row.
 
 A failing exchange is left out of the median and the spread; the others keep working.
 
+## Explorer: a transaction id is not found
+
+The explorer asks the node for `getrawtransaction <txid> 2` with no block hash. A node without a
+transaction index can only answer that for transactions still in its **mempool**, so a confirmed
+transaction looks missing even though the node is healthy and fully synced. Block pages are
+unaffected — they pass the block hash, so the node can find the transaction without an index.
+
+Set `txindex=1` in `bitcoin.conf` and restart the node. Adding it to a node that has been running
+without one triggers a one-off reindex; `getindexinfo` reports progress and says `"synced": true`
+when it is done:
+
+```bash
+bitcoin-cli getindexinfo
+```
+
 ## Explorer: address pages or "spent by" are missing
 
 Address pages need the node's address index, and "spent by" links need its spent-output

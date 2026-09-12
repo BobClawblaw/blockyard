@@ -23,7 +23,10 @@ export const SCHEMA_VERSION = 3;
 
 export const DEFAULTS = Object.freeze({
   space: Object.freeze({
-    shadows: true,        // cube-on-cube and resting shadows (blockscene3d shadowOps)
+    // OFF by default (operator, 2026-09-12: "make simple cubes the default, disable shadows by
+    // default"). Shadows are the costliest single thing the board draws -- one per resting stone
+    // and more in flight -- and the board is the first thing most people open.
+    shadows: false,       // cube-on-cube and resting shadows (blockscene3d shadowOps)
     idleFx: true,         // the effects at rest: ripples, light cycles, the lightning ball
     edges: true,          // the dark seam around each stone
     grid: true,           // the neon grid on the board
@@ -44,7 +47,7 @@ export const DEFAULTS = Object.freeze({
     stars: false,         // opt-in: a star field twinkles, so the board never stops repainting
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
-    detail: 'full',       // 'full' | 'simple' | 'flat' -- facet and crown thresholds below
+    detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
   }),
   // THE SKY IS ONE SKY. density and brightness lived under `markets` and were passed only to the
@@ -116,6 +119,7 @@ export const DEFAULTS = Object.freeze({
     // color"). Its own setting, not the neon tubes': the wireframe is drawn instead of a block,
     // so the neon finish never touches it.
     ghostColour: '#3d8bff',
+    ghostWidth: 1,        // multiplies the marker's line thickness (operator: "thinner lines")
     music: true,          // the tune
     sfx: true,            // the effects: move, rotate, drop, clear, game over
     neon: false,          // neon tubes on the pieces and the stack
@@ -280,6 +284,7 @@ export const PANEL = Object.freeze([
         options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
       Object.freeze({ key: 'ghostColour', label: 'Landing marker', kind: 'colour', hint: 'The wireframe on the floor of the well showing where the falling piece will land. Its own colour: the neon finish below never touches it, because the marker is drawn instead of a block rather than over one' }),
+      Object.freeze({ key: 'ghostWidth', label: 'Landing marker thickness', kind: 'range', min: 0.3, max: 2.5, step: 0.1, hint: 'How heavy the marker\u2019s lines are. 1 is the shipped weight; below it the outline thins out of the way of the stack behind it' }),
       Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'Korobeiniki, on oscillators' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Move, rotate, drop, clear, game over' }),
       Object.freeze({ key: 'neon', label: 'Neon pieces', kind: 'toggle', hint: 'The pieces and the stack as dim bodies under lit tubes' }),
@@ -524,7 +529,7 @@ export function tetrustOptions(s) {
   const sky = spaceOptions(s);
   return {
     stars: n.tetrust.stars, galaxy: n.tetrust.galaxy, galaxyAt: n.tetrust.galaxyAt, music: n.tetrust.music, sfx: n.tetrust.sfx,
-    ghostColour: n.tetrust.ghostColour,
+    ghostColour: n.tetrust.ghostColour, ghostWidth: n.tetrust.ghostWidth,
     neon: n.tetrust.neon, neonSource: n.tetrust.neonSource === 'colour' ? 'colour' : 'temperature', neonColour: n.tetrust.neonColour, neonBrightness: n.tetrust.neonBrightness,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,

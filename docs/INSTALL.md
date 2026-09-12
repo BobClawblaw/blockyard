@@ -29,9 +29,24 @@ machines you choose. Every setting mentioned here is described in full in
 | **Disk** | A few hundred MB at most for history, sessions and the audit trail (`./data` by default). |
 | **A modern browser** | Any current Chrome, Edge, Firefox or Safari. The 3D views use a 2D canvas and run without WebGL; a GPU helps with the dense viewer mode. |
 
-Optional node features that unlock more of the explorer:
+### Node indexes
 
-- a **transaction index** — look up any transaction by id, not only recent or mempool ones;
+**`txindex=1` is required for the explorer's transaction pages.** A transaction page asks the node
+for `getrawtransaction <txid> 2` with no block hash, and a node without a transaction index can
+only answer that for transactions still in its mempool — so without it, looking up a confirmed
+transaction by id fails even though the node is perfectly healthy. Set it in `bitcoin.conf`:
+
+```
+txindex=1
+```
+
+Adding it to a node that has been running without it triggers a one-off reindex, which takes a
+while and is unavoidable; the node reports progress, and `getindexinfo` tells you when it is
+`synced`. Everything else in the monitor — the dashboard, block space, mempool, fees, peers,
+mining, the block pages — works without it.
+
+Two further indexes are genuinely optional:
+
 - an **address index** — address pages (balance, received, transaction history);
 - a **spent-output index** — "spent by" links on every output.
 

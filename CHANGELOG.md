@@ -36,6 +36,14 @@ All notable changes to this project are documented here. The format follows
   tubes can take the block's own colour or one colour of your choosing, at a brightness you set.
 - **A movable lamp**: `Light` chooses straight above (now the default for Block space), upper
   left, upper right, or from the viewer.
+- **A thickness slider for Tetrust's landing marker**, 0.3 to 2.5 times the shipped weight, so the
+  outline can be thinned out of the way of the stack behind it.
+- Broken bricks in Blockout **fly up off the court** instead of vanishing, the same launch Tetrust's
+  cleared lines take.
+- **`txindex=1` is documented as required** for the explorer's transaction pages — a transaction page
+  asks for `getrawtransaction <txid> 2` with no block hash, which a node without the index can only
+  answer for its mempool. Block pages pass the hash and are unaffected. Install, README and
+  troubleshooting all say so now.
 - **The Tetrust landing marker's colour is a setting.** The wireframe showing where the falling
   piece will land is drawn instead of a block rather than over one, so the neon finish never
   applied to it and it stayed the shipped blue whatever else was changed; it has its own colour
@@ -47,15 +55,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Block space ships with simple cubes and shadows off.** Shadows are the costliest single thing
+  the board draws, and the board is the first thing most people open; both remain one click away in
+  Display settings.
 - The two games sit at the end of the nav under a **Diversions** pop-down, rather than among the
   working tabs.
 - The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
   tail that fades back to yellow behind a bright head, with a nebula of blue smoke emitted along
   the whole charged span and a shimmer over it. The lightning ball trails the same charge across
   the block-space board; the light cycles do not.
-- The pulse's particle motes and its jagged branches are gone, and its nebula is emitted over the
-  trail rather than per segment — emitting per segment gave neighbouring puffs the same age, so
-  they shared a radius and lined up into the concentric rings they were meant to replace.
+- The pulse's nebula is emitted over the whole charged span rather than per segment — emitting per
+  segment gave neighbouring puffs the same age, so they shared a radius and lined up into the
+  concentric rings they were meant to replace. (Its motes and crackle branches were removed at the
+  same time and restored afterwards; they are present.)
 - The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
   the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
 - Pool attribution moved out of the block card's body into a readable pill beneath it.

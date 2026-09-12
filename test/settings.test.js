@@ -28,8 +28,11 @@ function store() {
 
 test('defaults are the shipped look, and an empty or corrupt store still yields them', () => {
   assert.deepEqual(normalise(null), normalise(undefined));
-  assert.equal(normalise(null).space.shadows, true);
-  assert.equal(normalise(null).space.detail, 'full');
+  // shadows off and simple cubes are the SHIPPED look now (operator, 2026-09-12: "make simple
+  // cubes the default, disable shadows by default") -- the board is the first thing most people
+  // open, and shadows are the costliest single thing on it.
+  assert.equal(normalise(null).space.shadows, false);
+  assert.equal(normalise(null).space.detail, 'simple');
   assert.equal(normalise(null).sky.density, 1);
   const s = store();
   assert.deepEqual(loadSettings(s), normalise(null), 'empty store');
@@ -37,25 +40,28 @@ test('defaults are the shipped look, and an empty or corrupt store still yields 
   assert.deepEqual(loadSettings(s), normalise(null), 'corrupt store is not a crash');
   s.setItem(SETTINGS_KEY, JSON.stringify({ version: SCHEMA_VERSION, space: { detail: 'nonsense', dome: 999 }, sky: { density: -5 } }));
   const got = loadSettings(s);
-  assert.equal(got.space.detail, 'full', 'an unknown choice falls back');
+  assert.equal(got.space.detail, 'simple', 'an unknown choice falls back');
   assert.equal(got.space.dome, 12, 'out of range is clamped, not rejected');
   assert.equal(got.sky.density, 0.2, 'and clamped at the bottom too');
 });
 
 test('a setting round-trips through the store, and reset puts everything back', () => {
   const s = store();
-  const next = setSetting(loadSettings(s), 'space.shadows', false, s);
-  assert.equal(next.space.shadows, false);
-  assert.equal(loadSettings(s).space.shadows, false, 'it persisted');
+  // the subject has to be something whose default is TRUE, or "set it to false" leaves it at the
+  // default and isDefault() below cannot tell the difference. shadows used to serve here; it
+  // defaults to false now, so the neon grid does the job instead.
+  const next = setSetting(loadSettings(s), 'space.grid', false, s);
+  assert.equal(next.space.grid, false);
+  assert.equal(loadSettings(s).space.grid, false, 'it persisted');
   assert.equal(isDefault(next), false);
   // It used to be ignored and return the settled object, which made a typo look exactly like a
   // saved setting: the control moved, nothing persisted, and nothing said so.
   assert.throws(() => setSetting(next, 'space.nonsense', true, s), /unknown setting "space\.nonsense"/,
     'an unknown path is refused out loud, not swallowed');
-  assert.equal(loadSettings(s).space.shadows, false, 'and the store is untouched by the attempt');
+  assert.equal(loadSettings(s).space.grid, false, 'and the store is untouched by the attempt');
   const back = resetSettings(s);
   assert.equal(isDefault(back), true);
-  assert.equal(loadSettings(s).space.shadows, true, 'the store is empty again');
+  assert.equal(loadSettings(s).space.grid, true, 'the store is empty again');
 });
 
 test('every panel control names a real setting, and every setting has a control', () => {
@@ -490,9 +496,9 @@ test('the parse is memoised, and a write invalidates it', () => {
 test('tetrust: its own group, its own switches on the panel, and tetrustOptions carries the display sky when its stars are on', () => {
   // (operator, 2026-09-12: "Add teh starfield simulation as a toggle for teh game" ... "Tetris music
   // and sound effects ... Toggle for each in the game display")
-  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#3d8bff', music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title');
+  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#3d8bff', ghostWidth: 1, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title');
   const rows = PANEL.find((g) => g.group === 'tetrust')?.rows.map((r) => r.key);
-  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness']);
+  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'ghostWidth', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness']);
   const off = tetrustOptions({ tetrust: { stars: false, galaxy: false, music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
   assert.equal(off.stars, false); assert.equal(off.galaxy, false, 'the game decides its own galaxy, not the Sky group'); assert.equal(off.music, false); assert.equal(off.sfx, true);
   const on = tetrustOptions({ tetrust: { stars: true, galaxyAt: 'top-right' }, sky: { galaxy: false, density: 4, galaxyAt: 'bottom-left', dust: false } });

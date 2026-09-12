@@ -78,6 +78,7 @@ function opts(base) {
     edges: true, facetPx: Infinity, crownPx: Infinity, sheen: false,
     // neon on the pieces is the game's own switch (settings tetrust.neon and its colour rows)
     neon: t.neon, neonSource: t.neonSource, neonColour: t.neonColour, neonBrightness: t.neonBrightness,
+    wireWidth: t.ghostWidth,
     // STILL: drawn as laid, no choreography at all. A transition of zero was not enough -- the
     // planner's per-tile stagger (seconds between one cube's drop and the next) still applied,
     // and a piece's four cells came down one after another instead of as one shape.

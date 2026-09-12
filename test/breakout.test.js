@@ -9,6 +9,7 @@ import {
   COLS, ROWS, LIVES, PADDLE_W, PADDLE_Y, PADDLE_D, PADDLE_H, BALL_R, BRICK_ROWS, ROW_SPEC,
   newGame, advance, step, movePaddle, nudge, launch, tiles, remaining, speed, resetBall,
 } from '../public/js/breakout.js';
+import { debrisTiles } from '../public/js/blockout.js';
 
 const play = (g, ms, slice = 16) => { let out = []; for (let t = 0; t < ms; t += slice) out.push(...step(g, slice).hits); return out; };
 
@@ -204,4 +205,24 @@ test('a playfield refuses hover: the pointer does not light the bat, tooltip it,
   for (const game of ['blockout.js', 'tetrust.js']) {
     assert.match(read(game), /hover: false/, `${game} asks for it`);
   }
+});
+
+test('a broken brick flies up and off the court instead of vanishing', () => {
+  // (operator, 2026-09-12: "have the blocks fly up and off the screen when they are hit, instead
+  // of disappearing") -- the same launch Tetrust's cleared lines take.
+  const debris = [
+    { id: 1, x: 2, y: 18, color: '#ef5a5a', dx: -0.6, t0: 1000 },
+    { id: 2, x: 13, y: 18, color: '#ef5a5a', dx: 0.6, t0: 1000 },
+  ];
+  const at = (now) => debrisTiles(debris, now, 900);
+  const start = at(1000), mid = at(1450), late = at(1800);
+  assert.equal(start.length, 2);
+  assert.equal(start[0].floor, 0, 'it starts where the brick was');
+  assert.equal(start[0].color, '#ef5a5a', 'in the brick\'s own colour');
+  assert.ok(mid[0].floor > 8, `halfway it is well off the wall (${mid[0].floor})`);
+  assert.equal(mid[0].color, '#ef5a5a', 'and still full colour: it leaves, it does not dissolve in place');
+  assert.ok(mid[0].x < 2 && mid[1].x > 13, 'each drifts to its own side of the court');
+  assert.ok(late[0].floor > mid[0].floor && late[0].floor > 40, 'and keeps rising, past the top');
+  assert.deepEqual(at(1900), [], 'gone at the end');
+  assert.ok(start.every((t) => t.s === 1 && t.tall === 1 && t.txid.startsWith('k')), 'ordinary stones with their own ids');
 });

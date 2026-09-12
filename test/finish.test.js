@@ -96,6 +96,12 @@ test('a wire tile is an outline and nothing else: no fill, a halo under a bright
   assert.ok(ops.every((op) => op.face === 'wire'), `nothing but wire ops: ${[...new Set(ops.map((op) => op.face))]}`);
   assert.ok(ops.every((op) => op.fill === 'rgba(0,0,0,0)' && op.stroke && op.always === true), 'strokes only, and they draw whether or not Stone edges is on');
   assert.ok(ops.some((op) => op.lw >= 8) && ops.some((op) => op.lw <= 3), 'a wide halo and a line');
+  // the outline's weight is a setting (operator: "a slider to configure neon ghost line thickness")
+  const widths = (w) => buildScene([{ txid: 'g', x: 3, y: 3, s: 1, z: 0, color: '#ef5a5a', wire: '#3d8bff' }], { ...O, edges: false, wireWidth: w }).ops.map((op) => op.lw);
+  const thin = widths(0.4), fat = widths(2);
+  assert.ok(Math.max(...thin) < Math.max(...ops.map((op) => op.lw)), 'a lower setting draws thinner');
+  assert.ok(Math.max(...fat) > Math.max(...ops.map((op) => op.lw)), 'and a higher one heavier');
+  assert.ok(Math.min(...thin) > 0, 'never to nothing');
   const rgb = (col) => col.match(/rgba\((\d+),(\d+),(\d+)/).slice(1).map(Number);
   assert.ok(ops.every((op) => { const [r, , b] = rgb(op.stroke); return b >= 200 && r < 160; }), `in the wire colour (blue), not the tile's (red): ${ops[0].stroke}`);
 });

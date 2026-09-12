@@ -35,10 +35,40 @@ const SKY = { gridW: COLS, gridH: ROWS, oblique: COURT.oblique, dome: 0, space: 
 
 const KEY_NUDGE = 1.15;                 // grid units per key press, before the repeat takes over
 
+// A BROKEN BRICK LEAVES (operator, 2026-09-12: "have the blocks fly up and off the screen when
+// they are hit, instead of disappearing"). The same launch Tetrust's cleared lines take: slow off
+// the wall, then away, and gone past the top of the canvas rather than fading out over the court.
+const DEBRIS_MS = 900;
+const DEBRIS_RISE = 70;                 // units of height at the end: well past the top from any row
+
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, dirty: true,
   bound: false, state: null, h: null, held: { left: false, right: false },
+  debris: [], nextDebris: 1,            // { id, x, y, color, dx, t0 } bricks on their way out
 };
+
+/**
+ * The bricks in flight, at `now`. Pure, so the launch can be asserted without a canvas: each rises
+ * on its `floor`, drifts to its own side of the court, and holds its colour until it is off screen
+ * -- it leaves, it does not dissolve in place.
+ */
+export function debrisTiles(debris, now, ms = DEBRIS_MS) {
+  const out = [];
+  for (const d of debris) {
+    const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
+    if (t >= 1) continue;
+    const e = t * t * (3 - 2 * t) * 0.35 + t * t * 0.65;   // eases off the wall, then accelerates
+    const k = t < 0.82 ? 1 : 1 - (t - 0.82) / 0.18;        // full colour until the last stretch
+    out.push({ txid: `k${d.id}`, x: d.x + d.dx * e, y: d.y, s: 1, tall: 1,
+      floor: DEBRIS_RISE * e, color: fadeHex(d.color, k) });
+  }
+  return out;
+}
+function fadeHex(hex, k) {
+  const h = hex.replace('#', '');
+  const ch = (i) => Math.max(0, Math.min(255, Math.round(parseInt(h.slice(i, i + 2), 16) * k)));
+  return `#${[ch(0), ch(2), ch(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
 
 function opts(base) {
   const b = blockoutOptions(loadSettings());
@@ -148,11 +178,11 @@ function drawSky() {
   });
 }
 
-function draw() {
+function draw(now = performance.now()) {
   const g = G.game;
   const court = el('boWell');
   el('boWellWrap')?.classList.toggle('idle', !g);
-  if (court && g) board3d(court, tiles(g), opts(COURT));
+  if (court && g) board3d(court, [...tiles(g), ...debrisTiles(G.debris, now)], opts(COURT));
   drawStats();
 }
 
@@ -170,19 +200,25 @@ function frame(t) {
 
   const r = step(g, dt);
   for (const h of r.hits) {
-    if (h.kind === 'brick') sound.play(h.points >= 5 ? 'brickhard' : 'brick');
-    else if (h.kind === 'paddle') sound.play('paddle');
+    if (h.kind === 'brick') {
+      sound.play(h.points >= 5 ? 'brickhard' : 'brick');
+      // it leaves the court rather than vanishing: outward from the middle, and up
+      G.debris.push({ id: G.nextDebris++, x: h.x, y: h.y, color: h.color,
+        dx: (h.x - (COLS - 1) / 2) * 0.10, t0: t });
+    } else if (h.kind === 'paddle') sound.play('paddle');
     else if (h.kind === 'wall') sound.play('wall');
     else if (h.kind === 'life') sound.play('life');
   }
+  if (G.debris.length) G.debris = G.debris.filter((d) => t - d.t0 < DEBRIS_MS);
   if (g.over) { gameOver(); return; }
   if (r.cleared) { levelDone(); return; }
-  draw();
+  draw(t);
   G.raf = requestAnimationFrame(frame);
 }
 
 function start() {
   G.game = newGame();
+  G.debris = [];
   G.running = true; G.paused = false; G.last = 0; G.dirty = true;
   overlay(null);
   drawScores();

@@ -750,8 +750,8 @@ these are the settings that buy it back, roughly most expensive first:
 
 | setting | what it does |
 |---|---|
-| **Shadows** | Cubes casting shadows on the board and on each other. The costliest single effect on a full board: one shadow per resting stone, more in flight. |
-| **Level of detail** | *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
+| **Shadows** | Cubes casting shadows on the board and on each other. **Off by default**: it is the costliest single effect on a full board — one shadow per resting stone, more in flight — and the board is the first thing most people open. |
+| **Level of detail** | **Simple cubes by default.** *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
 | **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
 | **Idle effects** | The master switch for all 26 effects that play while the board rests. Which of them may play is the **Effects** tab. |
 | **Stone edges** | The dark seam drawn around each stone. |
@@ -818,6 +818,7 @@ shows in both. The rest are here only:
 |---|---|
 | **Galaxy centre** | Where the spiral's nucleus sits on the panel: behind the title, or any corner. |
 | **Landing marker** | The colour of the wireframe showing where the falling piece will land. It has its own colour because the marker is drawn *instead of* a block rather than over one, so the neon finish below never touches it. |
+| **Landing marker thickness** | How heavy that outline is, from 0.3 to 2.5 times the shipped weight. Thinner keeps it out of the way of the stack showing through it. |
 | **Neon pieces** | The pieces and the stack as dim solid bodies under lit tubes, the same finish as the Block space board. |
 | **Neon colour from** / **Neon colour** / **Neon brightness** | The tubes in each piece's own colour, or all in one colour of your choosing, at the brightness you set. |
 

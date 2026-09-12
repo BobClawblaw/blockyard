@@ -1052,11 +1052,11 @@ function priceLine(ctx, view, axes) {
   // SHIMMER on the charged stretch: a thin white-blue core whose brightness flickers per segment
   // on the frame clock, scaled by that segment's tint so it dies out exactly as the blue does.
   //
-  // What used to be here as well, and is gone (operator, 2026-09-12: "The particle effects behind
-  // the energy pulse on the yellow price bar looks terrible. Lets just use the nebula trail ...
-  // also, get rid of the lightning bolts effect. It looks absolutely terrible"): a spray of motes
-  // off the wire, and jagged branches re-rolled every frame. The trail is the nebula and the tinted
-  // line now, nothing else.
+  // These were removed on 2026-09-12 ("the particle effects ... looks terrible ... get rid of the
+  // lightning bolts effect") and asked for again the same day ("we need to add the energy and
+  // crackle and particle effects back to the electrical pulse that travels the market screen"), so
+  // they are back as they were. The nebula behind them keeps its span emitter -- that part of the
+  // rework stands, because it is what stopped the trail reading as concentric rings.
   const now = view.now ?? 0;
   for (let i = 0; i < n; i++) {
     const at = n > 1 ? i / (n - 1) : 0;
@@ -1068,6 +1068,41 @@ function priceLine(ctx, view, axes) {
     ctx.strokeStyle = `rgba(210,240,255,${(0.9 * tint * flick).toFixed(3)})`;
     ctx.lineWidth = lw * 2.4;
     ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+
+    // CRACKLE: short jagged branches off the wire, re-rolled EVERY frame -- electrical precisely
+    // because it never draws the same twice. Reach is in line-widths; the line is under a pixel
+    // wide, so 5-14 was invisible when this was first tried.
+    const forks = 1 + ((Math.random() * 3 * tint) | 0);
+    ctx.strokeStyle = `rgba(190,232,255,${(0.8 * tint).toFixed(3)})`;
+    ctx.lineWidth = lw * 1.7;
+    for (let k = 0; k < forks; k++) {
+      const f0 = Math.random();
+      let x = p.x + (q.x - p.x) * f0, y = p.y + (q.y - p.y) * f0;
+      const ang = Math.random() * Math.PI * 2;
+      const reach = lw * (18 + Math.random() * 30) * (0.5 + tint);
+      ctx.beginPath(); ctx.moveTo(x, y);
+      const legs = 3 + ((Math.random() * 2) | 0);
+      for (let m = 0; m < legs; m++) {
+        const a2 = ang + (Math.random() - 0.5) * 1.6;
+        x += Math.cos(a2) * (reach / legs); y += Math.sin(a2) * (reach / legs);
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // PARTICLES: a spray of motes streaming off the charged wire, each on its own heading,
+    // spreading wider and fading as its stretch of the line ages. Placed by a HASH of segment and
+    // mote plus the age -- not Math.random -- so a mote moves coherently frame to frame instead of
+    // jittering in place.
+    const age = passed / PULSE_TAIL;
+    for (let k = 0; k < 10; k++) {
+      const f0 = hash01(i * 31 + k * 7);
+      const bx = p.x + (q.x - p.x) * f0, by = p.y + (q.y - p.y) * f0;
+      const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
+      const dist = lw * (4 + 48 * age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
+      const r = lw * (1.6 + 3.2 * hash01(i * 5 + k + 41)) * (1 - 0.45 * age);
+      ctx.fillStyle = `rgba(200,236,255,${(0.75 * tint * (1 - 0.5 * age)).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
+    }
   }
   // the head: a bright bead riding the wire, gone when it reaches the far end
   if (headAt < 1) {
@@ -2082,7 +2117,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
     opts.neon === true, opts.sheen === true, opts.overheadLight === true, opts.light,
-    opts.neonSource, opts.neonColour, opts.neonBrightness,
+    opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;
@@ -2154,6 +2189,7 @@ export function render3d(canvas, cells, options = {}) {
       overheadLight: opts.overheadLight === true,   // the lamp straight above (Tetrust)
       light: opts.light,                            // or wherever settings.js space.light puts it
       neonSource: opts.neonSource, neonColour: opts.neonColour, neonBrightness: opts.neonBrightness,
+      wireWidth: opts.wireWidth,
       // the paint order's memory across frames (blockscene3d obliqueOrder): a tangle keeps the
       // relative order it had last frame, so nothing flickers in and out of one
       orderMemo: (st.orderMemo ??= new Map()),
