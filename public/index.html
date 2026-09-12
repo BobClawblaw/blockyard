@@ -584,6 +584,13 @@
                that screen"). Both elements stay in the page -- the toolbar switches between them
                live, and markets.js skips the DRAW for whichever is hidden, so the unseen one costs
                nothing per refresh. The 3D board keeps its place first; a test pins that order. -->
+          <!-- THE FIGURES SIT UNDER THE TOOLBAR IN BOTH VIEWS (operator, 2026-09-12: of the median,
+               spread, volume and reporting line, "that line is also missing on the 3D view"). It was
+               never missing -- it sat AFTER the board in the markup, so with the flat chart showing
+               it landed 37px under the toolbar, and with the 600px board showing it was pushed 647px
+               down and stranded below the picture. Measured both ways. One line of figures belongs
+               with the price, whichever way the price is drawn. -->
+          <div class="mksum" id="mkSummary"></div>
           <!-- No legend beside the board (operator, 2026-09-12: "get rid of this. takes up too much
                space on the markets page"). It was a 250px column of prose explaining that a green
                body closed up and a red one closed down, next to a chart that shows exactly that.
@@ -591,7 +598,6 @@
           <div class="mklayout" id="mkLayout">
             <div class="treemapwrap mkboard"><canvas class="treemap" id="mkBoard"></canvas><div class="goggles-tip hidden"></div></div>
           </div>
-          <div class="mksum" id="mkSummary"></div>
           <canvas class="mkchart" id="mkChart"></canvas>
           <div id="mkTable"></div>
           <h3 class="mksub">Order book depth <span class="faint">cumulative bids and asks against price · each exchange's book, their total, and the total as it stood · change bars on the right, log scale</span></h3>

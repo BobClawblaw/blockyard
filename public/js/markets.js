@@ -75,9 +75,10 @@ function prefs() {
 // draw the SAME hours from the same series -- that is the point of the pair, and also why showing
 // both spent two tall panels saying one thing. The Kiosk is unaffected: renderMarketsBoard draws
 // the board on its own canvas and does not consult this.
+// 2D first, and the default (operator: "Swap 2D and 3D view buttons and make 2D view the default").
 export const PRICE_VIEWS = Object.freeze([
-  Object.freeze({ id: '3d', label: '3D', title: '3D: each hour a candle floating at its price, over the star field' }),
   Object.freeze({ id: '2d', label: '2D', title: '2D: the flat chart -- axes, volume and a crosshair' }),
+  Object.freeze({ id: '3d', label: '3D', title: '3D: each hour a candle floating at its price, over the star field' }),
 ]);
 
 const r2 = (v) => Math.round(v * 100) / 100;

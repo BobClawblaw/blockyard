@@ -416,7 +416,23 @@ test('the price line is a steady neon glow now -- the saber is gone', () => {
   assert.doesNotMatch(src, /saberPulses|const crackle|polySpan/, "the saber code is gone");
   assert.match(src, /A BRIGHT NEON GLOW/);
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.ok(html.indexOf('id="mkBoard"') < html.indexOf('id="mkSummary"') && html.indexOf('id="mkBoard"') < html.indexOf('id="mkChart"'), 'the 3D board leads the Markets tab');
+  // THE FIGURES LEAD NOW, then the board, then the flat chart. This asserted that the board came
+  // first, from when it was the only view. With a selector -- and 2D the default -- the board no
+  // longer leads, and the median/spread/volume line has to sit under the toolbar in BOTH views:
+  // measured, it was 37px below the toolbar with the chart showing and 647px below it, stranded
+  // under the picture, with the board showing (operator: "that line is also missing on the 3D
+  // view"). It was never missing, only last. The board-before-chart half still holds and still
+  // means something, so it stays.
+  // EXISTENCE FIRST, then order. `indexOf` answers -1 for something that is not there, and -1 is
+  // less than every real offset -- so "the summary comes first" would have passed with the summary
+  // DELETED. Checked with a negative control, which is the only reason this is written this way.
+  const at = (id) => {
+    const i = html.indexOf(`id="${id}"`);
+    assert.ok(i >= 0, `${id} must exist in the page`);
+    return i;
+  };
+  assert.ok(at('mkSummary') < at('mkBoard'), 'the figures sit above whichever view is drawn');
+  assert.ok(at('mkBoard') < at('mkChart'), 'and the 3D board still precedes the flat chart');
 });
 
 test('the markets board has no ground grid -- one line between the candles and the hours', () => {

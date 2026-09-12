@@ -94,7 +94,10 @@ export const DEFAULTS = Object.freeze({
     // render, one above the other, which is two tall panels of the same hours. A string for the
     // same reason `range` is one: a control hands back a string, and a remembered choice has to
     // match what its own control offers.
-    priceView: '3d',     // '3d' (the candle board) | '2d' (the flat chart)
+    // 2D by default (operator, 2026-09-12: "make 2D view the default"): the flat chart is the one
+    // that answers "what is the price doing" at a glance, with axes and a crosshair. The board is
+    // the showpiece, and it is one click away.
+    priceView: '2d',     // '2d' (the flat chart) | '3d' (the candle board)
   }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
   // toggleable"). The keys are exactly details3d's FX_KINDS -- a test asserts the two lists match,
@@ -259,7 +262,7 @@ export const PANEL = Object.freeze([
       }),
       Object.freeze({
         key: 'priceView', label: 'Price view', kind: 'choice', hint: 'Which one the Markets page draws. Only one at a time — they show the same hours, and two tall panels of it filled the screen',
-        options: Object.freeze([['3d', '3D candle board'], ['2d', 'Flat chart']]),
+        options: Object.freeze([['2d', 'Flat chart'], ['3d', '3D candle board']]),
       }),
     ]),
   }),
