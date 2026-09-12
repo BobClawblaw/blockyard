@@ -347,20 +347,14 @@
              same one as Overview, Mining and Block space) sits in the narrower
              right column. -->
         <div class="mpcols">
-          <!-- SIX CHARTS, TWO UP, IN READING ORDER (operator, 2026-09-12: "Suggest a better
-               organization of panels for that screen", then "try it"). The page answers three
-               questions in turn and the rows follow them: how full is the pool, what does it cost,
-               and what is actually in there. One uniform grid rather than the pairs it replaced --
-               with nested pairs the cards' width was not monotonic in the window (measured: 454px
-               of figures at a 1280px window against 548px at 1000px), which made every breakpoint
-               a guess. -->
-          <!-- THREE COLUMNS THAT KEEP THEIR OWN HEIGHTS (operator, 2026-09-12: "can we compress the
-               top a bit. Bring up Fee estimates over time compress slightly and fit Fee rate vs age
-               under it?" and "Squeeze Age distribution under Block Space").
-               The grid this replaces stretched every card to its row's tallest -- so Mempool size
-               was held open to the height of the figures card beside it and carried ~130px of
-               nothing. These are flex columns: each card is exactly as tall as its contents, and
-               the columns end where they end. -->
+          <!-- TWO COLUMNS, THE RIGHT ONE WIDER (operator, 2026-09-12: "Why can't we put Age
+               distribution next to Fee rate vs age under Fee estimates over time"). No reason at
+               all, and it balances the page: with three equal columns the figures-and-histogram
+               column ran 659px at a 1600px window while the other two sat at 375 and 392 -- a 284px
+               spread. The two distributions share a row under the time series instead.
+               These are flex columns, not a grid of cards: a grid stretches every card to its row's
+               tallest, which is what once held Mempool size open with ~130px of nothing inside it.
+               Here each card is exactly as tall as its contents. -->
           <div class="ovcol">
             <div class="card w3" id="mpUsageCard">
               <h3>Pool usage <span class="sp"></span><span class="src">usage / maxmempool</span></h3>
@@ -375,6 +369,10 @@
               <div class="note tiny faint" id="mpHistNote"></div>
             </div>
           </div>
+          <!-- No Block space viewer on this page (operator: "just remove the block space panel from
+               mempool entirely"). It lives on Overview, Block space and Mining; here it was the
+               tallest thing by a distance -- square, so its width was its height -- and it spent
+               most of this page's layout budget. -->
           <div class="ovcol">
             <div class="card w5">
               <h3>Mempool size <span class="sp"></span><span class="src">count and bytes</span></h3>
@@ -384,21 +382,17 @@
               <h3>Fee estimates over time <span class="sp"></span><span class="src">sat/vB</span></h3>
               <canvas class="chart" id="mpFeeChart"></canvas>
             </div>
-          </div>
-          <!-- No Block space viewer here (operator, 2026-09-12: "just remove the block space panel
-               from mempool entirely"). It lives on Overview, Block space and Mining; on this page
-               it was the tallest thing by a distance -- square, so its width was its height -- and
-               it spent most of this page's layout budget. The six charts are what this page is
-               for, and they now sit two to a column. -->
-          <div class="ovcol">
-            <div class="card w6">
-              <h3>Fee rate vs age <span class="sp"></span><span class="src">sampled scatter</span></h3>
-              <canvas class="chart" id="mpScatter"></canvas>
-              <div class="note tiny faint" id="mpScatterNote"></div>
-            </div>
-            <div class="card w4">
-              <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
-              <canvas class="chart" id="mpAgeChart"></canvas>
+            <!-- the two distributions, side by side, under the time series -->
+            <div class="mprow">
+              <div class="card w6">
+                <h3>Fee rate vs age <span class="sp"></span><span class="src">sampled scatter</span></h3>
+                <canvas class="chart" id="mpScatter"></canvas>
+                <div class="note tiny faint" id="mpScatterNote"></div>
+              </div>
+              <div class="card w4">
+                <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
+                <canvas class="chart" id="mpAgeChart"></canvas>
+              </div>
             </div>
           </div>
         </div>
