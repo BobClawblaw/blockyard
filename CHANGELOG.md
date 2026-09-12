@@ -83,6 +83,14 @@ All notable changes to this project are documented here. The format follows
   the right face were each inset five pixels on two sides, so neither reached the top-right corner:
   every block carried a dark triangular wedge there, a sliver of bare card at the top left and a
   gap at the bottom right. The faces are now flush with the card and with each other.
+- **The network hash rate read "0.0 EH/s".** Two bugs, one hiding the other. The estimator divided
+  difficulty by the average block gap and left out the 2^32 hashes a difficulty-1 target expects,
+  so it was out by a factor of 4.29 billion; and the formatter's unit prefixes were each one step
+  too low, so a four-digit EH/s figure would have printed as a single-digit one. Checked against
+  the node's own `getnetworkhashps`, which the monitor had never used: the corrected estimate is
+  1111.8 EH/s against the node's 1097.9, agreeing to 1.26%. The test covering it asserted that the
+  wrong magnitude was "of the right order", which is why it survived; it now checks the figure
+  could be true rather than restating the implementation.
 
 ## [0.9.0] — 2026-09-11
 

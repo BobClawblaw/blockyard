@@ -71,10 +71,14 @@ export function satPerVb(btcPerKvB, dp = 2) {
   return (btcPerKvB * 1e8 / 1000).toFixed(dp);
 }
 
+// `n` is already in EH/s, so each step up is a THOUSAND of them: 1e3 EH/s is a zettahash and 1e6
+// is a yottahash. Both labels were one prefix too low (2026-09-12) -- 1112 EH/s printed as
+// "1.11 EH/s" -- which stayed hidden while the estimator that feeds this was itself out by 2^32
+// and never produced a number above 1.
 export function eh(n) {
   if (n == null || !Number.isFinite(n)) return '–';
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)} ZH/s`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(2)} EH/s`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)} YH/s`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)} ZH/s`;
   return `${n.toFixed(1)} EH/s`;
 }
 

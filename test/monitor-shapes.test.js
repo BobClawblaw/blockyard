@@ -67,8 +67,16 @@ test('a synced node still gets a hashrate, because the figure is honest there', 
   fillBlocks(m, 40, { gap: 600 });
   const s = m.snapshot({ seriesRanges: {} });
   assert.equal(s.hashrateNote, null);
-  // difficulty / mean gap = 1.2745e14 / 600 = 2.124e11 H/s
-  assert.ok(s.hashrateEstEh > 2e-7 && s.hashrateEstEh < 3e-7, `EH/s of the right order: ${s.hashrateEstEh}`);
+  // THIS ASSERTION PINNED THE BUG (2026-09-12, operator: "Why is difficulty and work showing
+  // 0 EH/s"). It called 2.5e-7 EH/s "the right order" -- a quarter of a millionth of an exahash,
+  // for the whole Bitcoin network -- because the estimator divided difficulty by the gap and left
+  // out the 2^32 hashes a difficulty-1 target expects. A bound copied from the implementation
+  // agrees with it by construction; the check has to be whether the number could be TRUE.
+  //   1.2745e14 * 2**32 / 600 s = 9.123e20 H/s = 912 EH/s
+  const expected = (1.2745e14 * 2 ** 32) / 600 / 1e18;
+  assert.ok(Math.abs(s.hashrateEstEh - expected) / expected < 0.02, `${s.hashrateEstEh} EH/s, expected about ${expected.toFixed(0)}`);
+  assert.ok(s.hashrateEstEh > 100 && s.hashrateEstEh < 1e5,
+    `a real network is hundreds to thousands of EH/s, not ${s.hashrateEstEh}`);
 });
 
 test('a node that has not answered yet says so rather than showing zero', () => {

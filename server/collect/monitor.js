@@ -1690,7 +1690,15 @@ export class NodeMonitor extends EventEmitter {
     const gaps = recent.map((b) => b.gapSec).filter((g) => g != null && g > 0 && g < 7200);
     const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
     const diff = s.chainInfo?.difficulty ?? s.mining?.difficulty ?? null;
-    const hashrateRaw = diff != null && avgGap ? diff / avgGap : null;
+    // HASHES PER SECOND, not difficulty per second (2026-09-12, operator: "Why is difficulty and
+    // work showing 0 EH/s"). A difficulty-1 target expects 2^32 hashes, so the network's rate is
+    // difficulty * 2^32 / seconds-per-block. Dividing difficulty by the gap alone is out by that
+    // factor of 4.29 billion: it put 1112 EH/s on screen as "0.0 EH/s", and the test that should
+    // have caught it asserted the wrong magnitude was "of the right order".
+    // Checked against the node's own getnetworkhashps at the time -- 1.0979e21 H/s reported
+    // against 1.112e21 estimated here, agreeing to about one per cent, which is what says this
+    // constant is the right one rather than merely a bigger one.
+    const hashrateRaw = diff != null && avgGap ? (diff * 2 ** 32) / avgGap : null;
     // "Network hashrate" here is difficulty divided by the mean gap between blocks
     // WE have. Far behind the tip that is not an estimate of anything: during IBD the
     // node applies hundreds of blocks per second, so the gap is milliseconds and the
