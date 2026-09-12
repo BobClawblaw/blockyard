@@ -24,7 +24,15 @@ import { renderDepth } from './depthchart.js';
 
 export const REFRESH_MS = 15_000;
 export const RANGES = [[24, '24 h'], [48, '48 h'], [168, '7 d']];
-export const MAX_3D_HOURS = 72;     // 168 towers on the board is a comb, not a chart
+// THE WHOLE RANGE, NOT THE LAST THREE DAYS (operator, 2026-09-12, choosing this over fattening the
+// candles or merely disclosing the cap). This was 72, with the note "168 towers on the board is a
+// comb, not a chart" -- a deliberate judgement, overruled deliberately: the 7 d button said seven
+// days and the board drew three, which is a truncation the reader was never told about, and this
+// project states what it cannot show rather than quietly showing less.
+// The cost is real and was measured first: 168 candles is 336 grid units, which drives the price
+// band taller, which shrinks the scale -- so each candle is thinner than it was at 72. If that
+// reads as a comb, the answer is to lower this number again, in the open.
+export const MAX_3D_HOURS = 168;
 // the 3D candle: two units a slot, a 1.4-unit body, a 0.4-unit wick, prices over 28 units
 // zBase: the price band starts above the volume band -- from a low camera the volume in the
 // front row would otherwise stand in front of the lowest candles
@@ -46,7 +54,7 @@ export const CAMERA_3D = {
   light: 'viewer',
   background: 'rgba(1,2,8,1)',
   neonCell: 'rgba(40,150,100,0.5)',
-  // a new hour slides 72 candles one slot: brisk, not the block board's 20 s reshuffle
+  // a new hour slides the whole row one slot: brisk, not the block board's 20 s reshuffle
   transition: { rise: 700, travel: 2200, drop: 1400, riseStagger: 300, dropStagger: 600, entryMs: 600 },
 };
 const UP = '#1fc98a', DOWN = '#ef4d5e';

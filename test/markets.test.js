@@ -210,7 +210,13 @@ test('the 3D chart: each hour a body floating open to close, wicks below and abo
   assert.ok(c.tiles.every((t) => /^#[0-9a-f]{6}$/.test(t.color) && t.label.startsWith('Coinbase BTC-USD')));
   assert.equal(chart3d(null).tiles.length, 0);
   const week = { base: ser.base, candles: Array.from({ length: 168 }, (_, i) => k(i, 1, 2, 3, 0, 1)) };
-  assert.equal(chart3d(week).gridW, MAX_3D_HOURS * C3.slot, 'capped: 168 towers is a comb');
+  // The week is drawn WHOLE now. This asserted a 72-hour cap, with the note "168 towers is a
+  // comb" -- a considered judgement the operator overruled after seeing the measured cost, because
+  // the 7 d button drew three days without saying so. Note the first assertion passes either way,
+  // since it is expressed in terms of MAX_3D_HOURS: on its own it would guard nothing. The second
+  // is the one that would fail if the cap came back.
+  assert.equal(chart3d(week).gridW, MAX_3D_HOURS * C3.slot);
+  assert.equal(chart3d(week).hours, 168, 'the whole week, not the last three days');
 });
 
 test('the chart camera faces the board and parks it along the bottom of the panel', () => {
