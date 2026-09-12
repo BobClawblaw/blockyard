@@ -944,9 +944,24 @@ async function boot() {
   const cfgWrap = document.getElementById('settingsWrap');
   const cfgBody = document.getElementById('cfgBody');
   const cfgGear = document.getElementById('btnSettings');
+  // TABS (operator, 2026-09-12: "tabbed section panel in setup"). One tab per PANEL group: the
+  // effects group alone is twenty-six switches, and a single scrolling column buried every other
+  // setting under it. The open tab is remembered for the session, not persisted -- it is where you
+  // were looking, not a preference.
+  let cfgTab = SETTINGS_PANEL[0].group;
   const drawSettings = () => {
     const s = loadSettings();
-    cfgBody.innerHTML = SETTINGS_PANEL.map((g) => `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${g.rows.map((r) => {
+    if (!SETTINGS_PANEL.some((g) => g.group === cfgTab)) cfgTab = SETTINGS_PANEL[0].group;
+    const tabs = `<div class="cfgtabs" role="tablist">${SETTINGS_PANEL.map((g) =>
+      `<button type="button" class="cfgtab${g.group === cfgTab ? ' on' : ''}" role="tab" aria-selected="${g.group === cfgTab}" data-cfgtab="${g.group}">${g.title}</button>`).join('')}</div>`;
+    cfgBody.innerHTML = tabs + SETTINGS_PANEL.filter((g) => g.group === cfgTab).map((g) => {
+      // ALL / NONE, where a group is nothing but switches: twenty-six of them is a lot of clicking
+      // to answer "just show me the quiet board"
+      const allToggles = g.rows.every((r) => r.kind === 'toggle');
+      const bulk = allToggles
+        ? `<div class="cfgbulk"><button type="button" class="btn" data-cfgall="${g.group}">all on</button><button type="button" class="btn" data-cfgnone="${g.group}">all off</button></div>`
+        : '';
+      return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${bulk}${g.rows.map((r) => {
       const v = s[g.group][r.key];
       const id = `cfg-${g.group}-${r.key}`;
       const ctl = r.kind === 'toggle'
@@ -957,7 +972,8 @@ async function boot() {
             ? `<input type="color" id="${id}" data-cfg="${g.group}.${r.key}" value="${v}">`
             : `<input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${v}</span>`;
       return `<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
-    }).join('')}</div>`).join('');
+      }).join('')}</div>`;
+    }).join('');
     drawPreview();
   };
   // THE PREVIEW (operator, 2026-09-12: "Slider for brightness, color selection, realtime
@@ -998,6 +1014,19 @@ async function boot() {
     drawSettings();
     render();
     toast('display settings back to their defaults');
+  });
+  cfgBody.addEventListener('click', (e) => {
+    const tab = e.target.closest?.('[data-cfgtab]');
+    if (tab) { cfgTab = tab.dataset.cfgtab; drawSettings(); return; }
+    const bulk = e.target.closest?.('[data-cfgall], [data-cfgnone]');
+    if (!bulk) return;
+    const on = bulk.hasAttribute('data-cfgall');
+    const group = bulk.dataset.cfgall ?? bulk.dataset.cfgnone;
+    for (const r of SETTINGS_PANEL.find((g) => g.group === group)?.rows ?? []) {
+      if (r.kind === 'toggle') setSetting(loadSettings(), `${group}.${r.key}`, on);
+    }
+    drawSettings();
+    render();
   });
   cfgBody.addEventListener('input', (e) => {
     const el = e.target.closest?.('[data-cfg]');

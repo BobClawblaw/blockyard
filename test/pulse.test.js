@@ -83,7 +83,8 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
 test('the tail lasts at least two seconds anywhere on the line, and clears the far end', async () => {
   // operator: "Make the tail at least 2 seconds before it fades out and back towards yellow"
   const src = (await import('node:fs')).readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  const ms = Number(src.match(/pulse: (\d+) \}/)[1]);
+  // (FX_MS is a 26-entry table now, one effect a line -- it was a single line when this was written)
+  const ms = Number(src.match(/\bpulse: (\d+),/)[1]);
   const travel = Number(src.match(/const PULSE_TRAVEL = ([\d.]+);/)[1]);
   const tail = Number(src.match(/const PULSE_TAIL = ([\d.]+);/)[1]);
   const crossMs = ms * travel;

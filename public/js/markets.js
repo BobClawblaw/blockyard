@@ -17,7 +17,7 @@
 //     so a new hour slides the chart along and another exchange drops its own candles in.
 // The server polls five exchanges' public APIs while this tab is open (server/collect/markets.js).
 import { board3d } from './details3d.js';
-import { loadSettings, marketsOptions } from './settings.js';
+import { loadSettings, setSetting, marketsOptions } from './settings.js';
 import { drawPriceChart, readout, EX_COLORS } from './pricechart.js';
 import { niceTicks } from './charts.js';
 import { renderDepth } from './depthchart.js';
@@ -55,7 +55,19 @@ const UP = '#1fc98a', DOWN = '#ef4d5e';
 const UP_V = '#2bd49a', DOWN_V = '#f0606e';
 const UP_W = '#8af2c9', DOWN_W = '#ff9ea8';
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const M = { data: null, at: 0, busy: false, error: null, ex: 'coinbase', range: 48, hover: null, bound: false };
+// THE TOOLBAR IS A PREFERENCE (operator, 2026-09-12: "We need to remember the user settings for
+// the Markets page"). The exchange and the range were a click that lasted until the tab closed.
+// They are seeded from the store on first use and written back on every click, so the page opens
+// where it was left -- on this browser, like every other display setting.
+const M = { data: null, at: 0, busy: false, error: null, ex: null, range: null, hover: null, bound: false };
+function prefs() {
+  if (M.ex === null || M.range === null) {
+    const mk = loadSettings().markets;
+    M.ex = mk.exchange;
+    M.range = Number(mk.range);
+  }
+  return M;
+}
 
 const r2 = (v) => Math.round(v * 100) / 100;
 const money = (v, dp = 2) => (v == null ? '–' : v.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }));
@@ -167,6 +179,7 @@ export function legend3dHtml(c3, ser) {
 }
 
 export function toolbarHtml(d) {
+  prefs();
   const exs = (d?.exchanges ?? []).filter((e) => e.candles?.length);
   const b = (attr, v, label, on) => `<button type="button" class="mkbtn${on ? ' on' : ''}" ${attr}="${v}">${label}</button>`;
   return `<div class="mkgrp">${exs.map((e) => b('data-mkex', e.id, `<i class="mkdot" data-ex="${e.id}"></i>${e.name}`, e.id === M.ex)).join('')}</div>
@@ -192,14 +205,16 @@ export function chartSeries(d, ex, range, now = Date.now()) {
 
 function drawChart() {
   const canvas = document.getElementById('mkChart');
-  const ser = chartSeries(M.data, M.ex, M.range);
+  const { ex, range } = prefs();
+  const ser = chartSeries(M.data, ex, range);
   if (!canvas || !ser) return;
   drawPriceChart(canvas, { candles: ser.candles, overlays: ser.overlays, name: `${ser.base.name} ${ser.base.pair}`, hover: M.hover });
 }
 
 function drawBoard(id = 'mkBoard') {
   const canvas = document.getElementById(id);
-  const ser = chartSeries(M.data, M.ex, M.range);
+  const { ex, range } = prefs();
+  const ser = chartSeries(M.data, ex, range);
   if (!canvas || !ser) return null;
   const hours = Math.min(MAX_3D_HOURS, ser.candles.length);
   const aspect = (canvas.clientHeight || 400) / Math.max(1, canvas.clientWidth || 1000);
@@ -217,8 +232,8 @@ function bindChart() {
   bar.addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
-    if (btn.dataset.mkex) M.ex = btn.dataset.mkex;
-    if (btn.dataset.mkrange) M.range = Number(btn.dataset.mkrange);
+    if (btn.dataset.mkex) setSetting(loadSettings(), 'markets.exchange', (M.ex = btn.dataset.mkex));
+    if (btn.dataset.mkrange) setSetting(loadSettings(), 'markets.range', String((M.range = Number(btn.dataset.mkrange))));
     const html = toolbarHtml(M.data);
     bar.innerHTML = html; bar.__html = html;
     drawChart();

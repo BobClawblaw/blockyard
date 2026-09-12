@@ -1,7 +1,9 @@
 // THE CHARGE TRAIL ON THE BOARD (operator, 2026-09-12: "We need the block space energy effect
-// also emit a blue line and dust trail just like the markets view"). Read through a recording
-// canvas: with a light cycle or the lightning ball running, the frame carries the pulse's blue
-// puffs, its electric tube, and its motes -- and at rest it carries none of them.
+// also emit a blue line and dust trail just like the markets view", then -- of the light cycles
+// that were given it the same day -- "the lightcycles shouldn't have the electricity effect").
+// So: the lightning ball carries it, the light cycles must not, and a board at rest carries
+// nothing. Read through a recording canvas, because whether the charge reaches the stroke is
+// exactly what a screenshot cannot explain and this can.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, triggerIdle } from '../public/js/details3d.js';
@@ -34,7 +36,7 @@ const PUFF = 'set:fillStyle=rgba(70,130,255,';
 const TUBE = 'set:strokeStyle=rgba(110,200,255,';
 const MOTE = 'set:fillStyle=rgba(200,236,255,';
 
-function carries(kind) {
+function chargeOf(kind) {
     const h = harness();
     board3d(h.canvas, TILES, { gridW: 12, gridH: 12, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } });
     for (let i = 1; i <= 6; i++) h.step(i * 16);
@@ -52,11 +54,21 @@ function carries(kind) {
       seen.mote += frame.filter((o) => o.startsWith(MOTE)).length;
     }
     void rest;
-    assert.ok(seen.puff > 20, `puffs: ${seen.puff}`);
-    assert.ok(seen.tube > 5, `tube: ${seen.tube}`);
-    assert.ok(seen.mote > 20, `motes: ${seen.mote}`);
+    return seen;
 }
 
 // one test each, spelled out: the documented count is scanned from the source
-test('the light cycle carries the charge: blue puffs behind it, an electric tube, a spray of motes', () => carries('lightcycle'));
-test('the lightning ball carries the charge: blue puffs behind it, an electric tube, a spray of motes', () => carries('ball'));
+test('the lightning ball carries the charge: blue puffs behind it, an electric tube, a spray of motes', () => {
+  const seen = chargeOf('ball');
+  assert.ok(seen.puff > 20, `puffs: ${seen.puff}`);
+  assert.ok(seen.tube > 5, `tube: ${seen.tube}`);
+  assert.ok(seen.mote > 20, `motes: ${seen.mote}`);
+});
+
+test('the light cycles do NOT: a rider whose point is a clean light wall is not an electrical storm', () => {
+  // (operator, 2026-09-12: "the lightcycles shouldn't have the electricity effect" -- it was given
+  // to both riders when the ball got it, and on the cycles it read as static over the wall)
+  const seen = chargeOf('lightcycle');
+  assert.equal(seen.puff, 0, 'no blue puffs behind the wall');
+  assert.equal(seen.mote, 0, 'and no motes');
+});

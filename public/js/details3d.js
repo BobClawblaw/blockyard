@@ -135,8 +135,19 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // board costs nothing between them. Only with a real DOM (the unit harness and
 // the DOM stub never get one), never under prefers-reduced-motion, never while
 // a transition runs, and it retries later while the board is not on screen.
-const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600, pulse: 7000 };
-const FX_KINDS = Object.keys(FX_MS);
+// THE TWENTY-SIX (operator, 2026-09-12: "Think of many more other video-game inspired effects ...
+// at least 25 total different effects, all toggleable"). Nine were here; seventeen more live in
+// fxAt (blockscene3d) as pure per-tile functions. Each is one entry here -- how long it runs --
+// and one toggle in settings.js (the `effects` group), and the two are checked against each other
+// by a test, so an effect cannot ship without a switch or a switch without an effect.
+const FX_MS = {
+  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
+  lightcycle: 6500, ball: 5600, pulse: 7000,
+  shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
+  rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, laser: 3400,
+  powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400, glitch: 3000,
+};
+export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from
 // one end to the other leaving a electric blue tint on the yellow line that starts fading back to
@@ -212,8 +223,10 @@ function fxNow(st, t) {
   // `ms` rides along: a consumer that needs wall-clock age (the price-line pulse holds its tint
   // for three SECONDS, not for a share of the effect) has to know how long the effect is. It was
   // missing, so the pulse computed NaN colours and the canvas kept the yellow it already had.
+  // x and y -- where the effect is centred -- ride along for EVERY kind: the radial arrivals
+  // (shockwave, nova, radar, vortex) need an origin, and they were once ripple's alone.
   const out = { kind: f.kind, u, ms: f.ms, gridW: st.gridW, gridH: st.gridH, dx: f.dx, dy: f.dy, rank: f.rank, seed: f.seed,
-    amp: Math.min(1, u * 6) * Math.pow(1 - u, 0.8) };
+    x: f.x, y: f.y, amp: Math.min(1, u * 6) * Math.pow(1 - u, 0.8) };
   if (f.kind === 'ripple') {
     const reach = Math.hypot(Math.max(f.x, st.gridW - f.x), Math.max(f.y, st.gridH - f.y));
     Object.assign(out, { x: f.x, y: f.y, r: reach * (1 - Math.pow(1 - u, 2)), w: 2.2 + 2.4 * u });
@@ -280,10 +293,14 @@ function scheduleFx(canvas, st, opts, soon = false) {
     if (busy || !canvas.clientWidth) { scheduleFx(canvas, st, opts, soon); return; }
     // a board with a price line gets the effects that follow it; every other board gets the grid
     const onALine = (opts.axes?.line?.length ?? 0) > 1;
-    const kinds = onALine ? LINE_FX : FX_KINDS.filter((k) => k !== 'pulse');
+    // every effect is switchable (settings.js `effects`): opts.fxKinds is the operator's list, and
+    // an empty one means the board rests in peace -- idleFx off is not the only way to say so
+    const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
+    const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => k !== 'pulse')).filter((k) => !allowed || allowed.has(k));
+    if (!kinds.length) return;
     const pool = kinds.filter((k) => k !== st.lastFx);
     // the first one after the board lands is a light-cycle race half the time -- on the grid only
-    const kind = !onALine && soon && st.lastFx !== 'lightcycle' && Math.random() < 0.5
+    const kind = !onALine && soon && st.lastFx !== 'lightcycle' && kinds.includes('lightcycle') && Math.random() < 0.5
       ? 'lightcycle'
       : (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
     startFx(st, kind, now);
@@ -560,21 +577,10 @@ export function drawCycles(ctx, view, lw) {
     for (const g of segs) if (!g.step) line(g.at, g.bt, c.color, 0.95 * g.br, c.small ? 2.2 : 3.6);
     for (const g of segs) if (!g.step) line(g.a, g.b, c.color, 0.8 * g.br, c.small ? 1.4 : 2.2);
     for (const g of segs) if (!g.step && g.br > 0.5) line(g.at, g.bt, [255, 255, 255], 1.6 * (g.br - 0.5), 1.4);
-    // the charge: the stretch of wall just behind the rider carries the Markets pulse's blue --
-    // its puffs, its tube, its crackle and its motes -- fading back to the wall's colour along
-    // CYCLE_TRAIL units (chargeTrail)
-    if (c.alpha > 0.3) {
-      const charged = [];
-      for (let k = Math.max(Math.floor(c.from), Math.floor(c.d - CYCLE_TRAIL)); k < Math.ceil(c.d) && k < end; k++) {
-        const s0 = Math.max(k, c.from, c.d - CYCLE_TRAIL), s1 = Math.min(k + 1, c.d);
-        if (s1 <= s0) continue;
-        const back = c.d - (s0 + s1) / 2;
-        const tint = Math.pow(Math.max(0, 1 - back / CYCLE_TRAIL), 1.4) * c.alpha;
-        const a = at(s0), b = at(s1), h = (c.hs[k] ?? 0) + wallH;
-        charged.push({ a: P(a.x, a.y, h), b: P(b.x, b.y, h), tint, age: Math.min(1, back / CYCLE_TRAIL), i: k });
-      }
-      chargeTrail(ctx, charged, lw, view.now ?? 0, (c.color[0] * 3 + c.color[1]) | 0);
-    }
+    // NO CHARGE ON A LIGHT CYCLE (operator, 2026-09-12: "the lightcycles shouldn't have the
+    // electricity effect"). It was given the Markets pulse's blue -- puffs, crackle, motes -- along
+    // with the lightning ball the same day; on a rider whose whole point is a clean light wall it
+    // read as static. The ball keeps it (drawBall): it IS electricity.
     if (c.d < end && c.alpha > 0.3) {
       const hd = at(c.d), hz = (c.hs[hd.k] ?? 0) + wallH * 0.5, r = c.small ? 0.75 : 1.25;
       const sq = (q, z) => [P(hd.x - q, hd.y - q, z), P(hd.x + q, hd.y - q, z), P(hd.x + q, hd.y + q, z), P(hd.x - q, hd.y + q, z)];
@@ -645,7 +651,6 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
   }
   ctx.lineWidth = lw;
 }
-const CYCLE_TRAIL = 9;       // units of route behind a light cycle's head that carry the charge
 
 // THE LIGHTNING BALL, over the cubes: the grid line it has traced burning behind it and cooling
 // over 16 units, a plasma ball of stacked glows with a white-hot heart, and bolts jumping from it

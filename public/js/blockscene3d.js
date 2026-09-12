@@ -687,6 +687,14 @@ export function fxFront(fx) {
   return lo + fx.u * (hi - lo);
 }
 
+// a deterministic 0..1 from an integer: where a firework bursts, which cube flares. Hashed, not
+// random, so an effect draws the same picture every time it replays -- which is what lets the
+// tests above assert on it at all.
+export function fxHash(n) {
+  const x = Math.sin((n | 0) * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 export function fxAt(t, fx) {
   if (!fx) return FX_NONE;
   const A = fx.amp ?? 1;
@@ -730,6 +738,180 @@ export function fxAt(t, fx) {
       const ddx = Math.max(t.x - b.x, 0, b.x - (t.x + t.s)), ddy = Math.max(t.y - b.y, 0, b.y - (t.y + t.s));
       const w = g(Math.hypot(ddx, ddy) / 2.6);
       return w > 0.02 ? { glow: 0.95 * w, outline: 0.9 * w, lift: 0, color: [170, 225, 255] } : FX_NONE;
+    }
+    // ---------------------------------------------------------------------------------------
+    // THE ARCADE (operator, 2026-09-12: "Think of many more other video-game inspired effects ...
+    // at least 25 total different effects, all toggleable"). Every one below is a PURE function of
+    // the tile and the effect's clock -- no state is kept, nothing is allocated per frame, and the
+    // board-level choices (where a firework bursts, which tile flares) are hashed out of fx.seed,
+    // so an effect replays identically and can be asserted here rather than watched.
+    //
+    // `reach` is the distance from the effect's origin to the farthest corner: a radial effect
+    // that covers the board in the time it is given, whatever the board's shape.
+    case 'shockwave': {
+      // Smash-style: a hard ring that throws the cubes it passes UP, not a soft glow
+      const reach = Math.hypot(Math.max(fx.x, fx.gridW - fx.x), Math.max(fx.y, fx.gridH - fx.y));
+      const r = reach * (1 - Math.pow(1 - fx.u, 1.7));
+      const k = (Math.hypot(cx - fx.x, cy - fx.y) - r) / 1.7;
+      const w = g(k);
+      return { glow: 0.85 * A * w, outline: A * w, lift: 4.5 * A * w, color: [255, 240, 190] };
+    }
+    case 'nova': {
+      // an implosion that snaps back out: the ring races IN to the middle over the first half,
+      // then out again, brighter and whiter, over the second
+      const reach = Math.hypot(Math.max(fx.x, fx.gridW - fx.x), Math.max(fx.y, fx.gridH - fx.y));
+      const inward = fx.u < 0.5;
+      const v = inward ? fx.u / 0.5 : (fx.u - 0.5) / 0.5;
+      const r = inward ? reach * (1 - Math.pow(v, 0.7)) : reach * Math.pow(v, 0.6);
+      const w = g((Math.hypot(cx - fx.x, cy - fx.y) - r) / (inward ? 2.2 : 1.5));
+      const hot = inward ? 0.55 : 1;
+      return { glow: hot * A * w, outline: 0.8 * hot * A * w, lift: (inward ? 0.4 : 3.2) * A * w,
+        color: inward ? [150, 190, 255] : [255, 255, 245] };
+    }
+    case 'firework': {
+      // three bursts, each at its own moment and place, each a ring that expands and dies
+      let glow = 0, outline = 0, lift = 0, col = [255, 200, 120];
+      for (let i = 0; i < 3; i++) {
+        const t0 = 0.05 + 0.26 * i, life = 0.45;
+        const v = (fx.u - t0) / life;
+        if (!(v > 0 && v < 1)) continue;
+        const bx = fxHash(fx.seed + i * 31 + 1) * fx.gridW, by = fxHash(fx.seed + i * 31 + 2) * fx.gridH;
+        const r = 9 * Math.pow(v, 0.55);
+        const w = g((Math.hypot(cx - bx, cy - by) - r) / 1.4) * (1 - v);
+        if (w > glow) {
+          glow = w; outline = 0.9 * w; lift = 1.8 * w;
+          col = [[255, 170, 110], [140, 220, 255], [220, 160, 255]][i];
+        }
+      }
+      return glow > 0.02 ? { glow: A * glow, outline: A * outline, lift: A * lift, color: col } : FX_NONE;
+    }
+    case 'flare': {
+      // one cube goes supernova and lights its neighbourhood -- the same hashed cube every replay
+      const fxp = fxHash(fx.seed + 7) * fx.gridW, fyp = fxHash(fx.seed + 8) * fx.gridH;
+      const bell = Math.sin(Math.PI * fx.u);
+      const d = Math.hypot(cx - fxp, cy - fyp);
+      const w = g(d / (1.2 + 7 * bell)) * bell;
+      return w > 0.02 ? { glow: A * w, outline: 0.8 * A * w, lift: 1.4 * A * w, color: [255, 245, 205] } : FX_NONE;
+    }
+    case 'wave': {
+      // a swell rolling across the board: the cubes rise and fall with it, several crests at once
+      const d = along() - fxFront(fx);
+      const env = g(d / 7);
+      const phase = Math.sin(d * 0.75);
+      const up = Math.max(0, phase);
+      return { glow: 0.45 * A * env * up, outline: 0.3 * A * env * up, lift: 3 * A * env * up, color: [120, 200, 255] };
+    }
+    case 'quake': {
+      // the board shakes: every cube jumps on its own beat, hardest at the start, dying out
+      const decay = Math.pow(1 - fx.u, 2);
+      const j = jitterOf(t.txid, 'qk' + fx.seed);
+      const shake = Math.sin(fx.u * 60 + j * 6.28);
+      const up = Math.max(0, shake) * decay;
+      return { glow: 0.3 * A * up, outline: 0.5 * A * up, lift: 2.4 * A * up, color: [255, 180, 140] };
+    }
+    case 'rain': {
+      // code rain: each column has its own drop, falling from the top of the board to the floor,
+      // with a white head and a fading green tail behind it
+      const col = Math.floor(cx);
+      const ph = fxHash(fx.seed + col * 17);
+      const head = fx.gridH + 3 - (fx.u * 1.35 - ph * 0.35) * (fx.gridH + 8);
+      const d = cy - head;                                  // above the head: the tail
+      if (d < -1.2) return FX_NONE;
+      const w = d < 1.2 ? 1 : Math.exp(-(d - 1.2) / 3.5);
+      const white = d < 1.2 ? 1 : 0;
+      return { glow: A * w, outline: 0.7 * A * w, lift: 0,
+        color: white ? [225, 255, 235] : [60, 235, 140] };
+    }
+    case 'sparkle': {
+      // a constellation lighting up a few cubes at a time, each in its own colour
+      const pick = jitterOf(t.txid, 'sp' + fx.seed);
+      if (pick > 0.3) return FX_NONE;
+      const when = jitterOf(t.txid, 'st' + fx.seed);
+      const w = g((fx.u - 0.08 - when * 0.8) / 0.07);
+      const hue = jitterOf(t.txid, 'sc' + fx.seed);
+      const col = hue < 0.34 ? [255, 230, 160] : hue < 0.67 ? [170, 220, 255] : [235, 175, 255];
+      return { glow: A * w, outline: 0.85 * A * w, lift: 0.5 * A * w, color: col };
+    }
+    case 'checker': {
+      // the board flips like a chessboard: black squares up while white squares are down
+      const dark = (Math.floor(cx) + Math.floor(cy)) & 1;
+      const beat = Math.sin(fx.u * Math.PI * 4 + (dark ? Math.PI : 0));
+      const up = Math.max(0, beat) * Math.sin(Math.PI * fx.u);
+      // (the first cut peaked at 0.26 of full brightness -- a flip nobody would notice across a
+      // board of small cubes; the squares have to actually read as lifting against each other)
+      return { glow: 0.85 * A * up, outline: 0.75 * A * up, lift: 2.8 * A * up,
+        color: dark ? [140, 255, 210] : [255, 210, 130] };
+    }
+    case 'radar': {
+      // a sweep hand turning once round the board, the cubes behind it fading like phosphor
+      const ang = Math.atan2(cy - fx.y, cx - fx.x);
+      const hand = -Math.PI + fx.u * Math.PI * 2;
+      let d = ang - hand;
+      while (d < 0) d += Math.PI * 2;                       // 0 at the hand, 2pi just before it
+      const w = d < 0.18 ? 1 : Math.exp(-(d - 0.18) * 1.6);
+      return { glow: 0.8 * A * w, outline: 0.5 * A * w, lift: 0, color: [110, 255, 170] };
+    }
+    case 'vortex': {
+      // the radar's hand, wound into a spiral: the arms turn and the whole board drains inward
+      const ang = Math.atan2(cy - fx.y, cx - fx.x);
+      const rad = Math.hypot(cy - fx.y, cx - fx.x);
+      const arm = ang + rad * 0.42 - fx.u * Math.PI * 4;
+      const d = Math.abs(((arm % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI);
+      const w = g((Math.PI - d) / 0.55) * Math.sin(Math.PI * fx.u);
+      return { glow: 0.9 * A * w, outline: 0.6 * A * w, lift: 1.2 * A * w, color: [165, 150, 255] };
+    }
+    case 'laser': {
+      // a cutting beam: a hard white line with a thin coloured bloom, crossing in one pass
+      const d = along() - fxFront(fx);
+      const core = g(d / 0.55), bloom = g(d / 2.6);
+      return { glow: A * Math.min(1, core + 0.35 * bloom), outline: A * core, lift: 0,
+        color: core > 0.35 ? [255, 255, 255] : [255, 90, 120] };
+    }
+    case 'powerup': {
+      // the board charges from the floor up, gold, with a bright lip at the top of the fill
+      const fill = fx.u * (fx.gridH + 4) - 2;
+      const below = fill - cy;
+      if (below < -1) return FX_NONE;
+      const lip = g(below / 1.1);
+      const held = below > 0 ? Math.min(0.55, 0.55 * Math.pow(1 - fx.u, 0.6)) : 0;
+      const w = Math.min(1, lip + held);
+      return { glow: A * w, outline: A * lip, lift: 1.6 * A * lip,
+        color: lip > 0.4 ? [255, 250, 220] : [255, 200, 90] };
+    }
+    case 'combo': {
+      // a chain reaction running the diagonal, each link popping as it is reached
+      const q = (cx + cy) / (fx.gridW + fx.gridH);
+      const v = fx.u * 1.2 - 0.1;
+      const w = g((q - v) / 0.05);
+      const step = Math.floor(q * 12);
+      const col = [[255, 120, 90], [255, 190, 80], [120, 255, 160], [110, 200, 255]][step & 3];
+      return { glow: A * w, outline: A * w, lift: 2.2 * A * w, color: col };
+    }
+    case 'aurora': {
+      // slow curtains of colour drifting over the board, brightest where they fold
+      const band = Math.sin(cx * 0.24 + fx.u * 5) + Math.sin(cy * 0.17 - fx.u * 3.4);
+      const w = Math.max(0, band) * 0.5 * Math.sin(Math.PI * fx.u);
+      const mix = (band + 2) / 4;
+      const col = [Math.round(80 + 60 * mix), Math.round(200 + 40 * mix), Math.round(255 - 70 * mix)];
+      return { glow: 0.8 * A * w, outline: 0.25 * A * w, lift: 0.8 * A * w, color: col };
+    }
+    case 'plasma': {
+      // the demoscene plasma: three sines over the board, the colour cycling with the clock
+      const v = Math.sin(cx * 0.32) + Math.sin(cy * 0.29) + Math.sin((cx + cy) * 0.19 + fx.u * 7);
+      const w = Math.max(0, v / 3) * Math.sin(Math.PI * fx.u);
+      const ph = (v + 3) / 6;
+      const col = [Math.round(140 + 115 * ph), Math.round(90 + 140 * (1 - ph)), Math.round(190 + 60 * ph)];
+      return { glow: 0.85 * A * w, outline: 0.2 * A * w, lift: 0, color: col };
+    }
+    case 'glitch': {
+      // data corruption: a different handful of cubes tears every eighth of the effect, hard on
+      // and hard off -- no easing, because a glitch that fades in is not a glitch
+      const frame = Math.floor(fx.u * 9);
+      const pick = jitterOf(t.txid, 'gl' + fx.seed + ':' + frame);
+      if (pick > 0.13) return FX_NONE;
+      const hard = pick < 0.05;
+      return { glow: A * (hard ? 1 : 0.6), outline: A, lift: hard ? 1.2 * A : 0,
+        color: hard ? [255, 60, 210] : [70, 255, 245] };
     }
     case 'lightcycle':
     case 'packets': {
