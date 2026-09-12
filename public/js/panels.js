@@ -3,7 +3,6 @@
 // payload is deliberately kept out of the live frame (mempool scatter, logs,
 // admin) -- those have their own cadence.
 import { lineChart, histogram, scatter, meter, stackedBars, paint, COL } from './charts.js';
-import { poolViewer } from './mining.js';
 
 const F = () => panelsFmt;
 let panelsFmt = null;
@@ -139,8 +138,9 @@ export function renderMempool(s, state, h, detail) {
   const dd = detail?.dist ?? d;
 
   meter(h.canvas('mpMeter'), { value: mp.usage, max: mp.maxUsage, fmt: (v) => fmt.bytes(v, 0) });
-  // the same Block space viewer as Overview, Mining and Block space, smaller
-  poolViewer(h.canvas('mpTreemap'), s, state);
+  // No Block space viewer on this page any more (operator: "just remove the block space panel from
+  // mempool entirely"). `poolViewer` is still exported by mining.js and still used by Overview,
+  // Block space, Mining and the Kiosk -- only this page's call is gone, along with its import.
   h.setText('mpLimits', kv([
     ['transactions', mp.count != null ? fmt.num(mp.count) : '–'],
     ['serialized', mp.bytes != null ? fmt.bytes(mp.bytes) : '–'],

@@ -18,7 +18,12 @@ test('the countdown reads minutes and seconds to the next refresh', () => {
 
 test('every pool viewer panel carries the countdown, and the page drives it once a second', () => {
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  for (const id of ['ovGnTreemap', 'spTreemap', 'mpTreemap', 'gnMempoolTreemap']) {
+  // 'mpTreemap' is deliberately absent: the Mempool page no longer carries a Block space viewer
+  // (operator, 2026-09-12: "just remove the block space panel from mempool entirely"). The viewer
+  // is still on Overview, Block space and Mining, and each of those must still carry its countdown
+  // -- which is what the remaining three ids check. Removed from the list rather than the guard
+  // being loosened: every viewer that EXISTS still has to have one.
+  for (const id of ['ovGnTreemap', 'spTreemap', 'gnMempoolTreemap']) {
     assert.ok(html.includes(`id="${id}"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>`), `${id} has its countdown and its refresh-now button, disabled until the board is at rest`);
   }
   const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');

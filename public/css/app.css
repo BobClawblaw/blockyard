@@ -740,7 +740,7 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
 #mpHistChart { height: clamp(130px, 26vh, 300px); }
 
 .mpcols { grid-column: 1 / -1; display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(300px, 0.45fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px; align-items: start; }
 .mpcols .card { grid-column: auto !important; }
 /* The gauge is a glance, not a chart: 190px of it left the figures beside it 317px to fit two

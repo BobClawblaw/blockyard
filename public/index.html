@@ -384,19 +384,17 @@
               <h3>Fee estimates over time <span class="sp"></span><span class="src">sat/vB</span></h3>
               <canvas class="chart" id="mpFeeChart"></canvas>
             </div>
+          </div>
+          <!-- No Block space viewer here (operator, 2026-09-12: "just remove the block space panel
+               from mempool entirely"). It lives on Overview, Block space and Mining; on this page
+               it was the tallest thing by a distance -- square, so its width was its height -- and
+               it spent most of this page's layout budget. The six charts are what this page is
+               for, and they now sit two to a column. -->
+          <div class="ovcol">
             <div class="card w6">
               <h3>Fee rate vs age <span class="sp"></span><span class="src">sampled scatter</span></h3>
               <canvas class="chart" id="mpScatter"></canvas>
               <div class="note tiny faint" id="mpScatterNote"></div>
-            </div>
-          </div>
-          <div class="ovcol">
-            <div class="card w4">
-              <h3>Block space <span class="sp"></span><span class="src">the next block's worth</span></h3>
-              <div class="treemapwrap sq">
-                <canvas class="treemap" id="mpTreemap"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div>
-                <div class="goggles-tip hidden"></div>
-              </div>
             </div>
             <div class="card w4">
               <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
