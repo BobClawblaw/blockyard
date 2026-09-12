@@ -322,7 +322,7 @@ Trimmed example:
 Notes:
 
 - `sync` always carries the node's own identity (`node`, `nodeLabel`, `endpoint`), and `strip` is the ordered list of facts the sync bar draws. `sync.state` is one of `synced`, `unknown`, or a syncing state (see `server/collect/sync.js`).
-- `hashrateEstEh` is difficulty divided by the observed mean block gap, in EH/s. During IBD, or more than 6 blocks behind headers, it is `null` and `hashrateNote` says why.
+- `hashrateEstEh` is the network hash rate in EH/s, estimated as difficulty x 2^32 divided by the observed mean block gap -- a difficulty-1 target expects 2^32 hashes, so leaving that factor out understates the rate by 4.29 billion (it did until 2026-09-12, and the figure reached the page as `0.0 EH/s`). The estimate agrees with the node's own `getnetworkhashps` to about one per cent. During IBD, or more than 6 blocks behind headers, it is `null` and `hashrateNote` says why.
 - `mempool.dist` omits the scatter points (`scatterPoints` is their count). Fetch them from `/api/mempool`.
 - `blocks.recent` holds the newest 40 blocks, newest first.
 - `series` has the chart windows listed under [/api/series](#snapshot-series-windows).

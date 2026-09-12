@@ -480,12 +480,15 @@ Kept as checked rather than deleted, so nobody re-derives them.
   Why it mattered: `gapSec` for the oldest surviving row is computed against the previous
   height, and after a silent eviction that predecessor was gone.
 - [x] **Suppressed during IBD, with the reason in the payload.** The figure is
-  difficulty ÷ the gap between blocks *we have*, which during IBD is the apply rate
-  wearing a network label — thousands of EH/s. It is withheld (`null`) when
+  difficulty × 2^32 ÷ the gap between blocks *we have*, which during IBD is the apply rate
+  wearing a network label — millions of EH/s. It is withheld (`null`) when
   `initialblockdownload` is true or the node trails its own headers by more than 6, and
   `hashrateNote` carries the sentence, so the UI renders `–` with an explanation rather
   than a large orange number. A synced node still gets the figure, because there it is
-  honest.
+  honest. (The `2^32` was missing from the estimator itself until 2026-09-12 — a separate
+  defect, and one this page described correctly while the code did not: it understated the
+  rate by 4.29 billion and put `0.0 EH/s` on the page. Fixed and cross-checked against the
+  node's own `getnetworkhashps`, which the monitor had never read.)
 - [x] **Two real nodes are wired, tested, and no longer the default.** With both
   configured the monitor was verified against production *and* a live IBD node:
   per-node series rings, the node switcher (which collapses to a single labelled
