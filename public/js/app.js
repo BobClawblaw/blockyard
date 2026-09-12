@@ -972,7 +972,15 @@ async function boot() {
     divBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
   divBtn?.addEventListener('click', (e) => { e.stopPropagation(); openDiversions(divPop?.classList.contains('hidden')); });
-  divPop?.addEventListener('click', () => openDiversions(false));
+  // The panel lives OUTSIDE <nav> now (see index.html: WebKit would not let the button be clicked
+  // inside the scrolling nav), so the delegated handler bound to #nav no longer sees these items.
+  // They route from here instead -- without this the three games become unreachable, which is a
+  // worse fault than the one the move fixes.
+  divPop?.addEventListener('click', (e) => {
+    const b = e.target.closest?.('button[data-page]');
+    if (b) setPage(b.dataset.page);
+    openDiversions(false);
+  });
   document.addEventListener('click', (e) => { if (divWrap && !divWrap.contains(e.target)) openDiversions(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openDiversions(false); });
   // DISPLAY SETTINGS (settings.js). The panel is built from PANEL, so a control and its value

@@ -42,20 +42,27 @@
       <button data-page="logs">Events</button>
       <button data-page="node">Node &amp; RPC</button>
       <button data-page="admin" id="navAdmin" hidden>Admin</button>
-      <!-- DIVERSIONS (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
-           options under a pop-down menu called 'Diversions'"). The items keep their data-page, so
-           the nav's own click handler routes them exactly as it routes every other tab -- and the
-           toggle deliberately has none, because a nav button with a data-page is required to have
-           a page section behind it. -->
-      <div class="navmenu" id="navDiv">
-        <button type="button" class="navmenu-btn" id="navDivBtn" aria-haspopup="true" aria-expanded="false">Diversions <span class="navcaret">&#9662;</span></button>
-        <div class="navmenu-pop hidden" id="navDivPop" role="menu">
-          <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
-          <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
-          <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
-        </div>
-      </div>
     </nav>
+    <!-- DIVERSIONS (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
+         options under a pop-down menu called 'Diversions'"). The toggle deliberately carries no
+         data-page, because a nav button with one is required to have a page section behind it.
+         OUTSIDE <nav>, and that is the whole point (operator, Safari on macOS: "still doesn't work
+         on safari. not clickable"). It used to sit inside `nav.pages`, which is a horizontal
+         scroll container, held at the right edge with `position: sticky; right: 0`. WebKit paints
+         a sticky element in its stuck position but hit-tests it where layout originally put it, so
+         the button was plainly visible and completely dead to the pointer -- in that engine only,
+         which is why every check here passed. Out here it is an ordinary flex item in the header
+         row: no sticky, no scroll container, nothing to go wrong. Being outside <nav> also means
+         the nav's delegated click handler no longer reaches the items, so app.js routes them from
+         the panel's own handler. -->
+    <div class="navmenu" id="navDiv">
+      <button type="button" class="navmenu-btn" id="navDivBtn" aria-haspopup="true" aria-expanded="false">Diversions <span class="navcaret">&#9662;</span></button>
+      <div class="navmenu-pop hidden" id="navDivPop" role="menu">
+        <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
+        <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
+        <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
+      </div>
+    </div>
     <span class="spacer"></span>
     <div class="meta">
       <span id="nodePick"></span>

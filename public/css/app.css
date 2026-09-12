@@ -1499,8 +1499,12 @@ body { font-variant-numeric: tabular-nums; }
    "Eve(nts)" and this menu was nowhere on screen. Sticky to the right edge keeps it in place while
    the tabs scroll underneath, and the short fade stops them appearing to slide out of a hard edge
    (the header's own gradient ends at --bg-1). */
-.navmenu { position: sticky; right: 0; z-index: 5; display: inline-flex; align-items: center; flex: 0 0 auto;
-  padding-left: 20px; background: linear-gradient(90deg, rgba(18, 21, 26, 0), var(--bg-1) 16px); }
+/* NOT STICKY, and not inside the scrolling nav (operator, Safari on macOS: "still doesn't work on
+   safari. not clickable"). This was `position: sticky; right: 0` inside `nav.pages`, an
+   overflow-x:auto container. WebKit paints a sticky element where it sticks but hit-tests it where
+   layout first put it, so the button showed at the right edge and ignored every click -- in that
+   engine alone. It is a plain header flex item now, which needs no sticky at all. */
+.navmenu { z-index: 5; display: inline-flex; align-items: center; flex: 0 0 auto; margin-left: 6px; }
 .navcaret { font-size: 9px; opacity: .8; }
 /* ...and the panel is FIXED, not absolute: `nav.pages` clips it on the block axis (a box with
    overflow-x:auto clips the other axis too) and `header.top` is overflow:hidden besides, so an

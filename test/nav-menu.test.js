@@ -41,10 +41,17 @@ test('the toggle carries no data-page: a nav button with one must have a section
   assert.match(toggle, /aria-expanded=/);
 });
 
-test('the menu is pinned and its panel escapes the clipping, or neither can be seen', () => {
+test('the menu is outside the scrolling nav, and its panel escapes the clipping', () => {
   const menu = rule('.navmenu'), pop = rule('.navmenu-pop');
-  assert.match(menu, /position: sticky/, 'the nav scrolls; the menu must not scroll away with it');
-  assert.match(menu, /right: 0/);
+  // NOT STICKY, AND NOT IN THE SCROLL CONTAINER. It was both, and on Safari for macOS the button
+  // was visible and unclickable: WebKit paints a sticky element in its stuck position but
+  // hit-tests it at its original layout position. Every check here passed while the menu was
+  // dead in that browser, so the guard is now structural -- the menu must sit outside <nav>.
+  assert.ok(!/position: sticky/.test(menu), 'sticky is what broke it in WebKit');
+  const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
+  assert.ok(!nav.includes('id="navDiv"'), 'the menu must not live inside the scrolling nav');
+  assert.match(app, /divPop\?\.addEventListener\('click'[\s\S]{0,200}?setPage\(b\.dataset\.page\)/,
+    'outside <nav> the delegated handler cannot route the games: the panel must route them itself');
   assert.match(pop, /position: fixed/, 'the nav and the header both clip; an absolute panel is invisible');
   assert.match(pop, /left: var\(--x/); assert.match(pop, /top: var\(--y/);
   // ...and the page positions it from the button's rect, through the CSSOM
