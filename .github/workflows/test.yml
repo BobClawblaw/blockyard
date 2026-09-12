@@ -31,9 +31,11 @@ jobs:
         node: ['22', '24']
     name: node ${{ matrix.node }}
     steps:
-      - uses: actions/checkout@v4
+      # v4 targets Node 20, which GitHub deprecated -- the runner force-ran it on 24 and said
+      # so in an annotation on the first run. v7 is current for both.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
 

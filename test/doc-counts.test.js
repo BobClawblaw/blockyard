@@ -29,10 +29,21 @@ const scan = scanTests({ root: ROOT });
 // That is a child process that *succeeds* while having measured nothing, so the
 // variable is removed deliberately and the parse below stays strict enough to
 // fail on an empty stream rather than default to zero.
+//
+// ASK FOR TAP; DO NOT TAKE THE DEFAULT. The default reporter is not a stable interface: it is
+// TAP on Node 22 and the spec reporter on Node 24, which prints "i tests 34" and a tick per
+// test instead of "# tests 34". This function used to take whatever the default was, so the
+// parse below found nothing on Node 24 and the test failed there while passing on 22 --
+// caught by the CI matrix on its second run ever. `--test-reporter=tap` pins the format to
+// the one the parse was written against, on every major.
 function runFile(file) {
   const env = { ...process.env, BLOCKYARD_CONFIG: 'none' };
   delete env.NODE_TEST_CONTEXT;
-  return execFileSync(process.execPath, ['--test', file], { cwd: ROOT, encoding: 'utf8', env, timeout: 60_000 });
+  return execFileSync(
+    process.execPath,
+    ['--test', '--test-reporter=tap', '--test-reporter-destination=stdout', file],
+    { cwd: ROOT, encoding: 'utf8', env, timeout: 60_000 },
+  );
 }
 
 test('the scanner counts the same tests `node --test` runs', (t) => {
