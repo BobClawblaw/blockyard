@@ -207,12 +207,14 @@ function fxNow(st, t) {
         const c = f.crashes?.[i];
         if (c && u >= c.u) {
           // DE-RES: stopped dead where it hit; drawCycles shatters its wall and fades it
-          return { ...p, d: c.d, from: Math.max(0, c.d - 12), alpha: 0, trail: 12, derez: Math.min(1, ((u - c.u) * f.ms) / DEREZ_MS), crash: c };
+          return { ...p, d: c.d, from: 0, alpha: 0, trail: Infinity, derez: Math.min(1, ((u - c.u) * f.ms) / DEREZ_MS), crash: c };
         }
         const v = Math.max(0, (u - p.lag) / (1 - p.lag));
         const run = Math.min(1, v / 0.8), after = Math.max(0, (v - 0.8) / 0.2);
         const d = run * len;
-        return { ...p, d, from: Math.max(0, d - 12, after * len), alpha: 1 - 0.75 * after, trail: 12 };
+        // the whole wall, from the start of the route: it is what the cycle has drawn on the
+        // board, and it stands until the effect is over (alpha fades it out at the very end)
+        return { ...p, d, from: 0, alpha: 1 - 0.75 * after, trail: Infinity };
       }
       const v = (u - p.s0) / 0.4;
       if (!(v > 0) || v >= 1.25) return { ...p, d: 0, from: 0, alpha: 0, trail: 3 };
@@ -475,7 +477,8 @@ export function drawCycles(ctx, view, lw) {
     loop(9, c.color, 0.5 * fade);
     loop(2.4, [255, 255, 255], 0.9 * fade);
     if (t < 0.35) fill(sqAt(at, hz + 0.5, 0.3 + 1.6 * (1 - t / 0.35)), [255, 255, 255], 0.9 * (1 - t / 0.35));
-    for (let k = Math.max(0, c.crash.d - 12); k < c.crash.d && k < c.pts.length - 1; k++) {
+    const shardFrom = Math.max(0, c.crash.d - 120);          // the whole wall, bounded so a long route cannot flood the frame
+    for (let k = shardFrom; k < c.crash.d && k < c.pts.length - 1; k++) {
       const a = c.pts[k], b = c.pts[k + 1], h = c.hs[k] ?? 0;
       for (let q = 0; q < 3; q++) {
         const f0 = (q + rnd()) / 3;
@@ -504,7 +507,11 @@ export function drawCycles(ctx, view, lw) {
       const s0 = Math.max(k, c.from), s1 = Math.min(k + 1, c.d);
       if (s1 <= s0) continue;
       const a = at(s0), b = at(s1), h = c.hs[k];
-      const bright = Math.pow(Math.max(0, 1 - (c.d - (s0 + s1) / 2) / c.trail), 1.5) * c.alpha;
+      // a wall that holds: full strength along its length, with the stretch nearest the head
+      // brighter still, rather than a 12-unit fade that erased the route behind the rider
+      const back = c.d - (s0 + s1) / 2;
+      const near = Math.pow(Math.max(0, 1 - back / 6), 1.5);          // the hot end, just behind the head
+      const bright = Math.min(1, 0.62 + 0.38 * near) * c.alpha;
       if (k > 0 && s0 === k && c.hs[k - 1] !== h) segs.push({ step: true, a: P(a.x, a.y, c.hs[k - 1]), b: P(a.x, a.y, h), top: P(a.x, a.y, Math.max(h, c.hs[k - 1]) + wallH), br: bright });
       segs.push({ a: P(a.x, a.y, h), b: P(b.x, b.y, h), at: P(a.x, a.y, h + wallH), bt: P(b.x, b.y, h + wallH), br: bright });
     }

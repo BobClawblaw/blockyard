@@ -1730,7 +1730,10 @@ export function cyclePath(seed, W, H, from = 'left') {
 // there, and two heads on one node at once both die. A dead cycle's wall de-reses and is no
 // longer solid, so the other rides on through it. Pure: paths [{ pts, lag }] in, per path
 // { u, d, at } or null out.
-export function cycleCrashes(paths, { trail = 12, step = 0.002, runShare = 0.8 } = {}) {
+// `trail`: how much of a cycle's wall is solid, counted back from its head. It is the whole wall
+// now (operator, 2026-09-12: the tails last the entire board), so a rider dies on any part of a
+// route another cycle has already laid -- which is what the walls look like.
+export function cycleCrashes(paths, { trail = Infinity, step = 0.002, runShare = 0.8 } = {}) {
   const n = paths.length;
   const out = paths.map(() => null);
   const len = paths.map((p) => p.pts.length - 1);

@@ -27,10 +27,26 @@ test('head to head, both de-res; parallel routes never crash', () => {
   assert.deepEqual([cycleCrashes([{ pts: line(0, 2, 20, 2), lag: 0 }, { pts: line(20, 8, 0, 8), lag: 0 }])].flat(), [null, null]);
 });
 
-test('a faded wall is not solid: only the last 12 units behind a head stop anyone', () => {
-  const early = { pts: line(10, 0, 10, 40), lag: 0 };   // laid (10,5) long before the other arrives
+test('the whole wall is solid: a rider dies on a route laid long before it got there', () => {
+  // operator, 2026-09-12: the tails last the entire board, so there is no stale part of a wall to
+  // ride through. The early cycle laid (10,5) well before the late one crosses it.
+  const early = { pts: line(10, 0, 10, 40), lag: 0 };
   const late = { pts: line(0, 5, 20, 5), lag: 0.55 };
-  assert.deepEqual(cycleCrashes([late, early]), [null, null]);
+  const [lateOut, earlyOut] = cycleCrashes([late, early]);
+  assert.ok(lateOut, 'the crosser dies on the older wall');
+  assert.deepEqual(lateOut.at, { x: 10, y: 5 }, 'exactly where the two routes meet');
+  assert.equal(earlyOut, null, 'the one that laid the wall rides on');
+});
+
+test('a de-resed wall stops being solid: the survivor rides through what is left of it', () => {
+  // the other half of the same rule, and the reason a crash does not simply kill everyone: once a
+  // cycle de-reses, its wall is no longer in play.
+  const a = { pts: line(0, 5, 30, 5), lag: 0 };
+  const b = { pts: line(5, 0, 5, 30), lag: 0 };
+  const c = { pts: line(20, 0, 20, 30), lag: 0.9 };      // crosses a's route much later
+  const out = cycleCrashes([a, b, c]);
+  assert.ok(out[0] || out[1], 'the early pair meet and at least one de-reses');
+  assert.ok(out.filter(Boolean).length < 3, 'not everyone dies: a de-resed wall is not a weapon');
 });
 
 test('real routes: a crash, when there is one, is on both routes', () => {
