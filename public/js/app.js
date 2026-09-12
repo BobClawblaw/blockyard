@@ -16,6 +16,7 @@ import { renderKiosk } from './kiosk.js';
 import { renderTetrust } from './tetrust.js';
 import { renderBlockout } from './blockout.js';
 import { renderBlockanoid } from './blockanoid.js';
+import { renderAbout } from './about.js';
 import { renderChain, renderMempool, renderPeers, renderNetwork, renderLogs, renderNode, renderAdmin, ensureLogsLoaded, init as initPanels, initChainDrill } from './panels.js';
 
 // panels.js needs the formatters but must not import them from here (circular);
@@ -470,6 +471,7 @@ export function render() {
     case 'tetrust': renderTetrust(s, state, helpers); break;
     case 'blockout': renderBlockout(s, state, helpers); break;
     case 'blockanoid': renderBlockanoid(s, state, helpers); break;
+    case 'about': renderAbout(s, state, helpers); break;
   }
 }
 
@@ -947,6 +949,9 @@ async function boot() {
     const b = e.target.closest('button[data-page]');
     if (b) setPage(b.dataset.page);
   });
+  // The monogram routes like a tab, but it lives OUTSIDE <nav> (it is the brand), and the handler
+  // above is bound to the nav element -- so it needs its own listener rather than inheriting one.
+  document.getElementById('brandAbout')?.addEventListener('click', () => setPage('about'));
   // the Diversions pop-down: opens on its button, closes on a choice, on a click anywhere else,
   // and on Escape
   const divWrap = document.getElementById('navDiv');

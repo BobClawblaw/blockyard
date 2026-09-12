@@ -38,7 +38,12 @@ test('every #id querySelector target exists in the page', () => {
 });
 
 test('the pages navigable from the nav all exist as sections', () => {
-  const navPages = [...html.matchAll(/<button data-page="([a-z]+)"/g)].map((m) => m[1]);
+  // ATTRIBUTE ORDER IS NOT PART OF THE CONTRACT. This matched `<button data-page=` only, so a
+  // button that led with any other attribute was invisible to it -- which is how the brand
+  // (`<button type="button" data-page="about" class="brand">`, the About link) slipped past while
+  // its section was seen, reporting a drift that did not exist. Matching data-page anywhere in the
+  // tag makes this catch MORE buttons, not fewer.
+  const navPages = [...html.matchAll(/<button[^>]*\sdata-page="([a-z]+)"/g)].map((m) => m[1]);
   const sections = [...html.matchAll(/<section class="page[^"]*" data-page="([a-z]+)"/g)].map((m) => m[1]);
   assert.deepEqual(navPages.sort(), sections.sort(), 'nav and page sections drifted apart');
 });
@@ -56,7 +61,23 @@ test('app.js renders a case for every page, and panels.js exports it', () => {
 
 test('no inline script or external URL in the page (CSP is self-only)', () => {
   assert.equal(/<script(?![^>]*src=)/i.test(html), false, 'inline <script> would be blocked by script-src \'self\'');
-  assert.equal(/https?:\/\/(?!www\.w3\.org)/.test(html), false, 'a non-namespace external URL would not load on a LAN box');
+
+  // A LOAD IS NOT A LINK. The rule here was "no http(s):// anywhere", and its stated reason was
+  // that an external URL would not load on a LAN box -- which is a fact about RESOURCES: a script,
+  // a stylesheet, an image. An <a href> is a navigation target. It fetches nothing, costs nothing
+  // offline, and the About page is required to carry one (operator, 2026-09-12: "link to our
+  // github page for the project").
+  //
+  // So the protection is kept and made specific: every external URL in the page must be an anchor
+  // destination. One appearing in src=, or as a stylesheet href, still fails -- which is the case
+  // the original rule existed to catch.
+  const external = [...html.matchAll(/https?:\/\/[^\s"'<>]+/g)]
+    .map((m) => m[0])
+    .filter((u) => !u.startsWith('http://www.w3.org'));
+  const anchored = new Set([...html.matchAll(/<a\b[^>]*\shref="(https?:\/\/[^"]+)"/g)].map((m) => m[1]));
+  const loaded = external.filter((u) => !anchored.has(u));
+  assert.deepEqual(loaded, [],
+    'an external URL that is not an <a href> is a resource load, which script-src/img-src \'self\' would block');
 });
 
 test('the login page uses an external script, matching script-src self', () => {

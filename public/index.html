@@ -7,14 +7,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>Blockyard - Bitcoin Machine Code</title>
+<title>BlockYard - Bitcoin Machine Code</title>
 <link rel="stylesheet" href="/css/app.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f7931a'/%3E%3Ctext x='16' y='22' font-size='18' font-family='monospace' font-weight='bold' text-anchor='middle' fill='%2316110a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ffb85c%22%2F%3E%3Cstop%20offset%3D%22.55%22%20stop-color%3D%22%23f7931a%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23a8640d%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227.5%22%20fill%3D%22url%28%23g%29%22%2F%3E%3Cg%20fill%3D%22%2316110a%22%20opacity%3D%22.14%22%3E%3Crect%20x%3D%224%22%20y%3D%2224.6%22%20width%3D%228%22%20height%3D%223.6%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2213%22%20y%3D%2224.6%22%20width%3D%226%22%20height%3D%223.6%22%20rx%3D%221%22%2F%3E%3Crect%20x%3D%2220%22%20y%3D%2224.6%22%20width%3D%228%22%20height%3D%223.6%22%20rx%3D%221%22%2F%3E%3C%2Fg%3E%3Cpath%20fill%3D%22%231a1206%22%20fill-rule%3D%22evenodd%22%20d%3D%22M5%208h6.6a4.2%204.2%200%200%201%202.35%207.66A4.4%204.4%200%200%201%2012%2024H5Zm3.3%202.9v3.5h3.1a1.75%201.75%200%200%200%200-3.5Zm0%206.4v3.8h3.4a1.9%201.9%200%200%200%200-3.8Z%22%2F%3E%3Cpath%20fill%3D%22%231a1206%22%20d%3D%22M16.8%208h3.3l2.75%205.3L25.6%208h3.3l-4.85%208.8V24h-3.3v-7.2Z%22%2F%3E%3C%2Fsvg%3E">
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><span class="mark">B</span> Blockyard <small id="ver"></small></div>
+    <!-- The monogram IS the About link (operator: "Make clicking the BlockYard icon the About
+         page then"). A <button data-page> rather than a bare click handler, so it satisfies the
+         same page contract every nav tab does: test/web-contract.test.js holds every
+         `<button data-page>` to a matching <section> and a render case. -->
+    <button type="button" data-page="about" class="brand" id="brandAbout" title="About BlockYard" aria-label="About BlockYard"><svg class="mark" viewBox="0 0 32 32" role="img" aria-label="BlockYard">
+  <defs><linearGradient id="byTile" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ffb85c"/><stop offset=".55" stop-color="#f7931a"/><stop offset="1" stop-color="#a8640d"/>
+  </linearGradient></defs>
+  <rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="url(#byTile)"/>
+  <g fill="#16110a" opacity=".14"><rect x="4" y="24.6" width="8" height="3.6" rx="1"/><rect x="13" y="24.6" width="6" height="3.6" rx="1"/><rect x="20" y="24.6" width="8" height="3.6" rx="1"/></g>
+  <path fill="#1a1206" fill-rule="evenodd" d="M5 8h6.6a4.2 4.2 0 0 1 2.35 7.66A4.4 4.4 0 0 1 12 24H5Zm3.3 2.9v3.5h3.1a1.75 1.75 0 0 0 0-3.5Zm0 6.4v3.8h3.4a1.9 1.9 0 0 0 0-3.8Z"/>
+  <path fill="#1a1206" d="M16.8 8h3.3l2.75 5.3L25.6 8h3.3l-4.85 8.8V24h-3.3v-7.2Z"/>
+</svg>
+    <span class="wordmark">Block<b>Yard</b></span> <small id="ver"></small></button>
     <nav class="pages" id="nav">
       <button data-page="overview" class="on">Overview</button>
       <button data-page="space">Block space</button>
@@ -59,7 +72,7 @@
     <div class="userchip">
       <span class="tiny faint" id="whoami"></span>
       <button class="btn gear" id="btnSettings" title="Display settings" aria-label="Display settings" aria-expanded="false">
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"><path d="M 13.94 2 c 0.50 0 0.92 0.37 0.99 0.87 l 0.26 1.85 c 0.50 0.18 0.97 0.41 1.40 0.69 l 1.73 -0.72 c 0.45 -0.19 0.98 -0.02 1.25 0.43 l 1.44 2.50 c 0.26 0.45 0.16 1.02 -0.24 1.28 l -1.47 1.16 c 0.04 0.28 0.06 0.56 0.06 0.84 c 0 0.28 -0.02 0.56 -0.06 0.84 l 1.47 1.16 c 0.40 0.26 0.50 0.83 0.24 1.28 l -1.44 2.50 c -0.27 0.45 -0.80 0.62 -1.25 0.43 l -1.73 -0.72 c -0.43 0.28 -0.90 0.51 -1.40 0.69 l -0.26 1.85 c -0.07 0.50 -0.49 0.87 -0.99 0.87 h -2.88 c -0.50 0 -0.92 -0.37 -0.99 -0.87 l -0.26 -1.85 c -0.50 -0.18 -0.97 -0.41 -1.40 -0.69 l -1.73 0.72 c -0.45 0.19 -0.98 0.02 -1.25 -0.43 l -1.44 -2.50 c -0.26 -0.45 -0.16 -1.02 0.24 -1.28 l 1.47 -1.16 c -0.04 -0.28 -0.06 -0.56 -0.06 -0.84 c 0 -0.28 0.02 -0.56 0.06 -0.84 l -1.47 -1.16 c -0.40 -0.26 -0.50 -0.83 -0.24 -1.28 l 1.44 -2.50 c 0.27 -0.45 0.80 -0.62 1.25 -0.43 l 1.73 0.72 c 0.43 -0.28 0.90 -0.51 1.40 -0.69 l 0.26 -1.85 c 0.07 -0.50 0.49 -0.87 0.99 -0.87 z M 12 8.40 a 3.60 3.60 0 1 0 0 7.20 a 3.60 3.60 0 0 0 0 -7.20 z"/></svg>
       </button>
       <button class="btn" id="btnPause" title="Freeze live updates (hold Shift to also stop the event feed)">pause</button>
       <button class="btn" id="btnLogout">sign out</button>
@@ -258,6 +271,46 @@
           <div class="hr"></div>
           <h3>Chain tips <span class="sp"></span><span class="src">getchaintips</span></h3>
           <table class="t" id="chTips"><thead><tr><th>height</th><th class="r">branchlen</th><th>status</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================== ABOUT -->
+    <!-- Reached from the monogram, not from a nav tab. The galaxy is the point here, not a
+         backdrop: this is the one page with no data for it to obscure. -->
+    <section class="page" data-page="about">
+      <div class="aboutwrap">
+        <canvas class="absky" id="abSky"></canvas>
+        <div class="aboutinner">
+          <div class="abhead">
+            <svg class="ablogo" viewBox="0 0 32 32" role="img" aria-label="BlockYard">
+              <defs><linearGradient id="abTile" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#ffb85c"/><stop offset=".55" stop-color="#f7931a"/><stop offset="1" stop-color="#a8640d"/>
+              </linearGradient></defs>
+              <rect x=".5" y=".5" width="31" height="31" rx="7.5" fill="url(#abTile)"/>
+              <g fill="#16110a" opacity=".14"><rect x="4" y="24.6" width="8" height="3.6" rx="1"/><rect x="13" y="24.6" width="6" height="3.6" rx="1"/><rect x="20" y="24.6" width="8" height="3.6" rx="1"/></g>
+              <path fill="#1a1206" fill-rule="evenodd" d="M5 8h6.6a4.2 4.2 0 0 1 2.35 7.66A4.4 4.4 0 0 1 12 24H5Zm3.3 2.9v3.5h3.1a1.75 1.75 0 0 0 0-3.5Zm0 6.4v3.8h3.4a1.9 1.9 0 0 0 0-3.8Z"/>
+              <path fill="#1a1206" d="M16.8 8h3.3l2.75 5.3L25.6 8h3.3l-4.85 8.8V24h-3.3v-7.2Z"/>
+            </svg>
+            <div>
+              <h1>Block<b>Yard</b></h1>
+              <p>A self-hosted monitor, block explorer, markets view and 3D block-space viewer for a Bitcoin node. No dependencies, no telemetry, read-only toward your node.</p>
+            </div>
+          </div>
+
+          <div class="abcols">
+            <section class="abcard"><h3>This monitor</h3><div id="abApp"></div></section>
+            <section class="abcard"><h3>Host</h3><div id="abHost"></div></section>
+            <section class="abcard"><h3>Bitcoin node</h3><div id="abNode"></div></section>
+          </div>
+
+          <a class="abgh" href="https://github.com/BobClawblaw/blockyard" target="_blank" rel="noopener noreferrer">
+            <!-- The GitHub mark, GitHub's trademark, used to link to the project on GitHub. -->
+            <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" focusable="false" fill="currentColor"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            <span>github.com/BobClawblaw/blockyard</span>
+          </a>
+
+          <p class="abcredit">Entirely made by machines. Directed by human hands.</p>
         </div>
       </div>
     </section>

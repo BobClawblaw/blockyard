@@ -25,6 +25,17 @@ All notable changes to this project are documented here. The format follows
   table. The rules file has no DOM, no clock and no randomness (a launch angle is an argument), so
   the whole of it runs under the test suite, and the ball is sub-stepped so it cannot tunnel through
   a brick on a slow frame.
+- **An About page**, reached by clicking the BlockYard monogram in the header rather than by a nav
+  tab of its own — the bar is already full enough to wrap below 2000 px. It shows the version and
+  live build, the host's operating system, architecture, processors, memory and runtime, and the
+  Bitcoin node's own version and protocol, over the spiral galaxy the other boards draw. New
+  `GET /api/about` supplies the host facts and deliberately reports no hostname, username, network
+  address or environment: the monitor is open-access by default, so the OS and processor describe
+  the machine's shape and never its owner.
+- **A stylised BY monogram and a real gear.** The brand mark was the letter `B` in a tile; it is now
+  a drawn monogram whose tile, gradient and courses of blocks live in the SVG, so the favicon is the
+  same drawing. The settings button was a circle with eight radiating rays — the standard sun glyph,
+  which is why it read as a light/dark toggle — and is now a cog with teeth and a punched bore.
 - **The Kiosk's price panel becomes Price & order book depth.** The 24 h high, low, volume,
   spread across books and the per-exchange table are gone; in their place is the depth chart,
   compact and toolbar-less, fixed at ±2.5% around the mid. A wall display is read from across a

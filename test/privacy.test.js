@@ -133,13 +133,22 @@ test('committed text carries no overlay-network address and no unreviewed host a
     if (f === 'test/privacy.test.js') continue;
     let text;
     try { text = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
-    if (OVERLAY.test(text)) hits.push(`${f}: overlay-network (100.64/10) address`);
-    for (const m of text.matchAll(RFC1918)) {
+    // SVG PATH DATA IS GEOMETRY, NOT TEXT. Compact path data elides separators, so
+    // `d="...5.47 7.59.4.07.55-.17..."` contains the run "7.59.4.07", which these rules read as
+    // a routable address. That happened twice in one afternoon -- the settings cog and the GitHub
+    // mark -- and hand-formatting every path forever is a tax, not a fix. A `d` attribute cannot
+    // carry a meaningful address, so it is excluded from the ADDRESS rules only.
+    //
+    // Note what is NOT excluded: the identity rules above (username, resolvable hostnames) still
+    // scan the whole file, path data included. Only the numeric-address patterns skip `d`.
+    const scan = text.replace(/\sd="[^"]*"/g, ' d=""');
+    if (OVERLAY.test(scan)) hits.push(`${f}: overlay-network (100.64/10) address`);
+    for (const m of scan.matchAll(RFC1918)) {
       if (RFC1918_OK.has(m[0])) continue;
       if (f === 'README.md' && m[0].endsWith('.0.0')) continue; // the 192.168.0.0/16 example CIDR
       hits.push(`${f}: RFC1918 address ${m[0]} -- use an RFC 5737 documentation address (192.0.2.x / 198.51.100.x / 203.0.113.x)`);
     }
-    if (!PEER_QUOTE_OK.some((re) => re.test(f)) && routable.test(text)) {
+    if (!PEER_QUOTE_OK.some((re) => re.test(f)) && routable.test(scan)) {
       hits.push(`${f}: a routable address outside the reviewed peer-quote list`);
     }
   }

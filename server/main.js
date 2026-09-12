@@ -282,7 +282,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     });
   }
   const served = plan.bindable.map((h) => `${app.scheme}://${h}:${cfg.server.port}`);
-  app.log({ level: 'info', msg: `Blockyard ${VERSION} listening on ${served.join(' and ')}` });
+  app.log({ level: 'info', msg: `BlockYard ${VERSION} listening on ${served.join(' and ')}` });
   if (!plan.bindable.includes('0.0.0.0') && !plan.bindable.includes('::')) {
     const v4 = localAddresses().filter((a) => a.family === 'IPv4' && !plan.bindable.includes(a.address) && !a.internal);
     const v6 = localAddresses().filter((a) => a.family === 'IPv6' && !plan.bindable.includes(a.address) && !a.internal).length;
@@ -438,7 +438,7 @@ export function banner(app) {
   const lines = [];
   const host = app.cfg.server.host;
   lines.push('');
-  lines.push('  Blockyard is up');
+  lines.push('  BlockYard is up');
   lines.push(`    URL      ${app.scheme}://${host === '0.0.0.0' ? 'localhost' : host}:${app.cfg.server.port}  (build ${app.build})`);
   if (app.bootstrap) {
     lines.push(`    login    ${app.bootstrap.username} / ${app.bootstrap.password}`);

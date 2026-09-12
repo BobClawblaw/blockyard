@@ -69,12 +69,43 @@ header.top {
   z-index: 20;
 }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; letter-spacing: .2px; flex: 0 0 auto; }
-.brand .mark {
-  width: 20px; height: 20px; border-radius: 5px;
-  background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent-dim));
-  box-shadow: 0 0 0 1px #00000066 inset, 0 0 12px #f7931a55;
-  display: grid; place-items: center; font-size: 11px; color: #16110a; font-weight: 800;
-}
+/* THE MONOGRAM. The tile, its gradient and the three courses of blocks along the bottom all
+   live in the SVG itself, so the mark is one object and the favicon is the same drawing --
+   no CSS needed to make it look right, which is what a favicon cannot have anyway. */
+.brand .mark { width: 22px; height: 22px; display: block; flex: 0 0 auto; border-radius: 6px; box-shadow: 0 0 14px #f7931a44; }
+.wordmark { font-weight: 600; letter-spacing: .2px; }
+.wordmark b { font-weight: 750; color: var(--accent); }
+/* The brand is a <button> now (it routes to About), so the browser's button chrome has to go:
+   without this the header grows a border, a background and the UA's own font. */
+button.brand { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+button.brand:hover .wordmark b { color: #ffc061; }
+button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+/* ==========================================================================
+   ABOUT (public/js/about.js). The galaxy is the page, not a decoration: this is
+   the one view with no data for it to sit behind, so the sky canvas fills the
+   panel and the text floats over it -- the same arrangement Tetrust uses.
+   ========================================================================== */
+.aboutwrap { position: relative; border-radius: var(--radius); overflow: hidden; background: #000; border: 1px solid var(--line-soft); min-height: min(calc(100vh - 150px), 820px); }
+.absky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.aboutinner { position: relative; z-index: 1; padding: 42px clamp(20px, 5vw, 64px); display: flex; flex-direction: column; gap: 26px; max-width: 1080px; margin: 0 auto; }
+.abhead { display: flex; align-items: flex-start; gap: 18px; }
+.ablogo { width: 64px; height: 64px; flex: 0 0 auto; border-radius: 14px; box-shadow: 0 0 28px #f7931a55; }
+.abhead h1 { margin: 0 0 6px; font-size: 34px; font-weight: 600; letter-spacing: .3px; text-shadow: 0 2px 14px #000; }
+.abhead h1 b { font-weight: 780; color: var(--accent); }
+.abhead p { margin: 0; max-width: 62ch; color: var(--fg-dim); line-height: 1.6; text-shadow: 0 1px 8px #000; }
+.abcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 14px; }
+.abcard { background: rgba(8, 12, 18, .72); border: 1px solid #1d2733; border-radius: var(--radius); padding: 14px 16px; }
+.abcard h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); font-weight: 600; }
+.abrow { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding: 3px 0; font-family: var(--mono); font-size: 12.5px; }
+.abrow span { color: var(--fg-dim); }
+.abrow b { font-weight: 600; color: var(--fg); text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.abgh { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; padding: 9px 15px; border-radius: 999px;
+  border: 1px solid #2a3543; background: rgba(8, 12, 18, .8); color: var(--fg); text-decoration: none; font-size: 13px; }
+.abgh:hover { border-color: var(--accent); color: var(--accent); }
+.abcredit { margin: 0; padding-top: 6px; color: var(--fg-faint); font-size: 13px; font-style: italic; letter-spacing: .3px; text-shadow: 0 1px 8px #000; }
+@media (max-width: 620px) { .abhead { flex-direction: column; gap: 12px; } .abhead h1 { font-size: 27px; } }
+#loginCard h1 b, .login h1 b { color: var(--accent); }
 .brand small { color: var(--fg-faint); font-weight: 500; }
 
 nav.pages { display: flex; gap: 2px; margin-left: 6px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }

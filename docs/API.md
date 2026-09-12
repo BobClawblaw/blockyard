@@ -166,6 +166,7 @@ HTML pages get a per-response script nonce (`script-src 'self' 'nonce-...'`). `S
 | Method | Path | Auth | Section |
 |---|---|---|---|
 | GET | `/api/health` | none | [3](#3-health-and-build) |
+| GET | `/api/about` | any | [3](#3-health-and-build) |
 | GET | `/api/build` | none | [3](#3-health-and-build) |
 | GET | `/api/state` | any | [4](#4-state-sync-and-nodes) |
 | GET | `/api/sync` | any | [4](#4-state-sync-and-nodes) |
@@ -231,6 +232,20 @@ Auth `none`, not rate limited. Built for uptime probes. `ok` is `true` when at l
   ]
 }
 ```
+
+### `GET /api/about`
+
+What the About page shows: the monitor's version and live build, and the **shape** of the machine it runs on.
+
+```json
+{ "version": "0.0.9", "build": "0.0.9-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
+  "arch": "x64", "cpus": 32, "cpuModel": "AMD Ryzen 9 9950X3D 16-Core Processor",
+  "totalMemGb": 132.3, "node": "v22.23.2", "uptimeSec": 2355 }
+```
+
+`auth: any` rather than `none`, unlike `/api/health` and `/api/build`: a version string answers "is my tab running current code", which a login page legitimately needs, whereas the host's processor and memory should not be readable before sign-in when accounts are on.
+
+It reports **no hostname, no username, no network addresses and no environment**. This monitor is open-access by default, so everything here is readable by anyone who can reach the port; the operating system and processor describe a machine's shape, not its owner. A test pins those absences.
 
 ### `GET /api/build`
 

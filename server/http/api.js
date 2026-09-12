@@ -120,6 +120,35 @@ export const routes = [
       };
     },
   },
+  // THE ABOUT PAGE'S HOST FACTS (operator, 2026-09-12: "system info. os info version").
+  //
+  // `auth: 'any'` rather than 'none' ON PURPOSE. With accounts off this is the same as open --
+  // that is the operator's posture, stated elsewhere -- but with accounts ON, the host's OS,
+  // processor and memory should not be readable before sign-in. /api/build and /api/health are
+  // 'none' because a version string answers "is my tab current", which a login page needs.
+  //
+  // What is deliberately NOT here: hostname, username, network addresses, environment. This
+  // monitor is open-access by default, so anything on this route is readable by anyone who can
+  // reach the port -- and those four are precisely what test/privacy.test.js exists to keep out
+  // of published artefacts. The OS and the processor identify a machine's SHAPE, not its owner.
+  {
+    method: 'GET', path: '/api/about', auth: 'any', handler: async (ctx, app) => {
+      const os = await import('node:os');
+      const cpus = os.cpus() ?? [];
+      return {
+        version: app.version,
+        build: await app.buildId(),
+        platform: os.platform(),
+        release: os.release(),
+        arch: os.arch(),
+        cpus: cpus.length || null,
+        cpuModel: cpus[0]?.model?.trim() ?? null,
+        totalMemGb: Math.round((os.totalmem() / 1e9) * 10) / 10,
+        node: process.version,
+        uptimeSec: Math.round((Date.now() - app.startedAt) / 1000),
+      };
+    },
+  },
   {
     method: 'GET', path: '/api/health', auth: 'none', handler: (ctx, app) => {
       const nodes = [...app.monitors.values()].map((m) => ({
