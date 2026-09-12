@@ -1343,16 +1343,13 @@ table.peertbl td { padding: 3px 7px; white-space: nowrap; }
 /* `[hidden]`-style collapse for whichever price view is off: .hidden is display:none elsewhere in
    this sheet, but .mklayout sets `display: grid` on the same element, and a later display wins. */
 .mklayout.hidden { display: none; }
-.mklayout { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 12px; }
-@media (max-width: 1000px) { .mklayout { grid-template-columns: minmax(0, 1fr); } }
+/* ONE COLUMN: the 250px track held the legend, and removing the legend without removing the track
+   would trade a panel of prose for an empty strip -- which is the same mistake as leaving the
+   space it was taking up. */
+.mklayout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .treemapwrap.mkboard { height: min(58vh, 620px); min-height: 340px; }
-.mkside .hud { font-size: 12px; line-height: 1.45; }
-.mkside .hudh { margin: 8px 0 3px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); }
-.mkrow { display: flex; align-items: center; gap: 6px; margin: 2px 0; flex-wrap: wrap; }
+/* (.mkside, .mkrow and .mksw dressed the board's legend and went with it.) */
 .mkn { display: inline-block; min-width: 36px; font-size: 10px; color: var(--fg-faint); }
-.mksw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
-.mksw.up { background: #1fc98a; }
-.mksw.down { background: #ef4d5e; margin-left: 8px; }
 .mktbl td.stale { color: #e8c987; }
 .mktbl th.r { text-align: right; }
 .treemapwrap.mkboard canvas.treemap { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -1373,7 +1370,6 @@ canvas.mkchart { width: 100%; height: min(54vh, 480px); min-height: 300px; displ
 .treemapwrap.mkboard { height: min(60vh, 600px); min-height: 380px; }
 .mklab { font-size: 11px; color: var(--fg-faint); margin-right: 4px; align-self: center; }
 canvas.mkchart.mkdepth { height: min(46vh, 420px); min-height: 280px; }
-.mksw.line { background: #ffec28; height: 3px; width: 14px; box-shadow: 0 0 6px #ffec28; }
 
 /* ---- explorer, round two (operator, 2026-09-11: "Surely we can make our display look at least as
    good as mempool. Do better. Make it beautiful") ---- */

@@ -50,8 +50,11 @@ test('the Block space panels are tightened to fit one screen, and only those pan
   for (const sel of ['.spacehud .hud {', '.spacehud .hudh {', '.spacehud .hud .bmeter {', '.spacehud .hudbar {']) {
     assert.ok(css.includes(sel), `${sel} is scoped to the Block space column`);
   }
-  // the same classes dress the Markets legend, which is not short of room: the shared rules stand
+  // The shared rules stand: the tightening above is scoped to `.spacehud`, so anything else using
+  // `.hud` keeps the roomier sizing. (These classes used to dress the Markets legend too; that
+  // legend was removed -- operator, 2026-09-12: "get rid of this. takes up too much space on the
+  // markets page" -- so there is no `.mkside .hud` rule left to assert. Dropped deliberately
+  // rather than left guarding an element that no longer exists.)
   assert.match(css, /^\.hudkv \{[^}]*gap: 3px 12px/m, 'the shared row rule is untouched');
   assert.match(css, /^\.hud \{[^}]*padding: 10px 12px/m, 'and the shared padding');
-  assert.match(css, /\.mkside \.hud \{/, 'the Markets legend keeps its own sizing');
 });

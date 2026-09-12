@@ -584,9 +584,12 @@
                that screen"). Both elements stay in the page -- the toolbar switches between them
                live, and markets.js skips the DRAW for whichever is hidden, so the unseen one costs
                nothing per refresh. The 3D board keeps its place first; a test pins that order. -->
+          <!-- No legend beside the board (operator, 2026-09-12: "get rid of this. takes up too much
+               space on the markets page"). It was a 250px column of prose explaining that a green
+               body closed up and a red one closed down, next to a chart that shows exactly that.
+               The board takes the full width now. -->
           <div class="mklayout" id="mkLayout">
             <div class="treemapwrap mkboard"><canvas class="treemap" id="mkBoard"></canvas><div class="goggles-tip hidden"></div></div>
-            <aside class="mkside"><div class="hud" id="mkLegend"></div></aside>
           </div>
           <div class="mksum" id="mkSummary"></div>
           <canvas class="mkchart" id="mkChart"></canvas>

@@ -174,20 +174,10 @@ export function tableHtml(d, fmt, now = Date.now()) {
   return `<div class="scroll"><table class="t mktbl"><thead><tr><th>exchange</th><th>pair</th><th class="r">last</th><th class="r">bid</th><th class="r">ask</th><th class="r">spread</th><th class="r">24 h</th><th class="r">24 h low – high</th><th class="r">24 h volume</th><th class="r">updated</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-export function legend3dHtml(c3, ser) {
-  if (!c3.tiles.length) return '<div class="faint">no candles yet</div>';
-  return `<div class="hudh">${ser?.base?.name ?? ''} ${ser?.base?.pair ?? ''}</div>
-    <div class="mkrow">the last ${c3.hours} hours, one candle each, newest on the right</div>
-    <div class="hudh">each candle</div>
-    <div class="mkrow"><span class="mksw up"></span>body: open → close, closed up</div>
-    <div class="mkrow"><span class="mksw down"></span>body: open → close, closed down</div>
-    <div class="mkrow">thin wick: the hour's low → high</div>
-    <div class="mkrow">bottom band: volume</div>
-    <div class="mkrow"><span class="mksw line"></span>neon line: the close, hour by hour</div>
-    <div class="hudh">height</div>
-    <div class="mkrow faint">no floor, one line under the volume: the candles over a star field, lit from the front right -- the newest hours brightest</div>
-    <div class="mkrow">price, $${money(c3.lo, 0)} at the floor to $${money(c3.hi, 0)} at the top; the levels are drawn on the board, the last price marked</div>`;
-}
+// (legend3dHtml lived here: a 250px column of prose beside the board explaining that a green body
+// closed up and a red one closed down. Removed with the legend it filled -- operator: "get rid of
+// this. takes up too much space on the markets page" -- rather than left as an exported function
+// with no caller.)
 
 export function toolbarHtml(d) {
   prefs();
@@ -250,13 +240,7 @@ function drawPrice() {
   document.getElementById('mkLayout')?.classList?.toggle('hidden', !three);
   document.getElementById('mkChart')?.classList?.toggle('hidden', three);
   if (!three) { drawChart(); return null; }
-  const b = drawBoard();
-  const legend = document.getElementById('mkLegend');
-  if (b && legend) {
-    const html = legend3dHtml(b.c3, b.ser);
-    if (legend.__html !== html) { legend.innerHTML = html; legend.__html = html; }
-  }
-  return b;
+  return drawBoard();
 }
 
 function bindChart() {
