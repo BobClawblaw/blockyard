@@ -1042,10 +1042,43 @@ export function obliqueOrder(tiles, o = {}) {
   const TOL = 0.5;
   const after = Array.from({ length: n }, () => []);
   const indeg = new Array(n).fill(0);
+  // A LEANING FACE OVER A SHORTER NEIGHBOUR (operator, 2026-09-12: "Height sorting issue on bottom
+  // left larger blocks next to smaller blocks"). Measured on the live Simple board: 6 of 33
+  // same-row tall/short pairs painted the short one AFTER the tall one, clipping the tall cube's
+  // side face -- every one of them on the LEFT half. Two things together: the pair rule below
+  // orders an x-overlap by column alone (left after right), which is right where faces lean
+  // right and backwards where the radial lean points them left; and abutting neighbours never
+  // reach that rule anyway, because the bounding-box check skips any pair closer than TOL while
+  // a 2-tall face leans over its neighbour by ~0.18 units. So: for same-row neighbours of
+  // unequal height, the taller paints after the one its face leans over, the side taken from the
+  // lean at its own column. +1: i after j. -1: j after i. 0: not this case.
+  // ON A SETTLED BOARD ONLY. A clipped face is a resting-board artefact -- a cube standing beside
+  // a shorter one. Applied during a transition this rule made pairs flicker (the guard caught 21
+  // of 785 overlapping pairs swapping mid-flight), and gating it per pair was not enough: an
+  // extra edge changes the SHAPE of the constraint graph, so as third cubes fly past and their
+  // hull edges come and go, the group a resting pair belongs to is re-cut differently from frame
+  // to frame and the pair swaps without either of them moving. So while anything on the board is
+  // in flight, no leaning-face edges at all: the graph is exactly what it was before this rule
+  // existed, and the resting order takes over once, at settle -- a single change, not a swap.
+  const flying = (t) => (t.z ?? 0) > 0 || (t.entry ?? 0) > 0;
+  const settledBoard = !tiles.some(flying);
+  const leanEdge = (p, q) => {
+    if (!settledBoard) return 0;
+    const hp = cubeHeight(p.t), hq = cubeHeight(q.t);
+    if (hp === hq) return 0;
+    const [tall, short, sign] = hp > hq ? [p.t, q.t, 1] : [q.t, p.t, -1];
+    if (!(short.y < tall.y + tall.s && tall.y < short.y + short.s)) return 0;     // same rows
+    const lean = obliqueLean(tall.x + tall.s / 2, o);
+    const onLeanSide = (lean > 0 && short.x === tall.x + tall.s) || (lean < 0 && short.x + short.s === tall.x);
+    return onLeanSide ? sign : 0;
+  };
   for (let i = 0; i < n; i++) {
     const a = info[i];
     for (let j = i + 1; j < n; j++) {
       const c2 = info[j];
+      const le = leanEdge(a, c2);
+      if (le > 0) { after[j].push(i); indeg[i]++; continue; }
+      if (le < 0) { after[i].push(j); indeg[j]++; continue; }
       if (a.bx1 - TOL < c2.bx0 || c2.bx1 - TOL < a.bx0 || a.by1 - TOL < c2.by0 || c2.by1 - TOL < a.by0) continue;
       if (!overlaps(a.hull, c2.hull, TOL)) continue;
       const c = nearer(a, c2);
