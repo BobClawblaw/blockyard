@@ -68,6 +68,24 @@ export const VIEWER_MODES = [
 // 1 x 1, the board 94% full, the largest still 26 units a side.
 // dither: area-true square sides (blockpack.js ditheredSide), so a full block fills the board
 export const DENSE_OPTS = { resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, neonCell: 'rgba(50,190,125,0.22)', dither: true };
+
+// SIMPLE IS THE DEFAULT VIEW, so its board has to pack clean (operator, 2026-09-12: "Simple viewer
+// mode is what I use as default. It needs to be fucking perfect"). It is NOT clean yet, and the
+// reason is recorded here so the next attempt does not repeat the one that failed.
+//
+// 48 was tried, on the grounds that the tail's equal squares come out 3 units a side and
+// 44 = 14x3 + 2, leaving a 2-wide strip no piece could enter down the whole board. That much is
+// true, and 48 did remove the side strip (interior gap rows 33 -> 8). It was still reverted,
+// because it is worse where it shows: measured across four pools, the TOP row came out 8%, 8%,
+// 67% and 4% full against 55%, 61%, 61% and 45% at 44, and leftover cells rose from 92 to 160 on
+// the live pool. Interior gap-rows were the wrong thing to optimise; the torn top edge is what
+// the eye reads as a mess.
+//
+// No resolution fixes it: the best top row across 40/44/48/50/56/60 swings from 4% to 98%
+// depending on the pool. The lever is not the board size. The tail is cut into N equal squares of
+// a side chosen in advance (aggregatePieces), and the scale is then shrunk in 5% steps until the
+// result happens to fit -- so the last row is partial by construction. A flush board needs the
+// scale SOLVED so the block fills the grid exactly, and the remainder tiled out to the edge.
 export function viewerSetup(s, state) {
   const d = state?.denseBlock;
   if (state?.viewerMode === '2' && d?.v?.length) {
@@ -238,16 +256,34 @@ export function growthMeter(nb, prevLit = null, now = Date.now()) {
  * height with no row yet is drawn as a placeholder that says so, not skipped -- skipping
  * hides the lag, and a row that hides its lag is a lie with better typography.
  */
-export function flowFrame({ tipHeight, recent = [], history = 8 } = {}) {
+export function flowFrame({ tipHeight, recent = [], stats = [], history = 8 } = {}) {
   const rows = new Map((recent ?? []).filter((r) => r && Number.isFinite(r.height)).map((r) => [r.height, r]));
-  const tip = { height: Number.isFinite(tipHeight) ? tipHeight : null, row: rows.get(tipHeight) ?? null };
+  // A HEIGHT WITHOUT ITS COINBASE IS NOT A HEIGHT WITHOUT DATA (operator, 2026-09-12: "It's not
+  // showing any data at all for unattributed blocks. How is that possible?"). Attribution reads one
+  // coinbase per poll, so it trails the tip -- but getblockstats has been in hand the whole time:
+  // size, weight, transactions, fees, feerate. The card used to be built only from the attribution
+  // row, so a height the reader had not reached yet was drawn as an empty dashed box, throwing away
+  // everything already known about it to report the one thing that was missing.
+  const statRows = new Map((stats ?? []).filter((r) => r && Number.isFinite(r.height)).map((r) => [r.height, r]));
+  const rowFor = (h) => {
+    const known = rows.get(h);
+    if (known) return known;
+    const st = statRows.get(h);
+    // `t` is the stats row's timestamp; the card reads `at`. Marked so the plate can say the miner
+    // is not known YET rather than claiming the block has no miner.
+    return st ? { ...st, at: st.at ?? st.t, coinbaseUnread: true } : null;
+  };
+  const tip = { height: Number.isFinite(tipHeight) ? tipHeight : null, row: rowFor(tipHeight) };
   const past = [];
   if (Number.isFinite(tipHeight)) {
     for (let h = tipHeight - 1; h > tipHeight - 1 - history && h >= 0; h--) {
-      past.push({ height: h, row: rows.get(h) ?? null });
+      past.push({ height: h, row: rowFor(h) });
     }
   }
-  const unattributed = (tip.row ? 0 : 1) + past.filter((p) => !p.row).length;
+  // still counted against ATTRIBUTION, not against the joined row: the note is about how far the
+  // coinbase reader is behind, and filling the cards in must not make that lag disappear
+  const heights = [tipHeight, ...past.map((p) => p.height)].filter((h) => Number.isFinite(h));
+  const unattributed = heights.filter((h) => !rows.has(h)).length;
   return { tip, history: past, unattributed };
 }
 
@@ -351,8 +387,7 @@ function blockCard(row, prev, fmt, arrived = false, isTip = false, extraClass = 
       title="${fmt.esc(tooltip)}">
     <i class="bstack" data-h="${f.capPct == null ? 0 : f.capPct.toFixed(1)}" data-pool="${w.idx}" aria-hidden="true"></i>
     <div class="bh"><span class="bdot" data-pool="${w.idx}"></span>${Number.isFinite(row.height) ? `<a class="bxlink" href="#explorer/block/${row.height}" title="open block ${row.height} in the explorer"><b>#${row.height}</b></a>` : '<b>#?</b>'}
-      ${ctx.tipHeight && Number.isFinite(row.height) ? `<i class="delt">−${ctx.tipHeight - row.height}</i>` : ''}
-      <span class="bpool" data-pool-fg="${w.idx}">${fmt.esc(trunc(w.name, 11))}</span></div>
+      ${ctx.tipHeight && Number.isFinite(row.height) ? `<i class="delt">−${ctx.tipHeight - row.height}</i>` : ''}</div>
     <div class="bwhen ${gapToPrev != null && gapToPrev > 1200 ? 'longgap' : ''}">${age ? `mined ${age}` : 'mined –'}${gapToPrev != null ? ` · gap ${gapText(gapToPrev)}` : ''}</div>
     <div class="bgrid">
       <div><i>size</i><span>${f.fillVb != null ? fmt.bytes(f.fillVb, 0) : '–'}</span></div>
@@ -366,6 +401,10 @@ function blockCard(row, prev, fmt, arrived = false, isTip = false, extraClass = 
       <span data-w="${f.capPct == null ? 0 : f.capPct.toFixed(1)}" data-pool="${w.idx}"></span>
     </div>
     <div class="bcap">${f.capPct != null ? `${f.capPct.toFixed(1)}% of 4M WU` : 'weight –'}${ctx.rank && ctx.rank.get(row.height) ? ` · feerate #${ctx.rank.get(row.height)}` : ''}</div>
+    <div class="bplaque"
+        title="${row.coinbaseUnread ? 'the coinbase for this height has not been read yet — attribution is one block per poll' : fmt.esc(row.tagText ? `coinbase: ${row.tagText}` : 'no readable coinbase text')}">
+      <span class="pill${row.coinbaseUnread ? ' waiting' : w.labelled ? '' : ' raw'}" data-pool-fg="${w.idx}">${row.coinbaseUnread ? 'reading coinbase' : fmt.esc(trunc(w.name, 22))}</span>
+    </div>
   </div>`;
 }
 
@@ -469,10 +508,12 @@ export function dragScroll(el) {
   el.addEventListener('click', (e) => { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
 }
 
-export function blockFlow(el, { tipHeight = null, recent = [], next = null, mempool = null, avgGapSec = null, tipAgeSec = null, ibd = false, online = true, paused = false } = {}, fmt) {
+export function blockFlow(el, { tipHeight = null, recent = [], stats = [], next = null, mempool = null, avgGapSec = null, tipAgeSec = null, ibd = false, online = true, paused = false } = {}, fmt) {
   dragScroll(el);
   if (!el) return;
-  const frame = flowFrame({ tipHeight, recent });
+  // `stats` too, or a height whose coinbase has not been read yet arrives here with its
+  // getblockstats row already in hand and still draws as an empty box
+  const frame = flowFrame({ tipHeight, recent, stats });
   const motion = flowMotion(el.__tip, frame.tip.height);
   // Arrival is WITNESSED: the timer starts only when the height changes under our eyes,
   // never on the first paint. A page that opened on a 14-minute-old tip has no idea when
@@ -841,6 +882,9 @@ export function feeLandscape(canvas, nb, fmt) {
 export const flowArgs = (s, state) => ({
   tipHeight: s?.tip?.height ?? null,
   recent: s?.attribution?.recent ?? [],
+  // getblockstats rows, keyed by height: what a block says about itself before its coinbase has
+  // been read. Without these a height the attribution reader has not reached draws as an empty box.
+  stats: s?.blocks?.recent ?? [],
   next: s?.attribution?.nextBlock ?? null,
   mempool: s?.mempool,
   avgGapSec: s?.avgBlockGapSec ?? null,

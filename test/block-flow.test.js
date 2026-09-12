@@ -445,3 +445,42 @@ test('nothing jitters: tabular numerals everywhere, and the live labels hold the
   assert.match(css, /#sseState \{ display: inline-block; min-width: 12ch; \}/);
   assert.match(css, /\.khead \.faint \{[^}]*text-overflow: ellipsis/);
 });
+
+test('a height whose coinbase has not been read yet still shows everything known about it', async () => {
+  // Operator, 2026-09-12: "It's not showing any data at all for unattributed blocks. How is that
+  // possible?" -- and it was a fair question. Attribution reads one coinbase per poll so it trails
+  // the tip, but getblockstats has been in hand the whole time. The card was built only from the
+  // attribution row, so a height the reader had not reached drew as an empty dashed box: every
+  // known fact about the block thrown away to report the one fact that was missing.
+  const { blockFlow, flowFrame } = await import('../public/js/mining.js');
+  const FMT = { num: (n) => String(n ?? '-'), bytes: (n) => String(n ?? '-'), esc: (s) => String(s ?? ''), ago: () => '-', rate: (x) => String(x ?? '-'), satPerVb: (x) => String(x ?? '-'), ageSec: () => '-', pct: (n) => String(n ?? '-') };
+  const recent = [{ height: 101, poolLabel: 'Foundry USA', poolKey: 'foundry', poolLabelKey: 'foundry', weight: 3_900_000, txs: 5000, totalfee: 700_000, size: 1_600_000, at: Date.now(), time: 1789200000 }];
+  // present in getblockstats, absent from attribution: the case that used to blank the card
+  const stats = [{ height: 100, weight: 3_991_446, txs: 5842, totalfee: 688_384, size: 1_623_024, avgFeerate: 2, t: Date.now() - 600_000, time: 1789199400 }];
+
+  const frame = flowFrame({ tipHeight: 101, recent, stats, history: 2 });
+  assert.ok(frame.history[0].row, 'the height with stats but no coinbase now has a row to draw');
+  assert.equal(frame.history[0].row.coinbaseUnread, true, 'marked, so the plate can say why');
+  assert.equal(frame.history[0].row.txs, 5842, 'carrying what getblockstats already knew');
+  // BOTH past heights are unattributed here: 100 has stats but no coinbase read, 99 has neither.
+  // The count is of coinbases still unread, not of blank cards -- filling 100's card in must not
+  // make the reader's lag disappear from the note under the row.
+  assert.equal(frame.unattributed, 2, 'the lag is STILL counted: drawing the card must not hide it');
+
+  const el = { clientWidth: 900, innerHTML: '' };
+  blockFlow(el, { tipHeight: 101, recent, stats, avgGapSec: 600 }, FMT);
+  const html = el.innerHTML;
+  const at100 = html.indexOf('#100');
+  assert.ok(at100 > 0, 'the height is drawn');
+  // bounded at the NEXT card, not a guessed character count: a fixed window ran 1601 chars over a
+  // 1275-char card and swallowed the stub for height 99, which IS a stub (no stats, no coinbase),
+  // so the assertion below was reading the wrong block's markup
+  const start = html.lastIndexOf('<div class="bcard', at100);
+  const nextCard = html.indexOf('<div class="bcard', at100);
+  const card = html.slice(start, nextCard === -1 ? undefined : nextCard);
+  assert.ok(!/bcard pending/.test(card), 'and not as an empty dashed stub');
+  assert.ok(card.includes('5842'), 'its transaction count is on the card');
+  assert.ok(card.includes('bgrid'), 'with the rest of its figures beside it');
+  assert.match(card, /class="pill waiting"/, 'the plate says the coinbase is still being read');
+  assert.ok(card.includes('reading coinbase'), 'in words, not as a blank');
+});

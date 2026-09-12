@@ -600,6 +600,26 @@ canvas#ovGnTreemap { display: block }
 .bgrid i { font-style: normal; color: var(--fg-faint) }
 .bgrid span { font-family: var(--mono); font-variant-numeric: tabular-nums }
 .bcap { font-size: 9.5px; color: var(--fg-faint); margin-top: 3px; font-variant-numeric: tabular-nums }
+/* THE MINER'S PLATE (operator, 2026-09-12: "we really need to move the pool name out of the block
+   info, and display it as a plaque underneath the block like the mempool space app labels
+   things"). It used to share the header row with the height, capped at 78px, which clipped
+   "Foundry USA" to "Foundry U…" -- the one fact on the card people scan for, truncated to make
+   room for a number that was already the biggest thing on the card. Full width under the block,
+   bled to the card's edges, so it reads as a label ON the block rather than another statistic. */
+/* A PILL, not a slab (operator, 2026-09-12: "Wtf is that unreadable shit ? Stuff it into a pill or
+   something, that is clearly visible"). The first cut carried data-pool, and applyMiningStyles
+   paints a BACKGROUND on any [data-pool] element that is not a .bcard -- so the plate came out as
+   a solid slab of the pool's colour with the pool's colour written on it. Unreadable, and entirely
+   self-inflicted. The pill takes no background from the style pass: only its TEXT is coloured,
+   through [data-pool-fg], over the card's own dark fill. */
+.bplaque { margin: 7px 0 0; text-align: center; min-width: 0; }
+.bplaque .pill { display: inline-block; max-width: 100%; padding: 2px 9px; border-radius: 999px;
+  background: var(--bg-3, #12161c); border: 1px solid var(--line, #262c35);
+  font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+/* a pool we could not name, and a coinbase not read yet, say so differently */
+.bplaque .pill.raw { font-family: var(--mono); text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--fg-dim); }
+.bplaque .pill.waiting { color: var(--fg-faint); font-weight: 500; border-style: dashed; }
 
 @media (prefers-reduced-motion: reduce) { .bcard.tip.overdue { animation: none } }
 
