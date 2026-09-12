@@ -31,7 +31,10 @@ test('everything the ball comes near lights up; far cubes stay dark', () => {
 
 test('the ball replaced the data packets among the idle effects', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  assert.match(src, /lightcycle: 6500, ball: 5600 \}/);
+  // the ball stays; `pulse` joined the list after it (2026-09-12, the price-line pulse on the
+  // markets board), so the literal's tail moved -- this pins that the ball is still in the set,
+  // not that it is last
+  assert.match(src, /lightcycle: 6500, ball: 5600, pulse: 8000 \}/);
   assert.doesNotMatch(src, /packets: 5200/);
   assert.match(src, /function drawBall\(ctx, view, lw\)/);
 });

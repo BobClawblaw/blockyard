@@ -133,8 +133,21 @@ function sizeCanvas(canvas) {
 // board costs nothing between them. Only with a real DOM (the unit harness and
 // the DOM stub never get one), never under prefers-reduced-motion, never while
 // a transition runs, and it retries later while the board is not on screen.
-const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600 };
+const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600, pulse: 8000 };
 const FX_KINDS = Object.keys(FX_MS);
+// THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
+// across the yellow line, not through space on an invisible grid ... travel the yellow line from
+// one end to the other leaving a electric blue tint on the yellow line that starts fading back to
+// normal yellow after 3 seconds"). Its life: travel, then the tint SITS for three seconds, then it
+// bleeds back to yellow. 0.3 of 8000 ms is a 2.4 s run end to end.
+const PULSE_TRAVEL = 0.3;
+const PULSE_HOLD_MS = 3000;
+const PULSE_FADE_MS = 2500;
+// A board with a price line is not a grid to sweep across. The straight-front effects (outline,
+// scan, tide), the light cycles and the lightning ball all travel the FLOOR, which on the candle
+// board is empty space -- which is what "through space on an invisible grid" describes. Where a
+// line exists, the effects that run are the ones with something to run along.
+const LINE_FX = ['pulse', 'twinkle'];
 const DEREZ_MS = 800;   // how long a crashed light cycle takes to shatter and fade
 
 function startFx(st, kind, now) {
@@ -181,7 +194,10 @@ function fxNow(st, t) {
   if (!f) return null;
   const u = (t - f.t0) / f.ms;
   if (!(u >= 0 && u < 1)) return null;
-  const out = { kind: f.kind, u, gridW: st.gridW, gridH: st.gridH, dx: f.dx, dy: f.dy, rank: f.rank, seed: f.seed,
+  // `ms` rides along: a consumer that needs wall-clock age (the price-line pulse holds its tint
+  // for three SECONDS, not for a share of the effect) has to know how long the effect is. It was
+  // missing, so the pulse computed NaN colours and the canvas kept the yellow it already had.
+  const out = { kind: f.kind, u, ms: f.ms, gridW: st.gridW, gridH: st.gridH, dx: f.dx, dy: f.dy, rank: f.rank, seed: f.seed,
     amp: Math.min(1, u * 6) * Math.pow(1 - u, 0.8) };
   if (f.kind === 'ripple') {
     const reach = Math.hypot(Math.max(f.x, st.gridW - f.x), Math.max(f.y, st.gridH - f.y));
@@ -247,9 +263,14 @@ function scheduleFx(canvas, st, opts, soon = false) {
     const now = (globalThis.performance && performance.now()) || 0;
     const busy = (st.plan && now < st.plan.settleAt) || st.dirty || !!st.pending;
     if (busy || !canvas.clientWidth) { scheduleFx(canvas, st, opts, soon); return; }
-    const pool = FX_KINDS.filter((k) => k !== st.lastFx);
-    // the first one after the board lands is a light-cycle race half the time
-    const kind = soon && st.lastFx !== 'lightcycle' && Math.random() < 0.5 ? 'lightcycle' : pool[(Math.random() * pool.length) | 0];
+    // a board with a price line gets the effects that follow it; every other board gets the grid
+    const onALine = (opts.axes?.line?.length ?? 0) > 1;
+    const kinds = onALine ? LINE_FX : FX_KINDS.filter((k) => k !== 'pulse');
+    const pool = kinds.filter((k) => k !== st.lastFx);
+    // the first one after the board lands is a light-cycle race half the time -- on the grid only
+    const kind = !onALine && soon && st.lastFx !== 'lightcycle' && Math.random() < 0.5
+      ? 'lightcycle'
+      : (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
     startFx(st, kind, now);
     st.wake?.();
   }, a + Math.random() * (b - a));
@@ -846,9 +867,53 @@ function priceLine(ctx, view, axes) {
   stroke(30, 'rgba(255,225,40,0.05)');
   stroke(18, 'rgba(255,228,45,0.10)');
   stroke(10, 'rgba(255,232,55,0.22)');
-  stroke(5.5, 'rgba(255,236,70,0.78)');
-  stroke(3, 'rgba(255,246,150,1)');
-  stroke(1.3, 'rgba(255,255,240,1)');
+  // the tube and core, which the pulse tints
+  const CORE = [[5.5, [255, 236, 70], 0.78], [3, [255, 246, 150], 1], [1.3, [255, 255, 240], 1]];
+  const fx = view.fx && view.fx.kind === 'pulse' ? view.fx : null;
+  if (!fx) {
+    for (const [w, c, a] of CORE) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    ctx.lineWidth = lw;
+    return;
+  }
+  // THE PULSE RUNS THE WIRE (operator, 2026-09-12: "travel the yellow line from one end to the
+  // other leaving a electric blue tint on the yellow line that starts fading back to normal yellow
+  // after 3 seconds"). The tint is per SEGMENT, by how long ago the head went past it: it holds
+  // for PULSE_HOLD_MS and only then bleeds back to yellow -- so the charge is left ON the line,
+  // not drawn across the floor beside it.
+  const n = pts.length - 1;
+  const headAt = Math.min(1, fx.u / PULSE_TRAVEL);           // 0..1 along the line
+  const BLUE = [110, 200, 255];
+  for (const [w, c, a] of CORE) {
+    ctx.lineWidth = lw * w;
+    for (let i = 0; i < n; i++) {
+      const at = n > 1 ? i / (n - 1) : 0;
+      const passed = headAt - at;
+      let tint = 0;
+      if (passed >= 0) {
+        const ageMs = passed * PULSE_TRAVEL * fx.ms;
+        tint = ageMs < PULSE_HOLD_MS ? 1 : Math.max(0, 1 - (ageMs - PULSE_HOLD_MS) / PULSE_FADE_MS);
+      }
+      const r = Math.round(c[0] + (BLUE[0] - c[0]) * tint);
+      const g = Math.round(c[1] + (BLUE[1] - c[1]) * tint);
+      const b = Math.round(c[2] + (BLUE[2] - c[2]) * tint);
+      ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
+      ctx.beginPath();
+      ctx.moveTo(pts[i].x, pts[i].y);
+      ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+      ctx.stroke();
+    }
+  }
+  // the head: a bright bead riding the wire, gone when it reaches the far end
+  if (headAt < 1) {
+    const d = headAt * n;
+    const k = Math.min(n - 1, Math.floor(d)), fr = d - k;
+    const hx = pts[k].x + (pts[k + 1].x - pts[k].x) * fr;
+    const hy = pts[k].y + (pts[k + 1].y - pts[k].y) * fr;
+    for (const [r, col] of [[9, 'rgba(110,200,255,0.14)'], [5, 'rgba(165,225,255,0.30)'], [2.4, 'rgba(235,250,255,0.92)']]) {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(hx, hy, lw * r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
   ctx.lineWidth = lw;
 }
 
@@ -951,7 +1016,7 @@ export const GALAXY_AT_DEFAULT = 'bottom-left';
 // rotating field cannot be sampled to the visible rectangle, or turning it would drag bare gaps
 // into view. So more stars are made than are ever drawn (see `oversample` above, which is per
 // placement), and the draw loop skips the ones outside.
-const GALAXY_MAX = 24000;                              // the count scales with area; 4K must not run away
+const GALAXY_MAX = 40000;                              // the count scales with area; 4K must not run away
 
 /**
  * NEBULAE (operator, 2026-09-12: "We need to improve the star fields. nebulas, more stars between
@@ -977,25 +1042,53 @@ export function nebulaClouds(pw, ph, at = GALAXY_AT_DEFAULT, seed = 11) {
   // dusty magenta, cold blue, teal, warm rose: a sky of one colour looks painted
   const TINTS = [[142, 88, 214], [48, 122, 196], [58, 168, 156], [198, 84, 142]];
   const out = [];
-  for (let i = 0; i < 6; i++) {
-    const t = 0.16 + 0.72 * rnd();
+  // Nine clouds, kept to the inner half of the disc: the disc reaches three times past the panel
+  // (GALAXY_PLACEMENTS), so a cloud laid anywhere on it was mostly laid off-screen -- the first cut
+  // put six out to the rim and the panel got a faint smudge in one corner. And bright enough to
+  // be SEEN: the first alphas (0.009-0.024) sat a hair above the background.
+  for (let i = 0; i < 9; i++) {
+    const t = 0.05 + 0.45 * rnd();
     const rad = inner + (maxR - inner) * t;
     const arm = Math.floor(rnd() * GALAXY_ARMS) * ((Math.PI * 2) / GALAXY_ARMS);
-    const ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() - 0.5) * 0.55;
-    const size = maxR * (0.09 + 0.11 * rnd());
+    const ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() - 0.5) * 0.5;
+    const size = maxR * (0.07 + 0.09 * rnd());
     const tint = TINTS[Math.floor(rnd() * TINTS.length)].join(',');
     const puffs = [];
-    const n = 18 + Math.floor(rnd() * 12);
+    const n = 22 + Math.floor(rnd() * 14);
     for (let k = 0; k < n; k++) {
       puffs.push({
         dx: (rnd() - 0.5) * size * 2.0,
         dy: (rnd() - 0.5) * size * 1.3,
         rx: size * (0.30 + 0.55 * rnd()),
         sq: 0.65 + 0.7 * rnd(),               // not circles: a cloud has a shape
-        a: 0.009 + 0.015 * rnd(),
+        a: 0.020 + 0.030 * rnd(),
       });
     }
     out.push({ gr: rad, ga: ang, tint, puffs });
+  }
+  return out;
+}
+
+/**
+ * DISTANT GALAXIES (operator, 2026-09-12: "Add whatever other universe / galaxy effects to the
+ * scene that you think will make it look even more visually stunning ... A beautiful rendering of
+ * our reaility"). A real deep field is not one galaxy on black: it has others in it, small and
+ * faint and far. Five of them, scattered over the panel, drawn first so everything else stands in
+ * front, and STATIC -- they do not turn with the disc, because they are not part of it. Each is a
+ * few concentric ellipses, tilted, in cool white or the faint blue of distance.
+ */
+export function farGalaxies(pw, ph, seed = 23) {
+  let s = seed >>> 0;
+  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const out = [];
+  for (let i = 0; i < 5; i++) {
+    out.push({
+      x: rnd() * pw, y: rnd() * ph,
+      rx: 7 + rnd() * 15,
+      ratio: 0.32 + rnd() * 0.5,            // a disc seen at some angle
+      rot: rnd() * Math.PI,
+      tint: rnd() < 0.5 ? '222,218,240' : '200,222,255',
+    });
   }
   return out;
 }
@@ -1011,7 +1104,9 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
   const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
   // density: the operator's multiplier on the shipped count (settings.js sky.density, which both
   // this board and the markets board read -- it used to live under `markets` and reach only one)
-  const d = Number.isFinite(density) ? Math.min(3, Math.max(0, density)) : 1;
+  // 8, not 3 (operator, 2026-09-12: "we need to be able to up the star density even more"). The
+  // slider's ceiling lives in settings.js PANEL; this is the renderer's own guard behind it.
+  const d = Number.isFinite(density) ? Math.min(8, Math.max(0, density)) : 1;
   const base = ((pw * ph) / (2400 * dpr * dpr)) * d;
   // `galaxy` is false, or WHERE the galaxy goes: a placement key. Carrying the placement in the
   // same argument keeps it part of what the field is built from, so moving the galaxy rebuilds
@@ -1052,7 +1147,11 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
         rad = maxR * 0.17 * Math.sqrt(rnd());
         ang = rnd() * Math.PI * 2;
         lit = 1;
-      } else if (roll < 0.86) {
+        // OLD STARS: a bulge is warm. The colour of a real spiral is not one colour -- its middle
+        // is yellow with age and its arms are blue with youth, and giving each population its own
+        // temperature is most of what makes the picture read as a galaxy rather than a pattern.
+        star.c = tint < 0.55 ? [255, 214, 150] : [255, 234, 196];
+      } else if (roll < 0.78) {
         const t = Math.pow(rnd(), 0.62);                 // crowded toward the middle
         rad = inner + (maxR - inner) * t;
         const arm = Math.floor(rnd() * GALAXY_ARMS) * ((Math.PI * 2) / GALAXY_ARMS);
@@ -1061,15 +1160,19 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
         const width = 0.18 * (1.35 - 0.75 * (rad / maxR));
         ang = arm + Math.log(rad / inner) / GALAXY_TWIST + (rnd() + rnd() + rnd() - 1.5) * width;
         lit = 1.2 - 0.35 * (rad / maxR);
+        // YOUNG STARS: the arms are where stars are born, and they burn blue-white
+        star.c = tint < 0.35 ? [160, 198, 255] : tint < 0.72 ? [205, 224, 255] : [242, 246, 255];
       } else {
         // BETWEEN THE ARMS (operator, 2026-09-12: "more stars between arms. I needs to look
         // awe-inspiring at the majesty and grandness of the universe"). This population was 6% of
         // the sky and it showed: the space between the arms went to black, which reads as a
-        // pinwheel on a void rather than a galaxy standing in a star field. 14% now, and a little
-        // brighter, so the dark lanes still read as lanes but are not empty.
+        // pinwheel on a void rather than a galaxy standing in a star field. 22% now (operator,
+        // again: "I want to see more twinkling of stuff between each of teh spiral arms"), and
+        // bright enough that their twinkle -- the full swing, since they are small -- actually
+        // shows, while still sitting back so the arms carry.
         rad = maxR * (0.16 + 0.84 * rnd());
         ang = rnd() * Math.PI * 2;
-        lit = 0.34;                                      // still well back, so the arms carry
+        lit = 0.46;
       }
       // fewer haloed giants than an even sky: at seven times the stars they read as clutter
       star.big = star.big && rnd() < 0.4;
@@ -1113,12 +1216,25 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
       stars: starField(pw, ph, dpr, 7, density, galaxy),
       // built once with the field, and turned with it: a cloud is placed in polar coordinates
       nebulae: galaxy ? nebulaClouds(pw, ph, galaxy === true ? GALAXY_AT_DEFAULT : galaxy) : null,
+      // and the deep field behind everything, galaxy or not
+      far: farGalaxies(pw, ph),
     };
     STARS.set(key, f);
   }
   ctx.__starBright = bright;
   const spin = galaxy ? now * GALAXY_SPIN : 0;
-  // the gas first: the stars stand IN it, not behind it
+  // the deep field first: distant galaxies, small and still
+  if (f.far && typeof ctx.ellipse === 'function') {
+    for (const g of f.far) {
+      for (const [k, a] of [[1, 0.035], [0.72, 0.05], [0.48, 0.08], [0.22, 0.16]]) {
+        ctx.fillStyle = `rgba(${g.tint},${(a * bright).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(g.x, g.y, g.rx * k * dpr, g.rx * k * g.ratio * dpr, g.rot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  // then the gas: the stars stand IN it, not behind it
   if (galaxy && f.nebulae && typeof ctx.ellipse === 'function') {
     for (const c of f.nebulae) {
       const ang = c.ga + spin;
