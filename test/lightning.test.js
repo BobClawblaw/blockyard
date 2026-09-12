@@ -34,7 +34,7 @@ test('the ball replaced the data packets among the idle effects', () => {
   // the ball stays; `pulse` joined the list after it (2026-09-12, the price-line pulse on the
   // markets board), so the literal's tail moved -- this pins that the ball is still in the set,
   // not that it is last
-  assert.match(src, /lightcycle: 6500, ball: 5600, pulse: 6000 \}/);
+  assert.match(src, /lightcycle: 6500, ball: 5600, pulse: 7000 \}/);
   assert.doesNotMatch(src, /packets: 5200/);
   assert.match(src, /function drawBall\(ctx, view, lw\)/);
 });

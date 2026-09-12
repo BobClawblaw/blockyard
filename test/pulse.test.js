@@ -65,4 +65,28 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   assert.ok(tube.some(([r, , b]) => b > r), `a segment behind the head is tinted blue (${tube.map((c) => c.join('/')).join(' ')})`);
   assert.ok(tube.some(([r, , b]) => r > b), 'and a segment ahead of it is still yellow: the tint is a tail, not the whole line');
   assert.ok(after.some((o) => o.startsWith('set:fillStyle=rgba(235,250,255')), 'and the head bead is drawn');
+  // crackle and shimmer ride the charged stretch (operator: "an obvious electrical crackling and
+  // shimmer effect ... on the blue highlighted areas that then fade ... as the blue fades out")
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(210,240,255')), 'a shimmering core over the blue');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(190,232,255')), 'and crackling branches off it');
+  // and the particle cloud (operator: "particle clouds following the energy surge too!!!!")
+  const motes = after.filter((o) => o.startsWith('set:fillStyle=rgba(200,236,255')).length;
+  assert.ok(motes >= 7, `motes stream off the charged stretch (${motes})`);
+  // and the blue nebula behind it all (operator: "a blue nebula behind the energy pulse that
+  // starts expanding and fading out to black") -- drawn before the tube, so it is BEHIND the wire
+  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(70,130,255'));
+  const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=rgba(') && o.endsWith(',0.78)'));
+  assert.ok(firstCloud >= 0, 'the nebula is drawn');
+  assert.ok(firstCloud < firstTube, 'and it is drawn behind the wire, not over it');
+});
+
+test('the tail lasts at least two seconds anywhere on the line, and clears the far end', async () => {
+  // operator: "Make the tail at least 2 seconds before it fades out and back towards yellow"
+  const src = (await import('node:fs')).readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const ms = Number(src.match(/pulse: (\d+) \}/)[1]);
+  const travel = Number(src.match(/const PULSE_TRAVEL = ([\d.]+);/)[1]);
+  const tail = Number(src.match(/const PULSE_TAIL = ([\d.]+);/)[1]);
+  const crossMs = ms * travel;
+  assert.ok(tail * crossMs >= 2000, `the tail is ${(tail * crossMs).toFixed(0)} ms long`);
+  assert.ok(1 / travel > 1 + tail, 'the head runs on far enough past the end for the whole tail to leave the line');
 });

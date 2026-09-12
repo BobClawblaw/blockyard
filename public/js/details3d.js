@@ -133,7 +133,7 @@ function sizeCanvas(canvas) {
 // board costs nothing between them. Only with a real DOM (the unit harness and
 // the DOM stub never get one), never under prefers-reduced-motion, never while
 // a transition runs, and it retries later while the board is not on screen.
-const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600, pulse: 6000 };
+const FX_MS = { ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200, lightcycle: 6500, ball: 5600, pulse: 7000 };
 const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from
@@ -146,10 +146,16 @@ const FX_KINDS = Object.keys(FX_MS);
 // after the head passed -- and the head crosses the line in under three, so the whole line went
 // blue together and snapped back together. Now the blue is strongest at the head and fades to
 // yellow over the quarter of the line behind it, and the head takes most of the effect to cross
-// (0.8 of 6000 ms) so the tail can be watched sliding along. The head runs on past the far end
-// until its tail has left too, which is why PULSE_TRAVEL is less than 1.
-const PULSE_TRAVEL = 0.8;
-const PULSE_TAIL = 0.25;
+// so the tail can be watched sliding along. The head runs on past the far end until its tail has
+// left too, which is why PULSE_TRAVEL is less than 1 -- and 1/PULSE_TRAVEL must exceed
+// 1 + PULSE_TAIL or the tail is cut off at the edge.
+//
+// Then: "Make the tail at least 2 seconds before it fades out and back towards yellow". 0.66 of
+// 7000 ms is a 4.6 s crossing; a tail 0.45 of the line long therefore lasts 2.1 s at any point.
+const PULSE_TRAVEL = 0.66;
+const PULSE_TAIL = 0.45;
+// a cheap deterministic 0..1 from an integer, for the pulse's particle motes
+const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
 // A board with a price line is not a grid to sweep across. The straight-front effects (outline,
 // scan, tide), the light cycles and the lightning ball all travel the FLOOR, which on the candle
 // board is empty space -- which is what "through space on an invisible grid" describes. Where a
@@ -871,14 +877,16 @@ function priceLine(ctx, view, axes) {
   // A BRIGHT NEON GLOW (operator, 2026-09-11, of the crackling light saber that was here: "that
   // effect is terrible. Remove it. I was hoping for a bright neon glow"). Steady -- no pulses, no
   // crackle, no flicker: a wide soft bloom, a hot yellow tube and a white core.
-  stroke(30, 'rgba(255,225,40,0.05)');
-  stroke(18, 'rgba(255,228,45,0.10)');
-  stroke(10, 'rgba(255,232,55,0.22)');
-  // the tube and core, which the pulse tints
-  const CORE = [[5.5, [255, 236, 70], 0.78], [3, [255, 246, 150], 1], [1.3, [255, 255, 240], 1]];
+  // the bloom, the tube and the core -- ALL of which the pulse tints. The first cut turned only
+  // the thin core blue and left the fat yellow bloom round it untouched, so the surge read as a
+  // faint whitening of the line (operator: "much too small on the yellow line, it's not obvious
+  // it's a large energy pulse travelling the line"). The bloom goes a deep saturated blue, the
+  // core an electric one, and every pass SWELLS behind the head.
+  const GLOW = [[30, [255, 225, 40], 0.05, 'glow'], [18, [255, 228, 45], 0.10, 'glow'], [10, [255, 232, 55], 0.22, 'glow']];
+  const CORE = [[5.5, [255, 236, 70], 0.78, 'core'], [3, [255, 246, 150], 1, 'core'], [1.3, [255, 255, 240], 1, 'core']];
   const fx = view.fx && view.fx.kind === 'pulse' ? view.fx : null;
   if (!fx) {
-    for (const [w, c, a] of CORE) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
     ctx.lineWidth = lw;
     return;
   }
@@ -888,9 +896,31 @@ function priceLine(ctx, view, axes) {
   // is left ON the line and seen leaving it, left to right, rather than drawn across the floor.
   const n = pts.length - 1;
   const headAt = fx.u / PULSE_TRAVEL;                        // 0..1 along the line, then past it
-  const BLUE = [110, 200, 255];
+  const BLUE = [110, 200, 255];                              // the core: electric
+  const DEEP = [30, 130, 255];                               // the bloom: saturated, so it reads BLUE
   const HOT = [255, 255, 215];                               // the flash: whiter than the wire
-  for (const [w, c, a] of CORE) {
+  // THE NEBULA BEHIND THE SURGE (operator, 2026-09-12: "like a blue nebula behind the energy pulse
+  // that starts expanding and fading out to black"). Drawn FIRST, so it sits behind the wire: soft
+  // nested discs on every charged segment, their radius growing with that stretch's age and their
+  // alpha falling with it -- tight and bright just behind the head, spread wide and gone to black
+  // by the tail's end. Plain fills, layered, as every glow in this renderer is.
+  for (let i = 0; i < n; i++) {
+    const at = n > 1 ? i / (n - 1) : 0;
+    const passed = headAt - at;
+    const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
+    if (tint < 0.04) continue;
+    const age = passed / PULSE_TAIL;
+    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+    const grow = 1 + 2.6 * age;
+    // radii in line-widths, and the line is under a pixel wide at board scale: the first cut's
+    // 26 was a smudge a few pixels across. Big enough to be a cloud the line runs through.
+    for (const [k, al] of [[70, 0.09], [44, 0.14], [22, 0.22]]) {
+      ctx.fillStyle = `rgba(70,130,255,${(al * tint * (1 - 0.7 * age)).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(mx, my, lw * k * grow, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  for (const [w, c, a, kind] of [...GLOW, ...CORE]) {
+    const B = kind === 'glow' ? DEEP : BLUE;
     ctx.lineWidth = lw * w;
     for (let i = 0; i < n; i++) {
       const at = n > 1 ? i / (n - 1) : 0;
@@ -898,13 +928,15 @@ function priceLine(ctx, view, axes) {
       // eased, so the tail fades rather than steps: blue right behind the head, most of the
       // yellow back by half the tail's length
       const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
+      // the charged stretch is FAT: a pulse is a thing travelling the line, not a colour on it
+      ctx.lineWidth = lw * w * (1 + 1.4 * tint);
       // ...and a FLASH behind the tail (operator: "Maybe even a higher color pulse for a brighter
       // yellow before it bounces back to normal yellow"): as the blue lets go, the wire overshoots
       // to a hotter, whiter yellow and settles back. A sine bump over the stretch just past the
       // tail, scaled by how little blue is left so the two never fight.
       const past = passed - PULSE_TAIL * 0.55;
       const hot = past > 0 && past < PULSE_TAIL ? Math.sin((past / PULSE_TAIL) * Math.PI) * (1 - tint) : 0;
-      const mix = (i) => c[i] + (BLUE[i] - c[i]) * tint + (HOT[i] - c[i]) * hot * 0.85;
+      const mix = (j) => c[j] + (B[j] - c[j]) * tint + (HOT[j] - c[j]) * hot * 0.85;
       const r = Math.round(Math.min(255, mix(0)));
       const g = Math.round(Math.min(255, mix(1)));
       const b = Math.round(Math.min(255, mix(2)));
@@ -915,13 +947,67 @@ function priceLine(ctx, view, axes) {
       ctx.stroke();
     }
   }
+  // CRACKLE AND SHIMMER on the charged stretch (operator, 2026-09-12: "add an obvious electrical
+  // crackling and shimmer effect to the spark effect travelling across the yellow line ... Have the
+  // crackling and shimmer effects on the blue highlighted areas that then fade and as the blue
+  // fades out"). Both are scaled by the segment's own tint, so they are fiercest just behind the
+  // head and die out exactly as the blue does.
+  //   shimmer: a thin white-blue core whose brightness flickers per segment on the frame clock
+  //   crackle: short jagged branches sprouting off the wire, re-rolled EVERY frame -- electrical,
+  //            because it never draws the same twice
+  const now = view.now ?? 0;
+  for (let i = 0; i < n; i++) {
+    const at = n > 1 ? i / (n - 1) : 0;
+    const passed = headAt - at;
+    const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
+    if (tint < 0.08) continue;
+    const p = pts[i], q = pts[i + 1];
+    const flick = 0.55 + 0.45 * Math.abs(Math.sin(now * 0.023 + i * 1.7) * Math.sin(now * 0.041 + i * 0.9));
+    ctx.strokeStyle = `rgba(210,240,255,${(0.9 * tint * flick).toFixed(3)})`;
+    ctx.lineWidth = lw * 2.4;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+    // branches: one to three per charged segment, each a 3-4 vertex zigzag off a random point.
+    // Reach in line-widths, and the line is under a pixel wide: 5-14 was invisible.
+    const forks = 1 + ((Math.random() * 3 * tint) | 0);
+    ctx.strokeStyle = `rgba(190,232,255,${(0.8 * tint).toFixed(3)})`;
+    ctx.lineWidth = lw * 1.7;
+    for (let k = 0; k < forks; k++) {
+      const f0 = Math.random();
+      let x = p.x + (q.x - p.x) * f0, y = p.y + (q.y - p.y) * f0;
+      const ang = Math.random() * Math.PI * 2;
+      const reach = lw * (18 + Math.random() * 30) * (0.5 + tint);
+      ctx.beginPath(); ctx.moveTo(x, y);
+      const legs = 3 + ((Math.random() * 2) | 0);
+      for (let m = 0; m < legs; m++) {
+        const a2 = ang + (Math.random() - 0.5) * 1.6;
+        x += Math.cos(a2) * (reach / legs); y += Math.sin(a2) * (reach / legs);
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // PARTICLES (operator: "particle clouds following the energy surge too!!!!"): a spray of
+    // motes streaming off the charged wire, each on its own heading, spreading wider and fading
+    // as its stretch of the line ages. Placed by a HASH of segment and mote plus the age -- not
+    // Math.random -- so a mote moves coherently frame to frame instead of jittering in place.
+    const age = passed / PULSE_TAIL;                       // 0 at the head, 1 at the tail's end
+    for (let k = 0; k < 10; k++) {
+      const f0 = hash01(i * 31 + k * 7);
+      const bx = p.x + (q.x - p.x) * f0, by = p.y + (q.y - p.y) * f0;
+      const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
+      const dist = lw * (4 + 48 * age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
+      const r = lw * (1.6 + 3.2 * hash01(i * 5 + k + 41)) * (1 - 0.45 * age);
+      ctx.fillStyle = `rgba(200,236,255,${(0.75 * tint * (1 - 0.5 * age)).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
   // the head: a bright bead riding the wire, gone when it reaches the far end
   if (headAt < 1) {
     const d = headAt * n;
     const k = Math.min(n - 1, Math.floor(d)), fr = d - k;
     const hx = pts[k].x + (pts[k + 1].x - pts[k].x) * fr;
     const hy = pts[k].y + (pts[k + 1].y - pts[k].y) * fr;
-    for (const [r, col] of [[9, 'rgba(110,200,255,0.14)'], [5, 'rgba(165,225,255,0.30)'], [2.4, 'rgba(235,250,255,0.92)']]) {
+    // a head you cannot miss: a wide blue corona, a bright core, a white point
+    for (const [r, col] of [[28, 'rgba(60,160,255,0.16)'], [15, 'rgba(120,200,255,0.34)'], [7, 'rgba(235,250,255,0.92)'], [3, 'rgba(255,255,255,1)']]) {
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(hx, hy, lw * r, 0, Math.PI * 2); ctx.fill();
     }
