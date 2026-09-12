@@ -9,8 +9,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  DEFAULTS, PANEL, SETTINGS_KEY, normalise, loadSettings, saveSettings, setSetting, resetSettings,
-  isDefault, spaceOptions, marketsOptions,
+  DEFAULTS, PANEL, SETTINGS_KEY, SCHEMA_VERSION, normalise, loadSettings, saveSettings, setSetting,
+  resetSettings, isDefault, spaceOptions, marketsOptions, onSettingsChange,
 } from '../public/js/settings.js';
 import { buildScene } from '../public/js/blockscene3d.js';
 import { starField } from '../public/js/details3d.js';
@@ -30,16 +30,16 @@ test('defaults are the shipped look, and an empty or corrupt store still yields 
   assert.deepEqual(normalise(null), normalise(undefined));
   assert.equal(normalise(null).space.shadows, true);
   assert.equal(normalise(null).space.detail, 'full');
-  assert.equal(normalise(null).markets.starDensity, 1);
+  assert.equal(normalise(null).sky.density, 1);
   const s = store();
   assert.deepEqual(loadSettings(s), normalise(null), 'empty store');
   s.setItem(SETTINGS_KEY, '{not json');
   assert.deepEqual(loadSettings(s), normalise(null), 'corrupt store is not a crash');
-  s.setItem(SETTINGS_KEY, JSON.stringify({ space: { detail: 'nonsense', dome: 999 }, markets: { starDensity: -5 } }));
+  s.setItem(SETTINGS_KEY, JSON.stringify({ version: SCHEMA_VERSION, space: { detail: 'nonsense', dome: 999 }, sky: { density: -5 } }));
   const got = loadSettings(s);
   assert.equal(got.space.detail, 'full', 'an unknown choice falls back');
   assert.equal(got.space.dome, 12, 'out of range is clamped, not rejected');
-  assert.equal(got.markets.starDensity, 0.2, 'and clamped at the bottom too');
+  assert.equal(got.sky.density, 0.2, 'and clamped at the bottom too');
 });
 
 test('a setting round-trips through the store, and reset puts everything back', () => {
@@ -48,7 +48,11 @@ test('a setting round-trips through the store, and reset puts everything back', 
   assert.equal(next.space.shadows, false);
   assert.equal(loadSettings(s).space.shadows, false, 'it persisted');
   assert.equal(isDefault(next), false);
-  assert.deepEqual(setSetting(next, 'space.nonsense', true, s).space.shadows, false, 'an unknown key changes nothing');
+  // It used to be ignored and return the settled object, which made a typo look exactly like a
+  // saved setting: the control moved, nothing persisted, and nothing said so.
+  assert.throws(() => setSetting(next, 'space.nonsense', true, s), /unknown setting "space\.nonsense"/,
+    'an unknown path is refused out loud, not swallowed');
+  assert.equal(loadSettings(s).space.shadows, false, 'and the store is untouched by the attempt');
   const back = resetSettings(s);
   assert.equal(isDefault(back), true);
   assert.equal(loadSettings(s).space.shadows, true, 'the store is empty again');
@@ -145,8 +149,12 @@ test('star density and brightness reach the field itself', () => {
   assert.deepEqual(starField(1200, 800, 1, 7, 1), starField(1200, 800, 1, 7, 1), 'seeded: the same sky every time');
   const off = marketsOptions({ markets: { stars: false } });
   assert.equal(off.space, false, 'stars off means the board draws none');
-  const dim = marketsOptions({ markets: { starBrightness: 0.4 } });
+  const dim = marketsOptions({ sky: { brightness: 0.4 } });
   assert.equal(dim.starBrightness, 0.4);
+  // the same sky, reaching the OTHER board: this is what the regroup was for
+  assert.equal(spaceOptions({ sky: { density: 2.5 } }).starDensity, 2.5,
+    'the block-space board can thin its stars too, which it could not when they lived under markets');
+  assert.equal(spaceOptions({ sky: { brightness: 0.5 } }).starBrightness, 0.5);
   assert.equal(marketsOptions({ markets: { glow: false } }).neonHalo, 'rgba(0,0,0,0)', 'glow off silences the halo');
 });
 
@@ -244,4 +252,88 @@ test('the gear opens a panel, and none of it is styled inline (CSP)', () => {
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
   assert.match(css, /\.cfgwrap \{/, 'the panel is styled');
   assert.match(css, /\.btn\.gear \{/, 'and so is the gear');
+});
+
+test('a v1 store keeps the choices it holds when a key moves group', () => {
+  // The foundation the operator chose to build first (2026-09-12). Before this, regrouping a key
+  // silently discarded whatever the operator had set: normalise dropped what it did not
+  // recognise. The sky keys moving out of `markets` is the first migration to prove it.
+  const s = store();
+  s.setItem(SETTINGS_KEY, JSON.stringify({ space: { shadows: false }, markets: { stars: false, starDensity: 2.4, starBrightness: 0.6, glow: false } }));
+  const got = loadSettings(s);            // no `version`: that is every store written before v2
+  assert.equal(got.sky.density, 2.4, 'the density the operator chose, under its new name');
+  assert.equal(got.sky.brightness, 0.6);
+  assert.equal(got.markets.stars, false, 'and the keys that did not move are untouched');
+  assert.equal(got.markets.glow, false);
+  assert.equal(got.space.shadows, false);
+  assert.equal(got.markets.starDensity, undefined, 'the old name is gone, not kept as a duplicate');
+});
+
+test('a store from a newer build falls back to defaults instead of guessing', () => {
+  const s = store();
+  s.setItem(SETTINGS_KEY, JSON.stringify({ version: SCHEMA_VERSION + 5, space: { dome: 11 }, sky: { density: 3 } }));
+  assert.deepEqual(loadSettings(s), normalise(null),
+    'its shape is unknown, so reading its keys would be a guess dressed as a preference');
+});
+
+test('what is written carries its version, and reading it back changes nothing', () => {
+  const s = store();
+  const saved = saveSettings({ space: { dome: 9 }, sky: { density: 2 } }, s);
+  const raw = JSON.parse(s.getItem(SETTINGS_KEY));
+  assert.equal(raw.version, SCHEMA_VERSION, 'stamped, so the next schema knows what it is reading');
+  assert.deepEqual(loadSettings(s), saved, 'a round trip is a fixed point');
+});
+
+test('the clamp and the slider cannot drift: the bounds have one source', () => {
+  // They were written out twice -- once in normalise, once in the PANEL row -- with nothing
+  // linking them. normalise reads the row now, so a slider that offers a value always stores it.
+  for (const g of PANEL) {
+    for (const r of g.rows) {
+      if (r.kind !== 'range') continue;
+      const below = normalise({ [g.group]: { [r.key]: r.min - 1 } })[g.group][r.key];
+      const above = normalise({ [g.group]: { [r.key]: r.max + 1 } })[g.group][r.key];
+      assert.equal(below, r.min, `${g.group}.${r.key} clamps to the minimum its slider offers`);
+      assert.equal(above, r.max, `${g.group}.${r.key} clamps to the maximum its slider offers`);
+      const mid = Math.min(r.max, r.min + r.step);
+      assert.equal(normalise({ [g.group]: { [r.key]: mid } })[g.group][r.key], mid,
+        `${g.group}.${r.key} stores a value the slider can actually produce`);
+    }
+    if (g.rows.some((r) => r.kind === 'choice')) {
+      for (const r of g.rows.filter((x) => x.kind === 'choice')) {
+        for (const [val] of r.options) {
+          assert.equal(normalise({ [g.group]: { [r.key]: val } })[g.group][r.key], val,
+            `${g.group}.${r.key} accepts ${val}, which its own control offers`);
+        }
+      }
+    }
+  }
+});
+
+test('a change reaches a subscriber without waiting for the next paint', () => {
+  const s = store();
+  const seen = [];
+  const off = onSettingsChange((next) => seen.push(next.space.dome));
+  setSetting(loadSettings(s), 'space.dome', 2, s);
+  resetSettings(s);
+  off();
+  setSetting(loadSettings(s), 'space.dome', 7, s);
+  assert.deepEqual(seen, [2, DEFAULTS.space.dome], 'the save and the reset both announced themselves');
+  assert.equal(loadSettings(s).space.dome, 7, 'and unsubscribing stops the telling, not the storing');
+});
+
+test('the parse is memoised, and a write invalidates it', () => {
+  // markets.js and mining.js call loadSettings() as they draw, so this was a JSON.parse per frame.
+  let reads = 0;
+  const inner = store();
+  const counting = {
+    getItem: (k) => { reads++; return inner.getItem(k); },
+    setItem: (k, v) => inner.setItem(k, v),
+    removeItem: (k) => inner.removeItem(k),
+  };
+  const a = loadSettings(counting);
+  const b = loadSettings(counting);
+  assert.equal(a, b, 'an unchanged store hands back the very same object');
+  assert.equal(reads, 2, 'it still checks the store each time; it just does not re-parse it');
+  setSetting(a, 'space.dome', 1, counting);
+  assert.equal(loadSettings(counting).space.dome, 1, 'a write is seen immediately after it lands');
 });

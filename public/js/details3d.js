@@ -879,7 +879,8 @@ const NO_CANVAS = {};
 export function starField(pw, ph, dpr = 1, seed = 7, density = 1) {
   let s = seed >>> 0;
   const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
-  // density: the operator's multiplier on the shipped count (settings.js markets.starDensity)
+  // density: the operator's multiplier on the shipped count (settings.js sky.density, which both
+  // this board and the markets board read -- it used to live under `markets` and reach only one)
   const d = Number.isFinite(density) ? Math.min(3, Math.max(0, density)) : 1;
   const n = Math.round(((pw * ph) / (2400 * dpr * dpr)) * d);
   const out = [];

@@ -11,10 +11,16 @@
 // Stored per browser under `bmc.settings` (like `bmc.viewerMode`), because these are view
 // preferences, not node state: a kiosk screen and a laptop looking at the same monitor want
 // different answers, and neither should need an account to have one.
+//
+// THE STORE IS VERSIONED (operator, 2026-09-12: "Scope an improved durable settings menu", and
+// the choice to build the foundation first). Regrouping a key used to be unaffordable: normalise
+// dropped what it did not recognise and setSetting ignored what it could not place, so any move
+// silently discarded the operator's stored choice. A version and a migration chain make a move
+// survivable, and `sky` below is the first one to take it.
 
 export const SETTINGS_KEY = 'bmc.settings';
+export const SCHEMA_VERSION = 2;
 
-// [value, ...allowed] for enums; [value, min, max] for numbers; booleans are themselves.
 export const DEFAULTS = Object.freeze({
   space: Object.freeze({
     shadows: true,        // cube-on-cube and resting shadows (blockscene3d shadowOps)
@@ -26,10 +32,16 @@ export const DEFAULTS = Object.freeze({
     detail: 'full',       // 'full' | 'simple' | 'flat' -- facet and crown thresholds below
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
   }),
+  // THE SKY IS ONE SKY. density and brightness lived under `markets` and were passed only to the
+  // markets board, so the Block space star field -- the same stars, drawn by the same code -- had
+  // no density or brightness control at all. Whether each board shows stars stays per board
+  // (space.stars, markets.stars); what the stars LOOK like belongs to neither.
+  sky: Object.freeze({
+    density: 1,           // multiplies the star count (0.2 .. 3)
+    brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
+  }),
   markets: Object.freeze({
     stars: true,
-    starDensity: 1,       // multiplies the star count (0.2 .. 3)
-    starBrightness: 1,    // multiplies each star's alpha (0.2 .. 1.5)
     glow: true,           // the neon halo under the grid lines
   }),
 });
@@ -48,111 +60,9 @@ const MOTION = {
   still: { rise: 0, travel: 1, drop: 0 },                  // lands immediately; no flight
 };
 
-const clamp = (v, lo, hi, fallback) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
-};
-const bool = (v, fallback) => (typeof v === 'boolean' ? v : fallback);
-const pick = (v, allowed, fallback) => (allowed.includes(v) ? v : fallback);
-
-/** Merge anything (a parsed store, a patch) onto the defaults, clamping every value. */
-export function normalise(raw) {
-  const s = raw && typeof raw === 'object' ? raw : {};
-  const sp = s.space && typeof s.space === 'object' ? s.space : {};
-  const mk = s.markets && typeof s.markets === 'object' ? s.markets : {};
-  return {
-    space: {
-      shadows: bool(sp.shadows, DEFAULTS.space.shadows),
-      idleFx: bool(sp.idleFx, DEFAULTS.space.idleFx),
-      edges: bool(sp.edges, DEFAULTS.space.edges),
-      grid: bool(sp.grid, DEFAULTS.space.grid),
-      stars: bool(sp.stars, DEFAULTS.space.stars),
-      dome: clamp(sp.dome, 0, 12, DEFAULTS.space.dome),
-      detail: pick(sp.detail, ['full', 'simple', 'flat'], DEFAULTS.space.detail),
-      motion: pick(sp.motion, ['full', 'quick', 'still'], DEFAULTS.space.motion),
-    },
-    markets: {
-      stars: bool(mk.stars, DEFAULTS.markets.stars),
-      starDensity: clamp(mk.starDensity, 0.2, 3, DEFAULTS.markets.starDensity),
-      starBrightness: clamp(mk.starBrightness, 0.2, 1.5, DEFAULTS.markets.starBrightness),
-      glow: bool(mk.glow, DEFAULTS.markets.glow),
-    },
-  };
-}
-
-export function loadSettings(storage = globalThis.localStorage) {
-  try {
-    const raw = storage?.getItem(SETTINGS_KEY);
-    return normalise(raw ? JSON.parse(raw) : null);
-  } catch {
-    return normalise(null);          // unreadable or corrupt: the defaults, never a crash
-  }
-}
-
-export function saveSettings(next, storage = globalThis.localStorage) {
-  const s = normalise(next);
-  try { storage?.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch { /* private mode, quota: keep it in memory */ }
-  return s;
-}
-
-/** Set one value by "group.key" and persist the result. Returns the whole settled object. */
-export function setSetting(current, path, value, storage = globalThis.localStorage) {
-  const [group, key] = String(path).split('.');
-  const base = normalise(current);
-  if (!base[group] || !(key in base[group])) return base;    // unknown key: ignored, not stored
-  return saveSettings({ ...base, [group]: { ...base[group], [key]: value } }, storage);
-}
-
-export function resetSettings(storage = globalThis.localStorage) {
-  try { storage?.removeItem(SETTINGS_KEY); } catch { /* nothing to remove */ }
-  return normalise(null);
-}
-
-/** True when nothing has been changed from the shipped defaults. */
-export function isDefault(s) {
-  return JSON.stringify(normalise(s)) === JSON.stringify(normalise(null));
-}
-
-/**
- * The renderer options for a block-space board (mining.js: Overview, Block space, Mempool, Kiosk).
- * Merged OVER the caller's own options, so a mode's resolution and slab still win where they are
- * the point of the mode; these are the user's preferences about how it is drawn.
- */
-export function spaceOptions(s) {
-  const sp = normalise(s).space;
-  const d = DETAIL[sp.detail] ?? DETAIL.full;
-  const out = {
-    shadows: sp.shadows,
-    idleFx: sp.idleFx,
-    grid: sp.grid,
-    space: sp.stars,
-    dome: sp.dome,
-    facetPx: d.facetPx,
-    crownPx: d.crownPx,
-  };
-  // the seam belongs to the Stone edges switch at every level of detail: a control that does
-  // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
-  // display mode"). Detail decides facets and the crown; this decides the outline.
-  out.edges = sp.edges;
-  if (!sp.edges) out.seamAlpha = 0;
-  const motion = MOTION[sp.motion];
-  if (motion) out.transition = motion;
-  return out;
-}
-
-/** The renderer options for the markets board (markets.js board3d). */
-export function marketsOptions(s) {
-  const mk = normalise(s).markets;
-  return {
-    space: mk.stars,
-    starDensity: mk.starDensity,
-    starBrightness: mk.starBrightness,
-    ...(mk.glow ? {} : { neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' }),
-  };
-}
-
 // What the panel draws. Kept beside the values so a new setting cannot be added without a
-// control, or a control without a value.
+// control, or a control without a value -- and, since normalise reads its bounds from here, so
+// that a slider and the clamp behind it cannot disagree. They used to be written out twice.
 export const PANEL = Object.freeze([
   Object.freeze({
     group: 'space',
@@ -176,14 +86,210 @@ export const PANEL = Object.freeze([
     ]),
   }),
   Object.freeze({
+    group: 'sky',
+    title: 'Sky',
+    note: 'The star field itself, wherever it is drawn — behind the Block space board and behind the candles. Each board decides whether to show it; this decides what it looks like.',
+    rows: Object.freeze([
+      Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 3, step: 0.1, hint: 'How many stars, against the shipped number' }),
+      Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
+    ]),
+  }),
+  Object.freeze({
     group: 'markets',
     title: 'Markets & Price',
     note: 'The candle board on Markets and Kiosk.',
     rows: Object.freeze([
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
-      Object.freeze({ key: 'starDensity', label: 'Star density', kind: 'range', min: 0.2, max: 3, step: 0.1, hint: 'How many stars, against the shipped number' }),
-      Object.freeze({ key: 'starBrightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
       Object.freeze({ key: 'glow', label: 'Grid glow', kind: 'toggle', hint: 'The neon halo under the grid lines' }),
     ]),
   }),
 ]);
+
+// "group.key" -> the row that defines it. The bounds live in exactly one place now.
+const ROWS = new Map();
+for (const g of PANEL) for (const r of g.rows) ROWS.set(`${g.group}.${r.key}`, r);
+
+const clamp = (v, lo, hi, fallback) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+};
+const bool = (v, fallback) => (typeof v === 'boolean' ? v : fallback);
+
+/** Clamp a number to the bounds its own slider advertises. */
+function clampRow(row, v, fallback) {
+  return clamp(v, row?.min ?? -Infinity, row?.max ?? Infinity, fallback);
+}
+/** Accept a choice only if its own control offers it. */
+function pickRow(row, v, fallback) {
+  const allowed = (row?.options ?? []).map(([val]) => val);
+  return allowed.includes(v) ? v : fallback;
+}
+
+/**
+ * v1 -> v2: the sky keys move out of `markets` into their own group. A v1 store keeps the values
+ * the operator chose; it does not get them reset for having been written yesterday.
+ * A store with no `version` at all is v1: that is every store written before this.
+ */
+const MIGRATIONS = {
+  1: (raw) => {
+    const mk = raw.markets && typeof raw.markets === 'object' ? raw.markets : {};
+    const { starDensity, starBrightness, ...markets } = mk;
+    const moved = {};
+    if (starDensity !== undefined) moved.density = starDensity;
+    if (starBrightness !== undefined) moved.brightness = starBrightness;
+    // anything already under `sky` wins: it was written by a newer schema than the one being read
+    return { ...raw, markets, sky: { ...moved, ...(raw.sky && typeof raw.sky === 'object' ? raw.sky : {}) } };
+  },
+};
+
+function migrate(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  let v = Number.isFinite(raw.version) ? raw.version : 1;
+  // Written by a build newer than this one: its shape is unknown, so the honest answer is the
+  // defaults rather than a guess at what its keys meant.
+  if (v > SCHEMA_VERSION) return null;
+  let out = raw;
+  while (v < SCHEMA_VERSION) {
+    const step = MIGRATIONS[v];
+    if (!step) return null;
+    out = step(out);
+    v++;
+  }
+  return out;
+}
+
+/**
+ * Merge anything (a parsed store, a patch) onto the defaults, clamping every value.
+ * Driven by DEFAULTS and PANEL rather than written out key by key, so adding a setting is one
+ * entry in each and a new key cannot arrive unclamped or unlisted.
+ */
+export function normalise(raw) {
+  const s = raw && typeof raw === 'object' ? raw : {};
+  const out = {};
+  for (const group of Object.keys(DEFAULTS)) {
+    const given = s[group] && typeof s[group] === 'object' ? s[group] : {};
+    const settled = {};
+    for (const [key, def] of Object.entries(DEFAULTS[group])) {
+      const row = ROWS.get(`${group}.${key}`);
+      const v = given[key];
+      if (typeof def === 'boolean') settled[key] = bool(v, def);
+      else if (typeof def === 'number') settled[key] = clampRow(row, v, def);
+      else settled[key] = pickRow(row, v, def);
+    }
+    out[group] = Object.freeze(settled);
+  }
+  return Object.freeze(out);
+}
+
+// Parsing localStorage on every board paint was a JSON.parse per frame (markets.js and mining.js
+// both call loadSettings() as they draw). The parse is memoised on the raw string, so an
+// unchanged store costs a getItem and a comparison.
+let cache = { raw: null, value: null };
+
+export function loadSettings(storage = globalThis.localStorage) {
+  try {
+    const raw = storage?.getItem(SETTINGS_KEY) ?? null;
+    if (cache.value && cache.raw === raw) return cache.value;
+    const value = normalise(migrate(raw ? JSON.parse(raw) : null));
+    cache = { raw, value };
+    return value;
+  } catch {
+    return normalise(null);          // unreadable or corrupt: the defaults, never a crash
+  }
+}
+
+// Consumers that want to know the moment a value changes, rather than waiting for the next paint.
+const listeners = new Set();
+/** Subscribe to settled settings. Returns an unsubscribe. */
+export function onSettingsChange(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function emit(s) {
+  for (const fn of [...listeners]) {
+    try { fn(s); } catch { /* a broken listener must not break the save */ }
+  }
+}
+
+export function saveSettings(next, storage = globalThis.localStorage) {
+  const s = normalise(next);
+  try {
+    storage?.setItem(SETTINGS_KEY, JSON.stringify({ version: SCHEMA_VERSION, ...s }));
+  } catch { /* private mode, quota: keep it in memory */ }
+  cache = { raw: null, value: null };
+  emit(s);
+  return s;
+}
+
+/**
+ * Set one value by "group.key" and persist the result. Returns the whole settled object.
+ *
+ * An unknown path THROWS. It used to be ignored, which made a typo indistinguishable from a
+ * saved setting -- the control would move and nothing would persist. Every path comes from PANEL
+ * (app.js builds the markup from it, and a test asserts every row names a real setting), so this
+ * is unreachable unless something is genuinely wrong, and then it should say so.
+ */
+export function setSetting(current, path, value, storage = globalThis.localStorage) {
+  const [group, key] = String(path).split('.');
+  const base = normalise(current);
+  if (!base[group] || !(key in base[group])) {
+    throw new TypeError(`unknown setting "${path}" (groups: ${Object.keys(DEFAULTS).join(', ')})`);
+  }
+  return saveSettings({ ...base, [group]: { ...base[group], [key]: value } }, storage);
+}
+
+export function resetSettings(storage = globalThis.localStorage) {
+  try { storage?.removeItem(SETTINGS_KEY); } catch { /* nothing to remove */ }
+  cache = { raw: null, value: null };
+  const s = normalise(null);
+  emit(s);
+  return s;
+}
+
+/** True when nothing has been changed from the shipped defaults. */
+export function isDefault(s) {
+  return JSON.stringify(normalise(s)) === JSON.stringify(normalise(null));
+}
+
+/**
+ * The renderer options for a block-space board (mining.js: Overview, Block space, Mempool, Kiosk).
+ * Merged OVER the caller's own options, so a mode's resolution and slab still win where they are
+ * the point of the mode; these are the user's preferences about how it is drawn.
+ */
+export function spaceOptions(s) {
+  const n = normalise(s);
+  const sp = n.space;
+  const d = DETAIL[sp.detail] ?? DETAIL.full;
+  const out = {
+    shadows: sp.shadows,
+    idleFx: sp.idleFx,
+    grid: sp.grid,
+    space: sp.stars,
+    dome: sp.dome,
+    facetPx: d.facetPx,
+    crownPx: d.crownPx,
+    // the same sky the markets board draws: this board had stars and no way to thin them
+    starDensity: n.sky.density,
+    starBrightness: n.sky.brightness,
+  };
+  // the seam belongs to the Stone edges switch at every level of detail: a control that does
+  // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
+  // display mode"). Detail decides facets and the crown; this decides the outline.
+  out.edges = sp.edges;
+  if (!sp.edges) out.seamAlpha = 0;
+  const motion = MOTION[sp.motion];
+  if (motion) out.transition = motion;
+  return out;
+}
+
+/** The renderer options for the markets board (markets.js board3d). */
+export function marketsOptions(s) {
+  const n = normalise(s);
+  const mk = n.markets;
+  return {
+    space: mk.stars,
+    starDensity: n.sky.density,
+    starBrightness: n.sky.brightness,
+    ...(mk.glow ? {} : { neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' }),
+  };
+}
