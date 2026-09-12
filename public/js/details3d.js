@@ -1287,7 +1287,14 @@ export function render3d(canvas, cells, options = {}) {
   // redraw. A plan is only made when the layout actually differs; otherwise
   // the in-flight animation is left alone to finish.
   const sig = tiles.map((t) => `${t.txid}:${t.x},${t.y},${t.s}${t.tall != null ? `^${t.tall}${t.color}` : ''}${t.floor != null ? `_${t.floor}` : ''}`).join('|');
-  const unchanged = sig === st.sig;
+  // how it is DRAWN, not what is drawn: the display settings (settings.js). A change here has to
+  // reach the board without waiting for the next poll, and without setting every block flying.
+  const optSig = [opts.shadows !== false, opts.edges !== false, opts.grid !== false, !!opts.space,
+    opts.seamAlpha, opts.facetPx, opts.crownPx, opts.dome, opts.idleFx !== false,
+    opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
+  const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
+  st.optSig = optSig;
+  const unchanged = sig === st.sig && !lookChanged;
   if (unchanged && st.plan && !still) {
     if (st.raf == null && (st.dirty || opts.space || !frameAt(st.plan, now, { unit: opts.unit, zUnit: opts.zUnit, vanishX: st.gridW * opts.unit / 2, vanishY: -st.gridH * opts.unit / 2, persp: opts.persp }).settled)) st.wake?.();
     return { tiles, settled: now >= st.plan.settleAt, yaw: st.yaw, replanned: false };
@@ -1309,7 +1316,9 @@ export function render3d(canvas, cells, options = {}) {
   // board empty until the drop phase -- twenty-five seconds of blank canvas.
   // Nothing was there before, so nothing has moved.
   const firstPaint = !st.prev.length;
-  const plan = (still || firstPaint)
+  // a look change on the same tiles is not a transition: land it where it already is
+  const lookOnly = lookChanged && sig === st.sig;
+  const plan = (still || firstPaint || lookOnly)
     // gridN matters even for a no-op plan: the camera constant is derived
     // from it, and a first paint on a different camera than every later
     // frame is exactly the load-time artefact this guards.
@@ -1339,6 +1348,7 @@ export function render3d(canvas, cells, options = {}) {
       boardW: st.gridW * opts.unit, boardH: st.gridH * opts.unit, dome: opts.dome, gridW: st.gridW, gridH: st.gridH,
       seamAlpha: opts.seamAlpha, fx: fxNow(st, t), oblique: opts.oblique, now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
       facetMinUnits: opts.facetPx / pxPerUnit, crownMinUnits: opts.crownPx / pxPerUnit,
+      shadows: opts.shadows !== false,   // settings.js: the board can be drawn without them
     };
     // the panel's extent in grid units, from the same constant fit paintFrame
     // uses: the textured sphere is laid over all of it (drawGrid), and an

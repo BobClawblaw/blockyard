@@ -630,7 +630,7 @@ these are the settings that buy it back, roughly most expensive first:
 | setting | what it does |
 |---|---|
 | **Shadows** | Cubes casting shadows on the board and on each other. The costliest single effect on a full board: one shadow per resting stone, more in flight. |
-| **Level of detail** | *Full* draws every facet and crown. *Simple cubes* draws those extras only on much larger stones. *Flat tiles* drops them, and the seams, entirely. |
+| **Level of detail** | *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
 | **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
 | **Idle effects** | The ripples, scans, light cycles and lightning ball that play while the board rests. |
 | **Stone edges** | The dark seam drawn around each stone. |

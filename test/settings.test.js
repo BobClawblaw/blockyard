@@ -86,15 +86,26 @@ test('shadows off really removes the shadow polygons from the scene', () => {
   assert.equal(without.length, 0, 'with shadows off, not one shadow polygon is built');
 });
 
-test('level of detail raises the facet and crown thresholds, and flat drops the seams', () => {
+test('level of detail raises the facet and crown thresholds', () => {
   const full = spaceOptions({ space: { detail: 'full' } });
   const simple = spaceOptions({ space: { detail: 'simple' } });
   const flat = spaceOptions({ space: { detail: 'flat' } });
   assert.ok(simple.facetPx > full.facetPx && simple.crownPx > full.crownPx, 'simple cubes: fewer polygons at the same size');
   assert.ok(flat.facetPx > simple.facetPx, 'flat is simpler still');
-  assert.equal(flat.edges, false, 'flat tiles carry no edge');
-  assert.equal(flat.seamAlpha, 0);
   assert.equal(spaceOptions({ space: { edges: false } }).seamAlpha, 0, 'edges off means no seam');
+});
+
+test('the Stone edges switch works at every level of detail -- no dead control', () => {
+  // operator, 2026-09-12: "stone edges don't work in flat tile display mode". Flat forced the
+  // seam off, so its own switch did nothing there.
+  for (const detail of ['full', 'simple', 'flat']) {
+    const on = spaceOptions({ space: { detail, edges: true } });
+    const off = spaceOptions({ space: { detail, edges: false } });
+    assert.equal(on.edges, true, detail + ': edges on means edges');
+    assert.notEqual(on.seamAlpha, 0, detail + ': and a seam to draw');
+    assert.equal(off.edges, false, detail + ': edges off means none');
+    assert.equal(off.seamAlpha, 0, detail + ': and no seam');
+  }
 });
 
 test('motion settings shorten or remove the flight; the board still lands', () => {
@@ -118,6 +129,30 @@ test('star density and brightness reach the field itself', () => {
   const dim = marketsOptions({ markets: { starBrightness: 0.4 } });
   assert.equal(dim.starBrightness, 0.4);
   assert.equal(marketsOptions({ markets: { glow: false } }).neonHalo, 'rgba(0,0,0,0)', 'glow off silences the halo');
+});
+
+test('the shadows option survives the whole path: settings -> render3d -> the scene', () => {
+  // The first version merged `shadows` into render3d options and stopped there: `view` is a
+  // curated object handed to buildScene, and shadows were not in it, so the board went on
+  // casting them (operator: "It still casts shadows when I have shadows unchecked"). Asserting
+  // on buildScene alone is what let that through, so this reads the render path itself.
+  const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const viewAt = src.indexOf('const view = {');
+  const builtAt = src.indexOf('shadows: opts.shadows !== false');
+  assert.ok(viewAt > 0, 'the view object is still built here');
+  assert.ok(builtAt > viewAt, 'and it carries the shadows option into the scene');
+  assert.ok(builtAt - viewAt < 1200, 'inside the same view literal, not somewhere else entirely');
+});
+
+test('simple cubes carry no divot at any size, and flat carries nothing at all', () => {
+  const full = spaceOptions({ space: { detail: 'full' } });
+  const simple = spaceOptions({ space: { detail: 'simple' } });
+  const flat = spaceOptions({ space: { detail: 'flat' } });
+  assert.equal(simple.crownPx, Infinity, 'no crown on a stone of any size');
+  assert.ok(simple.facetPx > full.facetPx, 'and fewer facets than full detail');
+  assert.equal(flat.crownPx, Infinity);
+  assert.equal(flat.facetPx, Infinity);
+  assert.equal(flat.edges, true, 'flat still honours the edges switch, which defaults to on');
 });
 
 test('the renderer honours the option names the settings hand it', () => {

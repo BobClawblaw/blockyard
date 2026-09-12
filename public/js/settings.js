@@ -38,8 +38,8 @@ const DETAIL = {
   // facetPx/crownPx are "draw this extra detail only when a stone is at least this many device
   // pixels across". Raising them is the cheap way to simplify: the same scene, fewer polygons.
   full: { facetPx: 9, crownPx: 18 },
-  simple: { facetPx: 26, crownPx: 64 },
-  flat: { facetPx: 1e9, crownPx: 1e9, edges: false, seamAlpha: 0 },
+  simple: { facetPx: 26, crownPx: Infinity },     // the divot IS the crown: never, at any size
+  flat: { facetPx: Infinity, crownPx: Infinity },   // facets and crown only: the seam is the operator's call
 };
 
 const MOTION = {
@@ -130,10 +130,11 @@ export function spaceOptions(s) {
     facetPx: d.facetPx,
     crownPx: d.crownPx,
   };
-  if (d.edges === false) out.edges = false;
-  else out.edges = sp.edges;
-  if (d.seamAlpha != null) out.seamAlpha = d.seamAlpha;
-  else if (!sp.edges) out.seamAlpha = 0;
+  // the seam belongs to the Stone edges switch at every level of detail: a control that does
+  // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
+  // display mode"). Detail decides facets and the crown; this decides the outline.
+  out.edges = sp.edges;
+  if (!sp.edges) out.seamAlpha = 0;
   const motion = MOTION[sp.motion];
   if (motion) out.transition = motion;
   return out;
