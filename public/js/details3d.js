@@ -560,6 +560,21 @@ export function drawCycles(ctx, view, lw) {
     for (const g of segs) if (!g.step) line(g.at, g.bt, c.color, 0.95 * g.br, c.small ? 2.2 : 3.6);
     for (const g of segs) if (!g.step) line(g.a, g.b, c.color, 0.8 * g.br, c.small ? 1.4 : 2.2);
     for (const g of segs) if (!g.step && g.br > 0.5) line(g.at, g.bt, [255, 255, 255], 1.6 * (g.br - 0.5), 1.4);
+    // the charge: the stretch of wall just behind the rider carries the Markets pulse's blue --
+    // its puffs, its tube, its crackle and its motes -- fading back to the wall's colour along
+    // CYCLE_TRAIL units (chargeTrail)
+    if (c.alpha > 0.3) {
+      const charged = [];
+      for (let k = Math.max(Math.floor(c.from), Math.floor(c.d - CYCLE_TRAIL)); k < Math.ceil(c.d) && k < end; k++) {
+        const s0 = Math.max(k, c.from, c.d - CYCLE_TRAIL), s1 = Math.min(k + 1, c.d);
+        if (s1 <= s0) continue;
+        const back = c.d - (s0 + s1) / 2;
+        const tint = Math.pow(Math.max(0, 1 - back / CYCLE_TRAIL), 1.4) * c.alpha;
+        const a = at(s0), b = at(s1), h = (c.hs[k] ?? 0) + wallH;
+        charged.push({ a: P(a.x, a.y, h), b: P(b.x, b.y, h), tint, age: Math.min(1, back / CYCLE_TRAIL), i: k });
+      }
+      chargeTrail(ctx, charged, lw, view.now ?? 0, (c.color[0] * 3 + c.color[1]) | 0);
+    }
     if (c.d < end && c.alpha > 0.3) {
       const hd = at(c.d), hz = (c.hs[hd.k] ?? 0) + wallH * 0.5, r = c.small ? 0.75 : 1.25;
       const sq = (q, z) => [P(hd.x - q, hd.y - q, z), P(hd.x + q, hd.y - q, z), P(hd.x + q, hd.y + q, z), P(hd.x - q, hd.y + q, z)];
@@ -570,6 +585,67 @@ export function drawCycles(ctx, view, lw) {
   }
   ctx.lineWidth = lw;
 }
+
+// THE CHARGE TRAIL (operator, 2026-09-12: "We need the block space energy effect also emit a
+// blue line and dust trail just like the markets view"). What the Markets pulse leaves on the
+// price line, for the board's own riders: the light cycles' wall tops and the lightning ball's
+// trace. `segs` are screen-space stretches just behind a head, each with its `tint` (1 at the
+// head, 0 at the trail's end) and `age` (0..1 the other way). Drawn as the pulse is drawn --
+// an emitter of soft blue puffs behind, a fat electric-blue tube over the stretch, a flickering
+// white-blue core with crackle forks re-rolled every frame, and a spray of hashed motes -- so
+// the two effects are visibly the same energy.
+function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
+  if (!segs.length) return;
+  for (const g of segs) {
+    if (g.tint < 0.04) continue;
+    const i = g.i + seedBase;
+    const mx = (g.a.x + g.b.x) / 2, my = (g.a.y + g.b.y) / 2;
+    for (let k = 0; k < 10; k++) {
+      const a1 = hash01(i * 47 + k * 11 + 3) * Math.PI * 2;
+      const spread = lw * (5 + 40 * g.age) * (0.35 + 0.65 * hash01(i * 13 + k * 5 + 29));
+      const rad = lw * (7 + 14 * hash01(i * 7 + k * 17 + 61)) * (1 + 1.2 * g.age);
+      const al = 0.09 * g.tint * (1 - 0.65 * g.age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
+      ctx.fillStyle = `rgba(70,130,255,${al.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(mx + Math.cos(a1) * spread, my + Math.sin(a1) * spread, rad, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  const line = (g, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = lw * w; ctx.beginPath(); ctx.moveTo(g.a.x, g.a.y); ctx.lineTo(g.b.x, g.b.y); ctx.stroke(); };
+  for (const g of segs) {
+    if (g.tint < 0.04) continue;
+    line(g, 14 * (1 + 0.8 * g.tint), `rgba(30,130,255,${(0.16 * g.tint).toFixed(3)})`);
+    line(g, 5 * (1 + 0.8 * g.tint), `rgba(110,200,255,${(0.7 * g.tint).toFixed(3)})`);
+  }
+  for (const g of segs) {
+    if (g.tint < 0.08) continue;
+    const i = g.i + seedBase;
+    const flick = 0.55 + 0.45 * Math.abs(Math.sin(now * 0.023 + i * 1.7) * Math.sin(now * 0.041 + i * 0.9));
+    line(g, 2.2, `rgba(210,240,255,${(0.9 * g.tint * flick).toFixed(3)})`);
+    const forks = 1 + ((Math.random() * 3 * g.tint) | 0);
+    ctx.strokeStyle = `rgba(190,232,255,${(0.8 * g.tint).toFixed(3)})`;
+    ctx.lineWidth = lw * 1.6;
+    for (let k = 0; k < forks; k++) {
+      const f0 = Math.random();
+      let x = g.a.x + (g.b.x - g.a.x) * f0, y = g.a.y + (g.b.y - g.a.y) * f0;
+      const ang = Math.random() * Math.PI * 2;
+      const reach = lw * (14 + Math.random() * 24) * (0.5 + g.tint);
+      ctx.beginPath(); ctx.moveTo(x, y);
+      const legs = 3 + ((Math.random() * 2) | 0);
+      for (let m = 0; m < legs; m++) { const a2 = ang + (Math.random() - 0.5) * 1.6; x += Math.cos(a2) * (reach / legs); y += Math.sin(a2) * (reach / legs); ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+    for (let k = 0; k < 8; k++) {
+      const f0 = hash01(i * 31 + k * 7);
+      const bx = g.a.x + (g.b.x - g.a.x) * f0, by = g.a.y + (g.b.y - g.a.y) * f0;
+      const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
+      const dist = lw * (3 + 36 * g.age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
+      const r = lw * (1.4 + 2.8 * hash01(i * 5 + k + 41)) * (1 - 0.45 * g.age);
+      ctx.fillStyle = `rgba(200,236,255,${(0.75 * g.tint * (1 - 0.5 * g.age)).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.lineWidth = lw;
+}
+const CYCLE_TRAIL = 9;       // units of route behind a light cycle's head that carry the charge
 
 // THE LIGHTNING BALL, over the cubes: the grid line it has traced burning behind it and cooling
 // over 16 units, a plasma ball of stacked glows with a white-hot heart, and bolts jumping from it
@@ -591,6 +667,7 @@ function drawBall(ctx, view, lw) {
     return { x: a.x + (c.x - a.x) * f, y: a.y + (c.y - a.y) * f };
   };
   const TR = 16, from = Math.max(0, b.d - TR);
+  const charged = [];
   for (let k = Math.floor(from); k < b.d && k < b.pts.length - 1; k++) {
     const s0 = Math.max(k, from), s1 = Math.min(k + 1, b.d);
     if (s1 <= s0) continue;
@@ -600,7 +677,11 @@ function drawBall(ctx, view, lw) {
     stroke(seg, 12, `rgba(90,170,255,${(0.16 * heat).toFixed(3)})`);
     stroke(seg, 4, `rgba(140,210,255,${(0.6 * heat).toFixed(3)})`);
     stroke(seg, 1.6, `rgba(235,248,255,${(0.95 * heat).toFixed(3)})`);
+    charged.push({ a: seg[0], b: seg[1], tint: heat, age: 1 - heat, i: k });
   }
+  // the dust and the crackle behind the ball, the same charge the light cycles and the Markets
+  // pulse carry (chargeTrail)
+  chargeTrail(ctx, charged, lw, view.now ?? 0, 977);
   const c = P(b.x, b.y, b.z);
   const disc = (r, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c.x, c.y, r * U, 0, Math.PI * 2); ctx.fill(); };
   const flick = 0.85 + 0.15 * Math.random();
