@@ -148,14 +148,17 @@ test('star density and brightness reach the field itself', () => {
   assert.ok(sparse < base / 2, `sparser sky: ${base} -> ${sparse}`);
   assert.deepEqual(starField(1200, 800, 1, 7, 1), starField(1200, 800, 1, 7, 1), 'seeded: the same sky every time');
   const off = marketsOptions({ markets: { stars: false } });
-  assert.equal(off.space, false, 'stars off means the board draws none');
+  assert.equal(off.stars, false, 'stars off means the board draws none');
+  assert.equal(off.space, true, 'but it is still a space board: the switch is the sky, not the style');
   const dim = marketsOptions({ sky: { brightness: 0.4 } });
   assert.equal(dim.starBrightness, 0.4);
   // the same sky, reaching the OTHER board: this is what the regroup was for
   assert.equal(spaceOptions({ sky: { density: 2.5 } }).starDensity, 2.5,
     'the block-space board can thin its stars too, which it could not when they lived under markets');
   assert.equal(spaceOptions({ sky: { brightness: 0.5 } }).starBrightness, 0.5);
-  assert.equal(marketsOptions({ markets: { glow: false } }).neonHalo, 'rgba(0,0,0,0)', 'glow off silences the halo');
+  // the grid glow is off on this board at every setting, so there is no longer a switch for it
+  assert.equal(marketsOptions({}).neonHalo, 'rgba(0,0,0,0)', 'the halo is silenced, always');
+  assert.equal(marketsOptions({}).gridGlow, 'rgba(0,0,0,0)');
 });
 
 test('the shadows option survives the whole path: settings -> render3d -> the scene', () => {
@@ -190,7 +193,9 @@ test('idle effects are armed when the board rests, star field or not', () => {
   const rest = src.indexOf('if (frame.settled && !st.dirty && !fxNow(st, t)) {');
   assert.ok(rest > 0, 'the rest branch no longer requires the loop to park');
   const armed = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect)');
-  const park = src.indexOf('if (!opts.space && !glowAnimating(st, t)) {', rest);
+  // the park test reads the SKY now, not the board style: `space` also carries the deck texture
+  // and the floor, so it could not go on standing in for "the stars need another frame"
+  const park = src.indexOf('if (!starsOn(opts) && !glowAnimating(st, t)) {', rest);
   assert.ok(armed > rest && armed < park, 'effects are armed before the park is even considered');
   assert.match(src, /if \(first\.settled\) \{ st\.atRest = true; scheduleFx\(canvas, st, opts, true\); \}/, 'and on a first paint that is already at rest');
   assert.match(src, /if \(!st\.atRest\) \{/, 'armed on the edge, not every frame');
@@ -266,7 +271,7 @@ test('a v1 store keeps the choices it holds when a key moves group', () => {
   assert.equal(got.sky.density, 2.4, 'the density the operator chose, under its new name');
   assert.equal(got.sky.brightness, 0.6);
   assert.equal(got.markets.stars, false, 'and the keys that did not move are untouched');
-  assert.equal(got.markets.glow, false);
+  assert.equal(got.markets.glow, undefined, 'markets.glow was dropped at v3; a v1 store does not resurrect it');
   assert.equal(got.space.shadows, false);
   assert.equal(got.markets.starDensity, undefined, 'the old name is gone, not kept as a duplicate');
 });

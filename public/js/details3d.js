@@ -876,6 +876,14 @@ function axisLabels(ctx, view, axes, n, k, dpr) {
 // ones carry a halo and a cross glint. Plain rgba fills and strokes, in device pixels.
 const STARS = new WeakMap();
 const NO_CANVAS = {};
+
+// IS THE SKY DRAWN? Not the same question as "is this a space board", though one option used to
+// answer both (operator, 2026-09-12: "I don't think the star field toggle works properly for
+// markets and price"). `space` also decides the deck texture, the translucent floor and the floor
+// line, so turning the stars off through it RESTYLED THE WHOLE BOARD -- which is not what a switch
+// labelled "Star field" should do. `stars` gates the sky alone; where it is absent the old
+// meaning stands, so every caller that never heard of it behaves exactly as before.
+const starsOn = (o) => !!(o.stars ?? o.space);
 // THE GALAXY (operator, 2026-09-12: "I want all the starts slowly rotating to form a spiral
 // galaxy in the background ... Make it a toggle").
 //
@@ -1087,7 +1095,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
-  if (opts.space) drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+  if (starsOn(opts)) drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
   if (!frame.bounds && !opts.oblique) return;
@@ -1454,6 +1462,7 @@ export function render3d(canvas, cells, options = {}) {
   // either changed -- the galaxy toggle and both sliders would have sat there doing nothing until
   // some unrelated poll happened to replan the board, which reads exactly like a broken switch.
   const optSig = [opts.shadows !== false, opts.edges !== false, opts.grid !== false, !!opts.space,
+    starsOn(opts),
     opts.seamAlpha, opts.facetPx, opts.crownPx, opts.dome, opts.idleFx !== false,
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
@@ -1461,7 +1470,7 @@ export function render3d(canvas, cells, options = {}) {
   st.optSig = optSig;
   const unchanged = sig === st.sig && !lookChanged;
   if (unchanged && st.plan && !still) {
-    if (st.raf == null && (st.dirty || opts.space || !frameAt(st.plan, now, { unit: opts.unit, zUnit: opts.zUnit, vanishX: st.gridW * opts.unit / 2, vanishY: -st.gridH * opts.unit / 2, persp: opts.persp }).settled)) st.wake?.();
+    if (st.raf == null && (st.dirty || starsOn(opts) || !frameAt(st.plan, now, { unit: opts.unit, zUnit: opts.zUnit, vanishX: st.gridW * opts.unit / 2, vanishY: -st.gridH * opts.unit / 2, persp: opts.persp }).settled)) st.wake?.();
     return { tiles, settled: now >= st.plan.settleAt, yaw: st.yaw, replanned: false };
   }
 
@@ -1531,16 +1540,17 @@ export function render3d(canvas, cells, options = {}) {
 
   const step = () => {
     const t = (globalThis.performance && performance.now()) || 0;
-    // SPACE keeps the loop alive for the twinkle -- about 24 frames a second once the board is
+    // THE SKY keeps the loop alive for the twinkle -- about 24 frames a second once the board is
     // still -- and stops it while the canvas is hidden (another tab of the app); the next
-    // render3d call wakes it (see the unchanged-layout branch)
-    if (opts.space) {
+    // render3d call wakes it (see the unchanged-layout branch). It is the STARS that need the
+    // repaint, not the board style, so a space-styled board with the sky off parks like any other.
+    if (starsOn(opts)) {
       if (canvas.isConnected === false || canvas.offsetParent === null) { st.raf = null; return; }
       if (st.settled && !st.dirty && !st.pending && !fxNow(st, t) && t - (st.lastPaint ?? 0) < 33) { st.raf = requestAnimationFrame(step); return; }
       st.lastPaint = t;
     }
     const frame = draw(t);
-    if (opts.space && frame.settled && st.pending) { const p = st.pending; st.pending = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
+    if (starsOn(opts) && frame.settled && st.pending) { const p = st.pending; st.pending = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     // keep the loop alive while the choreography runs OR the camera is moving;
     // park otherwise, because repainting a still picture is a heater
     if (frame.settled && !st.dirty && !fxNow(st, t)) {
@@ -1552,7 +1562,7 @@ export function render3d(canvas, cells, options = {}) {
         st.atRest = true;
         scheduleFx(canvas, st, opts, !afterEffect);
       }
-      if (!opts.space && !glowAnimating(st, t)) {
+      if (!starsOn(opts) && !glowAnimating(st, t)) {
         st.raf = null;
         if (st.pending) { const p = st.pending; st.pending = null; render3d(canvas, p.cells, p.options); return; }
         return;
@@ -1568,7 +1578,7 @@ export function render3d(canvas, cells, options = {}) {
 
   const first = draw(now);
   if (first.settled) { st.atRest = true; scheduleFx(canvas, st, opts, true); }   // at rest already, stars or not
-  if ((first.settled && !opts.space) || still || !globalThis.requestAnimationFrame) {
+  if ((first.settled && !starsOn(opts)) || still || !globalThis.requestAnimationFrame) {
     return { tiles, settled: true };
   }
   st.raf = requestAnimationFrame(step);

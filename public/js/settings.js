@@ -19,7 +19,7 @@
 // survivable, and `sky` below is the first one to take it.
 
 export const SETTINGS_KEY = 'bmc.settings';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const DEFAULTS = Object.freeze({
   space: Object.freeze({
@@ -42,9 +42,11 @@ export const DEFAULTS = Object.freeze({
     galaxy: false,        // opt-in: the same stars laid on spiral arms, turning once a quarter hour
     galaxyAt: 'bottom-left',   // where its middle sits: behind the board, or any of the corners
   }),
+  // `glow` was here and is gone (operator, 2026-09-12: "on markets and price. we should never show
+  // the grid glow. that's just terrible"). Never-show makes the switch a control nobody may use,
+  // and a control that must stay off is worse than no control: the board forces it off now.
   markets: Object.freeze({
     stars: true,
-    glow: true,           // the neon halo under the grid lines
   }),
 });
 
@@ -108,7 +110,6 @@ export const PANEL = Object.freeze([
     note: 'The candle board on Markets and Kiosk.',
     rows: Object.freeze([
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
-      Object.freeze({ key: 'glow', label: 'Grid glow', kind: 'toggle', hint: 'The neon halo under the grid lines' }),
     ]),
   }),
 ]);
@@ -147,6 +148,14 @@ const MIGRATIONS = {
     if (starBrightness !== undefined) moved.brightness = starBrightness;
     // anything already under `sky` wins: it was written by a newer schema than the one being read
     return { ...raw, markets, sky: { ...moved, ...(raw.sky && typeof raw.sky === 'object' ? raw.sky : {}) } };
+  },
+  // v2 -> v3: `markets.glow` is dropped. The markets board never draws the grid glow now, so the
+  // stored value has nothing left to mean. Written out rather than left to normalise (which would
+  // drop the key anyway) so the chain says what changed and when.
+  2: (raw) => {
+    const mk = raw.markets && typeof raw.markets === 'object' ? raw.markets : {};
+    const { glow, ...markets } = mk;
+    return { ...raw, markets };
   },
 };
 
@@ -272,7 +281,11 @@ export function spaceOptions(s) {
     shadows: sp.shadows,
     idleFx: sp.idleFx,
     grid: sp.grid,
+    // `space` is the board STYLE (no deck texture, a translucent floor); `stars` is the sky. They
+    // travel together here, which is the block-space board's shipped behaviour, but they are two
+    // options now so the markets board can keep its style while turning its sky off.
     space: sp.stars,
+    stars: sp.stars,
     dome: sp.dome,
     facetPx: d.facetPx,
     crownPx: d.crownPx,
@@ -297,11 +310,17 @@ export function marketsOptions(s) {
   const n = normalise(s);
   const mk = n.markets;
   return {
-    space: mk.stars,
+    // ALWAYS a space board: `space` carries the deck texture, the floor and the floor line as well
+    // as the sky, so driving it from the star switch restyled the whole board when the operator
+    // only wanted the stars gone. The sky has its own option now.
+    space: true,
+    stars: mk.stars,
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     galaxy: n.sky.galaxy,
     galaxyAt: n.sky.galaxyAt,
-    ...(mk.glow ? {} : { neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' }),
+    // never, at any setting: the halo under the grid lines is not wanted on this board
+    neonHalo: 'rgba(0,0,0,0)',
+    gridGlow: 'rgba(0,0,0,0)',
   };
 }
