@@ -56,6 +56,43 @@ test('the writes-while-open guard is a boot error with both ways out named', () 
   }
 });
 
+test('a node reached over BMC_MON_NODE_URL is not still called the built-in node', () =>
+  // Operator, 2026-09-12, looking at a second instance pointed at Bitcoin Core:
+  // "we're not on BMC Mainnet. We're using Core Mainnet there". The header said
+  // "BMC mainnet (production)" while the endpoint was Core on :8335 answering
+  // /Satoshi:31.99.0/ -- because BMC_MON_NODE_URL, DATADIR and COOKIE all existed
+  // and there was no way to say the node's NAME. The line whose only job is to say
+  // which node you are looking at must not be the line that is wrong.
+  withEnv({ BMC_MON_NODE_URL: 'http://127.0.0.1:8335' }, () => {
+    const cfg = loadConfig({ configFile: '/nonexistent.json', ifaces });
+    assert.equal(cfg.nodes[0].label, 'node @ 127.0.0.1:8335',
+      'a redirected node is named by the endpoint it actually answers on');
+    return withEnv({ BMC_MON_NODE_LABEL: 'Core mainnet (oracle)' }, () => {
+      assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
+        'Core mainnet (oracle)', 'an explicit label is the operator speaking, and wins');
+    });
+  }));
+
+test('a label in the file survives a URL override, and an untouched node keeps its built-in name', () => {
+  assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
+    'BMC mainnet (production)', 'nobody redirected this node, so nothing renames it');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmcmon-label-'));
+  try {
+    const f = path.join(dir, 'c.json');
+    fs.writeFileSync(f, JSON.stringify({
+      nodes: [{ id: 'mine', label: 'my node', rpcUrl: 'http://127.0.0.1:8331', datadir: dir, chainHint: 'main' }],
+    }));
+    return withEnv({ BMC_MON_NODE_URL: 'http://127.0.0.1:8335' }, () => {
+      const cfg = loadConfig({ configFile: f, ifaces });
+      assert.equal(cfg.nodes[0].rpcUrl, 'http://127.0.0.1:8335', 'the URL override still applies');
+      assert.equal(cfg.nodes[0].label, 'my node', 'a name the operator typed is not overwritten');
+    }).finally(() => fs.rmSync(dir, { recursive: true, force: true }));
+  } catch (e) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw e;
+  }
+});
+
 test('BMC_MON_DATA and the node sentinels still arrive as the types config expects', () =>
   // Regression cover for rule 20 (env vars are strings until code decides otherwise),
   // extended to the variables the open-by-default change made more visible.

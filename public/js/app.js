@@ -899,7 +899,7 @@ async function boot() {
   const renderPicker = (list) => {
     if (!list.length) return;
     if (list.length === 1) {
-      pick.innerHTML = `<span class="${STATE_DOT[list[0].syncState] ?? 'faint'}" title="${F.esc(list[0].rpcUrl)}">${F.esc(list[0].label)}</span>`;
+      pick.innerHTML = `<span class="${STATE_DOT[list[0].syncState] ?? 'faint'}" title="${F.esc(list[0].label + ' — ' + list[0].rpcUrl)}">${F.esc(list[0].label)}</span>`;
       return;
     }
     // Every node visible with its own state, because picking a node blind is how

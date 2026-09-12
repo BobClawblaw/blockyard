@@ -162,8 +162,15 @@ whose RPC server listens on port 8331:
 
 If your node lives elsewhere, override it with a `nodes` array in
 `config/local.json`, or for the first node only, with `BMC_MON_NODE_URL`,
-`BMC_MON_DATADIR`, `BMC_MON_COOKIE` and `BMC_MON_LOGFILE`. Note that Bitcoin Core's
-standard mainnet RPC port is 8332, so check your node's `rpcport`.
+`BMC_MON_DATADIR`, `BMC_MON_COOKIE`, `BMC_MON_LOGFILE` and `BMC_MON_NODE_LABEL`.
+Note that Bitcoin Core's standard mainnet RPC port is 8332, so check your node's
+`rpcport`.
+
+**The label follows the node.** If you set `BMC_MON_NODE_URL` without also setting
+`BMC_MON_NODE_LABEL`, the first node is renamed to `node @ host:port` rather than
+keeping the built-in name — a dashboard pointed at Bitcoin Core should not announce
+itself as a BMC node. Give it a name of your own with `BMC_MON_NODE_LABEL`, or with
+`label` in a `nodes` entry; either one wins over both.
 
 ### rpc
 
@@ -342,8 +349,8 @@ Environment variables override `config/local.json`.
   `BMC_MON_PORT` is range-checked, so check spelling.
 - **Lists**: comma-separated, with spaces around entries trimmed.
 - **Node variables** (`BMC_MON_NODE_URL`, `BMC_MON_DATADIR`, `BMC_MON_COOKIE`,
-  `BMC_MON_LOGFILE`, `BMC_MON_UNIT`) change **only the first entry** of `nodes`,
-  whether that entry comes from the defaults or from your file.
+  `BMC_MON_LOGFILE`, `BMC_MON_UNIT`, `BMC_MON_NODE_LABEL`) change **only the first
+  entry** of `nodes`, whether that entry comes from the defaults or from your file.
 
 ### Server variables
 
@@ -362,6 +369,7 @@ Environment variables override `config/local.json`.
 | `BMC_MON_COOKIE` | `nodes[0].cookieFile` | path | unset | Explicit cookie file for the first node. It is applied after `BMC_MON_DATADIR`, so it wins. |
 | `BMC_MON_LOGFILE` | `nodes[0].logFile` | path | see [defaults](#nodes) | Log file of the first node. Used only when the log source is on. |
 | `BMC_MON_UNIT` | `nodes[0].systemdUnit` | string | `bmcbitcoind.service` | systemd unit name of the first node. Informational only. |
+| `BMC_MON_NODE_LABEL` | `nodes[0].label` | string | `BMC mainnet (production)` | Display name of the first node, shown in the header. Setting `BMC_MON_NODE_URL` without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. |
 | `BMC_MON_RPC_TIMEOUT` | `rpc.timeoutMs` | number | `90000` | RPC timeout for ordinary calls. |
 | `BMC_MON_RPC_MIN_INTERVAL` | `rpc.minIntervalMs` | number | `250` | Minimum gap between RPC requests. |
 | `BMC_MON_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop poll answers older than this. |

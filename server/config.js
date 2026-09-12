@@ -361,6 +361,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     'BMC_MON_LOGFILE': ['__logfile', String],
     'BMC_MON_COOKIE': ['__cookie', String],
     'BMC_MON_UNIT': ['__unit', String],
+    'BMC_MON_NODE_LABEL': ['__label', String],
     'BMC_MON_RPC_TIMEOUT': ['rpc.timeoutMs', Number],
     'BMC_MON_RPC_MIN_INTERVAL': ['rpc.minIntervalMs', Number],
     'BMC_MON_RPC_STALE_DROP': ['rpc.staleDropMs', Number],
@@ -399,6 +400,22 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
   if (sentinels.logfile) cfg.nodes[0].logFile = sentinels.logfile;
   if (sentinels.cookie) cfg.nodes[0].cookieFile = sentinels.cookie;
   if (sentinels.unit) cfg.nodes[0].systemdUnit = sentinels.unit;
+  // A node is named by whoever knows its name: an explicit label -- from the environment or from
+  // the file -- is the operator speaking, and always wins. Failing that, a node whose URL was
+  // overridden is named by the endpoint it actually answers on, which cannot be wrong. Keeping
+  // the built-in label there would state something false about a node nobody said was BMC; the
+  // fallback states only what was measured. Nodes nobody redirected keep their built-in name.
+  const fileLabel = Array.isArray(fileCfg.nodes) && fileCfg.nodes[0] && fileCfg.nodes[0].label;
+  // Guarded, because `nodes: []` is refused by validate() below with a sentence that names the
+  // mistake, and reaching into nodes[0] before then would replace that sentence with a TypeError.
+  if (cfg.nodes[0]) {
+    if (sentinels.label) cfg.nodes[0].label = sentinels.label;
+    else if (cfg.nodes[0].__urlOverridden && !fileLabel) {
+      let host = cfg.nodes[0].rpcUrl;
+      try { host = new URL(cfg.nodes[0].rpcUrl).host; } catch { /* validate() reports a bad URL */ }
+      cfg.nodes[0].label = `node @ ${host}`;
+    }
+  }
 
   if (env('BMC_MON_FAKE_NODE', Boolean)) cfg.__fakeNode = true;
 
