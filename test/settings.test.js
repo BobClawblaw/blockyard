@@ -205,6 +205,21 @@ test('an idle effect starts on a board at rest, even while the loop runs for the
     'busy is: the choreography is running, a repaint is owed, or a newer layout waits');
 });
 
+test('cubes lean away from the middle of the board, not all one way', async () => {
+  // operator, 2026-09-12: "all the blocks seem to lean right. Even the ones on the left side ...
+  // I would expect blocks on the left side to have their right cube side visible".
+  const { obliqueLean, tileFaces } = await import('../public/js/blockscene3d.js');
+  const o = { unit: 6, zUnit: 6, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5, gridW: 40, gridH: 40 };
+  assert.ok(obliqueLean(0, o) < 0, 'at the left edge the push is leftward');
+  assert.ok(Math.abs(obliqueLean(20, o)) < 1e-9, 'over the middle a cube stands straight up');
+  assert.ok(obliqueLean(40, o) > 0, 'at the right edge it is rightward');
+  assert.equal(obliqueLean(0, o), -obliqueLean(40, o), 'and the fan is symmetric');
+  const sidesAt = (x) => tileFaces({ txid: 't', x, y: 20, s: 3, z: 0 }, o).sides.map((s) => s.key).sort();
+  assert.ok(sidesAt(1).includes('right'), 'a block on the left shows its RIGHT face');
+  assert.ok(sidesAt(36).includes('left'), 'a block on the right shows its LEFT face');
+  assert.equal(obliqueLean(5, {}), 0.15, 'with no board width it is the old constant, so bare projections are unchanged');
+});
+
 test('the renderer honours the option names the settings hand it', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /drawStars\(ctx, pw, ph, dpr \|\| 1, view\.now \?\? 0, opts\)/, 'star options reach drawStars');

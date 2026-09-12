@@ -109,10 +109,10 @@ export function capZ(gx, gy, o = {}) {
 // taking it out of the path leaves motion that is symmetric about the middle -- what the sphere's
 // normal was meant to give. Off the oblique camera there is no such term and this is the normal.
 export function flightDir(gx, gy, o = {}) {
-  const n = surfaceNormal(gx, gy, o);
-  if (!o.oblique) return n;
-  const { ox = 0.15 } = o.oblique;
-  return { x: n.x - ox * n.z, y: n.y, z: n.z };
+  // The oblique lean is radial now (obliqueLean), so the camera's own push already fans from the
+  // middle: the flight is the sphere's normal again, and subtracting the lean here as well would
+  // count that fan twice and tip every flight to the left.
+  return surfaceNormal(gx, gy, o);
 }
 
 export function surfaceNormal(gx, gy, o = {}) {
@@ -120,6 +120,18 @@ export function surfaceNormal(gx, gy, o = {}) {
   if (!s) return { x: 0, y: 0, z: 1 };
   const dx = gx - s.cx, dy = gy - s.cy;
   return { x: dx / s.R, y: dy / s.R, z: Math.sqrt(Math.max(0, s.R * s.R - dx * dx - dy * dy)) / s.R };
+}
+
+// How far a unit of height pushes a cube sideways, at gx. Zero over the middle of the board and
+// +/- oblique.ox at its edges: the fan of a camera standing over the centre. Without a board width
+// (a bare projection in a test) it falls back to the old constant, so nothing that does not know
+// about a board changes shape.
+export function obliqueLean(gx, o = {}) {
+  const ox = o.oblique?.ox ?? 0.15;
+  const W = o.gridW || 0;
+  if (!(W > 0)) return ox;
+  const half = W / 2;
+  return ox * Math.max(-1, Math.min(1, (gx - half) / half));
 }
 
 export function project(gx, gy, gz, o = {}) {
@@ -164,7 +176,7 @@ export function project(gx, gy, gz, o = {}) {
   // every frame). Here every cube shows its top and its west and south faces,
   // a fall is visible motion up and down the screen, and nothing ever changes
   // size -- so there is no growth to police and nothing to flicker.
-  if (o.oblique) return { x: x0 + z * o.oblique.ox * unit, y: y0 - (flipY ? 1 : -1) * z * o.oblique.oy * unit };
+  if (o.oblique) return { x: x0 + z * (o.leanFixed ?? obliqueLean(gx, o)) * unit, y: y0 - (flipY ? 1 : -1) * z * o.oblique.oy * unit };
   const k = 1 + z * risePerUnit * persp;       // > 1: nearer, and larger
   return { x: vanishX + (x0 - vanishX) * k, y: vanishY + (y0 - vanishY) * k };
 }
@@ -346,9 +358,11 @@ function flightFrame(tile, o = {}) {
   const cx = tile.x + tile.s / 2, cy = tile.y + tile.s / 2;
   const n = flightDir(cx, cy, o);
   const flip = o.flipY === false ? -1 : 1;
-  const dX = n.x + ox * n.z, dY = flip * n.y + oy * n.z;
+  const lean = obliqueLean(cx, o);            // the camera's push where this block stands
+  const dX = n.x + lean * n.z, dY = flip * n.y + oy * n.z;
   const c = capZ(cx, cy, o), s = tile.s, reach = cubeHeight(tile);
-  const x0 = tile.x + c * ox, x1 = tile.x + s + (c + reach) * ox;
+  const x0 = tile.x + Math.min(c * lean, (c + reach) * lean);
+  const x1 = tile.x + s + Math.max(c * lean, (c + reach) * lean);
   const up0 = (flip > 0 ? tile.y : -(tile.y + s)) + c * oy, up1 = up0 + s + reach * oy;
   return { v, dX, dY, x0, x1, up0, up1 };
 }
@@ -369,6 +383,9 @@ export function flightRoom(tile, o = {}) {
 
 export function liftProjector(tile, o = {}) {
   const z = tile.z ?? 0;
+  // the camera's lean belongs to the block, not to each corner of it: settle it once at the
+  // tile's centre so the cube stays rigid however wide it is (see obliqueLean)
+  if (o.oblique) o = { ...o, leanFixed: obliqueLean(tile.x + tile.s / 2, o) };
   if (!(z > 0)) return (gx, gy, gz) => project(gx, gy, gz, o);
   if (o.oblique) {
     // flight goes along the sphere's normal at the block's centre, so the
@@ -1005,11 +1022,13 @@ export function obliqueOrder(tiles, o = {}) {
   // a group the cubes go by how near their drawn centre is to the camera, a
   // smooth measure that cannot be cut two ways.
   // the camera looks along (-ox, -oy/dy, 1): a squeezed depth weighs a row further back more
-  const obx = o.oblique?.ox ?? 0.15, oby = (o.oblique?.oy ?? 0.36) / (o.oblique?.dy ?? 1);
+  const oby = (o.oblique?.oy ?? 0.36) / (o.oblique?.dy ?? 1);
   const depth = info.map((e2) => {
     const t = e2.t, h = cubeHeight(t), cx = t.x + t.s / 2, cy = t.y + t.s / 2;
     const zb = (t.z ?? 0) > 0 || t.entry > 0 ? visualBase(t, o) : 0;
-    return -obx * cx - (flipped ? 1 : -1) * oby * cy + capZ(cx, cy, o) + zb + (t.floor ?? 0) + h / 2;
+    // the camera leans per column now (obliqueLean), so depth is measured along the direction it
+    // actually looks at this block, not along one board-wide constant
+    return -obliqueLean(cx, o) * cx - (flipped ? 1 : -1) * oby * cy + capZ(cx, cy, o) + zb + (t.floor ?? 0) + h / 2;
   });
   const index = new Array(n).fill(-1), low = new Array(n).fill(0), onStack = new Array(n).fill(false), comp = new Array(n).fill(-1);
   const stack = [];
