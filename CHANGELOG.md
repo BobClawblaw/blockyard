@@ -62,6 +62,10 @@ All notable changes to this project are documented here. The format follows
   star.
 - Blocks with no pool attribution showed no statistics at all.
 - Taller cubes no longer clip the neighbour they lean over on a settled board.
+- **The Explorer's Latest blocks cubes were drawn with faces that did not meet.** The top face and
+  the right face were each inset five pixels on two sides, so neither reached the top-right corner:
+  every block carried a dark triangular wedge there, a sliver of bare card at the top left and a
+  gap at the bottom right. The faces are now flush with the card and with each other.
 
 ## [0.9.0] — 2026-09-11
 
