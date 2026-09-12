@@ -717,10 +717,107 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
 .ovcols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
 /* the Mempool page's stacks: the Block space viewer's column is the narrower
    one there ("in a smaller panel"), so the charts keep the width */
-.mpcols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; align-items: start; }
+/* 4fr/1fr (operator: "we can make the block space window 30% smaller if we can fit more panels onto
+   one display"). The viewer is square, so its COLUMN WIDTH IS ITS HEIGHT, which is what makes it
+   the lever for fitting the page on one screen: at 2000px this puts it near 396px against the 566
+   it had at 5fr/2fr -- 30% down, as asked -- and gives each of the six charts ~784px.
+   The sum then lands around 810px: three chart rows (~600), the strip of absences (~103), and the
+   gaps. That is inside an 832px viewport, so the page stops scrolling. */
+/* The floor is 300px, not 360. Measured: 360 starved the charts at mid widths -- a 1280px window
+   stopped fitting on one screen (1000px tall against 832) and the figures fell back to a single
+   column. The control strip wraps now, so the viewer no longer needs a floor wide enough to hold it
+   in one line; it only needs enough to stay a usable picture. */
+/* Three columns: the figures and the fee histogram, the time series, and the viewer with the age
+   histogram tucked under it. The last is narrowest because the viewer is square -- its width is its
+   height, which is the lever for keeping the page on one screen. */
+.mpcols { grid-column: 1 / -1; display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(300px, 0.62fr);
+  gap: 12px; align-items: start; }
 .mpcols .card { grid-column: auto !important; }
-.mpusage { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); gap: 14px; align-items: center; }
-.mpusage dl.kv { margin: 0; }
+/* The gauge is a glance, not a chart: 190px of it left the figures beside it 317px to fit two
+   label/value columns that need ~330, which is what squeezed them into each other. */
+.mpusage { display: grid; grid-template-columns: minmax(96px, 120px) minmax(0, 1fr); gap: 12px; align-items: center;
+  container-type: inline-size; }
+/* THE POOL FIGURES FLOW ACROSS, they do not stack (operator, 2026-09-12: "yeah, that's a huge
+   waste of space"). `.kv` is one label-left / value-right pair per row, which is right in a narrow
+   card and absurd in a wide one: measured at 1600px the labels sat at x230 and the values at x930
+   with ~600px of nothing between them, and twelve rows stood the card 301px tall. Pairs flow into
+   three columns instead, so the card is short and the middle is not a void.
+   Scoped to this card on purpose -- `.kv` is used on eight other pages, and restyling all of them
+   from one screenshot of one page is how a fix becomes three regressions. */
+/* `max-content`, NOT `minmax(0, 1fr)`. A 1fr track with a 0 minimum may shrink BELOW its own text,
+   and because `.kv dd` is right-aligned the overflow runs rightwards straight over the next
+   column's label: "27,947ialized", "0.02271fee", "100,000l vsize". Measured against the card it
+   looked fine -- the list stays inside its box, it is the cells that overlap each other -- which is
+   why the first check missed it and the operator's screenshot did not. A value column is exactly as
+   wide as the longest value in it, and nothing wraps. */
+/* MEASURED AGAINST THE CARD, not the window (operator, 2026-09-12: "text coming off panel" -- the
+   second column of figures ran past the card's right edge and the next card painted over it:
+   "serialize", "min fee r", "unbroadca").
+   The column count was keyed off @media, i.e. the VIEWPORT, and the viewport does not determine how
+   wide this card ends up -- the pair ratio and the outer 3fr/2fr split do. So every breakpoint was a
+   guess that was wrong at some window width, and I got it wrong twice. A container query asks the
+   only thing that matters: how much room does THIS card actually have.
+   It fails safe. One pair column is the default and can never overflow; two and three are opt-ins
+   that require the measured space (a pair runs to ~194px at its longest -- "OP_RETURN max" against
+   "2,237,214 sat" -- so two need ~410px beside a 132px gauge). A browser without container queries
+   simply keeps the single column. */
+/* `justify-content: start` is what closes the gulf. A grid `auto` track absorbs leftover space, so
+   the label column stretched to fill the card and threw the value against the far right edge --
+   which is the "huge waste of space" in the first place, and it came back the moment the figures
+   dropped to a single column. Content-sized tracks, leftover space left over. */
+.mpusage dl.kv { margin: 0; grid-template-columns: auto max-content; column-gap: 22px; justify-content: start; }
+.mpusage dl.kv dt, .mpusage dl.kv dd { white-space: nowrap; }
+/* The container is `.mpusage` -- the grid INSIDE the card -- so it measures about 26px narrower
+   than the card, and these thresholds are its width, not the card's. Two pairs need ~410px beside
+   the 132px gauge plus the 12px gap: 554. Three need ~626px of pairs: 770. The first cut used 600
+   and 880, which quietly dropped a 1600px-wide window back to a single column -- the tall card with
+   a gulf down the middle. */
+/* 570, not 540. Measured: a 548px container with two columns puts "6.2 MB", "300.0 MB" and
+   "0.10 sat/vB" past the card's right edge -- two columns need ~554 (410 of pairs, a 132 gauge, a
+   12 gap), so 540 was six pixels of wishful thinking. The margin is deliberate: these are live
+   figures and "2,237,214 sat" is wider than "0". */
+@container (min-width: 560px) { .mpusage dl.kv { grid-template-columns: repeat(2, auto max-content); } }
+@container (min-width: 790px) { .mpusage dl.kv { grid-template-columns: repeat(3, auto max-content); } }
+
+/* Pool usage and Mempool size share a row inside the left stack. TWO columns of figures, not
+   three: in this pair the usage card is ~556px rather than the 927px it had when it sat alone, and
+   three columns would overflow it. The count is part of THIS change for that reason -- the earlier
+   media queries keyed off the viewport, which says nothing about how wide the card ended up. */
+/* EVEN, and stretched to the same height (operator, 2026-09-12: "match heights with mempool size,
+   and shrink up pool usage more horizontally. We have more room"). At 2fr/1fr the figures card took
+   792px to show one column with ~300px of dead middle while the chart beside it got 396. Halved,
+   each is ~594: the figures fit two columns there, which also drops the card to ~175px against the
+   chart's ~182 -- and `stretch` makes them exactly equal rather than nearly. */
+
+/* WHERE TWO COLUMNS OF FIGURES STOP FITTING, measured rather than guessed. The longest pairs are
+   about 194px each ("OP_RETURN max" + "2,237,214 sat"), so two of them need ~410px; with the gauge
+   and the card's padding that is a ~578px card, which this layout only reaches above ~1500px of
+   viewport. Below it the figures go back to one column -- a taller card is fine, a card whose
+   contents hang out of its own right edge is not. The first cut broke at 1240 and overflowed by
+   145px at 1280. */
+/* The PAIR still stacks on a narrow window -- that is a viewport question, unlike the column count
+   above, which is a question about the card. */
+/* `.mppair.even` outranks a bare `.mppair`, so the two fee charts would have stayed side by side at
+   any width without naming it here -- fine at 1000px, not on a phone. */
+/* PAIRING CAN STARVE THE CARD IT PAIRS. Measured across widths, the usage container is NOT
+   monotonic in the viewport: at 1280 the pair is side by side and the figures get 454px -- narrower
+   than the 548px they get at 1000px, where the pair is stacked -- so 1280 fell back to one column
+   and a 301px card while 1000px managed a 175px one. Below ~1500 the usage card is worth more as a
+   full-width row (~750-820px, which buys two or three columns) than as half of one. */
+/* An even split only leaves each half wide enough for two columns of figures above ~1980px. Below
+   that the figures are worth more as a full-width row -- around 950px, which buys THREE columns and
+   an even shorter card -- than as a starved half. The `.even` pair (two charts) has no such floor
+   and stays side by side much further down. */
+@media (max-width: 1320px) { .mpcols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 900px) { .mpcols { grid-template-columns: minmax(0, 1fr); } }
+
+/* A LOG-DERIVED PANEL ON A MONITOR WITH NO LOG is one sentence, and it should not hold a 130px
+   empty chart open underneath it. Measured: two such cards at 187px each, for two lines of text.
+   panels.js marks the card when the log source is off; the card then sizes to what it actually
+   has to say. */
+.card.lognone canvas.chart { display: none; }
+.card.lognone { align-self: start; }
 @media (max-width: 860px) { .mpcols, .mpusage { grid-template-columns: minmax(0, 1fr); } }
 .ovcol  { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .ovpair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
@@ -747,6 +844,26 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
 .bgrid i { white-space: nowrap; }
 
 .card:has(> .treemapwrap.sq) > h3 { flex: 0 0 auto; }
+/* THE VIEWER'S HEADER CARRIES CONTROLS, so it must be allowed to reflow (operator, 2026-09-12:
+   "Now block space has text running off the screen"). Measured: the mode toggle (132px), the
+   refresh countdown (113) and the refresh button (84) sit INSIDE the h3 -- 346px of controls, plus
+   a 132px caption and the title, against a 392px card. `.card > h3` is a flex row with no wrapping,
+   so it clipped, and "refresh now" hung 42px past the card's edge.
+   The caption goes first: on a viewer card it is the least useful thing in the row, and it buys
+   back more than the countdown costs. Wrapping then guarantees the rest can never hang out, at any
+   width, whatever the controls grow into. */
+.card:has(> .treemapwrap.sq) > h3 { flex-wrap: wrap; row-gap: 5px; }
+.card:has(> .treemapwrap.sq) > h3 .src { display: none; }
+/* ...and the control strip has to wrap INSIDE itself too. Wrapping the h3 can only move a whole
+   child, and `.viewer-ctl` is one 346px child: at a 360px card its content box is ~334px, so the
+   strip was still 12px too wide sitting alone on its own line. Its three parts (the mode toggle,
+   the countdown, the button) wrap independently now, so there is no width at which this clips. */
+/* `flex: 0 1 auto` is the operative part -- `flex-wrap` alone did nothing. `.viewer-ctl.in-head`
+   ships `flex: 0 0 auto`, i.e. shrink DISABLED, so the strip always sized itself to its content
+   (346px, measured) and the header could never squeeze it; a flex container only wraps when it is
+   narrower than its contents, so wrap had nothing to act on and `min-width: 0` was moot with
+   shrinking switched off. Allowed to shrink, the header narrows it and its three parts wrap. */
+.card:has(> .treemapwrap.sq) > h3 .viewer-ctl { flex: 0 1 auto; flex-wrap: wrap; row-gap: 4px; min-width: 0; }
 .card:has(> .treemapwrap.sq) > .note { flex: 0 1 auto; min-height: 0; overflow: hidden; }
 /* The wrapper keeps its OWN aspect-ratio and full width from the base rule.
    An earlier cut set width:auto here to centre it; the canvas inside is

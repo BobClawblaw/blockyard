@@ -347,6 +347,20 @@
              same one as Overview, Mining and Block space) sits in the narrower
              right column. -->
         <div class="mpcols">
+          <!-- SIX CHARTS, TWO UP, IN READING ORDER (operator, 2026-09-12: "Suggest a better
+               organization of panels for that screen", then "try it"). The page answers three
+               questions in turn and the rows follow them: how full is the pool, what does it cost,
+               and what is actually in there. One uniform grid rather than the pairs it replaced --
+               with nested pairs the cards' width was not monotonic in the window (measured: 454px
+               of figures at a 1280px window against 548px at 1000px), which made every breakpoint
+               a guess. -->
+          <!-- THREE COLUMNS THAT KEEP THEIR OWN HEIGHTS (operator, 2026-09-12: "can we compress the
+               top a bit. Bring up Fee estimates over time compress slightly and fit Fee rate vs age
+               under it?" and "Squeeze Age distribution under Block Space").
+               The grid this replaces stretched every card to its row's tallest -- so Mempool size
+               was held open to the height of the figures card beside it and carried ~130px of
+               nothing. These are flex columns: each card is exactly as tall as its contents, and
+               the columns end where they end. -->
           <div class="ovcol">
             <div class="card w3" id="mpUsageCard">
               <h3>Pool usage <span class="sp"></span><span class="src">usage / maxmempool</span></h3>
@@ -355,14 +369,25 @@
                 <dl class="kv" id="mpLimits"></dl>
               </div>
             </div>
-            <div class="card w5">
-              <h3>Mempool size <span class="sp"></span><span class="src">count and bytes</span></h3>
-              <canvas class="chart" id="mpSizeChart"></canvas>
-            </div>
             <div class="card w6">
               <h3>Fee rate distribution <span class="sp"></span><span class="src">sat/vB from getrawmempool (RPC)</span></h3>
               <canvas class="chart" id="mpHistChart"></canvas>
               <div class="note tiny faint" id="mpHistNote"></div>
+            </div>
+          </div>
+          <div class="ovcol">
+            <div class="card w5">
+              <h3>Mempool size <span class="sp"></span><span class="src">count and bytes</span></h3>
+              <canvas class="chart" id="mpSizeChart"></canvas>
+            </div>
+            <div class="card w4">
+              <h3>Fee estimates over time <span class="sp"></span><span class="src">sat/vB</span></h3>
+              <canvas class="chart" id="mpFeeChart"></canvas>
+            </div>
+            <div class="card w6">
+              <h3>Fee rate vs age <span class="sp"></span><span class="src">sampled scatter</span></h3>
+              <canvas class="chart" id="mpScatter"></canvas>
+              <div class="note tiny faint" id="mpScatterNote"></div>
             </div>
           </div>
           <div class="ovcol">
@@ -373,41 +398,28 @@
                 <div class="goggles-tip hidden"></div>
               </div>
             </div>
-            <div class="card w6">
-              <h3>Fee rate vs age <span class="sp"></span><span class="src">sampled scatter</span></h3>
-              <canvas class="chart" id="mpScatter"></canvas>
-              <div class="note tiny faint" id="mpScatterNote"></div>
+            <div class="card w4">
+              <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
+              <canvas class="chart" id="mpAgeChart"></canvas>
             </div>
           </div>
         </div>
 
-        <!-- THREE TO A ROW, not two (operator, 2026-09-12: "We should really pack more panels into
-             this view", "too much wasted space", "Make the mempool page panels more dense"). Two
-             w4 cards in a twelve-column grid left FOUR columns empty across the whole width, and
-             the prose card below ran the full twelve for two lines of text. The third card here is
-             not filler: panels.js has been writing ingest and reject figures into `mpAccept` all
-             along, and nothing on this page had that id -- the data was collected from the log,
-             shipped to the browser and dropped on the floor. Same for the orphan pool below. -->
-        <div class="card w4">
-          <h3>Age distribution <span class="sp"></span><span class="src">seconds in pool</span></h3>
-          <canvas class="chart" id="mpAgeChart"></canvas>
-        </div>
-        <div class="card w4">
-          <h3>Fee estimates over time <span class="sp"></span><span class="src">sat/vB</span></h3>
-          <canvas class="chart" id="mpFeeChart"></canvas>
-        </div>
-        <div class="card w4">
+        <!-- WHAT THIS NODE CANNOT TELL US, as a strip rather than as rows. All three are absences:
+             two need the node's log (off on a monitor running RPC-only) and the third lists fields
+             getrawmempool omits. They are worth stating and not worth a third of the page. -->
+        <div class="card w4" id="mpAcceptCard">
           <h3>Ingest &amp; rejects <span class="sp"></span><span class="src">from the node's log</span></h3>
           <dl class="kv" id="mpAccept"></dl>
           <canvas class="chart short" id="mpIngestChart"></canvas>
         </div>
 
-        <div class="card w4">
+        <div class="card w4" id="mpOrphansCard">
           <h3>Orphan pool <span class="sp"></span><span class="src">held, parked and resolved</span></h3>
           <dl class="kv" id="mpOrphans"></dl>
           <canvas class="chart short" id="mpOrphanChart"></canvas>
         </div>
-        <div class="card w8">
+        <div class="card w4">
           <h3>Fields this node does not report <span class="sp"></span><span class="src">getrawmempool shape</span></h3>
           <div class="note" id="mpNotReported"></div>
         </div>

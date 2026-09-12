@@ -220,6 +220,18 @@ export function renderMempool(s, state, h, detail) {
   // column of dashes would read as "the node has no orphans" rather than "we are not watching".
   // Say which it is, the same way the peers page says "not reported by this build".
   const noLog = state.cfg?.log?.enabled === false;
+  // ...and when there is no log, the two cards that read it collapse to the sentence that says so,
+  // rather than standing a 130px empty chart open under one line of text.
+  //
+  // BY ID, never by walking up from a child. The DOM stub the tests run against returns null from
+  // that traversal, so a class toggled through it is silently skipped under test -- the suite stays
+  // green while the browser shows a card that never collapses. web-contract.test.js forbids it
+  // outright; `ovFeesCard` is the same lesson already learned once.
+  // (And the rule is enforced by scanning this file for the call, so it must not be spelled out
+  // here either -- writing it in a comment failed the guard exactly as using it would.)
+  for (const id of ['mpAcceptCard', 'mpOrphansCard']) {
+    document.getElementById(id)?.classList.toggle('lognone', noLog);
+  }
   const acc = mp.rejects;
   if (noLog) {
     h.setText('mpAccept', '<dt>ingest &amp; rejects</dt><dd class="faint">needs the node\'s log; this monitor is running on RPC alone</dd>');
