@@ -358,7 +358,10 @@ function flightFrame(tile, o = {}) {
   const cx = tile.x + tile.s / 2, cy = tile.y + tile.s / 2;
   const n = flightDir(cx, cy, o);
   const flip = o.flipY === false ? -1 : 1;
-  const lean = obliqueLean(cx, o);            // the camera's push where this block stands
+  // the lean where it stands, and the most it can have by the end of the flight (obliqueLean is
+  // bounded by +/-ox), taken in the direction it is travelling: the conservative case
+  const leanRest = obliqueLean(cx, o);
+  const lean = n.x + leanRest * n.z >= 0 ? ox : -ox;
   const dX = n.x + lean * n.z, dY = flip * n.y + oy * n.z;
   const c = capZ(cx, cy, o), s = tile.s, reach = cubeHeight(tile);
   const x0 = tile.x + Math.min(c * lean, (c + reach) * lean);
@@ -383,9 +386,19 @@ export function flightRoom(tile, o = {}) {
 
 export function liftProjector(tile, o = {}) {
   const z = tile.z ?? 0;
-  // the camera's lean belongs to the block, not to each corner of it: settle it once at the
-  // tile's centre so the cube stays rigid however wide it is (see obliqueLean)
-  if (o.oblique) o = { ...o, leanFixed: obliqueLean(tile.x + tile.s / 2, o) };
+  // the camera's lean belongs to the block, not to each corner of it: settle it once per cube so
+  // it stays rigid however wide it is, and take it where the cube IS -- a block in flight has
+  // moved along the sphere's normal, and a lean from the slot it left is the wrong lean (see
+  // obliqueLean)
+  const cxRest = tile.x + tile.s / 2, cyRest = tile.y + tile.s / 2;
+  if (o.oblique) {
+    const zv = z > 0 ? visualBase(tile, o) : 0;
+    const drift = zv * flightDir(cxRest, cyRest, o).x;       // along the sphere's normal
+    const height = zv + capZ(cxRest + drift, cyRest, o) + (tile.floor ?? 0) + cubeHeight(tile) / 2;
+    let lean = obliqueLean(cxRest + drift, o);
+    for (let i = 0; i < 2; i++) lean = obliqueLean(cxRest + drift + height * lean, o);
+    o = { ...o, leanFixed: lean };
+  }
   if (!(z > 0)) return (gx, gy, gz) => project(gx, gy, gz, o);
   if (o.oblique) {
     // flight goes along the sphere's normal at the block's centre, so the
