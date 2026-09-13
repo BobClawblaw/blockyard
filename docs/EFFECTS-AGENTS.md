@@ -255,7 +255,18 @@ the whole board is quoting, and it costs nothing until someone finds it.
 ## Built so far
 
 Batch one landed 2026-09-13: **recognizer (1), disc (2), snake (3), qbert (10), invaders (13),
-bomberman (24)** -- five different motion vocabularies, two of them data-aware. They live in
+bomberman (24)** -- five different motion vocabularies, two of them data-aware.
+
+Batch two, the same day: **centipede (4), pacman (5), galaga (14), tractor (15), missile (20),
+asteroids (21)**. These add the three things batch one had no example of -- an agent that
+DIVIDES (the centipede splits and both halves carry on), agents with DIFFERENT RULES FROM EACH
+OTHER (four pursuers: chase, ambush, scatter, wander), and TWO POPULATIONS THAT INTERACT (arcs
+raining down against interceptors rising to meet them). The tractor beam is the only agent that
+uses `lift`, and it is data-aware: it takes the tallest transaction on the board and puts it back.
+
+Fourteen agents now. `test/agents.test.js` holds every one of them to the same contract -- builds,
+frames, draws, publishes heads, replays from a seed, and leaves the board's tiles untouched -- so a
+new batch is checked against all of it the moment it is registered. They live in
 `public/js/agents.js` behind the registry described below; `test/agents.test.js` drives the real
 build/frame/draw path for every registered kind.
 

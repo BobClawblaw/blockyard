@@ -125,6 +125,7 @@ export const DEFAULTS = Object.freeze({
     powerup: true, combo: true, aurora: true, plasma: true, glitch: true,
     // the agents: something happening on the board, rather than a pattern over it
     recognizer: true, disc: true, snake: true, qbert: true, invaders: true, bomberman: true,
+    centipede: true, pacman: true, galaga: true, tractor: true, missile: true, asteroids: true,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -374,6 +375,12 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'qbert', label: 'Hopper', kind: 'toggle', hint: 'A small thing hopping block to block on the diagonal, with a shadow that tightens as it lands' }),
       Object.freeze({ key: 'invaders', label: 'Invaders', kind: 'toggle', hint: 'A rank of pixel-art ships stepping sideways and dropping a row, firing as they come' }),
       Object.freeze({ key: 'bomberman', label: 'Blast', kind: 'toggle', hint: 'A bomb whose four arms of fire are stopped by tall blocks \u2014 the cross it draws is the block\u2019s density' }),
+      Object.freeze({ key: 'centipede', label: 'Centipede', kind: 'toggle', hint: 'A column weaving down the board that splits in two partway, each half carrying on' }),
+      Object.freeze({ key: 'pacman', label: 'Maze chase', kind: 'toggle', hint: 'Four pursuers with different rules \u2014 one chases, one ambushes, one holds a corner, one wanders' }),
+      Object.freeze({ key: 'galaga', label: 'Squadron', kind: 'toggle', hint: 'A rank of ships from which two peel off, loop away and rejoin' }),
+      Object.freeze({ key: 'tractor', label: 'Tractor beam', kind: 'toggle', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
+      Object.freeze({ key: 'missile', label: 'Interception', kind: 'toggle', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
+      Object.freeze({ key: 'asteroids', label: 'Asteroids', kind: 'toggle', hint: 'Tumbling wireframe rocks drifting across, each breaking into two smaller ones' }),
     ]),
   }),
   Object.freeze({

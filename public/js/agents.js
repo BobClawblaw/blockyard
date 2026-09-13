@@ -646,3 +646,433 @@ defineAgent('bomberman', {
     bloom(ctx, c.x, c.y, U * 2.4, [255, 240, 200], b.fade);
   },
 });
+
+// ================================================================= BATCH TWO
+//
+// Six more, from the same catalogue: a splitter, four personalities, a formation that breaks up,
+// a thief, two populations that fight, and drifting debris. Between them they add the three things
+// batch one had no example of -- an agent that DIVIDES, agents with different rules from each
+// other, and two populations that interact.
+
+/** A closed wireframe outline in screen space -- Asteroids' whole visual language. */
+function wire(ctx, pts, col, w) {
+  if (pts.length < 3) return;
+  ctx.strokeStyle = col; ctx.lineWidth = w;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+/** An expanding ring, for a detonation. Cheap: one stroke, no fill. */
+function ring(ctx, x, y, r, col, w) {
+  ctx.strokeStyle = col; ctx.lineWidth = w;
+  ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.stroke();
+}
+
+// --- 7. CENTIPEDE ---------------------------------------------------------
+//
+// A column of segments weaving down the board, dropping a row each time it reaches an edge, and
+// SPLITTING in two partway through -- the split is the thing everyone remembers about Centipede,
+// and no other agent here divides. Our board is a grid of obstacles, which is the mushroom field
+// the original needs.
+defineAgent('centipede', {
+  build({ W, H, rnd }) {
+    // a boustrophedon: across, drop, back across -- the route the whole body follows in file
+    const pts = [];
+    const rows = 6;
+    const dropEvery = Math.max(2, Math.floor(H / (rows + 1)));
+    let dir = rnd() < 0.5 ? 1 : -1;
+    let x = dir > 0 ? 1 : W - 1;
+    let y = H - 2;
+    pts.push({ x, y });
+    for (let r = 0; r < rows; r++) {
+      const end = dir > 0 ? W - 1 : 1;
+      const steps = Math.max(1, Math.abs(end - x));
+      for (let i = 0; i < steps; i++) { x += dir; pts.push({ x, y }); }
+      for (let d = 0; d < dropEvery && y > 1; d++) { y -= 1; pts.push({ x, y }); }
+      dir = -dir;
+    }
+    return { pts, len: 11, splitAt: 0.45 + rnd() * 0.2, splitSeg: 4 + Math.floor(rnd() * 3) };
+  },
+  frame(a, u) {
+    const total = a.pts.length - 1;
+    const lead = Math.max(0, Math.min(1, u)) * total;
+    const split = u >= a.splitAt;
+    const heads = [];
+    const body = [];
+    for (let i = 0; i < a.len; i++) {
+      // after the split the tail half drops back and travels on its own, a little behind
+      const lag = i * 1.6 + (split && i >= a.splitSeg ? 6 + (u - a.splitAt) * 26 : 0);
+      const d = lead - lag;
+      if (d < 0) continue;
+      const p = alongPath(a.pts, d);
+      const isHead = i === 0 || (split && i === a.splitSeg);
+      body.push({ x: p.x, y: p.y, i, head: isHead });
+      heads.push({
+        x: p.x, y: p.y, r: isHead ? 1.9 : 1.4,
+        color: isHead ? [255, 230, 120] : [120, 235, 140],
+        alpha: isHead ? 1 : 0.85,
+      });
+    }
+    return { centipede: { body, split }, heads };
+  },
+  draw(ctx, view, lw) {
+    const c = view.fx?.centipede;
+    if (!c) return;
+    const U = view.unit ?? 8;
+    for (let i = c.body.length - 1; i >= 0; i--) {
+      const b = c.body[i];
+      const p = project(b.x, b.y, 1, view);
+      bloom(ctx, p.x, p.y, U * (b.head ? 1.15 : 0.85), b.head ? [255, 225, 120] : [110, 225, 130], b.head ? 0.95 : 0.7);
+      if (b.head) {
+        for (const o of [-0.32, 0.32]) {
+          ctx.fillStyle = 'rgba(20,14,6,0.95)';
+          ctx.beginPath(); ctx.arc(p.x + o * U * 0.5, p.y - U * 0.2, U * 0.17, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    void lw;
+  },
+});
+
+// --- 8. PAC-MAN -----------------------------------------------------------
+//
+// Four agents with DIFFERENT RULES on one board -- chase, ambush, scatter and random -- which is
+// the most legible "something is happening" this engine can show, and the thing no single-agent
+// effect can do. The routes are right angles, which is what our grid already is.
+const GHOSTS = Object.freeze([
+  { name: 'chase', color: [255, 90, 80] },     // straight at him
+  { name: 'ambush', color: [255, 180, 220] },  // aims where he WILL be
+  { name: 'scatter', color: [110, 230, 255] }, // holds a corner, drifts in
+  { name: 'random', color: [255, 175, 90] },   // wanders
+]);
+defineAgent('pacman', {
+  build({ W, H, seed, rnd }) {
+    const route = cyclePath(seed, W, H, rnd() < 0.5 ? 'left' : 'bottom');
+    const corners = [{ x: 1, y: 1 }, { x: W - 1, y: 1 }, { x: 1, y: H - 1 }, { x: W - 1, y: H - 1 }];
+    const ghosts = GHOSTS.map((g, i) => ({ ...g, home: corners[i], lag: 0.06 + i * 0.05, wob: rnd() * 6.28 }));
+    return { route, ghosts, W, H };
+  },
+  frame(a, u) {
+    const total = a.route.length - 1;
+    const d = Math.max(0, Math.min(1, u)) * total;
+    const me = alongPath(a.route, d);
+    // where he will be in a moment: the ambusher aims there instead of at him
+    const ahead = alongPath(a.route, Math.min(total, d + 6));
+    const heads = [{ x: me.x, y: me.y, color: [255, 240, 90], alpha: 1, r: 1.8 }];
+    const ghosts = a.ghosts.map((g) => {
+      const v = Math.max(0, (u - g.lag) / Math.max(0.05, 1 - g.lag));
+      let tx = me.x, ty = me.y;
+      if (g.name === 'ambush') { tx = ahead.x; ty = ahead.y; }
+      else if (g.name === 'scatter') { tx = g.home.x; ty = g.home.y; }
+      else if (g.name === 'random') { tx = me.x + Math.sin(g.wob + u * 7) * 9; ty = me.y + Math.cos(g.wob + u * 5) * 9; }
+      // each starts at its corner and eases toward its own target: four rules, four paths
+      const x = g.home.x + (tx - g.home.x) * v;
+      const y = g.home.y + (ty - g.home.y) * v;
+      heads.push({ x, y, color: g.color, alpha: 0.95, r: 1.5 });
+      return { x, y, color: g.color, name: g.name };
+    });
+    // the mouth opens and shuts on its own clock, not the effect's
+    return { pacman: { me, ghosts, chomp: Math.abs(Math.sin(u * 26)) }, heads };
+  },
+  draw(ctx, view, lw) {
+    const p = view.fx?.pacman;
+    if (!p) return;
+    const U = view.unit ?? 8;
+    // him: a disc with a wedge taken out, facing along his route
+    const c = project(p.me.x, p.me.y, 1.1, view);
+    const R = U * 1.25;
+    const gap = 0.12 + 0.5 * p.chomp;
+    const pts = [{ x: c.x, y: c.y }];
+    for (let i = 0; i <= 22; i++) {
+      const ang = gap + (i / 22) * (Math.PI * 2 - gap * 2);
+      pts.push({ x: c.x + Math.cos(ang) * R, y: c.y + Math.sin(ang) * R });
+    }
+    poly(ctx, pts, 'rgba(255,240,90,0.95)');
+    bloom(ctx, c.x, c.y, R * 1.5, [255, 230, 80], 0.35);
+    // the four: a dome and a ragged skirt, each in its own colour, with eyes that look at him
+    for (const g of p.ghosts) {
+      const q = project(g.x, g.y, 1.1, view);
+      const r = U * 1.05;
+      const body = [];
+      for (let i = 0; i <= 14; i++) { const ang = Math.PI + (i / 14) * Math.PI; body.push({ x: q.x + Math.cos(ang) * r, y: q.y + Math.sin(ang) * r * 0.95 }); }
+      for (let i = 0; i <= 4; i++) { const fx2 = q.x + r - (i / 4) * 2 * r; body.push({ x: fx2, y: q.y + r * 0.75 + (i % 2 ? 0 : r * 0.3) }); }
+      poly(ctx, body, `rgba(${g.color.join(',')},0.92)`);
+      bloom(ctx, q.x, q.y, r * 1.6, g.color, 0.25);
+      const look = Math.atan2(c.y - q.y, c.x - q.x);
+      for (const o of [-0.36, 0.36]) {
+        const ex = q.x + o * r, ey = q.y - r * 0.22;
+        ctx.fillStyle = 'rgba(250,252,255,0.98)';
+        ctx.beginPath(); ctx.arc(ex, ey, r * 0.28, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(20,30,80,0.98)';
+        ctx.beginPath(); ctx.arc(ex + Math.cos(look) * r * 0.12, ey + Math.sin(look) * r * 0.12, r * 0.14, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    void lw;
+  },
+});
+
+// --- 9. GALAGA ------------------------------------------------------------
+//
+// A formation that BREAKS UP: two ships peel off in Lissajous dives and rejoin. The dive curve is
+// two sines, so it costs nothing and looks far more expensive than it is.
+defineAgent('galaga', {
+  build({ W, H, rnd }) {
+    const cols = Math.max(4, Math.min(8, Math.round(W / 12)));
+    const ships = [];
+    for (let r = 0; r < 2; r++) {
+      for (let c = 0; c < cols; c++) {
+        ships.push({ c, r, x0: W * 0.18 + ((W * 0.64) / cols) * (c + 0.5), y0: H * 0.78 - r * Math.max(2.2, H * 0.06) });
+      }
+    }
+    const divers = [ships[(rnd() * ships.length) | 0], ships[(rnd() * ships.length) | 0]]
+      .map((sh, i) => ({ sh, t0: 0.18 + i * 0.28, ax: 2 + i, ay: 3 - i, amp: W * 0.3 }));
+    return { ships, divers, W, H };
+  },
+  frame(a, u) {
+    const sway = Math.sin(u * Math.PI * 2) * (a.W * 0.03);
+    const heads = [];
+    const drawn = [];
+    for (const sh of a.ships) {
+      const dive = a.divers.find((d) => d.sh === sh);
+      let x = sh.x0 + sway, y = sh.y0, diving = false;
+      if (dive) {
+        const v = (u - dive.t0) / 0.42;
+        if (v > 0 && v < 1) {
+          diving = true;
+          // a Lissajous loop away from the rank and back into it
+          const s = Math.sin(Math.PI * v);
+          x = sh.x0 + sway + Math.sin(v * Math.PI * dive.ax) * dive.amp * s;
+          y = sh.y0 - Math.abs(Math.sin(v * Math.PI * dive.ay)) * (a.H * 0.5) * s;
+        }
+      }
+      drawn.push({ x, y, r: sh.r, diving });
+      heads.push({ x, y, color: diving ? [255, 200, 90] : [150, 210, 255], alpha: diving ? 1 : 0.8, r: diving ? 2.2 : 1.6 });
+    }
+    return { galaga: { ships: drawn }, heads };
+  },
+  draw(ctx, view, lw) {
+    const g = view.fx?.galaga;
+    if (!g) return;
+    const U = view.unit ?? 8;
+    for (const sh of g.ships) {
+      const c = project(sh.x, sh.y, 2, view);
+      const col = sh.diving ? [255, 200, 90] : [150, 210, 255];
+      const r = U * (sh.diving ? 1.25 : 1);
+      // a blunt arrowhead: a hull, two wings and a canopy
+      poly(ctx, [
+        { x: c.x, y: c.y - r }, { x: c.x + r * 0.8, y: c.y + r * 0.7 },
+        { x: c.x, y: c.y + r * 0.3 }, { x: c.x - r * 0.8, y: c.y + r * 0.7 },
+      ], `rgba(${col.join(',')},0.95)`);
+      ctx.fillStyle = 'rgba(250,252,255,0.9)';
+      ctx.beginPath(); ctx.arc(c.x, c.y - r * 0.1, r * 0.24, 0, Math.PI * 2); ctx.fill();
+      if (sh.diving) bloom(ctx, c.x, c.y + r, r * 1.4, [255, 160, 70], 0.6);
+    }
+    void lw;
+  },
+});
+
+// --- 10. TRACTOR BEAM -----------------------------------------------------
+//
+// DATA-AWARE, and the only agent that uses `lift`: a ship stops over the TALLEST cube on the
+// board, opens a beam, and draws it up. The cube rises, thins and vanishes -- then comes back when
+// the effect ends, because nothing here mutates the board (see the hide/scale note in
+// blockscene3d.js).
+defineAgent('tractor', {
+  build({ tiles, W, H, rnd }) {
+    const target = tallestTile(tiles) ?? { x: W / 2, y: H / 2, h: 1, tile: null };
+    return { target, from: { x: rnd() < 0.5 ? -4 : W + 4, y: target.y }, W, H };
+  },
+  frame(a, u) {
+    const IN = 0.3, HOLD = 0.78;
+    const alt = a.target.h + 5;
+    if (u < IN) {
+      const v = u / IN;
+      const x = a.from.x + (a.target.x - a.from.x) * v;
+      return { tractor: { ship: { x, y: a.target.y, z: alt }, beam: 0, lift: 0 },
+        heads: [{ x, y: a.target.y, color: [180, 220, 255], alpha: 0.9, r: 1.6 }] };
+    }
+    const v = Math.min(1, (u - IN) / (HOLD - IN));
+    const beam = Math.sin(Math.min(1, v * 1.2) * Math.PI);
+    const lift = v * 4.5;
+    return {
+      tractor: { ship: { x: a.target.x, y: a.target.y, z: alt }, beam, lift, target: a.target },
+      // the beam lights the cube it is pulling, and lifts it
+      heads: [
+        { x: a.target.x, y: a.target.y, color: [190, 235, 255], alpha: 1, r: 2.4, lift },
+        { x: a.target.x, y: a.target.y, color: [140, 200, 255], alpha: 0.5 * beam, r: 4 },
+      ],
+    };
+  },
+  draw(ctx, view, lw) {
+    const t = view.fx?.tractor;
+    if (!t) return;
+    const U = view.unit ?? 8;
+    const c = project(t.ship.x, t.ship.y, t.ship.z, view);
+    if (t.beam > 0.02) {
+      // the cone, as stacked translucent quads: no gradients needed, and none allowed on a fill
+      const base = project(t.ship.x, t.ship.y, 0, view);
+      const w0 = U * 0.5, w1 = U * 2.2 * t.beam;
+      poly(ctx, [
+        { x: c.x - w0, y: c.y }, { x: c.x + w0, y: c.y },
+        { x: base.x + w1, y: base.y }, { x: base.x - w1, y: base.y },
+      ], `rgba(150,210,255,${(0.18 * t.beam).toFixed(3)})`);
+      poly(ctx, [
+        { x: c.x - w0 * 0.4, y: c.y }, { x: c.x + w0 * 0.4, y: c.y },
+        { x: base.x + w1 * 0.45, y: base.y }, { x: base.x - w1 * 0.45, y: base.y },
+      ], `rgba(220,245,255,${(0.3 * t.beam).toFixed(3)})`);
+    }
+    // the saucer: a flattened dome with a lit rim
+    const r = U * 1.6;
+    const dome = [];
+    for (let i = 0; i <= 20; i++) { const ang = Math.PI + (i / 20) * Math.PI; dome.push({ x: c.x + Math.cos(ang) * r, y: c.y + Math.sin(ang) * r * 0.42 }); }
+    poly(ctx, dome, 'rgba(120,180,255,0.9)');
+    poly(ctx, [
+      { x: c.x - r, y: c.y }, { x: c.x + r, y: c.y },
+      { x: c.x + r * 0.7, y: c.y + r * 0.25 }, { x: c.x - r * 0.7, y: c.y + r * 0.25 },
+    ], 'rgba(200,230,255,0.95)');
+    bloom(ctx, c.x, c.y + r * 0.2, r * 0.8, [180, 230, 255], 0.5);
+    void lw;
+  },
+});
+
+// --- 11. MISSILE COMMAND --------------------------------------------------
+//
+// TWO POPULATIONS THAT INTERACT, which nothing else here does: arcs rain toward the board while
+// interceptors rise to meet them, and each interception is an expanding ring that stops what it
+// catches.
+defineAgent('missile', {
+  build({ W, H, rnd }) {
+    const n = 5;
+    const incoming = [];
+    for (let i = 0; i < n; i++) {
+      const from = { x: rnd() * W, y: H + 3 };
+      const to = { x: rnd() * W, y: 1 + rnd() * (H * 0.4) };
+      const t0 = rnd() * 0.35;
+      // the interceptor leaves later and meets it partway: worked out now, so a frame only moves
+      const meet = 0.45 + rnd() * 0.3;
+      incoming.push({ from, to, t0, meet, up: { x: to.x + (rnd() - 0.5) * 8, y: 0 } });
+    }
+    return { incoming, W, H };
+  },
+  frame(a, u) {
+    const heads = [];
+    const shots = [];
+    const bursts = [];
+    for (const m of a.incoming) {
+      const v = (u - m.t0) / 0.7;
+      if (v <= 0) continue;
+      const caught = v >= m.meet;
+      const k = Math.min(caught ? m.meet : v, 1);
+      const x = m.from.x + (m.to.x - m.from.x) * k;
+      const y = m.from.y + (m.to.y - m.from.y) * k;
+      if (!caught) {
+        shots.push({ x, y, from: m.from, k, kind: 'down' });
+        heads.push({ x, y, color: [255, 120, 90], alpha: 1, r: 1.2 });
+      } else {
+        const age = (v - m.meet) / 0.35;
+        if (age < 1) {
+          bursts.push({ x, y, age });
+          heads.push({ x, y, color: [255, 240, 180], alpha: 1 - age, r: 1.5 + age * 5 });
+        }
+      }
+      // the interceptor climbing to the meeting point
+      const iv = Math.min(1, Math.max(0, (v - m.meet * 0.45) / (m.meet * 0.55)));
+      if (iv > 0 && !caught) {
+        const ix = m.up.x + (x - m.up.x) * iv, iy = m.up.y + (y - m.up.y) * iv;
+        shots.push({ x: ix, y: iy, from: m.up, k: iv, kind: 'up' });
+        heads.push({ x: ix, y: iy, color: [140, 255, 200], alpha: 1, r: 1 });
+      }
+    }
+    return { missile: { shots, bursts }, heads };
+  },
+  draw(ctx, view, lw) {
+    const m = view.fx?.missile;
+    if (!m) return;
+    const U = view.unit ?? 8;
+    for (const s of m.shots) {
+      const a0 = project(s.from.x, s.from.y, 0.8, view);
+      const a1 = project(s.x, s.y, 0.8, view);
+      const col = s.kind === 'down' ? '255,120,90' : '140,255,200';
+      line(ctx, [a0, a1], `rgba(${col},0.35)`, lw * 3);
+      line(ctx, [a0, a1], `rgba(${col},0.9)`, lw * 1.2);
+      bloom(ctx, a1.x, a1.y, U * 0.45, s.kind === 'down' ? [255, 150, 110] : [170, 255, 210], 0.9);
+    }
+    for (const b of m.bursts) {
+      const c = project(b.x, b.y, 0.9, view);
+      const r = U * (0.5 + b.age * 3.4);
+      const fade = 1 - b.age;
+      ring(ctx, c.x, c.y, r, `rgba(255,220,150,${(0.8 * fade).toFixed(3)})`, lw * 3);
+      ring(ctx, c.x, c.y, r * 0.65, `rgba(255,255,240,${(0.9 * fade).toFixed(3)})`, lw * 1.6);
+      bloom(ctx, c.x, c.y, r * 0.5, [255, 235, 190], fade * 0.7);
+    }
+  },
+});
+
+// --- 12. ASTEROIDS --------------------------------------------------------
+//
+// Pure vector art, which is what this renderer draws natively: tumbling wireframe polygons
+// drifting across, each splitting into two smaller ones partway. Nothing else here is line-only.
+defineAgent('asteroids', {
+  build({ W, H, rnd }) {
+    const rocks = [];
+    for (let i = 0; i < 4; i++) {
+      const shape = [];
+      const n = 7 + ((rnd() * 4) | 0);
+      for (let k = 0; k < n; k++) {
+        const ang = (k / n) * Math.PI * 2;
+        const rad = 0.62 + rnd() * 0.38;
+        shape.push([Math.cos(ang) * rad, Math.sin(ang) * rad]);
+      }
+      rocks.push({
+        shape,
+        x: rnd() * W, y: rnd() * H,
+        vx: (rnd() - 0.5) * W * 0.5, vy: (rnd() - 0.5) * H * 0.5,
+        spin: (rnd() - 0.5) * 5, size: 2.4 + rnd() * 1.6,
+        splitAt: 0.42 + rnd() * 0.25,
+      });
+    }
+    return { rocks, W, H };
+  },
+  frame(a, u) {
+    const out = [];
+    const heads = [];
+    for (const r of a.rocks) {
+      const wrap = (v, m) => ((v % m) + m) % m;
+      const push = (x, y, size, spin) => {
+        const px = wrap(x, a.W), py = wrap(y, a.H);
+        out.push({ x: px, y: py, size, rot: spin, shape: r.shape });
+        heads.push({ x: px, y: py, color: [190, 210, 235], alpha: 0.85, r: size * 0.8 });
+      };
+      if (u < r.splitAt) {
+        push(r.x + r.vx * u, r.y + r.vy * u, r.size, u * r.spin);
+      } else {
+        // it broke: two halves going their own ways from where it was
+        const bx = r.x + r.vx * r.splitAt, by = r.y + r.vy * r.splitAt;
+        const d = u - r.splitAt;
+        push(bx + (r.vx * 0.6 + r.vy * 0.5) * d, by + (r.vy * 0.6 - r.vx * 0.5) * d, r.size * 0.6, u * r.spin * 1.6);
+        push(bx + (r.vx * 0.6 - r.vy * 0.5) * d, by + (r.vy * 0.6 + r.vx * 0.5) * d, r.size * 0.6, -u * r.spin * 1.6);
+      }
+    }
+    return { asteroids: { rocks: out }, heads };
+  },
+  draw(ctx, view, lw) {
+    const a = view.fx?.asteroids;
+    if (!a) return;
+    const U = view.unit ?? 8;
+    for (const r of a.rocks) {
+      const c = project(r.x, r.y, 1.4, view);
+      const ca = Math.cos(r.rot), sa = Math.sin(r.rot);
+      const pts = r.shape.map(([sx, sy]) => ({
+        x: c.x + (sx * ca - sy * sa) * U * r.size,
+        y: c.y + (sx * sa + sy * ca) * U * r.size * 0.72,
+      }));
+      // a faint fill so it occludes a little, then the wire: Asteroids was a vector display
+      poly(ctx, pts, 'rgba(20,30,45,0.45)');
+      wire(ctx, pts, 'rgba(120,150,190,0.55)', lw * 4);
+      wire(ctx, pts, 'rgba(225,238,255,0.95)', lw * 1.4);
+    }
+  },
+});

@@ -154,6 +154,9 @@ const FX_MS = {
   // fields, because a thing that travels needs time to be watched: a field reads at a glance, an
   // agent has to arrive, do something, and leave.
   recognizer: 7600, disc: 6200, snake: 7000, qbert: 6600, invaders: 8200, bomberman: 6000,
+  // batch two: a splitter, four personalities, a formation that breaks up, a thief, two
+  // populations that fight, and drifting debris
+  centipede: 7400, pacman: 8600, galaga: 7800, tractor: 6800, missile: 7400, asteroids: 8000,
 };
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
