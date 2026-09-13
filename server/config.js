@@ -11,19 +11,18 @@ import { isBindableHost, planBinds, parseCidr } from './netinfo.js';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const HERE_DOC = `
-Defaults reflect the deployment inspected when this project was created:
-  node RPC     127.0.0.1:8331  (config/bitcoin.conf rpcport=8331; P2P owns 8332)
-  NOTE  those two lines in the node's bitcoin.conf are operational, not tuning. They
-  have been lost twice (a merge cleanup on 2026-08-26, a conf rewrite on 2026-09-08)
-  and each time this monitor reported production offline with ECONNREFUSED while the
-  node was healthy on Core's default RPC port 8332. Before believing that report, check
-  the node log for '[boot] config:' and '[rpc] JSON-RPC server on 127.0.0.1:8331'.
-  RPC binds ~100 s after systemd says "running", and [utxo_live] init blocks chain RPCs
-  for ~40 s after that -- see MEASUREMENTS 18.
+Defaults are Bitcoin Core's own, so \`npm start\` works against a stock local node:
+  node RPC     127.0.0.1:8332  (Core's mainnet default; testnet 18332, signet 38332)
   cookie       <datadir>/<chain>/.cookie  (regenerated each boot, deleted on stop)
-  datadir      /storage/bitcoinmachinecode/data
-  systemd      bmcbitcoind.service
-  log          <datadir>/../logs/<chain>/bitcoin.main.log  (logrotate'd)
+  datadir      ~/.bitcoin
+  systemd      bitcoind.service
+  log          <datadir>/debug.log
+  NOTE  a node that serves RPC on a NON-default port is the single most common reason
+  this monitor reports the node offline with ECONNREFUSED while the node is healthy.
+  Measured twice on the machine this was built against, where an rpcport= line was lost
+  to a config cleanup: check the node's own log for its "JSON-RPC server on ..." line
+  before believing the report. RPC can also bind well after systemd says "running", and
+  chain RPCs can block for tens of seconds after that -- see MEASUREMENTS 18.
 `.trim();
 
 const DEFAULTS = {
@@ -66,20 +65,24 @@ const DEFAULTS = {
   // failing, so a datadir that gets cleaned up does not break startup.
   nodes: [
     {
-      id: 'bmc-main',
-      label: 'BMC mainnet (production)',
-      rpcUrl: 'http://127.0.0.1:8331',
-      datadir: '/storage/bitcoinmachinecode/data',
+      // Bitcoin Core's own mainnet defaults (operator, 2026-09-13: a Core-centric release,
+      // "meant to be pointed at your Umbrel nodes or local Bitcoin Nodes"). A deployment
+      // that differs says so in config/local.json or through BLOCKYARD_NODE_* -- both are
+      // applied over these, so nothing here has to be right for everyone.
+      id: 'main',
+      label: 'Bitcoin Core (mainnet)',
+      rpcUrl: 'http://127.0.0.1:8332',
+      datadir: '/home/bitcoin/.bitcoin',
       chainHint: 'main',
       cookieFile: null, // derived from datadir+chainHint when null
       rpcUser: null,
       rpcPassword: null,
-      logFile: '/storage/bitcoinmachinecode/logs/main/bitcoin.main.log',
-      systemdUnit: 'bmcbitcoind.service',
+      logFile: '/home/bitcoin/.bitcoin/debug.log',
+      systemdUnit: 'bitcoind.service',
       color: '#f7931a',
     },
   ],
-  // Why the benchmark node is not monitored (was `bmc-bench`, removed 2026-09-08).
+  // Why the benchmark node is not monitored (was `bench`, removed 2026-09-08).
   //
   // Not because the data was wrong. Because on this box the observation changes the
   // thing observed and degrades the thing that matters:
@@ -104,14 +107,14 @@ const DEFAULTS = {
   // node switcher, the per-node rings and the picker all already support it:
   //
   //   { "nodes": [
-  //     { "id": "bmc-main", "label": "BMC mainnet (production)",
-  //       "rpcUrl": "http://127.0.0.1:8331",
-  //       "datadir": "/storage/bitcoinmachinecode/data", "chainHint": "main",
-  //       "logFile": "/storage/bitcoinmachinecode/logs/main/bitcoin.main.log" },
-  //     { "id": "bmc-bench", "label": "BMC bench (IBD / benchmark)",
+  //     { "id": "main", "label": "Bitcoin Core (mainnet)",
+  //       "rpcUrl": "http://127.0.0.1:8332",
+  //       "datadir": "/home/bitcoin/.bitcoin", "chainHint": "main",
+  //       "logFile": "/home/bitcoin/.bitcoin/debug.log" },
+  //     { "id": "bench", "label": "Bench node (IBD / benchmark)",
   //       "rpcUrl": "http://127.0.0.1:8461",
-  //       "datadir": "/mnt/2tbssd/bmc-bench/data", "chainHint": "main",
-  //       "logFile": "/mnt/2tbssd/bmc-bench/console.log",
+  //       "datadir": "/mnt/2tbssd/bench/data", "chainHint": "main",
+  //       "logFile": "/mnt/2tbssd/bench/console.log",
   //       "logStaleMs": 600000, "optional": true }
   //   ] }
   //
@@ -123,12 +126,12 @@ const DEFAULTS = {
   // burst. `log-silent` distinguishes the two by quoting the chain delta it saw.
   /* previous second entry, kept readable rather than silently deleted:
     {
-      id: 'bmc-bench',
-      label: 'BMC bench (IBD / benchmark)',
+      id: 'bench',
+      label: 'Bench node (IBD / benchmark)',
       rpcUrl: 'http://127.0.0.1:8461',
-      datadir: '/mnt/2tbssd/bmc-bench/data',
+      datadir: '/mnt/2tbssd/bench/data',
       chainHint: 'main',
-      logFile: '/mnt/2tbssd/bmc-bench/console.log',
+      logFile: '/mnt/2tbssd/bench/console.log',
       logStaleMs: 600000,
       optional: true,
     },
@@ -239,7 +242,7 @@ const DEFAULTS = {
     // what it bought: on the build deployed to production RPC answers getnettotals
     // 0/0 and getpeerinfo [] while getconnectioncount says 16, so "RPC only" there
     // means "no bandwidth and no peer names at all" -- and both builds report
-    // subversion /BitcoinMachineCode:0.0.1/, so RPC cannot tell you which one you
+    // the same non-Core subversion string, so RPC cannot tell you which one you
     // have (MEASUREMENTS 3, 4, 11, 26).
     enabled: false,
     // How long a tailed file may go without a single new byte before the monitor
@@ -405,7 +408,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
   // A node is named by whoever knows its name: an explicit label -- from the environment or from
   // the file -- is the operator speaking, and always wins. Failing that, a node whose URL was
   // overridden is named by the endpoint it actually answers on, which cannot be wrong. Keeping
-  // the built-in label there would state something false about a node nobody said was BMC; the
+  // the built-in label there would state something false about a node nobody named; the
   // fallback states only what was measured. Nodes nobody redirected keep their built-in name.
   const fileNode0 = Array.isArray(fileCfg.nodes) ? fileCfg.nodes[0] : null;
   const fileLabel = fileNode0 && fileNode0.label;

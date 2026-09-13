@@ -1,5 +1,5 @@
 // Which nodes this deployment watches is a decision, and it should be assertable.
-// The benchmark node (`bmc-bench`) was removed from the defaults on 2026-09-08: the
+// The benchmark node (`bench`) was removed from the defaults on 2026-09-08: the
 // node's RPC services one connection on one thread, so polling a benchmark from the
 // machine running it is load, and a monitor that shares a box with a benchmark is a
 // load generator wearing a label. Multi-node support is intact and stays tested.
@@ -31,10 +31,10 @@ const load = (obj, opts = {}) => {
 
 test('the default configuration watches production and nothing else', () => {
   const cfg = load(undefined);
-  assert.deepEqual(cfg.nodes.map((n) => n.id), ['bmc-main'],
+  assert.deepEqual(cfg.nodes.map((n) => n.id), ['main'],
     'the benchmark node must not be polled by default');
-  assert.equal(cfg.nodes[0].rpcUrl, 'http://127.0.0.1:8331');
-  assert.equal(cfg.nodes[0].logFile, '/storage/bitcoinmachinecode/logs/main/bitcoin.main.log');
+  assert.equal(cfg.nodes[0].rpcUrl, 'http://127.0.0.1:8332', "Core's mainnet RPC port is the shipped default");
+  assert.equal(cfg.nodes[0].logFile, '/home/bitcoin/.bitcoin/debug.log');
   assert.equal(configProblems().length, 0, `config self-check complains: ${configProblems()}`);
 });
 
@@ -52,11 +52,11 @@ test('the benchmark node is not reachable by accident (env overrides point nodes
 test('multi-node is a supported configuration, not a removed feature', () => {
   const cfg = load({
     nodes: [
-      { id: 'bmc-main', label: 'production', rpcUrl: 'http://127.0.0.1:8331', datadir: '/tmp', chainHint: 'main' },
+      { id: 'main', label: 'production', rpcUrl: 'http://127.0.0.1:8332', datadir: '/tmp', chainHint: 'main' },
       { id: 'other', label: 'a second node', rpcUrl: 'http://127.0.0.1:9999', datadir: '/tmp', chainHint: 'main', optional: true },
     ],
   });
-  assert.deepEqual(cfg.nodes.map((n) => n.id), ['bmc-main', 'other']);
+  assert.deepEqual(cfg.nodes.map((n) => n.id), ['main', 'other']);
   assert.equal(cfg.nodes[1].optional, true, 'an optional node reads as a note, not an outage');
   assert.equal(configProblems().length, 0);
 });

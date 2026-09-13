@@ -133,7 +133,7 @@ try {
   // from a local CA that is not in the system trust store, and "could not verify" is a
   // different fact from "could not reach".
   const caFile = process.env.BLOCKYARD_CA_FILE ?? '/etc/ssl/bmc-local/ca.crt';
-  const body = await getOverHttps(`https://${host}:8088/api/mining?node=bmc-main`, 0, fs.existsSync(caFile) ? { ca: fs.readFileSync(caFile) } : {});
+  const body = await getOverHttps(`https://${host}:8088/api/mining?node=main`, 0, fs.existsSync(caFile) ? { ca: fs.readFileSync(caFile) } : {});
   const d = JSON.parse(body);
   const rows = d.recent ?? [];
   const hit = rows.filter((r) => map.matchers.some((m) => normalizeText(`${r.rawCoinbase ? Buffer.from(r.rawCoinbase, 'hex').toString('utf8') : ''} ${r.tagText || ''}`).includes(m.tagNorm))).length;

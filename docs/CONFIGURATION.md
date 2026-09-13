@@ -5,7 +5,7 @@ key, every environment variable, what lives in the data directory, and which
 mistakes stop the server from starting.
 
 blockyard needs no configuration file to start. The built-in defaults describe
-one particular bmc install, though, so most deployments want at least a
+a stock local Bitcoin Core node, though, so most deployments want at least a
 `config/local.json` that says where the node is.
 
 - [How configuration is resolved](#how-configuration-is-resolved)
@@ -103,9 +103,9 @@ when the certificate expires within 14 days.
 
 ### nodes
 
-`nodes` is an array with one object per bmc node to monitor. It must not be empty.
-If you list more than one node, the web UI shows a node picker, and every node gets
-its own charts and event stream.
+`nodes` is an array with one object per Bitcoin Core node to monitor. It must not
+be empty. If you list more than one node, the web UI shows a node picker, and every
+node gets its own charts and event stream.
 
 | field | default | meaning |
 |---|---|---|
@@ -146,31 +146,35 @@ not stop. This lets a node whose directory has been removed disappear cleanly
 instead of showing as permanently offline.
 
 **Built-in default node.** Without a `nodes` array in your file, one node is
-configured. It assumes a bmc mainnet install under `/storage/bitcoinmachinecode`
-whose RPC server listens on port 8331:
+configured. It is Bitcoin Core's own mainnet layout: RPC on the standard port
+8332, with the data directory of a `bitcoin` service account:
 
 | field | built-in value |
 |---|---|
-| `id` | `bmc-main` |
-| `label` | `BMC mainnet (production)` |
-| `rpcUrl` | `http://127.0.0.1:8331` |
-| `datadir` | `/storage/bitcoinmachinecode/data` |
+| `id` | `main` |
+| `label` | `Bitcoin Core (mainnet)` |
+| `rpcUrl` | `http://127.0.0.1:8332` |
+| `datadir` | `/home/bitcoin/.bitcoin` |
 | `chainHint` | `main` |
-| `logFile` | `/storage/bitcoinmachinecode/logs/main/bitcoin.main.log` |
-| `systemdUnit` | `bmcbitcoind.service` |
+| `logFile` | `/home/bitcoin/.bitcoin/debug.log` |
+| `systemdUnit` | `bitcoind.service` |
 | `color` | `#f7931a` |
 
 If your node lives elsewhere, override it with a `nodes` array in
 `config/local.json`, or for the first node only, with `BLOCKYARD_NODE_URL`,
 `BLOCKYARD_DATADIR`, `BLOCKYARD_COOKIE`, `BLOCKYARD_LOGFILE` and `BLOCKYARD_NODE_LABEL`.
-Note that Bitcoin Core's standard mainnet RPC port is 8332, so check your node's
-`rpcport`.
+An appliance (Umbrel, Start9, myNode) usually keeps its data directory somewhere
+else, and a node with an `rpcport=` line of its own is not on 8332 at all: a
+non-default RPC port is the most common reason this monitor reports a healthy node
+as offline, so check the node's own `rpcport`.
 
-**The label follows the node.** If you set `BLOCKYARD_NODE_URL` without also setting
+**The label follows the node.** If you set `BLOCKYARD_NODE_URL` to an address other
+than the one the node was already configured for, and do not also set
 `BLOCKYARD_NODE_LABEL`, the first node is renamed to `node @ host:port` rather than
-keeping the built-in name — a dashboard pointed at Bitcoin Core should not announce
-itself as a BMC node. Give it a name of your own with `BLOCKYARD_NODE_LABEL`, or with
-`label` in a `nodes` entry; either one wins over both.
+keeping the built-in name, which would now describe a different node. Restating the
+address it already had redirects nothing, so in that case the built-in name stands.
+Give it a name of your own with `BLOCKYARD_NODE_LABEL`, or with `label` in a `nodes`
+entry; either one wins over both.
 
 ### rpc
 
@@ -364,12 +368,12 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_TRUST_PROXY` | `server.trustProxy` | boolean | `false` | Take the client address from `X-Forwarded-For`. |
 | `BLOCKYARD_TLS_CERT` | `server.tls.cert` | path | unset | PEM certificate. Set it together with `BLOCKYARD_TLS_KEY`. |
 | `BLOCKYARD_TLS_KEY` | `server.tls.key` | path | unset | PEM private key. Set it together with `BLOCKYARD_TLS_CERT`. |
-| `BLOCKYARD_NODE_URL` | `nodes[0].rpcUrl` | URL | `http://127.0.0.1:8331` | RPC endpoint of the first node. |
-| `BLOCKYARD_DATADIR` | `nodes[0].datadir` | path | `/storage/bitcoinmachinecode/data` | Data directory of the first node. It also **clears** `nodes[0].cookieFile`, so the cookie is looked up under the new datadir. |
+| `BLOCKYARD_NODE_URL` | `nodes[0].rpcUrl` | URL | `http://127.0.0.1:8332` | RPC endpoint of the first node. |
+| `BLOCKYARD_DATADIR` | `nodes[0].datadir` | path | `/home/bitcoin/.bitcoin` | Data directory of the first node. It also **clears** `nodes[0].cookieFile`, so the cookie is looked up under the new datadir. |
 | `BLOCKYARD_COOKIE` | `nodes[0].cookieFile` | path | unset | Explicit cookie file for the first node. It is applied after `BLOCKYARD_DATADIR`, so it wins. |
 | `BLOCKYARD_LOGFILE` | `nodes[0].logFile` | path | see [defaults](#nodes) | Log file of the first node. Used only when the log source is on. |
-| `BLOCKYARD_UNIT` | `nodes[0].systemdUnit` | string | `bmcbitcoind.service` | systemd unit name of the first node. Informational only. |
-| `BLOCKYARD_NODE_LABEL` | `nodes[0].label` | string | `BMC mainnet (production)` | Display name of the first node, shown in the header. Setting `BLOCKYARD_NODE_URL` without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. |
+| `BLOCKYARD_UNIT` | `nodes[0].systemdUnit` | string | `bitcoind.service` | systemd unit name of the first node. Informational only. |
+| `BLOCKYARD_NODE_LABEL` | `nodes[0].label` | string | `Bitcoin Core (mainnet)` | Display name of the first node, shown in the header. Setting `BLOCKYARD_NODE_URL` to a *different* address without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. Restating the address the node already had renames nothing. |
 | `BLOCKYARD_RPC_TIMEOUT` | `rpc.timeoutMs` | number | `90000` | RPC timeout for ordinary calls. |
 | `BLOCKYARD_RPC_MIN_INTERVAL` | `rpc.minIntervalMs` | number | `250` | Minimum gap between RPC requests. |
 | `BLOCKYARD_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop poll answers older than this. |
@@ -401,7 +405,7 @@ These are read only by scripts under `scripts/`, never by the server.
 | variable | used by | meaning |
 |---|---|---|
 | `FAKE_LOG` | `scripts/fake-node.js` (standalone) | Log file the standalone simulated node writes. Default `/tmp/blockyard-fake/bitcoin.main.log`. |
-| `BLOCKYARD_CA_FILE` | `scripts/pool-map.js` | CA certificate used for the optional `--check` against a TLS-serving monitor. Default `/etc/ssl/bmc-local/ca.crt`. |
+| `BLOCKYARD_CA_FILE` | `scripts/pool-map.js` | CA certificate used for the optional `--check` against a TLS-serving monitor. It has a built-in default path; see `scripts/pool-map.js`. |
 | `BLOCKYARD_BASE` | browser and render check scripts | Base URL of the monitor to test. |
 | `BLOCKYARD_CA` | `live-render-check.mjs`, `motion-check.mjs` | CA certificate for a TLS-serving monitor. |
 | `BROWSER_CDP` | browser probe scripts | Chrome DevTools Protocol endpoint of the browser to drive. |
@@ -429,17 +433,17 @@ addresses; substitute your own.
 ### A single node on the same machine
 
 The usual case: the node runs on this machine, and blockyard reads its cookie from
-the data directory. The node here keeps its data in `/var/lib/bmc`, with the mainnet
-cookie at `/var/lib/bmc/main/.cookie`:
+the data directory. The node here keeps its data in `/var/lib/bitcoind`, with the
+mainnet cookie at `/var/lib/bitcoind/main/.cookie`:
 
 ```json
 {
   "nodes": [
     {
       "id": "main",
-      "label": "bmc mainnet",
+      "label": "mainnet",
       "rpcUrl": "http://127.0.0.1:8332",
-      "datadir": "/var/lib/bmc",
+      "datadir": "/var/lib/bitcoind",
       "chainHint": "main"
     }
   ]
@@ -449,7 +453,7 @@ cookie at `/var/lib/bmc/main/.cookie`:
 The same thing without a file, using only the environment:
 
 ```bash
-BLOCKYARD_NODE_URL=http://127.0.0.1:8332 BLOCKYARD_DATADIR=/var/lib/bmc npm start
+BLOCKYARD_NODE_URL=http://127.0.0.1:8332 BLOCKYARD_DATADIR=/var/lib/bitcoind npm start
 ```
 
 Without `chainHint`, the monitor tries `<datadir>/.cookie` and then every
@@ -466,7 +470,7 @@ and an `rpcallowip` that admits this host in the node's own configuration, then:
   "nodes": [
     {
       "id": "remote",
-      "label": "bmc on 198.51.100.20",
+      "label": "node on 198.51.100.20",
       "rpcUrl": "http://198.51.100.20:8332",
       "cookieFile": "/nonexistent/.cookie",
       "rpcUser": "monitor",
@@ -500,14 +504,14 @@ does not count it against overall health:
       "id": "main",
       "label": "mainnet",
       "rpcUrl": "http://127.0.0.1:8332",
-      "datadir": "/var/lib/bmc",
+      "datadir": "/var/lib/bitcoind",
       "chainHint": "main"
     },
     {
       "id": "test",
       "label": "test node",
       "rpcUrl": "http://127.0.0.1:18332",
-      "datadir": "/srv/bmc-test/data",
+      "datadir": "/srv/bitcoind-test/data",
       "chainHint": "main",
       "color": "#4aa3df",
       "optional": true
@@ -654,9 +658,9 @@ builds whose RPC reports zeros:
     {
       "id": "main",
       "rpcUrl": "http://127.0.0.1:8332",
-      "datadir": "/var/lib/bmc",
+      "datadir": "/var/lib/bitcoind",
       "chainHint": "main",
-      "logFile": "/var/lib/bmc/main/debug.log"
+      "logFile": "/var/lib/bitcoind/main/debug.log"
     }
   ]
 }

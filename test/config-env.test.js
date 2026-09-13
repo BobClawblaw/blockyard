@@ -75,19 +75,19 @@ test('a node reached over BLOCKYARD_NODE_URL is not still called the built-in no
 
 test('restating the built-in address is not redirecting the node, so the name stands', () =>
   // Regression, 2026-09-12, caught on the running deployment within minutes of the fallback
-  // shipping: systemd/blockyard.service carries Environment=BLOCKYARD_NODE_URL=http://127.0.0.1:8331,
+  // shipping: systemd/blockyard.service carried Environment=BLOCKYARD_NODE_URL pointing at the SAME address,
   // the SAME address as the built-in default. Production booted with __urlOverridden true and
   // renamed ITSELF "node @ 127.0.0.1:8331". The flag says the variable was set, never that it
   // points anywhere new -- and the test that was supposed to cover this used :8335, which differs
   // from the default, so it sailed straight past the case that actually runs in production.
-  withEnv({ BLOCKYARD_NODE_URL: 'http://127.0.0.1:8331' }, () => {
+  withEnv({ BLOCKYARD_NODE_URL: 'http://127.0.0.1:8332' }, () => {
     assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
-      'BMC mainnet (production)', 'same address, same node, same name');
+      'Bitcoin Core (mainnet)', 'same address, same node, same name');
   }));
 
 test('a label in the file survives a URL override, and an untouched node keeps its built-in name', () => {
   assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).nodes[0].label,
-    'BMC mainnet (production)', 'nobody redirected this node, so nothing renames it');
+    'Bitcoin Core (mainnet)', 'nobody redirected this node, so nothing renames it');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-label-'));
   try {
     const f = path.join(dir, 'c.json');

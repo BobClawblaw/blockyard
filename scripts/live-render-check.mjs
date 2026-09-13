@@ -36,12 +36,12 @@ const panels = await import('../public/js/panels.js');
 panels.setFmt(F);
 const app = await import('../public/js/app.js');
 
-const snap = get('/api/state?node=bmc-main');
-try { snap.attribution = { ...(snap.attribution || {}), nextBlock: get('/api/nextblock?node=bmc-main') }; } catch { /* the page says so itself */ }
+const snap = get('/api/state?node=main');
+try { snap.attribution = { ...(snap.attribution || {}), nextBlock: get('/api/nextblock?node=main') }; } catch { /* the page says so itself */ }
 let dist = null;
-try { dist = get('/api/mempool?node=bmc-main')?.dist ?? null; } catch { /* ditto */ }
+try { dist = get('/api/mempool?node=main')?.dist ?? null; } catch { /* ditto */ }
 
-Object.assign(app.state, { snap, page: 'overview', series: snap.series ?? {}, node: snap.id ?? 'bmc-main', byNode: new Map([[snap.id ?? 'bmc-main', { series: snap.series ?? {}, snap }]]), mempoolDist: dist ? { ...dist, fetchedAt: Date.now() } : null });
+Object.assign(app.state, { snap, page: 'overview', series: snap.series ?? {}, node: snap.id ?? 'main', byNode: new Map([[snap.id ?? 'main', { series: snap.series ?? {}, snap }]]), mempoolDist: dist ? { ...dist, fetchedAt: Date.now() } : null });
 
 const PAGES = ['overview', 'chain', 'mempool', 'peers', 'network', 'mining', 'logs', 'node'];
 // Cards that must have something in them once the page has rendered with live data.

@@ -189,7 +189,7 @@ UNKNOWN=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 -b "$DIR/ck" "$BAS
 check "SSE refuses an unknown node instead of streaming silence" "$UNKNOWN" "404"
 check "the refusal says which nodes exist" "$(curl -s --max-time 3 -b "$DIR/ck" "$BASE/api/stream?node=not-a-node" | grep -c unknown_node)" "1"
 # And the known node still streams, so the refusal is not a blanket block.
-NFRAMES=$(curl -s -N -b "$DIR/ck" --max-time 8 "$BASE/api/stream?node=bmc-main" 2>/dev/null | head -c 400000 | grep -c 'event: snapshot')
+NFRAMES=$(curl -s -N -b "$DIR/ck" --max-time 8 "$BASE/api/stream?node=main" 2>/dev/null | head -c 400000 | grep -c 'event: snapshot')
 [ "$NFRAMES" -ge 1 ] && ok "SSE still delivers for a known node" || bad "SSE still delivers for a known node" "0 frames"
 # The same unknown node on the read model must also say 404, not serve the primary.
 check "/api/state refuses an unknown node" "$(curl -s -o /dev/null -w '%{http_code}' -b "$DIR/ck" "$BASE/api/state?node=not-a-node")" "404"
