@@ -16,6 +16,7 @@ config/blockyard.json
 
 node_modules/
 .DS_Store
+._*
 *.swp
 
 # local agent worktrees and settings
