@@ -148,19 +148,15 @@ const FX_MS = {
   ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
   lightcycle: 6500, ball: 5600, pulse: 7000,
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
-  rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, laser: 3400,
-  powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
+  rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
   // Longer than the fields, because something that travels needs time to be watched -- a field
   // reads at a glance, an agent has to arrive, do something, and leave.
-  //
   // Twenty-two of these were removed on the operator's call after seeing them on the board. The
   // ten that stayed are the ones worth the second animation loop: two riders, a splitter, a thief,
   // two populations that fight, a flood, the depth lanes, a collapse, a roller and a gateway.
   centipede: 7400, tractor: 6800, missile: 7400,
-  minesweeper: 7200, tempest: 7000,
-  boulderdash: 6400, marble: 7000, portal: 7200,
-};
+  boulderdash: 6400, marble: 7000, portal: 7200,};
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from
@@ -286,7 +282,14 @@ function scheduleFx(canvas, st, opts, soon = false) {
     // comes up and the roll says skip, the board plays whatever else is switched on -- repeating
     // twinkle if that is all there is, which is a quiet board rather than a surge every 14 s.
     // It still plays if the operator has turned everything else off.
-    if (pool.includes('pulse') && pool.length + kinds.length > 2 && Math.random() < 0.82) {
+    // ...AND THEN IT WAS TOO RARE (operator, 2026-09-13: "I'm not seeing the energy pulse riding
+    // the yellow tube on the 3D Chart any more"). 82% skip left it 9% of picks, and that is only
+    // half the story: the live hour's candle tracks the ticker, so its close moves on EVERY 15 s
+    // poll, the layout signature changes, the board re-lays and `st.fx = null` -- a 7 s pulse is
+    // interrupted nearly every time it is chosen. Selection and attrition multiplied to something
+    // the operator simply never saw finish. 50% puts selection back to a quarter of picks, which
+    // against the same attrition is a completed surge around once a minute.
+    if (pool.includes('pulse') && pool.length + kinds.length > 2 && Math.random() < 0.5) {
       const without = pool.filter((k) => k !== 'pulse');
       const fallback = without.length ? without : kinds.filter((k) => k !== 'pulse');
       if (fallback.length) pool = fallback;

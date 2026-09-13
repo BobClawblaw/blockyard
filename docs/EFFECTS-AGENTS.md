@@ -16,8 +16,9 @@ Mystery ship, De-res, Pipeline, Bombing run, Traffic, Ramp run, Options, Lemming
 Scan visor, Lock-on, Claim, Tetromino, Asteroids, Squadron, Maze chase, Blast, Invaders, Hopper,
 Snake, Identity disc, Recognizer, and the Glitch field effect.
 
-That is twenty-two of the thirty-two agents and one field. **Thirty-three effects remain: ten
-agents and twenty-three fields.**
+That is twenty-two of the thirty-two agents and one field. A second pass the same day removed
+**Laser, Lanes (`tempest`) and Sweep (`minesweeper`)** as well. **Thirty effects remain: eight
+agents and twenty-two fields.**
 
 The agents that stayed:
 
@@ -28,8 +29,6 @@ The agents that stayed:
 | `centipede` | a body that weaves down and splits in two |
 | `tractor` | a saucer that draws the tallest transaction up and puts it back |
 | `missile` | arcs raining down against interceptors rising to meet them |
-| `minesweeper` | a flood that goes around the richest transactions, which then flag |
-| `tempest` | pulses up the lanes, the one effect using the depth axis |
 | `boulderdash` | the board gives way from a point, cubes collapsing outward |
 | `marble` | rolls downhill, so it shows which way the block leans |
 | `portal` | in one gateway, out the other, trail carried through |

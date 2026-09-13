@@ -868,13 +868,6 @@ export function fxAt(t, fx) {
       const w = g((Math.PI - d) / 0.55) * Math.sin(Math.PI * fx.u);
       return { glow: 0.9 * A * w, outline: 0.6 * A * w, lift: 1.2 * A * w, color: [165, 150, 255] };
     }
-    case 'laser': {
-      // a cutting beam: a hard white line with a thin coloured bloom, crossing in one pass
-      const d = along() - fxFront(fx);
-      const core = g(d / 0.55), bloom = g(d / 2.6);
-      return { glow: A * Math.min(1, core + 0.35 * bloom), outline: A * core, lift: 0,
-        color: core > 0.35 ? [255, 255, 255] : [255, 90, 120] };
-    }
     case 'powerup': {
       // the board charges from the floor up, gold, with a bright lip at the top of the fill
       const fill = fx.u * (fx.gridH + 4) - 2;
@@ -916,8 +909,6 @@ export function fxAt(t, fx) {
     case 'centipede':
     case 'tractor':
     case 'missile':
-    case 'minesweeper':
-    case 'tempest':
     case 'boulderdash':
     case 'marble':
     case 'portal': {
