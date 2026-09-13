@@ -372,9 +372,11 @@ export const routes = [
   { method: 'GET', path: '/api/net', auth: 'any', handler: (ctx, app) => netView(pickNode(ctx, app)) },
   { method: 'GET', path: '/api/mining', auth: 'any', handler: (ctx, app) => ({ node: pickNode(ctx, app).id, ...pickNode(ctx, app).miningView() }) },
   {
-    // The block being built right now. On demand by design: the node spends 1.3-1.5 s of
-    // its single RPC thread answering this, so the page that shows it asks for it, and the
-    // answer is shared with anyone else watching inside the freshness window.
+    // The block being built right now, ASSEMBLED HERE from the verbose mempool the pool tier
+    // already reads (collect/gbt.js) -- no RPC call of its own. It used to be a getblocktemplate
+    // worth 1.3-1.5 s of the node's single RPC thread, which is why this was on-demand; what
+    // `stale` now bounds is re-assembly of the same pool, not a call to the node. The answer is
+    // exactly as fresh as the pool tier's last read, and says so (poolAgeMs).
     method: 'GET', path: '/api/nextblock', auth: 'any',
     handler: async (ctx, app) => {
       const m = pickNode(ctx, app);

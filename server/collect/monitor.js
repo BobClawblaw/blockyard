@@ -21,7 +21,8 @@ import { CounterRate } from '../store/ring.js';
 import { computeSync, stripFacts } from './sync.js';
 import { SHAPES, RULE_TO_SHAPE } from './logparse.js';
 import { decodeCoinbase, minerRow, ledgerApply, ledgerRows, aliasFor, matchPool } from './mining.js';
-import { summarizeTemplate, packagesFromTemplate, blockEconomy, templateCells, TEMPLATE_NOTE } from './nextblock.js';
+import { summarizeTemplate, packagesFromTemplate, blockEconomy, templateCells } from './nextblock.js';
+import { templateFromMempool, LOCAL_TEMPLATE_NOTE } from './gbt.js';
 import fs from 'node:fs';
 
 // The statistics getblockstats actually has. 'size', 'weight' and 'strippedsize' are
@@ -92,14 +93,20 @@ export class NodeMonitor extends EventEmitter {
     };
     this.miningQueue = [];
     this.miningBusy = false;
-    // The block being built right now. Fetched ON DEMAND, not on a timer: one
-    // getblocktemplate costs this node 1.3-1.5 s of its single RPC thread, so a
-    // background poll would pay that every minute for a page most people are not
-    // looking at. The Mining page asks, and the answer is served from here for the
-    // next few seconds to anyone who asks again.
+    // THE BLOCK BEING BUILT, assembled here from the mempool (2026-09-13; operator, on how
+    // mempool.space manages this against a base Core install: "do it"). It used to be one
+    // getblocktemplate call costing this node 1.3-1.5 s of its single RPC thread and 1.79 MB,
+    // fetched on demand so a page nobody was reading did not pay it every minute. It now costs
+    // the node NOTHING: the pool tier already reads getrawmempool(true) for the mempool view,
+    // and Core publishes depends, the ancestor sizes and fees.chunk/chunkweight in it, which is
+    // everything the selection needs. See gbt.js for the measured comparison against the node's
+    // own template (0.03% apart on fees).
     this.nextBlock = null;
     this.nextBlockAt = 0;
-    this.nextBlockBusy = null;      // an in-flight promise, so concurrent viewers share one call
+    // The verbose mempool the pool tier last read, and when. The block being built is assembled
+    // from it (gbt.js) rather than asked for, so the template is exactly as fresh as this is.
+    this.mempoolRaw = null;
+    this.mempoolRawAt = 0;
     this.nextBlockCfg = { freshMs: 15_000, enabled: this.miningCfg.template !== false };
     this.logHealthMs = this.logCfg.healthMs ?? 30_000;
     // Why 30 minutes and not 5: measured 2026-09-08, the synced production node's
@@ -560,6 +567,12 @@ export class NodeMonitor extends EventEmitter {
     if (raw && typeof raw === 'object') {
       this.state.mempoolDist = summarizeMempool(raw);
       this.mempoolDense = denseBlock(raw);   // Viewer Mode 2; not part of the snapshot
+      // THE TEMPLATE'S INPUT (2026-09-13). The block being built is assembled from this reply
+      // rather than bought with a getblocktemplate call, so the verbose map is kept until the
+      // next pool tier replaces it. Held on the monitor, never on `state`: it is tens of
+      // thousands of entries and must not ride a snapshot frame to a browser.
+      this.mempoolRaw = raw;
+      this.mempoolRawAt = Date.now();
       this.state.lastGoodAt = Date.now();
     }
     if (this.state.mempoolDist) {
@@ -871,66 +884,65 @@ export class NodeMonitor extends EventEmitter {
     if (this.state.chainInfo?.initialblockdownload === true) {
       return { unavailable: 'node is in initial download; a block template would be built from a chain that is not there yet' };
     }
-    if (!force && this.nextBlock && Date.now() - this.nextBlockAt < staleMs) return this.nextBlock;
-    if (this.nextBlockBusy) return this.nextBlockBusy;          // one call, many viewers
+    if (!this.mempoolRaw) {
+      // The pool tier has not answered yet. Saying so is better than assembling an empty block
+      // and calling it the one being built.
+      return this.nextBlock ?? { unavailable: 'the verbose mempool has not been read yet; the block being built is assembled from it' };
+    }
+    // ASSEMBLED, NOT FETCHED, so there is no call to coalesce and no lane to wait for: the
+    // `nextBlockBusy` promise and the heavy/keyed batch this used to run are gone with the RPC.
+    // What freshness means now is the age of the pool tier's last read (20 s by default), so the
+    // cache is keyed on THAT rather than on wall-clock: re-assembling the same mempool would
+    // produce the same block, and 25,000 entries is ~50 ms of our own CPU, not the node's.
+    if (!force && this.nextBlock && this.nextBlockPoolAt === this.mempoolRawAt && Date.now() - this.nextBlockAt < staleMs) {
+      return this.nextBlock;
+    }
 
-    const run = (async () => {
-      const t0 = Date.now();
-      try {
-        // HEAVY, KEYED, AND WITH ITS OWN PATIENCE. This call is the single most expensive thing
-        // the monitor asks for, and until 2026-09-13 it went through the lane as an ordinary
-        // priority-3 batch: default timeout (90 s) and the default 12 s freshness budget.
-        //
-        // Measured that day against an Umbrel running Core 31.1.0: getblocktemplate takes
-        // 4.0-4.5 s, five times in a row, with no warming -- while getblockchaininfo answers in
-        // ~100 ms. The same call on a local Core node takes 51 ms, so it is that machine's
-        // storage, not the software. The lane serves one call at a time, so those seconds are
-        // seconds nothing else is served, and every tier queued behind it blew its 12 s budget
-        // and was stale-dropped ("waited 77668ms for a lane free enough"). /api/nextblock took
-        // 75 s to answer.
-        //
-        // `heavy` buys heavyTimeoutMs instead of timeoutMs, so a genuinely slow node is given
-        // room rather than timed out at 90 s and retried. `key` makes a second viewer's request
-        // supersede a waiting one instead of queueing another 4 s call. maxWaitMs says what is
-        // actually true of a template: if it cannot start within a block-ish window it is not
-        // worth asking, because the answer would describe a mempool that has moved on.
-        const res = await this.rpc.batch([{ method: 'getblocktemplate', params: [{ rules: ['segwit'] }] }], {
-          heavy: true, key: `${this.id}:template`, priority: 3, maxWaitMs: 30_000,
-        });
-        const hit = res?.[0];
-        if (!hit?.ok) throw new Error(hit?.error?.message ?? 'getblocktemplate unanswered');
-        // `data` is the full hex of every selected transaction -- the reason a reply is
-        // 1.79 MB. Nothing downstream reads it, so it is gone before anything is built
-        // from the reply, and it never reaches a snapshot frame.
-        const txs = ((hit.result?.transactions) ?? []).map(({ data, ...rest }) => rest);
-        const summary = summarizeTemplate({ ...hit.result, transactions: txs }, {
-          at: Date.now(), previous: this.state.chainInfo?.bestblockhash ?? this.state.tip?.hash ?? null,
-        });
-        const packages = packagesFromTemplate(txs);
-        const avgWeightMined = (() => {
-          const rows = [...this.mining.rows.values()].filter((r) => Number.isFinite(r?.weight)).slice(0, 40);
-          return rows.length ? rows.reduce((n, r) => n + r.weight, 0) / rows.length : null;
-        })();
-        const economy = blockEconomy({ template: summary, mempool: this.state.mempool, avgWeightMined });
-        // Cells for the visualiser, bounded (see templateCells). The template's full
-        // transaction hex is dropped at the door and never reaches a snapshot frame.
-        const visual = templateCells(txs);
-        this.nextBlock = { ...summary, packages, economy, visual, ms: Date.now() - t0, at: Date.now(), note: TEMPLATE_NOTE };
-        this.nextBlockAt = Date.now();
-        this.clearQuality('template-unavailable');
-        return this.nextBlock;
-      } catch (err) {
-        // Keep showing the last template, marked: a page that silently stops updating is
-        // the failure mode this project keeps being called for.
-        this.flagQuality('template-unavailable', `getblocktemplate failed (${err?.message ?? err}); the block-in-progress card keeps its last reading and says how old it is`, 'warn');
-        if (this.nextBlock) this.nextBlock.lastError = `${err?.message ?? err}`;
-        return this.nextBlock ?? { unavailable: `${err?.message ?? err}` };
-      } finally {
-        this.nextBlockBusy = null;
-      }
-    })();
-    this.nextBlockBusy = run;
-    return run;
+    const t0 = Date.now();
+    try {
+      const chain = this.state.chainInfo ?? {};
+      const tipHeight = Number.isFinite(chain.blocks) ? chain.blocks : this.state.tip?.height ?? null;
+      const template = templateFromMempool(this.mempoolRaw, {
+        height: tipHeight == null ? null : tipHeight + 1,
+        previousblockhash: chain.bestblockhash ?? this.state.tip?.hash ?? null,
+        at: Date.now(),
+      });
+      const txs = template.transactions;
+      const summary = summarizeTemplate(template, {
+        at: Date.now(), previous: chain.bestblockhash ?? this.state.tip?.hash ?? null,
+      });
+      const packages = packagesFromTemplate(txs);
+      const avgWeightMined = (() => {
+        const rows = [...this.mining.rows.values()].filter((r) => Number.isFinite(r?.weight)).slice(0, 40);
+        return rows.length ? rows.reduce((n, r) => n + r.weight, 0) / rows.length : null;
+      })();
+      const economy = blockEconomy({ template: summary, mempool: this.state.mempool, avgWeightMined });
+      const visual = templateCells(txs);
+      this.nextBlock = {
+        ...summary,
+        packages,
+        economy,
+        visual,
+        ms: Date.now() - t0,
+        at: Date.now(),
+        note: LOCAL_TEMPLATE_NOTE,
+        // provenance, so the page can say where this came from and how old its input is
+        assembledLocally: true,
+        source: 'getrawmempool',
+        poolSize: template.poolSize,
+        poolAgeMs: Date.now() - this.mempoolRawAt,
+      };
+      this.nextBlockAt = Date.now();
+      this.nextBlockPoolAt = this.mempoolRawAt;
+      this.clearQuality('template-unavailable');
+      return this.nextBlock;
+    } catch (err) {
+      // Keep showing the last one, marked: a page that silently stops updating is the failure
+      // mode this project keeps being called for.
+      this.flagQuality('template-unavailable', `assembling the block being built failed (${err?.message ?? err}); the card keeps its last reading and says how old it is`, 'warn');
+      if (this.nextBlock) this.nextBlock.lastError = `${err?.message ?? err}`;
+      return this.nextBlock ?? { unavailable: `${err?.message ?? err}` };
+    }
   }
 
   miningView() {

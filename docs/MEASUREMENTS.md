@@ -913,6 +913,45 @@ The `data` field -- the full hex of every selected transaction, and the entire r
 reply is 1.79 MB -- is dropped before the summary is built and never reaches a snapshot
 frame.
 
+**Superseded 2026-09-13 (§26b): Bitcoin Core publishes the graph in the mempool, so the call
+is no longer made.** The paragraph above is kept because it was measured and it was true of
+the node it was measured on. Against Bitcoin Core on an Umbrel, `getrawmempool(true)` returns
+per entry:
+
+```
+depends[]          present -- 24,796 of 29,742 entries were in a package
+ancestorcount      present, with ancestorsize and fees.ancestor
+descendantcount    present, with descendantsize and fees.descendant
+chunkweight        present, with fees.chunk  <- Core's own cluster-mempool linearization
+```
+
+So the dependency graph does not have to be bought with a 1.79 MB template call: it is in the
+reply the monitor already reads every 20 s for the mempool view. `server/collect/gbt.js`
+assembles the block from it -- greedy over `fees.chunk`/`chunkweight`, each transaction taken
+with its unselected ancestors -- and returns it in the shape a `getblocktemplate` reply has,
+so `summarizeTemplate`, `templateCells`, `packagesFromTemplate` and `blockEconomy` read it
+unchanged.
+
+Measured the same day, a back-to-back template and mempool pair at height 966821 (so the two
+describe the same pool):
+
+```
+                    transactions      weight        fees      assembly
+ours                       6,546   3,995,859   643,076 sat       52 ms
+the node's template        6,535   3,991,951   642,860 sat    ~500 ms of the NODE's thread
+difference                    +11      +3,908      +216 sat (0.03%)
+set difference       178 in theirs not ours, 189 in ours not theirs -- all at the
+                     0.30 sat/vB margin, where ties are arbitrary
+```
+
+It is a reconstruction, not the node's answer: sigop limits and policy the mempool does not
+publish are not modelled, so it can differ at the margin. What it costs the operator's node is
+nothing.
+
+One number in the paragraph above is also stale on a warm node: on 2026-09-13 the same
+`getblocktemplate` answered in **0.5 s**, not 1.3-1.5 s, after the `dbcache`/`rpcthreads`
+tuning in INSTALL.md. The 4.0-4.5 s figure in §TROUBLESHOOTING was an untuned Umbrel.
+
 ## 27. The node's RPC surface, re-read (2026-09-11)
 
 29 calls against production (`127.0.0.1:8331`, cookie auth), strictly one at a time,

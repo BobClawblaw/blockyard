@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The block being built is assembled here now, and costs your node nothing.** It used to be a
+  `getblocktemplate` call worth 1.3-1.5 s of the node's single RPC thread and 1.79 MB per reply,
+  fetched on demand so a page nobody had open did not pay it every minute. Bitcoin Core publishes
+  everything the selection needs in the `getrawmempool(true)` reply this monitor **already reads
+  every 20 s** for the mempool view: `depends`, the ancestor sizes and fees, and
+  `fees.chunk`/`chunkweight` -- Core's own cluster-mempool linearization, which is the order its
+  miner sorts by. `server/collect/gbt.js` selects greedily over that, taking each transaction with
+  its unselected ancestors, and returns the result in the shape a `getblocktemplate` reply has, so
+  the summary, the histogram, the package analysis and the block economy read it unchanged.
+
+  Measured against the node's own template on a back-to-back pair at height 966821, so the two
+  describe the same pool: **6,546 transactions / 3,995,859 weight / 643,076 sat** against the
+  node's **6,535 / 3,991,951 / 642,860** -- 0.03% apart on fees, with the set difference confined
+  to the 0.30 sat/vB margin where ties are arbitrary. Assembly takes ~50-70 ms of this process's
+  CPU. It is a reconstruction of what a miner would choose, not the node's answer: sigop limits
+  and policy the mempool does not publish are not modelled, and the card says so.
+
+  The old measurement in `docs/MEASUREMENTS.md` -- that `getrawmempool` verbose carries no
+  `depends` -- was true of the experimental node it was taken on, and is kept there with the
+  correction appended rather than rewritten.
+
 ### Added
 
 - **Node appliance support: Umbrel, Start9, myNode.** A node on another machine has no cookie file

@@ -32,7 +32,14 @@ function harness() {
 }
 const TILES = [];
 for (let y = 0; y < 12; y += 2) for (let x = 0; x < 12; x += 2) TILES.push({ txid: `c${x}_${y}`, x, y, s: 2, tall: 1, color: '#33cc99' });
-const PUFF = 'set:fillStyle=rgba(70,130,255,';
+// The colours ARE the detector: these tests read through a recording canvas because whether the
+// charge reaches the stroke is exactly what a screenshot cannot explain. Changing the look means
+// changing these, and the negative control below (cycles draw none of it) is what keeps them
+// honest when they move.
+// 2026-09-13: the puff body went deeper and more saturated, and gained a lighter core on every
+// other puff, when the operator said "the nebula emissions are not substantial enough".
+const PUFF = 'set:fillStyle=rgba(48,110,255,';
+const PUFF_CORE = 'set:fillStyle=rgba(120,180,255,';
 const TUBE = 'set:strokeStyle=rgba(110,200,255,';
 const MOTE = 'set:fillStyle=rgba(200,236,255,';
 
@@ -44,12 +51,13 @@ function chargeOf(kind) {
     assert.ok(!h.ops.some((o) => o.startsWith(PUFF)), 'no charge at rest');
     harness.t = 1000;
     assert.equal(triggerIdle(h.canvas, kind), true);
-    let seen = { puff: 0, tube: 0, mote: 0 };
+    let seen = { puff: 0, puffCore: 0, tube: 0, mote: 0 };
     for (let i = 1; i <= 40; i++) {
       const before = h.ops.length;
       h.step(1000 + i * 60);
       const frame = h.ops.slice(before);
       seen.puff += frame.filter((o) => o.startsWith(PUFF)).length;
+      seen.puffCore += frame.filter((o) => o.startsWith(PUFF_CORE)).length;
       seen.tube += frame.filter((o) => o.startsWith(TUBE)).length;
       seen.mote += frame.filter((o) => o.startsWith(MOTE)).length;
     }
@@ -61,6 +69,7 @@ function chargeOf(kind) {
 test('the lightning ball carries the charge: blue puffs behind it, an electric tube, a spray of motes', () => {
   const seen = chargeOf('ball');
   assert.ok(seen.puff > 20, `puffs: ${seen.puff}`);
+  assert.ok(seen.puffCore > 10, `the cloud has depth, not one flat wash: ${seen.puffCore} lit cores`);
   assert.ok(seen.tube > 5, `tube: ${seen.tube}`);
   assert.ok(seen.mote > 20, `motes: ${seen.mote}`);
 });
@@ -70,5 +79,6 @@ test('the light cycles do NOT: a rider whose point is a clean light wall is not 
   // to both riders when the ball got it, and on the cycles it read as static over the wall)
   const seen = chargeOf('lightcycle');
   assert.equal(seen.puff, 0, 'no blue puffs behind the wall');
+  assert.equal(seen.puffCore, 0, 'not even the lighter cores the cloud gained in 2026-09-13');
   assert.equal(seen.mote, 0, 'and no motes');
 });

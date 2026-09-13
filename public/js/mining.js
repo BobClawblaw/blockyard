@@ -11,7 +11,10 @@
 // The honest part: an unlabelled coinbase is drawn with its raw text and a grey rail, the
 // next-block card states its own age and what it cost the node to answer, and the package
 // view is labelled as the block-under-construction's ancestor graph -- the one dependency
-// graph this node publishes (getblocktemplate carries `depends`; getrawmempool does not).
+// graph this node publishes. Until 2026-09-13 that meant getblocktemplate; measured against
+// Bitcoin Core, getrawmempool(true) carries `depends`, the ancestor sizes and fees, and
+// fees.chunk/chunkweight -- so the block being built is assembled from the mempool the
+// monitor already reads, and costs the node no call at all (server/collect/gbt.js).
 
 import { paint, COL } from './charts.js';
 import { blockTreemap, mempoolTreemap, rateColor as rateBucketColor } from './goggles.js';
@@ -413,7 +416,7 @@ function nextCard(nb, mempool, drift = {}, fmt, freshClass = '', fresh = null, m
   const ec = nb?.economy ?? null;
   const ring = freshClass ? ' ' + freshClass : '';
   const since = fresh && Number.isFinite(fresh.seconds) ? Math.round(fresh.seconds / 60) : null;
-  if (!nb) return `<div class="bcard next empty${ring}">The block being built.<br><span class="tiny">No template yet — the page asks for one on open and the node takes about a second and a half to answer. <a href="#mining">Mining</a> shows the packages inside it.</span></div>`;
+  if (!nb) return `<div class="bcard next empty${ring}">The block being built.<br><span class="tiny">No template yet — it is assembled from the node\u2019s mempool, which is read every twenty seconds. <a href="#mining">Mining</a> shows the packages inside it.</span></div>`;
   if (nb.unavailable) return `<div class="bcard next empty${ring}">No block template.<br><span class="tiny">${fmt.esc(nb.unavailable)}</span></div>`;
   const pct = nb.weightPct ?? 0;
   const ageSec = nb.at ? Math.round((Date.now() - nb.at) / 1000) : null;

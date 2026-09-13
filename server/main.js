@@ -203,8 +203,10 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       // BLOCKYARD_MINING=0 turns attribution off entirely; the sizes, fees and weights stay.
       enabled: process.env.BLOCKYARD_MINING !== '0',
       backfill: Number(process.env.BLOCKYARD_MINING_BACKFILL ?? 36),
-      // getblocktemplate is fetched on demand by the Mining page (1.3-1.5 s of the node's
-      // own RPC thread per call), never on a timer. BLOCKYARD_MINING_TEMPLATE=0 turns it off.
+      // The block being built is assembled from the mempool the pool tier already reads
+      // (collect/gbt.js), so it costs the node no call of its own -- it used to be a
+      // getblocktemplate worth 1.3-1.5 s of the node's single RPC thread.
+      // BLOCKYARD_MINING_TEMPLATE=0 still turns the card off for anyone who does not want it.
       template: process.env.BLOCKYARD_MINING_TEMPLATE !== '0',
       perTick: 1,
       // A human-edited tag -> label map. Absent by default, which is the correct state:

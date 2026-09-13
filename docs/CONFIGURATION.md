@@ -393,7 +393,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_MARKETS` | `markets.enabled` | boolean | `true` | `0` turns the Markets feed off. |
 | `BLOCKYARD_MINING` | *(none)* | `0` or anything | on | `0` turns off miner attribution, which decodes each block's coinbase to show the pool tag. Block sizes, fees and weights are unaffected. Only the literal `0` disables it. |
 | `BLOCKYARD_MINING_BACKFILL` | *(none)* | number | `36` | How many recent blocks are attributed to miners at startup. |
-| `BLOCKYARD_MINING_TEMPLATE` | *(none)* | `0` or anything | on | `0` stops the Mining page from requesting `getblocktemplate`, a call that occupies the node's RPC thread for over a second. It is only ever fetched on demand, never on a timer. Only the literal `0` disables it. |
+| `BLOCKYARD_MINING_TEMPLATE` | *(none)* | `0` or anything | on | `0` turns off the "block being built" card. Since 0.9.0 the template is **assembled from the mempool this monitor already reads**, so leaving it on costs your node no RPC call at all — it costs this process ~50-70 ms of CPU per assembly. Before that it was a `getblocktemplate` worth over a second of the node's single RPC thread, which is why the switch exists. Only the literal `0` disables it. |
 | `BLOCKYARD_POOL_MAP` | *(none)* | path | `<store.dir>/pool-map.json` | Pool label map to load (see [The data directory](#the-data-directory)). |
 | `BLOCKYARD_FAKE_NODE` | *(none)* | boolean | `false` | Development mode: start a built-in simulated node and monitor **only** that. Every configured node is replaced. Never set this in production. |
 | `FAKE_PORT` | *(none)* | number | `18331` | Port of the simulated node, with `BLOCKYARD_FAKE_NODE`. It is also used by `npm run fake-node`. |

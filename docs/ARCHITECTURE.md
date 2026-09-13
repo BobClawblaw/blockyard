@@ -138,7 +138,8 @@ server/
   collect/logtail.js log follower (rotation, truncation, partial lines)
   collect/logparse.js log line parsers (pure; target an EXPERIMENTAL node's grammar, not Core's)
   collect/mining.js  coinbase decoding and pool ledger folding (pure)
-  collect/nextblock.js getblocktemplate summary and package analysis (pure)
+  collect/gbt.js       the block being built, assembled from the mempool (pure)
+  collect/nextblock.js template summary and package analysis (pure)
   collect/markets.js exchange feed (tickers, candles, order books, spot price)
   store/ring.js      ring buffer, CounterRate, read-time downsampling
   store/history.js   named series, per-node views, atomic snapshots
@@ -214,10 +215,13 @@ Some reads are not on a timer:
   a burst). Mining attribution is queued for those heights: `getblock <hash> 1`
   plus `getrawtransaction <coinbase> 2`, one block per tick, newest first, and
   never during initial block download.
-- **Block template:** `getblocktemplate` is fetched only when a page asks for it
-  through `/api/nextblock`. A call costs the node well over a second of its RPC
-  thread, so the result is reused for 15 s and concurrent viewers share one
-  in-flight call.
+- **Block template:** assembled here, from the verbose mempool the pool tier
+  already reads — **no RPC call of its own**. Core publishes `depends`, the
+  ancestor sizes and fees, and `fees.chunk`/`chunkweight` (its own cluster-mempool
+  linearization) in `getrawmempool(true)`, which is everything the selection needs.
+  `/api/nextblock` serves it; it is as fresh as the pool tier's last read (20 s)
+  and takes ~50-70 ms of *our* CPU. Measured against the node's own
+  `getblocktemplate` on the same pool: 0.03% apart on fees (`collect/gbt.js`).
 - **Explorer and console:** requests from the explorer and the read-only RPC
   console go through the same lane (see 2.4).
 
@@ -272,9 +276,13 @@ Beyond the raw figures, it carries the reasoning the UI needs to be honest:
   `log.health.ratio` and held to a threshold against a frozen real sample (RULES 15).
 - **`collect/mining.js`**: coinbase scriptSig push decoding, tag extraction, and
   folding rows into per-pool counters. It never invents pool names.
-- **`collect/nextblock.js`**: turns a `getblocktemplate` reply into the next-block
-  card: header figures, a fixed-bucket feerate histogram, and ancestor packages
-  built from `depends`. The bulky `data` hex is dropped as soon as it arrives.
+- **`collect/gbt.js`**: assembles the block being built from `getrawmempool(true)`,
+  in the shape a `getblocktemplate` reply has, so every consumer below reads it
+  unchanged. Greedy over the node's own chunk feerate, each transaction taken with
+  its unselected ancestors. Pure.
+- **`collect/nextblock.js`**: turns that template into the next-block card: header
+  figures, a fixed-bucket feerate histogram, and ancestor packages built from
+  `depends`. Pure, and still able to read a real `getblocktemplate` reply.
 - **`collect/markets.js`**: `MarketFeed`, the only outbound connection that is not
   a node. It is covered in detail below.
 

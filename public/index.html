@@ -699,7 +699,7 @@
             </div>
             <div class="mnpair">
               <div class="card">
-                <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getblocktemplate · depends</span></h3>
+                <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getrawmempool · depends</span></h3>
                 <div id="mnPackages"></div>
               </div>
               <div class="card">
@@ -733,7 +733,7 @@
                 <dt>block fullness &amp; gaps</dt><dd>block train above</dd>
                 <dt>mempool feerate landscape</dt><dd>on the <b>Mempool</b> page (fee histogram + scatter)</dd>
                 <dt>CPFP / child-pays-for-parent clusters</dt><dd>shown above, <b>for the block under construction</b>.
-                  The ancestor graph is <span class="mono">getblocktemplate … depends</span> (indices into the selected
+                  The ancestor graph is <span class="mono">getrawmempool … depends</span> (indices into the selected
                   transactions) — 1,496 transactions, 19 multi-transaction packages and 40 transactions inside a package as
                   measured on 2026-09-09. It is <b>not</b> the whole mempool: <span class="mono">getrawmempool verbose</span> on
                   this build carries no <span class="mono">depends</span> and no <span class="mono">ancestorcount</span>, and
@@ -741,7 +741,7 @@
                   says which of those two it is showing rather than blurring them together.</dd>
                 <dt>1p1c ancestor packages</dt><dd><span class="warn">not shown.</span> The node reports accepted/failed counts for
                   1p1c packages, but only in its own log lines, and log files are not a source this monitor reads. The package
-                  view above is built from <span class="mono">getblocktemplate … depends</span>, which is RPC.</dd>
+                  view above is built from <span class="mono">getrawmempool … depends</span>, which is RPC.</dd>
               </div>
             </details>
           </div>

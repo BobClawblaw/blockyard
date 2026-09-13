@@ -70,14 +70,19 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   // Removed on 2026-09-12 and restored the same day at the operator's request, so these are back
   // to asserting their presence. (The nebula behind them keeps the span emitter it gained in
   // between -- that is what stopped the trail reading as concentric rings, and it stays.)
-  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(190,232,255')), 'crackling branches off the wire');
+  // 2026-09-13 (operator: "the lightning still looks terrible") the crackle became directional and
+  // tapered -- it leaves the wire near-perpendicular and is drawn in three passes, a wide dim halo,
+  // the arc, and a hot thin core -- so the single flat stroke colour it used to have is gone.
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(175,225,255')), 'crackling branches off the wire');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(90,170,255')), 'each branch has a halo under it');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(245,252,255')), 'and a hot core that stops short, so it tapers to a point');
   const motes = after.filter((o) => o.startsWith('set:fillStyle=rgba(200,236,255')).length;
   assert.ok(motes >= 7, `motes stream off the charged stretch (${motes})`);
   // and the blue nebula behind it all (operator: "a blue nebula behind the energy pulse that starts
   // expanding and fading out to black", then "make the nebula an emitter; still seeing concentric
   // circles") -- emitted over the whole charged span rather than per segment, and drawn before the
   // tube, so it sits BEHIND the wire
-  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(70,130,255'));
+  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(48,110,255'));
   const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=rgba(') && o.endsWith(',0.78)'));
   assert.ok(firstCloud >= 0, 'the nebula is drawn');
   assert.ok(firstCloud < firstTube, 'and it is drawn behind the wire, not over it');

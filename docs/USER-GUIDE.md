@@ -671,7 +671,7 @@ The block under construction and who has been mining.
 | Panel | What it shows |
 |---|---|
 | **Block flow** | The same Block flow as on Overview. |
-| **Packages in the block being built** | The ancestor graph from `getblocktemplate`: a histogram of package sizes, then a table of the top packages with fees, weight, package fee rate, child and parent fee rates, and a small picture of the package's shape. Rows with a child paying at least twice its parent's rate are highlighted as child-pays-for-parent. If every transaction stands alone, the panel says so. That is a real reading, not a missing chart. |
+| **Packages in the block being built** | The ancestor graph from `getrawmempool … depends`: a histogram of package sizes, then a table of the top packages with fees, weight, package fee rate, child and parent fee rates, and a small picture of the package's shape. Rows with a child paying at least twice its parent's rate are highlighted as child-pays-for-parent. If every transaction stands alone, the panel says so. That is a real reading, not a missing chart. |
 | **Feerate landscape** | The template's transactions bucketed by sat/vB, with green buckets well above the block's median and red ones below it. |
 | **Pools in this window** | Blocks per pool, share, median fee rate, average weight, and the coinbase tags seen. A pool the curated label map does not recognise is marked `unlabelled` and shown by its raw tag. |
 | **Mempool space** | The Block space viewer, with a note giving how many transactions are drawn and how long ago the pool was read. |

@@ -298,7 +298,17 @@ function scheduleFx(canvas, st, opts, soon = false) {
     const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
     const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => k !== 'pulse')).filter((k) => !allowed || allowed.has(k));
     if (!kinds.length) return;
-    const pool = kinds.filter((k) => k !== st.lastFx);
+    let pool = kinds.filter((k) => k !== st.lastFx);
+    // THE PULSE COMES ROUND LESS OFTEN (operator, 2026-09-13: "cut down the occurance of the
+    // energy pulse on the 3D yellow bar"). The price board has only two effects that follow the
+    // line, so a straight random pick ran the surge every other time -- roughly every 14 s, which
+    // on a board someone is reading prices off is too much. Three times in four it is dropped from
+    // the running when there is anything else to play, so twinkle carries the quiet stretches and
+    // the pulse stays an event. Never dropped to nothing: if it is the only effect left switched
+    // on, it still plays.
+    if (pool.length > 1 && pool.includes('pulse') && Math.random() < 0.75) {
+      pool = pool.filter((k) => k !== 'pulse');
+    }
     // the first one after the board lands is a light-cycle race half the time -- on the grid only
     const kind = !onALine && soon && st.lastFx !== 'lightcycle' && kinds.includes('lightcycle') && Math.random() < 0.5
       ? 'lightcycle'
@@ -606,13 +616,24 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
     if (g.tint < 0.04) continue;
     const i = g.i + seedBase;
     const mx = (g.a.x + g.b.x) / 2, my = (g.a.y + g.b.y) / 2;
-    for (let k = 0; k < 10; k++) {
+    // A CLOUD WITH SOMETHING IN IT (operator, 2026-09-13: "the nebula emissions are not
+    // substantial enough"). Ten puffs at 0.09 alpha over a 7-21 line-width radius is a haze you
+    // have to look for. Now: 22 puffs, half again as wide, at more than double the alpha, and in
+    // TWO tones -- a deep blue body with a lighter core drawn over its inner half -- so the cloud
+    // has depth rather than being one flat wash. Alpha stays low per puff because the substance
+    // comes from LAYERING; a single fat translucent disc reads as a bubble.
+    for (let k = 0; k < 22; k++) {
       const a1 = hash01(i * 47 + k * 11 + 3) * Math.PI * 2;
-      const spread = lw * (5 + 40 * g.age) * (0.35 + 0.65 * hash01(i * 13 + k * 5 + 29));
-      const rad = lw * (7 + 14 * hash01(i * 7 + k * 17 + 61)) * (1 + 1.2 * g.age);
-      const al = 0.09 * g.tint * (1 - 0.65 * g.age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
-      ctx.fillStyle = `rgba(70,130,255,${al.toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(mx + Math.cos(a1) * spread, my + Math.sin(a1) * spread, rad, 0, Math.PI * 2); ctx.fill();
+      const spread = lw * (5 + 46 * g.age) * (0.35 + 0.65 * hash01(i * 13 + k * 5 + 29));
+      const rad = lw * (9 + 22 * hash01(i * 7 + k * 17 + 61)) * (1 + 1.35 * g.age);
+      const al = 0.2 * g.tint * (1 - 0.6 * g.age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
+      const px = mx + Math.cos(a1) * spread, py = my + Math.sin(a1) * spread;
+      ctx.fillStyle = `rgba(48,110,255,${al.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+      if (k % 2 === 0) {
+        ctx.fillStyle = `rgba(120,180,255,${(al * 0.7).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(px, py, rad * 0.5, 0, Math.PI * 2); ctx.fill();
+      }
     }
   }
   const line = (g, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = lw * w; ctx.beginPath(); ctx.moveTo(g.a.x, g.a.y); ctx.lineTo(g.b.x, g.b.y); ctx.stroke(); };
@@ -626,25 +647,54 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
     const i = g.i + seedBase;
     const flick = 0.55 + 0.45 * Math.abs(Math.sin(now * 0.023 + i * 1.7) * Math.sin(now * 0.041 + i * 0.9));
     line(g, 2.2, `rgba(210,240,255,${(0.9 * g.tint * flick).toFixed(3)})`);
+    // LIGHTNING THAT LOOKS LIKE LIGHTNING (operator, 2026-09-13: "the lightning still looks
+    // terrible"). What was here scattered 1-3 forks at a uniformly random ANGLE off the wire and
+    // let each leg wander +-0.8 rad, which is a random walk, not a discharge: legs doubled back,
+    // crossed the wire, and the whole thing read as scribble at a constant width.
+    //
+    // A real arc has direction and it tapers. So: every fork leaves the wire roughly PERPENDICULAR
+    // (+-0.55 rad off the normal, sign picked per fork), holds that heading with only a small
+    // per-leg deviation, and is drawn in three passes -- a wide dim halo, the arc, and a hot thin
+    // core -- each shorter and brighter than the last, so it comes to a point instead of ending in
+    // a stub. Still re-rolled every frame: electrical precisely because it never draws twice.
     const forks = 1 + ((Math.random() * 3 * g.tint) | 0);
-    ctx.strokeStyle = `rgba(190,232,255,${(0.8 * g.tint).toFixed(3)})`;
-    ctx.lineWidth = lw * 1.6;
+    const nx = -(g.b.y - g.a.y), ny = g.b.x - g.a.x;
+    const nlen = Math.hypot(nx, ny) || 1;
     for (let k = 0; k < forks; k++) {
       const f0 = Math.random();
-      let x = g.a.x + (g.b.x - g.a.x) * f0, y = g.a.y + (g.b.y - g.a.y) * f0;
-      const ang = Math.random() * Math.PI * 2;
-      const reach = lw * (14 + Math.random() * 24) * (0.5 + g.tint);
-      ctx.beginPath(); ctx.moveTo(x, y);
-      const legs = 3 + ((Math.random() * 2) | 0);
-      for (let m = 0; m < legs; m++) { const a2 = ang + (Math.random() - 0.5) * 1.6; x += Math.cos(a2) * (reach / legs); y += Math.sin(a2) * (reach / legs); ctx.lineTo(x, y); }
-      ctx.stroke();
+      const ox = g.a.x + (g.b.x - g.a.x) * f0, oy = g.a.y + (g.b.y - g.a.y) * f0;
+      const side = Math.random() < 0.5 ? 1 : -1;
+      const base = Math.atan2((ny / nlen) * side, (nx / nlen) * side) + (Math.random() - 0.5) * 1.1;
+      const reach = lw * (16 + Math.random() * 26) * (0.5 + g.tint);
+      const legs = 4;
+      const pts = [{ x: ox, y: oy }];
+      let x = ox, y = oy, ang = base;
+      for (let m = 0; m < legs; m++) {
+        ang += (Math.random() - 0.5) * 0.7;                 // a heading that holds, not a walk
+        const step = (reach / legs) * (1 - 0.12 * m);       // each leg shorter: it tapers away
+        x += Math.cos(ang) * step; y += Math.sin(ang) * step;
+        pts.push({ x, y });
+      }
+      const arc = (upto, w, col) => {
+        ctx.strokeStyle = col; ctx.lineWidth = lw * w;
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        for (let m = 1; m <= upto; m++) ctx.lineTo(pts[m].x, pts[m].y);
+        ctx.stroke();
+      };
+      arc(legs, 3.2, `rgba(90,170,255,${(0.22 * g.tint).toFixed(3)})`);
+      arc(legs, 1.25, `rgba(175,225,255,${(0.8 * g.tint).toFixed(3)})`);
+      arc(Math.max(1, legs - 1), 0.5, `rgba(245,252,255,${(0.95 * g.tint).toFixed(3)})`);
     }
-    for (let k = 0; k < 8; k++) {
+    // SPARKS, NOT BLOBS (operator, 2026-09-13: "the particles are too fat"). They were discs of
+    // 1.4-4.2 line-widths, which at this line width read as a spray of dots rather than a spray of
+    // sparks. Halved in radius, doubled in number, and each one now flies FURTHER as it ages, so
+    // the trail is a fine mist that thins out instead of a clump of fat circles.
+    for (let k = 0; k < 16; k++) {
       const f0 = hash01(i * 31 + k * 7);
       const bx = g.a.x + (g.b.x - g.a.x) * f0, by = g.a.y + (g.b.y - g.a.y) * f0;
       const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
-      const dist = lw * (3 + 36 * g.age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
-      const r = lw * (1.4 + 2.8 * hash01(i * 5 + k + 41)) * (1 - 0.45 * g.age);
+      const dist = lw * (3 + 52 * g.age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
+      const r = lw * (0.55 + 1.15 * hash01(i * 5 + k + 41)) * (1 - 0.45 * g.age);
       ctx.fillStyle = `rgba(200,236,255,${(0.75 * g.tint * (1 - 0.5 * g.age)).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
     }
@@ -1000,7 +1050,10 @@ function priceLine(ctx, view, axes) {
   // its own angle, its own distance and its own size from four INDEPENDENT hashes, so no two share
   // a centre or a radius and there is no common edge for the eye to join up. Hashed, not random,
   // so a puff keeps its place from frame to frame instead of boiling.
-  const PUFFS = 130;
+  // (operator, 2026-09-13: "the nebula emissions are not substantial enough") -- more puffs, wider,
+  // and at more than double the alpha, with a lighter core on every other one so the cloud reads as
+  // having depth. Layering is what makes it substantial; a single fat translucent disc is a bubble.
+  const PUFFS = 210;
   for (let k = 0; k < PUFFS; k++) {
     const u = hash01(k * 7 + 13);                         // how far back down the tail it sits
     const at = headAt - u * PULSE_TAIL;
@@ -1013,13 +1066,18 @@ function priceLine(ctx, view, axes) {
     const mx = pts[i0].x + ((pts[i0 + 1] ?? pts[i0]).x - pts[i0].x) * fr;
     const my = pts[i0].y + ((pts[i0 + 1] ?? pts[i0]).y - pts[i0].y) * fr;
     const a1 = hash01(k * 31 + 101) * Math.PI * 2;
-    const spread = lw * (4 + 70 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
-    const rad = lw * (7 + 26 * hash01(k * 13 + 67)) * (1 + 1.1 * age);
-    const al = 0.075 * tint * (1 - 0.55 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
-    ctx.fillStyle = `rgba(70,130,255,${al.toFixed(3)})`;
+    const spread = lw * (4 + 78 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
+    const rad = lw * (9 + 34 * hash01(k * 13 + 67)) * (1 + 1.3 * age);
+    const al = 0.17 * tint * (1 - 0.5 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
+    const px = mx + Math.cos(a1) * spread, py = my + Math.sin(a1) * spread;
+    ctx.fillStyle = `rgba(48,110,255,${al.toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(mx + Math.cos(a1) * spread, my + Math.sin(a1) * spread, rad, 0, Math.PI * 2);
+    ctx.arc(px, py, rad, 0, Math.PI * 2);
     ctx.fill();
+    if (k % 2 === 0) {
+      ctx.fillStyle = `rgba(120,180,255,${(al * 0.7).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(px, py, rad * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
   }
   for (const [w, c, a, kind] of [...GLOW, ...CORE]) {
     const B = kind === 'glow' ? DEEP : BLUE;
@@ -1072,34 +1130,51 @@ function priceLine(ctx, view, axes) {
     // CRACKLE: short jagged branches off the wire, re-rolled EVERY frame -- electrical precisely
     // because it never draws the same twice. Reach is in line-widths; the line is under a pixel
     // wide, so 5-14 was invisible when this was first tried.
+    // LIGHTNING WITH A DIRECTION (operator, 2026-09-13: "the lightning still looks terrible").
+    // Forks now leave the wire near-perpendicular and hold their heading, tapering over four legs,
+    // drawn halo/arc/core so they come to a point. The old version picked a uniformly random angle
+    // and let each leg wander +-0.8 rad, which doubled back across the wire and read as scribble.
     const forks = 1 + ((Math.random() * 3 * tint) | 0);
-    ctx.strokeStyle = `rgba(190,232,255,${(0.8 * tint).toFixed(3)})`;
-    ctx.lineWidth = lw * 1.7;
+    const nx = -(q.y - p.y), ny = q.x - p.x;
+    const nlen = Math.hypot(nx, ny) || 1;
     for (let k = 0; k < forks; k++) {
       const f0 = Math.random();
-      let x = p.x + (q.x - p.x) * f0, y = p.y + (q.y - p.y) * f0;
-      const ang = Math.random() * Math.PI * 2;
-      const reach = lw * (18 + Math.random() * 30) * (0.5 + tint);
-      ctx.beginPath(); ctx.moveTo(x, y);
-      const legs = 3 + ((Math.random() * 2) | 0);
+      const ox = p.x + (q.x - p.x) * f0, oy = p.y + (q.y - p.y) * f0;
+      const side = Math.random() < 0.5 ? 1 : -1;
+      let ang = Math.atan2((ny / nlen) * side, (nx / nlen) * side) + (Math.random() - 0.5) * 1.1;
+      const reach = lw * (20 + Math.random() * 30) * (0.5 + tint);
+      const legs = 4;
+      const pl = [{ x: ox, y: oy }];
+      let x = ox, y = oy;
       for (let m = 0; m < legs; m++) {
-        const a2 = ang + (Math.random() - 0.5) * 1.6;
-        x += Math.cos(a2) * (reach / legs); y += Math.sin(a2) * (reach / legs);
-        ctx.lineTo(x, y);
+        ang += (Math.random() - 0.5) * 0.7;
+        const step = (reach / legs) * (1 - 0.12 * m);
+        x += Math.cos(ang) * step; y += Math.sin(ang) * step;
+        pl.push({ x, y });
       }
-      ctx.stroke();
+      const arc = (upto, w, col) => {
+        ctx.strokeStyle = col; ctx.lineWidth = lw * w;
+        ctx.beginPath(); ctx.moveTo(pl[0].x, pl[0].y);
+        for (let m = 1; m <= upto; m++) ctx.lineTo(pl[m].x, pl[m].y);
+        ctx.stroke();
+      };
+      arc(legs, 3.4, `rgba(90,170,255,${(0.22 * tint).toFixed(3)})`);
+      arc(legs, 1.3, `rgba(175,225,255,${(0.82 * tint).toFixed(3)})`);
+      arc(Math.max(1, legs - 1), 0.5, `rgba(245,252,255,${(0.95 * tint).toFixed(3)})`);
     }
     // PARTICLES: a spray of motes streaming off the charged wire, each on its own heading,
     // spreading wider and fading as its stretch of the line ages. Placed by a HASH of segment and
     // mote plus the age -- not Math.random -- so a mote moves coherently frame to frame instead of
     // jittering in place.
     const age = passed / PULSE_TAIL;
-    for (let k = 0; k < 10; k++) {
+    // SPARKS, NOT BLOBS (operator, 2026-09-13: "the particles are too fat"): half the radius,
+    // more of them, thrown further as the stretch ages -- a mist that thins, not a clump of discs.
+    for (let k = 0; k < 18; k++) {
       const f0 = hash01(i * 31 + k * 7);
       const bx = p.x + (q.x - p.x) * f0, by = p.y + (q.y - p.y) * f0;
       const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
-      const dist = lw * (4 + 48 * age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
-      const r = lw * (1.6 + 3.2 * hash01(i * 5 + k + 41)) * (1 - 0.45 * age);
+      const dist = lw * (4 + 62 * age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
+      const r = lw * (0.6 + 1.3 * hash01(i * 5 + k + 41)) * (1 - 0.45 * age);
       ctx.fillStyle = `rgba(200,236,255,${(0.75 * tint * (1 - 0.5 * age)).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
     }

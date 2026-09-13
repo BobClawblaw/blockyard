@@ -838,7 +838,7 @@ Pool attribution over the observed window of recent blocks, plus the cached bloc
 
 ### `GET /api/nextblock`
 
-The block being built right now, from `getblocktemplate`. It is fetched **on demand** because each call takes about 1.3–1.5 s of the node's single RPC thread. A result is shared with every caller inside the freshness window, and concurrent callers share one call.
+The block being built right now, **assembled by this server from the mempool** — it makes no RPC call of its own. Core publishes `depends`, the ancestor sizes and fees, and `fees.chunk`/`chunkweight` in `getrawmempool(true)`, which the monitor already reads every 20 s for the mempool view; `server/collect/gbt.js` selects greedily over the node's own chunk feerate, taking each transaction with its unselected ancestors. Assembly costs this process ~50–70 ms and your node nothing. The reply carries `assembledLocally: true`, `source: "getrawmempool"`, `poolSize` and `poolAgeMs` so a caller can see how fresh its input was. Measured against the node's own `getblocktemplate` on the same pool: 0.03% apart on total fees. It is a reconstruction of what a miner would choose, not the node's template — sigop limits and policy the mempool does not publish are not modelled.
 
 | Query | Type | Default | Meaning |
 |---|---|---|---|
