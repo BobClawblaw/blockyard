@@ -88,6 +88,7 @@ export class NodeMonitor extends EventEmitter {
       poolMap: null,
       byPool: new Map(),      // grouping by curated label where one matched, else raw key
       fetched: 0, skippedIbd: 0, lastError: null, at: null,
+      retryAt: 0, failures: 0,   // backoff after a failed attribution; cleared by the next success
     };
     this.miningQueue = [];
     this.miningBusy = false;
@@ -744,6 +745,13 @@ export class NodeMonitor extends EventEmitter {
 
   async pumpMining() {
     if (this.miningBusy || this.stopped || !this.miningQueue.length) return;
+    // A failed round sets mining.retryAt. Honour it here rather than dropping the work, so the
+    // queue survives a slow patch and drains when the node recovers.
+    if (this.mining.retryAt && Date.now() < this.mining.retryAt) {
+      const wait = this.mining.retryAt - Date.now();
+      setTimeout(() => { if (!this.stopped) this.pumpMining().catch(() => {}); }, wait).unref?.();
+      return;
+    }
     this.miningBusy = true;
     try {
       for (let n = 0; n < this.miningCfg.perTick && this.miningQueue.length; n++) {
@@ -752,14 +760,31 @@ export class NodeMonitor extends EventEmitter {
         const hash = this.state.blocks.get(height)?.hash;
         if (!hash) continue;                     // stats have not landed for it yet
         const row = await this.fetchMining(height, hash).catch((err) => {
-          // A failed attribution is a gap, not a zero. Say so once, keep the last rows,
-          // and stop hammering the lane this round.
+          // A failed attribution is a gap, not a zero. Say so, stop asking THIS round -- and
+          // keep the work.
+          //
+          // This used to do `this.miningQueue.length = 0`, which threw the backlog away. Nothing
+          // ever put it back: enqueueMining is called only by onNewTip (the heights that just
+          // arrived) and by backfillBlocks (once, at boot), and line ~737 skips anything already
+          // in `rows` -- which these never reached. So one stale-dropped block discarded the
+          // whole 36-block boot window permanently, and with perTick:1 the page then refilled one
+          // block at a time as new ones were mined. Seen on an Umbrel 2026-09-13: a single
+          // "waited 18068ms for a lane free enough" left windowBlocks=0 with a frozen lastError,
+          // while the same code on a local node attributed 30 blocks across 9 pools.
+          //
+          // The height goes back to the front, the rest of the queue survives, and a backoff
+          // decides when to try again -- so a busy node is not hammered and a recovering one
+          // catches up by itself.
           this.mining.lastError = `${err?.message ?? err}`;
-          this.flagQuality('mining-unavailable', `coinbase attribution stopped: getblock/getrawtransaction failed (${this.mining.lastError}); the block list keeps its sizes and fees, the miner column stays empty rather than guessed`, 'warn');
-          this.miningQueue.length = 0;
+          this.mining.failures += 1;
+          this.mining.retryAt = Date.now() + Math.min(60_000, 2_000 * 2 ** Math.min(this.mining.failures - 1, 5));
+          this.miningQueue.unshift(height);
+          this.flagQuality('mining-unavailable', `coinbase attribution paused: getblock/getrawtransaction failed (${this.mining.lastError}); retrying in ${Math.round((this.mining.retryAt - Date.now()) / 1000)}s -- the block list keeps its sizes and fees, the miner column stays empty rather than guessed`, 'warn');
           return null;
         });
-        if (!row) continue;
+        if (!row) break;                 // stop this round; the queue and the backoff hold the rest
+        this.mining.failures = 0;
+        this.mining.retryAt = 0;
         this.clearQuality('mining-unavailable');
         // Curated label, if the map knows this coinbase. The raw tag is never replaced.
         const matched = matchPool(this.mining.poolMap, { tagText: row.tagText, rawHex: row.rawCoinbase });
