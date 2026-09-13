@@ -792,6 +792,59 @@ export const routes = [
       };
     },
   },
+
+  // ---------------------------------------------------------- display settings
+  // (operator, 2026-09-13: "This is a server app. Should store things on a server", of the display
+  // settings that until now lived in each browser's localStorage.)
+  //
+  // They were per-browser by an earlier decision -- "a kiosk screen and a laptop looking at the
+  // same monitor want different answers, and neither should need an account to have one". The cost
+  // of that was the one the operator hit: the settings existed nowhere the app could read, so they
+  // could not be backed up, shared between machines, or even looked at from the server.
+  //
+  // THE SERVER KEEPS THE BLOB AND NOTHING ELSE. It does not know the schema and must not grow one:
+  // public/js/settings.js normalise() clamps every value on the way in, so a hand-edited file
+  // cannot put the UI into a state the panel could not. What the server owes is durability, a size
+  // limit, and the same gate as every other config write.
+  {
+    method: 'GET', path: '/api/settings', auth: 'any',
+    handler: async (ctx, app) => {
+      try {
+        const raw = await fsp.readFile(app.settingsFile, 'utf8');
+        return { settings: JSON.parse(raw), file: app.settingsFile, stored: true };
+      } catch (err) {
+        // Nothing saved yet is the normal first-run answer, not a fault: the client then keeps its
+        // own defaults and offers to push them up. A CORRUPT file is different and says so.
+        if (err.code === 'ENOENT') return { settings: null, file: app.settingsFile, stored: false };
+        return { settings: null, file: app.settingsFile, stored: false, error: `unreadable: ${err.message}` };
+      }
+    },
+  },
+  {
+    method: 'POST', path: '/api/settings', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      configWriteAllowed(app, ctx);
+      const s = ctx.body?.settings;
+      if (!s || typeof s !== 'object' || Array.isArray(s)) {
+        throw new HttpError(400, 'send { settings: { ... } }', { code: 'bad_settings' });
+      }
+      // A cap, because this is a body from a browser and the file is written to disk. The whole
+      // settled object is a couple of kilobytes; 256 KB is room to grow and still far from a way
+      // to fill a disk one POST at a time.
+      const text = `${JSON.stringify(s, null, 2)}\n`;
+      if (text.length > 262_144) throw new HttpError(413, 'settings too large', { code: 'too_large' });
+
+      await fsp.mkdir(path.dirname(app.settingsFile), { recursive: true });
+      const tmp = `${app.settingsFile}.tmp`;
+      const fh = await fsp.open(tmp, 'w', 0o600);
+      await fh.writeFile(text);
+      await fh.sync();
+      await fh.close();
+      await fsp.rename(tmp, app.settingsFile);
+
+      return { ok: true, file: app.settingsFile, bytes: text.length };
+    },
+  },
 ];
 
 // ----------------------------------------------------------------- views

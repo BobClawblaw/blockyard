@@ -595,6 +595,41 @@ function emit(s) {
   }
 }
 
+// THE SERVER HOLDS THESE NOW (operator, 2026-09-13: "This is a server app. Should store things on
+// a server"). localStorage stays as a LOCAL CACHE of what the server has, for one reason:
+// loadSettings() is called on every board paint and must answer synchronously -- fetching per paint
+// is not on the table, and waiting on a fetch before the first render would stall the page. So the
+// boot seeds this cache from GET /api/settings (app.js), every change writes through to
+// POST /api/settings, and a browser that cannot reach the server still draws with the last values
+// it saw instead of snapping back to the defaults.
+let push = null;           // injected by app.js: (settled) => Promise, debounced below
+let pushTimer = null;
+/** app.js hands us the poster once it has a CSRF-capable api(). */
+export function setSettingsPush(fn) { push = fn; }
+
+/**
+ * Seed the cache from the server, before the first paint.
+ * Returns the settled settings so the caller can tell whether anything was stored.
+ */
+export function seedSettings(stored, storage = globalThis.localStorage) {
+  const s = normalise(migrate(stored));
+  try { storage?.setItem(SETTINGS_KEY, JSON.stringify({ version: SCHEMA_VERSION, ...s })); } catch { /* fine */ }
+  cache = { raw: null, value: null };
+  emit(s);
+  return s;
+}
+
+// Coalesced: dragging a slider fires an input event per step, and each one must not be its own
+// write to disk. The value is already applied locally and on screen; the file catches up.
+function pushSoon(s) {
+  if (!push) return;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    try { Promise.resolve(push(s)).catch(() => {}); } catch { /* offline: the local cache stands */ }
+  }, 400);
+}
+
 export function saveSettings(next, storage = globalThis.localStorage) {
   const s = normalise(next);
   try {
@@ -602,6 +637,7 @@ export function saveSettings(next, storage = globalThis.localStorage) {
   } catch { /* private mode, quota: keep it in memory */ }
   cache = { raw: null, value: null };
   emit(s);
+  pushSoon(s);
   return s;
 }
 
@@ -627,6 +663,9 @@ export function resetSettings(storage = globalThis.localStorage) {
   cache = { raw: null, value: null };
   const s = normalise(null);
   emit(s);
+  // Reset is a change like any other: the server has to hear it, or the next browser to open the
+  // page would be handed the settings this one just discarded.
+  pushSoon(s);
   return s;
 }
 

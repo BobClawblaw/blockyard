@@ -9,7 +9,10 @@ import { lineChart, histogram, scatter, meter, stackedBars, sparkline, paint, re
 import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
 import { viewerIdle } from './details3d.js';
-import { loadSettings, setSetting, resetSettings, PANEL as SETTINGS_PANEL } from './settings.js';
+import {
+  loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush,
+  SETTINGS_KEY, PANEL as SETTINGS_PANEL,
+} from './settings.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets } from './markets.js';
 import { renderKiosk } from './kiosk.js';
@@ -860,6 +863,12 @@ function setPage(route) {
   render();
 }
 
+// Reading localStorage is not merely empty in a locked-down context, it throws, and
+// boot() is not the place to find that out.
+function hasLocalSettings() {
+  try { return !!globalThis.localStorage?.getItem(SETTINGS_KEY); } catch { return false; }
+}
+
 async function boot() {
   let me = null;
   try {
@@ -892,13 +901,32 @@ async function boot() {
     pill.title = 'No account is required: anyone who can reach this monitor reads it as role "viewer" (reads only — user admin, the audit trail and node writes stay closed). Start the server with BLOCKYARD_AUTH=1 to require sign-in.';
   }
   document.getElementById('navAdmin').hidden = me.user.role !== 'admin';
-  const [nodes, cfg] = await Promise.all([api('/api/nodes'), api('/api/config')]);
+  const [nodes, cfg, saved] = await Promise.all([
+    api('/api/nodes'),
+    api('/api/config'),
+    // Display settings belong to the deployment, not to one browser: this is a server
+    // app, so a phone and a desktop pointed at it see the same monitor. A server that
+    // cannot answer still boots -- the browser's own settings stand in, which is
+    // exactly the behaviour there was before the file existed.
+    api('/api/settings').catch(() => null),
+  ]);
   state.nodes = nodes.nodes;
   // Land on a node that is doing something. Defaulting to config order meant a
   // fully-synced production node could open at "Synced 100%" and fill the hero
   // while a bench node sat at 72% -- the wrong node, at the wrong size.
   state.node = (nodes.attention && nodes.attention[0]) || nodes.primary;
   state.cfg = cfg;
+  // Seed before the first paint: every later reader calls loadSettings(), so settings
+  // applied after a render would show this browser's copy and then visibly swap it.
+  if (saved?.stored && saved.settings) seedSettings(saved.settings);
+  else if (hasLocalSettings()) {
+    // A server with no file yet, reached from a browser that already has settings:
+    // hand them up rather than make someone pick them all again. Silent on refusal --
+    // a viewer without write access still gets a working page, just not a saved one.
+    api('/api/settings', { method: 'POST', body: { settings: loadSettings() } }).catch(() => {});
+  }
+  // From here on every save reaches the server too; settings.js debounces the push.
+  setSettingsPush((s) => api('/api/settings', { method: 'POST', body: { settings: s } }));
   await checkBuild();
   // Re-check on a timer, because the failure this exists for happens while the tab
   // is open: the operator deploys, the tab does not reload, and every subsequent

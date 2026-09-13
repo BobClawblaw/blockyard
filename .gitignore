@@ -8,6 +8,11 @@
 *.tmp
 
 config/local.json
+# Display settings, written by the app itself (POST /api/settings). THIS DEPLOYMENT's
+# preferences, not the shipped ones -- those are DEFAULTS in public/js/settings.js and
+# belong in the repository. Ignored for the same reason local.json is: it is a choice
+# someone made on one machine.
+config/blockyard.json
 
 node_modules/
 .DS_Store

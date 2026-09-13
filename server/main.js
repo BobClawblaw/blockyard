@@ -25,6 +25,22 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     cfg,
     // the file the settings were read from, or null for a run that was given none
     configFile: cfg.__configFile ?? null,
+    // DISPLAY SETTINGS live on the server (operator, 2026-09-13: "This is a server app. Should
+    // store things on a server"). They were per-browser localStorage, which meant a kiosk screen
+    // and a desk looking at the same monitor kept different answers and neither could be read back.
+    // Beside local.json rather than in data/: it is configuration a person chose, not runtime state.
+    //
+    // DERIVED FROM THE CONFIG FILE, not pinned to ROOT. A hardcoded repo path meant any test that
+    // POSTed settings wrote the REAL config/blockyard.json of the working copy -- a test run
+    // clobbering a deployment's own preferences. Following configFile puts it in the temp dir for a
+    // hermetic boot and leaves it exactly where it already is for this one (the unit sets no
+    // BLOCKYARD_CONFIG, so configFile is ROOT/config/local.json and the dirname is unchanged).
+    // env is deliberately NOT the lever: helpers/http.js touches no process.env, because Node runs
+    // a file's tests concurrently and a mutated var leaks into a sibling's boot.
+    settingsFile: path.join(
+      cfg.__configFile ? path.dirname(cfg.__configFile) : path.join(ROOT, 'config'),
+      'blockyard.json',
+    ),
     startedAt: Date.now(),
     publicDir: path.join(ROOT, 'public'),
     monitors: new Map(),
