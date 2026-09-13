@@ -942,7 +942,13 @@ export function fxAt(t, fx) {
     case 'galaga':
     case 'tractor':
     case 'missile':
-    case 'asteroids': {
+    case 'asteroids':
+    case 'tetrisdrop':
+    case 'qix':
+    case 'minesweeper':
+    case 'tempest':
+    case 'lockon':
+    case 'scanvisor': {
       let best = FX_NONE, bw = 0;
       for (const hd of fx.heads ?? []) {
         const ddx = Math.max(t.x - hd.x, 0, hd.x - (t.x + t.s)), ddy = Math.max(t.y - hd.y, 0, hd.y - (t.y + t.s));

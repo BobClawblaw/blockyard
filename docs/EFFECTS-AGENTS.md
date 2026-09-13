@@ -268,6 +268,16 @@ Fourteen agents now. `test/agents.test.js` holds every one of them to the same c
 frames, draws, publishes heads, replays from a seed, and leaves the board's tiles untouched -- so a
 new batch is checked against all of it the moment it is registered.
 
+Batch three, the same day: **tetrisdrop (25), qix (27), minesweeper (29), tempest (33),
+lockon (35), scanvisor (36)**. These work in AREA rather than along a path -- qix claims a region,
+minesweeper floods outward and goes *around* what blocks it -- and two of them add INFORMATION
+rather than decoration, which is the rarest thing an effect here can do: lockon tags the eight
+richest transactions in turn before firing, and scanvisor labels the blocks it crosses with their
+feerate. Three of the six are data-aware. `tetrisdrop` points the real, already-tested rules in
+`tetris.js` at the skyline instead of a well, so the piece shapes are not reinvented.
+
+Twenty agents.
+
 A third lesson, from verifying batch two: **a four-phase capture is not enough to judge an effect.**
 Pac-Man was written up as "did not appear at all" on the strength of one frame; captured every
 500 ms instead, all five characters are plainly there -- the wedge mid-board with its mouth open

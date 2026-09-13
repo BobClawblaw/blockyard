@@ -42,6 +42,9 @@ import {
   project, fxHash, cubeHeight,
   cyclePath, ballPath, cycleCrashes, cellTops, pathHeights,
 } from './blockscene3d.js';
+// The tetris drop points the real rules at the board instead of a well: pure, and already
+// tested in its own right, so the piece shapes and their rotations are not reinvented here.
+import { PIECES, cellsOf } from './tetris.js';
 
 // a cheap deterministic 0..1 from an integer. details3d.js keeps its own copy for the price-line
 // pulse; duplicating six lines is better than widening that module's public surface for a helper.
@@ -1089,5 +1092,384 @@ defineAgent('asteroids', {
       wire(ctx, pts, 'rgba(120,150,190,0.55)', lw * 4);
       wire(ctx, pts, 'rgba(225,238,255,0.95)', lw * 1.4);
     }
+  },
+});
+
+// ================================================================ BATCH THREE
+//
+// Six that change the board rather than crossing it, and two that ADD INFORMATION -- which is the
+// rarest thing an effect here can do. Every one is still a per-frame override: nothing below
+// mutates a tile (see hide/scale in blockscene3d.js).
+
+/** Flood fill over the grid from a seed, stopping at cells a predicate refuses. Pure. */
+export function floodFrom(x0, y0, W, H, blocked, limit = 900) {
+  const seen = new Set();
+  const order = [];
+  const key = (x, y) => y * W + x;
+  const q = [[x0 | 0, y0 | 0]];
+  seen.add(key(x0 | 0, y0 | 0));
+  while (q.length && order.length < limit) {
+    const [x, y] = q.shift();
+    order.push({ x, y, d: order.length });
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const k = key(nx, ny);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (blocked(nx, ny)) continue;      // seen, so it is never revisited, but not entered
+      q.push([nx, ny]);
+    }
+  }
+  return order;
+}
+
+// --- 13. TETRIS DROP ------------------------------------------------------
+//
+// A tetromino falls onto the skyline and LOCKS onto the tops of the cubes -- the rules come from
+// tetris.js, which is pure and already tested, pointed at the board instead of a well.
+defineAgent('tetrisdrop', {
+  build({ W, H, tiles, rnd }) {
+    const tops = cellTops(tiles, W, H);
+    const kinds = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
+    const kind = kinds[(rnd() * kinds.length) | 0];
+    const rot = (rnd() * 4) | 0;
+    const cells = cellsOf(kind, rot, 0, 0);
+    const spanX = Math.max(...cells.map(([cx]) => cx)) + 1;
+    const x0 = 1 + Math.floor(rnd() * Math.max(1, W - spanX - 2));
+    const y0 = 1 + Math.floor(rnd() * Math.max(1, H - 5));
+    // where it comes to rest: the tallest cube under any of its cells
+    let rest = 0;
+    for (const [cx, cy] of cells) {
+      const gx = x0 + cx, gy = y0 + cy;
+      if (gx >= 0 && gx < W && gy >= 0 && gy < H) rest = Math.max(rest, tops[gy * W + gx]);
+    }
+    return { kind, rot, cells, x0, y0, rest, color: PIECES[kind].color, from: rest + 14 };
+  },
+  frame(a, u) {
+    const FALL = 0.62;
+    const v = Math.min(1, u / FALL);
+    // eased in, so it accelerates like something falling rather than sliding
+    const z = a.from + (a.rest - a.from) * (v * v);
+    const locked = u >= FALL;
+    const flash = locked ? Math.max(0, 1 - (u - FALL) / 0.18) : 0;
+    const heads = a.cells.map(([cx, cy]) => ({
+      x: a.x0 + cx + 0.5, y: a.y0 + cy + 0.5,
+      color: locked ? [255, 255, 240] : [200, 230, 255],
+      alpha: locked ? 0.4 + 0.6 * flash : 0.8, r: 1.4,
+      lift: locked ? 0 : 0,
+    }));
+    return { tetrisdrop: { cells: a.cells, x0: a.x0, y0: a.y0, z, color: a.color, flash, locked }, heads };
+  },
+  draw(ctx, view, lw) {
+    const t = view.fx?.tetrisdrop;
+    if (!t) return;
+    const U = view.unit ?? 8;
+    const rgb = [parseInt(t.color.slice(1, 3), 16), parseInt(t.color.slice(3, 5), 16), parseInt(t.color.slice(5, 7), 16)];
+    for (const [cx, cy] of t.cells) {
+      const gx = t.x0 + cx, gy = t.y0 + cy;
+      const c = project(gx + 0.5, gy + 0.5, t.z + 0.6, view);
+      const r = U * 0.62;
+      poly(ctx, [
+        { x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y - r },
+        { x: c.x + r, y: c.y + r }, { x: c.x - r, y: c.y + r },
+      ], `rgba(${rgb.join(',')},0.92)`);
+      wire(ctx, [
+        { x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y - r },
+        { x: c.x + r, y: c.y + r }, { x: c.x - r, y: c.y + r },
+      ], 'rgba(255,255,255,0.8)', lw * 2);
+      if (t.flash > 0.02) bloom(ctx, c.x, c.y, r * 2.4, [255, 255, 235], t.flash);
+    }
+    void lw;
+  },
+});
+
+// --- 14. QIX --------------------------------------------------------------
+//
+// A line agent crawls in from the edge, cuts across, and the region it encloses is CLAIMED. The
+// only effect here that works in area rather than along a path.
+defineAgent('qix', {
+  build({ W, H, rnd }) {
+    const vertical = rnd() < 0.5;
+    const at = vertical ? 2 + rnd() * (W - 4) : 2 + rnd() * (H - 4);
+    const span = 0.25 + rnd() * 0.35;        // how much of the board it takes
+    return { vertical, at, span, W, H, from: rnd() < 0.5 ? 0 : 1 };
+  },
+  frame(a, u) {
+    const CUT = 0.55;
+    const cut = Math.min(1, u / CUT);
+    const fill = Math.max(0, (u - CUT) / (1 - CUT));
+    const len = (a.vertical ? a.H : a.W) * cut;
+    const head = a.from ? (a.vertical ? a.H : a.W) - len : len;
+    const heads = [{
+      x: a.vertical ? a.at : head, y: a.vertical ? head : a.at,
+      color: [255, 240, 140], alpha: 1, r: 1.8,
+    }];
+    // the claimed region lights as it fills
+    if (fill > 0) {
+      const w = (a.vertical ? a.W : a.H) * a.span * fill;
+      const steps = 9;
+      for (let i = 0; i < steps; i++) {
+        const q = (i / (steps - 1)) * w;
+        heads.push({
+          x: a.vertical ? a.at + q : (a.vertical ? 0 : a.W) * 0.5,
+          y: a.vertical ? a.H * 0.5 : a.at + q,
+          color: [120, 200, 255], alpha: 0.5 * (1 - i / steps), r: (a.vertical ? a.H : a.W) * 0.3,
+        });
+      }
+    }
+    return { qix: { vertical: a.vertical, at: a.at, head, cut, fill, span: a.span, W: a.W, H: a.H }, heads };
+  },
+  draw(ctx, view, lw) {
+    const q = view.fx?.qix;
+    if (!q) return;
+    const U = view.unit ?? 8;
+    const a0 = q.vertical ? project(q.at, 0, 0.9, view) : project(0, q.at, 0.9, view);
+    const a1 = q.vertical ? project(q.at, q.head, 0.9, view) : project(q.head, q.at, 0.9, view);
+    line(ctx, [a0, a1], 'rgba(255,235,120,0.35)', U * 0.9);
+    line(ctx, [a0, a1], 'rgba(255,252,215,0.95)', U * 0.25);
+    bloom(ctx, a1.x, a1.y, U * 1.5, [255, 240, 150], 1);
+    if (q.fill > 0) {
+      // the claimed area: a translucent slab over the region it cut off
+      const w = (q.vertical ? q.W : q.H) * q.span * q.fill;
+      const c0 = q.vertical ? project(q.at, 0, 0.5, view) : project(0, q.at, 0.5, view);
+      const c1 = q.vertical ? project(q.at + w, 0, 0.5, view) : project(0, q.at + w, 0.5, view);
+      const c2 = q.vertical ? project(q.at + w, q.H, 0.5, view) : project(q.W, q.at + w, 0.5, view);
+      const c3 = q.vertical ? project(q.at, q.H, 0.5, view) : project(q.W, q.at, 0.5, view);
+      poly(ctx, [c0, c1, c2, c3], `rgba(90,170,255,${(0.22 * q.fill).toFixed(3)})`);
+      wire(ctx, [c0, c1, c2, c3], `rgba(180,225,255,${(0.8 * q.fill).toFixed(3)})`, lw * 2.4);
+    }
+  },
+});
+
+// --- 15. MINESWEEPER ------------------------------------------------------
+//
+// DATA-AWARE. A reveal floods out from one cube and stops at the MINES -- which are the richest
+// transactions on the board. The shape the flood makes is therefore a map of where the expensive
+// fees sit, and flood-fill spreads quite unlike any radius here.
+defineAgent('minesweeper', {
+  build({ W, H, tiles, rnd }) {
+    // the top few feerates are the mines
+    const byRate = [...(tiles ?? [])]
+      .filter((t) => Number.isFinite(Number(t.rate)))
+      .sort((x, y) => Number(y.rate) - Number(x.rate))
+      .slice(0, 12);
+    const mines = new Set(byRate.map((t) => `${Math.floor(t.x + t.s / 2)},${Math.floor(t.y + t.s / 2)}`));
+    const sx = Math.floor(rnd() * W), sy = Math.floor(rnd() * H);
+    const order = floodFrom(sx, sy, W, H, (x, y) => mines.has(`${x},${y}`), 1400);
+    return { order, mines: [...mines].map((k) => { const [x, y] = k.split(',').map(Number); return { x, y }; }) };
+  },
+  frame(a, u) {
+    const shown = Math.floor(Math.min(1, u * 1.25) * a.order.length);
+    const heads = [];
+    // the leading edge of the flood, not every revealed cell: the frontier is the picture
+    const edge = a.order.slice(Math.max(0, shown - 90), shown);
+    for (const c of edge) {
+      const age = (shown - c.d) / 90;
+      heads.push({ x: c.x + 0.5, y: c.y + 0.5, color: [120, 220, 255], alpha: 0.9 * (1 - age), r: 1.1 });
+    }
+    // the mines light once the flood has reached them
+    if (u > 0.5) for (const m of a.mines) heads.push({ x: m.x + 0.5, y: m.y + 0.5, color: [255, 90, 90], alpha: Math.min(1, (u - 0.5) * 4), r: 1.6 });
+    return { minesweeper: { edge, mines: a.mines, lit: u > 0.5 ? Math.min(1, (u - 0.5) * 4) : 0 }, heads };
+  },
+  draw(ctx, view, lw) {
+    const m = view.fx?.minesweeper;
+    if (!m) return;
+    const U = view.unit ?? 8;
+    for (const mine of m.mines) {
+      if (m.lit <= 0.02) continue;
+      const c = project(mine.x + 0.5, mine.y + 0.5, 1.4, view);
+      bloom(ctx, c.x, c.y, U * 1.3, [255, 80, 80], m.lit);
+      // a flag: a little pole and a triangle, so a mine reads as marked rather than just red
+      const h = U * 1.5;
+      line(ctx, [{ x: c.x, y: c.y }, { x: c.x, y: c.y - h }], `rgba(255,255,255,${(0.9 * m.lit).toFixed(3)})`, lw * 2);
+      poly(ctx, [
+        { x: c.x, y: c.y - h }, { x: c.x + U * 0.8, y: c.y - h * 0.72 }, { x: c.x, y: c.y - h * 0.45 },
+      ], `rgba(255,90,90,${(0.95 * m.lit).toFixed(3)})`);
+    }
+  },
+});
+
+// --- 16. TEMPEST ----------------------------------------------------------
+//
+// Pulses rushing up lanes from the vanishing point toward the viewer -- the only effect that uses
+// the board's DEPTH as the axis of motion rather than crossing its surface.
+defineAgent('tempest', {
+  build({ W, H, rnd }) {
+    const lanes = Math.max(6, Math.min(14, Math.round(W / 7)));
+    const pulses = [];
+    for (let i = 0; i < lanes; i++) {
+      pulses.push({ lane: i, t0: rnd() * 0.55, speed: 0.85 + rnd() * 0.4 });
+    }
+    return { lanes, pulses, W, H };
+  },
+  frame(a, u) {
+    const heads = [];
+    const live = [];
+    for (const p of a.pulses) {
+      const v = ((u - p.t0) * p.speed) % 1;
+      if (u < p.t0) continue;
+      const x = (a.W / a.lanes) * (p.lane + 0.5);
+      const y = a.H * (1 - v);                      // from the far edge toward the near one
+      live.push({ x, y, v, lane: p.lane });
+      heads.push({ x, y, color: [140, 120, 255], alpha: 0.4 + 0.6 * v, r: 1 + 1.6 * v });
+    }
+    return { tempest: { pulses: live, lanes: a.lanes, W: a.W, H: a.H }, heads };
+  },
+  draw(ctx, view, lw) {
+    const t = view.fx?.tempest;
+    if (!t) return;
+    const U = view.unit ?? 8;
+    // the lanes themselves, faint, so the pulses have rails to run on
+    for (let i = 0; i <= t.lanes; i++) {
+      const x = (t.W / t.lanes) * i;
+      line(ctx, [project(x, 0, 0.3, view), project(x, t.H, 0.3, view)], 'rgba(120,100,220,0.16)', lw * 1.5);
+    }
+    for (const p of t.pulses) {
+      const c = project(p.x, p.y, 0.6 + p.v * 2.5, view);
+      const r = U * (0.5 + p.v * 1.6);
+      bloom(ctx, c.x, c.y, r, [160, 140, 255], 0.35 + 0.55 * p.v);
+      const w = (t.W / t.lanes) * 0.42;
+      const a0 = project(p.x - w, p.y, 0.6 + p.v * 2.5, view);
+      const a1 = project(p.x + w, p.y, 0.6 + p.v * 2.5, view);
+      line(ctx, [a0, a1], `rgba(220,205,255,${(0.5 + 0.5 * p.v).toFixed(3)})`, lw * (1.5 + 2.5 * p.v));
+    }
+  },
+});
+
+// --- 17. LOCK-ON ----------------------------------------------------------
+//
+// DATA-AWARE. A reticle flicks across the board tagging the richest transactions one by one, then
+// fires at all of them at once. The tag-then-release rhythm is unlike anything else here, and what
+// it tags is a reading of the fee structure.
+defineAgent('lockon', {
+  build({ tiles, W, H, rnd }) {
+    const targets = [...(tiles ?? [])]
+      .filter((t) => Number.isFinite(Number(t.rate)))
+      .sort((x, y) => Number(y.rate) - Number(x.rate))
+      .slice(0, 8)
+      .map((t) => ({ x: t.x + t.s / 2, y: t.y + t.s / 2, rate: Number(t.rate) }));
+    return { targets, from: { x: rnd() * W, y: rnd() * H }, W, H };
+  },
+  frame(a, u) {
+    const TAG = 0.62;
+    const n = a.targets.length;
+    if (!n) return { heads: [] };
+    if (u < TAG) {
+      const k = (u / TAG) * n;
+      const i = Math.min(n - 1, Math.floor(k));
+      const f = k - i;
+      const prev = i === 0 ? a.from : a.targets[i - 1];
+      const cur = a.targets[i];
+      const x = prev.x + (cur.x - prev.x) * f, y = prev.y + (cur.y - prev.y) * f;
+      const heads = [{ x, y, color: [255, 240, 200], alpha: 1, r: 1.6 }];
+      for (let j = 0; j <= i; j++) heads.push({ x: a.targets[j].x, y: a.targets[j].y, color: [255, 160, 90], alpha: 0.9, r: 1.4 });
+      return { lockon: { reticle: { x, y }, tagged: a.targets.slice(0, i + 1), fire: 0 }, heads };
+    }
+    const fire = (u - TAG) / (1 - TAG);
+    const heads = a.targets.map((t) => ({
+      x: t.x, y: t.y, color: [255, 255, 230], alpha: Math.max(0, 1 - fire), r: 1.4 + fire * 3,
+    }));
+    return { lockon: { reticle: null, tagged: a.targets, fire, from: a.from }, heads };
+  },
+  draw(ctx, view, lw) {
+    const l = view.fx?.lockon;
+    if (!l) return;
+    const U = view.unit ?? 8;
+    // WEIGHT SCALES WITH THE BOARD TOO. These brackets were drawn at lw*2.2 -- about two device
+    // pixels -- so on a 705px board of 3,700 cubes the eight tags were hairlines nobody could
+    // find. Verified on the live board. A stroke that must READ is sized in grid units like
+    // everything else; lw alone is only right for a line that may be hairline-thin.
+    const W = Math.max(lw * 2, U * 0.16);
+    for (const t of l.tagged) {
+      const c = project(t.x, t.y, 1.2, view);
+      const r = U * 1.5;
+      bloom(ctx, c.x, c.y, r * 0.9, [255, 150, 70], 0.35);
+      // a tag: four corner brackets, the way a targeting box reads
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        line(ctx, [
+          { x: c.x + sx * r, y: c.y + sy * r * 0.8 },
+          { x: c.x + sx * r * 0.4, y: c.y + sy * r * 0.8 },
+        ], 'rgba(255,185,100,0.98)', W);
+        line(ctx, [
+          { x: c.x + sx * r, y: c.y + sy * r * 0.8 },
+          { x: c.x + sx * r, y: c.y + sy * r * 0.3 },
+        ], 'rgba(255,185,100,0.98)', W);
+      }
+    }
+    if (l.reticle) {
+      const c = project(l.reticle.x, l.reticle.y, 1.4, view);
+      bloom(ctx, c.x, c.y, U * 1.6, [255, 240, 190], 0.5);
+      ring(ctx, c.x, c.y, U * 1.2, 'rgba(255,250,225,0.98)', W * 1.2);
+      line(ctx, [{ x: c.x - U * 2, y: c.y }, { x: c.x + U * 2, y: c.y }], 'rgba(255,245,210,0.75)', W * 0.8);
+      line(ctx, [{ x: c.x, y: c.y - U * 2 }, { x: c.x, y: c.y + U * 2 }], 'rgba(255,245,210,0.75)', W * 0.8);
+    }
+    if (l.fire > 0) {
+      // every streak released at once, from off-board, arriving together
+      for (const t of l.tagged) {
+        const c = project(t.x, t.y, 1.2, view);
+        const s = project(l.from.x, l.from.y, 6, view);
+        const k = Math.min(1, l.fire * 1.6);
+        const hx = s.x + (c.x - s.x) * k, hy = s.y + (c.y - s.y) * k;
+        line(ctx, [s, { x: hx, y: hy }], `rgba(255,200,120,${(0.75 * (1 - l.fire)).toFixed(3)})`, Math.max(lw * 2, U * 0.14));
+        if (k >= 1) bloom(ctx, c.x, c.y, U * (1 + l.fire * 2.5), [255, 235, 190], 1 - l.fire);
+      }
+    }
+  },
+});
+
+// --- 18. SCAN VISOR -------------------------------------------------------
+//
+// THE ONLY EFFECT THAT ADDS INFORMATION. A band crosses the board and, as it passes, briefly
+// LABELS the cubes it crosses with their feerate. Everything else here is decoration over the
+// data; this one makes the board more legible while it runs.
+defineAgent('scanvisor', {
+  build({ tiles, W, H, rnd }) {
+    const horiz = rnd() < 0.5;
+    // label the biggest cubes it will cross -- a label on every slab would be a wall of text
+    const pick = [...(tiles ?? [])]
+      .filter((t) => Number.isFinite(Number(t.rate)))
+      .sort((x, y) => (cubeHeight(y) - cubeHeight(x)))
+      .slice(0, 26)
+      .map((t) => ({ x: t.x + t.s / 2, y: t.y + t.s / 2, rate: Number(t.rate) }));
+    return { horiz, marks: pick, W, H };
+  },
+  frame(a, u) {
+    const span = a.horiz ? a.H : a.W;
+    const at = -3 + Math.min(1, u * 1.12) * (span + 6);
+    const near = a.marks.filter((m) => Math.abs((a.horiz ? m.y : m.x) - at) < 3.5)
+      .map((m) => ({ ...m, k: 1 - Math.abs((a.horiz ? m.y : m.x) - at) / 3.5 }));
+    const heads = near.map((m) => ({ x: m.x, y: m.y, color: [150, 255, 210], alpha: m.k, r: 1.5 }));
+    heads.push({
+      x: a.horiz ? a.W / 2 : at, y: a.horiz ? at : a.H / 2,
+      color: [110, 235, 190], alpha: 0.5, r: (a.horiz ? a.W : a.H) * 0.5,
+    });
+    return { scanvisor: { at, horiz: a.horiz, near, W: a.W, H: a.H }, heads };
+  },
+  draw(ctx, view, lw) {
+    const sv = view.fx?.scanvisor;
+    if (!sv) return;
+    const U = view.unit ?? 8;
+    // the band
+    const a0 = sv.horiz ? project(0, sv.at, 0.8, view) : project(sv.at, 0, 0.8, view);
+    const a1 = sv.horiz ? project(sv.W, sv.at, 0.8, view) : project(sv.at, sv.H, 0.8, view);
+    line(ctx, [a0, a1], 'rgba(90,230,180,0.28)', U * 1.6);
+    line(ctx, [a0, a1], 'rgba(210,255,240,0.92)', U * 0.22);
+    // THE LABELS, drawn the way axisLabels does it: a plate behind the text so it reads over any
+    // cube, and a monospace face because these are figures.
+    const size = Math.max(7, U * 1.1);
+    ctx.font = `${size}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    for (const m of sv.near) {
+      const c = project(m.x, m.y, 2.4, view);
+      const label = `${m.rate < 10 ? m.rate.toFixed(1) : Math.round(m.rate)}`;
+      const w = ctx.measureText(label).width;
+      ctx.fillStyle = `rgba(6,26,20,${(0.85 * m.k).toFixed(3)})`;
+      ctx.fillRect(c.x - w / 2 - size * 0.3, c.y - size * 0.7, w + size * 0.6, size * 1.4);
+      ctx.fillStyle = `rgba(180,255,225,${m.k.toFixed(3)})`;
+      ctx.fillText(label, c.x, c.y);
+    }
+    void lw;
   },
 });

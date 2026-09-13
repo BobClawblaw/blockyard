@@ -157,6 +157,9 @@ const FX_MS = {
   // batch two: a splitter, four personalities, a formation that breaks up, a thief, two
   // populations that fight, and drifting debris
   centipede: 7400, pacman: 8600, galaga: 7800, tractor: 6800, missile: 7400, asteroids: 8000,
+  // batch three: effects that work in AREA rather than along a path, and two that add
+  // information rather than decoration (lockon tags by feerate, scanvisor labels it)
+  tetrisdrop: 5600, qix: 7800, minesweeper: 7200, tempest: 7000, lockon: 7600, scanvisor: 8000,
 };
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run

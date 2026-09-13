@@ -126,6 +126,7 @@ export const DEFAULTS = Object.freeze({
     // the agents: something happening on the board, rather than a pattern over it
     recognizer: true, disc: true, snake: true, qbert: true, invaders: true, bomberman: true,
     centipede: true, pacman: true, galaga: true, tractor: true, missile: true, asteroids: true,
+    tetrisdrop: true, qix: true, minesweeper: true, tempest: true, lockon: true, scanvisor: true,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -381,6 +382,12 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'tractor', label: 'Tractor beam', kind: 'toggle', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
       Object.freeze({ key: 'missile', label: 'Interception', kind: 'toggle', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
       Object.freeze({ key: 'asteroids', label: 'Asteroids', kind: 'toggle', hint: 'Tumbling wireframe rocks drifting across, each breaking into two smaller ones' }),
+      Object.freeze({ key: 'tetrisdrop', label: 'Tetromino', kind: 'toggle', hint: 'A piece falls out of the sky and locks onto the tops of the blocks' }),
+      Object.freeze({ key: 'qix', label: 'Claim', kind: 'toggle', hint: 'A line cuts across the board and the region it encloses is claimed' }),
+      Object.freeze({ key: 'minesweeper', label: 'Sweep', kind: 'toggle', hint: 'A reveal floods outward and stops at the richest transactions, which then flag themselves' }),
+      Object.freeze({ key: 'tempest', label: 'Lanes', kind: 'toggle', hint: 'Pulses rushing up lanes from the far edge toward you \u2014 the one effect that uses depth' }),
+      Object.freeze({ key: 'lockon', label: 'Lock-on', kind: 'toggle', hint: 'A reticle tags the eight richest transactions in turn, then fires at all of them at once' }),
+      Object.freeze({ key: 'scanvisor', label: 'Scan visor', kind: 'toggle', hint: 'A band that labels the blocks it crosses with their feerate \u2014 it adds information, not decoration' }),
     ]),
   }),
   Object.freeze({

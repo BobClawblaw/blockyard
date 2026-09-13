@@ -14,7 +14,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, triggerIdle, FX_KINDS } from '../public/js/details3d.js';
-import { AGENTS, isAgent, alongPath, tallestTile, richestTile, rng } from '../public/js/agents.js';
+import { AGENTS, isAgent, alongPath, tallestTile, richestTile, rng, floodFrom } from '../public/js/agents.js';
 import { DEFAULTS, PANEL } from '../public/js/settings.js';
 import { fxAt, FX_NONE } from '../public/js/blockscene3d.js';
 
@@ -150,6 +150,28 @@ test('hide and scale are transient, and default to "visible, full size"', () => 
   assert.equal(FX_NONE.hide, 0, 'nothing is hidden by default');
   assert.equal(FX_NONE.scale, 1, 'and nothing is shortened');
   assert.equal(Object.isFrozen(FX_NONE), true, 'and it cannot be edited by a caller');
+});
+
+test('floodFrom spreads, stops at what blocks it, and never revisits', () => {
+  // New machinery for the minesweeper sweep, and the only thing in batch three nobody else
+  // exercises. A flood is not a radius: it goes AROUND an obstacle, which is what makes the shape
+  // it draws a map of where the expensive transactions sit.
+  const open = floodFrom(5, 5, 12, 12, () => false);
+  assert.equal(open.length, 144, 'an empty grid floods entirely');
+  assert.equal(new Set(open.map((c) => `${c.x},${c.y}`)).size, 144, 'and no cell twice');
+  assert.equal(open[0].x, 5, 'it starts where it was told to');
+  assert.equal(open[0].y, 5);
+  // a wall down the middle, with one gap: the far side is reachable only through the gap, so it
+  // must be reached LATER than the near side rather than not at all
+  const wall = (x, y) => x === 6 && y !== 0;
+  const around = floodFrom(2, 5, 12, 12, wall);
+  const far = around.filter((c) => c.x > 6);
+  assert.ok(far.length > 0, 'it finds the way around the wall');
+  const nearest = Math.min(...far.map((c) => c.d));
+  assert.ok(nearest > 12, `and gets there the long way (first far cell at step ${nearest})`);
+  assert.equal(around.some((c) => c.x === 6 && c.y !== 0), false, 'it never enters the wall itself');
+  // bounded, so a huge board cannot make one effect allocate without limit
+  assert.equal(floodFrom(0, 0, 200, 200, () => false, 50).length, 50, 'the limit is honoured');
 });
 
 test('the helpers agents are built on do what they say', () => {
