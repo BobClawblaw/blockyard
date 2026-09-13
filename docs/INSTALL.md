@@ -156,6 +156,36 @@ details. If `umbrel.local` does not resolve from your machine, use the appliance
 > stretched poll cadence: a mainnet template is genuinely expensive to build, and the monitor
 > deliberately slows its own polling rather than queue behind it.
 
+##### Recommended `bitcoin.conf` overrides on an appliance
+
+Umbrel's Bitcoin app takes extra `bitcoin.conf` lines in its advanced settings. This set is what
+an operator settled on for this monitor on 2026-09-13; each line is annotated with what it
+actually buys, because not all of them are for us:
+
+```conf
+# --- RPC concurrency ---
+rpcthreads=16
+rpcworkqueue=64
+rpcservertimeout=120
+
+# --- Indexes ---
+txindex=1
+coinstatsindex=1
+
+# --- Binary REST endpoints for bulk block/tx fetches (LAN only) ---
+rest=1
+```
+
+| line | what it does for this monitor |
+|---|---|
+| `txindex=1` | **Required** for the explorer's transaction pages. Without it a confirmed transaction cannot be looked up by id. |
+| `coinstatsindex=1` | **Real gain.** The Chain page's UTXO figures come from `gettxoutsetinfo muhash`; unindexed, that call is minutes of work, and the monitor flags `utxo-unindexed` instead. Note it **rebuilds from genesis** and takes hours -- until it finishes those figures stay unavailable. |
+| `rpcthreads=16`, `rpcworkqueue=64` | **Not for us directly:** this monitor issues one RPC at a time, so extra node threads do not speed it up. They matter on an appliance because other apps (Electrs, LND, mempool) share that bitcoind, and a full work queue is returned as an error rather than queued. Harmless and sensible; just not the thing that makes the monitor faster. |
+| `rpcservertimeout=120` | Keeps the node from closing a connection under a slow call. The monitor's own ceilings are 90 s ordinary / 300 s heavy, so this only matters on a heavily loaded appliance. |
+| `rest=1` | **Nothing today.** This monitor makes no REST calls -- it is JSON-RPC only. Enable it for other tools if you want; it is not a requirement here. |
+
+Restart the Bitcoin app after changing these: `bitcoin.conf` is read at start-up.
+
 Verified 2026-09-13 against an Umbrel running Bitcoin Core 31.1.0 (from Linux; the configuration is identical on macOS): the
 monitor reads the chain, the mempool and the peer table over RPC alone. `txindex` was already
 on there, so the explorer's transaction pages work; `getnettotals` and per-peer byte counts are
