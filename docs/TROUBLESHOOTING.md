@@ -75,20 +75,28 @@ is reported by `/api/config`, but the lane is serialised by construction and doe
 measured 2026-09-13 at 1, 4 and 8: four 200 ms jobs took ~807 ms with peak concurrency 1 in every
 case. Treat it as documentation of intent, not a tuning knob.
 
-What actually costs time on a mainnet node is the block template. Measured the same day on an
-Umbrel running Core 31.1.0: `getblockchaininfo` 95-110 ms, `getmempoolinfo` ~100 ms, but
-`getblocktemplate` **4.0-4.5 s**, five times in a row with no warming. The same call on a local
-Core node answered in **51 ms**, so this is that machine's storage, not the software and not the
-monitor. Two concurrent templates contend rather than overlap (6.9 s and 8.8 s against 4.5 s
-alone), so more concurrency would not help this call even if the lane offered it.
+What costs time on a mainnet node is the block template, and how much depends on how the node is
+configured. Measured on an Umbrel running Core 31.1.0 on 2026-09-13, **before** its RPC settings
+were tuned: `getblockchaininfo` 95-110 ms, `getmempoolinfo` ~100 ms, but `getblocktemplate`
+**4.0-4.5 s**, five times in a row with no warming -- while the same call on a local Core node
+answered in **51 ms**. Two concurrent templates contended rather than overlapped there (6.9 s and
+8.8 s against 4.5 s alone), so more concurrency would not have helped that call.
+
+**After** applying `dbcache=4096` plus the RPC settings in [INSTALL](INSTALL.md), the same node
+answered `getblocktemplate` in **488-565 ms** and the monitor's lane stopped timing out entirely,
+with average latency sampling between ~180 ms and a few seconds. If your appliance shows
+`rpc-slow`, check those settings before concluding the node is simply slow -- and note that a
+rebuilding index (`coinstatsindex` takes hours from genesis) competes for the same disk and will
+keep latency up until it finishes.
 
 ## An appliance node's pages do not fill in
 
 On **Umbrel**, check `dbcache` first: it ships at 450 MB, and an operator reported on 2026-09-13
 that the monitor's pages populate properly only after raising it to 4096 and restarting the
-Bitcoin app (`dbcache` is read at start-up). Note that this does not make heavy calls fast --
-`getblocktemplate` measured 3.7-3.9 s on that node both before and after -- so `rpc-slow` and a
-stretched cadence on the Node & RPC page are expected on a mainnet node and are not a fault.
+Bitcoin app (`dbcache` is read at start-up). Applied together with the RPC settings in
+[INSTALL](INSTALL.md#recommended-bitcoinconf-overrides-on-an-appliance), that node's
+`getblocktemplate` went from 4.0-4.5 s to 488-565 ms and the monitor stopped reporting
+`rpc-slow` entirely.
 
 ## Markets or Kiosk show no prices
 

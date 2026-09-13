@@ -148,13 +148,18 @@ details. If `umbrel.local` does not resolve from your machine, use the appliance
 > to **4096** in the Bitcoin app's advanced settings and restart the app -- `dbcache` is read at
 > start-up, so nothing changes until bitcoind restarts.
 >
-> What this fixes, reported by an operator on 2026-09-13: at the shipped 450 MB the monitor's
-> pages do not fill in properly; at 4096 they do. What it does **not** do is make the heavy calls
-> fast. Measured on that same node before and after the change, `getblocktemplate` stayed at
-> **3.7-3.9 s** while simple calls answered in ~100 ms (`getblockchaininfo` 95 ms,
-> `getmempoolinfo` 97 ms). So expect the Node & RPC page to keep reporting `rpc-slow` and a
-> stretched poll cadence: a mainnet template is genuinely expensive to build, and the monitor
-> deliberately slows its own polling rather than queue behind it.
+> What this fixes, measured on one Umbrel over the evening of 2026-09-13. At the shipped 450 MB
+> the monitor's pages did not fill in properly and the node was slow at the expensive calls:
+> `getblocktemplate` took **4.0-4.5 s**, five times consecutively with no warming, while
+> `getblockchaininfo` answered in ~100 ms. Raising `dbcache` alone did not move those numbers.
+>
+> Raising it **together with the RPC settings below** did: the same call came back at
+> **488-565 ms** (roughly eight times faster), `getblockchaininfo` at 36 ms, and the monitor's
+> own lane went from 7.0 s average latency with repeated timeouts to **no timeouts at all**, and
+> latency that samples between ~180 ms and a few seconds depending on what the node is doing.
+> (Measured while `coinstatsindex` was still rebuilding, which competes for the same disk -- the
+> poll cadence still stretches at times, it just no longer times out.) Which single line deserves
+> the credit was not isolated -- they were applied together -- so they are recommended together.
 
 ##### Recommended `bitcoin.conf` overrides on an appliance
 
