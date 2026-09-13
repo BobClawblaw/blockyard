@@ -149,23 +149,17 @@ const FX_MS = {
   lightcycle: 6500, ball: 5600, pulse: 7000,
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, laser: 3400,
-  powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400, glitch: 3000,
-  // THE AGENTS (agents.js, 2026-09-13: "Build all of them with amazing effects"). Longer than the
-  // fields, because a thing that travels needs time to be watched: a field reads at a glance, an
-  // agent has to arrive, do something, and leave.
-  recognizer: 7600, disc: 6200, snake: 7000, qbert: 6600, invaders: 8200, bomberman: 6000,
-  // batch two: a splitter, four personalities, a formation that breaks up, a thief, two
-  // populations that fight, and drifting debris
-  centipede: 7400, pacman: 8600, galaga: 7800, tractor: 6800, missile: 7400, asteroids: 8000,
-  // batch three: effects that work in AREA rather than along a path, and two that add
-  // information rather than decoration (lockon tags by feerate, scanvisor labels it)
-  tetrisdrop: 5600, qix: 7800, minesweeper: 7200, tempest: 7000, lockon: 7600, scanvisor: 8000,
-  // batch four: the family that ALTERS the board -- absorbing, collapsing, digging -- which
-  // only became possible once heads carried hide/scale through to the renderer
-  katamari: 8400, boulderdash: 6400, lemmings: 8000, marble: 7000, gradius: 7600, portal: 7200,
-  // batch five, the last of the catalogue: height as terrain, traffic, the marker that lands
-  // BEFORE the bomb, a pipe that fills, a board taken apart and put back, and one rare visitor
-  sonic: 6000, frogger: 7600, xevious: 7800, pipemania: 8400, derez: 6600, ufo: 5200,
+  powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
+  // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
+  // Longer than the fields, because something that travels needs time to be watched -- a field
+  // reads at a glance, an agent has to arrive, do something, and leave.
+  //
+  // Twenty-two of these were removed on the operator's call after seeing them on the board. The
+  // ten that stayed are the ones worth the second animation loop: two riders, a splitter, a thief,
+  // two populations that fight, a flood, the depth lanes, a collapse, a roller and a gateway.
+  centipede: 7400, tractor: 6800, missile: 7400,
+  minesweeper: 7200, tempest: 7000,
+  boulderdash: 6400, marble: 7000, portal: 7200,
 };
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run

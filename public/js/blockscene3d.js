@@ -911,56 +911,16 @@ export function fxAt(t, fx) {
       const col = [Math.round(140 + 115 * ph), Math.round(90 + 140 * (1 - ph)), Math.round(190 + 60 * ph)];
       return { glow: 0.85 * A * w, outline: 0.2 * A * w, lift: 0, color: col };
     }
-    case 'glitch': {
-      // data corruption: a different handful of cubes tears every eighth of the effect, hard on
-      // and hard off -- no easing, because a glitch that fades in is not a glitch
-      const frame = Math.floor(fx.u * 9);
-      const pick = jitterOf(t.txid, 'gl' + fx.seed + ':' + frame);
-      if (pick > 0.13) return FX_NONE;
-      const hard = pick < 0.05;
-      return { glow: A * (hard ? 1 : 0.6), outline: A, lift: hard ? 1.2 * A : 0,
-        color: hard ? [255, 60, 210] : [70, 255, 245] };
-    }
-    // ---------------------------------------------------------------------------------------
-    // THE AGENTS (agents.js): effects that are a THING MOVING rather than a pattern. Each
-    // publishes `heads` -- where it is on the board right now -- and the cubes near a head light
-    // in its colour. That is what keeps an agent part of the board instead of painted over it.
-    //
-    // `r` is a head's reach in grid units (default 0.8, the light cycles' tight rider). A
-    // Recognizer's gantry lights a wide swath; a thrown disc lights a point. `lift` lets a blast
-    // or a hop throw the cubes it passes.
     case 'lightcycle':
     case 'packets':
-    case 'recognizer':
-    case 'disc':
-    case 'snake':
-    case 'qbert':
-    case 'invaders':
-    case 'bomberman':
     case 'centipede':
-    case 'pacman':
-    case 'galaga':
     case 'tractor':
     case 'missile':
-    case 'asteroids':
-    case 'tetrisdrop':
-    case 'qix':
     case 'minesweeper':
     case 'tempest':
-    case 'lockon':
-    case 'scanvisor':
-    case 'katamari':
     case 'boulderdash':
-    case 'lemmings':
     case 'marble':
-    case 'gradius':
-    case 'portal':
-    case 'sonic':
-    case 'frogger':
-    case 'xevious':
-    case 'pipemania':
-    case 'derez':
-    case 'ufo': {
+    case 'portal': {
       let best = FX_NONE, bw = 0;
       for (const hd of fx.heads ?? []) {
         const ddx = Math.max(t.x - hd.x, 0, hd.x - (t.x + t.s)), ddy = Math.max(t.y - hd.y, 0, hd.y - (t.y + t.s));

@@ -9,6 +9,40 @@ are proposals, and the numbering here is what the commits refer to.
 
 ---
 
+## What was removed, and what stayed
+
+**2026-09-13, after seeing them on the board, the operator removed twenty-three effects**:
+Mystery ship, De-res, Pipeline, Bombing run, Traffic, Ramp run, Options, Lemmings, Katamari,
+Scan visor, Lock-on, Claim, Tetromino, Asteroids, Squadron, Maze chase, Blast, Invaders, Hopper,
+Snake, Identity disc, Recognizer, and the Glitch field effect.
+
+That is twenty-two of the thirty-two agents and one field. **Thirty-three effects remain: ten
+agents and twenty-three fields.**
+
+The agents that stayed:
+
+| kind | what it is |
+|---|---|
+| `lightcycle` | two riders laying light walls until one crashes |
+| `ball` | the lightning ball tracing the grid |
+| `centipede` | a body that weaves down and splits in two |
+| `tractor` | a saucer that draws the tallest transaction up and puts it back |
+| `missile` | arcs raining down against interceptors rising to meet them |
+| `minesweeper` | a flood that goes around the richest transactions, which then flag |
+| `tempest` | pulses up the lanes, the one effect using the depth axis |
+| `boulderdash` | the board gives way from a point, cubes collapsing outward |
+| `marble` | rolls downhill, so it shows which way the block leans |
+| `portal` | in one gateway, out the other, trail carried through |
+
+Two consequences worth knowing. **No surviving agent HIDES a cube** -- boulder dash shortens rather
+than absorbs -- so the `hide` path is now covered only by the synthetic end-to-end test in
+`agents.test.js`, not by any agent in the wild. And the `bomberman` test that proved the
+data-aware claim went with its subject; `marble` still reads the skyline as terrain and keeps its
+own test.
+
+Stored settings need no migration: `normalise` rebuilds the effects map from `DEFAULTS` and drops
+keys it does not know, so a `config/blockyard.json` naming a removed effect simply loses it.
+
 ## What separates an agent effect from what we already have
 
 The board has twenty-six idle effects. Seventeen of them are **fields**: pure functions of a

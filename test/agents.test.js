@@ -152,7 +152,7 @@ test('A HEAD CAN ACTUALLY HIDE AND SHRINK A CUBE, end to end from the caller', (
   // NOT catch this: the capability has to be asserted from the side that uses it.
   const tile = { txid: 'a', x: 4, y: 4, s: 1 };
   const at = (head) => fxAt(tile, {
-    kind: 'snake', u: 0.5, amp: 1, gridW: 20, gridH: 20, dx: 1, dy: 0, seed: 1, x: 0, y: 0, heads: [head],
+    kind: 'centipede', u: 0.5, amp: 1, gridW: 20, gridH: 20, dx: 1, dy: 0, seed: 1, x: 0, y: 0, heads: [head],
   });
   const on = at({ x: 4.5, y: 4.5, color: [1, 2, 3], alpha: 1, r: 1, hide: 1 });
   assert.equal(on.hide, 1, 'a head ON the cube hides it');
@@ -198,16 +198,17 @@ test('an agent that alters the board actually alters it, on a REAL board', () =>
     }
     return { hid, shrunk };
   };
-  const kat = sweep('katamari');
-  assert.ok(kat.hid > 0, `katamari absorbs cubes (${kat.hid} cube-frames hidden)`);
+  // katamari and lemmings were removed on the operator's call (2026-09-13), and with them the only
+  // agents that HID a cube. boulder dash is the survivor that alters the board, by shortening
+  // rather than hiding -- so that is what is measured here. The hide path is still covered end to
+  // end by the test above, which drives fxAt with a head that asks for it.
   const bd = sweep('boulderdash');
   assert.ok(bd.shrunk > 0, `boulder dash collapses cubes (${bd.shrunk} cube-frames shortened)`);
-  const lem = sweep('lemmings');
-  assert.ok(lem.shrunk > 0, `a lemming digs through one (${lem.shrunk} cube-frames shortened)`);
+  assert.equal(bd.hid, 0, 'it shortens rather than hides -- nothing left on the board absorbs a cube');
   // and the control: an agent that alters nothing must alter nothing
-  const gr = sweep('gradius');
-  assert.equal(gr.hid, 0, 'an agent that only travels hides nothing');
-  assert.equal(gr.shrunk, 0, 'and shortens nothing');
+  const mb = sweep('marble');
+  assert.equal(mb.hid, 0, 'an agent that only travels hides nothing');
+  assert.equal(mb.shrunk, 0, 'and shortens nothing');
 });
 
 test('hide and scale are transient, and default to "visible, full size"', () => {
@@ -295,37 +296,4 @@ test('marble rolls somewhere on ANY board, flat or sloped', () => {
   // the point of the effect: on a real slope it goes DOWNHILL, which a drift would not guarantee
   const heights = (p) => 6 - (p.x + p.y) * 0.08;
   assert.ok(heights(sloped.at(-1)) < heights(sloped[0]), 'and on a slope it ends lower than it started');
-});
-
-test('bomberman reads the skyline: a spiky block stops the blast, a flat one does not', () => {
-  // THE DATA-AWARE CLAIM, checked rather than asserted in a comment -- and this test has already
-  // earned its place twice by rejecting two wrong rules:
-  //
-  //   a flat threshold (1.2)  made every cube on the dense board a wall, because that board's
-  //                           slabs are all exactly 1.2 tall: the blast drew a dot.
-  //   the 70th percentile     made a field of 0.2s and a field of 6s identical (26 vs 26), because
-  //                           on a UNIFORM board the percentile sits just above everything at any
-  //                           absolute height. Density became unreadable.
-  //
-  // So the comparison that means something is not low-vs-tall, which is two flat boards; it is
-  // FLAT vs SPIKY. A wall is a cube that stands out from its neighbours.
-  const board = (h) => {
-    const out = [];
-    for (let x = 0; x < 20; x++) for (let y = 0; y < 14; y++) out.push({ txid: `b${x}_${y}`, x, y, s: 1, tall: h(x, y), color: '#333', rate: 1 });
-    return out;
-  };
-  const reach = (tiles) => {
-    const a = AGENTS.bomberman.build({ st: {}, seed: 7, W: 20, H: 14, tiles, tops: null, rnd: rng(7) });
-    return a.arms.reduce((n, arm) => n + arm.n, 0);
-  };
-  const flatLow = reach(board(() => 0.2));
-  const flatTall = reach(board(() => 6));
-  const spiky = reach(board((x, y) => (((x * 7 + y) % 7 === 0) ? 7 : 0.6)));
-  const verySpiky = reach(board((x, y) => (((x * 3 + y) % 3 === 0) ? 7 : 0.6)));
-
-  assert.ok(flatLow > spiky, `a flat block lets the blast run; a spiky one stops it (${flatLow} vs ${spiky})`);
-  assert.ok(spiky >= verySpiky, `and the spikier it is, the sooner (${spiky} vs ${verySpiky})`);
-  assert.equal(flatLow, flatTall,
-    'absolute height must NOT matter: a field of little transactions and a field of giants are both flat');
-  assert.ok(flatLow > 0, 'a flat board does not wall the blast in at the origin');
 });

@@ -61,7 +61,7 @@ test('an effect is the same picture every time it replays: no Math.random in the
   assert.notEqual(fxHash(7), fxHash(8));
   assert.ok(fxHash(12345) >= 0 && fxHash(12345) < 1);
   const t = { txid: 'a', x: 4, y: 4, s: 2 };
-  for (const kind of ['firework', 'flare', 'sparkle', 'glitch', 'rain', 'quake']) {
+  for (const kind of ['firework', 'flare', 'sparkle', 'plasma', 'rain', 'quake']) {
     const fx = { kind, u: 0.4, amp: 1, gridW: 20, gridH: 20, dx: 1, dy: 0, seed: 99, x: 9, y: 11 };
     assert.deepEqual(fxAt(t, fx), fxAt(t, fx), `${kind} replays identically`);
   }
