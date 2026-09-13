@@ -10,8 +10,15 @@ test('a long-running heavy call does not starve a cheap high-priority poll', asy
   const order = [];
   // Simulate the measured condition: one batch holding the lane for ~60 ms while
   // cheap polls arrive behind it. Without priorities the cheap poll is last.
-  const heavy = lane.submit(async () => { await sleep(60); order.push('heavy'); }, { key: 'slow', priority: 5 });
-  await sleep(5); // let it start
+  // WAIT ON A SIGNAL, NOT A SLEEP. This used to `await sleep(5)` to "let it start", which is a
+  // race: on a loaded machine (the full suite runs this alongside everything else) those 5 ms can
+  // elapse before the heavy task reaches its first await, the lane is still free, and the cheap
+  // poll runs first -- order comes out ['cheap','heavy'] and the assertion fails. Measured across
+  // this session's logs: 4 failures in ~40 full-suite runs, 0 in 8 isolated runs. The heavy task
+  // now tells us when it is genuinely holding the lane.
+  let started; const holding = new Promise((r) => { started = r; });
+  const heavy = lane.submit(async () => { started(); await sleep(60); order.push('heavy'); }, { key: 'slow', priority: 5 });
+  await holding;
   const cheap1 = lane.submit(async () => { order.push('cheap-superseded'); }, { key: 'fast', priority: 0 });
   const cheap2 = lane.submit(async () => { order.push('cheap'); }, { key: 'fast', priority: 0 });
   await Promise.allSettled([heavy, cheap1, cheap2]);
@@ -21,8 +28,9 @@ test('a long-running heavy call does not starve a cheap high-priority poll', asy
 test('the newest poll for the same tier wins and the older one reports itself superseded', async () => {
   const lane = new Lane(cfg);
   const seen = [];
-  const blockers = lane.submit(async () => { await sleep(40); return 'blocker'; }, { key: 'b', priority: 9 });
-  await sleep(5);
+  let began; const held = new Promise((r) => { began = r; });
+  const blockers = lane.submit(async () => { began(); await sleep(40); return 'blocker'; }, { key: 'b', priority: 9 });
+  await held;   // the same race as above: a sleep here is a coin flip under load
   const a = lane.submit(async () => seen.push('a'), { key: 'fast', priority: 0 });
   const b = lane.submit(async () => seen.push('b'), { key: 'fast', priority: 0 });
   await Promise.allSettled([blockers, a, b]);

@@ -14,7 +14,11 @@
 //  3. Zero dependencies, no CDN.
 
 import { packBlock, packExact, vbytesPerUnit, vsizeForSide } from './blockpack.js';
-import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cyclePath, ballPath, cycleCrashes, cellTops, pathHeights } from './blockscene3d.js';
+import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops } from './blockscene3d.js';
+// THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
+// This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
+// draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
+import { AGENTS, isAgent, rng } from './agents.js';
 
 const STATE = new WeakMap();
 
@@ -189,29 +193,20 @@ function startFx(st, kind, now) {
   // LIGHT CYCLES and DATA PACKETS (see cyclePath): the routes and the height of every
   // stretch are fixed when the effect starts -- the board is still -- so a frame only moves
   // the heads along them. Two cycles in TRON's blue and orange from opposite edges.
-  let paths = null, crashes = null;
-  if (kind === 'lightcycle' || kind === 'ball') {
+  // AGENTS BUILD THEIR OWN WORLD, once, here (agents.js). The board is STILL while an effect
+  // runs, so a route, a formation or a sprite's flight is decided now and a frame only moves
+  // along it -- which is what makes these cheap enough to have fifty of.
+  let agent = null;
+  const spec = AGENTS[kind];
+  if (spec?.build) {
     const W = st.gridW, H = st.gridH;
-    const tops = cellTops(st.restTiles || [], W, H);
-    if (kind === 'lightcycle') {
-      const sides = Math.random() < 0.5 ? ['left', 'right'] : ['bottom', 'top'];
-      paths = sides.map((side, i) => {
-        const pts = cyclePath(seed + i * 7919, W, H, side);
-        return { pts, hs: pathHeights(pts, tops, W, H), color: i ? [255, 150, 40] : [80, 220, 255], lag: i * 0.06 };
-      });
-      crashes = cycleCrashes(paths);
-    } else {
-      // THE LIGHTNING BALL (operator, 2026-09-11, of the data packets that were here: "It comes
-      // off more as wandering lights. I was hoping for something that comes from off-screen along
-      // a grid line, and then starts tracing through the grid to the opposite side. Some
-      // high-effects version of a lightning ball moving along the grid, illuminating everything it
-      // comes near"). One route, edge to edge, entered from off-screen (ballPath).
-      const side = ['left', 'right', 'bottom', 'top'][(Math.random() * 4) | 0];
-      const pts = ballPath(seed, W, H, side, Math.ceil(Math.max(W, H) * 0.35) + 8);
-      paths = [{ pts, hs: pathHeights(pts, tops, W, H), color: [150, 215, 255] }];
-    }
+    const tiles = st.restTiles || [];
+    agent = spec.build({ st, seed, W, H, tiles, tops: cellTops(tiles, W, H), rnd: rng(seed) });
   }
-  st.fx = { kind, t0: now, ms: FX_MS[kind] ?? 4500, x: Math.random() * st.gridW, y: Math.random() * st.gridH, dx: d[0], dy: d[1], rank, seed, paths, crashes };
+  st.fx = { kind, t0: now, ms: FX_MS[kind] ?? 4500, x: Math.random() * st.gridW, y: Math.random() * st.gridH, dx: d[0], dy: d[1], rank, seed, agent,
+    // `paths`/`crashes` stay on the record because drawCycles reads view.fx.cycles, which the
+    // agent's frame() produces from them; nothing outside agents.js builds them any more.
+    paths: agent?.paths ?? null, crashes: agent?.crashes ?? null };
   st.lastFx = kind;
 }
 
@@ -231,48 +226,12 @@ function fxNow(st, t) {
     const reach = Math.hypot(Math.max(f.x, st.gridW - f.x), Math.max(f.y, st.gridH - f.y));
     Object.assign(out, { x: f.x, y: f.y, r: reach * (1 - Math.pow(1 - u, 2)), w: 2.2 + 2.4 * u });
   }
-  if (f.kind === 'ball' && f.paths) {
-    // the ball runs the whole route at one speed; it carries its own light, so no sweep envelope
-    const p = f.paths[0], len = p.pts.length - 1;
-    const d = Math.max(0, Math.min(1, (u - 0.02) / 0.96)) * len;
-    const k = Math.min(len - 1, Math.floor(d)), fr = d - k;
-    const a = p.pts[k], b = p.pts[k + 1] ?? a;
-    out.ball = { x: a.x + (b.x - a.x) * fr, y: a.y + (b.y - a.y) * fr, z: (p.hs[k] ?? 0) + 0.9, d, pts: p.pts, hs: p.hs };
-    out.amp = 1;
-    return out;
-  }
-  if (f.paths) {
-    // where each head is: a cycle runs the whole route in the first 80% of the effect, then
-    // stops at the far edge while its wall retracts and fades ("the line begins to fade out
-    // quickly"); a packet runs its short hop in 40% from its own start, trailing 3 units
-    out.cycles = f.paths.map((p, i) => {
-      const len = p.pts.length - 1;
-      if (f.kind === 'lightcycle') {
-        const c = f.crashes?.[i];
-        if (c && u >= c.u) {
-          // DE-RES: stopped dead where it hit; drawCycles shatters its wall and fades it
-          return { ...p, d: c.d, from: 0, alpha: 0, trail: Infinity, derez: Math.min(1, ((u - c.u) * f.ms) / DEREZ_MS), crash: c };
-        }
-        const v = Math.max(0, (u - p.lag) / (1 - p.lag));
-        const run = Math.min(1, v / 0.8), after = Math.max(0, (v - 0.8) / 0.2);
-        const d = run * len;
-        // the whole wall, from the start of the route: it is what the cycle has drawn on the
-        // board, and it stands until the effect is over (alpha fades it out at the very end)
-        return { ...p, d, from: 0, alpha: 1 - 0.75 * after, trail: Infinity };
-      }
-      const v = (u - p.s0) / 0.4;
-      if (!(v > 0) || v >= 1.25) return { ...p, d: 0, from: 0, alpha: 0, trail: 3 };
-      const after = Math.max(0, (v - 1) / 0.25);
-      const d = Math.min(1, v) * len;
-      return { ...p, d, from: Math.max(0, d - 3, after * len), alpha: 1 - after, trail: 3 };
-    });
-    out.heads = out.cycles.filter((c) => c.alpha > 0.05 && c.d > 0 && c.d < c.pts.length - 1).map((c) => {
-      const k = Math.min(c.pts.length - 2, Math.floor(c.d)), fr = c.d - k;
-      const a = c.pts[k], b = c.pts[k + 1] ?? a;
-      return { x: a.x + (b.x - a.x) * fr, y: a.y + (b.y - a.y) * fr, color: c.color, alpha: c.alpha };
-    });
-    // the crash flashes white and lights the cubes round it
-    for (const c of out.cycles) if (c.derez != null && c.derez < 0.6) out.heads.push({ x: c.crash.at.x, y: c.crash.at.y, color: [255, 255, 255], alpha: 1 - c.derez / 0.6 });
+  // AN AGENT'S FRAME comes from its own spec (agents.js). Everything it publishes lands on the
+  // frame object: `heads` (how it lights the cubes -- fxAt's heads branch), plus whatever its
+  // draw reads, such as `cycles` for the light walls or `ball` for the plasma ball.
+  if (f.agent && isAgent(f.kind)) {
+    const spec = AGENTS[f.kind];
+    if (spec?.frame) Object.assign(out, spec.frame(f.agent, u, { ms: f.ms, derezMs: DEREZ_MS, seed: f.seed }) ?? {});
   }
   return out;
 }

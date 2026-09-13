@@ -418,6 +418,16 @@ Kept as checked rather than deleted, so nobody re-derives them.
   footer that shows a hash nobody can compare against anything is decoration. HTML
   consequently never answers `304` (its body is per-response); assets keep their ETag.
   Asserted in `test/http-app.test.js` and nine checks in `scripts/smoke.sh`.
+- [x] **`rpc-lane.test.js` raced under load: fixed 2026-09-13.** "a long-running heavy call
+  does not starve a cheap high-priority poll" and its sibling each did `await sleep(5)` to let the
+  blocking task start before queueing behind it. That is a coin flip, not a wait: on a loaded
+  machine the 5 ms can elapse before the heavy task reaches its first `await`, so the lane is still
+  free and the cheap poll runs first -- `['cheap','heavy']` instead of `['heavy','cheap']`.
+  Measured across this session's logs: **4 failures in ~40 full-suite runs, 0 in 8 isolated runs**,
+  which is exactly the signature of a load-dependent race and exactly why it kept looking like
+  "just a flake". Both now await a promise the task itself resolves once it is genuinely holding
+  the lane. Nothing in `server/rpc/` changed: the lane was never wrong, the test was.
+
 - [ ] Mempool **add/remove stream** is not real: the node refuses
   `zmqpubsequence` (documented in its `docs/RPC_LIVE_NODE.md` slice 19 — it can
   publish adds but has no clean "removed" choke point). So "realtime mempool"
