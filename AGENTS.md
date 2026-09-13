@@ -27,22 +27,35 @@ v22.23.2 `node --test test/` dies with `Cannot find module '<root>/test'` — th
 positional is resolved as a module instead of searched for `*.test.js`. Measured
 2026-09-08; `test/*.test.js` and `test/**/*.test.js` both run the whole suite.
 
-`BLOCKYARD_LOG_SOURCE=0` is not a neutral switch. The monitor then opens no log file
-at all, raises `log-source-disabled` naming every figure that loses its source, and
+**LOG PARSING IS NOT AVAILABLE FOR BITCOIN CORE.** Measured 2026-09-13: every structured rule in
+`collect/logparse.js` keys on tags an experimental node emits -- `[dlc]`, `[dl]`, `[dial]`,
+`[utxo_live]`, `[config]` -- and `TS_RE` wants `YYYY-MM-DD HH:MM:SS.mmm `, which is not the
+`2026-09-13T01:30:00Z` Core writes. Fed real Core `debug.log` lines the parser returns
+`kind: "raw"` with **no structured fields** and a timestamp that fell back to *now* rather than the
+line's own time, so rows would appear in the feed at the wrong moment. The same lines from the
+experimental node return `kind: "bandwidth"` with six fields. Both fixtures in `test/fixtures/` are
+experimental-format; no Core log has ever been tested against this parser.
+
+So: the log source is OFF by default and must stay off against Core. Turning it on buys nothing and
+costs a misdated event feed. Supporting Core means writing Core fixtures first, then rules for
+Core's own lines -- not flipping a switch.
+
+`BLOCKYARD_LOG_SOURCE=0` is therefore the normal, supported mode, not a degradation. The monitor
+opens no log file, raises `log-source-disabled` naming every figure that loses its source, and
 regenerates the `/api/config` provenance table so no row can claim a log source.
-Whether bandwidth survives depends on the **node**, not on us — and not on which
-*build* either. Measured 2026-09-08: one build answers `getnettotals` 0/0 and
-`getpeerinfo []` with 17 connections, another answers 11.56 MB/s (against 11.2 MB/s in
-its own log) and 21 peers with per-peer byte counts — both reporting
-`subversion: /BitcoinMachineCode:0.0.1/`, so RPC cannot tell you which one you are
-talking to. Measured again 2026-09-09, on one process with **no restart between the two
-readings**: the daemon that answered 0/0 at 09:36 had advanced to 23,955,131 bytes
-received by 17:36, while `getpeerinfo` stayed `[]`. So the honest form of the question is
-"what does it read now", asked per boot and re-asked periodically; a cached answer is a
-staleness bug with documentation attached. `downloadMeasured`/`uploadMeasured` are where
-that re-asking lives — they gate on a *moving* counter, so a counter that never moved
-renders as `–` instead of a chart of zeros claiming an idle node. The log banner remains
-the only build attestation on this box (MEASUREMENTS 23).
+
+The measurements below are from the experimental node and are kept because the REASONING still
+applies to any node whose RPC under-reports -- they are not claims about Core. Measured 2026-09-08:
+one build answers `getnettotals` 0/0 and `getpeerinfo []` with 17 connections, another answers
+11.56 MB/s (against 11.2 MB/s in its own log) and 21 peers with per-peer byte counts -- both
+reporting the same non-Core subversion string, so RPC cannot tell you which one you are talking to.
+Measured again 2026-09-09, on one process with **no restart between the two readings**: the daemon
+that answered 0/0 at 09:36 had advanced to 23,955,131 bytes received by 17:36, while `getpeerinfo`
+stayed `[]`. So the honest form of the question is "what does it read now", asked per boot and
+re-asked periodically; a cached answer is a staleness bug with documentation attached.
+`downloadMeasured`/`uploadMeasured` are where that re-asking lives -- they gate on a *moving*
+counter, so a counter that never moved renders as `–` instead of a chart of zeros claiming an idle
+node.
 
 No npm install step exists **by design** — see Rule 1.
 
@@ -376,7 +389,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 755 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 759 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

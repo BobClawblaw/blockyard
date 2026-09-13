@@ -316,7 +316,7 @@ Available actions:
 | key | default | meaning |
 |---|---|---|
 | `log.level` | `"info"` | Server log verbosity: `debug`, `info`, `warn` or `error`. The server logs to stdout. Under systemd that goes to the journal. |
-| `log.enabled` | `false` | Tail each node's `logFile` as an extra data source. Off by default: the monitor runs on RPC alone. Turn it on only if your node build writes a log format blockyard parses. With it off, figures that only the log can provide (bandwidth and per-peer bytes on builds whose RPC reports zero) are shown as unavailable. |
+| `log.enabled` | `false` | Tail each node's `logFile` as an extra data source. **Off by default, and there is currently no log format this parses for Bitcoin Core** -- see the note below. With it off, figures only a log could provide are shown as unavailable rather than as zero. |
 | `log.tailBytes` | `2097152` (2 MiB) | Size of the read-back window the log tail uses. |
 | `log.staleMs` | `1800000` (30 min) | How long a tailed log may go without a single new byte before the monitor reports it as silent. A synced, idle node can legitimately stay quiet for about 20 minutes. Override per node with `logStaleMs`. |
 | `log.healthMs` | `30000` | How often that check runs. It costs no RPC. |
@@ -371,7 +371,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_NODE_URL` | `nodes[0].rpcUrl` | URL | `http://127.0.0.1:8332` | RPC endpoint of the first node. |
 | `BLOCKYARD_DATADIR` | `nodes[0].datadir` | path | `/home/bitcoin/.bitcoin` | Data directory of the first node. It also **clears** `nodes[0].cookieFile`, so the cookie is looked up under the new datadir. |
 | `BLOCKYARD_COOKIE` | `nodes[0].cookieFile` | path | unset | Explicit cookie file for the first node. It is applied after `BLOCKYARD_DATADIR`, so it wins. |
-| `BLOCKYARD_LOGFILE` | `nodes[0].logFile` | path | see [defaults](#nodes) | Log file of the first node. Used only when the log source is on. |
+| `BLOCKYARD_LOGFILE` | `nodes[0].logFile` | path | see [defaults](#nodes) | Log file of the first node. Used only when the log source is on -- which is not supported for Bitcoin Core; see [RPC-only mode](#rpc-only-mode-and-the-log-source). |
 | `BLOCKYARD_UNIT` | `nodes[0].systemdUnit` | string | `bitcoind.service` | systemd unit name of the first node. Informational only. |
 | `BLOCKYARD_NODE_LABEL` | `nodes[0].label` | string | `Bitcoin Core (mainnet)` | Display name of the first node, shown in the header. Setting `BLOCKYARD_NODE_URL` to a *different* address without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. Restating the address the node already had renames nothing. |
 | `BLOCKYARD_RPC_TIMEOUT` | `rpc.timeoutMs` | number | `90000` | RPC timeout for ordinary calls. |
@@ -635,10 +635,10 @@ No outbound connections except to the node:
 
 or `BLOCKYARD_MARKETS=0`.
 
-### RPC-only mode, and turning the log source on
+### RPC-only mode, and the log source
 
-RPC-only is the **default**: `log.enabled` is `false`, and every node's `logFile` is
-ignored. To make it explicit, and to survive a future default change:
+RPC-only is the **default and the supported mode**: `log.enabled` is `false`, and every
+node's `logFile` is ignored. To make it explicit, and to survive a future default change:
 
 ```json
 {
@@ -648,23 +648,15 @@ ignored. To make it explicit, and to survive a future default change:
 
 or `BLOCKYARD_LOG_SOURCE=0`.
 
-To tail the node's log as well, which fills in bandwidth and per-peer figures on
-builds whose RPC reports zeros:
-
-```json
-{
-  "log": { "enabled": true },
-  "nodes": [
-    {
-      "id": "main",
-      "rpcUrl": "http://127.0.0.1:8332",
-      "datadir": "/var/lib/bitcoind",
-      "chainHint": "main",
-      "logFile": "/var/lib/bitcoind/main/debug.log"
-    }
-  ]
-}
-```
+> **Log parsing does not currently support Bitcoin Core.** The parsers were written and
+> measured against an experimental node implementation with a different log grammar, and
+> that is the only format they have been tested against. Measured 2026-09-13 against real
+> Core `debug.log` lines: every line comes back as an unstructured `raw` event with **no
+> figures extracted**, and the timestamp falls back to the time of reading rather than the
+> time in the line -- so enabling it against Core adds nothing and misdates the event feed.
+>
+> Nothing in the UI depends on it: every panel reads RPC. Support for Core's log format
+> would mean new parser rules and Core fixtures, not a configuration change.
 
 ### Running under systemd
 

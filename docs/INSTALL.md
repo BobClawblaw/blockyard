@@ -128,10 +128,12 @@ read, so use the `rpcUser` / `rpcPassword` form above and point `rpcUrl` at it.
 **Several nodes** — add more entries to `nodes`; a node picker appears in the header and
 every chart, table and stream is per node.
 
-**The node's log (optional).** By default the monitor works from RPC alone. If your node
-build reports bandwidth and peer detail only in its log, add `"logFile"` to the node entry
-and turn the log source on with `"log": { "enabled": true }` (or `BLOCKYARD_LOG_SOURCE=1`).
-The Node & RPC page lists exactly which figures each source provides.
+**The node's log.** The monitor works from RPC alone, and that is the supported mode.
+**Log parsing does not currently support Bitcoin Core**: the parsers were written against an
+experimental node with a different log grammar, and fed real Core `debug.log` lines they
+extract no figures and misdate the entries (measured 2026-09-13). Leave `log.enabled` off --
+it is off by default -- and ignore `logFile`. The Node & RPC page lists exactly which figures
+each source provides.
 
 ## 5. First run
 

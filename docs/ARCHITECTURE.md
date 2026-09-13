@@ -136,7 +136,7 @@ server/
   collect/monitor.js NodeMonitor: poll tiers, log absorption, read model
   collect/sync.js    the sync bar's data contract (pure)
   collect/logtail.js log follower (rotation, truncation, partial lines)
-  collect/logparse.js log line parsers (pure, tested against real lines)
+  collect/logparse.js log line parsers (pure; target an EXPERIMENTAL node's grammar, not Core's)
   collect/mining.js  coinbase decoding and pool ledger folding (pure)
   collect/nextblock.js getblocktemplate summary and package analysis (pure)
   collect/markets.js exchange feed (tickers, candles, order books, spot price)
@@ -261,7 +261,11 @@ Beyond the raw figures, it carries the reasoning the UI needs to be honest:
   as a wake-up. On rotation it drains the old inode to EOF before switching to the
   new file. If the file shrinks, it restarts at 0. A partial last line is carried
   over to the next read. At start it backfills the last `log.tailBytes`.
-- **`collect/logparse.js`**: pure parsers for the node's log lines. Labelled lines
+- **`collect/logparse.js`**: pure parsers for the node's log lines. **These target an
+  experimental node implementation's log grammar and do not support Bitcoin Core's
+  `debug.log`**: measured 2026-09-13, Core lines return unstructured `raw` events with no
+  fields and a fallback timestamp. The log source is off by default and should stay off
+  against Core. Labelled lines
   are scanned **field by field**, so a new field costs only that field, which is
   kept verbatim in `extraFields`, rather than the whole line (RULES 16). `SHAPES`
   and `RULE_TO_SHAPE` drive per-shape liveness flags. Coverage is published as
@@ -1063,7 +1067,8 @@ test is written with `node:test` and `node:assert`, with nothing to install.
   real `node --test` reporter prints, and fails on nested declarations the scanner
   would miss. Do not type the count into a document by hand.
 - **Fixtures**: `test/fixtures/` holds **real** node log lines, taken from actual
-  logs and not typed from memory (RULES 7). A frozen 90-minute sample holds parser
+  logs and not typed from memory (RULES 7) -- all of them from the experimental node,
+  which is why Core log support is not claimed anywhere. A frozen 90-minute sample holds parser
   coverage above its threshold.
 - **`npm run render:live`** (`scripts/live-render-check.mjs`): runs the page
   renderers under the DOM stub against a running monitor's real responses.
@@ -1080,7 +1085,7 @@ test is written with `node:test` and `node:assert`, with nothing to install.
 | `blockscene3d.test.js`, `details3d.test.js`, `viewer-modes.test.js` | no intersections during a transition, constant transform and camera, paint-order stability, shadows, landings, idle behaviour, loop parking, hover only at rest, both viewer modes |
 | `rpc-lane.test.js` | priority, coalescing, stale drop, breaker semantics, the unkeyed-job recursion bug, cadence stretching and its floor |
 | `open-access.test.js`, `http-app.test.js`, `tls.test.js`, `cidr.test.js`, `audit-and-kdf.test.js` | the viewer ceiling, admin 403 in open mode, refused writes, sessions and CSRF, TLS, CIDR gate failure direction, audit rotation, scrypt |
-| `logparse.test.js`, `bench-log.test.js`, `shape-liveness.test.js` | parsers against real lines, coverage thresholds, per-shape liveness flags |
+| `logparse.test.js`, `bench-log.test.js`, `shape-liveness.test.js`, `log-core-unsupported.test.js` | parsers against real experimental-node lines, coverage thresholds, per-shape liveness flags, and the standing proof that Core's format is NOT parsed |
 
 A green `npm test` is necessary but not sufficient (RULES 5). Before calling a
 change done, run `npm run dev` and look at the page, or run `npm run smoke`.

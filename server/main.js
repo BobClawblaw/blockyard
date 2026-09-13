@@ -163,7 +163,24 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       if (n.logFile) app.log({ level: 'info', msg: `node "${n.id}": ignoring logFile ${n.logFile} because the log source is disabled (BLOCKYARD_LOG_SOURCE=0)` });
       n.logFile = null;
     }
-    app.log({ level: 'warn', msg: 'log source DISABLED: running on RPC only. Bandwidth and per-peer bytes work only on node builds that publish them (measured 2026-09-08: bench build 11.56 MB/s via getnettotals against 11.2 MB/s stated in its log; production build 0 bytes and getpeerinfo [] with 16 connections). Per-peer relay legs, served-block attribution, tx accept/reject counts, disk-write rate, worker bans, the node\'s own ETA, compaction/validation stalls and sync_failing have no RPC source at all.' });
+    app.log({ level: 'warn', msg: 'log source DISABLED: running on RPC only -- which is the supported mode, and the only one for Bitcoin Core (the log parsers target an experimental node grammar; see docs/CONFIGURATION.md). Bandwidth and per-peer bytes work only on node builds that publish them (measured 2026-09-08: bench build 11.56 MB/s via getnettotals against 11.2 MB/s stated in its log; production build 0 bytes and getpeerinfo [] with 16 connections). Per-peer relay legs, served-block attribution, tx accept/reject counts, disk-write rate, worker bans, the node\'s own ETA, compaction/validation stalls and sync_failing have no RPC source at all.' });
+  } else {
+    // THE INVERSE CASE, said out loud. Turning the log source on against Bitcoin Core produces
+    // nothing useful and is easy to mistake for a configuration problem: logparse.js targets an
+    // experimental node's grammar ([dlc], [dl], [dial], [utxo_live], [config], and a
+    // "YYYY-MM-DD HH:MM:SS.mmm " timestamp), so Core's debug.log lines come back as unstructured
+    // `raw` events with no fields, timestamped when they were READ rather than when they were
+    // written. The boot log is the most visible place to say so before someone spends an evening
+    // wondering why the bandwidth chart is empty. (operator, 2026-09-13.)
+    app.log({
+      level: 'warn',
+      msg: 'log source ENABLED: note that log parsing does NOT support Bitcoin Core -- the parsers '
+        + 'were written and tested against an experimental node implementation with a different log '
+        + 'grammar. Against a Core debug.log every line is kept as an unstructured event with no '
+        + 'figures extracted and a timestamp taken at read time, so panels that need the log stay '
+        + 'empty and the event feed is misdated. Set BLOCKYARD_LOG_SOURCE=0 (the default) unless your '
+        + 'node writes the format in test/fixtures/. See docs/CONFIGURATION.md, "RPC-only mode".',
+    });
   }
 
   for (const nodeCfg of cfg.nodes) {

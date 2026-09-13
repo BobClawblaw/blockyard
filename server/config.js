@@ -239,16 +239,27 @@ const DEFAULTS = {
   log: {
     level: 'info',
     tailBytes: 2 * 1024 * 1024,
-    // OFF by default since 2026-09-09: the UI reads RPC only. Tailing a file the
-    // node rewrites between releases is a grammar dependency that has already cost
-    // this project two silent-outage incidents, and every panel that needed it has
-    // been removed rather than left showing dashes.
-    // Turning it on (BLOCKYARD_LOG_SOURCE=1) still works and is still honest about
-    // what it bought: on the build deployed to production RPC answers getnettotals
-    // 0/0 and getpeerinfo [] while getconnectioncount says 16, so "RPC only" there
-    // means "no bandwidth and no peer names at all" -- and both builds report
-    // the same non-Core subversion string, so RPC cannot tell you which one you
-    // have (MEASUREMENTS 3, 4, 11, 26).
+    // OFF by default, and NOT SUPPORTED AGAINST BITCOIN CORE.
+    //
+    // logparse.js targets an experimental node's log grammar: its rules key on [dlc], [dl],
+    // [dial], [utxo_live] and [config] tags, and its timestamp rule wants
+    // "YYYY-MM-DD HH:MM:SS.mmm ", not the "2026-09-13T01:30:00Z" Core writes. Measured
+    // 2026-09-13 against real Core debug.log lines: every line comes back as an unstructured
+    // `raw` event with NO fields extracted, and its timestamp falls back to the time of reading
+    // rather than the time in the line -- so turning this on against Core adds nothing and
+    // misdates the event feed. Both fixtures in test/fixtures/ are experimental-format; no Core
+    // log has ever been tested against this parser (test/log-core-unsupported.test.js pins that).
+    //
+    // Off since 2026-09-09 for an independent reason that still holds: tailing a file the node
+    // rewrites between releases is a grammar dependency that has already cost this project two
+    // silent-outage incidents, and every panel that needed it was removed rather than left
+    // showing dashes. Nothing in the UI depends on the log.
+    //
+    // The measurements that motivated the option are from the experimental node and are kept for
+    // the reasoning, not as claims about Core: on the build deployed there, RPC answered
+    // getnettotals 0/0 and getpeerinfo [] while getconnectioncount said 16, so "RPC only" meant
+    // "no bandwidth and no peer names at all" -- and both builds reported the same non-Core
+    // subversion string, so RPC could not tell you which one you had (MEASUREMENTS 3, 4, 11, 26).
     enabled: false,
     // How long a tailed file may go without a single new byte before the monitor
     // says so. Default 30 min: measured 2026-09-08, the synced production node's own

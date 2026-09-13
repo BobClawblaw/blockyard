@@ -429,7 +429,7 @@ Each point is `{ t, v }`. `t` is the **end** of the bucket, and empty buckets ar
 | `rpc` | `latencyMs avgLatencyMs ratePerSec queued errors breakerTrips busyMsPerSec` |
 | `self` | `rssMb heapMb sseClients usersActive cpuPct eventRate` |
 
-Many fields only fill when the node log source is on (`BLOCKYARD_LOG_SOURCE=1`). In RPC-only mode they stay empty, not zero.
+Many fields only fill from a node log source. **That source does not currently support Bitcoin Core** (the parsers target an experimental node's log grammar), so against Core these stay empty -- empty, never zero. RPC-only is the default and supported mode.
 
 #### Snapshot series windows
 
