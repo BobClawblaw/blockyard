@@ -181,8 +181,24 @@ export function flightGeom(tile, zv, o = {}) {
   // and it does not change as the cube climbs (so the path stays perfectly straight and nothing
   // moves at touchdown). `arcing` keeps re-settling as it climbs, which is the curve it is named
   // for. Every number in this comment came from a probe, not from reading the code.
-  if (mode !== 'arcing') return { drift, lean: settleAt(0), cx: cxRest + drift };
-  return { drift, lean: settleAt(zv), cx: cxRest + drift };
+  // THE SHAPE IS RE-SETTLED EVERY FRAME; ONLY THE PATH IS PINNED (operator, 2026-09-13: "that looks
+  // terrible when the blocks fall into place (non-changing perspective looks strange visually) ...
+  // I'm not seeing the bottom or the front face changing at all during movement. We are
+  // regressing"). Correct, and it was my regression: before this setting existed the renderer always
+  // re-settled the lean with height -- what `arcing` still does -- and making `normal` the default
+  // froze it for the whole flight. Measured falling from z=40 at gx=6: arcing sweeps -0.1291 ->
+  // -0.0885 and converges on the resting lean as it lands; `normal` held -0.0885 at EVERY height.
+  // Frozen exactly where the perspective should move most.
+  //
+  // So the two jobs are separated rather than traded. `lean` is the cube's SHAPE and is re-settled
+  // at the cube's real height in both modes, so a falling cube's faces change frame by frame as
+  // they always did. `leanPath` is what the departure mode decides -- pinned for `normal`, giving
+  // the straight line along the sphere's normal that was chosen, and re-settled for `arcing`, which
+  // is the curve it is named for. liftProjector draws with `lean` and then shifts the cube rigidly
+  // so its centre sits on `leanPath`; at rest the two are equal, so the standing board and the
+  // touchdown are untouched.
+  const lean = settleAt(zv);
+  return { drift, lean, leanPath: mode === 'arcing' ? lean : settleAt(0), cx: cxRest + drift };
 }
 
 export function surfaceNormal(gx, gy, o = {}) {
@@ -462,8 +478,27 @@ export function liftProjector(tile, o = {}) {
   // obliqueLean)
   if (o.oblique) {
     const zv = z > 0 ? visualBase(tile, o) : 0;
-    o = { ...o, leanFixed: flightGeom(tile, zv, o).lean };
+    const g = flightGeom(tile, zv, o);
+    // draw with the SHAPE lean (re-settled each frame), then put the cube's centre back on the
+    // departure mode's PATH. The lean enters project()'s x term only, so a single x offset moves
+    // the whole cube rigidly -- its faces keep the shape the camera gives them at this height.
+    // At rest the two leans are equal and this is exactly the shipped resting projection.
+    o = { ...o, leanFixed: g.lean };
+    if (g.leanPath !== g.lean) {
+      const cx = tile.x + tile.s / 2, cy = tile.y + tile.s / 2;
+      const inner = liftProjectorAt(tile, o, z);
+      const onPath = liftProjectorAt(tile, { ...o, leanFixed: g.leanPath }, z);
+      const dx = onPath(cx, cy, z).x - inner(cx, cy, z).x;
+      if (dx) return (gx, gy, gz) => { const p = inner(gx, gy, gz); return { x: p.x + dx, y: p.y }; };
+      return inner;
+    }
   }
+  return liftProjectorAt(tile, o, z);
+}
+
+// the projection with the lean already settled onto `o` -- split out so liftProjector can evaluate
+// it twice, once for the cube's shape and once for the path its centre must follow
+function liftProjectorAt(tile, o, z) {
   if (!(z > 0)) return (gx, gy, gz) => project(gx, gy, gz, o);
   if (o.oblique) {
     // flight goes along the sphere's normal at the block's centre, so the
