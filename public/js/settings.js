@@ -61,15 +61,20 @@ export const DEFAULTS = Object.freeze({
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
     // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
     // arcing towards/away from the sides instead of just traveling straight up ... make it a toggle
-    // for Linear vs Arcing", then "give me 3 choices to see and toggle between").
+    // for Linear vs Arcing", then "give me 3 choices to see and toggle between", then, having seen
+    // all three on the live board: "Get rid of straight up. Make Along the board's curve the
+    // default.")
     //
-    // Measured before choosing a default: the shipped path is already nearly straight (the drawn
-    // slope dx/dy moves only 0.7335 -> 0.7481 over a whole climb at the left edge). What makes it
-    // read as arcing is that the straight line is STEEP -- three pixels sideways for every four up
-    // at the rim, against -0.017 over the middle. So the fan, not the curve, is the thing seen, and
-    // `vertical` is the only one of the three that removes it. It ships as the default because it
-    // is what was asked for; the other two are here to be compared against it.
-    departures: 'vertical',  // 'vertical' | 'normal' | 'arcing'
+    // Measured before any of it: the shipped path is already nearly straight (the drawn slope dx/dy
+    // moves only 0.7335 -> 0.7481 over a whole climb at the left edge). What reads as arcing is
+    // that the straight line is STEEP -- three pixels sideways for every four up at the rim,
+    // against -0.017 over the middle. A `vertical` mode that removed the fan entirely was built and
+    // shown alongside these two, and cut after the comparison: the fan is the domed board being
+    // honest about itself.
+    //
+    // A stored 'vertical' from that round is not a valid value any more, and normalise resolves an
+    // unknown choice to this default, so those boards land on 'normal' rather than on nothing.
+    departures: 'normal',  // 'normal' | 'arcing'
   }),
   // THE SKY IS ONE SKY. density and brightness lived under `markets` and were passed only to the
   // markets board, so the Block space star field -- the same stars, drawn by the same code -- had
@@ -248,8 +253,8 @@ export const PANEL = Object.freeze([
       }),
       Object.freeze({
         key: 'departures', label: 'Departures and arrivals', kind: 'choice',
-        hint: 'The path a block takes as it leaves or arrives. Straight up rises over its own column; the other two fan outward from the middle of the board, which is what makes the left and right edges look like they arc away',
-        options: Object.freeze([['vertical', 'Straight up'], ['normal', 'Along the board’s curve'], ['arcing', 'Arcing (original)']]),
+        hint: 'The path a block takes as it leaves or arrives. Both follow the board’s curve outward from the middle; along the curve is a straight line, arcing bends as the block climbs',
+        options: Object.freeze([['normal', 'Along the board’s curve'], ['arcing', 'Arcing (original)']]),
       }),
       Object.freeze({ key: 'dome', label: 'Board curve', kind: 'range', min: 0, max: 12, step: 1, hint: 'How far the board bows toward you; 0 is flat' }),
       Object.freeze({

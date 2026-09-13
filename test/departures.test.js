@@ -1,8 +1,13 @@
-// HOW A CUBE LEAVES AND ARRIVES: three paths, and the measurement that chose them.
+// HOW A CUBE LEAVES AND ARRIVES: two paths, and the measurement that chose them.
 //
 // (operator, 2026-09-13: "Notice how it looks like all the left and right side blocks are arcing
 // towards/away from the sides instead of just traveling straight up? Can we fix this make it a
-// toggle", then "Give me 3 choices to see and toggle between in the settings".)
+// toggle", then "Give me 3 choices to see and toggle between in the settings", then, having seen
+// all three on the live board: "Get rid of straight up. Make Along the board's curve the default.")
+//
+// A third mode, `vertical`, removed the fan entirely -- measured at exactly 0.00px sideways drift
+// at both edges, at every height. It was built so it could be compared, and cut once it had been.
+// That is the point of building all three: the comparison decided it, not an argument about it.
 //
 // WHY THIS FILE MEASURES RATHER THAN DESCRIBES. The first diagnosis was wrong, and only a probe
 // caught it: the complaint was that the path CURVES, and there is real curvature in the shipped
@@ -37,27 +42,15 @@ function slope(gx, z, mode) {
   return p.y - b.y ? (p.x - b.x) / (p.y - b.y) : 0;
 }
 
-test('STRAIGHT UP really is straight up: no sideways travel at either edge', () => {
-  // The complaint itself, as a number. At the rim the shipped path moves ~90px sideways over a
-  // flight; this must move none, or the setting does not do what its label says.
-  for (const gx of [2, 48, 93]) {
-    for (const z of [5, 20, 80]) {
-      const b = at(gx, 0, 'vertical'), p = at(gx, z, 'vertical');
-      assert.ok(Math.abs(p.x - b.x) < 1e-6, `gx=${gx} z=${z}: drifts ${(p.x - b.x).toFixed(3)}px sideways`);
-    }
-    // and it still RISES -- a mode that pinned the cube in place would also pass the check above
-    assert.ok(at(gx, 80, 'vertical').y < at(gx, 0, 'vertical').y - 50, `gx=${gx} still climbs`);
-  }
-});
-
 test('ALONG THE CURVE is a straight line, and ARCING is not', () => {
   // The distinction the operator asked to see. `normal` holds its lean at the resting value, so the
   // slope is identical at every height; `arcing` re-settles it as the cube climbs, so it drifts.
   for (const gx of [2, 93]) {
     const n5 = slope(gx, 5, 'normal'), n80 = slope(gx, 80, 'normal');
     assert.ok(Math.abs(n5 - n80) < 1e-6, `normal is straight at gx=${gx} (${n5.toFixed(4)} vs ${n80.toFixed(4)})`);
-    // both still fan: that is what makes them different from vertical, and it is the thing the
-    // screenshot was objecting to
+    // BOTH STILL FAN, deliberately. This is the thing the original screenshot objected to, kept
+    // after the comparison: the fan is the domed board being honest about itself, and it is why
+    // `vertical` was cut rather than kept as the default.
     assert.ok(Math.abs(n80) > 0.5, `normal still fans at gx=${gx} (${n80.toFixed(4)})`);
   }
   // WHERE THE BEND ACTUALLY IS. The first draft asserted arcing bends at the rim and failed there
@@ -79,12 +72,13 @@ test('ALONG THE CURVE is a straight line, and ARCING is not', () => {
 });
 
 test('NOTHING SNAPS AT TOUCHDOWN, in any mode', () => {
-  // The trap in this change. The lean is not only the sideways push, it is also what makes a cube's
-  // side faces lean -- so `vertical` cannot simply zero it, or an airborne cube would be drawn
-  // unleaned and then JUMP to its resting shape as it landed. It subtracts the flight altitude's
-  // share instead, which goes to zero as the cube lands. Checked as a limit, at the rim where the
-  // lean is strongest.
-  for (const mode of ['arcing', 'normal', 'vertical']) {
+  // The trap in this change, and it bit twice. The lean is not only the sideways push, it is also
+  // what makes a cube's side faces lean, and the two modes settle it differently -- so a mode that
+  // disagreed with itself across the ground would snap a cube sideways exactly as it landed. That
+  // shipped briefly: flight used the plain resting lean while rest used the settled one, a 0.031px
+  // jump on the last step down. Both now use the settled lean at zero height, which is what a
+  // resting cube uses. Checked as a limit, at the rim where the lean is strongest.
+  for (const mode of ['arcing', 'normal']) {
     const xs = [2, 1, 0.5, 0.2, 0.05, 0.01, 0].map((z) => at(2, z, mode).x);
     for (let i = 1; i < xs.length; i++) {
       const step = Math.abs(xs[i] - xs[i - 1]);
@@ -93,9 +87,6 @@ test('NOTHING SNAPS AT TOUCHDOWN, in any mode', () => {
     // and the last approach is smooth: the final hundredth of a unit must not move it visibly
     assert.ok(Math.abs(xs[xs.length - 1] - xs[xs.length - 2]) < 0.05, `${mode}: continuous at touchdown`);
   }
-  // vertical is the strong case: its drawn x is the resting x throughout the whole flight
-  const rest = at(2, 0, 'vertical').x;
-  for (const z of [0.01, 1, 20, 80]) assert.ok(Math.abs(at(2, z, 'vertical').x - rest) < 1e-6, `vertical holds its column at z=${z}`);
 });
 
 test('the paint order is measured at the same point as the geometry, in every mode', () => {
@@ -103,7 +94,7 @@ test('the paint order is measured at the same point as the geometry, in every mo
   // comment there warned they must agree. With a mode to honour, a copy is a latent flicker: the
   // cube would be DRAWN by one rule and SORTED by another. Both now call flightGeom. This pins the
   // shipped order against the signature measured before the change, so `arcing` is provably
-  // untouched, and checks the other two produce a complete, stable order rather than throwing.
+  // untouched, and checks `normal` produces a complete, stable order rather than throwing.
   const O = {
     unit: 6, zUnit: 6, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5,
     gridW: 44, gridH: 44, edges: true, shadows: false, viewRect: { x0: -6, x1: 50, y0: -6, y1: 50 },
@@ -124,17 +115,15 @@ test('the paint order is measured at the same point as the geometry, in every mo
   const BASELINE = 't19 t15 t18 t14 t11 t17 t13 t10 t16 t7 t12 t3 t9 t6 t2 t8 t5 t1 t4 t0';
   assert.equal(orderOf('arcing').join(' '), BASELINE, 'the shipped order is unchanged');
   assert.equal(orderOf(null).join(' '), BASELINE, 'and a caller that names no mode still gets it');
-  for (const mode of ['normal', 'vertical']) {
-    const ord = orderOf(mode);
-    assert.equal(ord.length, tiles.length, `${mode}: every cube is painted exactly once`);
-    assert.deepEqual(orderOf(mode), ord, `${mode}: the order is stable between builds`);
-  }
+  const ord = orderOf('normal');
+  assert.equal(ord.length, tiles.length, 'normal: every cube is painted exactly once');
+  assert.deepEqual(orderOf('normal'), ord, 'normal: the order is stable between builds');
 });
 
 test('THE RESTING BOARD IS UNTOUCHED: this changes flight, never how a cube stands', () => {
   // obliqueLean also leans every RESTING cube's faces outward from the middle (lean-order.test.js,
   // settings.test.js). If a departure mode reached that, every cube on the board would change
-  // shape -- which is not what was asked for. A resting cube is projected identically in all three.
+  // shape -- which is not what was asked for. A resting cube is projected identically in both.
   const O = { ...BASE };
   assert.ok(obliqueLean(0, O) < 0 && obliqueLean(95, O) > 0, 'the resting fan is still radial');
   // THIS CAUGHT A REAL DEFECT, and it is worth saying what, because the tolerance is the test. The
@@ -144,26 +133,30 @@ test('THE RESTING BOARD IS UNTOUCHED: this changes flight, never how a cube stan
   // cube landed. flightGeom now only honours the mode once a cube is airborne. Kept at 1e-9 so a
   // reappearance fails rather than hides: the modes must agree EXACTLY at rest.
   for (const gx of [2, 48, 93]) {
-    const a = at(gx, 0, 'arcing'), n = at(gx, 0, 'normal'), v = at(gx, 0, 'vertical');
-    assert.ok(Math.abs(a.x - n.x) < 1e-9 && Math.abs(a.x - v.x) < 1e-9,
-      `gx=${gx}: a resting cube sits in one place (arcing ${a.x.toFixed(6)}, normal ${n.x.toFixed(6)}, vertical ${v.x.toFixed(6)})`);
-    assert.ok(Math.abs(a.y - n.y) < 1e-9 && Math.abs(a.y - v.y) < 1e-9);
+    const a = at(gx, 0, 'arcing'), n = at(gx, 0, 'normal');
+    assert.ok(Math.abs(a.x - n.x) < 1e-9,
+      `gx=${gx}: a resting cube sits in one place (arcing ${a.x.toFixed(6)}, normal ${n.x.toFixed(6)})`);
+    assert.ok(Math.abs(a.y - n.y) < 1e-9);
   }
 });
 
-test('the setting exists, ships as Straight up, and reaches the renderer', () => {
-  assert.equal(DEFAULTS.space.departures, 'vertical', 'it ships as the mode that was asked for');
+test('the setting exists, ships along the board’s curve, and reaches the renderer', () => {
+  assert.equal(DEFAULTS.space.departures, 'normal', 'it ships along the board\u2019s curve');
   const row = PANEL.find((g) => g.group === 'space')?.rows.find((r) => r.key === 'departures');
   assert.ok(row, 'and it has a control, or it cannot be toggled');
   assert.equal(row.kind, 'choice');
-  assert.equal(row.options.length, 3, 'three choices to compare');
-  assert.deepEqual(row.options.map(([v]) => v), ['vertical', 'normal', 'arcing']);
+  assert.equal(row.options.length, 2, 'two paths: straight up was cut after the comparison');
+  assert.deepEqual(row.options.map(([v]) => v), ['normal', 'arcing']);
   // normalise reads its allowed values from the panel row, so a junk value must fall back rather
   // than reach the geometry and be read as "arcing" by accident
-  assert.equal(normalise({ space: { departures: 'sideways' } }).space.departures, 'vertical');
+  assert.equal(normalise({ space: { departures: 'sideways' } }).space.departures, 'normal');
+  // MIGRATION OFF A REMOVED MODE. 'vertical' shipped briefly and anyone who chose it has it in
+  // their stored settings; it is not a valid value now, so it must resolve to the default rather
+  // than reach the geometry, where departMode would read it as an unknown and fall through.
+  assert.equal(normalise({ space: { departures: 'vertical' } }).space.departures, 'normal');
   assert.equal(normalise({ space: { departures: 'arcing' } }).space.departures, 'arcing');
   // and it is actually handed to the board
-  assert.equal(spaceOptions(null).departures, 'vertical');
+  assert.equal(spaceOptions(null).departures, 'normal');
   assert.equal(spaceOptions({ space: { departures: 'arcing' } }).departures, 'arcing');
 });
 
@@ -171,7 +164,7 @@ test('an option nobody sets behaves exactly as the board always did', () => {
   // Every caller written before this -- and every test -- must draw what it drew. The default lives
   // in the geometry, not only in settings.js, so a bare projection is unchanged.
   assert.equal(departMode({}), 'arcing');
-  assert.equal(departMode({ departures: 'vertical' }), 'vertical');
+  assert.equal(departMode({ departures: 'normal' }), 'normal');
   for (const gx of [2, 93]) for (const z of [5, 80]) {
     assert.equal(at(gx, z, undefined).x, at(gx, z, 'arcing').x, `gx=${gx} z=${z}: unchanged for callers that say nothing`);
   }
