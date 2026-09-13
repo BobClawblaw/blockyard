@@ -29,10 +29,10 @@ Contents
 
 ### Base URL
 
-The server listens on port `8088` by default (`BLOCKYARD_PORT`), on the addresses in `server.host` / `BLOCKYARD_BIND`. The examples below use:
+The server listens on port `21000` by default (`BLOCKYARD_PORT`), on the addresses in `server.host` / `BLOCKYARD_BIND`. The examples below use:
 
 ```
-http://127.0.0.1:8088
+http://127.0.0.1:21000
 ```
 
 When TLS is configured (`BLOCKYARD_TLS_CERT` + `BLOCKYARD_TLS_KEY`), every listener speaks HTTPS and the scheme becomes `https`. `/api/build` and `/api/health` report which one is in effect (`scheme`, `tls`).
@@ -1411,31 +1411,31 @@ data: [{"seq":194640,"source":"monitor","kind":"tip_jump","severity":"info","ts"
 Get the current state of the primary node, without chart series:
 
 ```sh
-curl -s 'http://127.0.0.1:8088/api/state?series=none' | jq '{height: .tip.height, sync: .sync.state, mempool: .mempool.count}'
+curl -s 'http://127.0.0.1:21000/api/state?series=none' | jq '{height: .tip.height, sync: .sync.state, mempool: .mempool.count}'
 ```
 
 Look up a transaction, first through search, then as a full page:
 
 ```sh
-curl -s 'http://127.0.0.1:8088/api/x/search?q=9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69'
+curl -s 'http://127.0.0.1:21000/api/x/search?q=9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69'
 # {"ok":true,"type":"tx","id":"9891f72b..."}
 
-curl -s 'http://127.0.0.1:8088/api/x/tx?txid=9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69' \
+curl -s 'http://127.0.0.1:21000/api/x/tx?txid=9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69' \
   | jq '{ok, fee: .tx.fee, feerate: .tx.feerate, height: .tx.height, usd}'
 ```
 
 Stream live updates (`-N` turns off curl's buffering):
 
 ```sh
-curl -sN 'http://127.0.0.1:8088/api/stream?node=bmc-main' | grep --line-buffered '^event:'
+curl -sN 'http://127.0.0.1:21000/api/stream?node=bmc-main' | grep --line-buffered '^event:'
 ```
 
 Query market depth. The first call starts exchange polling, and books appear within about 30 s:
 
 ```sh
-curl -s 'http://127.0.0.1:8088/api/markets' > /dev/null
+curl -s 'http://127.0.0.1:21000/api/markets' > /dev/null
 sleep 35
-curl -s 'http://127.0.0.1:8088/api/markets/depth?ago=300' \
+curl -s 'http://127.0.0.1:21000/api/markets/depth?ago=300' \
   | jq '{mid, p0, step, n, coinbase: (.exchanges[] | select(.id=="coinbase") | {bestBidDepth: (.bids | map(select(. != null)) | last), error})}'
 ```
 
@@ -1443,13 +1443,13 @@ Call a read-only RPC method (open mode):
 
 ```sh
 curl -s -X POST -H 'Content-Type: application/json' \
-  -d '{"method":"getblockchaininfo"}' http://127.0.0.1:8088/api/rpc | jq '.result.blocks'
+  -d '{"method":"getblockchaininfo"}' http://127.0.0.1:21000/api/rpc | jq '.result.blocks'
 ```
 
 With accounts on: sign in, keep the cookie, and send the CSRF token on mutating calls:
 
 ```sh
-B=http://127.0.0.1:8088
+B=http://127.0.0.1:21000
 CSRF=$(curl -s -c jar.txt -H 'Content-Type: application/json' \
   -d '{"username":"alice","password":"a long passphrase here"}' $B/api/login | jq -r .csrf)
 
@@ -1464,7 +1464,7 @@ Poll the event feed incrementally:
 ```sh
 SEQ=0
 while sleep 10; do
-  R=$(curl -s "http://127.0.0.1:8088/api/events?since=$SEQ&severity=warn,error")
+  R=$(curl -s "http://127.0.0.1:21000/api/events?since=$SEQ&severity=warn,error")
   echo "$R" | jq -r '.events[] | "\(.ts) \(.severity) \(.text)"'
   SEQ=$(echo "$R" | jq .maxSeq)
 done

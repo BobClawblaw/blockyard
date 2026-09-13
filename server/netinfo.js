@@ -94,7 +94,7 @@ export function bindProblemMessage({ err, host, port, ifaces = networkInterfaces
   }
   if (code === 'EACCES') {
     return `cannot bind ${host}:${port} — permission denied. Ports below 1024 need privileges; `
-      + `use a high port (8088) or a reverse proxy in front.`;
+      + `use a high port (21000) or a reverse proxy in front.`;
   }
   if (code === 'EADDRINUSE') {
     const same = have.some((a) => a.address === host);

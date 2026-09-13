@@ -37,7 +37,7 @@ else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 736 unit tests, all built in
+npm test            # optional: 737 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
 
@@ -45,7 +45,7 @@ To watch your own node, create `config/local.json`:
 
 ```json
 {
-  "server": { "host": "127.0.0.1", "port": 8088 },
+  "server": { "host": "127.0.0.1", "port": 21000 },
   "nodes": [
     {
       "id": "main",
@@ -58,7 +58,7 @@ To watch your own node, create `config/local.json`:
 }
 ```
 
-then `npm start` and open <http://127.0.0.1:8088>. There is no `npm install` step — there
+then `npm start` and open <http://127.0.0.1:21000>. There is no `npm install` step — there
 is nothing to install.
 
 The full walkthrough — service install, network exposure, accounts, TLS, a reverse proxy —
@@ -114,7 +114,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 736 unit tests (node:test, no dependencies)
+npm test             # 737 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```

@@ -24,7 +24,7 @@ Read the journal first: `journalctl -u blockyard -n 100 --no-pager`.
 | message or symptom | cause and fix |
 |---|---|
 | a syntax error at start-up | the runtime is older than Node 22. Check `node -v` **as the service account**, and give `ExecStart` an absolute path to a Node 22 binary. |
-| `EADDRINUSE` | something else holds the port. Change `server.port` / `BLOCKYARD_PORT`, or stop the other process (`ss -ltnp | grep 8088`). |
+| `EADDRINUSE` | something else holds the port. Change `server.port` / `BLOCKYARD_PORT`, or stop the other process (`ss -ltnp | grep 21000`). |
 | none of the configured addresses exist | the bind names addresses this machine does not have (for example after a DHCP change). The log prints the addresses it does have; fix `server.host`. |
 | `Invalid configuration` followed by a list | each line names the setting and why — for example a certificate without a key, an expired certificate, a malformed CIDR, or node writes enabled without accounts. |
 | `config: cannot parse …/local.json` | the JSON has a syntax error (a trailing comma is the usual one). |
@@ -136,7 +136,7 @@ exchanges unreachable, pages show BTC figures only — never a guessed price.
 
 Browsers allow full screen only after a click on the page, and some embedded or kiosk-mode
 browsers refuse it entirely. Use the browser's own full-screen key (F11) instead, or start the
-browser in kiosk mode pointed at `http://<host>:8088/#kiosk`.
+browser in kiosk mode pointed at `http://<host>:21000/#kiosk`.
 
 ## Sign-in problems
 

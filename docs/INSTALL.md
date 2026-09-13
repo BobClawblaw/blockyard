@@ -137,12 +137,12 @@ npm start
 
 Watch the start-up lines. You should see the addresses it listens on, a line per node,
 and — because accounts are off by default — a warning that names who can read the monitor.
-Then open <http://127.0.0.1:8088>.
+Then open <http://127.0.0.1:21000>.
 
 Check it from the shell:
 
 ```bash
-curl -s http://127.0.0.1:8088/api/health
+curl -s http://127.0.0.1:21000/api/health
 ```
 
 If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-shows-offline).
@@ -199,7 +199,7 @@ Where the monitor listens is a security decision. Set `server.host` in `config/l
 
 | bind | who can connect | typical use |
 |---|---|---|
-| `"127.0.0.1"` | this machine only | reach it with an SSH tunnel: `ssh -L 8088:127.0.0.1:8088 you@host` |
+| `"127.0.0.1"` | this machine only | reach it with an SSH tunnel: `ssh -L 21000:127.0.0.1:21000 you@host` |
 | `"192.0.2.10"` (a LAN address) | anything that can route to that address | a home or office LAN |
 | `["192.0.2.10", "198.51.100.7"]` | exactly those addresses | LAN plus a VPN such as Tailscale or WireGuard |
 | `"0.0.0.0"` (the default) | every interface | behind a firewall you control |
@@ -214,7 +214,7 @@ Notes:
   against containers or tunnels on the same host, add a firewall rule, for example:
 
   ```bash
-  sudo ufw allow from 192.0.2.0/24 to any port 8088 proto tcp
+  sudo ufw allow from 192.0.2.0/24 to any port 21000 proto tcp
   ```
 
 - `server.allowCidrs` (or `BLOCKYARD_ALLOW_CIDRS=192.0.2.0/24,2001:db8::/32`) makes the
@@ -278,13 +278,13 @@ server {
     # ssl_certificate / ssl_certificate_key ...
 
     location / {
-        proxy_pass http://127.0.0.1:8088;
+        proxy_pass http://127.0.0.1:21000;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     location /api/stream {
-        proxy_pass http://127.0.0.1:8088;
+        proxy_pass http://127.0.0.1:21000;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         proxy_buffering off;

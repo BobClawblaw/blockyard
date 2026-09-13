@@ -90,7 +90,7 @@ Durations are in milliseconds unless the name says otherwise (`retentionHours`).
 |---|---|---|
 | `server.host` | `"0.0.0.0"` | Address to listen on. Kept for compatibility; `server.hosts` wins when both are set. |
 | `server.hosts` | *(unset; falls back to `host`)* | Addresses to listen on: an array (`["192.0.2.10", "2001:db8::10"]`), or a single string with commas (`"192.0.2.10,198.51.100.7"`). One HTTP server is started per address, and all of them share sessions, rate limits and monitors. Entries must be address literals: IPv4, IPv6, `0.0.0.0`, `::`, or `localhost`. Hostnames are refused. See [Binding](#binding-to-specific-addresses). |
-| `server.port` | `8088` | TCP port. It is the same port on every address. It must be an integer from 1 to 65535. |
+| `server.port` | `21000` | TCP port. It is the same port on every address. It must be an integer from 1 to 65535. |
 | `server.allowCidrs` | `[]` | Client allowlist. Empty means every client that can reach the port is admitted. Otherwise only addresses inside one of the networks connect, and everyone else gets HTTP 403 (the reason goes to the server log). Entries are CIDRs or bare addresses (a bare address means `/32` or `/128`), IPv4 or IPv6, compared bit by bit. An entry that cannot be parsed stops the boot. |
 | `server.trustProxy` | `false` | When `true`, the client address is the **first** entry of the `X-Forwarded-For` header instead of the socket's peer address. That address feeds the CIDR allowlist, the rate limits and the audit log. Turn it on only when a reverse proxy you control is the sole way in and it sets that header. Otherwise any client can pick its own address and walk past `allowCidrs`. |
 | `server.tls.cert` | `null` | Path to a PEM certificate. TLS is on only when `cert` and `key` are both set, and then every listener serves HTTPS. |
@@ -359,7 +359,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_CONFIG` | *(which file is read)* | path or `none` | `<repo>/config/local.json` | Configuration file to read. `none`/`off`/`no`/`-` reads no file. |
 | `BLOCKYARD_BIND` | `server.host` | list | `0.0.0.0` | Listen address(es), for example `127.0.0.1` or `192.0.2.10,2001:db8::10`. If both are set, this wins over `BLOCKYARD_HOST`. Ignored when the file sets `server.hosts` (see [Known quirks](#known-quirks)). |
 | `BLOCKYARD_HOST` | `server.host` | list | `0.0.0.0` | Same as `BLOCKYARD_BIND`. |
-| `BLOCKYARD_PORT` | `server.port` | number | `8088` | Listen port. |
+| `BLOCKYARD_PORT` | `server.port` | number | `21000` | Listen port. |
 | `BLOCKYARD_ALLOW_CIDRS` | `server.allowCidrs` | list | *(empty: everyone)* | Client allowlist, for example `192.0.2.0/24,2001:db8::/32`. |
 | `BLOCKYARD_TRUST_PROXY` | `server.trustProxy` | boolean | `false` | Take the client address from `X-Forwarded-For`. |
 | `BLOCKYARD_TLS_CERT` | `server.tls.cert` | path | unset | PEM certificate. Set it together with `BLOCKYARD_TLS_KEY`. |
@@ -598,7 +598,7 @@ address, and admit only clients from those networks:
 {
   "server": {
     "hosts": ["192.0.2.10", "2001:db8::10"],
-    "port": 8088,
+    "port": 21000,
     "allowCidrs": ["192.0.2.0/24", "2001:db8::/32"]
   }
 }
@@ -617,7 +617,7 @@ Things to know about specific binds:
   be routed to a bound address still reaches it. If "LAN only" must be enforced,
   use a firewall or `allowCidrs`.
 - For this machine only, use `"hosts": ["127.0.0.1"]` and reach it with
-  `ssh -L 8088:127.0.0.1:8088 user@monitor-host`.
+  `ssh -L 21000:127.0.0.1:21000 user@monitor-host`.
 
 ### Markets off
 

@@ -63,7 +63,7 @@ TimeoutStopSec=45
 # Consequences worth remembering: binding a single non-loopback address means
 # 127.0.0.1 on the host itself stops working (curl checks must use that address),
 # and clients that reach the box over a tunnel need that tunnel's address listed.
-Environment=BLOCKYARD_PORT=8088
+Environment=BLOCKYARD_PORT=21000
 Environment=BLOCKYARD_NODE_URL=http://127.0.0.1:8331
 Environment=BLOCKYARD_DATADIR=/storage/bitcoinmachinecode/data
 Environment=BLOCKYARD_LOGFILE=/storage/bitcoinmachinecode/logs/main/bitcoin.main.log

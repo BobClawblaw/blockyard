@@ -31,7 +31,9 @@ const DEFAULTS = {
     // Multi-user means the LAN has to reach it, so it binds broadly by default.
     // Set BLOCKYARD_BIND=127.0.0.1 to keep it on this machine only.
     host: '0.0.0.0',
-    port: 8088,
+    // 21000 (operator, 2026-09-13: "make default web port 21000 for access"). It was 8088, which
+    // sits in the range every other monitor on a box reaches for; this one is ours.
+    port: 21000,
     // Defense in depth: only these CIDRs may connect. Empty = any.
     allowCidrs: [],
     trustProxy: false,

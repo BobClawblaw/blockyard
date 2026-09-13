@@ -10,7 +10,7 @@ and serves charts plus a live event feed to several users at once.
 ## Run it
 
 ```bash
-npm start                     # port 8088, NO sign-in by default; bound to config/local.json server.hosts (this box: 0.0.0.0 since 2026-09-11; bmc-port-guard admits the LAN interface and lo, and tailscale0 for 8088 only)
+npm start                     # port 21000, NO sign-in by default; bound to config/local.json server.hosts (this box: 0.0.0.0 since 2026-09-11; bmc-port-guard admits the LAN interface and lo, and tailscale0 for 21000 only)
 BLOCKYARD_AUTH=1 npm start      # accounts on: login, roles, sessions, CSRF, per-user audit
 BLOCKYARD_TLS_CERT=… BLOCKYARD_TLS_KEY=… npm start  # HTTPS on every listener; cookie becomes Secure
 BLOCKYARD_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it lost
@@ -51,13 +51,23 @@ value — user admin, the audit trail, password changes and every node write sta
 and node writes refuse to be enabled at all while accounts are off unless
 `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1` says so deliberately. Rule 23.
 
+**THE PORT MOVED TO 21000 on 2026-09-13** (operator: "make default web port 21000 for access").
+`server.port` now defaults to 21000, the unit sets `BLOCKYARD_PORT=21000`, and
+`bmc-port-guard.sh` was rewritten so 21000 takes 8088's place in every rule -- ACCEPT on
+`enp14s0` and `lo`, ACCEPT on `tailscale0`, REJECT otherwise; 8081/8443 and loopback-only 8999
+are untouched. Verified after the restart: 21000 answers on `lo`, 8088 no longer connects, and
+the jump is installed on v4 and v6. **Everything below this line that says 8088 is a record of
+what was measured on 2026-09-09/11, when that was the port. Those numbers are left as they were
+measured rather than rewritten -- the reasoning is what makes them worth keeping.**
+
 **Since 2026-09-11 this box binds `0.0.0.0`** (operator: "Rebind the server to 0.0.0.0").
 Measured after the restart: one socket, `0.0.0.0:8088`; `/api/health` 200 over `lo` and
 over the LAN address; `bmc-port-guard.sh status` unchanged -- ACCEPT on `enp14s0` and `lo`,
 REJECT otherwise for 8081/8088/8443 -- so the docker bridges were still refused, by the
 guard rather than the bind, and so were tailnet peers (operator: "I can't reach via
 Tailscale"; the REJECT counter rose by 14 while they tried). **Also since 2026-09-11 the guard
-ACCEPTs tcp/8088 on `tailscale0`** (IPv4 and IPv6), inserted before the REJECT; 8081/8443 stay
+ACCEPTs the monitor port on `tailscale0`** (IPv4 and IPv6; tcp/8088 then, tcp/21000 since
+2026-09-13), inserted before the REJECT; 8081/8443 stay
 LAN-only and 8999 loopback-only. The installed `/usr/local/sbin/bmc-port-guard.sh` carries the
 reasoning next to the rule; the previous version is `bmc-port-guard.sh.bak-2026-09-11`. With
 accounts off, every tailnet device reads everything as `viewer` (the role ceiling still holds).
@@ -365,7 +375,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 736 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 737 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
