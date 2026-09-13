@@ -677,7 +677,15 @@ export function domeLight(t, o = {}) {
 //        rank (cascade), seed (twinkle), x, y, r, w (ripple) }.
 // Returns { glow 0..1, outline 0..1, lift (units), color [r,g,b] }. Pure, so it
 // is tested directly; only resting blocks are touched.
-export const FX_NONE = Object.freeze({ glow: 0, outline: 0, lift: 0, color: null });
+// `hide` and `scale` are how an effect may ALTER THE BOARD and have it snap back (operator,
+// 2026-09-13, asked whether effects may eat cubes: "Allow it, it snaps back"). They are applied
+// per frame onto a COPY of the tile, exactly as `lift` already is -- nothing here ever mutates
+// st.restTiles -- so when the effect ends, is interrupted by a transition, or the tab is hidden,
+// the override simply stops being computed and the board is correct again by construction. That
+// is the only version of "snaps back" that cannot leak.
+//   hide  1 = the cube is not drawn at all this frame (absorbed, dug through, collapsed away)
+//   scale 1 = full height; below 1 the cube is drawn shorter, for a collapse or a dig
+export const FX_NONE = Object.freeze({ glow: 0, outline: 0, lift: 0, color: null, hide: 0, scale: 1 });
 
 // where a sweeping front is, along (dx, dy), in grid units -- entering from
 // just outside one side of the board and leaving past the other
@@ -913,14 +921,30 @@ export function fxAt(t, fx) {
       return { glow: A * (hard ? 1 : 0.6), outline: A, lift: hard ? 1.2 * A : 0,
         color: hard ? [255, 60, 210] : [70, 255, 245] };
     }
+    // ---------------------------------------------------------------------------------------
+    // THE AGENTS (agents.js): effects that are a THING MOVING rather than a pattern. Each
+    // publishes `heads` -- where it is on the board right now -- and the cubes near a head light
+    // in its colour. That is what keeps an agent part of the board instead of painted over it.
+    //
+    // `r` is a head's reach in grid units (default 0.8, the light cycles' tight rider). A
+    // Recognizer's gantry lights a wide swath; a thrown disc lights a point. `lift` lets a blast
+    // or a hop throw the cubes it passes.
     case 'lightcycle':
-    case 'packets': {
-      // the cubes a head is riding over flash in its colour (see cyclePath)
+    case 'packets':
+    case 'recognizer':
+    case 'disc':
+    case 'snake':
+    case 'qbert':
+    case 'invaders':
+    case 'bomberman': {
       let best = FX_NONE, bw = 0;
       for (const hd of fx.heads ?? []) {
         const ddx = Math.max(t.x - hd.x, 0, hd.x - (t.x + t.s)), ddy = Math.max(t.y - hd.y, 0, hd.y - (t.y + t.s));
-        const w = (hd.alpha ?? 1) * g(Math.hypot(ddx, ddy) / 0.8);
-        if (w > bw && w > 0.02) { bw = w; best = { glow: 0.85 * w, outline: 0.8 * w, lift: 0, color: hd.color }; }
+        const w = (hd.alpha ?? 1) * g(Math.hypot(ddx, ddy) / Math.max(0.2, hd.r ?? 0.8));
+        if (w > bw && w > 0.02) {
+          bw = w;
+          best = { glow: 0.85 * w, outline: 0.8 * w, lift: (hd.lift ?? 0) * w, color: hd.color, hide: 0, scale: 1 };
+        }
       }
       return best;
     }
@@ -1020,8 +1044,15 @@ export function buildScene(tiles, o = {}) {
   const lampSide = LIGHTS[lightOf(o)].side;
   for (const t of ordered) {
     const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
+    // GONE FOR THE DURATION, not deleted: a hidden cube is skipped this frame and drawn again the
+    // moment the effect stops asking for it to be hidden.
+    if (fxv.hide > 0.5) continue;
+    // A SHORTER CUBE, the same way: `tall` on a copy. A collapse or a dig is a height override,
+    // never an edit to the tile the board was built from.
+    const sc = fxv.scale == null ? 1 : fxv.scale;
+    const shaped = sc < 0.999 ? { ...t, tall: Math.max(0.04, cubeHeight(t) * sc) } : t;
     // NEON is a flat cube: no facets, no crown -- solid faces and the tubes on their edges
-    const f = tileFaces(fxv.lift > 0.001 ? { ...t, fxz: fxv.lift } : t, o, t.s >= facetMin && o.neon !== true);
+    const f = tileFaces(fxv.lift > 0.001 ? { ...shaped, fxz: fxv.lift } : shaped, o, t.s >= facetMin && o.neon !== true);
     const a = t.alpha ?? 1;
     const airborne = (t.z ?? 0) > 0.02;
     const out = airborne && !o.oblique ? air : ground;

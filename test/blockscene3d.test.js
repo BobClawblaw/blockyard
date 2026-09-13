@@ -384,7 +384,12 @@ test('idle effects: the tide lifts cubes, the cascade runs richest to cheapest, 
   let twinkling = 0;
   for (let i = 0; i < 400; i++) if (jitterOfTest('t' + i, 'tw7') <= 0.45) twinkling++;
   assert.ok(twinkling > 120 && twinkling < 240, `a bit under half the cubes take part (${twinkling} of 400)`);
-  assert.deepEqual(fxAt({ txid: 'x', x: 0, y: 0, s: 1 }, null), { glow: 0, outline: 0, lift: 0, color: null }, 'no effect, no change');
+  // `hide` and `scale` joined the shape on 2026-09-13 so an agent may eat or collapse a cube and
+  // have it snap back (they are applied per frame onto a COPY of the tile, never to the tile).
+  // The literal shape is still worth pinning: this is what "nothing is happening to this cube"
+  // means, and a wrong default here would hide the board while any effect ran.
+  assert.deepEqual(fxAt({ txid: 'x', x: 0, y: 0, s: 1 }, null),
+    { glow: 0, outline: 0, lift: 0, color: null, hide: 0, scale: 1 }, 'no effect, no change');
 });
 
 test('an idle effect draws glowing outlines as thick rgba strokes, and never touches blocks in the air', () => {

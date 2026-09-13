@@ -18,7 +18,9 @@ const codeOnly = (f) => readFileSync(new URL(`../public/js/${f}`, import.meta.ur
   .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 test('the 3D viewer never uses clip, globalAlpha, composite modes or shadowBlur', () => {
-  for (const f of ['details3d.js', 'blockscene3d.js']) {
+  // agents.js joined them on 2026-09-13: it draws on the SAME canvas under the same software
+  // rasteriser, so a clip or a globalAlpha there fails exactly the way it fails in the renderer.
+  for (const f of ['details3d.js', 'blockscene3d.js', 'agents.js']) {
     const src = codeOnly(f);
     assert.ok(src.length > 2000, `${f}: the source was actually read`);
     assert.ok(!/\.clip\(/.test(src), `${f}: no clip()`);

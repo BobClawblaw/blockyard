@@ -122,6 +122,7 @@ export const isAgent = (kind) => Object.prototype.hasOwnProperty.call(AGENTS, ki
 // other's wall and de-reses. The routes and the height of every stretch are fixed at build time
 // because the board is still; a frame only advances the heads.
 defineAgent('lightcycle', {
+  draw(ctx, view, lw, api) { api.drawCycles(ctx, view, lw); },
   build({ st, seed, W, H, tiles, rnd }) {
     const tops = cellTops(tiles, W, H);
     const sides = rnd() < 0.5 ? ['left', 'right'] : ['bottom', 'top'];
@@ -164,6 +165,7 @@ defineAgent('lightcycle', {
 // tracing through the grid to the opposite side. Some high-effects version of a lightning ball
 // moving along the grid, illuminating everything it comes near".)
 defineAgent('ball', {
+  draw(ctx, view, lw, api) { api.drawBall(ctx, view, lw); },
   build({ W, H, seed, tiles, rnd }) {
     const tops = cellTops(tiles, W, H);
     const side = ['left', 'right', 'bottom', 'top'][(rnd() * 4) | 0];
@@ -181,3 +183,426 @@ defineAgent('ball', {
 });
 
 export { project, fxHash };
+
+// ================================================================= BATCH ONE
+//
+// Six agents, chosen to cover five different motion vocabularies rather than six variations on
+// one: a strider, a ricochet, a seeker, a hopper, a formation, and an explosion shaped by the
+// board. Three of them READ THE DATA -- the board is transactions, and an effect that answers
+// "which is biggest" or "how dense is this block" is worth more than one that ignores what it
+// crosses (docs/EFFECTS-AGENTS.md).
+
+// --- shared drawing -------------------------------------------------------
+// Plain rgba fills and strokes, layered. No clip, no globalAlpha, no composite modes, no
+// shadowBlur -- same rules as the renderer, and viewer-canvas-rules.test.js now scans this file.
+
+/** A filled polygon in screen space. */
+function poly(ctx, pts, fill) {
+  if (pts.length < 3) return;
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** A polyline in screen space. */
+function line(ctx, pts, col, w) {
+  if (pts.length < 2) return;
+  ctx.strokeStyle = col; ctx.lineWidth = w;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+}
+
+/** Nested discs: this renderer's only way to make something glow. */
+function bloom(ctx, x, y, r, rgb, a = 1) {
+  for (const [k, m] of [[1, 0.10], [0.62, 0.22], [0.34, 0.55], [0.16, 0.95]]) {
+    ctx.fillStyle = `rgba(${rgb.join(',')},${(m * a).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(x, y, r * k, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/** A square standing at grid (x, y) at height z, as screen points. */
+const quad = (view, x, y, z, r) => [
+  project(x - r, y - r, z, view), project(x + r, y - r, z, view),
+  project(x + r, y + r, z, view), project(x - r, y + r, z, view),
+];
+
+// --- 1. RECOGNIZER --------------------------------------------------------
+//
+// Tron's marching gantry: two legs and a crossbar striding the board on a straight line, lighting
+// a WIDE swath beneath it. Why this one first: the light cycles' real weakness on a dense board is
+// that a one-unit wall is a scratch across thousands of slabs. A gantry is wide, slow and heavy,
+// and it reads at any board size.
+defineAgent('recognizer', {
+  build({ W, H, rnd, tiles }) {
+    const horiz = rnd() < 0.5;
+    const lane = horiz ? 2 + rnd() * Math.max(1, H - 4) : 2 + rnd() * Math.max(1, W - 4);
+    const span = Math.max(4, Math.min(horiz ? H : W, 3 + Math.round((horiz ? H : W) * 0.22)));
+    const tops = cellTops(tiles, W, H);
+    let peak = 0;
+    for (const t of tiles ?? []) peak = Math.max(peak, (t.floor ?? 0) + cubeHeight(t));
+    void tops;
+    return { horiz, lane, span, W, H, deck: peak + 3.2, back: rnd() < 0.5 ? -1 : 1 };
+  },
+  frame(a, u) {
+    // in from off-board and out the far side, at a constant march
+    const along = -6 + u * ((a.horiz ? a.W : a.H) + 12);
+    const at = a.back < 0 ? (a.horiz ? a.W : a.H) - along : along;
+    const half = a.span / 2;
+    const foot = (o) => (a.horiz ? { x: at, y: a.lane + o } : { x: a.lane + o, y: at });
+    const legs = [foot(-half), foot(half)];
+    // the legs light what they stride over, and the span between them gets a softer wash
+    const heads = legs.map((p) => ({ x: p.x, y: p.y, color: [150, 215, 255], alpha: 1, r: 2.2 }));
+    heads.push({ x: (legs[0].x + legs[1].x) / 2, y: (legs[0].y + legs[1].y) / 2, color: [90, 170, 255], alpha: 0.55, r: half });
+    return { recognizer: { at, legs, half, deck: a.deck, horiz: a.horiz }, heads };
+  },
+  draw(ctx, view, lw) {
+    const r = view.fx?.recognizer;
+    if (!r) return;
+    const P = (x, y, z) => project(x, y, z, view);
+    const [l0, l1] = r.legs;
+    const COL = [120, 200, 255];
+    // two legs: tapered columns from the deck to the board
+    for (const f of r.legs) {
+      const top = P(f.x, f.y, r.deck), bot = P(f.x, f.y, 0);
+      poly(ctx, [
+        { x: top.x - lw * 9, y: top.y }, { x: top.x + lw * 9, y: top.y },
+        { x: bot.x + lw * 5, y: bot.y }, { x: bot.x - lw * 5, y: bot.y },
+      ], `rgba(${COL.join(',')},0.5)`);
+      line(ctx, [top, bot], `rgba(210,240,255,0.9)`, lw * 2);
+      bloom(ctx, bot.x, bot.y, lw * 16, COL, 0.5);
+    }
+    // the crossbar: the body of the thing, a slab between the legs
+    const a0 = P(l0.x, l0.y, r.deck), a1 = P(l1.x, l1.y, r.deck);
+    const h = lw * 22;
+    poly(ctx, [
+      { x: a0.x, y: a0.y - h }, { x: a1.x, y: a1.y - h },
+      { x: a1.x, y: a1.y }, { x: a0.x, y: a0.y },
+    ], `rgba(${COL.join(',')},0.62)`);
+    line(ctx, [{ x: a0.x, y: a0.y - h }, { x: a1.x, y: a1.y - h }], 'rgba(235,250,255,0.95)', lw * 2.4);
+    // the eye: a bright bar under the crossbar's middle
+    const mid = { x: (a0.x + a1.x) / 2, y: (a0.y + a1.y) / 2 };
+    bloom(ctx, mid.x, mid.y - h * 0.45, lw * 20, [255, 240, 200], 0.85);
+  },
+});
+
+// --- 2. IDENTITY DISC -----------------------------------------------------
+//
+// Thrown from one edge, ricocheting off the board's walls, each bounce flashing the cubes where it
+// lands. Why: ricochet geometry gives ANTICIPATION -- you can see where it will hit before it
+// does, which no field effect can offer.
+defineAgent('disc', {
+  build({ W, H, rnd }) {
+    let x = rnd() * W, y = 0.001;
+    let vx = (rnd() - 0.5) * 2.2, vy = 0.9 + rnd() * 0.5;
+    if (Math.abs(vx) < 0.25) vx = vx < 0 ? -0.25 : 0.25;
+    const pts = [{ x, y }];
+    const hits = [];
+    // trace the whole ricochet up front: the board is still, so the route is knowable
+    for (let step = 0; step < 900 && pts.length < 240; step++) {
+      x += vx * 0.35; y += vy * 0.35;
+      if (x < 0) { x = -x; vx = -vx; hits.push({ x: 0, y, i: pts.length }); }
+      if (x > W) { x = 2 * W - x; vx = -vx; hits.push({ x: W, y, i: pts.length }); }
+      if (y < 0) { y = -y; vy = -vy; hits.push({ x, y: 0, i: pts.length }); }
+      if (y > H) { y = 2 * H - y; vy = -vy; hits.push({ x, y: H, i: pts.length }); }
+      pts.push({ x, y });
+      if (hits.length >= 5) break;
+    }
+    return { pts, hits };
+  },
+  frame(a, u) {
+    const d = Math.max(0, Math.min(1, u)) * (a.pts.length - 1);
+    const at = alongPath(a.pts, d);
+    const heads = [{ x: at.x, y: at.y, color: [255, 245, 210], alpha: 1, r: 1.4 }];
+    // a bounce flashes hard, briefly, where it struck
+    for (const hit of a.hits) {
+      const age = (d - hit.i) / 12;
+      if (age > 0 && age < 1) heads.push({ x: hit.x, y: hit.y, color: [255, 255, 255], alpha: 1 - age, r: 3.5 * age + 1 });
+    }
+    return { disc: { at, d, pts: a.pts, spin: u * 40 }, heads };
+  },
+  draw(ctx, view, lw) {
+    const d = view.fx?.disc;
+    if (!d) return;
+    const P = (x, y, z) => project(x, y, z, view);
+    // the trail it has already flown, cooling behind it
+    const TR = 26, from = Math.max(0, d.d - TR);
+    for (let k = Math.floor(from); k < d.d && k < d.pts.length - 1; k++) {
+      const heat = Math.pow(Math.max(0, 1 - (d.d - k) / TR), 1.7);
+      const a = P(d.pts[k].x, d.pts[k].y, 0.7), b = P(d.pts[k + 1].x, d.pts[k + 1].y, 0.7);
+      line(ctx, [a, b], `rgba(120,200,255,${(0.35 * heat).toFixed(3)})`, lw * 5 * heat);
+      line(ctx, [a, b], `rgba(240,252,255,${(0.85 * heat).toFixed(3)})`, lw * 1.4 * heat);
+    }
+    // the disc itself: a ring seen edge-on, turning as it flies
+    const c = P(d.at.x, d.at.y, 0.9);
+    const R = lw * 13;
+    const squash = Math.abs(Math.cos(d.spin)) * 0.75 + 0.25;
+    const ring = [];
+    for (let i = 0; i <= 20; i++) {
+      const ang = (i / 20) * Math.PI * 2;
+      ring.push({ x: c.x + Math.cos(ang) * R, y: c.y + Math.sin(ang) * R * squash });
+    }
+    poly(ctx, ring, 'rgba(90,180,255,0.30)');
+    line(ctx, ring, 'rgba(245,252,255,0.95)', lw * 2.2);
+    bloom(ctx, c.x, c.y, R * 1.5, [160, 220, 255], 0.5);
+  },
+});
+
+// --- 3. SNAKE -------------------------------------------------------------
+//
+// DATA-AWARE. It heads for the TALLEST cube on the board, eats it, grows, and picks the next --
+// so it is working down the block's biggest transactions in order, and the length of its own body
+// is the readout. The cube it eats is hidden for the duration and comes back when the effect ends
+// (operator: "Allow it, it snaps back"); nothing mutates the board's tiles.
+defineAgent('snake', {
+  build({ tiles, W, H, rnd }) {
+    const byHeight = [...(tiles ?? [])]
+      .map((t) => ({ t, h: (t.floor ?? 0) + cubeHeight(t), x: t.x + t.s / 2, y: t.y + t.s / 2 }))
+      .sort((a, b) => b.h - a.h)
+      .slice(0, 7);
+    const start = { x: rnd() * W, y: rnd() * H };
+    const route = [start, ...byHeight.map((m) => ({ x: m.x, y: m.y }))];
+    return { route, meals: byHeight.map((m) => String(m.t.txid)), W, H };
+  },
+  frame(a, u) {
+    const legs = a.route.length - 1;
+    if (legs < 1) return { heads: [] };
+    const d = Math.max(0, Math.min(1, u)) * legs;
+    const at = alongPath(a.route, d);
+    // the body: segments trailing the head down the route it has already run
+    const body = [];
+    for (let k = 1; k <= 9; k++) {
+      const bd = d - k * 0.13;
+      if (bd < 0) break;
+      const p = alongPath(a.route, bd);
+      body.push({ x: p.x, y: p.y, k });
+    }
+    const eaten = new Set(a.meals.slice(0, Math.floor(d)));
+    const heads = [{ x: at.x, y: at.y, color: [120, 255, 170], alpha: 1, r: 1.6 }];
+    for (const b of body) heads.push({ x: b.x, y: b.y, color: [70, 210, 130], alpha: 0.8 - b.k * 0.06, r: 1.1 });
+    return { snake: { at, body, d }, eaten, heads };
+  },
+  draw(ctx, view, lw) {
+    const s = view.fx?.snake;
+    if (!s) return;
+    const P = (x, y, z) => project(x, y, z, view);
+    for (let i = s.body.length - 1; i >= 0; i--) {
+      const b = s.body[i];
+      const c = P(b.x, b.y, 0.9);
+      const r = lw * (11 - b.k * 0.6);
+      bloom(ctx, c.x, c.y, r, [60, 210, 130], 0.55);
+    }
+    const h = P(s.at.x, s.at.y, 1.1);
+    bloom(ctx, h.x, h.y, lw * 15, [150, 255, 190], 0.95);
+    // two eyes, so it reads as alive
+    for (const o of [-0.35, 0.35]) {
+      ctx.fillStyle = 'rgba(10,30,20,0.95)';
+      ctx.beginPath(); ctx.arc(h.x + o * lw * 7, h.y - lw * 2, lw * 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+  },
+});
+
+// --- 4. Q*BERT ------------------------------------------------------------
+//
+// The closest match in the whole catalogue between a real arcade board and ours: Q*bert's board IS
+// an isometric stack of cubes. A small agent hops cube to cube on the diagonal, each landing
+// recolouring what it lands on for a moment.
+defineAgent('qbert', {
+  build({ W, H, rnd }) {
+    const hops = [];
+    let x = 1 + rnd() * (W - 2), y = 1 + rnd() * (H - 2);
+    hops.push({ x, y });
+    for (let i = 0; i < 13; i++) {
+      const dx = rnd() < 0.5 ? -1.6 : 1.6, dy = rnd() < 0.5 ? -1.6 : 1.6;
+      x = Math.max(0.5, Math.min(W - 0.5, x + dx));
+      y = Math.max(0.5, Math.min(H - 0.5, y + dy));
+      hops.push({ x, y });
+    }
+    return { hops };
+  },
+  frame(a, u) {
+    const n = a.hops.length - 1;
+    const d = Math.max(0, Math.min(1, u)) * n;
+    const i = Math.min(n - 1, Math.floor(d));
+    const f = d - i;
+    const p0 = a.hops[i], p1 = a.hops[i + 1] ?? p0;
+    const x = p0.x + (p1.x - p0.x) * f, y = p0.y + (p1.y - p0.y) * f;
+    const z = Math.sin(Math.PI * f) * 2.6;           // the hop: a clean arc, every time
+    const landed = f > 0.92 || f < 0.08;
+    const heads = [{ x, y, color: landed ? [255, 240, 180] : [255, 150, 90], alpha: 1, r: landed ? 2.4 : 1.3 }];
+    return { qbert: { x, y, z, f }, heads };
+  },
+  draw(ctx, view, lw) {
+    const q = view.fx?.qbert;
+    if (!q) return;
+    const c = project(q.x, q.y, q.z + 0.8, view);
+    const sh = project(q.x, q.y, 0.05, view);
+    // its shadow tightens as it falls, which is what sells the hop
+    const near = 1 - Math.min(1, q.z / 2.6);
+    ctx.fillStyle = `rgba(0,0,0,${(0.30 * near).toFixed(3)})`;
+    ctx.beginPath(); ctx.ellipse(sh.x, sh.y, lw * 10 * (1.4 - 0.5 * near), lw * 4 * (1.4 - 0.5 * near), 0, 0, Math.PI * 2); ctx.fill();
+    bloom(ctx, c.x, c.y, lw * 13, [255, 150, 80], 0.9);
+    // a snout, so it has a facing
+    ctx.fillStyle = 'rgba(255,235,200,0.95)';
+    ctx.beginPath(); ctx.arc(c.x + lw * 5, c.y + lw * 2, lw * 3.2, 0, Math.PI * 2); ctx.fill();
+    for (const o of [-0.4, 0.4]) {
+      ctx.fillStyle = 'rgba(20,12,10,0.95)';
+      ctx.beginPath(); ctx.arc(c.x + o * lw * 6, c.y - lw * 3, lw * 2, 0, Math.PI * 2); ctx.fill();
+    }
+  },
+});
+
+// --- 5. SPACE INVADERS ----------------------------------------------------
+//
+// The formation is the thing this board has never done: many agents moving as ONE. A rank and file
+// stepping sideways, dropping a row at the edge, and accelerating as their numbers fall. Drawn as
+// pixel-art silhouettes (operator: "flying ships or other pixel-graphic inspired art").
+const INVADER = Object.freeze([
+  // a classic 11x8 crab, as unit-space cells
+  '..X.....X..', '...X...X...', '..XXXXXXX..', '.XX.XXX.XX.',
+  'XXXXXXXXXXX', 'X.XXXXXXX.X', 'X.X.....X.X', '...XX.XX...',
+]);
+defineAgent('invaders', {
+  build({ W, H, rnd }) {
+    const cols = Math.max(3, Math.min(8, Math.round(W / 7)));
+    const rows = 3;
+    const gapX = W / (cols + 1.4), gapY = 2.6;
+    const ships = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) ships.push({ c, r, x0: gapX * (c + 0.9), y0: H - 2 - r * gapY });
+    }
+    return { ships, cols, rows, W, H, dir: rnd() < 0.5 ? 1 : -1, amp: gapX * 0.55 };
+  },
+  frame(a, u) {
+    // six steps sideways, dropping each time the rank reverses -- and faster as it goes
+    const steps = 7;
+    const k = Math.floor(u * steps);
+    const swing = ((k % 2) ? -1 : 1) * a.dir;
+    const within = (u * steps) - k;
+    const dx = swing * a.amp * (0.35 + 0.65 * within);
+    const dy = -k * 0.8;
+    const alive = Math.max(1, a.ships.length - Math.floor(u * a.ships.length * 0.35));
+    const heads = [];
+    const ships = [];
+    a.ships.slice(0, alive).forEach((s, i) => {
+      const x = s.x0 + dx, y = s.y0 + dy;
+      ships.push({ x, y, r: s.r, i });
+      // not every ship needs its own head: the board only has so many cubes under them
+      if (i % 2 === 0) heads.push({ x, y, color: [130, 255, 160], alpha: 0.9, r: 1.5 });
+    });
+    // the shot: one descending bolt, re-aimed each step
+    const shooter = ships[(k * 3) % Math.max(1, ships.length)];
+    const shot = shooter ? { x: shooter.x, y: shooter.y - within * 6 } : null;
+    if (shot) heads.push({ x: shot.x, y: shot.y, color: [255, 240, 160], alpha: 1, r: 1 });
+    return { invaders: { ships, shot, phase: k }, heads };
+  },
+  draw(ctx, view, lw) {
+    const inv = view.fx?.invaders;
+    if (!inv) return;
+    const cell = lw * 2.2;
+    const W = INVADER[0].length, H2 = INVADER.length;
+    for (const s of inv.ships) {
+      const c = project(s.x, s.y, 2.2, view);
+      const col = s.r === 0 ? [150, 255, 170] : s.r === 1 ? [120, 220, 255] : [255, 180, 120];
+      // the sprite, cell by cell -- pixel art drawn as pixels
+      for (let ry = 0; ry < H2; ry++) {
+        for (let rx = 0; rx < W; rx++) {
+          if (INVADER[ry][rx] !== 'X') continue;
+          ctx.fillStyle = `rgba(${col.join(',')},0.92)`;
+          ctx.fillRect(c.x + (rx - W / 2) * cell, c.y + (ry - H2 / 2) * cell, cell * 0.92, cell * 0.92);
+        }
+      }
+      bloom(ctx, c.x, c.y, cell * 7, col, 0.22);
+    }
+    if (inv.shot) {
+      const p = project(inv.shot.x, inv.shot.y, 1.6, view);
+      line(ctx, [{ x: p.x, y: p.y - lw * 7 }, { x: p.x, y: p.y + lw * 7 }], 'rgba(255,245,170,0.95)', lw * 2.4);
+      bloom(ctx, p.x, p.y, lw * 7, [255, 240, 150], 0.6);
+    }
+  },
+});
+
+// --- 6. BOMBERMAN ---------------------------------------------------------
+//
+// DATA-AWARE, and the most honest of the six: the walker drops a bomb and the blast runs in four
+// straight lines until a TALL CUBE stops it. The cross it draws is therefore a picture of the
+// block's density -- a sparse block gives long arms, a full one gives a stub.
+defineAgent('bomberman', {
+  build({ W, H, tiles, rnd }) {
+    const tops = cellTops(tiles, W, H);
+    const at = { x: Math.floor(2 + rnd() * Math.max(1, W - 4)), y: Math.floor(2 + rnd() * Math.max(1, H - 4)) };
+    const walk = [{ x: at.x - 3, y: at.y }, { x: at.x, y: at.y }];
+    const top = (x, y) => (x >= 0 && x < W && y >= 0 && y < H ? tops[(y | 0) * W + (x | 0)] : 99);
+    // how far each arm reaches before a cube taller than the blast stops it
+    const WALL = 1.2;
+    const arms = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => {
+      let n = 0;
+      while (n < 9) {
+        const nx = at.x + dx * (n + 1), ny = at.y + dy * (n + 1);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) break;
+        if (top(nx, ny) > WALL) break;      // a tall transaction is a wall
+        n++;
+      }
+      return { dx, dy, n };
+    });
+    return { at, walk, arms };
+  },
+  frame(a, u) {
+    // three acts: walk in, the fuse, the blast
+    const WALK = 0.35, FUSE = 0.62;
+    if (u < WALK) {
+      const p = alongPath(a.walk, (u / WALK) * (a.walk.length - 1));
+      return { bomberman: { phase: 'walk', at: p }, heads: [{ x: p.x, y: p.y, color: [255, 220, 140], alpha: 1, r: 1.4 }] };
+    }
+    if (u < FUSE) {
+      const f = (u - WALK) / (FUSE - WALK);
+      return { bomberman: { phase: 'fuse', at: a.at, f },
+        heads: [{ x: a.at.x, y: a.at.y, color: [255, 160, 90], alpha: 0.6 + 0.4 * Math.sin(f * 30), r: 1.6 }] };
+    }
+    const b = (u - FUSE) / (1 - FUSE);
+    const reach = Math.min(1, b * 2.2);
+    const fade = Math.max(0, 1 - Math.max(0, (b - 0.45) / 0.55));
+    const heads = [{ x: a.at.x, y: a.at.y, color: [255, 255, 230], alpha: fade, r: 2 }];
+    for (const arm of a.arms) {
+      for (let k = 1; k <= Math.round(arm.n * reach); k++) {
+        heads.push({ x: a.at.x + arm.dx * k, y: a.at.y + arm.dy * k,
+          color: [255, 190 - k * 8, 90], alpha: fade, r: 1.5 });
+      }
+    }
+    return { bomberman: { phase: 'blast', at: a.at, arms: a.arms, reach, fade }, heads };
+  },
+  draw(ctx, view, lw) {
+    const b = view.fx?.bomberman;
+    if (!b) return;
+    const P = (x, y, z) => project(x, y, z, view);
+    if (b.phase === 'walk') {
+      const c = P(b.at.x, b.at.y, 1);
+      bloom(ctx, c.x, c.y, lw * 12, [255, 225, 150], 0.85);
+      return;
+    }
+    if (b.phase === 'fuse') {
+      const c = P(b.at.x, b.at.y, 0.8);
+      const sw = 1 + 0.25 * Math.sin(b.f * 30);
+      bloom(ctx, c.x, c.y, lw * 13 * sw, [40, 40, 50], 0.9);
+      bloom(ctx, c.x, c.y - lw * 10, lw * 3.5 * sw, [255, 200, 80], 1);
+      return;
+    }
+    // the blast: four arms of fire, each stopped where the skyline stopped it
+    for (const arm of b.arms) {
+      const n = arm.n * b.reach;
+      if (n < 0.2) continue;
+      const a0 = P(b.at.x, b.at.y, 0.6);
+      const a1 = P(b.at.x + arm.dx * n, b.at.y + arm.dy * n, 0.6);
+      line(ctx, [a0, a1], `rgba(255,140,50,${(0.45 * b.fade).toFixed(3)})`, lw * 16);
+      line(ctx, [a0, a1], `rgba(255,220,120,${(0.8 * b.fade).toFixed(3)})`, lw * 7);
+      line(ctx, [a0, a1], `rgba(255,255,235,${(0.95 * b.fade).toFixed(3)})`, lw * 2.4);
+      bloom(ctx, a1.x, a1.y, lw * 10, [255, 190, 110], b.fade * 0.8);
+    }
+    const c = P(b.at.x, b.at.y, 0.8);
+    bloom(ctx, c.x, c.y, lw * 26, [255, 240, 200], b.fade);
+  },
+});

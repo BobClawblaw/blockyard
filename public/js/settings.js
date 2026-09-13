@@ -123,6 +123,8 @@ export const DEFAULTS = Object.freeze({
     shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, laser: true,
     powerup: true, combo: true, aurora: true, plasma: true, glitch: true,
+    // the agents: something happening on the board, rather than a pattern over it
+    recognizer: true, disc: true, snake: true, qbert: true, invaders: true, bomberman: true,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -366,6 +368,12 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'aurora', label: 'Aurora', kind: 'toggle', hint: 'Slow curtains of colour drifting over the board' }),
       Object.freeze({ key: 'plasma', label: 'Plasma', kind: 'toggle', hint: 'The demoscene plasma: sines over the board, the colour cycling' }),
       Object.freeze({ key: 'glitch', label: 'Glitch', kind: 'toggle', hint: 'Data corruption: a handful of blocks tear, hard on and hard off' }),
+      Object.freeze({ key: 'recognizer', label: 'Recognizer', kind: 'toggle', hint: 'A two-legged gantry striding the board, lighting a wide swath beneath it' }),
+      Object.freeze({ key: 'disc', label: 'Identity disc', kind: 'toggle', hint: 'A thrown disc ricocheting off the edges, flashing the blocks where it strikes' }),
+      Object.freeze({ key: 'snake', label: 'Snake', kind: 'toggle', hint: 'It eats the tallest transactions in turn and grows a segment for each \u2014 its length is the readout' }),
+      Object.freeze({ key: 'qbert', label: 'Hopper', kind: 'toggle', hint: 'A small thing hopping block to block on the diagonal, with a shadow that tightens as it lands' }),
+      Object.freeze({ key: 'invaders', label: 'Invaders', kind: 'toggle', hint: 'A rank of pixel-art ships stepping sideways and dropping a row, firing as they come' }),
+      Object.freeze({ key: 'bomberman', label: 'Blast', kind: 'toggle', hint: 'A bomb whose four arms of fire are stopped by tall blocks \u2014 the cross it draws is the block\u2019s density' }),
     ]),
   }),
   Object.freeze({

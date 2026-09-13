@@ -150,6 +150,10 @@ const FX_MS = {
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, laser: 3400,
   powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400, glitch: 3000,
+  // THE AGENTS (agents.js, 2026-09-13: "Build all of them with amazing effects"). Longer than the
+  // fields, because a thing that travels needs time to be watched: a field reads at a glance, an
+  // agent has to arrive, do something, and leave.
+  recognizer: 7600, disc: 6200, snake: 7000, qbert: 6600, invaders: 8200, bomberman: 6000,
 };
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
@@ -1907,8 +1911,13 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   if (wall) wall();
   if (opts.axes?.line) priceLine(ctx, view, opts.axes);
   if (opts.axes) axisLabels(ctx, view, opts.axes, gridN, fit.scaleX, dpr || 1);
-  drawCycles(ctx, view, ctx.lineWidth);
-  drawBall(ctx, view, ctx.lineWidth);
+  // THE AGENT'S OWN GEOMETRY, dispatched from the registry (agents.js). The light cycles' walls
+  // and the lightning ball were two hard-coded calls here; with fifty agents this is the seam.
+  // drawCycles and drawBall stay in this module -- lightcycle-crash.test.js imports drawCycles by
+  // name and calls it with a hand-built view -- and the registry simply points at them.
+  const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
+  if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
+  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
