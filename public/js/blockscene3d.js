@@ -109,10 +109,81 @@ export function capZ(gx, gy, o = {}) {
 // taking it out of the path leaves motion that is symmetric about the middle -- what the sphere's
 // normal was meant to give. Off the oblique camera there is no such term and this is the normal.
 export function flightDir(gx, gy, o = {}) {
+  // STRAIGHT UP IS A CHOICE (operator, 2026-09-13: "it looks like all the left and right side
+  // blocks are arcing towards/away from the sides instead of just traveling straight up ... make it
+  // a toggle"). Under `vertical` a departure has no sideways component at all, so an edge cube
+  // leaves the board the way the middle column always did. The other two modes keep the sphere's
+  // normal, which is what makes departures fan out from the board's middle.
+  if (departMode(o) === 'vertical') return { x: 0, y: 0, z: 1 };
   // The oblique lean is radial now (obliqueLean), so the camera's own push already fans from the
   // middle: the flight is the sphere's normal again, and subtracting the lean here as well would
   // count that fan twice and tip every flight to the left.
   return surfaceNormal(gx, gy, o);
+}
+
+// HOW A CUBE LEAVES AND ARRIVES: 'arcing' | 'normal' | 'vertical'.
+//
+// MEASURED FIRST, because the obvious story was wrong. The complaint was that the path CURVES, and
+// the settle loop below (the lean re-derived at the drifted position, twice) does bend it -- but
+// sampling the drawn path up a flight showed the bend is about 2%: dx/dy runs 0.7335 -> 0.7481 at
+// the left edge over the whole climb. The path is already very nearly straight. What it is not is
+// VERTICAL: that slope means an edge cube moves three pixels sideways for every four it moves up,
+// while the middle column sits at -0.017. So what reads as "arcing towards the sides" is mostly a
+// steep straight fan, not a curve, and removing the curve alone would have looked like nothing
+// happened. Hence three modes rather than two, and the operator choosing by eye.
+//
+//   arcing    the shipped look: the lean is re-settled as the cube climbs, so the fan bends slightly
+//   normal    the lean is held at its resting value: a straight line along the sphere's normal
+//   vertical  no sideways travel at all -- the flight's own lean offset is taken back out
+//
+// The default here is `arcing` so that every caller that has never heard of this -- and every test
+// written before it -- draws exactly what it always drew. settings.js passes a mode explicitly.
+export const departMode = (o = {}) => o.departures ?? 'arcing';
+
+/**
+ * Where a flying cube really is, and how it leans, settled once per cube.
+ *
+ * THE ONE PLACE BOTH CALLERS AGREE. liftProjector draws the cube here and obliqueOrder sorts it,
+ * and both used to re-derive this with the same six lines copied. The comment on the second copy
+ * warned that the order and the geometry must be measured at the same point -- so with a mode to
+ * honour, the copies become one function rather than two that can drift apart. Paint order that
+ * disagrees with geometry by even a little is the flicker class this board has had before.
+ */
+export function flightGeom(tile, zv, o = {}) {
+  const cxRest = tile.x + tile.s / 2, cyRest = tile.y + tile.s / 2;
+  const mode = departMode(o);
+  const drift = zv * flightDir(cxRest, cyRest, o).x;       // along the sphere's normal (0 when vertical)
+  // THE LEAN IS ALSO THE CUBE'S SHAPE, which is why `vertical` cannot simply zero it. Height enters
+  // the projection as `x += z * lean * unit`, so the same term that pushes a flight sideways is
+  // what makes a cube's side faces lean. Zeroing it would flatten an airborne cube and then SNAP it
+  // at touchdown, because a resting cube leans by its column. So every mode keeps a real lean here,
+  // and `vertical` instead subtracts the flight altitude's share of it back out (liftProjector), a
+  // correction that goes to zero as the cube lands -- continuous by construction.
+  // THE SETTLED LEAN at a given flight height. A cube's lean is a fixed point: it leans by where it
+  // is, and leaning moves where it is, so this iterates twice -- the shipped rule, unchanged.
+  const settleAt = (h) => {
+    const d = h * flightDir(cxRest, cyRest, o).x;
+    const height = h + capZ(cxRest + d, cyRest, o) + (tile.floor ?? 0) + cubeHeight(tile) / 2;
+    let lean = obliqueLean(cxRest + d, o);
+    for (let i = 0; i < 2; i++) lean = obliqueLean(cxRest + d + height * lean, o);
+    return lean;
+  };
+  // A CUBE AT REST IS DRAWN THE SAME IN EVERY MODE, AND EACH MODE AGREES WITH ITSELF AS IT LANDS.
+  //
+  // Both halves of that were got wrong in turn, and only measurement caught either. First cut: the
+  // mode applied at every height, so a RESTING rim cube was drawn at 23.945640 under arcing and
+  // 23.976709 under the others -- a flight setting changing how the standing board looks. Second
+  // cut guarded on `zv > 0`, which fixed rest and broke the boundary instead: flight used the plain
+  // resting lean while rest used the settled one, so each mode now disagreed with ITSELF across
+  // touchdown -- a 0.031px snap on the last step down, and a `vertical` that still drifted 0.03px.
+  //
+  // The constant that satisfies both is the settled lean evaluated AT ZERO HEIGHT: it is exactly
+  // what a resting cube uses (so rest is identical in all three modes and identical to shipped),
+  // and it does not change as the cube climbs (so the path stays perfectly straight and nothing
+  // moves at touchdown). `arcing` keeps re-settling as it climbs, which is the curve it is named
+  // for. Every number in this comment came from a probe, not from reading the code.
+  if (mode !== 'arcing') return { drift, lean: settleAt(0), cx: cxRest + drift };
+  return { drift, lean: settleAt(zv), cx: cxRest + drift };
 }
 
 export function surfaceNormal(gx, gy, o = {}) {
@@ -391,15 +462,28 @@ export function liftProjector(tile, o = {}) {
   // moved along the sphere's normal, and a lean from the slot it left is the wrong lean (see
   // obliqueLean)
   const cxRest = tile.x + tile.s / 2, cyRest = tile.y + tile.s / 2;
+  let unlean = 0;
   if (o.oblique) {
     const zv = z > 0 ? visualBase(tile, o) : 0;
-    const drift = zv * flightDir(cxRest, cyRest, o).x;       // along the sphere's normal
-    const height = zv + capZ(cxRest + drift, cyRest, o) + (tile.floor ?? 0) + cubeHeight(tile) / 2;
-    let lean = obliqueLean(cxRest + drift, o);
-    for (let i = 0; i < 2; i++) lean = obliqueLean(cxRest + drift + height * lean, o);
-    o = { ...o, leanFixed: lean };
+    const g = flightGeom(tile, zv, o);
+    o = { ...o, leanFixed: g.lean };
+    // VERTICAL: take the flight's own sideways offset back out. The cube keeps its lean -- its
+    // faces are drawn exactly as a resting cube's are -- but the screen x it would gain from being
+    // HIGH is subtracted, so it rises straight up its own column. At touchdown zv is 0 and so is
+    // this, which is why nothing jumps as it lands.
+    if (departMode(o) === 'vertical') unlean = zv * g.lean * (o.unit ?? 12);
   }
   if (!(z > 0)) return (gx, gy, gz) => project(gx, gy, gz, o);
+  if (unlean) {
+    const inner = liftProjectorInner(tile, o, z);
+    return (gx, gy, gz) => { const p = inner(gx, gy, gz); return { x: p.x - unlean, y: p.y }; };
+  }
+  return liftProjectorInner(tile, o, z);
+}
+
+// the projection itself, with the lean already settled onto `o` -- split out so the vertical
+// correction above can wrap it without duplicating either branch
+function liftProjectorInner(tile, o, z) {
   if (o.oblique) {
     // flight goes along the sphere's normal at the block's centre, so the
     // board's blocks leave and arrive fanned out from its middle; the cube
@@ -1491,14 +1575,15 @@ export function obliqueOrder(tiles, o = {}) {
     const t = e2.t, h = cubeHeight(t), cxRest = t.x + t.s / 2, cy = t.y + t.s / 2;
     const zb = (t.z ?? 0) > 0 || t.entry > 0 ? visualBase(t, o) : 0;
     // where this cube is actually DRAWN: its slot, plus the flight along the sphere's normal,
-    // plus the camera's own sideways push -- settled the same way liftProjector settles it, so
-    // the order and the geometry are measured at the same point (obliqueLean is radial, so a
-    // block that has travelled leans by where it has got to, not by the slot it left)
-    const drift = zb * flightDir(cxRest, cy, o).x;
-    const height = zb + capZ(cxRest + drift, cy, o) + (t.floor ?? 0) + h / 2;
-    let lean = obliqueLean(cxRest + drift, o);
-    for (let i = 0; i < 2; i++) lean = obliqueLean(cxRest + drift + height * lean, o);
-    const cx = cxRest + drift;
+    // plus the camera's own sideways push -- settled by the SAME function liftProjector uses, so
+    // the order and the geometry cannot be measured at different points (obliqueLean is radial, so
+    // a block that has travelled leans by where it has got to, not by the slot it left). This was
+    // six lines copied from there; with a departure mode to honour, a copy is a latent flicker.
+    const g = flightGeom(t, zb, o);
+    const lean = g.lean;
+    // vertical departures take the flight's lean offset back out, so the cube is drawn over its own
+    // column: the depth must be measured where it is DRAWN, not where the lean would have put it
+    const cx = departMode(o) === 'vertical' ? cxRest : g.cx;
     return -lean * cx - (flipped ? 1 : -1) * oby * cy + capZ(cx, cy, o) + zb + (t.floor ?? 0) + h / 2;
   });
   const index = new Array(n).fill(-1), low = new Array(n).fill(0), onStack = new Array(n).fill(false), comp = new Array(n).fill(-1);

@@ -59,6 +59,17 @@ export const DEFAULTS = Object.freeze({
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
+    // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
+    // arcing towards/away from the sides instead of just traveling straight up ... make it a toggle
+    // for Linear vs Arcing", then "give me 3 choices to see and toggle between").
+    //
+    // Measured before choosing a default: the shipped path is already nearly straight (the drawn
+    // slope dx/dy moves only 0.7335 -> 0.7481 over a whole climb at the left edge). What makes it
+    // read as arcing is that the straight line is STEEP -- three pixels sideways for every four up
+    // at the rim, against -0.017 over the middle. So the fan, not the curve, is the thing seen, and
+    // `vertical` is the only one of the three that removes it. It ships as the default because it
+    // is what was asked for; the other two are here to be compared against it.
+    departures: 'vertical',  // 'vertical' | 'normal' | 'arcing'
   }),
   // THE SKY IS ONE SKY. density and brightness lived under `markets` and were passed only to the
   // markets board, so the Block space star field -- the same stars, drawn by the same code -- had
@@ -234,6 +245,11 @@ export const PANEL = Object.freeze([
       Object.freeze({
         key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board refreshes',
         options: Object.freeze([['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
+      }),
+      Object.freeze({
+        key: 'departures', label: 'Departures and arrivals', kind: 'choice',
+        hint: 'The path a block takes as it leaves or arrives. Straight up rises over its own column; the other two fan outward from the middle of the board, which is what makes the left and right edges look like they arc away',
+        options: Object.freeze([['vertical', 'Straight up'], ['normal', 'Along the board’s curve'], ['arcing', 'Arcing (original)']]),
       }),
       Object.freeze({ key: 'dome', label: 'Board curve', kind: 'range', min: 0, max: 12, step: 1, hint: 'How far the board bows toward you; 0 is flat' }),
       Object.freeze({
@@ -740,6 +756,7 @@ export function spaceOptions(s) {
   if (!sp.edges) out.seamAlpha = 0;
   const motion = MOTION[sp.motion];
   if (motion) out.transition = motion;
+  out.departures = sp.departures;
   out.light = sp.light;
   out.fxKinds = enabledEffects(n);
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;

@@ -2465,6 +2465,9 @@ export function render3d(canvas, cells, options = {}) {
       vanishX: st.gridW * opts.unit * opts.vanish.fx, vanishY: -st.gridH * opts.unit * (1 - opts.vanish.fy), persp: opts.persp,
       boardW: st.gridW * opts.unit, boardH: st.gridH * opts.unit, dome: opts.dome, gridW: st.gridW, gridH: st.gridH,
       seamAlpha: opts.seamAlpha, fx: fxNow(st, t), oblique: opts.oblique, now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
+      // the departure path (settings.js space.departures): it reaches the geometry AND the paint
+      // order through the same view object, which is the only way those two can agree
+      departures: opts.departures,
       facetMinUnits: opts.facetPx / pxPerUnit, crownMinUnits: opts.crownPx / pxPerUnit,
       shadows: opts.shadows !== false,   // settings.js: the board can be drawn without them
       // the finishes (settings.js space.neon / space.sheen). They were in the look signature and
