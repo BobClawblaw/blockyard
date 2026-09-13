@@ -48,7 +48,16 @@ export class NodeMonitor extends EventEmitter {
     // History.forNode for the measurement).
     this.history = history?.__perNode ? history : (history?.forNode ? history.forNode(nodeCfg.id) : history);
     this.log = log.child({ node: nodeCfg.id });
-    this.rpc = new RpcClient(nodeCfg, rpc, { log: this.log });
+    // THE LANE IS PER NODE, and so are its limits. The shared defaults describe a node that
+    // services one connection at a time; a node entry may say otherwise with its own `rpc` block.
+    // Measured 2026-09-13 against an Umbrel running Core 31.1.0: four concurrent
+    // getblockchaininfo calls finished in 158 ms wall against 157 ms each -- genuinely parallel
+    // (Core defaults to four RPC threads). With maxInFlight:1 the 3.9 s getblocktemplate on the
+    // 20 s pool tier held the only slot, and the fast tier queued behind it: that node showed
+    // avgLatency 1715 ms with 2 timeouts while a local node on the same monitor showed 69 ms and
+    // none. The etiquette is right for a single-threaded server and wrong for this one, so it is
+    // now a per-node statement rather than a global assumption.
+    this.rpc = new RpcClient(nodeCfg, { ...rpc, ...(nodeCfg.rpc ?? {}) }, { log: this.log });
     // The log *config* has to be passed in separately. It used to be read as
     // `log.tailBytes` off the logger function, which has no such property, so the
     // configured value was silently ignored and LogTail's own 2 MB default applied
@@ -1670,7 +1679,7 @@ export class NodeMonitor extends EventEmitter {
       this.flagQuality('rpc-timeouts', `${t.failedCalls} RPC attempt(s) failed outright, most recently after ${t.lastLatencyMs ?? '?'}ms; this node's RPC thread starves while its download worker is saturated, so panels may lag or show no data`, 'warn');
     }
     if ((t.avgLatencyMs ?? 0) > slowAt) {
-      this.flagQuality('rpc-slow', `the node's RPC is answering in ~${(t.avgLatencyMs / 1000).toFixed(1)}s (this node services one connection at a time on a single thread, and was measured at 40s during initial block download), so polling has slowed itself down rather than queueing up`, 'warn');
+      this.flagQuality('rpc-slow', `the node's RPC is answering in ~${(t.avgLatencyMs / 1000).toFixed(1)}s (the lane this monitor gives it allows ${this.rpc.cfg.maxInFlight} call(s) in flight, and was measured at 40s during initial block download), so polling has slowed itself down rather than queueing up`, 'warn');
     } else {
       this.clearQuality('rpc-slow');
     }

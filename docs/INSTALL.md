@@ -25,7 +25,7 @@ machines you choose. Every setting mentioned here is described in full in
 | **Node.js 22 or newer** | `node -v` must print `v22` or later. Older runtimes fail on syntax at start-up, which looks like a bug in the app. Install from [nodejs.org](https://nodejs.org), your distribution's backports, or a version manager such as `nvm`. |
 | **A running Bitcoin node** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with its JSON-RPC server enabled -- your own build, a distribution package, or a node appliance such as [Umbrel](https://umbrel.com), [Start9](https://start9.com) or myNode. The monitor reads it; it does not manage it. |
 | **RPC credentials** | Either read access to the node's cookie file (`<datadir>/<chain>/.cookie`, the usual case on the same machine) or an RPC user and password. |
-| **Linux** (recommended) | Any OS with Node 22 runs it; the service instructions below assume systemd. |
+| **macOS, Linux or Windows** | Any OS with Node 22 runs it: there is nothing to compile, and the server calls no platform-specific API (no `child_process`, no `/proc`, no `systemctl`). Developed and tested on Linux. Only the *service* instructions in section 6 are Linux-specific (they use systemd); on macOS run it in a terminal, or write a `launchd` plist. |
 | **Disk** | A few hundred MB at most for history, sessions and the audit trail (`./data` by default). |
 | **A modern browser** | Any current Chrome, Edge, Firefox or Safari. The 3D views use a 2D canvas and run without WebGL; a GPU helps with the dense viewer mode. |
 
@@ -121,9 +121,50 @@ Use the RPC port your node is configured with (`rpcport` in its configuration fi
 mainnet default is 8332). Any value you set in `config/local.json` or in the environment
 overrides the built-in defaults.
 
-**On a node appliance** (Umbrel, Start9, myNode), the node usually listens on the
-appliance's LAN address with an RPC user and password rather than a cookie file you can
-read, so use the `rpcUser` / `rpcPassword` form above and point `rpcUrl` at it.
+#### A node appliance (Umbrel, Start9, myNode)
+
+An appliance runs the node on another machine, so there is **no cookie file this process can
+read** -- use `rpcUser` / `rpcPassword`, and give no `datadir` at all:
+
+```json
+{
+  "nodes": [
+    {
+      "id": "umbrel",
+      "label": "Umbrel",
+      "rpcUrl": "http://umbrel.local:8332",
+      "rpcUser": "umbrel",
+      "rpcPassword": "the RPC password from the appliance",
+      "chainHint": "main"
+    }
+  ]
+}
+```
+
+On Umbrel the username, password, host and port are in the **Bitcoin Node** app's connection
+details. If `umbrel.local` does not resolve from your machine, use the appliance's IP address.
+
+> **Raise `dbcache` on an Umbrel node.** Umbrel ships Bitcoin Core with `dbcache=450` (MB). Set it
+> to **4096** in the Bitcoin app's advanced settings and restart the app -- `dbcache` is read at
+> start-up, so nothing changes until bitcoind restarts.
+>
+> What this fixes, reported by an operator on 2026-09-13: at the shipped 450 MB the monitor's
+> pages do not fill in properly; at 4096 they do. What it does **not** do is make the heavy calls
+> fast. Measured on that same node before and after the change, `getblocktemplate` stayed at
+> **3.7-3.9 s** while simple calls answered in ~100 ms (`getblockchaininfo` 95 ms,
+> `getmempoolinfo` 97 ms). So expect the Node & RPC page to keep reporting `rpc-slow` and a
+> stretched poll cadence: a mainnet template is genuinely expensive to build, and the monitor
+> deliberately slows its own polling rather than queue behind it.
+
+Verified 2026-09-13 against an Umbrel running Bitcoin Core 31.1.0 (from Linux; the configuration is identical on macOS): the
+monitor reads the chain, the mempool and the peer table over RPC alone. `txindex` was already
+on there, so the explorer's transaction pages work; `getnettotals` and per-peer byte counts are
+served over RPC, which is why the log source (see below) is not needed for Core.
+
+> **The web UI's node-connection form cannot set credentials.** It takes an RPC URL, a data
+> directory and a label, and deliberately accepts no password -- taking one over an endpoint that
+> is open by default is not something to add quietly. So an appliance is configured here, in
+> `config/local.json`, not through the form.
 
 **Several nodes** — add more entries to `nodes`; a node picker appears in the header and
 every chart, table and stream is per node.
@@ -154,6 +195,10 @@ curl -s http://127.0.0.1:21000/api/health
 If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-shows-offline).
 
 ## 6. Run it as a service
+
+> **macOS:** this section is Linux/systemd. On a Mac, either leave `npm start` running in a
+> terminal, or wrap it in a `launchd` plist -- there is no other platform-specific step, and the
+> configuration in section 4 is identical.
 
 1. **Create an account for it** that can read the node's cookie (and log, if you use it).
    Usually that means adding it to the node's group:

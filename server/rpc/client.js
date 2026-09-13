@@ -1,15 +1,23 @@
 // Bitcoin Core JSON-RPC client with deliberate etiquette.
 //
-// Why this is more than a fetch wrapper: the node's RPC server accepts and
-// services ONE connection at a time on a single thread (docs/RPC_LIVE_NODE.md,
-// slice 11 -- that is also why its `waitforblock` refuses to wait indefinitely,
-// and why `rescanblockchain` is documented as blocking every other RPC). A
-// dashboard with N tabs each polling M methods is therefore an accidental
-// denial-of-service against the very node we exist to monitor.
+// Why this is more than a fetch wrapper: a dashboard with N tabs each polling M methods is an
+// accidental denial-of-service against the very node we exist to monitor. Whatever the node's
+// threading, the monitor must be a good guest.
 //
-// So every request from every user and every poll tier goes through ONE
-// serialized lane with:
-//   - maxInFlight = 1                (the server cannot use more anyway)
+// HOW MANY CONNECTIONS THE NODE CAN ACTUALLY USE DEPENDS ON THE NODE, and the default here was
+// written for one that services ONE connection at a time on a single thread
+// (docs/RPC_LIVE_NODE.md slice 11 -- also why its `waitforblock` refuses to wait indefinitely,
+// and why `rescanblockchain` blocks every other RPC). That is NOT true of Bitcoin Core, which
+// defaults to four RPC threads: measured 2026-09-13 against an Umbrel running Core 31.1.0, four
+// concurrent getblockchaininfo calls finished in 158 ms wall against 157 ms each. The line that
+// used to sit below -- "maxInFlight = 1 (the server cannot use more anyway)" -- was false there,
+// and the cost was real: a 3.9 s getblocktemplate held the only slot while every other tier
+// queued, giving avgLatency 1715 ms and repeated 90 s timeouts on a node answering single calls
+// in ~106 ms. A node entry can now carry its own `rpc` block (see monitor.js), so this is a
+// default, not an assumption.
+//
+// So every request from every user and every poll tier goes through ONE serialized lane with:
+//   - maxInFlight                    (1 by default: safe for any node, raise it per node)
 //   - a floor between request starts (minIntervalMs)
 //   - a global calls/second ceiling
 //   - a circuit breaker that backs off instead of pile-driving a busy node

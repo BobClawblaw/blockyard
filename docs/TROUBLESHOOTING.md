@@ -68,8 +68,30 @@ The Node & RPC page shows the last error. Common causes:
 
 The Node & RPC page shows RPC latency and the queue. When the node is slow the monitor
 stretches its polling automatically and skips heavy reads, so a busy node (for example during
-initial sync) shows fewer updates rather than being slowed further. If latency stays high,
-check the node's own load; the monitor never runs more than one request at a time.
+initial sync) shows fewer updates rather than being slowed further.
+
+By default the monitor runs **one** request at a time, which is the safe assumption for any
+node. Bitcoin Core serves RPC on several threads (four by default), so a node entry may raise
+its own limit -- this is per node, not global, because the right answer differs per node:
+
+```json
+{ "id": "umbrel", "rpcUrl": "http://umbrel.local:8332", "rpcUser": "...", "rpcPassword": "...",
+  "rpc": { "maxInFlight": 4, "minIntervalMs": 0, "maxRatePerSec": 20 } }
+```
+
+Measured 2026-09-13 on an Umbrel running Core 31.1.0: four concurrent `getblockchaininfo` calls
+finished in 158 ms wall against 157 ms each, so the node really is answering in parallel. With
+one slot, a 3.9 s `getblocktemplate` on the 20 s pool tier held the lane and the fast tier
+queued behind it -- that node showed 16.4 s average latency and repeated 90 s timeouts while a
+local node on the same monitor showed 35 ms and none. Raising it cleared the timeouts.
+
+## An appliance node's pages do not fill in
+
+On **Umbrel**, check `dbcache` first: it ships at 450 MB, and an operator reported on 2026-09-13
+that the monitor's pages populate properly only after raising it to 4096 and restarting the
+Bitcoin app (`dbcache` is read at start-up). Note that this does not make heavy calls fast --
+`getblocktemplate` measured 3.7-3.9 s on that node both before and after -- so `rpc-slow` and a
+stretched cadence on the Node & RPC page are expected on a mainnet node and are not a fault.
 
 ## Markets or Kiosk show no prices
 

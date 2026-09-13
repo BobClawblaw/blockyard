@@ -315,6 +315,15 @@ table.t td { padding: 4px 7px; border-bottom: 1px solid var(--line-soft); font-f
 table.t tr:hover td { background: #ffffff06; }
 table.t td.r { text-align: right; }
 table.t td.w { font-family: var(--sans); }
+
+/* POLL CADENCE: the figures sit UNDER their headings (operator, 2026-09-13: "Pool cadence data
+   needs to be centered in the table, under the header, not right justified").
+   Scoped by id on purpose. `table.t td.r` right-aligns the body cells of every table in the app,
+   and `table.t` has no `th.r` rule at all -- the other tables that right-align (.xtbl, .mktbl,
+   table.xtable, .kp-ex) each define their own, which is why only this one read as misaligned.
+   An id selector outranks `table.t td.r` without moving anybody else's columns. */
+#ndCadence th, #ndCadence td { text-align: center; }
+#ndCadence th:first-child, #ndCadence td:first-child { text-align: left; }
 .scroll { max-height: 320px; overflow: auto; }
 
 /* ------------------------------------------------------------ feed */

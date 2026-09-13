@@ -575,7 +575,19 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   }
   for (const n of cfg.nodes) {
     if (!n.rpcUrl || !/^https?:\/\//.test(n.rpcUrl)) problems.push(`node ${n.id}: rpcUrl must be http(s)://host:port`);
-    if (!n.datadir && !n.cookieFile) problems.push(`node ${n.id}: need datadir or cookieFile for cookie auth`);
+    // AUTHENTICATION CAN COME FROM EITHER PLACE. Cookie auth needs a datadir (or an explicit
+    // cookieFile) to read <datadir>/<chain>/.cookie -- but a node on ANOTHER machine has no
+    // readable cookie, and rpcUser/rpcPassword is the only way in. resolveCookie() has always
+    // supported that (it falls through to the configured user/password); this validator did not,
+    // so the exact configuration docs/INSTALL.md recommends for a node appliance -- Umbrel,
+    // Start9, myNode -- was refused at boot with "need datadir or cookieFile". Found 2026-09-13
+    // by following our own install instructions against an Umbrel node.
+    const hasCookiePath = !!(n.datadir || n.cookieFile);
+    const hasUserPass = !!(n.rpcUser && n.rpcPassword);
+    if (!hasCookiePath && !hasUserPass) {
+      problems.push(`node ${n.id}: needs either datadir/cookieFile (cookie auth, same machine) or rpcUser + rpcPassword (a node on another machine, e.g. an appliance)`);
+    }
+    if (n.rpcUser && !n.rpcPassword) problems.push(`node ${n.id}: rpcUser is set but rpcPassword is empty`);
   }
   if (problems.length) {
     throw new Error(`Invalid configuration:\n  - ${problems.join('\n  - ')}`);
