@@ -75,9 +75,12 @@ is reported by `/api/config`, but the lane is serialised by construction and doe
 measured 2026-09-13 at 1, 4 and 8: four 200 ms jobs took ~807 ms with peak concurrency 1 in every
 case. Treat it as documentation of intent, not a tuning knob.
 
-What costs time on a mainnet node is the block template, and how much depends on how the node is
-configured. Measured on an Umbrel running Core 31.1.0 on 2026-09-13, **before** its RPC settings
-were tuned: `getblockchaininfo` 95-110 ms, `getmempoolinfo` ~100 ms, but `getblocktemplate`
+What costs time on a mainnet node is the expensive reads, and how much depends on how the node is
+configured. The sharpest example used to be the block template -- since 0.9.0 the monitor
+assembles that from the mempool and never calls `getblocktemplate`, so the numbers below are kept
+as the clearest illustration of what appliance tuning is worth, not as a call this software still
+makes. Measured on an Umbrel running Core 31.1.0 on 2026-09-13, **before** its RPC settings were
+tuned: `getblockchaininfo` 95-110 ms, `getmempoolinfo` ~100 ms, but `getblocktemplate`
 **4.0-4.5 s**, five times in a row with no warming -- while the same call on a local Core node
 answered in **51 ms**. Two concurrent templates contended rather than overlapped there (6.9 s and
 8.8 s against 4.5 s alone), so more concurrency would not have helped that call.
@@ -96,7 +99,8 @@ that the monitor's pages populate properly only after raising it to 4096 and res
 Bitcoin app (`dbcache` is read at start-up). Applied together with the RPC settings in
 [INSTALL](INSTALL.md#recommended-bitcoinconf-overrides-on-an-appliance), that node's
 `getblocktemplate` went from 4.0-4.5 s to 488-565 ms and the monitor stopped reporting
-`rpc-slow` entirely.
+`rpc-slow` entirely. (The monitor no longer makes that call -- see above -- but the same tuning
+moves every other read on the lane, which is why the advice stands.)
 
 ## Markets or Kiosk show no prices
 

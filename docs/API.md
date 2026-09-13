@@ -865,8 +865,12 @@ The block being built right now, **assembled by this server from the mempool** â
                "blockBytesEstimate": 1661742, "ahead": [], "note": "..." },
   "visual": { "cells": [], "totalVbytes": 506910, "tailCount": 786 },
   "at": 1789155693548,
-  "ms": 4182,
-  "note": "getblocktemplate(rules:[segwit]) costs this node roughly 1.3-1.5 s ..."
+  "ms": 72,
+  "note": "the block being built is assembled here from getrawmempool(true) ...",
+  "assembledLocally": true,
+  "source": "getrawmempool",
+  "poolSize": 30768,
+  "poolAgeMs": 2276
 }
 ```
 

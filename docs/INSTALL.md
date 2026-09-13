@@ -207,7 +207,7 @@ Compatibility claims here are separated by how they were established, because "s
 | Blocks, Block flow | recent blocks with sizes, weights and fees |
 | Explorer | working -- `txindex` was synced on that node |
 | Block space (3D) | both viewer modes |
-| Block being built | `getblocktemplate` answered in ~0.5 s after tuning (4.0-4.5 s before) |
+| Block being built | assembled here from the mempool since 0.9.0 — no call to the node at all (before: `getblocktemplate`, ~0.5 s after tuning, 4.0-4.5 s before) |
 | Mining / pool attribution | 34 blocks attributed across 9 pools |
 | Markets, Kiosk | unaffected by the node; they read exchange APIs |
 

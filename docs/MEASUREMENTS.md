@@ -1027,8 +1027,8 @@ the node's source** (`asm/rpc_node.c`, `asm/rpc_chain.c`), not from `help`.
 | per-peer **relay counts** | absent (DEFECTS) | still absent. Row keys: `id, addr, services, servicesnames, relaytxes, lastsend, lastrecv, bytessent, bytesrecv, conntime, timeoffset, version, subver, inbound, permissions, startingheight, synced_headers, synced_blocks, network`. `relaytxes` is a boolean (true on all 9), not a count |
 | `getnettotals` as a lifetime counter | assumed | **no: it falls when a peer leaves** (next subsection) |
 | ancestor fields in `getrawmempool true` | absent (§5) | still absent: 09:23:08Z, **19,014** entries, 2,641,932 B, **0.144 s**, keys `vsize, weight, time, fees{base}` only |
-| … in `getmempoolentry` | not recorded | **present**, 0.69 ms, 522 B: `vsize, weight, time, height, descendantcount, descendantsize, ancestorcount, ancestorsize, wtxid, fees{base, modified, ancestor, descendant}, depends, spentby, unbroadcast` (sampled tx: `ancestorcount` 18). One call per txid, so a full sweep is ≥19,014 × 0.69 ms ≈ 13 s of the single RPC thread: a drill-down, not a poll. §26's `getblocktemplate` remains the cheap ancestor graph |
-| ZMQ | `zmqpubsequence` refused (DEFECTS) | `getzmqnotifications` → `[]`, 0.180 ms. No mempool sequence feed |
+| … in `getmempoolentry` | not recorded | **present**, 0.69 ms, 522 B: `vsize, weight, time, height, descendantcount, descendantsize, ancestorcount, ancestorsize, wtxid, fees{base, modified, ancestor, descendant}, depends, spentby, unbroadcast` (sampled tx: `ancestorcount` 18). One call per txid, so a full sweep is ≥19,014 × 0.69 ms ≈ 13 s of the single RPC thread: a drill-down, not a poll. §26's `getblocktemplate` was the cheap ancestor graph on that node; **on Core the graph is in `getrawmempool(true)` itself and costs nothing extra — see §26b** |
+| ZMQ | `zmqpubsequence` refused (DEFECTS) | `getzmqnotifications` → `[]`, 0.180 ms. No mempool sequence feed. **2026-09-13, Bitcoin Core/Umbrel: all five publishers present** — `pubsequence` tcp://0.0.0.0:28335, `pubrawblock` 28332, `pubrawtx` 28333, `pubhashblock` 28334, `pubhashtx` 28336, hwm 1000 each. Not reachable from this host, though: all five refuse while 8332 is open, because bitcoind binds them inside its container and Umbrel publishes only the RPC port |
 | log over RPC | no `getlogevents` (§16) | still none: the only log-named method in the 165 is `logging`, which `allowlist.js` denies |
 
 ### `getnettotals` is a sum over live peers, not a lifetime counter
@@ -1074,7 +1074,7 @@ after curl started, and the reply arrived at 09:23:41.370Z by curl's clock. The 
 the answer at the end of the 2.9 s, not the start, so the time was spent **waiting to be
 served**, not computing. The likely cause is queueing behind the running monitor's own
 tiers on the single RPC thread (§1): the fast tier batches five methods every 4 s, and
-§26's `getblocktemplate` holds the thread 1.3–1.5 s. **Unconfirmed**: the monitor's lane
+§26's `getblocktemplate` holds the thread 1.3–1.5 s (no longer called — §26b). **Unconfirmed**: the monitor's lane
 telemetry for those seconds was not read. The general point stands. A latency measured
 from this box while the monitor runs is an upper bound, and a sub-ms method's outlier is
 somebody else's call.

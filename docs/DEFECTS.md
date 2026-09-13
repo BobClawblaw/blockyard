@@ -432,6 +432,19 @@ Kept as checked rather than deleted, so nobody re-derives them.
   stream with better optics.
   Re-checked 2026-09-11 on `deploy-20260910ag`: `getzmqnotifications` answers `[]`, and
   none of the 165 methods is a sequence feed (MEASUREMENTS 27).
+  **Corrected 2026-09-13 -- that is a fact about THAT node, not about the feature.** Bitcoin
+  Core on an Umbrel answers `getzmqnotifications` with all five publishers:
+  `pubhashblock` 28334, `pubrawblock` 28332, `pubrawtx` 28333, `pubhashtx` 28336 and
+  **`pubsequence` 28335** -- the per-transaction add/remove/replace stream this entry says does
+  not exist. It does exist on Core; the experimental build is what lacked it. (Same shape of
+  error as the `getrawmempool … depends` claim corrected in MEASUREMENTS 26b the same day: a
+  true measurement on one node written up as a general limitation.)
+  What is still true is that we cannot *reach* it by default: bitcoind binds `0.0.0.0:2833x`
+  **inside its container**, and Umbrel publishes only 8332 to the LAN -- measured from this host,
+  all five ports answer `Connection refused` while 8332 is open. So a ZMQ feed has to be an
+  opt-in accelerator for operators who publish those ports, with the 20 s poll as the floor for
+  everyone else. The `feed:{kind:'poll', …}` field stays honest either way; it would report
+  `kind:'zmq'` when a stream is actually connected.
 - [x] No per-peer **byte** counters: **closed on `deploy-20260910ag`, still
   build-dependent.** 2026-09-11 09:22:05Z: `getpeerinfo` 9 rows, and
   `getconnectioncount` 9. `bytesrecv` summed to **109,027,561** against
