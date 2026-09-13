@@ -322,7 +322,7 @@ export function renderPeers(s, state, h) {
 
 }
 
-// THE PEER TABLE (operator, 2026-09-11: "Doesn't the bmc rpc pull more info for peers
+// THE PEER TABLE (operator, 2026-09-11: "Doesn't the node's rpc pull more info for peers
 // now?"). It does: getpeerinfo on this build answers one row per connection -- address,
 // network, user agent and protocol version, direction, when it connected, when it last
 // received and sent, the bytes each way (summing to 99.99% of getnettotals, MEASUREMENTS

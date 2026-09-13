@@ -23,7 +23,7 @@ machines you choose. Every setting mentioned here is described in full in
 | need | notes |
 |---|---|
 | **Node.js 22 or newer** | `node -v` must print `v22` or later. Older runtimes fail on syntax at start-up, which looks like a bug in the app. Install from [nodejs.org](https://nodejs.org), your distribution's backports, or a version manager such as `nvm`. |
-| **A running `bmc` node** | [Bitcoin Machine Code](https://github.com/BobClawblaw/bitcoinmachinecode) with its JSON-RPC server enabled. The monitor reads it; it does not manage it. |
+| **A running Bitcoin node** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with its JSON-RPC server enabled -- your own build, a distribution package, or a node appliance such as [Umbrel](https://umbrel.com), [Start9](https://start9.com) or myNode. The monitor reads it; it does not manage it. |
 | **RPC credentials** | Either read access to the node's cookie file (`<datadir>/<chain>/.cookie`, the usual case on the same machine) or an RPC user and password. |
 | **Linux** (recommended) | Any OS with Node 22 runs it; the service instructions below assume systemd. |
 | **Disk** | A few hundred MB at most for history, sessions and the audit trail (`./data` by default). |
@@ -92,9 +92,9 @@ at `<datadir>/<chainHint>/.cookie`:
   "nodes": [
     {
       "id": "main",
-      "label": "My bmc node",
-      "rpcUrl": "http://127.0.0.1:8331",
-      "datadir": "/var/lib/bmc/data",
+      "label": "My node",
+      "rpcUrl": "http://127.0.0.1:8332",
+      "datadir": "/home/you/.bitcoin",
       "chainHint": "main"
     }
   ]
@@ -108,8 +108,8 @@ at `<datadir>/<chainHint>/.cookie`:
   "nodes": [
     {
       "id": "main",
-      "label": "My bmc node",
-      "rpcUrl": "http://192.0.2.20:8331",
+      "label": "My node",
+      "rpcUrl": "http://192.0.2.20:8332",
       "rpcUser": "monitor",
       "rpcPassword": "a long random password"
     }
@@ -117,9 +117,13 @@ at `<datadir>/<chainHint>/.cookie`:
 }
 ```
 
-Use the RPC port your node is configured with (`rpcport` in its configuration file). The
-built-in defaults assume the Bitcoin Machine Code reference layout; any value you set in
-`config/local.json` or in the environment overrides them.
+Use the RPC port your node is configured with (`rpcport` in its configuration file; Core's
+mainnet default is 8332). Any value you set in `config/local.json` or in the environment
+overrides the built-in defaults.
+
+**On a node appliance** (Umbrel, Start9, myNode), the node usually listens on the
+appliance's LAN address with an RPC user and password rather than a cookie file you can
+read, so use the `rpcUser` / `rpcPassword` form above and point `rpcUrl` at it.
 
 **Several nodes** — add more entries to `nodes`; a node picker appears in the header and
 every chart, table and stream is per node.

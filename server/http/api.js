@@ -114,7 +114,7 @@ const RANGES = { '15m': 900_000, '1h': 3600_000, '6h': 21600_000, '24h': 86400_0
 // differs. Every claim below is a measurement from 2026-09-08, and the RPC-only
 // column is build-dependent in a way that no RPC call can tell you: the build
 // that published 2,116,236,872 bytes and the build that published 0 both report
-// subversion /BitcoinMachineCode:0.0.1/.
+// the same subversion string as each other.
 function sourcesFor(logEnabled) {
   const logOnly = 'no RPC source for this; it exists only in the node log';
   return [

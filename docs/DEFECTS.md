@@ -76,7 +76,7 @@ Kept as checked rather than deleted, so nobody re-derives them.
 - [x] **`node-restarting`**: `[serve] shutting down (signal 15): tip=965914` is
   surfaced with the tip at shutdown, so the ECONNREFUSED that follows reads as the
   restart instead of as a monitor or network fault. Measured while it happened: a
-  concurrent session deployed `bmcbitcoind.deploy-20260908a` at 06:21 and the
+  concurrent session deployed `deploy-20260908a` at 06:21 and the
   monitor reported `online: false` with the reason intact.
 - [x] **An unknown eta stays unknown**: `[dlc] ==` can print `eta --:--:--:--`;
   decoded as `null`, never as zero or as a huge number.
@@ -98,11 +98,11 @@ Kept as checked rather than deleted, so nobody re-derives them.
   (`deploy-20260908a`: 4 peer rows, `bytesrecv` summing to exactly `getnettotals`,
   nonzero sent) where the previous build answered `[]` and `0/0`. RPC-only mode is
   therefore viable on production *today* — and left switched off by default, because
-  every build still reports `subversion /BitcoinMachineCode:0.0.1/` and the mode has
+  every build still reports the same non-Core `subversion` (`:0.0.1`) and the mode has
   no way to know it is on a generous build. That asymmetry is the whole argument for
   the log staying a primary source.
   **Update 2026-09-11:** the "no way to know" half is false on `deploy-20260910ag`.
-  `getnetworkinfo` answers `bmc_build_commit` "860b8fdd", `bmc_build_dirty` false
+  `getnetworkinfo` answers the build's own commit attestation "860b8fdd", dirty false
   (MEASUREMENTS 27). The monitor does not read the field yet (see Functional gaps), and
   older builds omit it.
 
@@ -440,12 +440,12 @@ Kept as checked rather than deleted, so nobody re-derives them.
   re-derives it: `deploy-20260907a` answered `[]` (so there per-peer bytes existed only
   in the log's `[dlc] w<N>` lines); `deploy-20260908a` gave 4 rows for 6 connections;
   the ~05:47 bench build gave 21 rows with `bytesrecv` up to 201,608,074 and a
-  `bmc_download_worker` marker, summing to 70.29% of `getnettotals`.
+  vendor download-worker marker, summing to 70.29% of `getnettotals`.
   **Why the ~30% "gap" vanished:** it was not filled. This build's `getnettotals`
   forgets closed peers too, so rows and total agree by both leaving them out. That is a
   divergence from Core, and it broke the rate maths (open item under Security /
   correctness). Measured on a synced node only: no download-worker rows
-  (`id` ≥ 100000) were present, because `bmcgetdownloadinfo` was inactive.
+  (`id` ≥ 100000) were present, because the vendor download-info method was inactive.
 - [ ] No per-peer **relay transaction** counts: not in `getpeerinfo` on any build
   measured (`[txrelay]` legs are the only source), and no method exposes them.
   Re-checked on `deploy-20260910ag` 2026-09-11 09:22:05Z: rows carry `relaytxes: true`,
@@ -453,10 +453,10 @@ Kept as checked rather than deleted, so nobody re-derives them.
 - [ ] **Three RPC sources on `deploy-20260910ag` that nothing reads yet**
   (opportunities, not features; MEASUREMENTS 27). Verified by `grep` over `server/` on
   2026-09-11: no call site for either method and no read of either field. The only
-  mention is the allowlist comment admitting `bmcgetdownloadinfo` to the read-only
-  console.
-  - **`bmcgetdownloadinfo`** (0.175 ms; read-only, shared memory). It is aimed at what
-    RPC-only mode loses per MEASUREMENTS 23. By source, **not yet measured while
+  mention is the allowlist comment admitting that vendor read method to the read-only
+  console via its vendor read prefix.
+  - **A vendor download-info method** (0.175 ms; read-only, shared memory). It is aimed
+    at what RPC-only mode loses per MEASUREMENTS 23. By source, **not yet measured while
     active**, it would supply: the worker ban count (`banned`); per-download-peer
     identity and rate (`peers[].addr/subver/bytes_recv/bps_recv`); and the download's
     own progress (`applied`, `end_height`, `window`, `first_hole`, `staged`,
@@ -464,10 +464,10 @@ Kept as checked rather than deleted, so nobody re-derives them.
     the accept/reject breakdown, archive holes or `sync_failing`, so those stay
     log-only. Idle it answers `{active:false, bytes_total:0}`, so a poller can call it
     unconditionally.
-  - **`bmc_build_commit` / `bmc_build_dirty`** in `getnetworkinfo`: build attestation
-    over RPC, which MEASUREMENTS 15/18/23 said did not exist. It could stamp provenance
-    and history rows, and invalidate cached capability answers on change. It is not a
-    reason to stop re-asking: §23 saw a counter change inside one process.
+  - **The build's own commit / dirty attestation fields** in `getnetworkinfo`: build
+    attestation over RPC, which MEASUREMENTS 15/18/23 said did not exist. It could stamp
+    provenance and history rows, and invalidate cached capability answers on change. It
+    is not a reason to stop re-asking: §23 saw a counter change inside one process.
   - **`getorphantxs 1`** (~0.2 ms): `{txid, bytes, parents, age_ms}`. `parents` is the
     count of missing inputs, i.e. *why* a transaction is stuck. It is an RPC source for
     the orphan figure that is log-only today.

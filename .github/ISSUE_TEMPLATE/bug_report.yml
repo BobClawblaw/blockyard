@@ -40,7 +40,6 @@ body:
       label: Which node is it watching?
       options:
         - Bitcoin Core
-        - Bitcoin Machine Code
         - The built-in fake node (npm run dev)
         - Something else
     validations:

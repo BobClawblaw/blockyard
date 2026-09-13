@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as fmt from '../public/js/fmt.js';
 
-// The exact string bmcbitcoind reports, read off the running node 2026-09-13.
+// The exact string the running node reports, read off it 2026-09-13.
 const PRE = 'This is a pre-release test build - use at your own risk - do not use for mining or merchant applications';
 
 test('the permanent pre-release notice is dropped from the banner', () => {

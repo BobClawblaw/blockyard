@@ -1,5 +1,5 @@
-# bmcbitcoind.deploy-20260910ag (getnetworkinfo: bmc_build_commit 860b8fdd, bmc_build_dirty false), production node, chain main
-# taken 2026-09-11 09:18:42Z: one `help` call, no params, JSON-RPC to 127.0.0.1:8331 with cookie auth; 3,028-byte reply, flat list, no categories
+# a non-Core node build (its getnetworkinfo carries build-commit/build-dirty fields Core does not), production node, chain main
+# taken 2026-09-11 09:18:42Z: one `help` call, no params, JSON-RPC over loopback with cookie auth; 3,028-byte reply, flat list, no categories
 # 165 names below = the reply's list verbatim (header prose dropped); diff a later `help` against this to name additions and removals (MEASUREMENTS 27)
 abandontransaction
 abortprivatebroadcast

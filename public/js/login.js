@@ -28,7 +28,7 @@ api('/api/me').then((r) => {
 api('/api/health').then(({ data }) => {
   if (!data || !Array.isArray(data.nodes)) return;
   const online = data.nodes.filter((n) => n.online).length;
-  sub.innerHTML = `Bitcoin Machine Code node monitor · <span class="${online ? 'ok' : 'bad'}">${online}/${data.nodes.length}</span> node(s) answering`;
+  sub.innerHTML = `Bitcoin node monitor · <span class="${online ? 'ok' : 'bad'}">${online}/${data.nodes.length}</span> node(s) answering`;
 });
 
 let countdown = null;

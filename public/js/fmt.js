@@ -127,7 +127,7 @@ export function uptime(ms) {
 // "how do we get rid of the node warning?" -- "This is a pre-release test build - use at your
 // own risk - do not use for mining or merchant applications").
 //
-// It is TRUE: bmcbitcoind is a pre-release build and says so on every poll, which means a red
+// It is TRUE: a node built from source reports itself pre-release on every poll, which means a red
 // caveat sits across the hero permanently and stops meaning anything. The fix is deliberately
 // the narrowest one available -- this exact notice, matched on the phrase bitcoind has always
 // used for it, and nothing else. "unknown new rules activated", a chain reorganisation, an

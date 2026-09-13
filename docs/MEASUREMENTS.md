@@ -9,8 +9,8 @@ Two nodes were live during this work:
 
 | name | RPC | datadir | chain | log |
 |---|---|---|---|---|
-| production | `127.0.0.1:8331` | `/storage/bitcoinmachinecode/data` | main | `logs/main/bitcoin.main.log` (systemd stdout, logrotated) |
-| bench | `127.0.0.1:8461` | `/mnt/2tbssd/bmc-bench/data` | main, **doing IBD** | `console.log` in the run dir, **not** `data/main/debug.log` (see §11) |
+| production | `127.0.0.1:8331` | `<datadir>` | main | `logs/main/bitcoin.main.log` (systemd stdout, logrotated) |
+| bench | `127.0.0.1:8461` | `/mnt/2tbssd/bench/data` | main, **doing IBD** | `console.log` in the run dir, **not** `data/main/debug.log` (see §11) |
 
 Auth is cookie: `<datadir>/<chain>/.cookie`, regenerated every start, deleted on
 stop. Resolve fresh, re-resolve on 401; a cached cookie is a restart away from
@@ -43,7 +43,7 @@ A top-level JSON array is answered on **one** connection (`docs/RPC_LIVE_NODE.md
 slice 11: "Batches never throw HTTP errors"). Verified:
 
 ```bash
-A=$(cat /storage/bitcoinmachinecode/data/main/.cookie)
+A=$(cat <datadir>/main/.cookie)
 curl -s --user "$A" http://127.0.0.1:8331/ -d '[
  {"jsonrpc":"1.0","id":"a","method":"getdifficulty","params":[]},
  {"jsonrpc":"1.0","id":"b","method":"getconnectioncount","params":[]},
@@ -64,7 +64,7 @@ getpeerinfo        -> []
 
 The node's `docs/RPC_LIVE_NODE.md` slice 2 describes a shared peer table that
 should fill this, and `rpc_fill_peer_slot(...)` is called in `main.c` — but the
-deployed build (`bmcbitcoind.deploy-20260907a`) publishes nothing. **This is a
+deployed build (`deploy-20260907a`) publishes nothing. **This is a
 node-side gap, not a monitor bug.** The monitor therefore:
 
 - renders peer **identity and activity from the log** (relay legs, block serving,
@@ -311,7 +311,7 @@ gave three different answers to the same three calls. This is the record.
 |---|---|---|---|
 | deployed to production, 04:16 and again 05:20 | 13 → 17 | **`[]`** | **0** |
 | bench, built 03:02, sampled 04:16 | 5 | 5 rows, bytes summing to 3,232 | 3,232 |
-| bench, rebuilt ~05:47, sampled 05:51 | 5 | **21 rows**, largest 201,608,074, `bmc_download_worker` field present | 2,116,236,872 |
+| bench, rebuilt ~05:47, sampled 05:51 | 5 | **21 rows**, largest 201,608,074, a download-worker marker field present | 2,116,236,872 |
 
 `getpeerinfo`'s 21 rows sum to 1,487,577,978 = **70.29%** of what `getnettotals`
 reports received. The missing third is traffic from peers no longer in the table,
@@ -338,16 +338,16 @@ published (`upload-unmeasurable`). A rate computed as `Δ(1129)/Δt` would have
 rendered as a calm `0 B/s` upload on a node doing 11 MB/s in the other direction.
 
 **RPC cannot tell you which regime you are in.** Both the build that reports 12.9 GB
-and the build that reports 0 answer `subversion: /BitcoinMachineCode:0.0.1/`,
-`version: 1`. The only build attestation on this box is the log banner
-(`===== bmcbitcoind LOG START … built Sep 8 2026 03:02 =====`). So "trust the RPC
-instead of the log" is not a safe global stance: the log is how you know whether
+and the build that reports 0 answer the same vendor `subversion` string and the same
+`version: 1`. The only build attestation on this box is the build's own log banner
+(`… LOG START … built Sep 8 2026 03:02 …`). So "trust the RPC instead of the log" is
+not a safe global stance: the log is how you know whether
 the RPC's zeros mean zero or mean *unpublished*.
 
 **Update 2026-09-11 (§27):** true of every build up to this date, and no longer of
-`deploy-20260910ag`. Its `getnetworkinfo` carries `bmc_build_commit` "860b8fdd" and
-`bmc_build_dirty` false. Older builds omit the field, so this paragraph still describes
-them.
+`deploy-20260910ag`. Its `getnetworkinfo` carries the build's own commit attestation
+field, "860b8fdd", and a dirty flag reading false. Older builds omit the field, so this
+paragraph still describes them.
 
 **And the log moved again, an hour after its parser was written.** At 05:42:27 the
 tick line gained a field:
@@ -373,21 +373,22 @@ rule 15 and DEFECTS.
 | `getmemoryinfo` | 2 | — | refused: `getmemoryinfo "stats" reports Bitcoin Core's SECURE ALLOCATOR…` |
 | `getlogging` | 2 | — | does not exist; the method is `logging`, which is denied as a mutator |
 
-There is **no `getlogevents`** and no BMC-specific stats method (171 methods,
+There is **no `getlogevents`** and no build-specific stats method (171 methods,
 identical lists on both builds), so the log buffer is not reachable over RPC:
 `[dlc]`'s write rate, `[tx_accept]`'s reject breakdown, `[check]`'s archive holes
 and `[utxo_live]`'s validation stalls have no RPC equivalent at any cadence.
 
 **Update 2026-09-11 (§27):** `deploy-20260910ag` serves **165** methods and has gained a
-BMC-specific one, `bmcgetdownloadinfo`. It covers the download's state, not the log's
-reject, write-rate or hole figures, and there is still no `getlogevents`. The 171-name
+build-specific one, a vendor download-info method with no Core counterpart. It covers
+the download's state, not the log's reject, write-rate or hole figures, and there is
+still no `getlogevents`. The 171-name
 list above was never saved, so the six dropped methods cannot be named. The 165-name list
 is in `docs/rpc-methods-2026-09-11.txt`.
 
 ## 17. Fourth build, and the parsers that died while nobody was looking
 
 At 06:21:35 the production node logged `[serve] shutting down (signal 15):
-tip=965914 outbound_legs=0` and came back as `bmcbitcoind.deploy-20260908a`. Two
+tip=965914 outbound_legs=0` and came back as `deploy-20260908a`. Two
 things were true the moment it returned:
 
 **1. The `[dlc] ==` progress line had changed parenthetical, and the rigid rule
@@ -435,7 +436,7 @@ lines are parsed: a new field costs that field (`extraFields`, values kept verba
 ## 18. Production deploy-20260908a: the RPC gap closed, and a port trap reloaded
 
 Fixed at 07:52 after an outage the monitor reported correctly the whole time
-(`bmc-main online false`, with the reason, no invented numbers).
+(`main online false`, with the reason, no invented numbers).
 
 **What actually broke was two lines in the node's `bitcoin.conf`.** The 06:21 deploy
 rewrote that file to four lines, dropping `rpcport=8331` and `port=8332`, so the
@@ -476,18 +477,18 @@ Same host, new build, 2 minutes after boot:
 | `getpeerinfo` | **`[]`** | **4 rows** |
 | sum of `bytesrecv` | 0 | **1,036,340 — exactly `getnettotals` recv** |
 | `getnettotals` sent | 0 | **310,937** |
-| `bmc_download_worker` in rows | — | absent (the bench build has it) |
+| download-worker marker field in rows | — | absent (the bench build has it) |
 
 So on the build production runs *now*, RPC-only mode can back the bandwidth and peer
 panels. Two caveats the data still shows: rows (4) were fewer than
-`getconnectioncount` (6), and `subversion` is still `/BitcoinMachineCode:0.0.1/` on
+`getconnectioncount` (6), and `subversion` is still the same vendor string on
 every build including the two that reported 0 bytes — so the log banner remains the
 only way to know which regime you are in, which is why `BLOCKYARD_LOG_SOURCE=0` states
 its losses instead of assuming they are gone.
 
 **Update 2026-09-11 (§27):** on `deploy-20260910ag` both caveats moved. Rows equal
 connections (9 of 9, 09:22Z), and `getnetworkinfo` attests the build
-(`bmc_build_commit` "860b8fdd"). Rows now sum to 99.99% of `getnettotals` because that
+(commit attestation "860b8fdd"). Rows now sum to 99.99% of `getnettotals` because that
 total no longer counts closed peers, not because it covers them.
 
 ## 19. Cadences, measured — because a stale-warning needs a number, not a feeling
@@ -590,7 +591,7 @@ being discovered as "where did my history go".
 
 ## 21. What monitoring the benchmark cost, and why it stopped
 
-The benchmark node (`bmc-bench`) was removed from the default configuration on
+The benchmark node (`bench`) was removed from the default configuration on
 2026-09-08. Not because its data was wrong — because on this box the act of watching
 it was load, and it could not be read reliably enough to be worth that load.
 
@@ -603,7 +604,7 @@ polling-monitored node was the same mistake with better branding.
 
 **Reliability, measured over roughly one hour of it being watched:**
 
-| measurement | bmc-bench | bmc-main, same monitor, same code |
+| measurement | bench | main, same monitor, same code |
 |---|---|---|
 | RPC average latency | ~18–32 s | ≤ 22 ms |
 | RPC timeouts | 90 s, on fast *and* slow tiers | 0 |
@@ -728,7 +729,7 @@ them mine.
 No restart happened in between — see the process tree below. So "does this node publish
 byte counters?" is not only a question about **which build** (the 03:02 bench build
 answered 11.56 MB/s against the 11.2 MB/s in its own log while the production build
-answered 0, both reporting subversion `/BitcoinMachineCode:0.0.1/`); it is a question
+answered 0, both reporting the same vendor subversion string); it is a question
 about **when**, answerable only by asking again. Anything in this repo that caches the
 answer — a flag string, a provenance row, a panel that stays empty out of habit — is a
 staleness bug with documentation attached. Peer identity did **not** change: `getpeerinfo`
@@ -924,16 +925,16 @@ The raw responses stayed in the session scratch and are **not** committed, becau
 ### Which build answered, and RPC can now say so
 
 ```
-09:20:05Z getnetworkinfo   bmc_build_commit "860b8fdd"   bmc_build_dirty false
-                           subversion /BitcoinMachineCode:0.0.1/  version 1   connections 9 (in 0 / out 9)
+09:20:05Z getnetworkinfo   build commit "860b8fdd"   build dirty false
+                           subversion <the build's own vendor string>  version 1   connections 9 (in 0 / out 9)
 09:20:32Z uptime           10823            -> RPC up since 06:20:09Z
 09:23:06Z getblockchaininfo blocks 966,485 == headers 966,485, initialblockdownload false, vp 1
 ```
 
 Cross-checked off the wire. The daemon pid (started 06:18:24Z per `ps lstart`, box in
-UTC) has `/proc/<pid>/exe` → `bmcbitcoind.deploy-20260910ag`, and its log banner reads
-`LOG START: 2026-09-11 06:18:25 UTC … v0.0.1 built Sep 10 2026 20:04:29`. The
-`bmcbitcoind.live` symlink points at the same file, but its mtime was 09:24 (touched
+UTC) has `/proc/<pid>/exe` → the deployed build `deploy-20260910ag`, and its log banner
+reads `LOG START: 2026-09-11 06:18:25 UTC … v0.0.1 built Sep 10 2026 20:04:29`. The
+build's `live` symlink points at the same file, but its mtime was 09:24 (touched
 *during* the survey), so it was not taken as evidence. `uptime` started 105 s after the
 process did, the same shape as §18's ~100 s bind delay.
 
@@ -969,7 +970,7 @@ the node's source** (`asm/rpc_node.c`, `asm/rpc_chain.c`), not from `help`.
 
 | method | read-only? (from source) | params | latency | shape |
 |---|---|---|---|---|
-| `bmcgetdownloadinfo` | yes: reads the shared-memory `node_status_t` the download publishes; no Core counterpart | none | **0.175 ms** (09:22:08Z) | measured idle: `{"active":false,"bytes_total":0}`, 71 B. **The download-time shape is read from source and was NOT measured on the wire** (production was synced): `workers, pool_idle_pct, pool, banned, free_peers, window, first_hole, claim, applied, end_height, staged, stall_timeout_s, stall_evictions, median_bps, bytes_total`, plus `peers[]` of `{worker, addr, subver, services, startingheight, conntime, bytes_recv, bps_recv, idle_pct, inflight_lo, inflight_hi}` |
+| the build's own download-info method | yes: reads the shared-memory `node_status_t` the download publishes; no Core counterpart | none | **0.175 ms** (09:22:08Z) | measured idle: `{"active":false,"bytes_total":0}`, 71 B. **The download-time shape is read from source and was NOT measured on the wire** (production was synced): `workers, pool_idle_pct, pool, banned, free_peers, window, first_hole, claim, applied, end_height, staged, stall_timeout_s, stall_evictions, median_bps, bytes_total`, plus `peers[]` of `{worker, addr, subver, services, startingheight, conntime, bytes_recv, bps_recv, idle_pct, inflight_lo, inflight_hi}` |
 | `getorphantxs` | yes: a compact snapshot the worker shares | verbosity `0` or `1`; `2` (hex) is refused `-8` by source | v0 **0.253 ms**, 375 B; v1 **0.200 ms**, 622 B | v0: 5 txids. v1: `{txid, bytes, parents, age_ms}`; 5 orphans, `bytes` 3,071 ×4 and 195, `parents` 1 each, `age_ms` 97,934–217,047. Core fields absent by source: `wtxid`, `vsize`, `weight`, `expiration`, `from`. `parents` (inputs still missing) is this node's own |
 | `getprivatebroadcastinfo` | yes (its sibling `abortprivatebroadcast` is a control op, not invoked) | none | 0.187 ms | HTTP 404, `-32601` "Private broadcast is not enabled. Ensure you're running Bitcoin Core with -privatebroadcast=1": the option is off on production |
 | `getaddressbalance` / `getaddresstxids` | read, from the address-index journal; Core has no such methods | address, array, or `{"addresses":[…]}` | **not invoked** | by source: answers only with `addrindex=1`; `getaddresstxids` returns up to 100,000 txids. A monitor has no address to ask about |
@@ -997,7 +998,7 @@ the node's source** (`asm/rpc_node.c`, `asm/rpc_chain.c`), not from `help`.
 |---|---|---|---|
 | 09:22:05.667 | `getpeerinfo`, 9 rows, summed | 109,027,561 | 34,804,574 |
 | 09:22:07.189 | `getnettotals` | **109,036,122** | 34,807,044 |
-| 09:22:08.709 | `bmcgetdownloadinfo` | `bytes_total` 0 | — |
+| 09:22:08.709 | the download-info method | `bytes_total` 0 | — |
 | 09:23:03.804 | `getnettotals` | **89,979,098** | 30,012,780 |
 | 09:23:36.938 | `getpeerinfo`, **8** rows, summed | 90,137,131 | 30,063,796 |
 | 09:23:38.456 (served 09:23:41.372) | `getnettotals` | 90,139,443 | 30,066,175 |
@@ -1005,7 +1006,7 @@ the node's source** (`asm/rpc_node.c`, `asm/rpc_chain.c`), not from `help`.
 The counter fell **19,057,024** bytes received (4,794,264 sent) in 56.6 s. The row missing
 at 09:23:36 (`id` 15) held **19,303,469** / 4,868,658 at 09:22:05. The difference,
 246,445 / 74,394, is what the surviving peers moved in between. The download term was 0
-(`bmcgetdownloadinfo` inactive), so the drop is exactly one departed peer.
+(the download-info method reported inactive), so the drop is exactly one departed peer.
 
 The node's source says so in so many words. `cmd_getnettotals` sums the `used` slots of
 the live peer table plus `dl_bytes_total`, and comments: *"Core counts bytes for the
@@ -1041,8 +1042,9 @@ somebody else's call.
 
 ### Not wired, as of this survey
 
-`grep` over `server/`, 2026-09-11: nothing calls `bmcgetdownloadinfo` or `getorphantxs`,
-and nothing reads `bmc_build_commit`/`bmc_build_dirty`. The only `server/` mention is the
-allowlist comment that admits `bmcgetdownloadinfo` to the read-only console via its
-`bmcget` prefix. What each could supply is listed in DEFECTS (Functional gaps) as an
+`grep` over `server/`, 2026-09-11: nothing calls the download-info method or
+`getorphantxs`, and nothing reads the build's commit/dirty attestation fields. The only
+`server/` mention is the allowlist comment that admits the download-info method to the
+read-only console via its vendor method-name prefix. What each could supply is listed in
+DEFECTS (Functional gaps) as an
 opportunity, not a feature.

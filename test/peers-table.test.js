@@ -1,5 +1,5 @@
 // The Peers page shows what getpeerinfo publishes (operator, 2026-09-11: "Doesn't the
-// bmc rpc pull more info for peers now?"). Addresses here are documentation ranges.
+// the rpc pull more info for peers now?"). Addresses here are documentation ranges.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

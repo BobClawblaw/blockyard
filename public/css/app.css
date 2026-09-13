@@ -138,7 +138,7 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
 @media (max-width: 1760px) { #whoami { display: none; } nav.pages button { padding: 6px 8px; } }
 @media (max-width: 1500px) { .brand small { display: none; } .top .meta > span[title="Monitor uptime"] { display: none; } }
 /* 16ch cut a real node name in half (measured at 1280: a 106px box holding 159px of text, so
-   "BMC mainnet (production)" read as "BMC mainnet (p..."), and 22ch still fell 13px short of it.
+   a long node label read as "Bitcoin Core (mainn..."), and 22ch still fell 13px short of it.
    26ch clears the longest built-in label with room to spare, and there is room to give: the RPC
    readout is already hidden at this width and the chip still ends ~255px clear of the window edge.
    The ellipsis and the tooltip (which names the node AND its endpoint) remain the backstop for

@@ -2,7 +2,7 @@
   "name": "blockyard",
   "version": "0.0.9",
   "private": true,
-  "description": "Live web monitor, 3D block-space viewer, block explorer and markets view for a Bitcoin node (Bitcoin Core or Bitcoin Machine Code)",
+  "description": "Live web monitor, 3D block-space viewer, block explorer and markets view for a Bitcoin Core node",
   "license": "Apache-2.0",
   "keywords": [
     "bitcoin",

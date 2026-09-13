@@ -1,7 +1,7 @@
 # Rules
 
 Rules earned by breaking things in this repo. Each cites the defect that produced
-it, in the house style of `/storage/bitcoinmachinecode/docs/ENGINEERING_RULES.md`:
+it, in the house style of the node project's own engineering rules:
 a rule without its scar tissue gets argued away by the next session.
 
 ---

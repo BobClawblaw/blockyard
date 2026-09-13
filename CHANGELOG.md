@@ -213,7 +213,7 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
 
 ### Monitor
 
-- Live dashboard for one or more Bitcoin Machine Code nodes over JSON-RPC, with an optional
+- Live dashboard for one or more Bitcoin nodes over JSON-RPC, with an optional
   log source: Overview, Chain & Sync, Mempool, Peers, Network, Mining, Events, Node & RPC and
   Admin tabs, updated once a second over Server-Sent Events.
 - Sync viewer whose bar is blocks held over announced headers, with the node's own progress

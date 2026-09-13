@@ -46,12 +46,12 @@ When TLS is configured (`BLOCKYARD_TLS_CERT` + `BLOCKYARD_TLS_KEY`), every liste
 
 ### Multi-node: the `node` parameter
 
-A monitor can watch several nodes. Every per-node endpoint accepts `?node=<id>` (`?nodeId=` is an alias, except on `/api/stream`). When it is omitted, the first configured node (the "primary") answers. `/api/nodes` lists the configured ids. The built-in default id is `bmc-main`, and the examples use it.
+A monitor can watch several nodes. Every per-node endpoint accepts `?node=<id>` (`?nodeId=` is an alias, except on `/api/stream`). When it is omitted, the first configured node (the "primary") answers. `/api/nodes` lists the configured ids. The built-in default id is `main`, and the examples use it.
 
 An unknown id is a `404`:
 
 ```json
-{ "error": { "message": "no node \"nope\"; known: bmc-main", "kind": "api", "code": null } }
+{ "error": { "message": "no node \"nope\"; known: main", "kind": "api", "code": null } }
 ```
 
 These endpoints are **not** per-node: `/api/health`, `/api/build`, `/api/nodes`, `/api/telemetry`, `/api/config`, `/api/events` (rows carry a `node` field but there is no node filter), `/api/markets*`, and the account/admin routes.
@@ -227,7 +227,7 @@ Auth `none`, not rate limited. Built for uptime probes. `ok` is `true` when at l
   "uptimeSec": 1519,
   "authRequired": false,
   "nodes": [
-    { "id": "bmc-main", "label": "BMC mainnet", "online": true, "optional": false,
+    { "id": "main", "label": "Bitcoin Core", "online": true, "optional": false,
       "chain": "main", "tip": 966546, "lastError": null }
   ]
 }
@@ -298,8 +298,8 @@ Trimmed example:
 
 ```json
 {
-  "id": "bmc-main",
-  "label": "BMC mainnet",
+  "id": "main",
+  "label": "Bitcoin Core",
   "color": "#f7931a",
   "online": true,
   "chain": "main",
@@ -309,7 +309,7 @@ Trimmed example:
            "time": 1789154285, "mediantime": 1789151883, "ageSec": 1403, "behindHeaders": 0 },
   "sync": { "state": "synced", "height": 966546, "headers": 966546, "behind": 0, "pct": 100,
             "verificationProgress": 100, "etaSec": null, "eta": null, "rateTrend": "stalled",
-            "node": "bmc-main", "nodeLabel": "BMC mainnet", "endpoint": "http://127.0.0.1:8331",
+            "node": "main", "nodeLabel": "Bitcoin Core", "endpoint": "http://127.0.0.1:8332",
             "strip": [ { "label": "chain", "...": "..." } ] },
   "difficulty": 127450789715843.1,
   "hashrateEstEh": 200.1,
@@ -352,12 +352,12 @@ Only the sync bar's data: small enough to poll hard from a status widget.
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "sync": { "state": "synced", "chain": "main", "height": 966546, "headers": 966546, "behind": 0,
             "pct": 100, "verificationProgress": 100, "headersMayLag": false, "tipAgeSec": 1408,
             "etaSec": null, "etaBest": null, "etaWorst": null, "blocksPerMin": null,
             "avgBlockGapSec": 636.7, "sizeOnDisk": 767996069971, "peers": 11, "reorgs": 0,
-            "warnings": [], "reason": null, "caveats": [], "node": "bmc-main", "strip": [] },
+            "warnings": [], "reason": null, "caveats": [], "node": "main", "strip": [] },
   "tip": { "height": 966546, "headers": 966546, "hash": "0000...a4aa", "ageSec": 1408, "behindHeaders": 0 },
   "chain": "main",
   "ibd": false,
@@ -372,11 +372,11 @@ Every configured node with its sync state.
 ```json
 {
   "nodes": [
-    { "id": "bmc-main", "label": "BMC mainnet", "rpcUrl": "http://127.0.0.1:8331", "chain": "main",
+    { "id": "main", "label": "Bitcoin Core", "rpcUrl": "http://127.0.0.1:8332", "chain": "main",
       "online": true, "optional": false, "syncState": "synced", "pct": 100,
       "height": 966546, "headers": 966546, "syncing": false }
   ],
-  "primary": "bmc-main",
+  "primary": "main",
   "attention": []
 }
 ```
@@ -404,7 +404,7 @@ An unknown name or field is a `400` that lists the valid ones.
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "rangeMs": 900000,
   "bucketMs": 45000,
   "series": {
@@ -456,7 +456,7 @@ The mempool panel's data, including the scatter points and treemap cells that th
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "feed": { "kind": "poll", "cadenceSec": 60, "streamAvailable": false,
             "why": "the node refuses zmqpubsequence: ...",
             "source": "getrawmempool verbose on the 20 s pool tier + [tx_accept]/[txrelay] log lines" },
@@ -503,7 +503,7 @@ Every transaction in the next block's worth of the pool, richest feerate first: 
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "at": 1789155648684,
   "blockVsize": 1000000,
   "n": 4107,
@@ -535,7 +535,7 @@ Recent blocks with per-block statistics from `getblockstats`.
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "blocks": [
     { "t": 1789154285000, "height": 966546,
       "hash": "0000000000000000000019f6fb9d8e1e43e9d72916b2ed8aef080c778685a4aa",
@@ -570,7 +570,7 @@ With neither `hash` nor `height`, the current tip is returned. A malformed hash 
 ```json
 {
   "ok": true,
-  "node": "bmc-main",
+  "node": "main",
   "requested": { "hash": null, "height": "966000",
                  "resolvedHash": "0000000000000000000013b8a367391f68a9891808c636ced0a399cdc1e0d5ab",
                  "resolvedHeight": 966000 },
@@ -598,7 +598,7 @@ With neither `hash` nor `height`, the current tip is returned. A malformed hash 
 When the node refuses (for example, a pruned block), the answer is `200` with:
 
 ```json
-{ "ok": false, "node": "bmc-main", "query": { "hash": null, "height": "12" },
+{ "ok": false, "node": "main", "query": { "hash": null, "height": "12" },
   "error": { "message": "Block not available (pruned data)", "code": -1, "kind": "rpc" },
   "hint": "the node does not have this block stored (pruned, ...)" }
 ```
@@ -616,7 +616,7 @@ One transaction, decoded by the node (`getrawtransaction` verbosity 1).
 ```json
 {
   "ok": true,
-  "node": "bmc-main",
+  "node": "main",
   "requested": { "txid": "9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69", "block": null },
   "txid": "9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69",
   "size": 222, "vsize": 141, "weight": 561, "version": 2, "locktime": 0,
@@ -687,7 +687,7 @@ Uses `getrawtransaction` verbosity 2, which carries the fee and every prevout. T
 ```json
 {
   "ok": true,
-  "node": "bmc-main",
+  "node": "main",
   "tx": {
     "txid": "9891f72bea4bc27b8dd3990295be331e5e9ae69bc152c5ad31862efbb624ae69",
     "hash": "00267bf1d6de9f1a811665fe9cbe3f8f551ead73703e41e4b7f0ecb097669c8e",
@@ -730,7 +730,7 @@ Uses `getrawtransaction` verbosity 2, which carries the fee and every prevout. T
 ```json
 {
   "ok": true,
-  "node": "bmc-main",
+  "node": "main",
   "block": { "hash": "0000000000000000000013b8a367391f68a9891808c636ced0a399cdc1e0d5ab",
              "height": 966000, "confirmations": 547, "time": 1788831647, "mediantime": 1788829927,
              "size": 1661742, "strippedsize": 777394, "weight": 3993924, "version": 551559168,
@@ -772,7 +772,7 @@ This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`
 ```json
 {
   "ok": true,
-  "node": "bmc-main",
+  "node": "main",
   "address": "bc1qqe2mj05z2q4zrqly789r59q5k53rhtgn8hznl0",
   "type": "witness v0",
   "scriptType": null,
@@ -804,7 +804,7 @@ Pool attribution over the observed window of recent blocks, plus the cached bloc
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "recent": [
     { "height": 966546, "hash": "0000...a4aa", "at": 1789154285000, "poolKey": "viabtc",
       "tagText": "/ViaBTC/", "tagSource": "push", "tagParseable": true, "tagHeightMatch": true,
@@ -848,7 +848,7 @@ The block being built right now, from `getblocktemplate`. It is fetched **on dem
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "height": 966547,
   "previous": "0000000000000000000019f6fb9d8e1e43e9d72916b2ed8aef080c778685a4aa",
   "txCount": 1186,
@@ -880,7 +880,7 @@ When no template is available, the answer is `{ "node": "...", "unavailable": "<
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "counts": { "connections": 11, "in": 0, "out": 11, "wanted": null, "budget": null,
               "banned": null, "bannedOf": null },
   "ranking": null,
@@ -891,7 +891,7 @@ When no template is available, the answer is `{ "node": "...", "unavailable": "<
   "rpcPeers": [ { "id": 3, "addr": "192.0.2.10:8333", "subver": "/Satoshi:27.0.0/", "...": "getpeerinfo row, verbatim" } ],
   "activity": [],
   "recentEvents": [],
-  "network": { "version": 10000, "subversion": "/BitcoinMachineCode:0.0.1/", "protocol": 70016,
+  "network": { "version": 10000, "subversion": "/Satoshi:29.0.0/", "protocol": 70016,
                "services": "0000000000000409", "servicesNames": [ "NETWORK", "WITNESS" ],
                "networkactive": true, "relayfee": 0.00001, "incrementalfee": 0.00001,
                "networks": [], "localaddresses": [] }
@@ -908,7 +908,7 @@ Bandwidth and disk, with every absent figure listed in words.
 
 ```json
 {
-  "node": "bmc-main",
+  "node": "main",
   "measured": { "inBps": null, "diskWriteBps": null, "netTotalLog": null, "diskTotal": null,
                 "avgRecv": null, "avgWrite": null, "floor": null, "poolMedian": null,
                 "source": "getnettotals delta rate (RPC) — reported only while that counter moves; ...",
@@ -946,7 +946,7 @@ The monitor's own event feed: collector errors, quality flags, new tips, reorgs 
     { "seq": 194639, "source": "monitor", "kind": "collector_error", "severity": "warn",
       "tag": "collector", "ts": 1789107616900,
       "text": "getrawmempool verbose failed: RPC circuit breaker open; retry in 22s (...)",
-      "node": "bmc-main" }
+      "node": "main" }
   ],
   "maxSeq": 194639,
   "count": 8
@@ -1039,13 +1039,13 @@ Auth `any`, with CSRF when accounts are on. Runs one **read-only** RPC method ag
 Success:
 
 ```json
-{ "ok": true, "node": "bmc-main", "method": "getblockcount", "ms": 314, "result": 966546, "note": null }
+{ "ok": true, "node": "main", "method": "getblockcount", "ms": 314, "result": 966546, "note": null }
 ```
 
 The node returned an error (still HTTP 200):
 
 ```json
-{ "ok": false, "node": "bmc-main", "method": "getblock", "ms": 12,
+{ "ok": false, "node": "main", "method": "getblock", "ms": 12,
   "error": { "message": "Block not found", "code": -5, "kind": "rpc" } }
 ```
 
@@ -1077,9 +1077,9 @@ The default is **deny**. The rules are applied in this order, and the first matc
    | Heavy reads that monopolise the single-threaded RPC server | `rescanblockchain`, `scanblocks`, `scantxoutset`, `getdescriptoractivity`, `verifychain` |
    | Other | `logging` |
 
-3. **Deny prefixes**: denied. The prefixes are `generate`, `invalidate`, `reconsider`, `import`, `send`, `set`, `unload`, `load`, `sign`, plus the node's own mutating shapes `bmcset`, `bmcsend`, `bmcimport`, `bmcload`, `bmcsign`, `bmcgenerate`, `bmcinvalidate`, `bmcreconsider`.
+3. **Deny prefixes**: denied. The prefixes are `generate`, `invalidate`, `reconsider`, `import`, `send`, `set`, `unload`, `load`, `sign`. A node that adds vendor-prefixed commands of its own beyond Core's RPC set has the mutating shapes of those denied too, by the same rule.
 4. `help` and `uptime` are allowed. `stop` is denied.
-5. **Allow prefixes**: allowed. The prefixes are `get`, `list`, `estimate`, `verify`, `help`, `uptime`, `decoderaw`, `decodescript`, `createraw`, `analyzepsbt`, `decodepsbt`, `convertbits`, `getrpcinfo`, and the node's own read verbs `bmcget`, `bmclist`, `bmcestimate`, `bmcverify`. A bare `bmc` prefix is **not** allowed.
+5. **Allow prefixes**: allowed. The prefixes are `get`, `list`, `estimate`, `verify`, `help`, `uptime`, `decoderaw`, `decodescript`, `createraw`, `analyzepsbt`, `decodepsbt`, `convertbits`, `getrpcinfo`. Where a node adds vendor-prefixed commands, its **read** verbs are admitted by name (its `get`/`list`/`estimate`/`verify` forms) and the bare vendor prefix is **not**, so a future vendor-prefixed `setban` cannot be pre-authorised.
 6. **Anything else**: denied, with the message "not recognised as a read-only method; add it to server/rpc/allowlist.js if this is wrong".
 
 Consequences worth knowing:
@@ -1289,7 +1289,7 @@ Auth `admin`.
 
 ```json
 {
-  "entries": [ { "at": 1789155000000, "type": "rpc", "ok": true, "username": "alice", "node": "bmc-main",
+  "entries": [ { "at": 1789155000000, "type": "rpc", "ok": true, "username": "alice", "node": "main",
                  "method": "getblockcount", "ms": 12, "ip": "192.0.2.20" } ],
   "limit": 100,
   "log": { "file": "audit.jsonl", "files": 1, "totalBytes": 20480, "currentBytes": 20480,
@@ -1312,8 +1312,8 @@ The monitor's own health: process, RPC client, log tail, stream clients and the 
   "self": { "t": 1789155700000, "rssMb": 175.6, "heapMb": 42.8, "sseClients": 5, "usersActive": 0,
             "cpuPct": 2.71, "eventRate": 0, "build": "0.1.0-fd620adc52" },
   "nodes": [
-    { "id": "bmc-main",
-      "rpc": { "nodeId": "bmc-main", "url": "http://127.0.0.1:8331", "cookieSource": "...", "online": true,
+    { "id": "main",
+      "rpc": { "nodeId": "main", "url": "http://127.0.0.1:8332", "cookieSource": "...", "online": true,
                "lastGoodAt": 1789155699000, "lastError": null, "breakerOpen": false, "breaker": {},
                "queued": 0, "calls": 12345, "batches": 2345, "methods": {}, "errors": 3, "timeouts": 0,
                "authRetries": 0, "breakerTrips": 1, "lastLatencyMs": 8, "avgLatencyMs": 40,
@@ -1322,10 +1322,10 @@ The monitor's own health: process, RPC client, log tail, stream clients and the 
       "tiers": { "fast": 1789155699000 },
       "lastTier": {},
       "history": { "mempool": { "points": 5000, "firstAt": 1789000000000, "lastAt": 1789155699000,
-                                "unattributed": 0, "nodes": [ "bmc-main" ] } } }
+                                "unattributed": 0, "nodes": [ "main" ] } } }
   ],
   "sse": { "clients": 1, "perClient": [ { "id": 1, "user": "anonymous", "seconds": 1666, "kb": 243531,
-                                          "dropped": { "snapshot": 0, "series": 0, "events": 0 }, "node": "bmc-main" } ] },
+                                          "dropped": { "snapshot": 0, "series": 0, "events": 0 }, "node": "main" } ] },
   "audit": { "file": "audit.jsonl", "files": 1, "totalBytes": 20480, "...": "as in /api/audit log" }
 }
 ```
@@ -1338,8 +1338,8 @@ The effective, non-secret configuration and the access posture.
 {
   "poll": { "fastMs": 4000, "midMs": 15000, "poolMs": 20000, "slowMs": 60000, "rareMs": 900000, "blockBackfill": 30 },
   "rpc": { "maxInFlight": 1, "minIntervalMs": 250, "maxRatePerSec": 4, "timeoutMs": 90000 },
-  "allowlist": { "denyExactCount": 68, "allowPrefixes": [ "analyzepsbt", "bmcestimate", "..." ],
-                 "denyPrefixes": [ "bmcgenerate", "..." ], "defaultDecision": "deny" },
+  "allowlist": { "denyExactCount": 68, "allowPrefixes": [ "analyzepsbt", "convertbits", "..." ],
+                 "denyPrefixes": [ "generate", "..." ], "defaultDecision": "deny" },
   "actions": { "enabled": false, "allow": [] },
   "retention": { "hours": 72, "ringCapacity": 20000, "events": 5000 },
   "access": { "mode": "open", "anonymous": true, "role": "viewer", "writesAllowed": false },
@@ -1360,7 +1360,7 @@ Server-Sent Events over plain HTTP: one-way, node to browser, with no WebSocket 
 ### Connecting
 
 ```
-GET /api/stream?node=bmc-main
+GET /api/stream?node=main
 Accept: text/event-stream
 ```
 
@@ -1378,7 +1378,7 @@ The stream opens with the comment line `: stream open`. After that:
 | Event | `id:` | Cadence | `data` |
 |---|---|---|---|
 | `snapshot` | the global `seq` | at most 1/s per node, sent when a collector tier finishes | The same object as `GET /api/state` without `app` and `user`, and with the default series windows included. It is large: hundreds of KB with series. |
-| `series` | — | every 20 s while any client is connected | `{ "node": "bmc-main", "series": { "mempool": { "hour": [ {"t","v"} ], "...": "..." }, "...": "..." } }` (the windows in section 5) |
+| `series` | — | every 20 s while any client is connected | `{ "node": "main", "series": { "mempool": { "hour": [ {"t","v"} ], "...": "..." }, "...": "..." } }` (the windows in section 5) |
 | `events` | — | batched as they occur | An array of event rows, same shape as `/api/events` rows. Routine `raw`/`info` chatter is filtered out. |
 | comment `: ping` | — | every 15 s | Heartbeat. There is no payload. |
 
@@ -1389,10 +1389,10 @@ Example wire format:
 
 id: 406
 event: snapshot
-data: {"id":"bmc-main","label":"BMC mainnet","online":true,"chain":"main","tip":{"height":966546,...},"seq":406,...}
+data: {"id":"main","label":"Bitcoin Core","online":true,"chain":"main","tip":{"height":966546,...},"seq":406,...}
 
 event: events
-data: [{"seq":194640,"source":"monitor","kind":"tip_jump","severity":"info","ts":1789155700000,"text":"...","node":"bmc-main"}]
+data: [{"seq":194640,"source":"monitor","kind":"tip_jump","severity":"info","ts":1789155700000,"text":"...","node":"main"}]
 
 : ping
 
@@ -1427,7 +1427,7 @@ curl -s 'http://127.0.0.1:21000/api/x/tx?txid=9891f72bea4bc27b8dd3990295be331e5e
 Stream live updates (`-N` turns off curl's buffering):
 
 ```sh
-curl -sN 'http://127.0.0.1:21000/api/stream?node=bmc-main' | grep --line-buffered '^event:'
+curl -sN 'http://127.0.0.1:21000/api/stream?node=main' | grep --line-buffered '^event:'
 ```
 
 Query market depth. The first call starts exchange polling, and books appear within about 30 s:
@@ -1456,7 +1456,7 @@ CSRF=$(curl -s -c jar.txt -H 'Content-Type: application/json' \
 curl -s -b jar.txt "$B/api/me" | jq .user
 curl -s -b jar.txt -X POST -H 'Content-Type: application/json' -H "X-CSRF-Token: $CSRF" \
   -d '{"method":"getmempoolinfo"}' "$B/api/rpc" | jq .result.size
-curl -sN -b jar.txt "$B/api/stream?node=bmc-main"
+curl -sN -b jar.txt "$B/api/stream?node=main"
 ```
 
 Poll the event feed incrementally:

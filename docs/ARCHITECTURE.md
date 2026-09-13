@@ -18,7 +18,7 @@ Companion documents:
 ## 1. The big picture
 
 blockyard is a single Node.js process (Node 22 or later) with **no dependencies**.
-It sits between one or more Bitcoin Machine Code (`bmc`) nodes and any number of
+It sits between one or more Bitcoin Core nodes and any number of
 browsers:
 
 - **Upstream**, it reads each node's JSON-RPC interface. If configured, it also
@@ -28,7 +28,7 @@ browsers:
 
 ```mermaid
 flowchart LR
-  subgraph node["bmc node (one per configured node)"]
+  subgraph node["Bitcoin node (one per configured node)"]
     RPC["JSON-RPC server<br/>single connection, single thread"]
     LOG["log file<br/>(optional)"]
   end
@@ -380,11 +380,11 @@ The read-only console (`POST /api/rpc`) may only call methods that
    methods that start with `get`), spends, wallet state, peer control, chain
    mutators, and heavy reads that would monopolise the node (`rescanblockchain`,
    `scantxoutset`, `verifychain`, ...).
-2. **Deny prefixes** such as `send`, `set`, `import`, `sign`, and their `bmc*`
-   forms.
+2. **Deny prefixes** such as `send`, `set`, `import`, `sign` -- and, on a node that
+   adds vendor-prefixed commands of its own, their vendor-prefixed forms too.
 3. **Allow prefixes** that read as reads: `get`, `list`, `estimate`, `decode*`,
-   ..., plus the node's own `bmcget`, `bmclist`, `bmcestimate` and `bmcverify`. A
-   bare `bmc` prefix is deliberately not allowed.
+   ... A node's vendor-prefixed **read** verbs are admitted by name; the bare vendor
+   prefix deliberately is not, so a future vendor-prefixed `setban` cannot slip in.
 4. **Anything else is denied.** The reply says which file to edit.
 
 Node **writes** do not go through this file. They are named `ACTIONS` behind

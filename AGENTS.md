@@ -3,9 +3,10 @@
 Read this first, then `docs/MEASUREMENTS.md` (and, on a working copy that keeps one, the
 latest file in the local `worklog/`).
 
-This is a multi-user web monitor for the **Bitcoin Machine Code** node at
-`/storage/bitcoinmachinecode`. It reads that node's JSON-RPC and follows its log,
-and serves charts plus a live event feed to several users at once.
+This is a multi-user web monitor for a **Bitcoin Core** node. It reads the node's
+JSON-RPC and follows its log, and serves charts plus a live event feed to several users
+at once. This box watches the node configured in `config/local.json` / the unit's
+`BLOCKYARD_NODE_*` environment.
 
 ## Run it
 
@@ -188,7 +189,7 @@ silently ate another test's result line — rule 22.
    node gave three different answers. Deployed build: `getpeerinfo []` with
    `getconnectioncount 13-17` and `getnettotals 0/0`. A 03:02 build: peer rows whose
    bytes summed to exactly `getnettotals` = 3,232 B while its log moved ~47 GB. A
-   ~05:47 build: 21 rows with up to 201 MB each, `bmc_download_worker` marked, and a
+   ~05:47 build: 21 rows with up to 201 MB each, a download-worker marker present, and a
    `getnettotals` delta-rate matching its own stated rate to 3%. Per-peer throughput
    and every reject/stall/hole figure are still log-only, and there is no
    `getlogevents` on either build (171 identical methods on 2026-09-08; 165 on
@@ -356,7 +357,7 @@ page, CLI user admin, systemd unit, fake node for dev. Log-derived sources repor
 their own coverage (`log.health.ratio`) and flag a tail that is missing, silent, or
 no longer matching any rule.
 
-Watches **production only** by default (`bmc-main`); multi-node is supported via
+Watches **production only** by default (the first configured node); multi-node is supported via
 `config/local.json` and was verified against two live nodes, but the benchmark node was
 dropped from the defaults on measured grounds — see `MEASUREMENTS 21` and the comment in
 `server/config.js`.

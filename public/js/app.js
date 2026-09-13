@@ -207,7 +207,7 @@ export function renderSyncHero(box, s) {
       <span class="sf node" title="${F.esc(sync.endpoint ?? '')}"><b>${F.esc(sync.nodeLabel ?? s?.label ?? 'node')}</b></span>
       <span class="sf pct-big ${done ? 'ok' : 'accent'}" title="${F.esc(pctTitle)}"><b>${pct == null ? '–' : pct.toFixed(pct >= 99.995 ? 4 : 2)}%</b></span>
       ${facts}
-      ${others.length ? others.map((n) => `<button class="sf jump" data-jump-node="${F.esc(n.id)}" title="Switch to this node"><i>also syncing</i><b>${F.esc(n.label.replace(/^BMC /, ''))} ${n.pct == null ? '…' : n.pct.toFixed(0) + '%'}</b></button>`).join('') : ''}
+      ${others.length ? others.map((n) => `<button class="sf jump" data-jump-node="${F.esc(n.id)}" title="Switch to this node"><i>also syncing</i><b>${F.esc(n.label)} ${n.pct == null ? '…' : n.pct.toFixed(0) + '%'}</b></button>`).join('') : ''}
       <span class="strip-tail">
         ${caveats.length ? `<span class="sf note-count ${caveats.some((c) => /LONGER|stall|backwards|hide the stall/.test(c)) ? 'bad' : 'warn'}" data-toggle-sync="1" title="${F.esc(caveats.join(' '))}"><i>${caveats.length} note${caveats.length > 1 ? 's' : ''}</i><b>show</b></span>` : ''}
         <button class="btn tiny-btn" data-toggle-hero="1" title="Show the full derivation, legend and notes">${state.heroForced ? 'compact' : 'detail'}</button>

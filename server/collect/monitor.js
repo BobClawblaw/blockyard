@@ -60,9 +60,9 @@ export class NodeMonitor extends EventEmitter {
     // Measured 2026-09-08 on the build then running the bench node: getnettotals'
     // delta-rate was 11.56 MB/s against the node's own stated 11.2 MB/s over 90 s
     // (3% apart), and getpeerinfo answered 21 rows naming up to 201,608,074 bytes
-    // per peer with a `bmc_download_worker` marker. On the deployed production
+    // per peer with a download-worker marker. On the deployed production
     // build the SAME two calls answer 0 bytes and [] rows with getconnectioncount
-    // at 16 -- and both report subversion /BitcoinMachineCode:0.0.1/. So RPC cannot
+    // at 16 -- and both report the same non-Core subversion string. So RPC cannot
     // tell you whether RPC is complete; only the log's build banner can. That is
     // why turning the log off is a loud, per-node statement rather than a silence.
     this.logEnabled = Boolean(nodeCfg.logFile);
@@ -576,7 +576,7 @@ export class NodeMonitor extends EventEmitter {
   // COINSTATS IS AN INDEX, AND WITHOUT IT THE SUMMARY IS A FULL SCAN (2026-09-11, pointing this
   // app at Bitcoin Core v31.99 for the first time). `gettxoutsetinfo` with no argument means
   // hash_type "hash_serialized_3", which walks the whole UTXO set: measured 41.47 s on Core with
-  // 165.2 M UTXOs, against 0.003 s for "muhash" and 0.002 s for the bare call on the bmc node.
+  // 165.2 M UTXOs, against 0.003 s for "muhash" and 0.002 s for the bare call on the production node.
   // One 41 s call in a lane that holds one request at a time is not one slow poll: it poisoned the
   // latency average, stretched every tier's cadence (60 s -> 75 s), dropped 43 polls as stale, and
   // switched off coinbase attribution and the block template with it -- while the page told the
@@ -2412,7 +2412,7 @@ function histogramLinear(values, { lo, hi, buckets }) {
   return { kind: 'linear', lo, hi, buckets, step, edges: counts.map((_, i) => Math.round(lo + step * i)), counts };
 }
 
-// PER-PEER RATES (2026-09-11, operator: "Doesn't the bmc rpc pull more info for peers
+// PER-PEER RATES (2026-09-11, operator: "Doesn't the node's rpc pull more info for peers
 // now?"). getpeerinfo publishes cumulative bytessent / bytesrecv per connection -- summing
 // to 99.99% of getnettotals on this build (MEASUREMENTS 27) -- so a rate is the change in
 // one peer's counters between two samples over the time between them. A peer seen for the
