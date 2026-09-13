@@ -48,15 +48,11 @@ export class NodeMonitor extends EventEmitter {
     // History.forNode for the measurement).
     this.history = history?.__perNode ? history : (history?.forNode ? history.forNode(nodeCfg.id) : history);
     this.log = log.child({ node: nodeCfg.id });
-    // THE LANE IS PER NODE, and so are its limits. The shared defaults describe a node that
-    // services one connection at a time; a node entry may say otherwise with its own `rpc` block.
-    // Measured 2026-09-13 against an Umbrel running Core 31.1.0: four concurrent
-    // getblockchaininfo calls finished in 158 ms wall against 157 ms each -- genuinely parallel
-    // (Core defaults to four RPC threads). With maxInFlight:1 the 3.9 s getblocktemplate on the
-    // 20 s pool tier held the only slot, and the fast tier queued behind it: that node showed
-    // avgLatency 1715 ms with 2 timeouts while a local node on the same monitor showed 69 ms and
-    // none. The etiquette is right for a single-threaded server and wrong for this one, so it is
-    // now a per-node statement rather than a global assumption.
+    // A node entry may carry its own `rpc` block to override lane TIMING (spacing, rate ceiling,
+    // timeouts). It cannot buy concurrency: Lane runs one call at a time by construction and does
+    // not read maxInFlight -- measured 2026-09-13 at 1, 4 and 8, peak concurrency was 1 every
+    // time. An earlier version of this comment claimed the override fixed a starving node; it did
+    // not, because nothing read it.
     this.rpc = new RpcClient(nodeCfg, { ...rpc, ...(nodeCfg.rpc ?? {}) }, { log: this.log });
     // The log *config* has to be passed in separately. It used to be read as
     // `log.tailBytes` off the logger function, which has no such property, so the
@@ -856,7 +852,26 @@ export class NodeMonitor extends EventEmitter {
     const run = (async () => {
       const t0 = Date.now();
       try {
-        const res = await this.rpc.batch([{ method: 'getblocktemplate', params: [{ rules: ['segwit'] }] }], { priority: 3 });
+        // HEAVY, KEYED, AND WITH ITS OWN PATIENCE. This call is the single most expensive thing
+        // the monitor asks for, and until 2026-09-13 it went through the lane as an ordinary
+        // priority-3 batch: default timeout (90 s) and the default 12 s freshness budget.
+        //
+        // Measured that day against an Umbrel running Core 31.1.0: getblocktemplate takes
+        // 4.0-4.5 s, five times in a row, with no warming -- while getblockchaininfo answers in
+        // ~100 ms. The same call on a local Core node takes 51 ms, so it is that machine's
+        // storage, not the software. The lane serves one call at a time, so those seconds are
+        // seconds nothing else is served, and every tier queued behind it blew its 12 s budget
+        // and was stale-dropped ("waited 77668ms for a lane free enough"). /api/nextblock took
+        // 75 s to answer.
+        //
+        // `heavy` buys heavyTimeoutMs instead of timeoutMs, so a genuinely slow node is given
+        // room rather than timed out at 90 s and retried. `key` makes a second viewer's request
+        // supersede a waiting one instead of queueing another 4 s call. maxWaitMs says what is
+        // actually true of a template: if it cannot start within a block-ish window it is not
+        // worth asking, because the answer would describe a mempool that has moved on.
+        const res = await this.rpc.batch([{ method: 'getblocktemplate', params: [{ rules: ['segwit'] }] }], {
+          heavy: true, key: `${this.id}:template`, priority: 3, maxWaitMs: 30_000,
+        });
         const hit = res?.[0];
         if (!hit?.ok) throw new Error(hit?.error?.message ?? 'getblocktemplate unanswered');
         // `data` is the full hex of every selected transaction -- the reason a reply is

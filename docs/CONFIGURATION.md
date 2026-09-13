@@ -184,7 +184,7 @@ limits protect the node from the monitor. They apply to each node separately.
 
 | key | default | meaning |
 |---|---|---|
-| `rpc.maxInFlight` | `1` | Requests outstanding at once. It must be at least 1. Raising it only helps a node that serves requests concurrently. |
+| `rpc.maxInFlight` | `1` | Requests outstanding at once. **Currently advisory:** the lane is serialised by construction and does not read this value (measured 2026-09-13 at 1, 4 and 8 -- peak concurrency was 1 in every case). It must still be at least 1. |
 | `rpc.minIntervalMs` | `250` | Minimum gap between the start of one request and the next. |
 | `rpc.maxRatePerSec` | `4` | Hard ceiling on requests per second, whatever the poll tiers ask for. |
 | `rpc.timeoutMs` | `90000` | Timeout for ordinary calls. It is deliberately generous, because a busy but healthy node can take tens of seconds to answer. |

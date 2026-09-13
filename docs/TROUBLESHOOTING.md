@@ -70,20 +70,17 @@ The Node & RPC page shows RPC latency and the queue. When the node is slow the m
 stretches its polling automatically and skips heavy reads, so a busy node (for example during
 initial sync) shows fewer updates rather than being slowed further.
 
-By default the monitor runs **one** request at a time, which is the safe assumption for any
-node. Bitcoin Core serves RPC on several threads (four by default), so a node entry may raise
-its own limit -- this is per node, not global, because the right answer differs per node:
+The monitor runs **one** request at a time, always. `rpc.maxInFlight` exists in the config and
+is reported by `/api/config`, but the lane is serialised by construction and does not read it --
+measured 2026-09-13 at 1, 4 and 8: four 200 ms jobs took ~807 ms with peak concurrency 1 in every
+case. Treat it as documentation of intent, not a tuning knob.
 
-```json
-{ "id": "umbrel", "rpcUrl": "http://umbrel.local:8332", "rpcUser": "...", "rpcPassword": "...",
-  "rpc": { "maxInFlight": 4, "minIntervalMs": 0, "maxRatePerSec": 20 } }
-```
-
-Measured 2026-09-13 on an Umbrel running Core 31.1.0: four concurrent `getblockchaininfo` calls
-finished in 158 ms wall against 157 ms each, so the node really is answering in parallel. With
-one slot, a 3.9 s `getblocktemplate` on the 20 s pool tier held the lane and the fast tier
-queued behind it -- that node showed 16.4 s average latency and repeated 90 s timeouts while a
-local node on the same monitor showed 35 ms and none. Raising it cleared the timeouts.
+What actually costs time on a mainnet node is the block template. Measured the same day on an
+Umbrel running Core 31.1.0: `getblockchaininfo` 95-110 ms, `getmempoolinfo` ~100 ms, but
+`getblocktemplate` **4.0-4.5 s**, five times in a row with no warming. The same call on a local
+Core node answered in **51 ms**, so this is that machine's storage, not the software and not the
+monitor. Two concurrent templates contend rather than overlap (6.9 s and 8.8 s against 4.5 s
+alone), so more concurrency would not help this call even if the lane offered it.
 
 ## An appliance node's pages do not fill in
 

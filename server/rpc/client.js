@@ -17,7 +17,10 @@
 // default, not an assumption.
 //
 // So every request from every user and every poll tier goes through ONE serialized lane with:
-//   - maxInFlight                    (1 by default: safe for any node, raise it per node)
+//   - one call in flight             (by construction: Lane gates on a boolean, and `maxInFlight`
+//                                     in the config is advisory -- it is reported but NOT read.
+//                                     Measured 2026-09-13 at 1, 4 and 8: peak concurrency 1 every
+//                                     time. Making it real is a change to this file, not config.)
 //   - a floor between request starts (minIntervalMs)
 //   - a global calls/second ceiling
 //   - a circuit breaker that backs off instead of pile-driving a busy node
