@@ -740,9 +740,22 @@ async function attemptStreamRecovery(why) {
  * data. Anything we do not have for the new node shows a placeholder and fills
  * in from the background pull.
  */
+// THE NODE YOU PICKED IS THE NODE YOU GET BACK (operator, 2026-09-13: "The selected option should
+// stay sticky as the default"). Remembered per browser, like the viewer mode, and written ONLY
+// here: switchNode is the single audited path a deliberate choice goes through (web-contract.test
+// requires the switch be delegated to it), so a storage write anywhere else would be a second
+// owner of the same fact.
+//
+// Wrapped, because storage does not merely return null when it is unavailable -- a private window
+// THROWS on access, and an exception here would take the node switch down with it.
+const NODE_KEY = 'blockyard.node';
+const rememberNode = (id) => { try { globalThis.localStorage?.setItem(NODE_KEY, id); } catch { /* storage refused */ } };
+export const rememberedNode = () => { try { return globalThis.localStorage?.getItem(NODE_KEY) || null; } catch { return null; } };
+
 async function switchNode(id) {
   if (!id || id === state.node) return;
   state.node = id;
+  rememberNode(id);
   const rec = nodeRec(id);
   resetAllCharts();
   state.snap = rec.snap ?? null;
@@ -829,6 +842,10 @@ async function recoverMissingNode() {
     }
     toast(`${lost} is no longer configured; watching ${next}`, 'warn');
     state.node = null;          // switchNode no-ops on the same id; this one differs
+    // This also REPLACES the remembered node, because switchNode remembers what it is given -- and
+    // that is the behaviour wanted here rather than an accident of call order: the node someone
+    // picked is genuinely gone, so keeping its id would make every future boot re-check a node that
+    // no longer exists before falling back. The recovery's choice becomes the new default.
     await switchNode(next);
   } catch {
     // Signed out mid-recovery (api() redirects) or the node list is unreachable too.
@@ -958,7 +975,20 @@ async function boot() {
   // Land on a node that is doing something. Defaulting to config order meant a
   // fully-synced production node could open at "Synced 100%" and fill the hero
   // while a bench node sat at 72% -- the wrong node, at the wrong size.
-  state.node = (nodes.attention && nodes.attention[0]) || nodes.primary;
+  //
+  // ...UNLESS SOMEONE HAS CHOSEN ONE (operator, 2026-09-13: "The selected option should stay sticky
+  // as the default"). An explicit pick is stronger evidence of intent than the heuristic, so a
+  // remembered node wins; the attention rule above still decides a FIRST visit, and still decides
+  // it for anyone who has never touched the picker. That keeps "land on the work" for the case it
+  // was written for without overriding someone who has already said otherwise.
+  //
+  // VALIDATED AGAINST THE LIVE LIST, never trusted on its own: a node can be removed from the
+  // config between visits, and a remembered id that no longer exists would open the page on a node
+  // that cannot answer -- a strip of dashes with no explanation, which is the failure this app
+  // exists to avoid. An unknown id simply falls through to the heuristic.
+  const remembered = rememberedNode();
+  const known = (nodes.nodes ?? []).some((n) => n.id === remembered);
+  state.node = (known ? remembered : null) || (nodes.attention && nodes.attention[0]) || nodes.primary;
   state.cfg = cfg;
   // Seed before the first paint: every later reader calls loadSettings(), so settings
   // applied after a render would show this browser's copy and then visibly swap it.

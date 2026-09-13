@@ -143,6 +143,58 @@ test('THE HEADER UPTIME SURVIVES A FRAME THAT DOES NOT CARRY IT', () => {
   assert.equal(globalThis.document.getElementById('rpcLat').textContent, '6ms', 'and rpc latency moved with this frame too');
 });
 
+test('THE PICKED NODE IS STICKY, and is validated before it is trusted', () => {
+  // (operator, 2026-09-13: "The selected option should stay sticky as the default".) Boot derived
+  // the node from `attention` every time, so a deliberate pick was discarded on reload and the page
+  // landed on whichever node the server currently thought was interesting.
+  const app = fs.readFileSync(path.join(ROOT, 'public/js/app.js'), 'utf8');
+
+  // WRITTEN IN ONE PLACE ONLY. switchNode is the single audited path a deliberate choice goes
+  // through (web-contract.test.js requires the switch be delegated to it), so a storage write
+  // anywhere else would be a second owner of the same fact.
+  //
+  // Matched through NODE_KEY rather than the literal string: the key is named once on purpose, so
+  // a test hunting for setItem('blockyard.node' finds nothing and fails while the code is correct
+  // -- which is exactly what the first draft of this did. Pinning the constant is the stronger
+  // guard anyway: it holds BOTH that there is one writer and that there is one definition of the
+  // key, and a stray literal elsewhere could not satisfy it.
+  const keyDef = app.match(/const NODE_KEY = 'blockyard\.node';/g) || [];
+  assert.equal(keyDef.length, 1, 'the storage key is named exactly once');
+  const writes = app.match(/setItem\(NODE_KEY/g) || [];
+  assert.equal(writes.length, 1, `the remembered node is written once, found ${writes.length}`);
+  const fn = app.slice(app.indexOf('async function switchNode'), app.indexOf('/**\n * The background collector.'));
+  assert.match(fn, /rememberNode\(id\)/, 'and the write happens inside switchNode');
+
+  // VALIDATED, never trusted alone: a node can be removed from the config between visits, and a
+  // remembered id that no longer exists would open the page on a node that cannot answer -- a strip
+  // of dashes with no explanation. An unknown id must fall through to the heuristic.
+  assert.match(app, /const known = \(nodes\.nodes \?\? \[\]\)\.some\(\(n\) => n\.id === remembered\)/,
+    'the remembered id is checked against the live node list');
+  assert.match(app, /state\.node = \(known \? remembered : null\) \|\|/,
+    'and an unknown one falls back rather than stranding the page');
+  // the attention heuristic SURVIVES for a first visit: it is what lands someone who has never
+  // chosen on the node actually doing work
+  assert.match(app, /\(nodes\.attention && nodes\.attention\[0\]\) \|\| nodes\.primary/,
+    'attention still decides when nothing is remembered');
+
+});
+
+test('rememberedNode survives a store that is missing, empty or hostile', () => {
+  // A private window throws on access rather than returning null; a fresh browser returns null; a
+  // cleared one returns ''. All three must come back as "nothing remembered", not as a node id.
+  const real = globalThis.localStorage;
+  try {
+    globalThis.localStorage = undefined;
+    assert.equal(app.rememberedNode(), null, 'no store at all');
+    globalThis.localStorage = { getItem: () => { throw new Error('SecurityError'); } };
+    assert.equal(app.rememberedNode(), null, 'a store that throws');
+    globalThis.localStorage = { getItem: () => '' };
+    assert.equal(app.rememberedNode(), null, 'an empty value is not a node id');
+    globalThis.localStorage = { getItem: () => 'bmc-main' };
+    assert.equal(app.rememberedNode(), 'bmc-main', 'and a real one comes back');
+  } finally { globalThis.localStorage = real; }
+});
+
 test('renderFeed always emits exactly three cells per row', () => {
   const { els } = installDom();
   const events = [
