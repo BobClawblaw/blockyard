@@ -123,9 +123,12 @@ node gets its own charts and event stream.
 | `color` | `"#f7931a"` | Accent colour for this node in the UI. |
 | `systemdUnit` | *(see defaults)* | Name of the node's systemd unit. It is informational and not currently used by the server. |
 
-**Credentials.** Every node needs `datadir` or `cookieFile`, even one that
-authenticates with `rpcUser`/`rpcPassword` (see
-[Known quirks](#known-quirks) and the [remote node example](#a-remote-node-with-a-username-and-password)).
+**Credentials.** A node needs **either** a cookie path (`datadir`, optionally with `chainHint`,
+or an explicit `cookieFile`) **or** `rpcUser` + `rpcPassword`. Cookie auth is the usual case on the
+same machine; user/password is the only option for a node on another machine -- an appliance such
+as Umbrel, Start9 or myNode -- whose cookie file this process cannot read. A node with neither is
+refused at boot, and `rpcUser` without `rpcPassword` is refused too, rather than sending
+`Basic dXNlcjo=` and failing with a confusing 401.
 Before every connection that lacks a credential, and again after any HTTP 401, the
 client looks for a credential in this order and uses the first one found:
 
@@ -472,7 +475,6 @@ and an `rpcallowip` that admits this host in the node's own configuration, then:
       "id": "remote",
       "label": "node on 198.51.100.20",
       "rpcUrl": "http://198.51.100.20:8332",
-      "cookieFile": "/nonexistent/.cookie",
       "rpcUser": "monitor",
       "rpcPassword": "a-long-random-secret"
     }
@@ -480,11 +482,9 @@ and an `rpcallowip` that admits this host in the node's own configuration, then:
 }
 ```
 
-The `cookieFile` line is needed because every node must name `datadir` or
-`cookieFile` (see [Known quirks](#known-quirks)). Pointing it at a path that does
-not exist satisfies that check. The credential lookup then finds no cookie and falls
-through to `rpcUser`/`rpcPassword`. Do **not** use `datadir` for this: a missing
-`datadir` without `cookieFile` makes the node get skipped at startup.
+No `datadir` and no `cookieFile`: a node on another machine has no cookie this process can read,
+and the credential lookup falls through to `rpcUser`/`rpcPassword`. Do **not** add `datadir`
+here -- a `datadir` that does not exist on *this* machine makes the node get skipped at startup.
 
 Plain HTTP JSON-RPC sends the password and every reply in clear text. Across an
 untrusted network, reach the node through an SSH tunnel or VPN. For example,
@@ -777,9 +777,10 @@ Reported but **not** fatal:
 These are current behaviours of the code that a configuration author should know
 about.
 
-- **`rpcUser`/`rpcPassword` alone fail validation.** Every node must name `datadir`
-  or `cookieFile`. For a password-only node, set `cookieFile` to a path that does not
-  exist, as in [the remote node example](#a-remote-node-with-a-username-and-password).
+- **`rpcUser`/`rpcPassword` alone are fine** since 2026-09-13. They used to fail validation,
+  and the documented workaround was to point `cookieFile` at a path that does not exist. That is
+  no longer needed: a node authenticated by username and password needs no `datadir` and no
+  `cookieFile`. If you copied the old workaround, it still works -- but you can delete the line.
 - **`server.hosts` in the file beats `BLOCKYARD_BIND`/`BLOCKYARD_HOST`.** The
   environment variables set `server.host`, but a `server.hosts` array takes
   precedence over `server.host`. If your file uses `hosts`, change the bind there,

@@ -191,6 +191,43 @@ rest=1
 
 Restart the Bitcoin app after changing these: `bitcoin.conf` is read at start-up.
 
+##### What is verified, and what is not
+
+Compatibility claims here are separated by how they were established, because "should work" and
+"was measured" are different statements.
+
+**Verified** -- an Umbrel running Bitcoin Core 31.1.0, reached at `umbrel.local:8332` with
+`rpcUser`/`rpcPassword` and no `datadir`, on 2026-09-13:
+
+| area | result |
+|---|---|
+| Chain & Sync, Overview | synced, tip and headers agree, 0 behind |
+| Mempool | ~32,000 transactions, fee histogram, distributions |
+| Peers, Network | 11 peers with per-peer byte counts over RPC |
+| Blocks, Block flow | recent blocks with sizes, weights and fees |
+| Explorer | working -- `txindex` was synced on that node |
+| Block space (3D) | both viewer modes |
+| Block being built | `getblocktemplate` answered in ~0.5 s after tuning (4.0-4.5 s before) |
+| Mining / pool attribution | 34 blocks attributed across 9 pools |
+| Markets, Kiosk | unaffected by the node; they read exchange APIs |
+
+**Expected but not measured** -- Start9 and myNode use the same shape (a node on another machine,
+username and password, no readable cookie), so they should work identically, but neither was
+tested. macOS likewise: the server calls no platform-specific API and was developed and tested on
+Linux.
+
+**Known pending on a freshly tuned appliance:**
+
+- `coinstatsindex` **rebuilds from genesis** and takes hours. Until it finishes, the Chain page's
+  UTXO figures are unavailable and the monitor flags `utxo-unindexed`; `gettxoutsetinfo` answers
+  `Unable to read UTXO set` (-32603), which is the node being honest, not a fault.
+- While any index is rebuilding it competes for the same disk, so RPC latency stays higher and the
+  Node & RPC page may show a stretched poll cadence. That settles when the rebuild lands.
+- `peerinfo-partial` is normal on Core: bytes from peers that have since disconnected remain in
+  `getnettotals` but leave no per-peer row, so the two do not sum.
+- **Log parsing does not support Core** (see below). Leave the log source off; nothing in the UI
+  depends on it.
+
 Verified 2026-09-13 against an Umbrel running Bitcoin Core 31.1.0 (from Linux; the configuration is identical on macOS): the
 monitor reads the chain, the mempool and the peer table over RPC alone. `txindex` was already
 on there, so the explorer's transaction pages work; `getnettotals` and per-peer byte counts are

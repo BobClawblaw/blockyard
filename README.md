@@ -29,8 +29,9 @@ board without a reload.
 
 ## Quick start
 
-You need **Node.js 22 or newer** and a running Bitcoin Core node with JSON-RPC enabled. Set
-**`txindex=1`** on the node if you want the explorer to look up transactions by id — everything
+You need **Node.js 22 or newer** and a running Bitcoin Core node with JSON-RPC enabled — your own
+build, a distribution package, or a node appliance such as **Umbrel**, **Start9** or **myNode**.
+Set **`txindex=1`** on the node if you want the explorer to look up transactions by id — everything
 else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 
 ```bash
@@ -59,6 +60,27 @@ To watch your own node, create `config/local.json`:
 
 then `npm start` and open <http://127.0.0.1:21000>. There is no `npm install` step — there
 is nothing to install.
+
+**On an Umbrel, Start9 or myNode?** The node is on another machine, so there is no cookie file to
+read — use the RPC username and password from the appliance, and no `datadir`:
+
+```json
+{
+  "nodes": [
+    {
+      "id": "umbrel",
+      "label": "Umbrel",
+      "rpcUrl": "http://umbrel.local:8332",
+      "rpcUser": "umbrel",
+      "rpcPassword": "the RPC password from the Bitcoin app",
+      "chainHint": "main"
+    }
+  ]
+}
+```
+
+See [Appliance setup](docs/INSTALL.md#a-node-appliance-umbrel-start9-mynode) for the
+`bitcoin.conf` settings that make it perform, and what is verified against what.
 
 The full walkthrough — service install, network exposure, accounts, TLS, a reverse proxy —
 is in **[docs/INSTALL.md](docs/INSTALL.md)**.

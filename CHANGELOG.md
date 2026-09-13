@@ -8,6 +8,38 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Node appliance support: Umbrel, Start9, myNode.** A node on another machine has no cookie file
+  this process can read, so it authenticates with `rpcUser` / `rpcPassword` and **no `datadir`**.
+  That configuration was already the documented advice and was *refused at boot* -- the validator
+  demanded `datadir` or `cookieFile` regardless, so the recommended setup could not start. Found by
+  following our own install instructions against a real Umbrel. A node with no way to authenticate
+  at all is still refused, and `rpcUser` without `rpcPassword` is now caught too.
+  `docs/CONFIGURATION.md`'s old workaround -- point `cookieFile` at a path that does not exist --
+  is obsolete and marked as such.
+- **Verified against an Umbrel running Bitcoin Core 31.1.0** on 2026-09-13: chain, mempool, peers,
+  blocks, explorer and the block-being-built card all read over JSON-RPC alone. `docs/INSTALL.md`
+  gains an appliance section with the `config/local.json` block, the `bitcoin.conf` settings that
+  make it perform (`dbcache=4096`, `rpcthreads`, `rpcworkqueue`, `rpcservertimeout`, `txindex`,
+  `coinstatsindex`), and an annotation of what each line does **for this monitor** -- including
+  `rest=1`, which does nothing here, because repeating a config block as received wisdom is how a
+  document starts lying.
+
+### Changed
+
+- **This is a Bitcoin Core-centric release.** The README, install, configuration, API and
+  architecture documents describe Core; the shipped defaults are Core's own (`id: main`,
+  `127.0.0.1:8332`, `~/.bitcoin`, `bitcoind.service`). Measurement records taken against a
+  non-Core build are anonymised rather than relabelled -- they describe what was measured, and
+  claiming otherwise would invent measurements that never happened.
+- **The default web port is 21000** (was 8088).
+- **Display settings are stored on the server** in `config/blockyard.json`, so a phone and a
+  desktop pointed at the same monitor agree. The browser keeps a cache so boards still draw when
+  the server cannot be reached.
+- **Log parsing is documented as unavailable for Bitcoin Core.** The parsers target an experimental
+  node's log grammar; fed Core's `debug.log` they extract no figures and timestamp entries at read
+  time. The log source is off by default and should stay off against Core --
+  `test/log-core-unsupported.test.js` pins that so it cannot be assumed away.
+
 - **A node connection form**, on **Node & RPC** (operator: "Still left to do is a config connection
   in the web settings. We have no way for users to configure a connection to their rpc backend").
   Enter an RPC URL, a data directory, a chain and a label; **test connection** probes it with a
@@ -26,7 +58,47 @@ All notable changes to this project are documented here. The format follows
   also lost four dead grid columns, and Pool usage gained the pool's total vsize, average vsize and
   total fees, all of which were computed on every sample and never drawn.
 
+- **Block space ships with simple cubes and shadows off.** Shadows are the costliest single thing
+  the board draws, and the board is the first thing most people open; both remain one click away in
+  Display settings.
+- The two games sit at the end of the nav under a **Diversions** pop-down, rather than among the
+  working tabs.
+- The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
+  tail that fades back to yellow behind a bright head, with a nebula of blue smoke emitted along
+  the whole charged span and a shimmer over it. The lightning ball trails the same charge across
+  the block-space board; the light cycles do not.
+- The pulse's nebula is emitted over the whole charged span rather than per segment — emitting per
+  segment gave neighbouring puffs the same age, so they shared a radius and lined up into the
+  concentric rings they were meant to replace. (Its motes and crackle branches were removed at the
+  same time and restored afterwards; they are present.)
+- The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
+  the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
+- Pool attribution moved out of the block card's body into a readable pill beneath it.
+
 ### Fixed
+
+- **The node-connection probe leaked the node's RPC credential** (HIGH, found by audit and
+  reproduced with a working exploit). `POST /api/config/node/test` built its throwaway client from
+  the live node's config, so `resolveCookie` read the real `.cookie` and sent it as an
+  `Authorization` header **to whatever URL the request named** -- on a request needing no session
+  and no CSRF token, reachable by a plain cross-site form. Credentials now go only to the endpoint
+  the monitor is already configured for; anywhere else is probed unauthenticated and says so. Open
+  mode additionally refuses any state-changing request whose `Origin` is not this server or whose
+  `Sec-Fetch-Site` says cross-site.
+- **Coinbase attribution stopped permanently after one failed block.** `pumpMining` cleared the
+  whole queue on a single failure and nothing ever re-queued it, so one slow moment discarded the
+  entire 36-block boot window and the Mining page sat empty. The failed height is put back, the
+  rest of the queue survives, and a backoff decides when to retry.
+- **The block template no longer monopolises the RPC lane.** `getblocktemplate` went through as an
+  ordinary call with a 12-second freshness budget; on a node where it takes seconds, everything
+  queued behind it was stale-dropped and `/api/nextblock` took 75 s. It is now heavy, keyed and
+  given a realistic budget -- measured 52.8 s to 4.2 s on the same node.
+- **Session TTLs were inverted**: an 8-hour absolute lifetime with a 72-hour idle ceiling meant the
+  idle check could never fire. Now 72 h absolute, 8 h idle, with a test on the invariant.
+- **`randomPassword()` drew with modulo bias**, over-representing the first 58 characters of its
+  66-character alphabet. It uses `crypto.randomInt` now.
+- **The audit trail redacts by key shape**, not by two hardcoded field names, so an action echoing a
+  key-shaped argument cannot write a secret into the one file designed to be kept.
 
 - **The display-settings sliders no longer jitter while dragging** (operator: "the grid intensity
   slider jitters when I move it"). Every `input` event ran a full synchronous re-render; a drag
@@ -154,27 +226,6 @@ All notable changes to this project are documented here. The format follows
   twenty-six switches are a lot of clicking otherwise.
 - **Markets remembers its toolbar**: the exchange and the range are settings now, so the page
   opens where you left it.
-
-### Changed
-
-- **Block space ships with simple cubes and shadows off.** Shadows are the costliest single thing
-  the board draws, and the board is the first thing most people open; both remain one click away in
-  Display settings.
-- The two games sit at the end of the nav under a **Diversions** pop-down, rather than among the
-  working tabs.
-- The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
-  tail that fades back to yellow behind a bright head, with a nebula of blue smoke emitted along
-  the whole charged span and a shimmer over it. The lightning ball trails the same charge across
-  the block-space board; the light cycles do not.
-- The pulse's nebula is emitted over the whole charged span rather than per segment — emitting per
-  segment gave neighbouring puffs the same age, so they shared a radius and lined up into the
-  concentric rings they were meant to replace. (Its motes and crackle branches were removed at the
-  same time and restored afterwards; they are present.)
-- The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
-  the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
-- Pool attribution moved out of the block card's body into a readable pill beneath it.
-
-### Fixed
 
 - **The star field never animated on a board that asked for no tile choreography.** `still` is
   about the tiles; it was also returning before the animation loop started, so Tetrust's galaxy
