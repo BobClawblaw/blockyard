@@ -376,7 +376,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 742 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 755 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

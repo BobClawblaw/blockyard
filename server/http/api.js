@@ -57,8 +57,12 @@ function pickNode(ctx, app) {
 //
 // With accounts ON, this is an admin action like any other. With accounts OFF there is no identity
 // to check, and the operator chose to allow it rather than demand BLOCKYARD_AUTH just to point the
-// monitor at a node. CSRF still applies in both cases, so another site cannot post this on your
-// behalf, and every save is audited.
+// monitor at a node. Every save is audited.
+//
+// CSRF: the double-submit check only runs when there IS a session (server.js), so with accounts
+// off it never fired here -- the claim this comment used to make ("CSRF still applies in both
+// cases") was false, and a cross-site form could post to these routes. Open mode now refuses a
+// cross-site Origin / Sec-Fetch-Site on every csrf:true route instead.
 //
 // This is deliberately NOT the /api/action posture. That gate refuses node writes while accounts
 // are off because those commands reach the NODE. This reaches only this app's own config file.
@@ -727,23 +731,58 @@ export const routes = [
       const started = Date.now();
       // A THROWAWAY CLIENT WITH ITS OWN LANE. The live node's client holds a serialized queue
       // against a single-threaded RPC server; probing somewhere else must not take a slot in it.
-      // The probe inherits the CURRENT node's credentials and is then overridden by the candidate's
-      // four fields. The two routes want different things here and the difference is deliberate:
-      // a test should authenticate the way this monitor already does (cookie file, or an rpcUser
-      // the config already carries), while the SAVE writes only the four fields and never a
-      // credential. Building the probe from `node` alone left it with no credentials at all.
-      const probe = new RpcClient({ ...(app.cfg.nodes?.[0] ?? {}), ...node, id: 'probe' },
+      //
+      // CREDENTIALS GO TO ONE ENDPOINT ONLY: the one this monitor is already configured for.
+      //
+      // This route used to build the probe as `{ ...app.cfg.nodes[0], ...node }`, so it inherited
+      // the live node's datadir and resolveCookie() read the real .cookie -- which the client then
+      // sent as an Authorization header TO WHATEVER URL THE REQUEST NAMED. With accounts off (the
+      // shipped default) the route needs no session, and the CSRF check is skipped without one, so
+      // a single unauthenticated POST -- including a plain cross-site HTML form, since readBody
+      // accepts x-www-form-urlencoded -- moved the node's RPC credential to any address the caller
+      // chose. Confirmed with a working proof of concept on 2026-09-13 against a planted cookie:
+      // the collector received it as `Authorization: Basic <the cookie>`.
+      //
+      // Dropping the spread alone does NOT fix it: candidateNode falls back to the configured
+      // datadir, so a request naming only an rpcUrl would still resolve the real cookie. The rule
+      // has to be about the DESTINATION. Same endpoint: authenticate as we already do. Any other
+      // endpoint: no datadir, no cookieFile, no rpcUser -- resolveCookie returns null and the
+      // client sends no Authorization header at all.
+      const cur = app.cfg.nodes?.[0] ?? {};
+      const sameEndpoint = !!cur.rpcUrl && node.rpcUrl === cur.rpcUrl;
+      const probeNode = sameEndpoint
+        ? { ...cur, ...node, id: 'probe' }
+        : { rpcUrl: node.rpcUrl, chainHint: node.chainHint, id: 'probe' };
+      const probe = new RpcClient(probeNode,
         { ...app.cfg.rpc, timeoutMs: Math.min(app.cfg.rpc.timeoutMs ?? 8000, 8000) }, { log: () => {} });
       try {
         const info = await probe.call('getblockchaininfo', []);
         return {
-          ok: true, ms: Date.now() - started,
+          ok: true, ms: Date.now() - started, authenticated: sameEndpoint,
           chain: info?.chain ?? null, blocks: info?.blocks ?? null,
           ibd: info?.initialblockdownload ?? null,
         };
       } catch (err) {
+        // A 401 from a NEW endpoint is the expected answer, not a fault: it proves the address is
+        // an RPC server, which is what the form needs to know. Saying so beats reporting a
+        // mysterious auth failure for a credential we deliberately did not send.
+        if (!sameEndpoint && (err.kind === 'auth' || /\b401\b/.test(err.message ?? ''))) {
+          return {
+            ok: true, ms: Date.now() - started, authenticated: false, reachable: true,
+            chain: null, blocks: null, ibd: null,
+            note: 'the endpoint answered, and refused an unauthenticated call -- which is what an RPC server should do. '
+              + 'Credentials are only sent to the endpoint this monitor is already configured for, so authentication was not tested. '
+              + 'Save this connection and the monitor will use the datadir cookie for it.',
+          };
+        }
         // A failed probe is an ANSWER, not a server error: the form needs the reason to show it.
-        return { ok: false, ms: Date.now() - started, error: { message: err.message, kind: err.kind ?? null, code: err.code ?? null } };
+        // `authenticated` is reported on EVERY path, success or failure: a caller cannot otherwise
+        // tell "it refused us" from "we deliberately sent no credential", and those mean different
+        // things to someone deciding whether the connection they typed is right.
+        return {
+          ok: false, ms: Date.now() - started, authenticated: sameEndpoint,
+          error: { message: err.message, kind: err.kind ?? null, code: err.code ?? null },
+        };
       }
     },
   },
@@ -904,6 +943,18 @@ async function blockDrill(ctx, app) {
   const query = { hash: hashArg, height: heightArg };
   if (hashArg && !HEX64.test(hashArg)) throw new HttpError(400, `"${hashArg}" is not a 64-hex-character block hash`);
   if (heightArg != null && !/^\d{1,12}$/.test(heightArg)) throw new HttpError(400, `"${heightArg}" is not a block height`);
+  // AND NOT ABSURDLY ABOVE THE TIP. The regex alone admits 999,999,999,999, and each such request
+  // spends a turn in the node's SINGLE-THREADED RPC lane only to be told "block height out of
+  // range" -- the lane this whole app is built to be careful with. (Audit, 2026-09-13.)
+  //
+  // The 1000-block margin is deliberate, not slack: our chainInfo is a cached poll and can be a
+  // block or two behind, so clamping hard at the tip would refuse the block that was mined a
+  // second ago. Rejecting a real block the operator just saw would be a worse defect than the
+  // wasted turn this prevents.
+  const knownTip = m.state.chainInfo?.blocks ?? null;
+  if (heightArg != null && knownTip != null && Number(heightArg) > knownTip + 1000) {
+    throw new HttpError(400, `block ${heightArg} is above this node's tip (${knownTip})`, { code: 'above_tip' });
+  }
 
   let height = heightArg != null ? Number(heightArg) : null;
   let hash = hashArg;

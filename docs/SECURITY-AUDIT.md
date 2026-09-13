@@ -1,5 +1,19 @@
 # Blockyard Security Audit
 
+> **STATUS: REMEDIATED — 2026-09-13, the same day.** Finding 1 (HIGH) is fixed: the node-connection
+> probe now sends credentials only to the endpoint the monitor is already configured for, and open
+> mode refuses cross-site state-changing requests by `Origin` / `Sec-Fetch-Site`. The exploit below
+> was re-run against the patched code and the collector received no `Authorization` header.
+> Findings 4, 5, 8 and 10 are fixed in the same pass. Finding 2 (allowlist prefixes) is open by
+> decision. Regression tests: `test/config-node-security.test.js`, `test/session-ttl.test.js`,
+> `test/random-password.test.js`, `test/audit-redaction.test.js`.
+>
+> The proof of concept is kept deliberately: it is the blueprint for the regression test and the
+> record of how the finding was verified. It is not a live weapon against a current build.
+>
+> One correction to the report's own metadata: the address it gave for the model host has been
+> replaced with an RFC 5737 documentation address, per this project's privacy rule.
+
 - **Project:** blockyard — a multi-user web monitor for a Bitcoin Machine Code node (`/storage/blockyard`)
 - **Audit date:** 2026-09-13 (single session)
 - **Scope:** full code + security audit of `server/`, `public/`, `scripts/`, `test/` (~44,100 lines across 154 files), the deployment posture (systemd unit, port guard, config defaults), and the `SECURITY.md` / `docs/SECURITY.md` claims vs. code

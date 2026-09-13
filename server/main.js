@@ -214,12 +214,26 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     log: app.log,
   });
   await app.auditLog.adopt();
+  // REDACT BY SHAPE, not by a list of two names. Deleting `password` and `rpcPassword` covered the
+  // fields today's routes happen to carry -- but the trail also stores action ARGUMENTS and a
+  // 200-character preview of action RESULTS, so the next action that echoes a key-shaped argument
+  // would write it into audit.jsonl for ever, where the whole point of the file is that it is kept.
+  // An audit on 2026-09-13 pointed at exactly that gap. Nested, because arguments are objects.
+  //
+  // `key` alone is deliberately NOT in the pattern: it would redact poolKey, labelKey and keylen,
+  // which are not secrets, and an audit trail full of [redacted] where the useful fields were is
+  // its own kind of failure.
+  const SECRETISH = /pass(word|phrase)?|secret|cookie|token|priv(ate)?_?key|seed|mnemonic|authorization|credential/i;
+  const redact = (v, depth = 0) => {
+    if (v == null || depth > 6) return v;
+    if (Array.isArray(v)) return v.map((x) => redact(x, depth + 1));
+    if (typeof v !== 'object') return v;
+    const out = {};
+    for (const [k, val] of Object.entries(v)) out[k] = SECRETISH.test(k) ? '[redacted]' : redact(val, depth + 1);
+    return out;
+  };
   app.audit = async (row) => {
-    const entry = { at: Date.now(), ...row };
-    // Credentials never reach the trail -- not the login password, not an RPC
-    // cookie pasted into an action's arguments.
-    delete entry.password;
-    delete entry.rpcPassword;
+    const entry = redact({ at: Date.now(), ...row });
     await app.auditLog.append(entry).catch((err) => app.log({ level: 'error', msg: `audit write failed: ${err.message}` }));
   };
   app.readAudit = async (limit = 100) => app.auditLog.read(limit);

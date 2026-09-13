@@ -101,7 +101,7 @@ test('credentials are the caller\u2019s business and never the file\u2019s', asy
   // The shape main.js enforces; asserted here against the file itself.
   const a = mkAudit();
   const row = { type: 'login', username: 'admin', password: 'hunter2hunter2' };
-  delete row.password; // what app.audit() does before appending
+  delete row.password; // app.audit() redacts by key shape; this builds the row directly
   await a.append(row);
   const raw = fs.readFileSync(a.file, 'utf8');
   assert.ok(!raw.includes('hunter2hunter2'), 'a password must not reach the audit file, in any field');

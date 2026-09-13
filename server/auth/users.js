@@ -232,9 +232,12 @@ async function hashPassword(password, base) {
 // plaintext anywhere, so there is nothing to go looking for afterwards.
 export function randomPassword(len = 20) {
   const alphabet = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%*-+=';
-  const bytes = crypto.randomBytes(len);
+  // crypto.randomInt, NOT randomBytes()%n. The alphabet is 66 long and 256 % 66 = 58, so the
+  // modulo form drew the first 58 characters slightly more often than the rest -- a small bias,
+  // in the one function whose entire job is to be an unguessable bootstrap credential. randomInt
+  // rejection-samples internally, so the distribution is flat. (Audit, 2026-09-13.)
   let out = '';
-  for (let i = 0; i < len; i++) out += alphabet[bytes[i] % alphabet.length];
+  for (let i = 0; i < len; i++) out += alphabet[crypto.randomInt(alphabet.length)];
   return out;
 }
 

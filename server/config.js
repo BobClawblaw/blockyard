@@ -211,8 +211,13 @@ const DEFAULTS = {
     // sessions, CSRF and the audit trail-by-user.
     enabled: false,
     dataDir: null,
-    sessionTtlMs: 8 * 3600 * 1000,
-    idleTtlMs: 72 * 3600 * 1000,
+    // THE LONG ONE IS THE ABSOLUTE LIFETIME, the short one the idle ceiling -- which is the way
+    // round the names read, and the opposite of what shipped until 2026-09-13. With an 8 h
+    // absolute and a 72 h idle ceiling, the idle check in sessions.js could never fire: nothing
+    // lived long enough to be 72 h idle, so a session was 8 h whatever you did. Found in an audit;
+    // docs/SECURITY.md described the intended relationship, not the one in force.
+    sessionTtlMs: 72 * 3600 * 1000,   // absolute: a session dies 72 h after sign-in, active or not
+    idleTtlMs: 8 * 3600 * 1000,       // idle: 8 h without a request and it is gone
     scrypt: { N: 16384, r: 8, p: 1, keylen: 32 },
     minPasswordChars: 12,
     loginMaxAttempts: 8,

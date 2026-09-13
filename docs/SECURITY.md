@@ -64,7 +64,12 @@ The last enabled admin cannot be demoted, disabled or deleted.
   Roles are re-read on every request, so a demotion takes effect immediately.
 - **CSRF**: every state-changing request must carry an `X-CSRF-Token` header matching the
   session; the cookie alone is never accepted as proof. With accounts off there is no session
-  to ride, so the check does not apply.
+  to ride, so the token check has nothing to compare -- and until 2026-09-13 that meant those
+  routes had no cross-site protection at all. An audit proved it with a working exploit against
+  the node-connection test. Open mode now refuses any state-changing request whose `Origin` is
+  not this server, or whose `Sec-Fetch-Site` says cross-site. A client that sends neither header
+  (curl, a script) is unaffected: it can already reach the port, and this guards against what a
+  *browser* can be made to do on someone's behalf.
 - **Brute force**: sign-in is locked after 8 failures in 5 minutes per username and per
   address, for 10 minutes, with the same error and the same hashing time for unknown users
   and wrong passwords. A separate throttle limits sign-in attempts per address, because each

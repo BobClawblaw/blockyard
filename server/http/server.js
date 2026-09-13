@@ -217,6 +217,36 @@ export function createAppServer(app) {
       }
     }
 
+    // OPEN MODE STILL HAS TO REFUSE CROSS-SITE WRITES.
+    //
+    // The check above is skipped without a session, on the reasoning that there is no credential
+    // to ride. That is true of READS, and false of every route that makes the SERVER act. The node
+    // connection test was the proof: with accounts off it took an unauthenticated POST -- and a
+    // plain cross-site <form> reaches it, because readBody accepts x-www-form-urlencoded, so there
+    // is no preflight to stop it -- and pointed a credentialed RPC probe at an attacker's URL.
+    //
+    // A page on another origin cannot suppress Origin on a form post, nor forge Sec-Fetch-Site, so
+    // these two are exactly the signal open mode has left. A non-browser client (curl, a script)
+    // sends neither and is unaffected: it can already reach the port, and this check is about what
+    // a BROWSER can be made to do on somebody's behalf.
+    if (route.csrf && !session) {
+      const origin = req.headers.origin;
+      const site = req.headers['sec-fetch-site'];
+      let crossSite = false;
+      if (origin && origin !== 'null') {
+        try { crossSite = new URL(origin).host !== req.headers.host; } catch { crossSite = true; }
+      } else if (origin === 'null') {
+        crossSite = true;                       // an opaque origin: a sandboxed frame or a data: URL
+      }
+      if (site && !['same-origin', 'none'].includes(site)) crossSite = true;
+      if (crossSite) {
+        await app.audit({ type: 'csrf-rejected', username: null, path, ip, reason: 'cross-site request in open mode' });
+        return sendJson(req, res, 403, {
+          error: { message: 'cross-site request refused: this endpoint changes state, and with accounts off there is no token to check', kind: 'csrf' },
+        });
+      }
+    }
+
     const setCookies = [];
     const ctx = {
       req, res, app, ip, params, query, body, user, session, token,
