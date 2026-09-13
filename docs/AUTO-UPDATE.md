@@ -238,9 +238,10 @@ an unsigned tag must fail closed.
 
 1. **Make the repository public**, or document that auto-update requires a token. Today it is
    private and the feature cannot work for anyone else.
-2. **Fix the version scheme.** `package.json` and `server/main.js` say **0.0.9**; `CHANGELOG.md`
-   says **[0.9.0]** and **[0.1.0]**. Any "is this newer?" comparison is wrong until one scheme wins.
-   This is a precondition, not a detail — it is the field the whole feature compares.
+2. ~~**Fix the version scheme.**~~ **Done 2026-09-13.** `package.json` and `server/main.js` said
+   **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is this newer?" comparison
+   would have been wrong, and that field is what the whole feature compares. 0.9.0 is current, and
+   every source now says so. The two values are no longer written down twice (see §10.1 note).
 3. **Create the first tag.** There are none, so there is no release channel to subscribe to.
 4. **Decide the open-mode question** in §6 knowingly.
 

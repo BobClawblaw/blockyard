@@ -238,7 +238,7 @@ Auth `none`, not rate limited. Built for uptime probes. `ok` is `true` when at l
 What the About page shows: the monitor's version and live build, and the **shape** of the machine it runs on.
 
 ```json
-{ "version": "0.0.9", "build": "0.0.9-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
+{ "version": "0.9.0", "build": "0.9.0-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
   "arch": "x64", "cpus": 32, "cpuModel": "AMD Ryzen 9 9950X3D 16-Core Processor",
   "totalMemGb": 132.3, "node": "v22.23.2", "uptimeSec": 2355 }
 ```

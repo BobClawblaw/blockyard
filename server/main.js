@@ -13,7 +13,12 @@ import { computeBuildId } from './http/static.js';
 import { NodeMonitor } from './collect/monitor.js';
 import { localAddresses, bindProblemMessage, planBinds } from './netinfo.js';
 
-const VERSION = '0.0.9';
+// ONE PLACE, NOT TWO. This was a literal here AND a "version" field in package.json, and on
+// 2026-09-13 they had drifted: this said 0.0.9 while CHANGELOG.md released [0.9.0]. Harmless until
+// something compares versions -- and the auto-update design (docs/AUTO-UPDATE.md) compares exactly
+// this field to decide whether a release is newer, so the drift would have made it answer wrongly.
+// package.json is the authority; a test asserts the two agree.
+const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 
 export async function boot({ configFile, log: logOverride = null } = {}) {
   const cfg = loadConfig({ configFile });
