@@ -218,7 +218,7 @@ export function renderSyncHero(box, s) {
       ${vp != null && !done ? `<div class="vp-tick" data-left="${Math.min(100, vp)}"></div>` : ''}
     </div>
     ${state.heroForced ? expanded(s, sync, caveats) : ''}
-    ${(s?.warnings ?? []).length && !state.heroForced ? `<div class="caveat bad mt-6"><b>Node warnings:</b> ${F.esc(s.warnings.join('; '))}</div>` : ''}
+    ${F.nodeWarnings(s?.warnings).length && !state.heroForced ? `<div class="caveat bad mt-6"><b>Node warnings:</b> ${F.esc(F.nodeWarnings(s.warnings).join('; '))}</div>` : ''}
   `;
   // The bar is drawn from data-w above; without this call the fill is 0 wide and
   // the strip reads as an empty bar on a node that is 96% synced.
@@ -261,7 +261,7 @@ function expanded(s, sync, caveats) {
     <dl class="kv">${rows.map(([k, v]) => `<dt>${F.esc(k)}</dt><dd>${F.esc(v)}</dd>`).join('')}</dl>
     ${(sync.reason && sync.state === 'unknown') ? `<div class="caveat bad mt-8"><b>Why this is unknown:</b> ${F.esc(sync.reason)}</div>` : ''}
     ${caveats.map((c) => `<div class="caveat${/LONGER|stall|cut off|backwards|hide the stall/.test(c) ? ' bad' : ''} mt-5">${F.esc(c)}</div>`).join('')}
-    ${(s?.warnings ?? []).length ? `<div class="caveat bad mt-5"><b>Node warnings:</b> ${F.esc(s.warnings.join('; '))}</div>` : ''}
+    ${F.nodeWarnings(s?.warnings).length ? `<div class="caveat bad mt-5"><b>Node warnings:</b> ${F.esc(F.nodeWarnings(s.warnings).join('; '))}</div>` : ''}
   </div>`;
 }
 

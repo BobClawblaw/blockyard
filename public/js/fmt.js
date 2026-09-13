@@ -122,3 +122,24 @@ export function uptime(ms) {
   const m = Math.floor((s % 3600) / 60);
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
+
+// THE ONE WARNING THE BANNER DOES NOT SHOW (operator, 2026-09-13, getting ready for release:
+// "how do we get rid of the node warning?" -- "This is a pre-release test build - use at your
+// own risk - do not use for mining or merchant applications").
+//
+// It is TRUE: bmcbitcoind is a pre-release build and says so on every poll, which means a red
+// caveat sits across the hero permanently and stops meaning anything. The fix is deliberately
+// the narrowest one available -- this exact notice, matched on the phrase bitcoind has always
+// used for it, and nothing else. "unknown new rules activated", a chain reorganisation, an
+// unsupported chainstate: all still land in the banner, in red.
+//
+// WHERE THIS DOES NOT HAPPEN: the server. monitor.js and sync.js keep passing the node's exact
+// words through, so /api/state still reports what the node said and the filter cannot become a
+// way for the monitor to conceal it. This is a presentation choice, applied at the banner.
+const PRE_RELEASE = /pre-release test build/i;
+
+/** The node's warnings, minus the permanent pre-release notice. Never throws on odd input. */
+export function nodeWarnings(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((w) => typeof w === 'string' && w.trim() && !PRE_RELEASE.test(w));
+}
