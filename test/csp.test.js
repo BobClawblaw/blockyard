@@ -84,7 +84,14 @@ test('renderHtml versions assets and nothing else', () => {
   assert.ok(out.includes('href="/"'), 'pages are no-cache already, and ?v= on "/" collides with the app\'s own ?node=/?range= space');
   assert.ok(out.includes('href="data:image'), 'a data: URL is not a path');
   assert.ok(out.includes('nonce="NONCE123"'), 'the nonce placeholder must be filled');
-  assert.ok(!/%BMC[A-Z]+%/.test(out), `an unfilled placeholder ships to the browser as literal text: ${out.match(/%BMC[A-Z]+%/g)}`);
+  // THE PATTERN MUST MATCH THE PLACEHOLDERS THAT EXIST. This guarded /%BMC[A-Z]+%/, a naming
+  // convention that has not existed since the rename to Blockyard -- static.js fills
+  // %BLOCKYARD_NONCE% and %BLOCKYARD_BUILD% -- so it could never fire and had been passing
+  // vacuously. The positive control below is what stops that happening again silently.
+  const UNFILLED = /%BLOCKYARD_[A-Z_]+%/;
+  assert.ok(!UNFILLED.test(out), `an unfilled placeholder ships to the browser as literal text: ${out.match(/%BLOCKYARD_[A-Z_]+%/g)}`);
+  assert.ok(UNFILLED.test('<b>%BLOCKYARD_BUILD%</b>'),
+    'the guard must actually match an unfilled placeholder, or it asserts nothing');
 });
 
 test('no shipped HTML file carries a style attribute', () => {
