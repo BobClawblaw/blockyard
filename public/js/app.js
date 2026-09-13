@@ -438,11 +438,36 @@ export function setText(id, v) {
 
 // -------------------------------------------------------------- dispatch
 
+// THE HEADER UPTIME HOLDS ITS FIGURE (operator, 2026-09-13: "Uptime keeps blanking out and does
+// not stay drawn. It should stay there until updated").
+//
+// It was not a dropped stream. `app` IS NOT IN AN SSE FRAME AT ALL: wireMonitor pushes
+// `m.snapshot({})`, the bare node snapshot, about once a second, while the `app` block -- version,
+// build, uptime, self telemetry -- is added by fullState, which only runs on the HTTP pull every
+// 20 s. So the uptime was written once per pull and blanked by the very next stream frame a second
+// later. What looked like a flickering value was a figure that is simply absent from 95% of the
+// frames that render the header.
+//
+// Two ways to fix that, and the obvious one is wrong: putting the `app` block on every frame means
+// calling app.selfTelemetry() once a second, and that is not a pure read -- it PUSHES A ROW into
+// app.selfRing, a 5,000-row history sampled every 10 s. Filling it at frame rate would destroy the
+// server's own telemetry history to keep a header field warm.
+//
+// So the value is held here instead: it changes when a new reading arrives and never otherwise, and
+// `–` survives only until the first one. Monitor uptime is a property of THIS MONITOR, not of the
+// node being watched, so holding it across a node switch stays correct -- which is exactly why the
+// rpc latency beside it is left alone. That one is per node, and holding it would show one node's
+// round trip under another node's name. It also never blanks, because health.rpc is in every frame.
+let lastUptime = null;
+
 export function render() {
   const s = state.snap;
   document.getElementById('rpcLat').textContent = s?.health?.rpc?.lastLatencyMs != null ? `${s.health.rpc.lastLatencyMs}ms` : '–';
   document.getElementById('rpcLat').className = s?.health?.rpc?.avgLatencyMs > 5000 ? 'bad' : '';
-  document.getElementById('appUp').textContent = s?.app ? F.uptime(s.app.uptimeSec * 1000) : '–';
+  // `s?.app ?` was also wrong on its own terms: an app block with a null uptimeSec multiplied to 0
+  // and rendered "0m" -- a made-up figure rather than a missing one. The reading is the number.
+  if (s?.app?.uptimeSec != null) lastUptime = F.uptime(s.app.uptimeSec * 1000);
+  document.getElementById('appUp').textContent = lastUptime ?? '–';
   document.getElementById('offline').classList.toggle('hidden', !!s?.online);
   if (s && !s.online) {
     document.getElementById('offline').innerHTML = `<b>${F.esc(s.label)} is not answering RPC.</b> `

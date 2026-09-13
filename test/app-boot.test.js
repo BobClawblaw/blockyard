@@ -105,6 +105,44 @@ function feedRows(html) {
   return [...html.matchAll(/<div class="row[^"]*">([\s\S]*?)<\/div>/g)].map((m) => (m[1].match(/<span/g) || []).length);
 }
 
+test('THE HEADER UPTIME SURVIVES A FRAME THAT DOES NOT CARRY IT', () => {
+  // (operator, 2026-09-13: "Uptime keeps blanking out and does not stay drawn. It should stay
+  // there until updated".)
+  //
+  // NOT A DROPPED STREAM -- `app` IS NOT IN AN SSE FRAME AT ALL. wireMonitor pushes
+  // `m.snapshot({})`, the bare node snapshot, about once a second; the `app` block that carries
+  // uptimeSec is added by fullState, which only runs on the HTTP pull every 20 s. So the figure was
+  // written once per pull and wiped by the very next stream frame. This drives that exact sequence:
+  // a pull frame, then a stream frame shaped the way the server really sends one.
+  const { els } = installDom();
+  els.get('appUp'); els.get('rpcLat'); els.get('offline');
+  const pull = { online: true, label: 'n', health: { rpc: { lastLatencyMs: 6 } }, app: { uptimeSec: 3600 * 9 + 60 * 42 } };
+  const streamFrame = { online: true, label: 'n', health: { rpc: { lastLatencyMs: 7 } } };  // no `app`, as sent
+  const upText = () => globalThis.document.getElementById('appUp').textContent;
+
+  app.state.snap = pull;
+  app.render();
+  const shown = upText();
+  assert.match(shown, /\d/, `the pull frame draws a figure (${shown})`);
+
+  app.state.snap = streamFrame;
+  app.render();
+  assert.equal(upText(), shown, 'and the stream frame that lacks `app` must not blank it');
+  app.render();
+  assert.equal(upText(), shown, 'nor the next one, nor any number of them');
+  // the per-node figure beside it is deliberately NOT held, and this is where that shows: it
+  // follows the CURRENT frame. Holding it would show one node's round trip under another node's
+  // name after a switch. It never blanks anyway -- health.rpc is in every frame.
+  assert.equal(globalThis.document.getElementById('rpcLat').textContent, '7ms', 'rpc latency tracks the frame in hand');
+
+  // HELD IS NOT FROZEN: a new reading still replaces it. Persistence that cannot update is just a
+  // different way of being wrong.
+  app.state.snap = { ...pull, app: { uptimeSec: 3600 * 10 } };
+  app.render();
+  assert.notEqual(upText(), shown, `a fresh reading still updates it (${upText()})`);
+  assert.equal(globalThis.document.getElementById('rpcLat').textContent, '6ms', 'and rpc latency moved with this frame too');
+});
+
 test('renderFeed always emits exactly three cells per row', () => {
   const { els } = installDom();
   const events = [
