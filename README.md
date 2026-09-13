@@ -1,10 +1,9 @@
 # blockyard
 
 A live, multi-user web monitor and block explorer for
-[Bitcoin Machine Code](https://github.com/BobClawblaw/bitcoinmachinecode) (`bmc`), the
-fully-validating Bitcoin node written in hand-authored x86-64 assembly.
+[Bitcoin Core](https://github.com/bitcoin/bitcoin).
 
-Point it at a `bmc` node and open a browser: live charts, a 3D block-space viewer,
+Point it at your node and open a browser: live charts, a 3D block-space viewer,
 a block / transaction / address explorer, exchange prices with order-book depth, and a
 kiosk view for a wall screen. No dependencies to install, no CDN, no telemetry, and
 read-only toward your node by default.
@@ -30,14 +29,14 @@ board without a reload.
 
 ## Quick start
 
-You need **Node.js 22 or newer** and a running `bmc` node with JSON-RPC enabled. Set
+You need **Node.js 22 or newer** and a running Bitcoin Core node with JSON-RPC enabled. Set
 **`txindex=1`** on the node if you want the explorer to look up transactions by id — everything
 else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 737 unit tests, all built in
+npm test            # optional: 742 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
 
@@ -49,9 +48,9 @@ To watch your own node, create `config/local.json`:
   "nodes": [
     {
       "id": "main",
-      "label": "My bmc node",
-      "rpcUrl": "http://127.0.0.1:8331",
-      "datadir": "/var/lib/bmc/data",
+      "label": "My node",
+      "rpcUrl": "http://127.0.0.1:8332",
+      "datadir": "/home/you/.bitcoin",
       "chainHint": "main"
     }
   ]
@@ -86,9 +85,9 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
 
 - **Read-only by default.** The monitor never writes to your node unless you enable
   individual actions, with accounts on and a typed confirmation per call.
-- **A good guest.** The `bmc` RPC server answers one connection at a time on one thread,
-  so every request goes through one serialized, prioritised, batched lane. The monitor
-  would rather skip a poll than slow your node down.
+- **A good guest.** Every request goes through one serialized, prioritised, batched lane,
+  so the monitor never opens a burst of parallel calls against your node's RPC threads.
+  It would rather skip a poll than slow your node down.
 - **Honest data.** A missing figure is shown as missing, never as zero; stale data looks
   stale; inferred numbers are labelled as inferences; every figure's source is listed on
   the Node & RPC page.
@@ -114,7 +113,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 737 unit tests (node:test, no dependencies)
+npm test             # 742 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
