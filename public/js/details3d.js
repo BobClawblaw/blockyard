@@ -163,6 +163,9 @@ const FX_MS = {
   // batch four: the family that ALTERS the board -- absorbing, collapsing, digging -- which
   // only became possible once heads carried hide/scale through to the renderer
   katamari: 8400, boulderdash: 6400, lemmings: 8000, marble: 7000, gradius: 7600, portal: 7200,
+  // batch five, the last of the catalogue: height as terrain, traffic, the marker that lands
+  // BEFORE the bomb, a pipe that fills, a board taken apart and put back, and one rare visitor
+  sonic: 6000, frogger: 7600, xevious: 7800, pipemania: 8400, derez: 6600, ufo: 5200,
 };
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run

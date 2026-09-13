@@ -285,7 +285,15 @@ nothing touches a tile, the override just stops being computed. `marble` is data
 way -- it obeys the board as TERRAIN, rolling greedily downhill, so it drains away from the big
 transactions and shows which way the block leans.
 
-Twenty-six agents.
+Batch five, the same day: **sonic (6), frogger (9), xevious (16), pipemania (28), derez (39),
+ufo (41)**. `sonic` is the second agent to use height as TERRAIN rather than as an obstacle -- it
+launches off the tallest block in its row and arcs. `xevious` is the only effect where you see what
+is about to happen: the marker lands a beat before the bomb. `derez` takes the board apart as it
+passes and puts it back behind itself, which is the plainest demonstration that an effect can do
+that without touching a tile. `ufo` is deliberately brief -- rarity is its whole design.
+
+**Thirty-two agents, and with the eighteen field effects that is fifty on the board.** Every entry
+in this catalogue worth building has been built.
 
 **A fifth lesson, learned three times in one day: a measurement that contradicts a working picture
 is usually the measurement.** Three times a probe reported an effect doing nothing while the

@@ -1671,6 +1671,30 @@ defineAgent('marble', {
       x = bx; y = by;
       pts.push({ x, y });
     }
+    // A FLAT BOARD IS STILL A BOARD. Greedy descent stops the instant no neighbour is lower -- and
+    // the dense block-space board packs thousands of slabs that are ALL exactly the same height,
+    // so the route came out two points long and the marble sat almost still for its whole run.
+    // Measured on the live board; the same shape of bug as bomberman's flat wall threshold, which
+    // is the second time a skyline-reading agent has done nothing on a board with no skyline.
+    //
+    // Where there is no gradient there is still a DIRECTION worth rolling: the board is laid out
+    // richest-first, so "downhill" in the data sense is toward the cheap end. The marble drifts
+    // that way instead of stalling, which keeps the data-aware claim honest rather than dropping it.
+    if (pts.length < 6) {
+      const dirs = [[1, 0.35], [-1, 0.35], [0.35, 1], [0.35, -1]];
+      const [dx, dy] = dirs[(rnd() * dirs.length) | 0];
+      let cx = pts[0].x, cy = pts[0].y;
+      pts.length = 1;
+      for (let i = 0; i < 44; i++) {
+        cx = Math.max(0, Math.min(W - 1, cx + dx));
+        cy = Math.max(0, Math.min(H - 1, cy + dy));
+        // it still prefers a lower neighbour when one exists: a slope steers it, flatness does not
+        const here = top(Math.round(cx), Math.round(cy));
+        const ahead = top(Math.round(cx + dx), Math.round(cy + dy));
+        if (ahead > here + 0.6) { cy = Math.max(0, Math.min(H - 1, cy - dy)); }
+        pts.push({ x: cx, y: cy });
+      }
+    }
     return { pts: pts.length > 1 ? pts : [{ x, y }, { x: x + 1, y }], tops, W, H };
   },
   frame(a, u) {
@@ -1807,5 +1831,349 @@ defineAgent('portal', {
     gate(p.outAt, [255, 150, 60]);
     const c = project(p.at.x, p.at.y, 1.3, view);
     bloom(ctx, c.x, c.y, U * 1.1, p.through ? [255, 200, 140] : [200, 225, 255], 0.95);
+  },
+});
+
+// ================================================================= BATCH FIVE
+//
+// The last six, and with them every effect in the catalogue that was worth building. Two use the
+// skyline as TERRAIN rather than as an obstacle, one is deliberately rare, and one de-reses the
+// board and puts it back.
+
+// --- 25. SONIC ------------------------------------------------------------
+//
+// Uses height as TERRAIN, which nothing else does: a rider accelerates along the board, launches
+// off the top of a tall cube, and ARCS through the air before landing further on. The skyline
+// stops being scenery and becomes a ramp.
+defineAgent('sonic', {
+  build({ W, H, tiles, rnd }) {
+    const tops = cellTops(tiles, W, H);
+    const y = 1 + Math.floor(rnd() * Math.max(1, H - 2));
+    const top = (x) => (x >= 0 && x < W ? tops[y * W + (x | 0)] : 0);
+    // find the best ramp on this row: the sharpest rise, which is where it will launch
+    let best = 1, rise = 0;
+    for (let x = 2; x < W - 6; x++) {
+      const d = top(x) - top(x - 2);
+      if (d > rise) { rise = d; best = x; }
+    }
+    return { y, W, H, launch: best, rise, tops, top: (x) => top(x) };
+  },
+  frame(a, u) {
+    const RUN = 0.42;
+    const heads = [];
+    let x, z, airborne = false;
+    if (u < RUN) {
+      // the run-up, accelerating
+      const v = Math.pow(u / RUN, 1.6);
+      x = v * a.launch;
+      z = a.top(x) + 0.7;
+    } else {
+      const v = (u - RUN) / (1 - RUN);
+      airborne = true;
+      const span = Math.min(a.W - a.launch, 8 + a.rise * 4);
+      x = a.launch + v * span;
+      // a real arc: up off the ramp, down onto whatever is there
+      const apex = 3 + a.rise * 1.6;
+      z = a.top(a.launch) + 0.7 + Math.sin(Math.PI * v) * apex - v * v * 0.8;
+      z = Math.max(a.top(x) + 0.7, z);
+    }
+    heads.push({ x, y: a.y, color: airborne ? [120, 190, 255] : [90, 160, 255], alpha: 1, r: 1.8 });
+    // the trail it has run
+    for (let k = 1; k <= 6; k++) {
+      const bx = Math.max(0, x - k * 1.1);
+      heads.push({ x: bx, y: a.y, color: [70, 140, 235], alpha: 0.5 - k * 0.06, r: 1.1 });
+    }
+    return { sonic: { x, y: a.y, z, airborne, launch: a.launch }, heads };
+  },
+  draw(ctx, view, lw) {
+    const s2 = view.fx?.sonic;
+    if (!s2) return;
+    const U = view.unit ?? 8;
+    const c = project(s2.x, s2.y, s2.z, view);
+    const R = U * 0.95;
+    // a ball in a blur of motion: streaks behind it, longer when it is flying
+    for (let k = 1; k <= 5; k++) {
+      const p = project(s2.x - k * (s2.airborne ? 0.9 : 0.6), s2.y, s2.z - (s2.airborne ? k * 0.25 : 0), view);
+      ctx.fillStyle = `rgba(80,160,255,${(0.28 - k * 0.045).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, R * (1 - k * 0.11), 0, Math.PI * 2); ctx.fill();
+    }
+    bloom(ctx, c.x, c.y, R * 1.9, [110, 185, 255], 0.75);
+    ctx.fillStyle = 'rgba(235,246,255,0.98)';
+    ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, Math.PI * 2); ctx.fill();
+    if (s2.airborne) {
+      // the shadow says how high it is, which is the whole readout of an arc
+      const sh = project(s2.x, s2.y, 0.05, view);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.ellipse(sh.x, sh.y, R * 0.8, R * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    void lw;
+  },
+});
+
+// --- 26. FROGGER ----------------------------------------------------------
+//
+// Several agents crossing at once in opposite lanes at different speeds, and some of them COLLIDE.
+// Traffic, rather than one thing travelling.
+defineAgent('frogger', {
+  build({ W, H, rnd }) {
+    const lanes = [];
+    const n = Math.max(4, Math.min(8, Math.round(H / 9)));
+    for (let i = 0; i < n; i++) {
+      lanes.push({
+        y: (H / (n + 1)) * (i + 1),
+        dir: i % 2 ? 1 : -1,
+        speed: 0.7 + rnd() * 0.8,
+        offset: rnd(),
+        cars: 2 + ((rnd() * 2) | 0),
+        color: i % 2 ? [255, 170, 70] : [110, 210, 255],
+      });
+    }
+    return { lanes, W, H };
+  },
+  frame(a, u) {
+    const heads = [];
+    const cars = [];
+    for (const l of a.lanes) {
+      for (let c = 0; c < l.cars; c++) {
+        const p = ((u * l.speed + l.offset + c / l.cars) % 1);
+        const x = l.dir > 0 ? p * a.W : a.W - p * a.W;
+        cars.push({ x, y: l.y, color: l.color, dir: l.dir });
+        heads.push({ x, y: l.y, color: l.color, alpha: 0.92, r: 1.6 });
+      }
+    }
+    return { frogger: { cars }, heads };
+  },
+  draw(ctx, view, lw) {
+    const f = view.fx?.frogger;
+    if (!f) return;
+    const U = view.unit ?? 8;
+    for (const c of f.cars) {
+      const p = project(c.x, c.y, 1.1, view);
+      const w = U * 1.5, h = U * 0.6;
+      poly(ctx, [
+        { x: p.x - w * c.dir, y: p.y - h }, { x: p.x + w * 0.5 * c.dir, y: p.y - h },
+        { x: p.x + w * 0.5 * c.dir, y: p.y + h }, { x: p.x - w * c.dir, y: p.y + h },
+      ], `rgba(${c.color.join(',')},0.92)`);
+      // headlights, so a lane has a direction you can read at a glance
+      bloom(ctx, p.x + w * 0.5 * c.dir, p.y, U * 0.45, [255, 250, 220], 0.8);
+    }
+    void lw;
+  },
+});
+
+// --- 27. XEVIOUS ----------------------------------------------------------
+//
+// THE LEAD IS THE EFFECT: a ship crosses at altitude dropping markers AHEAD of itself, and each
+// one detonates a beat later. You can see what is about to happen before it does, which nothing
+// else here offers.
+defineAgent('xevious', {
+  build({ W, H, rnd }) {
+    const horiz = rnd() < 0.5;
+    const lane = 2 + rnd() * ((horiz ? H : W) - 4);
+    const marks = [];
+    for (let i = 0; i < 6; i++) marks.push({ t: 0.1 + i * 0.13, at: 0.12 + i * 0.14 });
+    return { horiz, lane, marks, W, H };
+  },
+  frame(a, u) {
+    const span = a.horiz ? a.W : a.H;
+    const shipAt = u * span * 1.1;
+    const heads = [];
+    const marks = [];
+    const ship = a.horiz ? { x: shipAt, y: a.lane } : { x: a.lane, y: shipAt };
+    heads.push({ x: ship.x, y: ship.y, color: [200, 230, 255], alpha: 1, r: 1.6 });
+    for (const m of a.marks) {
+      if (u < m.t) continue;
+      const age = (u - m.t) / 0.16;
+      const at = m.at * span;
+      const p = a.horiz ? { x: at, y: a.lane } : { x: a.lane, y: at };
+      if (age < 1) {
+        // the marker: placed, waiting, pulsing
+        marks.push({ ...p, age, fired: false });
+        heads.push({ x: p.x, y: p.y, color: [255, 220, 120], alpha: 0.55 + 0.45 * Math.sin(age * 18), r: 1.3 });
+      } else if (age < 2.2) {
+        const blast = (age - 1) / 1.2;
+        marks.push({ ...p, age, fired: true, blast });
+        heads.push({ x: p.x, y: p.y, color: [255, 240, 200], alpha: 1 - blast, r: 1.5 + blast * 4 });
+      }
+    }
+    return { xevious: { ship, marks }, heads };
+  },
+  draw(ctx, view, lw) {
+    const x = view.fx?.xevious;
+    if (!x) return;
+    const U = view.unit ?? 8;
+    for (const m of x.marks) {
+      const c = project(m.x, m.y, 0.8, view);
+      if (!m.fired) {
+        // a crosshair on the ground where it WILL land
+        const r = U * 1.1 * (1 - m.age * 0.3);
+        ring(ctx, c.x, c.y, r, `rgba(255,220,120,${(0.9).toFixed(3)})`, Math.max(lw * 2, U * 0.12));
+        line(ctx, [{ x: c.x - r, y: c.y }, { x: c.x + r, y: c.y }], 'rgba(255,235,160,0.8)', Math.max(lw * 1.5, U * 0.08));
+        line(ctx, [{ x: c.x, y: c.y - r }, { x: c.x, y: c.y + r }], 'rgba(255,235,160,0.8)', Math.max(lw * 1.5, U * 0.08));
+      } else {
+        ring(ctx, c.x, c.y, U * (0.8 + m.blast * 3), `rgba(255,230,170,${(0.9 * (1 - m.blast)).toFixed(3)})`, Math.max(lw * 2, U * 0.16));
+        bloom(ctx, c.x, c.y, U * (0.6 + m.blast * 1.6), [255, 230, 180], 1 - m.blast);
+      }
+    }
+    const s2 = project(x.ship.x, x.ship.y, 5.5, view);
+    const R = U * 1.2;
+    poly(ctx, [
+      { x: s2.x, y: s2.y - R }, { x: s2.x + R * 0.75, y: s2.y + R * 0.6 },
+      { x: s2.x, y: s2.y + R * 0.2 }, { x: s2.x - R * 0.75, y: s2.y + R * 0.6 },
+    ], 'rgba(210,236,255,0.96)');
+    bloom(ctx, s2.x, s2.y, R * 1.3, [150, 200, 255], 0.4);
+  },
+});
+
+// --- 28. PIPE MANIA -------------------------------------------------------
+//
+// Two phases, which is a rhythm none of the others have: pipe segments lay themselves tile by tile
+// into a connected run, and then fluid FLOWS the finished pipe.
+defineAgent('pipemania', {
+  build({ W, H, seed, rnd }) {
+    const pts = cyclePath(seed, W, H, rnd() < 0.5 ? 'left' : 'bottom');
+    return { pts: pts.slice(0, Math.min(pts.length, 60)) };
+  },
+  frame(a, u) {
+    const LAY = 0.58;
+    const n = a.pts.length - 1;
+    const heads = [];
+    if (u < LAY) {
+      const laid = (u / LAY) * n;
+      const at = alongPath(a.pts, laid);
+      heads.push({ x: at.x, y: at.y, color: [200, 210, 225], alpha: 1, r: 1.4 });
+      return { pipemania: { laid, flow: 0, pts: a.pts }, heads };
+    }
+    const flow = ((u - LAY) / (1 - LAY)) * n;
+    const at = alongPath(a.pts, flow);
+    heads.push({ x: at.x, y: at.y, color: [90, 200, 255], alpha: 1, r: 1.6 });
+    return { pipemania: { laid: n, flow, pts: a.pts }, heads };
+  },
+  draw(ctx, view, lw) {
+    const p = view.fx?.pipemania;
+    if (!p) return;
+    const U = view.unit ?? 8;
+    const upto = Math.floor(p.laid);
+    const pipe = [];
+    for (let i = 0; i <= upto && i < p.pts.length; i++) pipe.push(project(p.pts[i].x, p.pts[i].y, 0.9, view));
+    if (pipe.length > 1) {
+      line(ctx, pipe, 'rgba(90,100,120,0.9)', U * 0.75);       // the casing
+      line(ctx, pipe, 'rgba(180,192,210,0.95)', U * 0.42);     // the metal
+    }
+    if (p.flow > 0) {
+      const wet = [];
+      const upto2 = Math.floor(p.flow);
+      for (let i = 0; i <= upto2 && i < p.pts.length; i++) wet.push(project(p.pts[i].x, p.pts[i].y, 0.9, view));
+      if (wet.length > 1) {
+        line(ctx, wet, 'rgba(40,150,255,0.85)', U * 0.34);
+        line(ctx, wet, 'rgba(170,225,255,0.95)', U * 0.14);
+      }
+      const head = alongPath(p.pts, p.flow);
+      const c = project(head.x, head.y, 0.9, view);
+      bloom(ctx, c.x, c.y, U * 0.9, [120, 210, 255], 0.9);
+    }
+    void lw;
+  },
+});
+
+// --- 29. DEREZ ------------------------------------------------------------
+//
+// A front crosses the board DE-RESOLVING the cubes it passes -- they break up and vanish -- and
+// they come back behind it. The most direct demonstration that an effect can take the board apart
+// and put it back without touching a tile.
+defineAgent('derez', {
+  build({ W, H, rnd }) {
+    const horiz = rnd() < 0.5;
+    return { horiz, W, H, back: rnd() < 0.5 };
+  },
+  frame(a, u) {
+    const span = a.horiz ? a.W : a.H;
+    // the front runs across, and the RESTORE follows it a third of the board behind
+    const lead = -4 + u * (span + 8);
+    const at = a.back ? span - lead : lead;
+    const heads = [];
+    const band = span * 0.22;
+    const steps = 26;
+    for (let i = 0; i < steps; i++) {
+      const q = (i / (steps - 1)) * band;
+      const pos = a.back ? at + q : at - q;
+      const k = 1 - q / band;
+      heads.push({
+        x: a.horiz ? pos : (a.W / steps) * i + a.W / (steps * 2),
+        y: a.horiz ? (a.H / steps) * i + a.H / (steps * 2) : pos,
+        color: [120, 220, 255], alpha: 0.8 * k, r: Math.max(a.W, a.H) * 0.06,
+        hide: k > 0.25 ? 1 : 0,
+      });
+    }
+    return { derez: { at, horiz: a.horiz, band, W: a.W, H: a.H }, heads };
+  },
+  draw(ctx, view, lw) {
+    const d = view.fx?.derez;
+    if (!d) return;
+    const U = view.unit ?? 8;
+    // the front itself: a bright edge with shards spitting off it
+    const a0 = d.horiz ? project(d.at, 0, 1.2, view) : project(0, d.at, 1.2, view);
+    const a1 = d.horiz ? project(d.at, d.H, 1.2, view) : project(d.W, d.at, 1.2, view);
+    line(ctx, [a0, a1], 'rgba(90,200,255,0.32)', U * 1.1);
+    line(ctx, [a0, a1], 'rgba(225,248,255,0.95)', U * 0.2);
+    for (let i = 0; i < 40; i++) {
+      const t = hash01(i * 7 + 3);
+      const off = (hash01(i * 13 + 5) - 0.5) * 3;
+      const p = d.horiz
+        ? project(d.at + off, t * d.H, 1.2 + hash01(i * 3) * 2, view)
+        : project(t * d.W, d.at + off, 1.2 + hash01(i * 3) * 2, view);
+      const r = U * (0.12 + 0.22 * hash01(i * 5 + 11));
+      ctx.fillStyle = `rgba(170,230,255,${(0.35 + 0.45 * hash01(i * 11)).toFixed(3)})`;
+      ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+    }
+    void lw;
+  },
+});
+
+// --- 30. UFO --------------------------------------------------------------
+//
+// The mystery ship. It crosses the top of the board, it is worth nothing, and RARITY IS THE POINT:
+// it plays as briefly as anything here and then it is gone.
+defineAgent('ufo', {
+  build({ W, H, rnd }) {
+    const dir = rnd() < 0.5 ? 1 : -1;
+    return { dir, W, H, y: H * (0.82 + rnd() * 0.12), wob: rnd() * 6.28 };
+  },
+  frame(a, u) {
+    const x = a.dir > 0 ? -3 + u * (a.W + 6) : a.W + 3 - u * (a.W + 6);
+    const y = a.y + Math.sin(a.wob + u * 9) * 1.2;
+    // it comes and goes rather than fading in place
+    const edge = Math.min(1, Math.min(u, 1 - u) * 8);
+    return {
+      ufo: { x, y, u, edge },
+      heads: [{ x, y, color: [255, 120, 220], alpha: 0.95 * edge, r: 2.4 }],
+    };
+  },
+  draw(ctx, view, lw) {
+    const f = view.fx?.ufo;
+    if (!f) return;
+    const U = view.unit ?? 8;
+    const c = project(f.x, f.y, 4.5, view);
+    const R = U * 1.9 * f.edge;
+    if (R < 0.5) return;
+    // a saucer: a wide flattened hull, a dome, and lamps round the rim
+    const hull = [];
+    for (let i = 0; i <= 26; i++) {
+      const ang = (i / 26) * Math.PI * 2;
+      hull.push({ x: c.x + Math.cos(ang) * R, y: c.y + Math.sin(ang) * R * 0.34 });
+    }
+    poly(ctx, hull, 'rgba(190,70,170,0.92)');
+    wire(ctx, hull, 'rgba(255,180,240,0.95)', Math.max(lw * 2, U * 0.1));
+    const dome = [];
+    for (let i = 0; i <= 16; i++) {
+      const ang = Math.PI + (i / 16) * Math.PI;
+      dome.push({ x: c.x + Math.cos(ang) * R * 0.45, y: c.y + Math.sin(ang) * R * 0.42 });
+    }
+    poly(ctx, dome, 'rgba(255,190,245,0.9)');
+    for (let i = 0; i < 5; i++) {
+      const lx = c.x - R * 0.7 + (i / 4) * R * 1.4;
+      const on = (Math.floor(f.u * 40) + i) % 5 === 0;
+      bloom(ctx, lx, c.y + R * 0.18, U * 0.3, on ? [255, 255, 220] : [255, 140, 220], on ? 1 : 0.5);
+    }
   },
 });

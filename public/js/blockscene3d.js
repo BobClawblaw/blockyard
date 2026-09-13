@@ -954,7 +954,13 @@ export function fxAt(t, fx) {
     case 'lemmings':
     case 'marble':
     case 'gradius':
-    case 'portal': {
+    case 'portal':
+    case 'sonic':
+    case 'frogger':
+    case 'xevious':
+    case 'pipemania':
+    case 'derez':
+    case 'ufo': {
       let best = FX_NONE, bw = 0;
       for (const hd of fx.heads ?? []) {
         const ddx = Math.max(t.x - hd.x, 0, hd.x - (t.x + t.s)), ddy = Math.max(t.y - hd.y, 0, hd.y - (t.y + t.s));

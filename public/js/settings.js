@@ -128,6 +128,7 @@ export const DEFAULTS = Object.freeze({
     centipede: true, pacman: true, galaga: true, tractor: true, missile: true, asteroids: true,
     tetrisdrop: true, qix: true, minesweeper: true, tempest: true, lockon: true, scanvisor: true,
     katamari: true, boulderdash: true, lemmings: true, marble: true, gradius: true, portal: true,
+    sonic: true, frogger: true, xevious: true, pipemania: true, derez: true, ufo: true,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -395,6 +396,12 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'marble', label: 'Marble', kind: 'toggle', hint: 'A ball that rolls downhill \u2014 it drains away from the big transactions, so it shows which way the block leans' }),
       Object.freeze({ key: 'gradius', label: 'Options', kind: 'toggle', hint: 'A leader trailed by four satellites, each following exactly where it has been' }),
       Object.freeze({ key: 'portal', label: 'Portal', kind: 'toggle', hint: 'Two gateways on opposite edges; something enters one and leaves the other' }),
+      Object.freeze({ key: 'sonic', label: 'Ramp run', kind: 'toggle', hint: 'A rider that launches off the tallest block in its row and arcs through the air' }),
+      Object.freeze({ key: 'frogger', label: 'Traffic', kind: 'toggle', hint: 'Lanes crossing in both directions at different speeds' }),
+      Object.freeze({ key: 'xevious', label: 'Bombing run', kind: 'toggle', hint: 'Markers land ahead of the ship and detonate a beat later \u2014 you see it coming' }),
+      Object.freeze({ key: 'pipemania', label: 'Pipeline', kind: 'toggle', hint: 'Pipe laid tile by tile, and then the fluid runs it' }),
+      Object.freeze({ key: 'derez', label: 'De-res', kind: 'toggle', hint: 'A front that takes the blocks apart as it passes and puts them back behind it' }),
+      Object.freeze({ key: 'ufo', label: 'Mystery ship', kind: 'toggle', hint: 'A saucer crossing the top of the board. Brief, and worth nothing' }),
     ]),
   }),
   Object.freeze({
