@@ -24,3 +24,5 @@ node_modules/
 # working notes stay on the working machine (never published)
 worklog/
 docs/STATE-*.md
+# scoping reports and proposals that are not decisions yet
+docs/PRIVATE-*.md
