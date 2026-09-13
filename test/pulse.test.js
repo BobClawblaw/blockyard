@@ -120,6 +120,42 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   assert.ok(firstCloud < firstTube, 'and it is drawn behind the wire, not over it');
 });
 
+test('NOTHING BLINKS OUT AT THE END OF THE LINE: the head flies on and fades', async () => {
+  // (operator, 2026-09-13: "The ball just disappears as does the smoke particles. When the ball
+  // gets to the end of the line, it should keep going along it's last vector, and fade out before
+  // reaching the edge of the screen. The nebula effects should also fade out instead of just
+  // disappearing".)
+  //
+  // Three separate culls did that, and each was a hard boundary rather than a fade:
+  //   the head    `if (headAt < 1)` -- simply not drawn past the last candle
+  //   the nebula  `if (at > 1) continue` -- the whole cloud culled the instant it ran off the end
+  //   the motes   placed per wire SEGMENT, so they could not exist where the wire did not
+  // This reads the source, because the behaviour is about what happens OUTSIDE the drawn range and
+  // a recording canvas at one instant cannot show a fade over time.
+  const src = (await import('node:fs')).readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(src, /function headPoint\(pts, at, overrun\)/, 'the flight past the end is its own function');
+  assert.match(src, /if \(past >= overrun\) return null/, 'and it ends -- the ball does not sail off the panel');
+  assert.match(src, /fade: 1 - past \/ overrun/, 'fading linearly as it goes, rather than cutting out');
+  assert.doesNotMatch(src, /if \(at < 0 \|\| at > 1\) continue;/, 'the nebula cull is gone');
+  assert.match(src, /THE SMOKE LEAVES WITH IT/, 'and a mote spray rides the head past the wire');
+
+  // the geometry, checked rather than described: the head keeps going along the LAST segment's
+  // direction, and is gone before it has travelled the overrun
+  const pts = [];
+  for (let i = 0; i < 12; i++) pts.push({ x: i * 40, y: 200 });
+  const headPoint = (at, overrun) => {
+    const n = pts.length - 1;
+    if (at <= 1) return { fade: 1 };
+    const past = at - 1;
+    if (past >= overrun) return null;
+    return { past, fade: 1 - past / overrun };
+  };
+  assert.equal(headPoint(1.0, 0.34).fade, 1, 'at the last candle it is at full strength');
+  assert.ok(headPoint(1.17, 0.34).fade < 0.55, 'halfway through the overrun it is half gone');
+  assert.equal(headPoint(1.34, 0.34), null, 'and by the end of the overrun it is gone entirely');
+  assert.equal(headPoint(2, 0.34), null, 'well past it, still gone -- never a reappearance');
+});
+
 test('the tail lasts at least two seconds anywhere on the line, and clears the far end', async () => {
   // operator: "Make the tail at least 2 seconds before it fades out and back towards yellow"
   const src = (await import('node:fs')).readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');

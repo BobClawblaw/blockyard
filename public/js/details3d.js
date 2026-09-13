@@ -281,8 +281,21 @@ function scheduleFx(canvas, st, opts, soon = false) {
     // the running when there is anything else to play, so twinkle carries the quiet stretches and
     // the pulse stays an event. Never dropped to nothing: if it is the only effect left switched
     // on, it still plays.
-    if (pool.length > 1 && pool.includes('pulse') && Math.random() < 0.75) {
-      pool = pool.filter((k) => k !== 'pulse');
+    // ...AND THE GUARD WAS DEAD ON THE ONLY BOARD IT WAS FOR (operator, 2026-09-13: the energy
+    // ball must ride the line "MUCH LESS OFTEN"). The price board's whole list is LINE_FX --
+    // pulse and twinkle -- so `pool` after dropping lastFx is ALWAYS length 1, and the
+    // `pool.length > 1` test could never pass there. Measured: a strict alternation,
+    // twinkle pulse twinkle pulse, 50% pulse for ever. The rule only ever fired on the grid
+    // boards, which do not play the pulse at all.
+    //
+    // So the skip no longer depends on there being something else in the pool: when the pulse
+    // comes up and the roll says skip, the board plays whatever else is switched on -- repeating
+    // twinkle if that is all there is, which is a quiet board rather than a surge every 14 s.
+    // It still plays if the operator has turned everything else off.
+    if (pool.includes('pulse') && pool.length + kinds.length > 2 && Math.random() < 0.82) {
+      const without = pool.filter((k) => k !== 'pulse');
+      const fallback = without.length ? without : kinds.filter((k) => k !== 'pulse');
+      if (fallback.length) pool = fallback;
     }
     // NO FAVOURITES (operator, 2026-09-13: "the tron lightcycles effect happens way too often").
     // There used to be a rule here: the first effect after the board came to rest was a light-cycle
@@ -1047,6 +1060,34 @@ function traceCurve(t, pts) {
 // The price curve, kept between frames: one entry, because there is one price line on screen.
 const CURVE = { key: null, path: null };
 
+/**
+ * Where the pulse's head is, INCLUDING its flight past the end of the line.
+ *
+ * `at` is 0..1 along the line and then beyond. Up to 1 it interpolates the points as before. Past
+ * 1 it continues along the direction of the FINAL SEGMENT -- the last vector -- for `overrun` of
+ * the line's length, fading linearly to nothing. Returns null once it is gone, so the caller draws
+ * nothing rather than drawing something transparent.
+ */
+function headPoint(pts, at, overrun) {
+  const n = pts.length - 1;
+  if (at < 0) return null;
+  if (at <= 1) {
+    const d = at * n;
+    const k = Math.min(n - 1, Math.floor(d)), fr = d - k;
+    return { x: pts[k].x + (pts[k + 1].x - pts[k].x) * fr, y: pts[k].y + (pts[k + 1].y - pts[k].y) * fr, fade: 1 };
+  }
+  const past = at - 1;
+  if (past >= overrun) return null;                     // faded out before the edge
+  const a = pts[n - 1], b = pts[n];
+  const vx = b.x - a.x, vy = b.y - a.y;
+  const len = Math.hypot(vx, vy) || 1;
+  // the whole line's length, so the overrun is a share of the line and not of one candle
+  let total = 0;
+  for (let i = 0; i < n; i++) total += Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+  const travel = past * total;
+  return { x: b.x + (vx / len) * travel, y: b.y + (vy / len) * travel, fade: 1 - past / overrun };
+}
+
 function priceLine(ctx, view, axes) {
   const pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
@@ -1116,14 +1157,20 @@ function priceLine(ctx, view, axes) {
   for (let k = 0; k < PUFFS; k++) {
     const u = hash01(k * 7 + 13);                         // how far back down the tail it sits
     const at = headAt - u * PULSE_TAIL;
-    if (at < 0 || at > 1) continue;
-    const tint = Math.pow(1 - u, 1.4);
+    if (at < 0) continue;
+    // PAST THE END IT FADES, IT DOES NOT VANISH (operator: "The nebula effects should also fade out
+    // instead of just disappearing"). This was `at > 1 -> continue`, so the cloud was culled the
+    // instant its stretch ran off the last candle and the whole trail blinked out together.
+    const off = at > 1 ? (at - 1) / 0.34 : 0;
+    if (off >= 1) continue;
+    const edge = 1 - off;
+    const tint = Math.pow(1 - u, 1.4) * edge;
     const age = u;
-    const d = at * Math.max(1, n - 1);
-    const i0 = Math.max(0, Math.min(n - 1, Math.floor(d)));
-    const fr = d - i0;
-    const mx = pts[i0].x + ((pts[i0 + 1] ?? pts[i0]).x - pts[i0].x) * fr;
-    const my = pts[i0].y + ((pts[i0 + 1] ?? pts[i0]).y - pts[i0].y) * fr;
+    // positioned along the same flight the head takes, so the cloud follows it off the end
+    // instead of piling up on the last candle
+    const hp = headPoint(pts, at, 0.34);
+    if (!hp) continue;
+    const mx = hp.x, my = hp.y;
     const a1 = hash01(k * 31 + 101) * Math.PI * 2;
     const spread = lw * (4 + 78 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
     const rad = lw * (9 + 34 * hash01(k * 13 + 67)) * (1 + 1.3 * age);
@@ -1265,16 +1312,47 @@ function priceLine(ctx, view, axes) {
       ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
     }
   }
-  // the head: a bright bead riding the wire, gone when it reaches the far end
-  if (headAt < 1) {
-    const d = headAt * n;
-    const k = Math.min(n - 1, Math.floor(d)), fr = d - k;
-    const hx = pts[k].x + (pts[k + 1].x - pts[k].x) * fr;
-    const hy = pts[k].y + (pts[k + 1].y - pts[k].y) * fr;
-    // a head you cannot miss: a wide blue corona, a bright core, a white point
-    for (const [r, col] of [[28, 'rgba(60,160,255,0.16)'], [15, 'rgba(120,200,255,0.34)'], [7, 'rgba(235,250,255,0.92)'], [3, 'rgba(255,255,255,1)']]) {
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(hx, hy, lw * r, 0, Math.PI * 2); ctx.fill();
+  // THE SMOKE LEAVES WITH IT (operator, 2026-09-13: "The ball just disappears as does the smoke
+  // particles"). The spray above is placed per wire SEGMENT, so it can only exist where the wire
+  // does -- at the last candle it stops, which is half of what the operator saw vanish. This is
+  // the same mist, positioned along the head's flight instead, so it follows the ball off the end
+  // and thins out with it.
+  {
+    const OVERRUN = 0.34;
+    for (let m = 0; m < 26; m++) {
+      const back = hash01(m * 11 + 7) * PULSE_TAIL * 0.5;       // how far behind the head it trails
+      const hp = headPoint(pts, headAt - back, OVERRUN);
+      if (!hp || hp.fade >= 1) continue;                        // only past the end: the wire has its own
+      const ang = hash01(m * 17 + 41) * Math.PI * 2;
+      const spread = lw * (5 + 40 * (back / (PULSE_TAIL * 0.5))) * (0.4 + 0.6 * hash01(m * 5 + 3));
+      const r = lw * (0.6 + 1.3 * hash01(m * 7 + 19));
+      const a = 0.7 * hp.fade * (1 - back / (PULSE_TAIL * 0.6));
+      if (a <= 0.01) continue;
+      ctx.fillStyle = `rgba(200,236,255,${a.toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(hp.x + Math.cos(ang) * spread, hp.y + Math.sin(ang) * spread, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // THE HEAD FLIES ON (operator, 2026-09-13: "When the ball gets to the end of the line, it should
+  // keep going along it's last vector, and fade out before reaching the edge of the screen").
+  // It used to be `if (headAt < 1)` and nothing else -- the bead simply stopped existing at the
+  // last candle, which is the disappearance the operator saw. Past the end it now carries on along
+  // the direction of the final segment and fades, so it leaves rather than blinks out.
+  //
+  // OFF THE END, NOT OFF THE SCREEN: the flight is capped at a fraction of the line's own length,
+  // so on any board width it goes dark before the edge rather than sailing into the panel border.
+  {
+    const OVERRUN = 0.34;                       // of the line's length, past the last point
+    const hp = headPoint(pts, headAt, OVERRUN);
+    if (hp) {
+      // a head you cannot miss: a wide blue corona, a bright core, a white point -- all of it
+      // scaled and faded together once it is off the wire
+      const f = hp.fade;
+      for (const [r, c0, a0] of [[28, '60,160,255', 0.16], [15, '120,200,255', 0.34], [7, '235,250,255', 0.92], [3, '255,255,255', 1]]) {
+        ctx.fillStyle = `rgba(${c0},${(a0 * f).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, lw * r * (0.55 + 0.45 * f), 0, Math.PI * 2); ctx.fill();
+      }
     }
   }
   done();
