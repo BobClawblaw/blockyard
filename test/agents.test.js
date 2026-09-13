@@ -144,6 +144,35 @@ test('the board is never mutated: an effect that eats a cube leaves the tiles al
   }
 });
 
+test('A HEAD CAN ACTUALLY HIDE AND SHRINK A CUBE, end to end from the caller', () => {
+  // THE DEAD-MACHINERY REGRESSION. `hide` and `scale` were added to fxAt's result so an effect
+  // could eat or collapse a cube -- and the heads branch then hardcoded `hide: 0, scale: 1`, so no
+  // agent could reach them. Three batches shipped with that dead, and it was only caught when the
+  // effects that need it were about to be written on top. A defaults check on FX_NONE (below) does
+  // NOT catch this: the capability has to be asserted from the side that uses it.
+  const tile = { txid: 'a', x: 4, y: 4, s: 1 };
+  const at = (head) => fxAt(tile, {
+    kind: 'snake', u: 0.5, amp: 1, gridW: 20, gridH: 20, dx: 1, dy: 0, seed: 1, x: 0, y: 0, heads: [head],
+  });
+  const on = at({ x: 4.5, y: 4.5, color: [1, 2, 3], alpha: 1, r: 1, hide: 1 });
+  assert.equal(on.hide, 1, 'a head ON the cube hides it');
+  const away = at({ x: 14, y: 14, color: [1, 2, 3], alpha: 1, r: 1, hide: 1 });
+  assert.equal(away.hide, 0, 'a head far away does not -- reach decides, not intent');
+  const shrunk = at({ x: 4.5, y: 4.5, color: [1, 2, 3], alpha: 1, r: 1, scale: 0.2 });
+  assert.ok(shrunk.scale < 0.25, `a head over it shortens it (${shrunk.scale})`);
+  const partly = at({ x: 5.6, y: 4.5, color: [1, 2, 3], alpha: 1, r: 1, scale: 0.2 });
+  assert.ok(partly.scale > shrunk.scale && partly.scale < 1, `and eases in with reach (${partly.scale})`);
+  const plain = at({ x: 4.5, y: 4.5, color: [1, 2, 3], alpha: 1, r: 1 });
+  assert.equal(plain.hide, 0, 'a head that asks for neither changes neither');
+  assert.equal(plain.scale, 1);
+  assert.ok(plain.glow > 0.5, 'but it still lights the cube');
+
+  // THE CONTROL: an unregistered kind falls to FX_NONE, which is how the first version of this
+  // probe fooled me -- every case came back identical because none of them ran at all.
+  const unknown = fxAt(tile, { kind: 'not-a-kind', u: 0.5, amp: 1, gridW: 20, gridH: 20, dx: 1, dy: 0, heads: [{ x: 4.5, y: 4.5, color: [1, 2, 3], alpha: 1, r: 1, hide: 1 }] });
+  assert.equal(unknown.glow, 0, 'an unregistered kind lights nothing, so identical results mean the test did not run');
+});
+
 test('hide and scale are transient, and default to "visible, full size"', () => {
   // FX_NONE is what every tile gets when nothing is happening to it, and what the airborne path
   // short-circuits to. If these defaults were wrong the board would vanish while an effect ran.

@@ -278,6 +278,14 @@ feerate. Three of the six are data-aware. `tetrisdrop` points the real, already-
 
 Twenty agents.
 
+**A fourth lesson, and the sharpest one: machinery nobody uses is machinery that does not work.**
+`hide` and `scale` were added to `fxAt`'s result so an effect could eat or collapse a cube and have
+it snap back -- and the heads branch then hardcoded `hide: 0, scale: 1`, so no agent could actually
+reach them. Three batches passed with that dead. It was only caught when batch four's whole family
+(katamari, boulder dash, lemmings) was about to be built on top of it; every one of them would have
+drawn a glow and called it eating. Wire a capability to a caller the same day you add it, or test
+it end to end from the caller's side.
+
 A third lesson, from verifying batch two: **a four-phase capture is not enough to judge an effect.**
 Pac-Man was written up as "did not appear at all" on the strength of one frame; captured every
 500 ms instead, all five characters are plainly there -- the wedge mid-board with its mouth open
