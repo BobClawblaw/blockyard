@@ -657,7 +657,7 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
     // per-leg deviation, and is drawn in three passes -- a wide dim halo, the arc, and a hot thin
     // core -- each shorter and brighter than the last, so it comes to a point instead of ending in
     // a stub. Still re-rolled every frame: electrical precisely because it never draws twice.
-    const forks = 1 + ((Math.random() * 3 * g.tint) | 0);
+    const forks = 1 + ((Math.random() * 4 * g.tint) | 0);
     const nx = -(g.b.y - g.a.y), ny = g.b.x - g.a.x;
     const nlen = Math.hypot(nx, ny) || 1;
     for (let k = 0; k < forks; k++) {
@@ -665,7 +665,7 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
       const ox = g.a.x + (g.b.x - g.a.x) * f0, oy = g.a.y + (g.b.y - g.a.y) * f0;
       const side = Math.random() < 0.5 ? 1 : -1;
       const base = Math.atan2((ny / nlen) * side, (nx / nlen) * side) + (Math.random() - 0.5) * 1.1;
-      const reach = lw * (5 + Math.random() * 7) * (0.45 + 0.55 * g.tint);
+      const reach = lw * (10 + Math.random() * 9) * (0.45 + 0.55 * g.tint);
       // SHORT AND JAGGED. Five legs, each shorter than the last, with a hard alternating zig of
       // +-0.9 rad about the heading -- a discharge kinks, it does not curve. The first cut held a
       // heading over four long smooth legs and drew whiskers halfway across the board.
@@ -1137,7 +1137,7 @@ function priceLine(ctx, view, axes) {
     // Forks now leave the wire near-perpendicular and hold their heading, tapering over four legs,
     // drawn halo/arc/core so they come to a point. The old version picked a uniformly random angle
     // and let each leg wander +-0.8 rad, which doubled back across the wire and read as scribble.
-    const forks = 1 + ((Math.random() * 3 * tint) | 0);
+    const forks = 1 + ((Math.random() * 4 * tint) | 0);
     const nx = -(q.y - p.y), ny = q.x - p.x;
     const nlen = Math.hypot(nx, ny) || 1;
     for (let k = 0; k < forks; k++) {
@@ -1145,7 +1145,7 @@ function priceLine(ctx, view, axes) {
       const ox = p.x + (q.x - p.x) * f0, oy = p.y + (q.y - p.y) * f0;
       const side = Math.random() < 0.5 ? 1 : -1;
       let ang = Math.atan2((ny / nlen) * side, (nx / nlen) * side) + (Math.random() - 0.5) * 1.1;
-      const reach = lw * (6 + Math.random() * 8) * (0.45 + 0.55 * tint);
+      const reach = lw * (11 + Math.random() * 10) * (0.45 + 0.55 * tint);
       // SHORT AND JAGGED (see chargeTrail): five kinked legs close to the wire, not four long
       // smooth ones. The screenshot of the first cut showed pale whiskers curving off the board.
       const legs = 5;
