@@ -107,7 +107,38 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   // and every kind must be reachable at all: a kind the scheduler can never pick is dead code
   const never = FX_KINDS.filter((k) => k !== 'pulse' && !count[k]);
   assert.deepEqual(never, [], `these kinds were never chosen in ${n} draws`);
-  void LINE_FX;
+
+  // THE PRICE BOARD HAS ITS OWN LIST, AND ITS OWN BUG. This test declared LINE_FX and then threw
+  // it away with `void`, so nothing covered the board the pulse actually plays on -- which is
+  // exactly how the skip survived: it was gated on `pool.length > 1`, and on a TWO-effect list
+  // `pool` after dropping lastFx is always length 1, so it could never fire. Measured before the
+  // fix: a strict alternation, twinkle pulse twinkle pulse, 50% pulse for ever (operator: the
+  // energy ball must ride the line "MUCH LESS OFTEN").
+  const linePick = (last) => {
+    const kinds = LINE_FX;
+    let pool = kinds.filter((k) => k !== last);
+    if (pool.includes('pulse') && pool.length + kinds.length > 2 && Math.random() < 0.82) {
+      const without = pool.filter((k) => k !== 'pulse');
+      const fallback = without.length ? without : kinds.filter((k) => k !== 'pulse');
+      if (fallback.length) pool = fallback;
+    }
+    return (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
+  };
+  const lineCount = {};
+  let lineLast = null;
+  for (let i = 0; i < n; i++) { const k = linePick(lineLast); lineCount[k] = (lineCount[k] ?? 0) + 1; lineLast = k; }
+  const pulseShare = (lineCount.pulse ?? 0) / n;
+  assert.ok(pulseShare < 0.25,
+    `the pulse takes ${(100 * pulseShare).toFixed(1)}% of the price board's effects; it alternated at 50% `
+    + 'before the guard was fixed, and the operator asked for much less often');
+  assert.ok(pulseShare > 0.02, `but it must still play sometimes (${(100 * pulseShare).toFixed(1)}%)`);
+  // with everything else switched off it is all that is left, and must still run
+  const onlyPulse = (() => {
+    const kinds = ['pulse'];
+    let pool = kinds.filter((k) => k !== 'pulse');
+    return (pool.length ? pool : kinds)[0];
+  })();
+  assert.equal(onlyPulse, 'pulse', 'the last effect standing still plays, however it is weighted');
 });
 
 test('with every effect switched off the board never schedules one, and it still draws', () => {
