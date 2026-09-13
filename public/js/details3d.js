@@ -159,6 +159,10 @@ const FX_MS = {
   centipede: 7400, tractor: 6800, missile: 7400,
   boulderdash: 6400, portal: 7200,};
 export const FX_KINDS = Object.keys(FX_MS);
+// The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
+// the table rather than written as a number, so culling or adding an effect cannot leave the cap
+// shorter than the effect it is meant to outlast. See the deferral in render3d.
+const FX_DEFER_MAX = Math.max(...Object.values(FX_MS)) + 1000;
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from
 // one end to the other leaving a electric blue tint on the yellow line that starts fading back to
@@ -1353,7 +1357,16 @@ function priceLine(ctx, view, axes) {
       // a head you cannot miss: a wide blue corona, a bright core, a white point -- all of it
       // scaled and faded together once it is off the wire
       const f = hp.fade;
-      for (const [r, c0, a0] of [[28, '20,140,255', 0.16], [15, '110,220,255', 0.34], [7, '235,250,255', 0.92], [3, '255,255,255', 1]]) {
+      // THE BALL ITSELF IS BLUE, not just the tint behind it (operator, 2026-09-13: "The 3d Price
+      // chart still doesn't have a neon blue leading pulse like I asked for. It's white").
+      //
+      // The earlier pass turned the TAIL neon blue and left this stack alone -- and this stack is
+      // the head: four discs, of which the inner two were rgba(235,250,255,0.92) over pure
+      // rgba(255,255,255,1). A white disc at full alpha painted on top of a blue corona is a white
+      // ball with a blue halo, which is exactly what was reported. Every layer is blue-dominant
+      // now, the hot centre included -- it is the brightest, palest blue rather than white, so the
+      // head still reads as the hottest point on the line without going colourless.
+      for (const [r, c0, a0] of [[28, '0,150,255', 0.20], [15, '40,190,255', 0.48], [7, '80,220,255', 0.95], [3, '150,240,255', 1]]) {
         ctx.fillStyle = `rgba(${c0},${(a0 * f).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(hp.x, hp.y, lw * r * (0.55 + 0.45 * f), 0, Math.PI * 2); ctx.fill();
       }
@@ -2422,11 +2435,36 @@ export function render3d(canvas, cells, options = {}) {
   // previous TARGETS, so every block in the air would jump to where it was
   // going and set off again. The newest layout is parked and planned the
   // moment the current one settles; a still newer one simply replaces it.
-  if (!unchanged && st.plan && !still && st.raf != null && now < st.plan.settleAt) {
+  //
+  // ...AND IT NOW WAITS FOR THE RUNNING EFFECT TOO (operator, 2026-09-13: "for the block space
+  // panel, we need to defer a refresh until the active effect has finished its sequence").
+  // Accepting a layout does `st.fx = null` below -- a transition takes the stage -- so a refresh
+  // arriving mid-effect cut the effect off wherever it had got to. On this board that was most of
+  // them: the pool refreshes on a timer, the signature changes, and effects run 3.2-7.4 s. The
+  // scheduler's own comment already recorded the damage from the other side ("a 7 s pulse is
+  // interrupted nearly every time it is chosen").
+  //
+  // TWO LIMITS, so this cannot become its own bug:
+  //   - only a TILE change waits. A look change (a switch flipped in settings) still applies at
+  //     once, because a control that appears dead for seven seconds is worse than an interrupted
+  //     effect. That is why this tests `sig !== st.sig` rather than `!unchanged`.
+  //   - it waits at most FX_DEFER_MAX. fxNow is bounded by the effect's own `ms`, so an effect
+  //     always ends on its own; the cap is there so that a bug in an effect cannot freeze the
+  //     data on screen indefinitely. Deferring is a courtesy to the animation, never a reason to
+  //     show stale figures for ever.
+  //
+  // Nothing can overtake the parked layout: scheduleFx treats a pending render as `busy` and
+  // re-arms its timer instead of starting another effect, so an effect cannot chain ahead of a
+  // refresh that is already waiting.
+  const fxHolding = !!fxNow(st, now) && sig !== st.sig
+    && (st.pendingAt == null || now - st.pendingAt < FX_DEFER_MAX);
+  if (!unchanged && st.plan && !still && st.raf != null && (now < st.plan.settleAt || fxHolding)) {
     st.pending = { cells, options };
+    st.pendingAt ??= now;
     return { tiles: st.prev, settled: false, deferred: true };
   }
   st.pending = null;
+  st.pendingAt = null;
   st.atRest = false;                       // a new layout: the next settle arms the next effect
 
   // The FIRST paint never animates. With arrivals no longer drawn until they
@@ -2515,7 +2553,12 @@ export function render3d(canvas, cells, options = {}) {
       st.lastPaint = t;
     }
     const frame = draw(t);
-    if (starsOn(opts) && frame.settled && st.pending) { const p = st.pending; st.pending = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
+    // THE FLUSH WAITS FOR THE EFFECT AS WELL. `frame.settled` is about the TRANSITION, not the
+    // effect, so without the fxNow test this let a parked refresh through the moment the board
+    // landed -- cutting the effect off exactly as before. It is also the live path: stars ship on
+    // by default, so this is the branch a real board takes, and guarding only the entry above
+    // would have looked correct and done nothing.
+    if (starsOn(opts) && frame.settled && st.pending && !fxNow(st, t)) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     // keep the loop alive while the choreography runs OR the camera is moving;
     // park otherwise, because repainting a still picture is a heater
     if (frame.settled && !st.dirty && !fxNow(st, t)) {
@@ -2529,10 +2572,10 @@ export function render3d(canvas, cells, options = {}) {
       }
       if (!starsOn(opts) && !glowAnimating(st, t)) {
         st.raf = null;
-        if (st.pending) { const p = st.pending; st.pending = null; render3d(canvas, p.cells, p.options); return; }
+        if (st.pending) { const p = st.pending; st.pending = null; st.pendingAt = null; render3d(canvas, p.cells, p.options); return; }
         return;
       }
-      if (st.pending) { const p = st.pending; st.pending = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
+      if (st.pending) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     }
     else st.atRest = false;               // something is moving again: the next rest re-arms
     st.raf = requestAnimationFrame(step);

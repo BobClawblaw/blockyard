@@ -226,6 +226,64 @@ test('an unchanged refresh does NOT restart the transition', () => {
   assert.equal(h.pending(), true, 'and its animation loop was left alone');
 });
 
+test('A REFRESH WAITS FOR THE RUNNING EFFECT TO FINISH ITS SEQUENCE', () => {
+  // (operator, 2026-09-13: "for the block space panel, we need to defer a refresh until the active
+  // effect has finished its sequence".)
+  //
+  // Accepting a layout does `st.fx = null` -- a transition takes the stage -- so a refresh landing
+  // mid-effect cut the effect off wherever it had got to. On this board that was most of them: the
+  // pool refreshes on a timer and effects run 3.2-7.4 s. The scheduler's own comment had already
+  // recorded the damage from the other side: "a 7 s pulse is interrupted nearly every time it is
+  // chosen."
+  const h = harness();
+  const before = [{ txid: 'a', vbytes: 40000, rate: 9 }, { txid: 'b', vbytes: 40000, rate: 9 }];
+  const after = [...before, { txid: 'c', vbytes: 90000, rate: 40 }];
+  render3d(h.canvas, before, {});
+  h.pump(2400);
+  assert.equal(h.pending(), false, 'the board is at rest before the effect starts');
+
+  harness.t = 0;
+  assert.equal(triggerIdle(h.canvas, 'pulse'), true, 'a 7 s effect is running');
+  h.pump(20);                                     // ~0.3 s in: well inside the sequence
+
+  const held = render3d(h.canvas, after, {});
+  assert.equal(held.deferred, true, 'the refresh is parked rather than applied');
+  // the RETURNED tiles are laid out (x/y/s/colour), not the cells handed in, so the property to
+  // assert is WHICH transactions are on the board -- the new one must not be among them yet
+  assert.deepEqual(held.tiles.map((t) => t.txid).filter(Boolean).sort(), ['a', 'b'],
+    'and the board still shows what it was showing');
+
+  // THE EFFECT REALLY SURVIVES. Deferring the layout is only worth doing if the sequence then runs
+  // to its end -- the whole point is the finish, not merely a delayed refresh.
+  const mid = h.ops.length;
+  h.pump(60);
+  assert.ok(h.ops.length > mid, 'the effect is still drawing after the refresh arrived');
+
+  // ...and once it is over, the parked refresh lands on its own, with no further call from the
+  // caller. A deferral that needed the next refresh to flush it would show data a cycle stale.
+  h.pump(600);                                    // past the 7 s effect at 16 ms a frame
+  const settled = render3d(h.canvas, after, {});
+  assert.equal(settled.deferred, undefined, 'the refresh is no longer being held');
+  assert.deepEqual(settled.tiles.map((t) => t.txid).filter(Boolean).sort(), ['a', 'b', 'c'],
+    'and the transaction that was waiting is now on the board');
+});
+
+test('a refresh is deferred for the effect, but a SETTING is never held behind one', () => {
+  // The limit that keeps the deferral from becoming its own bug. A control that appears dead for
+  // seven seconds is worse than an interrupted effect, so only a TILE change waits: the guard
+  // tests the data signature, not `!unchanged`.
+  const h = harness();
+  const tiles = [{ txid: 'a', vbytes: 40000, rate: 9 }, { txid: 'b', vbytes: 40000, rate: 9 }];
+  render3d(h.canvas, tiles, {});
+  h.pump(2400);
+  harness.t = 0;
+  triggerIdle(h.canvas, 'pulse');
+  h.pump(20);
+  // the same tiles, drawn a different way: this must apply at once
+  const look = render3d(h.canvas, tiles, { shadows: false });
+  assert.notEqual(look.deferred, true, 'a look change is not parked behind the effect');
+});
+
 test('the grid is square and straight on: no rotation to fight the animation', () => {
   // Rotation is gone (operator: "get rid of rotation if it helps the
   // animation"). Orbiting a square grid only turns it back into a diamond,

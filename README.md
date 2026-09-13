@@ -37,7 +37,7 @@ else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 815 unit tests, all built in
+npm test            # optional: 818 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
 
@@ -136,7 +136,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 815 unit tests (node:test, no dependencies)
+npm test             # 818 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```

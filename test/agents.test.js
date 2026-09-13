@@ -220,6 +220,54 @@ test('hide and scale are transient, and default to "visible, full size"', () => 
   assert.equal(Object.isFrozen(FX_NONE), true, 'and it cannot be edited by a caller');
 });
 
+test('THE TRACTOR PUTS THE BLOCK DOWN AND LEAVES, rather than stopping mid-abduction', () => {
+  // (operator, 2026-09-13: "rather than just abruptly finish, have the UFO drop the blocks causing
+  // them to slightly bounce, and then quickly flies off screen".) Before this the beam simply
+  // stopped: the cube was still 4.5 units up, the saucer parked over it, and the whole thing
+  // blinked out.
+  const W = 40, H = 30;
+  const tiles = [];
+  for (let x = 0; x < W; x += 2) for (let y = 0; y < H; y += 2) {
+    tiles.push({ txid: `t${x}_${y}`, x, y, s: 2, tall: x === 20 && y === 14 ? 6 : 1.2, color: '#33cc99', rate: 5 });
+  }
+  const a = AGENTS.tractor.build({ st: {}, seed: 3, W, H, tiles, tops: null, rnd: rng(3) });
+  const at = (u) => AGENTS.tractor.frame(a, u, { ms: 6800, derezMs: 800, seed: 3 }).tractor;
+  const rows = [];
+  for (let u = 0; u <= 1.0001; u += 0.02) rows.push({ u: +u.toFixed(2), ...at(Math.min(1, u)) });
+  const lift = (r) => r.lift ?? 0;
+
+  const peak = Math.max(...rows.map(lift));
+  assert.ok(peak > 3, `the beam lifts the cube clear of the board (${peak})`);
+
+  // IT BOUNCES. Not merely "comes down" -- a bounce is a rebound, so after the peak the height must
+  // go UP again at least once before settling. The fall is the board's own bounceDrop, so a dropped
+  // cube lands the way every other cube on this board lands.
+  const after = rows.filter((r) => r.u > rows.find((q) => lift(q) === peak).u);
+  let rebounds = 0;
+  for (let i = 1; i < after.length; i++) if (lift(after[i]) - lift(after[i - 1]) > 0.01) rebounds++;
+  assert.ok(rebounds >= 1, `it rebounds after landing rather than just falling (${rebounds} rebound steps)`);
+
+  // GROUNDED BEFORE THE EFFECT ENDS. `lift` is a per-frame OVERRIDE on a copy of the tile, so when
+  // the effect stops the override simply stops being computed -- a cube still in the air at u=1
+  // would SNAP to the ground instead of landing on it. This is the assertion that catches a
+  // retiming of the phases, which is the likeliest way to break it.
+  assert.equal(lift(rows[rows.length - 1]), 0, 'the cube is down before the sequence ends');
+  const airborneLate = rows.filter((r) => r.u >= 0.85 && lift(r) > 0.01);
+  assert.equal(airborneLate.length, 0, 'and it is down well before, not on the final frame');
+
+  // the beam cuts at release: a beam still drawn over a falling cube reads as the ship dropping
+  // something it is still holding
+  const held = rows.filter((r) => lift(r) > 0.01 && lift(r) < peak - 0.01 && (r.beam ?? 0) > 0.02 && r.dropped);
+  assert.equal(held.length, 0, 'the beam is off while the cube falls');
+
+  // AND IT FLIES OFF. The saucer must actually leave the board, not drift a little.
+  const endX = rows[rows.length - 1].ship.x;
+  assert.ok(endX > W + 4 || endX < -4, `the saucer is off screen by the end (x=${endX}, board 0..${W})`);
+  // quickly: accelerating, so the second half of the exit covers more ground than the first
+  const x80 = rows.find((r) => r.u === 0.8).ship.x, x90 = rows.find((r) => r.u === 0.9).ship.x;
+  assert.ok(Math.abs(endX - x90) > Math.abs(x90 - x80), 'it accelerates away rather than drifting');
+});
+
 test('floodFrom spreads, stops at what blocks it, and never revisits', () => {
   // New machinery for the minesweeper sweep, and the only thing in batch three nobody else
   // exercises. A flood is not a radius: it goes AROUND an obstacle, which is what makes the shape

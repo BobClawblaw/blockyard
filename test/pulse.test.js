@@ -105,7 +105,26 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   // and the curve itself: a pipe, not a polyline of forty pieces
   assert.ok(after.includes('bezierCurveTo'), 'the line is a curve through the closes, not straight hops');
   assert.ok(after.some((o) => o === 'set:lineJoin=round'), 'with round joins, so it reads as a tube');
-  assert.ok(after.some((o) => o.startsWith('set:fillStyle=rgba(235,250,255')), 'and the head bead is drawn');
+  // THE HEAD BEAD IS BLUE (operator, 2026-09-13: "still doesn't have a neon blue leading pulse ...
+  // It's white"). The tail had gone neon blue in an earlier pass and this stack had not: the bead
+  // is four discs and its inner two were rgba(235,250,255,0.92) over pure rgba(255,255,255,1) --
+  // a white ball with a blue halo, which is precisely what was reported.
+  //
+  // SCOPED TO THE BEAD, which the first draft was not: it matched every fillStyle at alpha >= 0.9
+  // and so asserted that every bright fill ON THE WHOLE BOARD was blue -- the green cubes, the red
+  // ones and the deck plates included. It failed for that reason while the head was already
+  // correct. A probe must measure the thing it is named after.
+  const beadCore = after.filter((o) => o.startsWith('set:fillStyle=rgba(80,220,255')
+    || o.startsWith('set:fillStyle=rgba(150,240,255'));
+  assert.ok(beadCore.length >= 2, `the head bead is drawn, hot centre and all (${beadCore.length})`);
+  // and the property behind the literals, so this still bites if the mix is retuned: every disc of
+  // the head is blue-dominant, none of them white
+  for (const [r, g, b] of [[0, 150, 255], [40, 190, 255], [80, 220, 255], [150, 240, 255]]) {
+    assert.ok(b > r, `the head's discs are blue, not white (${r}/${g}/${b})`);
+    assert.ok(after.some((o) => o.startsWith(`set:fillStyle=rgba(${r},${g},${b}`)), `disc ${r}/${g}/${b} is painted`);
+  }
+  assert.equal(after.some((o) => o.startsWith('set:fillStyle=rgba(255,255,255,1)')), false,
+    'and nothing in the head is painted pure white any more');
   // The shimmer stays: a thin white-blue core flickering over the charged stretch.
   assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(210,240,255')), 'a shimmering core over the blue');
   // Removed on 2026-09-12 and restored the same day at the operator's request, so these are back
@@ -160,7 +179,7 @@ test('THE HEAD CARRIES ITS OWN CRACKLE, and still does past the end of the line'
   // and the overrun has it gone by ~6,190. 5,200 ms in is off the wire with roughly two thirds of
   // its fade left -- exactly where the old head was four discs and nothing else.
   const offEnd = (() => { const b = h.ops.length; h.step(6200); return h.ops.slice(b); })();
-  assert.ok(offEnd.some((o) => o.startsWith('set:fillStyle=rgba(235,250,255')), 'the head is still out there past the line');
+  assert.ok(offEnd.some((o) => o.startsWith('set:fillStyle=rgba(80,220,255')), 'the head is still out there past the line');
   assert.ok(offEnd.some((o) => o.startsWith(ARC)), 'and it is STILL crackling where there is no wire to crackle on');
   assert.ok(offEnd.some((o) => o.startsWith(CORE)), 'core and all');
 });

@@ -41,6 +41,10 @@
 import {
   project, fxHash, cubeHeight,
   cyclePath, ballPath, cycleCrashes, cellTops, pathHeights,
+  // the board's OWN gravity, for the tractor beam's release. A dropped cube must fall the way every
+  // other cube on this board falls -- a second hand-rolled parabola beside the real one would land
+  // differently from the transition happening next to it.
+  bounceDrop,
 } from './blockscene3d.js';
 // The tetris drop points the real rules at the board instead of a well: pure, and already
 // tested in its own right, so the piece shapes and their rotations are not reinvented here.
@@ -372,25 +376,69 @@ defineAgent('tractor', {
     const target = tallestTile(tiles) ?? { x: W / 2, y: H / 2, h: 1, tile: null };
     return { target, from: { x: rnd() < 0.5 ? -4 : W + 4, y: target.y }, W, H };
   },
+  // IT PUTS THE BLOCK DOWN AND LEAVES (operator, 2026-09-13: "rather than just abruptly finish,
+  // have the UFO drop the blocks causing them to slightly bounce, and then quickly flies off
+  // screen"). Before this the beam simply stopped: the cube was still four and a half units in the
+  // air, the saucer still parked over it, and the whole thing blinked out mid-abduction.
+  //
+  // Four phases now, and the last two are the ask:
+  //   IN    0.00-0.30  the saucer flies in from one side
+  //   HOLD  0.30-0.62  the beam comes on and the cube rises
+  //   DROP  0.62-0.80  the beam CUTS and the cube falls, bouncing as it lands
+  //   AWAY  0.80-1.00  the saucer accelerates off the way it came
+  //
+  // The fall is the board's own bounceDrop, not a parabola written here: a cube dropped by the
+  // saucer lands exactly as a cube dropped by a refresh does, which is the only way the two read as
+  // the same world. It is called with a small bounce and few hops, because the ask was "slightly".
+  //
+  // The cube is back at lift 0 by the end of DROP, with the whole of AWAY to spare. That matters:
+  // `lift` is a per-frame OVERRIDE applied to a copy of the tile, so when the effect ends the
+  // override simply stops being computed -- a cube still in the air at that moment would snap to
+  // the ground rather than land on it.
   frame(a, u) {
-    const IN = 0.3, HOLD = 0.78;
+    const IN = 0.3, HOLD = 0.62, DROP = 0.8;
     const alt = a.target.h + 5;
+    const LIFT = 4.5;
     if (u < IN) {
       const v = u / IN;
       const x = a.from.x + (a.target.x - a.from.x) * v;
       return { tractor: { ship: { x, y: a.target.y, z: alt }, beam: 0, lift: 0 },
         heads: [{ x, y: a.target.y, color: [180, 220, 255], alpha: 0.9, r: 1.6 }] };
     }
-    const v = Math.min(1, (u - IN) / (HOLD - IN));
-    const beam = Math.sin(Math.min(1, v * 1.2) * Math.PI);
-    const lift = v * 4.5;
+    if (u < HOLD) {
+      const v = (u - IN) / (HOLD - IN);
+      const beam = Math.sin(Math.min(1, v * 1.2) * Math.PI);
+      const lift = v * LIFT;
+      return {
+        tractor: { ship: { x: a.target.x, y: a.target.y, z: alt }, beam, lift, target: a.target },
+        // the beam lights the cube it is pulling, and lifts it
+        heads: [
+          { x: a.target.x, y: a.target.y, color: [190, 235, 255], alpha: 1, r: 2.4, lift },
+          { x: a.target.x, y: a.target.y, color: [140, 200, 255], alpha: 0.5 * beam, r: 4 },
+        ],
+      };
+    }
+    if (u < DROP) {
+      // RELEASED. The beam is off the instant it lets go -- a beam still drawn over a falling cube
+      // reads as the ship dropping something it is still holding.
+      const v = (u - HOLD) / (DROP - HOLD);
+      const lift = LIFT * bounceDrop(v, 0.10, 2, 0.5);
+      return {
+        tractor: { ship: { x: a.target.x, y: a.target.y, z: alt }, beam: 0, lift, target: a.target, dropped: true },
+        heads: [
+          { x: a.target.x, y: a.target.y, color: [200, 240, 255], alpha: 1, r: 2.2, lift },
+          // a flash of dust at the moment of impact, and only then
+          { x: a.target.x, y: a.target.y, color: [255, 240, 200], alpha: lift < 0.05 ? 0.7 : 0, r: 3 },
+        ],
+      };
+    }
+    // AWAY: t^2, so it pulls away rather than drifting off, and leaves the way it came in
+    const v = (u - DROP) / (1 - DROP);
+    const dir = a.from.x < a.target.x ? -1 : 1;
+    const x = a.target.x + dir * (a.W * 0.9 + 6) * v * v;
     return {
-      tractor: { ship: { x: a.target.x, y: a.target.y, z: alt }, beam, lift, target: a.target },
-      // the beam lights the cube it is pulling, and lifts it
-      heads: [
-        { x: a.target.x, y: a.target.y, color: [190, 235, 255], alpha: 1, r: 2.4, lift },
-        { x: a.target.x, y: a.target.y, color: [140, 200, 255], alpha: 0.5 * beam, r: 4 },
-      ],
+      tractor: { ship: { x, y: a.target.y, z: alt + v * 2 }, beam: 0, lift: 0, leaving: true },
+      heads: [{ x, y: a.target.y, color: [180, 220, 255], alpha: Math.max(0, 1 - v), r: 1.6 }],
     };
   },
   draw(ctx, view, lw) {
@@ -634,7 +682,9 @@ defineAgent('portal', {
       const to = a.horiz ? { x: a.W * 0.28, y: a.outAt.y } : { x: a.outAt.x, y: a.H * 0.28 };
       at = { x: a.outAt.x + (to.x - a.outAt.x) * v, y: a.outAt.y + (to.y - a.outAt.y) * v };
     }
-    heads.push({ x: at.x, y: at.y, color: [235, 245, 255], alpha: 1, r: 1.5 });
+    // the traveller lights the cubes in its own yellow, so the board glows with it rather than
+    // in a colour the ball is not (operator, 2026-09-13: "a glowing yellow neon ball")
+    heads.push({ x: at.x, y: at.y, color: [255, 225, 90], alpha: 1, r: 1.5 });
     return { portal: { inAt: a.inAt, outAt: a.outAt, at, through: u >= THROUGH }, heads };
   },
   draw(ctx, view, lw) {
@@ -656,8 +706,23 @@ defineAgent('portal', {
     };
     gate(p.inAt, [110, 165, 255]);
     gate(p.outAt, [255, 150, 60]);
+    // A GLOWING YELLOW NEON BALL (operator, 2026-09-13: "Have the Portal effect rendering a glowing
+    // yellow neon ball"). It was a single bloom in white-blue going in and pale orange coming out,
+    // which read as a smudge rather than an object. Now a real ball: a wide soft corona, three
+    // stacked bodies and a hot pale centre, all plain rgba fills -- no shadowBlur, no globalAlpha,
+    // no composite modes, the same rules the rest of this file is scanned for.
     const c = project(p.at.x, p.at.y, 1.3, view);
-    bloom(ctx, c.x, c.y, U * 1.1, p.through ? [255, 200, 140] : [200, 225, 255], 0.95);
+    const R = U * 0.78;
+    bloom(ctx, c.x, c.y, R * 2.8, [255, 210, 40], 0.9);
+    for (const [rr, col] of [
+      [1.95, 'rgba(255,185,15,0.30)'],
+      [1.30, 'rgba(255,215,55,0.58)'],
+      [0.85, 'rgba(255,238,130,0.93)'],
+      [0.48, 'rgba(255,252,205,1)'],
+    ]) {
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(c.x, c.y, R * rr, 0, Math.PI * 2); ctx.fill();
+    }
   },
 });
 
