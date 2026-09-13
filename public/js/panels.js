@@ -562,25 +562,52 @@ export function renderNode(s, state, h) {
   }
 }
 
+// THE LAST READING STANDS (operator, 2026-09-13: "This section shows info, then it disappears.
+// Can we not make info go away, and just have it updated?").
+//
+// Every figure here was re-derived from the frame being painted, so ANY frame without `app.self`
+// -- the first paint before the stream has answered, a reconnect, a paused stream, an error frame
+// -- rewrote the whole block as seven dashes. The values did not go stale; they were erased and
+// replaced by placeholders, which reads as the panel breaking rather than as the panel waiting.
+//
+// A figure now only ever changes when there is a NEW figure. `–` survives exactly as long as
+// nothing has ever been read, which is the one time it is honest.
+const SELF_LAST = {};
 function drawSelf(h, s) {
   const fmt = F();
-  const rows = (s.app?.selfHistory) ?? null;
-  if (rows && rows.length) {
+  const t = s.app?.self ?? {};
+  // keep(key, value) -- remember it when it is real, otherwise reuse what we last knew
+  const keep = (k, v) => {
+    if (v != null) SELF_LAST[k] = v;
+    return SELF_LAST[k] ?? '–';
+  };
+  h.setText('ndSelf', kv([
+    ['resident', keep('rss', t.rssMb != null ? `${t.rssMb} MB` : null)],
+    ['heap', keep('heap', t.heapMb != null ? `${t.heapMb} MB` : null)],
+    ['cpu', keep('cpu', t.cpuPct != null ? `${t.cpuPct.toFixed(1)}%` : null)],
+    ['sse clients', keep('sse', s.app?.sseClients != null ? String(s.app.sseClients) : null)],
+    ['active users', keep('users', t.usersActive != null ? String(t.usersActive) : null)],
+    ['events/s', keep('events', t.eventRate != null ? String(t.eventRate) : null)],
+    ['app uptime', keep('uptime', s.app?.uptimeSec != null ? fmt.uptime(s.app.uptimeSec * 1000) : null)],
+  ]));
+
+  // THE CHART IS FED BY A RING THE SERVER NEVER SENDS. app.selfRing collects a row every 10 s and
+  // caps at 5,000, but nothing exports it -- `s.app.selfHistory` is undefined on every frame ever
+  // served, so this branch has always been dead and the panel has always said "no self history
+  // yet". Rather than leave a permanent placeholder, the client keeps its own short history from
+  // the readings it is already being given, which needs no server change and cannot go stale.
+  const rows = (s.app?.selfHistory) ?? SELF_SERIES;
+  if (t.rssMb != null && (!SELF_SERIES.length || SELF_SERIES[SELF_SERIES.length - 1].t !== t.t)) {
+    SELF_SERIES.push({ t: t.t ?? Date.now(), rssMb: t.rssMb });
+    if (SELF_SERIES.length > 480) SELF_SERIES.shift();     // ~8 minutes at one a second
+  }
+  if (rows && rows.length > 1) {
     lineChart(h.canvas('ndSelfChart'), [{ label: 'rss MB', color: COL.cyan, points: rows.map((r) => ({ t: r.t, v: r.rssMb })), area: true }], { fmtY: (v) => `${Math.round(v)}` });
   } else {
-    const t = s.app?.self ?? {};
-    h.setText('ndSelf', kv([
-      ['resident', t.rssMb != null ? t.rssMb + ' MB' : '–'],
-      ['heap', t.heapMb != null ? t.heapMb + ' MB' : '–'],
-      ['cpu', t.cpuPct != null ? t.cpuPct.toFixed(1) + '%' : '–'],
-      ['sse clients', String(s.app?.sseClients ?? '–')],
-      ['active users', String(t.usersActive ?? '–')],
-      ['events/s', String(t.eventRate ?? '–')],
-      ['app uptime', s.app ? fmt.uptime(s.app.uptimeSec * 1000) : '–'],
-    ]));
-    paint(h.canvas('ndSelfChart'), { when: false, draw: () => {}, placeholder: 'no self history yet' });
+    paint(h.canvas('ndSelfChart'), { when: false, draw: () => {}, placeholder: 'gathering…' });
   }
 }
+const SELF_SERIES = [];
 
 let consoleBound = false;
 function bindConsole(h) {

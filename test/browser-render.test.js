@@ -208,6 +208,47 @@ test('the mining page renders without throwing, with data and without it', () =>
   assert.deepEqual(empty.errs, [], 'and not throw when attribution has produced nothing yet');
 });
 
+test('THE TELEMETRY PANEL NEVER BLANKS A FIGURE IT ALREADY KNEW', () => {
+  // (operator, 2026-09-13: "This section shows info, then it disappears. Can we not make info go
+  // away, and just have it updated?")
+  //
+  // Every figure was re-derived from the frame being painted, so any frame without `app.self` --
+  // the first paint before the stream answers, a reconnect, a paused stream -- rewrote the whole
+  // block as seven dashes. The numbers were not stale, they were erased, which reads as the panel
+  // breaking rather than waiting. A figure must only change when there is a NEW figure.
+  const { el } = installDom();
+  const state = { page: 'node', node: 'main', byNode: new Map(), events: [], snap: null, series: {}, cfg: { sources: [] } };
+  const h = {
+    api: async () => ({}), toast: () => {}, state, fmt: F, charts,
+    setText: (id, v) => { el(id).innerHTML = String(v); },
+    canvas: (id) => el(id),
+    renderFeed: () => {}, render: () => {}, renderSyncHero: () => {}, peersDetail: async () => [],
+  };
+  const frame = (self) => ({
+    label: 'n', chain: 'main', rpc: { url: '' },
+    app: { uptimeSec: 120, sseClients: 3, ...(self ? { self } : {}) },
+  });
+  panels.renderNode(frame({ t: 1, rssMb: 88.4, heapMb: 41.2, cpuPct: 2.5, usersActive: 1, eventRate: 0.7 }), state, h);
+  const first = el('ndSelf').innerHTML;
+  assert.match(first, /88\.4 MB/, 'a good frame shows the reading');
+  assert.match(first, /41\.2 MB/);
+  assert.match(first, /2\.5%/);
+
+  // THE FRAME THAT USED TO WIPE IT
+  panels.renderNode(frame(null), state, h);
+  const after = el('ndSelf').innerHTML;
+  assert.match(after, /88\.4 MB/, 'a frame with no app.self keeps the last resident reading');
+  assert.match(after, /41\.2 MB/, 'and the last heap');
+  assert.match(after, /2\.5%/, 'and the last cpu');
+  assert.equal(/–/.test(after.replace(/<[^>]*>/g, '')), false, 'and shows no dash where a figure was known');
+
+  // persistence must not mean frozen: a fresh reading still replaces the old one
+  panels.renderNode(frame({ t: 2, rssMb: 91, heapMb: 43, cpuPct: 3.1, usersActive: 2, eventRate: 1.4 }), state, h);
+  const updated = el('ndSelf').innerHTML;
+  assert.match(updated, /91 MB/, 'a fresh reading updates the figure');
+  assert.equal(/88\.4 MB/.test(updated), false, 'and the old one is gone');
+});
+
 test('an unlabelled block is shown as unlabelled, not as a pool', () => {
   const { el } = runMining(snapWithMining(richSnap()), 'labels');
   const html = el('mnPools').innerHTML + el('ovMiningPools').innerHTML;

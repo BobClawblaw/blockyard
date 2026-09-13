@@ -143,7 +143,7 @@ Everything in the monitor talks only to your node, **except**:
 
 | when | to | what is sent |
 |---|---|---|
-| while someone has the **Markets** or **Kiosk** tab open — or **Overview**, when its price line is switched on (off by default) — and for 10 minutes after the last request | `api.exchange.coinbase.com`, `api.kraken.com`, `www.bitstamp.net`, `api-pub.bitfinex.com`, `www.okx.com` (HTTPS) | public ticker, hourly candle and order-book requests with a `User-Agent` naming the software — nothing about your node |
+| while someone has the **Markets**, **Kiosk** or **Overview** tab open — Overview's price line is **on by default**, so the landing page reaches out unless you switch it off — and for 10 minutes after the last request | `api.exchange.coinbase.com`, `api.kraken.com`, `www.bitstamp.net`, `api-pub.bitfinex.com`, `www.okx.com` (HTTPS) | public ticker, hourly candle and order-book requests with a `User-Agent` naming the software — nothing about your node |
 | when someone opens an **explorer** page and no fresh market price is at hand | two of the exchanges above, at most once a minute | a public ticker request |
 
 Nothing is fetched when nobody is looking. Your machine's public address is visible to those

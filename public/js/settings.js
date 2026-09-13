@@ -104,13 +104,18 @@ export const DEFAULTS = Object.freeze({
     // THE SUMMARY LINE ON OVERVIEW (operator, 2026-09-13: "We really need to squeeze this line into
     // the top of the Overview, between Sync status and Block Flow").
     //
-    // OFF by default, and that is the whole point of it being a setting. Those four figures come
-    // from the full exchange feed, which is deliberately parked unless someone is on Markets or
-    // Kiosk -- and Overview is the page the app OPENS on. Defaulting this true would mean every
-    // deployment starts talking to five exchanges the moment anyone looks at it, which is exactly
-    // what docs/SECURITY.md promises it does not do. On, it is the operator's deliberate choice,
-    // and the outbound table says Overview counts as watching.
-    overviewSummary: false,
+    // ON by default (operator, 2026-09-13: "In Display and Settings, enable 'Price Line on
+    // Overview' checked as default"). It shipped OFF, and the reason it was off still stands and
+    // is worth stating plainly rather than deleting: those four figures come from the full
+    // exchange feed, which is otherwise parked unless someone is on Markets or Kiosk -- and
+    // Overview is the page the app OPENS on. So with this on, EVERY deployment contacts five
+    // exchanges the moment anyone looks at it, not only when they go looking for a price.
+    //
+    // That is the operator's call to make, and it is made. What must not happen is the code
+    // quietly disagreeing with the promise: docs/SECURITY.md's outbound table and the README row
+    // both now say Overview reaches out by default, and the switch is still here for anyone who
+    // wants the old behaviour.
+    overviewSummary: true,
   }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
   // toggleable"). The keys are exactly details3d's FX_KINDS -- a test asserts the two lists match,
@@ -276,8 +281,9 @@ export const PANEL = Object.freeze([
       Object.freeze({
         key: 'overviewSummary', label: 'Price line on Overview', kind: 'toggle',
         hint: 'Median, spread, 24 h volume and how many books reported, at the top of Overview. '
-          + 'Off by default: it needs the exchange feed, so turning it on means this monitor '
-          + 'contacts five exchanges whenever Overview is open, not only on Markets and Kiosk.',
+          + 'On by default: it needs the exchange feed, so leaving it on means this monitor '
+          + 'contacts five exchanges whenever Overview is open, not only on Markets and Kiosk. '
+          + 'Switch it off and the landing page talks to nothing but your node.',
       }),
       Object.freeze({
         key: 'priceView', label: 'Price view', kind: 'choice', hint: 'Which one the Markets page draws. Only one at a time — they show the same hours, and two tall panels of it filled the screen',

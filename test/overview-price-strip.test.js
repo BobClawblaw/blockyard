@@ -26,10 +26,21 @@ const store = () => {
   return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) };
 };
 
-test('the strip is OFF by default, so no deployment starts polling exchanges by surprise', () => {
-  assert.equal(DEFAULTS.markets.overviewSummary, false,
-    'defaulting this true would contact five exchanges whenever Overview is open');
-  assert.equal(loadSettings(store()).markets.overviewSummary, false, 'and a fresh browser agrees');
+test('the strip is ON by default, and the outbound promise says so', () => {
+  // It shipped OFF, and the reason was good: Overview is the landing page, so defaulting this true
+  // means every deployment contacts five exchanges the moment anyone looks at it. The operator
+  // turned it on anyway (2026-09-13: "enable 'Price Line on Overview' checked as default"), which
+  // is their call -- but the code must not then disagree with the documented promise. So this test
+  // pins BOTH halves together: the default, and the security note that admits what it costs.
+  assert.equal(DEFAULTS.markets.overviewSummary, true);
+  assert.equal(loadSettings(store()).markets.overviewSummary, true, 'and a fresh browser agrees');
+
+  const sec = fs.readFileSync(path.join(ROOT, 'docs', 'SECURITY.md'), 'utf8');
+  const row = sec.split('\n').find((l) => l.startsWith('| while someone has the **Markets**'));
+  assert.ok(row, 'the outbound-connections table should still carry that row');
+  assert.match(row, /on by default/,
+    'SECURITY.md must say the landing page reaches out by default, now that it does');
+  assert.equal(/off by default/.test(row), false, 'and must not still claim the opposite');
 });
 
 test('it has a control, so it is not a hidden preference', () => {

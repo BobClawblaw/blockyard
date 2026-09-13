@@ -37,7 +37,7 @@ else works without it (see [Requirements](docs/INSTALL.md#1-requirements)).
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 807 unit tests, all built in
+npm test            # optional: 808 unit tests, all built in
 npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
 ```
 
@@ -125,9 +125,9 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
 - **Where it listens is your decision** — bind to `127.0.0.1`, a LAN address, a VPN
   address, or several. Built-in HTTPS with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`.
 - **Outbound connections are limited and on demand**: exchange APIs only while someone has
-  the Markets or Kiosk tab open — or Overview, if you switch on its price line, which is off by
-  default for exactly that reason — plus a cached spot price for the explorer's dollar figures.
-  `BLOCKYARD_MARKETS=0` turns all of it off.
+  the Markets, Kiosk or Overview tab open — Overview's price line is on by default, so the landing
+  page reaches out unless you switch it off — plus a cached spot price for the explorer's dollar
+  figures. `BLOCKYARD_MARKETS=0` turns all of it off.
 
 Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 [SECURITY.md](SECURITY.md).
@@ -136,7 +136,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 807 unit tests (node:test, no dependencies)
+npm test             # 808 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
