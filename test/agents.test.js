@@ -162,23 +162,35 @@ test('the helpers agents are built on do what they say', () => {
   assert.equal(richestTile([]), null);
 });
 
-test('bomberman reads the skyline: its blast is stopped by tall transactions', () => {
-  // THE DATA-AWARE CLAIM, checked rather than asserted in a comment. A board of tall cubes must
-  // give shorter arms than a board of flat ones -- that is what makes the cross a picture of the
-  // block's density instead of decoration.
-  const flat = [];
-  const tall = [];
-  for (let x = 0; x < 20; x++) {
-    for (let y = 0; y < 14; y++) {
-      flat.push({ txid: `f${x}_${y}`, x, y, s: 1, tall: 0.2, color: '#333', rate: 1 });
-      tall.push({ txid: `t${x}_${y}`, x, y, s: 1, tall: 6, color: '#333', rate: 1 });
-    }
-  }
+test('bomberman reads the skyline: a spiky block stops the blast, a flat one does not', () => {
+  // THE DATA-AWARE CLAIM, checked rather than asserted in a comment -- and this test has already
+  // earned its place twice by rejecting two wrong rules:
+  //
+  //   a flat threshold (1.2)  made every cube on the dense board a wall, because that board's
+  //                           slabs are all exactly 1.2 tall: the blast drew a dot.
+  //   the 70th percentile     made a field of 0.2s and a field of 6s identical (26 vs 26), because
+  //                           on a UNIFORM board the percentile sits just above everything at any
+  //                           absolute height. Density became unreadable.
+  //
+  // So the comparison that means something is not low-vs-tall, which is two flat boards; it is
+  // FLAT vs SPIKY. A wall is a cube that stands out from its neighbours.
+  const board = (h) => {
+    const out = [];
+    for (let x = 0; x < 20; x++) for (let y = 0; y < 14; y++) out.push({ txid: `b${x}_${y}`, x, y, s: 1, tall: h(x, y), color: '#333', rate: 1 });
+    return out;
+  };
   const reach = (tiles) => {
     const a = AGENTS.bomberman.build({ st: {}, seed: 7, W: 20, H: 14, tiles, tops: null, rnd: rng(7) });
     return a.arms.reduce((n, arm) => n + arm.n, 0);
   };
-  const open = reach(flat), blocked = reach(tall);
-  assert.ok(open > blocked, `a sparse block gives longer arms than a full one (${open} vs ${blocked})`);
-  assert.equal(blocked, 0, 'walled in on every side, the blast goes nowhere');
+  const flatLow = reach(board(() => 0.2));
+  const flatTall = reach(board(() => 6));
+  const spiky = reach(board((x, y) => (((x * 7 + y) % 7 === 0) ? 7 : 0.6)));
+  const verySpiky = reach(board((x, y) => (((x * 3 + y) % 3 === 0) ? 7 : 0.6)));
+
+  assert.ok(flatLow > spiky, `a flat block lets the blast run; a spiky one stops it (${flatLow} vs ${spiky})`);
+  assert.ok(spiky >= verySpiky, `and the spikier it is, the sooner (${spiky} vs ${verySpiky})`);
+  assert.equal(flatLow, flatTall,
+    'absolute height must NOT matter: a field of little transactions and a field of giants are both flat');
+  assert.ok(flatLow > 0, 'a flat board does not wall the blast in at the origin');
 });

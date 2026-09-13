@@ -4,7 +4,8 @@
 *"Give me at least 25-50 new video game inspired effects. Examine all video games, and explain
 your choices"*, then *"we can even add flying ships or other pixel-graphic inspired art"*.)
 
-This is a design document, not a changelog. Nothing here is built yet.
+This is a design document. Six of the fifty are built (see **Built so far** below); the rest
+are proposals, and the numbering here is what the commits refer to.
 
 ---
 
@@ -32,7 +33,9 @@ The existing machinery for agents:
 | `cellTops(tiles, W, H)` | the height of the cube under every grid cell | `blockscene3d.js` |
 | `pathHeights(pts, tops, W, H)` | what a route rides over, stepping at corners | `blockscene3d.js` |
 | `chargeTrail(ctx, segs, lw, now)` | the shared electrical wake: puffs, tube, crackle, motes | `details3d.js` |
-| `fx.heads` | `[{x, y, color, alpha}]` — how an agent lights cubes | `fxAt` |
+| `fx.heads` | `[{x, y, color, alpha, r, lift}]` — how an agent lights cubes. `r` is its reach in GRID UNITS (default 0.8: a gantry lights a swath, a thrown disc lights a point), `lift` throws the cubes it passes | `fxAt` |
+| `AGENTS` registry | `{ build, frame, draw }` per kind; details3d.js keeps only three seams | `agents.js` |
+| `view.unit` | pixels per grid unit — **size every sprite against this, never against `lw`** | `project` |
 
 **Two hard rules any new effect must satisfy**, both enforced by tests:
 
@@ -248,6 +251,25 @@ sprite — the highest-impact version of pixel art here.
 the whole board is quoting, and it costs nothing until someone finds it.
 
 ---
+
+## Built so far
+
+Batch one landed 2026-09-13: **recognizer (1), disc (2), snake (3), qbert (10), invaders (13),
+bomberman (24)** -- five different motion vocabularies, two of them data-aware. They live in
+`public/js/agents.js` behind the registry described below; `test/agents.test.js` drives the real
+build/frame/draw path for every registered kind.
+
+Two things learned building them, which apply to all the rest:
+
+- **Size in GRID UNITS, never in line-widths.** `lw` is about one device pixel, so a sprite drawn
+  at `lw * 20` is 20px on any board -- 2.8% of a 705px panel, a speck among 3,700 cubes. The first
+  cut of the recognizer, the invaders and the blast were all invisible for this reason and had to
+  be redrawn against `view.unit` (7.3px per unit on the dense 96-grid board, 16px on the 44-grid
+  one). `drawCycles` had it right all along with `wallH = 3`.
+- **The board is never mutated.** `fxAt` results carry `hide` and `scale`, applied per frame onto a
+  *copy* of the tile. An effect interrupted by a transition or a hidden tab stops being computed
+  and the board is correct again by construction -- which is the only version of "it snaps back"
+  that cannot leak.
 
 ## What I would build first, and why
 

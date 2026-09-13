@@ -217,7 +217,13 @@ function line(ctx, pts, col, w) {
   ctx.stroke();
 }
 
-/** Nested discs: this renderer's only way to make something glow. */
+/**
+ * Nested discs: this renderer's only way to make something glow.
+ *
+ * `r` is in PIXELS -- callers size it from view.unit, never from lw. lw is about one device pixel,
+ * so a sprite measured in line-widths comes out the same tiny size on every board; measured in
+ * grid units it is the same size relative to the BOARD, which is what reads.
+ */
 function bloom(ctx, x, y, r, rgb, a = 1) {
   for (const [k, m] of [[1, 0.10], [0.62, 0.22], [0.34, 0.55], [0.16, 0.95]]) {
     ctx.fillStyle = `rgba(${rgb.join(',')},${(m * a).toFixed(3)})`;
@@ -264,21 +270,22 @@ defineAgent('recognizer', {
     const r = view.fx?.recognizer;
     if (!r) return;
     const P = (x, y, z) => project(x, y, z, view);
+    const U = view.unit ?? 8;           // pixels per grid unit: the only honest scale on this board
     const [l0, l1] = r.legs;
     const COL = [120, 200, 255];
-    // two legs: tapered columns from the deck to the board
+    // two legs: tapered columns from the deck to the board, a grid unit and a half wide at the top
     for (const f of r.legs) {
       const top = P(f.x, f.y, r.deck), bot = P(f.x, f.y, 0);
       poly(ctx, [
-        { x: top.x - lw * 9, y: top.y }, { x: top.x + lw * 9, y: top.y },
-        { x: bot.x + lw * 5, y: bot.y }, { x: bot.x - lw * 5, y: bot.y },
+        { x: top.x - U * 0.75, y: top.y }, { x: top.x + U * 0.75, y: top.y },
+        { x: bot.x + U * 0.42, y: bot.y }, { x: bot.x - U * 0.42, y: bot.y },
       ], `rgba(${COL.join(',')},0.5)`);
-      line(ctx, [top, bot], `rgba(210,240,255,0.9)`, lw * 2);
-      bloom(ctx, bot.x, bot.y, lw * 16, COL, 0.5);
+      line(ctx, [top, bot], 'rgba(210,240,255,0.9)', lw * 2);
+      bloom(ctx, bot.x, bot.y, U * 1.4, COL, 0.5);
     }
-    // the crossbar: the body of the thing, a slab between the legs
+    // the crossbar: the body of the thing, a slab spanning the legs
     const a0 = P(l0.x, l0.y, r.deck), a1 = P(l1.x, l1.y, r.deck);
-    const h = lw * 22;
+    const h = U * 1.9;
     poly(ctx, [
       { x: a0.x, y: a0.y - h }, { x: a1.x, y: a1.y - h },
       { x: a1.x, y: a1.y }, { x: a0.x, y: a0.y },
@@ -286,7 +293,7 @@ defineAgent('recognizer', {
     line(ctx, [{ x: a0.x, y: a0.y - h }, { x: a1.x, y: a1.y - h }], 'rgba(235,250,255,0.95)', lw * 2.4);
     // the eye: a bright bar under the crossbar's middle
     const mid = { x: (a0.x + a1.x) / 2, y: (a0.y + a1.y) / 2 };
-    bloom(ctx, mid.x, mid.y - h * 0.45, lw * 20, [255, 240, 200], 0.85);
+    bloom(ctx, mid.x, mid.y - h * 0.45, U * 1.7, [255, 240, 200], 0.85);
   },
 });
 
@@ -334,12 +341,12 @@ defineAgent('disc', {
     for (let k = Math.floor(from); k < d.d && k < d.pts.length - 1; k++) {
       const heat = Math.pow(Math.max(0, 1 - (d.d - k) / TR), 1.7);
       const a = P(d.pts[k].x, d.pts[k].y, 0.7), b = P(d.pts[k + 1].x, d.pts[k + 1].y, 0.7);
-      line(ctx, [a, b], `rgba(120,200,255,${(0.35 * heat).toFixed(3)})`, lw * 5 * heat);
-      line(ctx, [a, b], `rgba(240,252,255,${(0.85 * heat).toFixed(3)})`, lw * 1.4 * heat);
+      line(ctx, [a, b], `rgba(120,200,255,${(0.35 * heat).toFixed(3)})`, lw * 7 * heat);
+      line(ctx, [a, b], `rgba(240,252,255,${(0.85 * heat).toFixed(3)})`, lw * 2 * heat);
     }
     // the disc itself: a ring seen edge-on, turning as it flies
     const c = P(d.at.x, d.at.y, 0.9);
-    const R = lw * 13;
+    const R = (view.unit ?? 8) * 1.1;   // a disc about a cube wide, not thirteen pixels
     const squash = Math.abs(Math.cos(d.spin)) * 0.75 + 0.25;
     const ring = [];
     for (let i = 0; i <= 20; i++) {
@@ -348,7 +355,7 @@ defineAgent('disc', {
     }
     poly(ctx, ring, 'rgba(90,180,255,0.30)');
     line(ctx, ring, 'rgba(245,252,255,0.95)', lw * 2.2);
-    bloom(ctx, c.x, c.y, R * 1.5, [160, 220, 255], 0.5);
+    bloom(ctx, c.x, c.y, R * 1.8, [160, 220, 255], 0.5);
   },
 });
 
@@ -390,18 +397,19 @@ defineAgent('snake', {
     const s = view.fx?.snake;
     if (!s) return;
     const P = (x, y, z) => project(x, y, z, view);
+    const U = view.unit ?? 8;
     for (let i = s.body.length - 1; i >= 0; i--) {
       const b = s.body[i];
       const c = P(b.x, b.y, 0.9);
-      const r = lw * (11 - b.k * 0.6);
+      const r = U * (0.95 - b.k * 0.05);
       bloom(ctx, c.x, c.y, r, [60, 210, 130], 0.55);
     }
     const h = P(s.at.x, s.at.y, 1.1);
-    bloom(ctx, h.x, h.y, lw * 15, [150, 255, 190], 0.95);
+    bloom(ctx, h.x, h.y, U * 1.3, [150, 255, 190], 0.95);
     // two eyes, so it reads as alive
     for (const o of [-0.35, 0.35]) {
       ctx.fillStyle = 'rgba(10,30,20,0.95)';
-      ctx.beginPath(); ctx.arc(h.x + o * lw * 7, h.y - lw * 2, lw * 2.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(h.x + o * U * 0.5, h.y - U * 0.2, U * 0.2, 0, Math.PI * 2); ctx.fill();
     }
   },
 });
@@ -444,14 +452,15 @@ defineAgent('qbert', {
     // its shadow tightens as it falls, which is what sells the hop
     const near = 1 - Math.min(1, q.z / 2.6);
     ctx.fillStyle = `rgba(0,0,0,${(0.30 * near).toFixed(3)})`;
-    ctx.beginPath(); ctx.ellipse(sh.x, sh.y, lw * 10 * (1.4 - 0.5 * near), lw * 4 * (1.4 - 0.5 * near), 0, 0, Math.PI * 2); ctx.fill();
-    bloom(ctx, c.x, c.y, lw * 13, [255, 150, 80], 0.9);
+    const U = view.unit ?? 8;
+    ctx.beginPath(); ctx.ellipse(sh.x, sh.y, U * 0.9 * (1.4 - 0.5 * near), U * 0.36 * (1.4 - 0.5 * near), 0, 0, Math.PI * 2); ctx.fill();
+    bloom(ctx, c.x, c.y, U * 1.15, [255, 150, 80], 0.9);
     // a snout, so it has a facing
     ctx.fillStyle = 'rgba(255,235,200,0.95)';
-    ctx.beginPath(); ctx.arc(c.x + lw * 5, c.y + lw * 2, lw * 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(c.x + U * 0.45, c.y + U * 0.18, U * 0.3, 0, Math.PI * 2); ctx.fill();
     for (const o of [-0.4, 0.4]) {
       ctx.fillStyle = 'rgba(20,12,10,0.95)';
-      ctx.beginPath(); ctx.arc(c.x + o * lw * 6, c.y - lw * 3, lw * 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(c.x + o * U * 0.5, c.y - U * 0.28, U * 0.18, 0, Math.PI * 2); ctx.fill();
     }
   },
 });
@@ -468,14 +477,21 @@ const INVADER = Object.freeze([
 ]);
 defineAgent('invaders', {
   build({ W, H, rnd }) {
-    const cols = Math.max(3, Math.min(8, Math.round(W / 7)));
+    // SIZED AND PLACED IN GRID UNITS. The first cut hung the rank at `H - 2` and stepped it DOWN,
+    // which on the 96-unit dense board started it off the top edge and marched it further off;
+    // and its sprite cell was a fraction of a line-width, so what did survive was sub-pixel.
+    // The rank now occupies the middle half of the board and descends through it.
+    const cols = Math.max(3, Math.min(7, Math.round(W / 14)));
     const rows = 3;
-    const gapX = W / (cols + 1.4), gapY = 2.6;
+    const gapX = (W * 0.72) / cols;
+    const gapY = Math.max(2.5, H * 0.075);
     const ships = [];
     for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) ships.push({ c, r, x0: gapX * (c + 0.9), y0: H - 2 - r * gapY });
+      for (let c = 0; c < cols; c++) {
+        ships.push({ c, r, x0: W * 0.14 + gapX * (c + 0.5), y0: H * 0.80 - r * gapY });
+      }
     }
-    return { ships, cols, rows, W, H, dir: rnd() < 0.5 ? 1 : -1, amp: gapX * 0.55 };
+    return { ships, cols, rows, W, H, dir: rnd() < 0.5 ? 1 : -1, amp: gapX * 0.45, drop: H * 0.55 };
   },
   frame(a, u) {
     // six steps sideways, dropping each time the rank reverses -- and faster as it goes
@@ -484,7 +500,7 @@ defineAgent('invaders', {
     const swing = ((k % 2) ? -1 : 1) * a.dir;
     const within = (u * steps) - k;
     const dx = swing * a.amp * (0.35 + 0.65 * within);
-    const dy = -k * 0.8;
+    const dy = -(a.drop / steps) * (k + within);      // descends through the board, not off it
     const alive = Math.max(1, a.ships.length - Math.floor(u * a.ships.length * 0.35));
     const heads = [];
     const ships = [];
@@ -503,7 +519,10 @@ defineAgent('invaders', {
   draw(ctx, view, lw) {
     const inv = view.fx?.invaders;
     if (!inv) return;
-    const cell = lw * 2.2;
+    // each ship about three grid units across: the sprite is eleven cells wide, so one cell is
+    // 3/11 of a grid unit -- 2px on the dense board, 4.4px on the simple one, and it scales with
+    // the board rather than with the line width (which is one device pixel, always)
+    const cell = (view.unit ?? 8) * (3 / 11);
     const W = INVADER[0].length, H2 = INVADER.length;
     for (const s of inv.ships) {
       const c = project(s.x, s.y, 2.2, view);
@@ -516,12 +535,13 @@ defineAgent('invaders', {
           ctx.fillRect(c.x + (rx - W / 2) * cell, c.y + (ry - H2 / 2) * cell, cell * 0.92, cell * 0.92);
         }
       }
-      bloom(ctx, c.x, c.y, cell * 7, col, 0.22);
+      bloom(ctx, c.x, c.y, cell * 8, col, 0.28);
     }
     if (inv.shot) {
       const p = project(inv.shot.x, inv.shot.y, 1.6, view);
-      line(ctx, [{ x: p.x, y: p.y - lw * 7 }, { x: p.x, y: p.y + lw * 7 }], 'rgba(255,245,170,0.95)', lw * 2.4);
-      bloom(ctx, p.x, p.y, lw * 7, [255, 240, 150], 0.6);
+      const U = view.unit ?? 8;
+      line(ctx, [{ x: p.x, y: p.y - U * 0.6 }, { x: p.x, y: p.y + U * 0.6 }], 'rgba(255,245,170,0.95)', lw * 2.6);
+      bloom(ctx, p.x, p.y, U * 0.6, [255, 240, 150], 0.6);
     }
   },
 });
@@ -537,8 +557,26 @@ defineAgent('bomberman', {
     const at = { x: Math.floor(2 + rnd() * Math.max(1, W - 4)), y: Math.floor(2 + rnd() * Math.max(1, H - 4)) };
     const walk = [{ x: at.x - 3, y: at.y }, { x: at.x, y: at.y }];
     const top = (x, y) => (x >= 0 && x < W && y >= 0 && y < H ? tops[(y | 0) * W + (x | 0)] : 99);
-    // how far each arm reaches before a cube taller than the blast stops it
-    const WALL = 1.2;
+    // A WALL IS A SPIKE, NOT A HEIGHT. Two wrong rules preceded this one, and both were measured:
+    //
+    //   a flat 1.2       the dense block-space board packs ~3,700 slabs that are ALL exactly 1.2
+    //                    tall, so every neighbour was a wall, every arm was length zero, and the
+    //                    blast drew a dot on the board the operator was looking at.
+    //   the 70th pct     fixed that, and broke the meaning: on a uniform board the 70th percentile
+    //                    sits just above every cube whatever its absolute height, so a field of
+    //                    0.2s and a field of 6s gave identical arms (26 vs 26, caught by the test
+    //                    below). Density became unreadable, which is the whole point of the effect.
+    //
+    // What should stop a blast is a cube that stands out from ITS NEIGHBOURS. So: the median of the
+    // skyline plus a real margin. A uniformly flat board -- at any height -- has no outliers and
+    // lets the blast run the whole way; a board with scattered towers stops it at the first one.
+    // The cross is then a picture of how SPIKY the block is, which is what a mempool actually
+    // varies in: a block of even little transactions against one carrying a few giants.
+    const heights = [];
+    for (let i = 0; i < tops.length; i++) if (tops[i] > 0) heights.push(tops[i]);
+    heights.sort((a, b) => a - b);
+    const median = heights.length ? heights[Math.floor(0.5 * (heights.length - 1))] : 1;
+    const WALL = Math.max(0.35, median * 1.6 + 0.25);
     const arms = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => {
       let n = 0;
       while (n < 9) {
@@ -579,16 +617,17 @@ defineAgent('bomberman', {
     const b = view.fx?.bomberman;
     if (!b) return;
     const P = (x, y, z) => project(x, y, z, view);
+    const U = view.unit ?? 8;
     if (b.phase === 'walk') {
       const c = P(b.at.x, b.at.y, 1);
-      bloom(ctx, c.x, c.y, lw * 12, [255, 225, 150], 0.85);
+      bloom(ctx, c.x, c.y, U * 1.1, [255, 225, 150], 0.85);
       return;
     }
     if (b.phase === 'fuse') {
       const c = P(b.at.x, b.at.y, 0.8);
       const sw = 1 + 0.25 * Math.sin(b.f * 30);
-      bloom(ctx, c.x, c.y, lw * 13 * sw, [40, 40, 50], 0.9);
-      bloom(ctx, c.x, c.y - lw * 10, lw * 3.5 * sw, [255, 200, 80], 1);
+      bloom(ctx, c.x, c.y, U * 1.15 * sw, [40, 40, 50], 0.9);
+      bloom(ctx, c.x, c.y - U * 0.9, U * 0.32 * sw, [255, 200, 80], 1);
       return;
     }
     // the blast: four arms of fire, each stopped where the skyline stopped it
@@ -597,12 +636,13 @@ defineAgent('bomberman', {
       if (n < 0.2) continue;
       const a0 = P(b.at.x, b.at.y, 0.6);
       const a1 = P(b.at.x + arm.dx * n, b.at.y + arm.dy * n, 0.6);
-      line(ctx, [a0, a1], `rgba(255,140,50,${(0.45 * b.fade).toFixed(3)})`, lw * 16);
-      line(ctx, [a0, a1], `rgba(255,220,120,${(0.8 * b.fade).toFixed(3)})`, lw * 7);
-      line(ctx, [a0, a1], `rgba(255,255,235,${(0.95 * b.fade).toFixed(3)})`, lw * 2.4);
-      bloom(ctx, a1.x, a1.y, lw * 10, [255, 190, 110], b.fade * 0.8);
+      // the arms are a grid unit thick, so the cross reads at any board size
+      line(ctx, [a0, a1], `rgba(255,140,50,${(0.45 * b.fade).toFixed(3)})`, U * 1.5);
+      line(ctx, [a0, a1], `rgba(255,220,120,${(0.8 * b.fade).toFixed(3)})`, U * 0.7);
+      line(ctx, [a0, a1], `rgba(255,255,235,${(0.95 * b.fade).toFixed(3)})`, U * 0.22);
+      bloom(ctx, a1.x, a1.y, U * 0.9, [255, 190, 110], b.fade * 0.8);
     }
     const c = P(b.at.x, b.at.y, 0.8);
-    bloom(ctx, c.x, c.y, lw * 26, [255, 240, 200], b.fade);
+    bloom(ctx, c.x, c.y, U * 2.4, [255, 240, 200], b.fade);
   },
 });
