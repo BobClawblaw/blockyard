@@ -248,55 +248,97 @@ const quad = (view, x, y, z, r) => [
 // and it reads at any board size.
 defineAgent('recognizer', {
   build({ W, H, rnd, tiles }) {
-    const horiz = rnd() < 0.5;
-    const lane = horiz ? 2 + rnd() * Math.max(1, H - 4) : 2 + rnd() * Math.max(1, W - 4);
-    const span = Math.max(4, Math.min(horiz ? H : W, 3 + Math.round((horiz ? H : W) * 0.22)));
-    const tops = cellTops(tiles, W, H);
+    // ALWAYS STRADDLE GRID X. Measured on this camera: +10 in grid x moves 73.4 screen px
+    // horizontally, +10 in grid y moves 0.0 -- y is DEPTH here, it only moves things up the
+    // screen. The first cut flipped a coin between the two axes, so half the time both legs
+    // projected to the same screen x and the whole gantry collapsed into a single vertical line
+    // with a rectangular wash behind it. That is what it was doing when the operator said it was
+    // bad, and it was: it read as a scanning artifact, not a machine.
+    //
+    // So the legs are separated in x and the thing marches in y, toward the viewer.
+    const span = Math.max(10, Math.min(W * 0.42, Math.round(W * 0.3)));
+    const lane = span / 2 + 1 + rnd() * Math.max(1, W - span - 2);
     let peak = 0;
     for (const t of tiles ?? []) peak = Math.max(peak, (t.floor ?? 0) + cubeHeight(t));
-    void tops;
-    return { horiz, lane, span, W, H, deck: peak + 3.2, back: rnd() < 0.5 ? -1 : 1 };
+    return { W, H, span, lane, deck: peak + 3.4, dir: rnd() < 0.5 ? 1 : -1 };
   },
   frame(a, u) {
     // in from off-board and out the far side, at a constant march
-    const along = -6 + u * ((a.horiz ? a.W : a.H) + 12);
-    const at = a.back < 0 ? (a.horiz ? a.W : a.H) - along : along;
+    const march = -8 + u * (a.H + 16);
+    const at = a.dir < 0 ? a.H - march : march;
     const half = a.span / 2;
-    const foot = (o) => (a.horiz ? { x: at, y: a.lane + o } : { x: a.lane + o, y: at });
-    const legs = [foot(-half), foot(half)];
-    // the legs light what they stride over, and the span between them gets a softer wash
-    const heads = legs.map((p) => ({ x: p.x, y: p.y, color: [150, 215, 255], alpha: 1, r: 2.2 }));
-    heads.push({ x: (legs[0].x + legs[1].x) / 2, y: (legs[0].y + legs[1].y) / 2, color: [90, 170, 255], alpha: 0.55, r: half });
-    return { recognizer: { at, legs, half, deck: a.deck, horiz: a.horiz }, heads };
+    const legs = [{ x: a.lane - half, y: at }, { x: a.lane + half, y: at }];
+    // IT WALKS. The legs alternate, which is most of what makes a two-legged thing read as walking
+    // rather than sliding -- one foot plants while the other lifts.
+    const step = Math.sin(u * 26);
+    const lift = [Math.max(0, step) * 1.4, Math.max(0, -step) * 1.4];
+    const heads = [
+      { x: legs[0].x, y: legs[0].y, color: [150, 215, 255], alpha: 1, r: 2.4 },
+      { x: legs[1].x, y: legs[1].y, color: [150, 215, 255], alpha: 1, r: 2.4 },
+    ];
+    // the shadow it throws BETWEEN its legs: several soft heads across the span rather than one
+    // wide one, because a single big radius painted a flat rectangle that looked like a selection
+    for (let i = 1; i < 6; i++) {
+      heads.push({
+        x: a.lane - half + (a.span * i) / 6, y: at,
+        color: [70, 130, 210], alpha: 0.4, r: 2.6,
+      });
+    }
+    return { recognizer: { at, legs, half, lane: a.lane, deck: a.deck, lift, step }, heads };
   },
   draw(ctx, view, lw) {
     const r = view.fx?.recognizer;
     if (!r) return;
     const P = (x, y, z) => project(x, y, z, view);
-    const U = view.unit ?? 8;           // pixels per grid unit: the only honest scale on this board
-    const [l0, l1] = r.legs;
+    const U = view.unit ?? 8;
     const COL = [120, 200, 255];
-    // two legs: tapered columns from the deck to the board, a grid unit and a half wide at the top
-    for (const f of r.legs) {
-      const top = P(f.x, f.y, r.deck), bot = P(f.x, f.y, 0);
-      poly(ctx, [
-        { x: top.x - U * 0.75, y: top.y }, { x: top.x + U * 0.75, y: top.y },
-        { x: bot.x + U * 0.42, y: bot.y }, { x: bot.x - U * 0.42, y: bot.y },
-      ], `rgba(${COL.join(',')},0.5)`);
-      line(ctx, [top, bot], 'rgba(210,240,255,0.9)', lw * 2);
-      bloom(ctx, bot.x, bot.y, U * 1.4, COL, 0.5);
+    const DARK = [40, 90, 165];
+    const [l0, l1] = r.legs;
+
+    // THE LEGS: solid tapered columns with real thickness, drawn from four projected corners so
+    // they stand in the scene rather than being a flat decal laid over it. Each foot lifts in turn.
+    const legAt = (f, liftBy) => {
+      const footZ = liftBy;
+      const wTop = 1.5, wBot = 0.85;
+      const t0 = P(f.x - wTop / 2, f.y, r.deck), t1 = P(f.x + wTop / 2, f.y, r.deck);
+      const b0 = P(f.x - wBot / 2, f.y, footZ), b1 = P(f.x + wBot / 2, f.y, footZ);
+      poly(ctx, [t0, t1, b1, b0], `rgba(${DARK.join(',')},0.88)`);
+      // a lit inner edge, so the column has a front and a side
+      const i0 = P(f.x - wTop * 0.18, f.y, r.deck), i1 = P(f.x + wTop * 0.18, f.y, footZ);
+      line(ctx, [i0, i1], `rgba(${COL.join(',')},0.95)`, U * 0.22);
+      // the foot: a bright pad where it meets the board, and its glow on the cubes
+      const pad = [P(f.x - 1, f.y - 0.8, footZ), P(f.x + 1, f.y - 0.8, footZ),
+        P(f.x + 1, f.y + 0.8, footZ), P(f.x - 1, f.y + 0.8, footZ)];
+      poly(ctx, pad, `rgba(${COL.join(',')},0.9)`);
+      if (liftBy < 0.2) bloom(ctx, b0.x + (b1.x - b0.x) / 2, b0.y, U * 1.6, COL, 0.55);
+    };
+    legAt(l0, r.lift[0]);
+    legAt(l1, r.lift[1]);
+
+    // THE BODY: a deep slab spanning the legs, with a lit top edge and a dark underside, so it
+    // reads as a machine overhead rather than a line. Height and depth both in grid units.
+    const bodyH = 2.6, bodyD = 1.6;
+    const bl = r.lane - r.half, br = r.lane + r.half;
+    const fT0 = P(bl, r.at - bodyD / 2, r.deck + bodyH), fT1 = P(br, r.at - bodyD / 2, r.deck + bodyH);
+    const fB0 = P(bl, r.at - bodyD / 2, r.deck), fB1 = P(br, r.at - bodyD / 2, r.deck);
+    const kT0 = P(bl, r.at + bodyD / 2, r.deck + bodyH), kT1 = P(br, r.at + bodyD / 2, r.deck + bodyH);
+    poly(ctx, [kT0, kT1, fT1, fT0], `rgba(${COL.join(',')},0.5)`);          // the top deck
+    poly(ctx, [fT0, fT1, fB1, fB0], `rgba(${DARK.join(',')},0.94)`);        // the face
+    line(ctx, [fT0, fT1], 'rgba(225,245,255,0.95)', U * 0.2);               // the lit lip
+    line(ctx, [fB0, fB1], `rgba(${COL.join(',')},0.8)`, U * 0.12);
+
+    // THE EYE: a WIDE SLOT across the middle of the face, which is the Recognizer's whole
+    // silhouette. The first cut was a single small dot and read as a stray highlight.
+    const eyeY = (fT0.y + fB0.y) / 2;
+    const eL = fT0.x + (fT1.x - fT0.x) * 0.3, eR = fT0.x + (fT1.x - fT0.x) * 0.7;
+    const eh = U * 0.38;
+    poly(ctx, [{ x: eL, y: eyeY - eh }, { x: eR, y: eyeY - eh },
+      { x: eR, y: eyeY + eh }, { x: eL, y: eyeY + eh }], 'rgba(255,238,190,0.95)');
+    for (const k of [2.2, 1.4]) {
+      poly(ctx, [{ x: eL, y: eyeY - eh * k }, { x: eR, y: eyeY - eh * k },
+        { x: eR, y: eyeY + eh * k }, { x: eL, y: eyeY + eh * k }], 'rgba(255,220,140,0.13)');
     }
-    // the crossbar: the body of the thing, a slab spanning the legs
-    const a0 = P(l0.x, l0.y, r.deck), a1 = P(l1.x, l1.y, r.deck);
-    const h = U * 1.9;
-    poly(ctx, [
-      { x: a0.x, y: a0.y - h }, { x: a1.x, y: a1.y - h },
-      { x: a1.x, y: a1.y }, { x: a0.x, y: a0.y },
-    ], `rgba(${COL.join(',')},0.62)`);
-    line(ctx, [{ x: a0.x, y: a0.y - h }, { x: a1.x, y: a1.y - h }], 'rgba(235,250,255,0.95)', lw * 2.4);
-    // the eye: a bright bar under the crossbar's middle
-    const mid = { x: (a0.x + a1.x) / 2, y: (a0.y + a1.y) / 2 };
-    bloom(ctx, mid.x, mid.y - h * 0.45, U * 1.7, [255, 240, 200], 0.85);
+    void lw;
   },
 });
 

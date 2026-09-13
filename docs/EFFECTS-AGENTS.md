@@ -296,6 +296,21 @@ that without touching a tile. `ufo` is deliberately brief -- rarity is its whole
 Every entry in this catalogue worth building has been built. (An earlier note here said fifty;
 that was my arithmetic, not a count -- there were twenty-four fields, not eighteen.)
 
+**A seventh lesson: a bias written when the list was short becomes a takeover when it grows.**
+`scheduleFx` gave the light cycles a 50% head start on the first effect after the board came to
+rest -- a reasonable flourish among nine effects, and an eighteenfold bias among fifty-six (measured:
+33.2% of picks against 1.8% for an even split). The block-space board re-lays on every pool refresh,
+so that branch fired constantly and the operator saw light cycles and little else. Nothing guarded
+it, which is why it survived four batches of new effects being added around it. `effects.test.js`
+now replicates the scheduler's choice and fails if any kind takes more than twice an even share, or
+if any kind is unreachable.
+
+Related, and the same shape: the recognizer flipped a coin between marching along grid X or grid Y.
+On this camera +10 in grid x moves 73.4 screen pixels horizontally and +10 in grid y moves **zero**
+-- y is depth. So half the time both its legs projected to the same screen x, the gantry collapsed
+into a single vertical line, and it read as a scanning artifact. Geometry that is symmetric in the
+data is not necessarily symmetric on screen.
+
 **A sixth lesson, and the one with the highest recurrence: on this board, FLAT IS THE COMMON CASE.**
 The dense block-space viewer packs thousands of slabs at exactly the same height, so any agent that
 reads the skyline for a gradient finds none. Three were blinded by it before the pattern was

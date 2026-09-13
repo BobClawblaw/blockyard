@@ -284,10 +284,16 @@ function scheduleFx(canvas, st, opts, soon = false) {
     if (pool.length > 1 && pool.includes('pulse') && Math.random() < 0.75) {
       pool = pool.filter((k) => k !== 'pulse');
     }
-    // the first one after the board lands is a light-cycle race half the time -- on the grid only
-    const kind = !onALine && soon && st.lastFx !== 'lightcycle' && kinds.includes('lightcycle') && Math.random() < 0.5
-      ? 'lightcycle'
-      : (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
+    // NO FAVOURITES (operator, 2026-09-13: "the tron lightcycles effect happens way too often").
+    // There used to be a rule here: the first effect after the board came to rest was a light-cycle
+    // race HALF THE TIME. That was written when there were nine effects and it read as a flourish.
+    // Measured with fifty-six: 33.2% of every first-after-landing pick was the light cycles,
+    // against 1.8% for an even split -- an eighteenfold bias. And the block-space board re-lays on
+    // every pool refresh, so `soon` fires constantly, which is why it felt relentless.
+    //
+    // A hardcoded favourite also contradicts the scheduling the operator actually chose (flat and
+    // rare, so any one effect is a genuine surprise), so it is gone rather than merely reduced.
+    const kind = (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
     startFx(st, kind, now);
     st.wake?.();
   }, a + Math.random() * (b - a));

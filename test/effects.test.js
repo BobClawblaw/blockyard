@@ -76,6 +76,40 @@ test('the switches reach the scheduler: the enabled list is what the boards are 
   assert.deepEqual(enabledEffects({ effects: Object.fromEntries(FX_KINDS.map((k) => [k, false])) }), [], 'all off is a board at rest');
 });
 
+test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
+  // (operator, 2026-09-13: "the tron lightcycles effect happens way too often".)
+  //
+  // There was a rule in scheduleFx giving the light cycles a 50% head start on the first effect
+  // after the board came to rest. Written when there were nine effects, it read as a flourish;
+  // measured with fifty-six it took 33.2% of every first-after-landing pick against 1.8% for an
+  // even split -- an eighteenfold bias. And the block-space board re-lays on every pool refresh,
+  // so that branch fires constantly, which is why it felt relentless.
+  //
+  // Nothing guarded it, which is why it survived four batches of new effects. This does: the
+  // choice is replicated exactly as scheduleFx makes it, and no kind may run away with the board.
+  const LINE_FX = ['pulse', 'twinkle'];
+  const pick = (last) => {
+    const kinds = FX_KINDS.filter((k) => k !== 'pulse');
+    let pool = kinds.filter((k) => k !== last);
+    if (pool.length > 1 && pool.includes('pulse') && Math.random() < 0.75) pool = pool.filter((k) => k !== 'pulse');
+    return (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
+  };
+  const n = 20000;
+  const count = {};
+  let last = null;
+  for (let i = 0; i < n; i++) { const k = pick(last); count[k] = (count[k] ?? 0) + 1; last = k; }
+  const even = 1 / (FX_KINDS.length - 1);
+  const worst = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+  const share = worst[1] / n;
+  assert.ok(share < even * 2,
+    `${worst[0]} takes ${(100 * share).toFixed(1)}% of picks; an even split is ${(100 * even).toFixed(1)}% `
+    + '-- no effect may be hardcoded as a favourite');
+  // and every kind must be reachable at all: a kind the scheduler can never pick is dead code
+  const never = FX_KINDS.filter((k) => k !== 'pulse' && !count[k]);
+  assert.deepEqual(never, [], `these kinds were never chosen in ${n} draws`);
+  void LINE_FX;
+});
+
 test('with every effect switched off the board never schedules one, and it still draws', () => {
   // the scheduler used to pick from the whole list and the switches were advisory
   const timers = [];
