@@ -127,7 +127,7 @@ export const DEFAULTS = Object.freeze({
     lightcycle: true, ball: true, pulse: true,
     shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true, // the agents: something happening on the board, rather than a pattern over it
-    centipede: true, tractor: true, missile: true, boulderdash: true, marble: true, portal: true,
+    centipede: true, tractor: true, missile: true, boulderdash: true, portal: true,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -374,7 +374,6 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'tractor', label: 'Tractor beam', kind: 'toggle', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
       Object.freeze({ key: 'missile', label: 'Interception', kind: 'toggle', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
       Object.freeze({ key: 'boulderdash', label: 'Collapse', kind: 'toggle', hint: 'The board gives way from a point and the blocks fall in, cascading outward' }),
-      Object.freeze({ key: 'marble', label: 'Marble', kind: 'toggle', hint: 'A ball that rolls downhill \u2014 it drains away from the big transactions, so it shows which way the block leans' }),
       Object.freeze({ key: 'portal', label: 'Portal', kind: 'toggle', hint: 'Two gateways on opposite edges; something enters one and leaves the other' }),
     ]),
   }),

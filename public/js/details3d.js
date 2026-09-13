@@ -152,11 +152,12 @@ const FX_MS = {
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
   // Longer than the fields, because something that travels needs time to be watched -- a field
   // reads at a glance, an agent has to arrive, do something, and leave.
-  // Twenty-two of these were removed on the operator's call after seeing them on the board. The
-  // ten that stayed are the ones worth the second animation loop: two riders, a splitter, a thief,
-  // two populations that fight, a flood, the depth lanes, a collapse, a roller and a gateway.
+  // Most of these were removed on the operator's call after seeing them on the board. The seven
+  // that stayed are the ones worth the second animation loop: two riders (lightcycle, ball), a
+  // splitter, a thief, an interception, a collapse and a gateway. The count is deliberately not
+  // written as a number here -- it went stale twice as effects were culled.
   centipede: 7400, tractor: 6800, missile: 7400,
-  boulderdash: 6400, marble: 7000, portal: 7200,};
+  boulderdash: 6400, portal: 7200,};
 export const FX_KINDS = Object.keys(FX_MS);
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from

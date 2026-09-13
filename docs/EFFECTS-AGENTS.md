@@ -17,8 +17,8 @@ Scan visor, Lock-on, Claim, Tetromino, Asteroids, Squadron, Maze chase, Blast, I
 Snake, Identity disc, Recognizer, and the Glitch field effect.
 
 That is twenty-two of the thirty-two agents and one field. A second pass the same day removed
-**Laser, Lanes (`tempest`) and Sweep (`minesweeper`)** as well. **Thirty effects remain: eight
-agents and twenty-two fields.**
+**Laser, Lanes (`tempest`) and Sweep (`minesweeper`)**, and a third removed **Marble**.
+**Twenty-nine effects remain: seven agents and twenty-two fields.**
 
 The agents that stayed:
 
@@ -30,14 +30,15 @@ The agents that stayed:
 | `tractor` | a saucer that draws the tallest transaction up and puts it back |
 | `missile` | arcs raining down against interceptors rising to meet them |
 | `boulderdash` | the board gives way from a point, cubes collapsing outward |
-| `marble` | rolls downhill, so it shows which way the block leans |
 | `portal` | in one gateway, out the other, trail carried through |
 
 Two consequences worth knowing. **No surviving agent HIDES a cube** -- boulder dash shortens rather
 than absorbs -- so the `hide` path is now covered only by the synthetic end-to-end test in
-`agents.test.js`, not by any agent in the wild. And the `bomberman` test that proved the
-data-aware claim went with its subject; `marble` still reads the skyline as terrain and keeps its
-own test.
+`agents.test.js`, not by any agent in the wild. And **no surviving agent reads the skyline as
+terrain**: `bomberman` and then `marble` were the two that did, and both went, taking their
+data-aware tests with them. The flat-board guard below still plays every registered agent on a
+uniform board, so the lesson outlives the effects that taught it -- it is the guard, not the
+effects, that keeps the next skyline-reader honest.
 
 Stored settings need no migration: `normalise` rebuilds the effects map from `DEFAULTS` and drops
 keys it does not know, so a `config/blockyard.json` naming a removed effect simply loses it.

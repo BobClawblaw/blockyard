@@ -910,7 +910,6 @@ export function fxAt(t, fx) {
     case 'tractor':
     case 'missile':
     case 'boulderdash':
-    case 'marble':
     case 'portal': {
       let best = FX_NONE, bw = 0;
       for (const hd of fx.heads ?? []) {

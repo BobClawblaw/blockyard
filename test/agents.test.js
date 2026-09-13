@@ -205,10 +205,11 @@ test('an agent that alters the board actually alters it, on a REAL board', () =>
   const bd = sweep('boulderdash');
   assert.ok(bd.shrunk > 0, `boulder dash collapses cubes (${bd.shrunk} cube-frames shortened)`);
   assert.equal(bd.hid, 0, 'it shortens rather than hides -- nothing left on the board absorbs a cube');
-  // and the control: an agent that alters nothing must alter nothing
-  const mb = sweep('marble');
-  assert.equal(mb.hid, 0, 'an agent that only travels hides nothing');
-  assert.equal(mb.shrunk, 0, 'and shortens nothing');
+  // and the control: an agent that alters nothing must alter nothing. This was `marble` until it
+  // was removed (2026-09-13); portal travels the same way and makes the same promise.
+  const pt = sweep('portal');
+  assert.equal(pt.hid, 0, 'an agent that only travels hides nothing');
+  assert.equal(pt.shrunk, 0, 'and shortens nothing');
 });
 
 test('hide and scale are transient, and default to "visible, full size"', () => {
@@ -276,24 +277,3 @@ test('NO AGENT IS BLINDED BY A FLAT BOARD -- the guard for a bug found three tim
   }
 });
 
-test('marble rolls somewhere on ANY board, flat or sloped', () => {
-  // The second skyline-reading agent to do nothing on a board with no skyline. Greedy descent
-  // stops the instant no neighbour is lower, and the dense block-space board packs thousands of
-  // slabs at exactly the same height -- so the route was two points long and the marble sat still
-  // for its whole run. A flat board is still a board.
-  const board = (tall) => {
-    const out = [];
-    for (let x = 0; x < 40; x++) for (let y = 0; y < 30; y++) out.push({ txid: `m${x}_${y}`, x, y, s: 1, tall: tall(x, y), color: '#333', rate: (x + y) % 40 });
-    return out;
-  };
-  const route = (tiles) => AGENTS.marble.build({ st: {}, seed: 5, W: 40, H: 30, tiles, tops: null, rnd: rng(5) }).pts;
-  const flat = route(board(() => 1.2));
-  assert.ok(flat.length > 6, `a flat board still gives it somewhere to go (${flat.length} points)`);
-  const moved = Math.hypot(flat.at(-1).x - flat[0].x, flat.at(-1).y - flat[0].y);
-  assert.ok(moved > 5, `and it actually travels (${moved.toFixed(1)} grid units)`);
-  const sloped = route(board((x, y) => 6 - (x + y) * 0.08));
-  assert.ok(sloped.length > 6, 'a sloped board too');
-  // the point of the effect: on a real slope it goes DOWNHILL, which a drift would not guarantee
-  const heights = (p) => 6 - (p.x + p.y) * 0.08;
-  assert.ok(heights(sloped.at(-1)) < heights(sloped[0]), 'and on a slope it ends lower than it started');
-});
