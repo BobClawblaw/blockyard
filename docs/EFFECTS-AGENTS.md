@@ -292,8 +292,21 @@ is about to happen: the marker lands a beat before the bomb. `derez` takes the b
 passes and puts it back behind itself, which is the plainest demonstration that an effect can do
 that without touching a tile. `ufo` is deliberately brief -- rarity is its whole design.
 
-**Thirty-two agents, and with the eighteen field effects that is fifty on the board.** Every entry
-in this catalogue worth building has been built.
+**Thirty-two agents, and with the twenty-four field effects that is FIFTY-SIX on the board.**
+Every entry in this catalogue worth building has been built. (An earlier note here said fifty;
+that was my arithmetic, not a count -- there were twenty-four fields, not eighteen.)
+
+**A sixth lesson, and the one with the highest recurrence: on this board, FLAT IS THE COMMON CASE.**
+The dense block-space viewer packs thousands of slabs at exactly the same height, so any agent that
+reads the skyline for a gradient finds none. Three were blinded by it before the pattern was
+obvious -- bomberman's wall threshold made every neighbour a wall and the blast drew a dot; marble's
+greedy descent stopped at the first step and it sat still; sonic found no rise, so it never launched
+and parked at the left edge. Each was measured only because its frame sizes stayed suspiciously
+flat across a whole capture.
+
+`agents.test.js` now plays EVERY registered agent on a perfectly uniform board and requires it to
+keep publishing heads and to visit more than a handful of distinct places. A skyline-reading agent
+must degrade to something worth watching, never to nothing.
 
 **A fifth lesson, learned three times in one day: a measurement that contradicts a working picture
 is usually the measurement.** Three times a probe reported an effect doing nothing while the

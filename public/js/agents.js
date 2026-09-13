@@ -1856,7 +1856,24 @@ defineAgent('sonic', {
       const d = top(x) - top(x - 2);
       if (d > rise) { rise = d; best = x; }
     }
-    return { y, W, H, launch: best, rise, tops, top: (x) => top(x) };
+    // A FLAT BOARD HAS NO RAMP, and this is the THIRD agent to be blinded by that -- bomberman's
+    // wall threshold, marble's greedy descent, and now this. The dense block-space board packs
+    // thousands of slabs at exactly the same height, so `rise` comes out 0.00, `launch` stays at
+    // x=1, and the rider parks at the left edge for its whole run (measured: it crossed 9 of 96
+    // grid units with a 2.8-unit arc, against 21 units and 10.6 on a varied board).
+    //
+    // So where the board offers no ramp, it builds one: it launches from a third of the way along
+    // and jumps a fixed, decent arc. The skyline still WINS wherever there is one -- this only
+    // fires when there is genuinely nothing to launch off.
+    const flat = rise < 0.25;
+    return {
+      y, W, H,
+      launch: flat ? Math.floor(W * 0.3) : best,
+      rise: flat ? 2.2 : rise,
+      flat,
+      tops,
+      top: (x) => top(x),
+    };
   },
   frame(a, u) {
     const RUN = 0.42;

@@ -250,6 +250,31 @@ test('the helpers agents are built on do what they say', () => {
   assert.equal(richestTile([]), null);
 });
 
+test('NO AGENT IS BLINDED BY A FLAT BOARD -- the guard for a bug found three times', () => {
+  // Three agents that read the skyline have now done nothing on a board with no skyline:
+  //   bomberman  a flat wall threshold made every neighbour a wall -> the blast drew a dot
+  //   marble     greedy descent stops when no neighbour is lower   -> a two-point route
+  //   sonic      no rise means no ramp                             -> parked at the left edge
+  // The dense block-space board packs thousands of slabs at EXACTLY the same height, so "flat" is
+  // not a corner case here, it is the common case. Rather than wait for a fourth, every agent is
+  // played on a perfectly uniform board and must still move something.
+  const W = 40, H = 30;
+  const flat = [];
+  for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) flat.push({ txid: `f${x}_${y}`, x, y, s: 1, tall: 1.2, color: '#333', rate: (x + y) % 40 });
+  for (const kind of Object.keys(AGENTS)) {
+    const a = AGENTS[kind].build({ st: {}, seed: 11, W, H, tiles: flat, tops: null, rnd: rng(11) });
+    const seen = new Set();
+    let frames = 0;
+    for (let u = 0.04; u < 1; u += 0.04) {
+      const f = AGENTS[kind].frame(a, u, { ms: 7000, derezMs: 800, seed: 11 });
+      for (const hd of f?.heads ?? []) seen.add(`${Math.round(hd.x)},${Math.round(hd.y)}`);
+      if ((f?.heads ?? []).length) frames++;
+    }
+    assert.ok(frames > 4, `${kind} publishes heads through its run on a flat board (${frames} frames)`);
+    assert.ok(seen.size > 3, `${kind} MOVES on a flat board rather than parking (${seen.size} distinct places)`);
+  }
+});
+
 test('marble rolls somewhere on ANY board, flat or sloped', () => {
   // The second skyline-reading agent to do nothing on a board with no skyline. Greedy descent
   // stops the instant no neighbour is lower, and the dense block-space board packs thousands of
