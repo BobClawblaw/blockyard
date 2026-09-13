@@ -134,7 +134,8 @@ const snapWithMining = (base) => {
         sizeHistogram: { 1: 1456, 2: 16, 3: 3 },
         top: [{ size: 3, feesSat: 5122, weight: 1874, packageFeeRate: 10.93, childRate: 38.1, parentRate: 0.5, cpfp: true, txids: ['aa', 'bb', 'cc'] }],
       },
-      note: 'getblocktemplate costs the node ~1.3 s of its single RPC thread',
+      note: 'assembled here from getrawmempool(true); it costs the node no extra call',
+      assembledLocally: true, source: 'getrawmempool', poolSize: 30768, poolAgeMs: 2276,
     },
   };
   return s;
@@ -227,10 +228,12 @@ test('the mining page shows the block being built and names the child-pays-for-p
   // 2026-09-11 the card went compact (operator: "Takes up way too much vertical
   // space"): the fill is a labelled cell of its two-column grid now
   assert.match(flow, /<i>full<\/i><span>40\.8%/, 'and the card says how full the block under construction already is');
-  assert.match(flow, /1312ms|answered in/, 'the node-side cost of answering is on the card, not in a comment');
+  assert.match(flow, /assembled in \d+ms/, 'the card says what assembling it cost, not what the node spent -- it spends nothing now');
   const pkgs = el('mnPackages').innerHTML;
   assert.match(pkgs, /3 tx/, 'the largest package is listed');
   assert.match(pkgs, /10\.93/, 'package feerate is the number that means something for CPFP');
   assert.match(pkgs, /class="cpfp"/, 'the subsidy pattern is marked as such');
-  assert.match(pkgs, /getblocktemplate/, 'and the panel says which endpoint the graph came from');
+  assert.match(pkgs, /getrawmempool/, 'and the panel says which endpoint the graph came from');
+  assert.equal(/getblocktemplate/.test(pkgs), false,
+    'and no longer names a call this software does not make -- the panel used to tell the operator that getrawmempool carries no depends, which is where the graph now comes from');
 });

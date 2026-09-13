@@ -426,7 +426,7 @@ function nextCard(nb, mempool, drift = {}, fmt, freshClass = '', fresh = null, m
     <i class="bstack" data-h="${Math.max(0, Math.min(100, pct)).toFixed(1)}" aria-hidden="true"></i>
     <div class="bh"><span class="live"></span><b>#${nb.height ?? '?'}</b><span class="bpool">${drift.stale ? 'stale template' : 'being built'}</span>${since != null ? `<span class="bage">${since}m</span>` : ''}</div>
     ${drift.stale ? `<div class="note tiny warn">this reading is ${Math.abs(drift.behind)} height(s) behind the tip — the node has since mined a block</div>` : ''}
-    <div class="bgap">${ageSec != null ? `${ageSec}s old · answered in ${nb.ms ?? '?'}ms` : ''}</div>
+    <div class="bgap">${ageSec != null ? `${ageSec}s old · assembled in ${nb.ms ?? '?'}ms` : ''}</div>
     ${meter}
     <div class="bgrid" title="${fmt.num(nb.weight)} of ${fmt.num(nb.weightLimit ?? WU_CAP_FALLBACK)} WU selected${q != null ? ` · ${fmt.bytes(q)} queued in the mempool` : ''}">
       <div><i>txs</i><span>${nb.txCount != null ? fmt.num(nb.txCount) : '–'}</span></div>
@@ -631,7 +631,7 @@ export function blockFlow(el, { tipHeight = null, recent = [], stats = [], next 
 /**
  * A block that nobody is assembling yet.
  *
- * `getblocktemplate` reports ONE candidate at a time, so anything beyond tip+1 is
+ * Only ONE candidate is ever assembled -- the next block -- so anything beyond tip+1 is
  * inference. Those cards say so in their own border and text rather than being drawn like
  * the real one: an estimate that looks like a measurement is the same category of error
  * as a number that was never measured. What can honestly be shown is how much of the
@@ -728,7 +728,7 @@ export function packagesView(el, packages, fmt) {
         <td class="pkshape" title="${fmt.esc((p.txids ?? []).join(' '))}">${rateBoxes(p)}</td>
       </tr>`).join('')}
     </tbody></table>
-    <div class="note tiny faint">${packages.txsInPackages} of the template's transactions sit inside a package; ${packages.cpfpCandidates} packages have a child paying at least twice its parent's rate — that is the child-pays-for-parent shape. The ancestor graph comes from <span class="mono">getblocktemplate … depends</span>, which is the graph this node publishes; <span class="mono">getrawmempool</span> on this build carries no <span class="mono">depends</span> or <span class="mono">ancestorcount</span>, so this is the block under construction, not the whole pool.</div>`;
+    <div class="note tiny faint">${packages.txsInPackages} of the template's transactions sit inside a package; ${packages.cpfpCandidates} packages have a child paying at least twice its parent's rate — that is the child-pays-for-parent shape. The ancestor graph comes from <span class="mono">getrawmempool … depends</span> — Bitcoin Core publishes the whole graph in the mempool, along with <span class="mono">ancestorcount</span> and <span class="mono">fees.chunk</span>, so the block being built is assembled here and costs your node no call of its own. This is that block, not the whole pool.</div>`;
 }
 
 /** A tiny picture of a package: box size = weight, colour = that transaction's own rate. */
@@ -958,7 +958,7 @@ export function nextHud(nb, { meter = '', fresh = null, mempool = null } = {}, f
       ${kv('sat/vB', `${nb.feeRate?.p50 ?? '–'} med · ${nb.feeRate?.max ?? '–'} max`)}
       ${mempool?.bytes != null ? kv('queued', fmt.bytes(mempool.bytes)) : ''}
       ${ec?.backlogBlocks != null ? kv('queue depth', `≈ ${ec.backlogBlocks} blocks`) : ''}
-      ${kv('template', `${ageSec != null ? `${ageSec}s old` : '–'} · ${nb.ms ?? '?'} ms to answer`)}
+      ${kv('template', `${ageSec != null ? `${ageSec}s old` : '–'} · ${nb.ms ?? '?'} ms to assemble`)}
     </dl>`;
 }
 
@@ -1094,7 +1094,7 @@ function coveragePanel(a, h) {
     ${row('block in progress', nb && !nb.unavailable
       ? `#${nb.height ?? '?'} · ${(nb.weightPct ?? 0).toFixed(1)}% full · ${nb.txCount ?? '?'} txs${nb.ageMs != null ? '' : ''}`
       : `<span class="warn">${esc(nb?.unavailable ?? 'not requested yet — this page asks while it is visible')}</span>`)}
-    ${nb?.ms != null ? row('template cost', `${nb.ms} ms for the node to answer, once per view refresh`) : ''}
+    ${nb?.ms != null ? row('template cost', `${nb.ms} ms to assemble here, from the mempool — no call to the node`) : ''}
     ${a.lastError ? row('last error', `<span class="bad">${esc(a.lastError)}</span>`) : ''}
   </dl>`;
 }

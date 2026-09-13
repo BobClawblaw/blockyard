@@ -518,9 +518,10 @@ async function peersDetail(force = false) {
 let peersFetching = false;
 
 // The block being built right now. Fetched only while the Mining page is on screen, and
-// only once every 20 s: answering getblocktemplate costs this node 1.3-1.5 s of its single
-// RPC thread, so a background poll would spend the node's time on a page nobody is
-// looking at. The server also shares one in-flight call between concurrent viewers.
+// only once every 20 s -- which is now OUR cost, not the node's: since 2026-09-13 the server
+// assembles the template from the mempool it already reads (collect/gbt.js) rather than
+// spending 1.3-1.5 s of the node's single RPC thread on getblocktemplate. The cadence stays
+// because re-assembling an unchanged pool would produce an identical block for ~50 ms of CPU.
 // The full pool distribution is 40-50 KB and belongs in neither the snapshot nor the
 // 1 s stream (rule 5), so the Mining page asks for it on its own cadence and the cell
 // list is drawn from wherever the newest answer came from.
@@ -575,11 +576,12 @@ const TEMPLATE_PAGES = new Set(['mining', 'overview', 'space', 'kiosk']);
 async function nextBlockDetail(force = false) {
   // The block being built is asked for on both pages that draw it -- the Overview and
   // Mining -- and nowhere else, and never while the tab is hidden or updates are paused.
-  // Answering one getblocktemplate costs this node 1.3-1.5 s of its single RPC thread, so
-  // the cadence is the price: 20 s on the page whose whole subject is the template, 60 s
-  // on the landing page that shows a card of it. The Block space page (2026-09-11)
-  // carries the block being built in its own panel, so it pays the Mining rate; the
-  // server shares one in-flight call between viewers either way.
+  // This used to cost the node 1.3-1.5 s of its single RPC thread per answer, and the
+  // cadence was that price. The template is assembled from the mempool now and costs the
+  // node nothing, but the cadence stands on its own: the pool tier only refreshes every
+  // 20 s, so asking faster would re-assemble an identical block. 20 s on the page whose
+  // whole subject is the template, 60 s on the landing page that shows a card of it; the
+  // Block space page carries it in its own panel and pays the Mining rate.
   if (!TEMPLATE_PAGES.has(state.page)) return state.snap?.attribution?.nextBlock;
   if (document.hidden || state.paused) return state.snap?.attribution?.nextBlock ?? null;
   const freshMs = state.page === 'overview' ? 60_000 : 20_000;

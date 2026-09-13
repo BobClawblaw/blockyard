@@ -73,7 +73,7 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   // 2026-09-13 (operator: "the lightning still looks terrible") the crackle became directional and
   // tapered -- it leaves the wire near-perpendicular and is drawn in three passes, a wide dim halo,
   // the arc, and a hot thin core -- so the single flat stroke colour it used to have is gone.
-  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(175,225,255')), 'crackling branches off the wire');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(185,230,255')), 'crackling branches off the wire');
   assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(90,170,255')), 'each branch has a halo under it');
   assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(245,252,255')), 'and a hot core that stops short, so it tapers to a point');
   const motes = after.filter((o) => o.startsWith('set:fillStyle=rgba(200,236,255')).length;

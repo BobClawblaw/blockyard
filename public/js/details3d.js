@@ -665,13 +665,16 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
       const ox = g.a.x + (g.b.x - g.a.x) * f0, oy = g.a.y + (g.b.y - g.a.y) * f0;
       const side = Math.random() < 0.5 ? 1 : -1;
       const base = Math.atan2((ny / nlen) * side, (nx / nlen) * side) + (Math.random() - 0.5) * 1.1;
-      const reach = lw * (16 + Math.random() * 26) * (0.5 + g.tint);
-      const legs = 4;
+      const reach = lw * (5 + Math.random() * 7) * (0.45 + 0.55 * g.tint);
+      // SHORT AND JAGGED. Five legs, each shorter than the last, with a hard alternating zig of
+      // +-0.9 rad about the heading -- a discharge kinks, it does not curve. The first cut held a
+      // heading over four long smooth legs and drew whiskers halfway across the board.
+      const legs = 5;
       const pts = [{ x: ox, y: oy }];
       let x = ox, y = oy, ang = base;
       for (let m = 0; m < legs; m++) {
-        ang += (Math.random() - 0.5) * 0.7;                 // a heading that holds, not a walk
-        const step = (reach / legs) * (1 - 0.12 * m);       // each leg shorter: it tapers away
+        ang = base + (m % 2 ? -1 : 1) * (0.35 + Math.random() * 0.55) + (Math.random() - 0.5) * 0.3;
+        const step = (reach / legs) * (1 - 0.15 * m);
         x += Math.cos(ang) * step; y += Math.sin(ang) * step;
         pts.push({ x, y });
       }
@@ -681,8 +684,8 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
         for (let m = 1; m <= upto; m++) ctx.lineTo(pts[m].x, pts[m].y);
         ctx.stroke();
       };
-      arc(legs, 3.2, `rgba(90,170,255,${(0.22 * g.tint).toFixed(3)})`);
-      arc(legs, 1.25, `rgba(175,225,255,${(0.8 * g.tint).toFixed(3)})`);
+      arc(legs, 2.2, `rgba(90,170,255,${(0.3 * g.tint).toFixed(3)})`);
+      arc(legs, 0.9, `rgba(185,230,255,${(0.92 * g.tint).toFixed(3)})`);
       arc(Math.max(1, legs - 1), 0.5, `rgba(245,252,255,${(0.95 * g.tint).toFixed(3)})`);
     }
     // SPARKS, NOT BLOBS (operator, 2026-09-13: "the particles are too fat"). They were discs of
@@ -1142,13 +1145,16 @@ function priceLine(ctx, view, axes) {
       const ox = p.x + (q.x - p.x) * f0, oy = p.y + (q.y - p.y) * f0;
       const side = Math.random() < 0.5 ? 1 : -1;
       let ang = Math.atan2((ny / nlen) * side, (nx / nlen) * side) + (Math.random() - 0.5) * 1.1;
-      const reach = lw * (20 + Math.random() * 30) * (0.5 + tint);
-      const legs = 4;
+      const reach = lw * (6 + Math.random() * 8) * (0.45 + 0.55 * tint);
+      // SHORT AND JAGGED (see chargeTrail): five kinked legs close to the wire, not four long
+      // smooth ones. The screenshot of the first cut showed pale whiskers curving off the board.
+      const legs = 5;
+      const base = ang;
       const pl = [{ x: ox, y: oy }];
       let x = ox, y = oy;
       for (let m = 0; m < legs; m++) {
-        ang += (Math.random() - 0.5) * 0.7;
-        const step = (reach / legs) * (1 - 0.12 * m);
+        ang = base + (m % 2 ? -1 : 1) * (0.35 + Math.random() * 0.55) + (Math.random() - 0.5) * 0.3;
+        const step = (reach / legs) * (1 - 0.15 * m);
         x += Math.cos(ang) * step; y += Math.sin(ang) * step;
         pl.push({ x, y });
       }
@@ -1158,8 +1164,8 @@ function priceLine(ctx, view, axes) {
         for (let m = 1; m <= upto; m++) ctx.lineTo(pl[m].x, pl[m].y);
         ctx.stroke();
       };
-      arc(legs, 3.4, `rgba(90,170,255,${(0.22 * tint).toFixed(3)})`);
-      arc(legs, 1.3, `rgba(175,225,255,${(0.82 * tint).toFixed(3)})`);
+      arc(legs, 2.4, `rgba(90,170,255,${(0.3 * tint).toFixed(3)})`);
+      arc(legs, 0.95, `rgba(185,230,255,${(0.92 * tint).toFixed(3)})`);
       arc(Math.max(1, legs - 1), 0.5, `rgba(245,252,255,${(0.95 * tint).toFixed(3)})`);
     }
     // PARTICLES: a spray of motes streaming off the charged wire, each on its own heading,
