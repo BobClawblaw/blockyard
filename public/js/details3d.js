@@ -2214,7 +2214,15 @@ export function render3d(canvas, cells, options = {}) {
     // render3d call wakes it (see the unchanged-layout branch). It is the STARS that need the
     // repaint, not the board style, so a space-styled board with the sky off parks like any other.
     if (starsOn(opts)) {
-      if (canvas.isConnected === false || canvas.offsetParent === null) { st.raf = null; return; }
+      // ABSENT COUNTS AS HIDDEN, and this is the sky loop's only exit: 2218 re-arms when the
+      // frame is throttled, 2242 re-arms otherwise, and the park at 2234 is gated behind
+      // !starsOn -- so a starry board that cannot answer "am I visible?" never unwinds. The
+      // strict `=== false` / `=== null` form could only fire where the properties exist, and
+      // the day space.stars shipped ON by default that turned an unreachable branch into an
+      // infinite one (renderMining: Maximum call stack size exceeded, wherever rAF runs inline
+      // rather than deferring to a real frame). In a browser this is a no-op: isConnected is
+      // always a boolean and offsetParent always an Element or null.
+      if (!canvas.isConnected || !canvas.offsetParent) { st.raf = null; return; }
       if (st.settled && !st.dirty && !st.pending && !fxNow(st, t) && t - (st.lastPaint ?? 0) < 33) { st.raf = requestAnimationFrame(step); return; }
       st.lastPaint = t;
     }

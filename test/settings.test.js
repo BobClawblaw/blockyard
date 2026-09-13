@@ -34,7 +34,7 @@ test('defaults are the shipped look, and an empty or corrupt store still yields 
   // open, and shadows are the costliest single thing on it.
   assert.equal(normalise(null).space.shadows, false);
   assert.equal(normalise(null).space.detail, 'simple');
-  assert.equal(normalise(null).sky.density, 1);
+  assert.equal(normalise(null).sky.density, 3, 'the shipped sky is dense (operator, 2026-09-13)');
   const s = store();
   assert.deepEqual(loadSettings(s), normalise(null), 'empty store');
   s.setItem(SETTINGS_KEY, '{not json');
@@ -447,8 +447,8 @@ test('the arms are arms: the stars bunch along the spiral instead of spreading e
 test('the galaxy reaches both boards, because the sky belongs to neither', async () => {
   assert.equal(spaceOptions({ sky: { galaxy: true } }).galaxy, true, 'the block-space board');
   assert.equal(marketsOptions({ sky: { galaxy: true } }).galaxy, true, 'and the candle board');
-  assert.equal(spaceOptions({}).galaxy, false, 'off by default: it is an opt-in effect');
-  assert.equal(marketsOptions({}).galaxy, false);
+  assert.equal(spaceOptions({}).galaxy, true, 'ON by default since 2026-09-13: it is the shipped look, no longer opt-in');
+  assert.equal(marketsOptions({}).galaxy, true);
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /f\.galaxy !== galaxy/, 'the field is rebuilt when the shape changes, not every frame');
   // The forbidden canvas shortcuts are NOT re-checked here. viewer-canvas-rules.test.js owns that
@@ -497,7 +497,7 @@ test('the parse is memoised, and a write invalidates it', () => {
 test('tetrust: its own group, its own switches on the panel, and tetrustOptions carries the display sky when its stars are on', () => {
   // (operator, 2026-09-12: "Add teh starfield simulation as a toggle for teh game" ... "Tetris music
   // and sound effects ... Toggle for each in the game display")
-  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#3d8bff', ghostWidth: 1, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1, grid: true, gridColour: '#3cc88c', gridBrightness: 1 }, 'the panel is the sky, galaxy centred behind the title, and the well has its own grid');
+  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#2f2c44', ghostWidth: 0.5, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1, grid: true, gridColour: '#1844bf', gridBrightness: 1.55 }, 'the panel is the sky, galaxy centred behind the title, and the well has its own grid in blue');
   const rows = PANEL.find((g) => g.group === 'tetrust')?.rows.map((r) => r.key);
   assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'ghostWidth', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness', 'grid', 'gridColour', 'gridBrightness']);
   const off = tetrustOptions({ tetrust: { stars: false, galaxy: false, music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
@@ -511,6 +511,26 @@ test('tetrust: its own group, its own switches on the panel, and tetrustOptions 
   assert.throws(() => setSetting({}, 'tetrust.volume', 1, store), /unknown setting/);
   setSetting({}, 'tetrust.music', false, store);
   assert.equal(loadSettings(store).tetrust.music, false, 'persisted like every other setting');
+});
+
+test('the shipped look is the one that was chosen, leaf by leaf', () => {
+  // (operator, 2026-09-13: "Ok, the current settings I have saved out should be the shipping
+  // defaults. Make it so".) These are the ten leaves that moved off the engine's original values,
+  // promoted from the settings that deployment had actually been running.
+  //
+  // Five of them are guarded NOWHERE else -- the tetrust deepEqual above covers four and
+  // effects.test.js covers the markets range. Without this a later edit could quietly restore the
+  // engine green, or put the star field back behind an opt-in, and the suite would not object.
+  assert.equal(DEFAULTS.space.stars, true, 'the star field ships ON: the board repaints forever, deliberately');
+  assert.equal(DEFAULTS.sky.density, 3, 'and dense -- the top of the slider range');
+  assert.equal(DEFAULTS.sky.galaxy, true, 'the spiral arms ship on');
+  assert.equal(DEFAULTS.markets.range, '24', 'markets opens on 24 h');
+  assert.equal(DEFAULTS.blockout.gridBrightness, 0.35, "blockout's lattice sits well down from full");
+  assert.equal(DEFAULTS.blockanoid.gridColour, '#332c63', 'blockanoid is indigo, not the engine green');
+  assert.equal(DEFAULTS.tetrust.gridColour, '#1844bf', 'tetrust is blue, not the engine green');
+  assert.equal(DEFAULTS.tetrust.gridBrightness, 1.55, 'and above full, which the blue needs to read');
+  assert.equal(DEFAULTS.tetrust.ghostColour, '#2f2c44');
+  assert.equal(DEFAULTS.tetrust.ghostWidth, 0.5, 'a thin landing marker (operator: "thinner lines")');
 });
 
 test('the neon tubes are tunable: source, one colour (a hex, validated), brightness (clamped) -- for the board and the game', () => {
@@ -639,6 +659,11 @@ test('the grid settings actually reach the boards that draw them', () => {
   const b = blockanoidOptions({ blockanoid: { gridColour: '#0000ff', gridBrightness: 1 } });
   assert.equal(b.gridOpts.neonCell, 'rgba(0,0,255,0.18)');
   assert.equal(blockanoidOptions({ blockanoid: { grid: false } }).grid, false);
-  assert.equal(tetrustOptions({ tetrust: { gridColour: '#0000ff' } }).gridOpts.neonCell, 'rgba(0,0,255,0.06)',
-    'the well keeps its own fainter weight');
+  // Stated at an EXPLICIT brightness, so this measures the well's own weight rather than tracking
+  // whatever brightness happens to ship: the first cut asserted the bare default and broke the day
+  // the shipped 1.55 arrived, which told us nothing about the invariant it was meant to hold.
+  assert.equal(tetrustOptions({ tetrust: { gridColour: '#0000ff', gridBrightness: 1 } }).gridOpts.neonCell, 'rgba(0,0,255,0.06)',
+    'the well keeps its own fainter weight: 0.06 at brightness 1');
+  assert.equal(tetrustOptions({ tetrust: { gridColour: '#0000ff' } }).gridOpts.neonCell, 'rgba(0,0,255,0.093)',
+    'and the shipped 1.55 lifts it, which is what makes the blue read at all');
 });

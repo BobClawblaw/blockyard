@@ -107,7 +107,7 @@ test('with every effect switched off the board never schedules one, and it still
 test('markets remembers its toolbar: the exchange and the range are settings with controls', () => {
   // (operator, 2026-09-12: "We need to remember the user settings for the Markets page")
   assert.equal(DEFAULTS.markets.exchange, 'coinbase');
-  assert.equal(DEFAULTS.markets.range, '48', 'a string: a <select> hands back a string');
+  assert.equal(DEFAULTS.markets.range, '24', 'a string: a <select> hands back a string');
   const rows = PANEL.find((g) => g.group === 'markets')?.rows ?? [];
   const ex = rows.find((r) => r.key === 'exchange'), range = rows.find((r) => r.key === 'range');
   assert.ok(ex?.options.some(([v]) => v === 'kraken') && ex.options.length >= 2, 'the exchanges are offered');

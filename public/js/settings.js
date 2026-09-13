@@ -51,7 +51,10 @@ export const DEFAULTS = Object.freeze({
     neonColour: '#3d8bff',       // the one colour, when chosen
     neonBrightness: 1,           // multiplies the tubes' alpha and width (0.2 .. 2)
     sheen: false,         // a metallic highlight along the lit edge of each top face
-    stars: false,         // opt-in: a star field twinkles, so the board never stops repainting
+    // ON (operator, 2026-09-13: "the current settings I have saved out should be the shipping
+    // defaults"). It was opt-in because a twinkling field means the board never stops repainting.
+    // That cost is now paid deliberately rather than avoided: it is the look that was chosen.
+    stars: true,
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
@@ -62,9 +65,9 @@ export const DEFAULTS = Object.freeze({
   // no density or brightness control at all. Whether each board shows stars stays per board
   // (space.stars, markets.stars); what the stars LOOK like belongs to neither.
   sky: Object.freeze({
-    density: 1,           // multiplies the star count (0.2 .. 3)
+    density: 3,           // multiplies the star count (0.2 .. 3) -- the shipped look sits at the top of the range
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
-    galaxy: false,        // opt-in: the same stars laid on spiral arms, turning once a quarter hour
+    galaxy: true,         // the same stars laid on spiral arms, turning once a quarter hour
     galaxyAt: 'bottom-left',   // where its middle sits: behind the board, or any of the corners
     // THE LAYERS OF THE SKY, each its own switch (operator, 2026-09-12: "We should have toggles for
     // all these sub-options in preferences"). All on: they were asked for, and a feature shipped
@@ -85,9 +88,9 @@ export const DEFAULTS = Object.freeze({
     // THE TOOLBAR REMEMBERS (operator, 2026-09-12: "We need to remember the user settings for the
     // Markets page"). Which exchange and how many hours were a click that survived until the tab
     // was closed; they are preferences, and they live here now. Strings, because a <select> hands
-    // back a string and a number that arrives as "48" must still match its own control.
+    // back a string and a number that arrives as "24" must still match its own control.
     exchange: 'coinbase',
-    range: '48',
+    range: '24',
     // ONE VIEW OR THE OTHER, never both (operator, 2026-09-12: "For markets page, have a selector
     // for either the 3D view or 2D view for price. Not both at the same time. Too much waste of
     // space for that screen"). The page drew the 3D board AND the flat candlestick chart on every
@@ -125,7 +128,7 @@ export const DEFAULTS = Object.freeze({
     // the grid under the court, its own now rather than the engine's hardcoded green
     grid: true,
     gridColour: '#3cc88c',
-    gridBrightness: 1,
+    gridBrightness: 0.35,   // well down from full: the court reads better with the lattice faint
     sfx: true,
   }),
   // BLOCKANOID (operator, 2026-09-12: "Take blockout, and make rip off of Arkanoid using our
@@ -142,7 +145,7 @@ export const DEFAULTS = Object.freeze({
     capsules: true,       // the falling letters
     enemies: true,        // the minions drifting down the court
     grid: true,           // the grid under the court
-    gridColour: '#3cc88c',
+    gridColour: '#332c63',   // deep indigo rather than the engine green
     gridBrightness: 1,
     sfx: true,
   }),
@@ -157,8 +160,8 @@ export const DEFAULTS = Object.freeze({
     // the landing marker's colour (operator: "I want to be able to set the ghost wireframe
     // color"). Its own setting, not the neon tubes': the wireframe is drawn instead of a block,
     // so the neon finish never touches it.
-    ghostColour: '#3d8bff',
-    ghostWidth: 1,        // multiplies the marker's line thickness (operator: "thinner lines")
+    ghostColour: '#2f2c44',
+    ghostWidth: 0.5,      // multiplies the marker's line thickness (operator: "thinner lines")
     music: true,          // the tune
     sfx: true,            // the effects: move, rotate, drop, clear, game over
     neon: false,          // neon tubes on the pieces and the stack
@@ -166,8 +169,8 @@ export const DEFAULTS = Object.freeze({
     neonColour: '#3d8bff',
     neonBrightness: 1,
     grid: true,           // the grid under the well
-    gridColour: '#3cc88c',
-    gridBrightness: 1,
+    gridColour: '#1844bf',   // blue rather than the engine green
+    gridBrightness: 1.55,    // and above full, which the blue needs to read at all
   }),
 });
 

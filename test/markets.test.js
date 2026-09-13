@@ -354,7 +354,10 @@ test('the markets board is space: no deck texture, a translucent floor, a fixed 
   assert.ok(Math.max(...vals) - Math.min(...vals) > 0.05, 'it twinkles');
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /if \(opts\.space\) \{\n    const S = 24/, 'the deck texture is skipped on a space board');
-  assert.match(src, /canvas\.offsetParent === null\) \{ st\.raf = null; return; \}/, 'the twinkle stops while hidden');
+  // ABSENT counts as hidden, not just an explicit null: the strict `=== null` form could only
+  // fire where the property exists, so the day space.stars shipped ON the sky loop's only exit
+  // became unreachable wherever rAF runs inline, and renderMining recursed until the stack went.
+  assert.match(src, /!canvas\.offsetParent\) \{ st\.raf = null; return; \}/, 'the twinkle stops while hidden');
 });
 
 import { project } from '../public/js/blockscene3d.js';
