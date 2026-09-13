@@ -127,6 +127,7 @@ export const DEFAULTS = Object.freeze({
     recognizer: true, disc: true, snake: true, qbert: true, invaders: true, bomberman: true,
     centipede: true, pacman: true, galaga: true, tractor: true, missile: true, asteroids: true,
     tetrisdrop: true, qix: true, minesweeper: true, tempest: true, lockon: true, scanvisor: true,
+    katamari: true, boulderdash: true, lemmings: true, marble: true, gradius: true, portal: true,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -388,6 +389,12 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'tempest', label: 'Lanes', kind: 'toggle', hint: 'Pulses rushing up lanes from the far edge toward you \u2014 the one effect that uses depth' }),
       Object.freeze({ key: 'lockon', label: 'Lock-on', kind: 'toggle', hint: 'A reticle tags the eight richest transactions in turn, then fires at all of them at once' }),
       Object.freeze({ key: 'scanvisor', label: 'Scan visor', kind: 'toggle', hint: 'A band that labels the blocks it crosses with their feerate \u2014 it adds information, not decoration' }),
+      Object.freeze({ key: 'katamari', label: 'Katamari', kind: 'toggle', hint: 'A ball that rolls the board absorbing blocks and growing \u2014 they all come back when it finishes' }),
+      Object.freeze({ key: 'boulderdash', label: 'Collapse', kind: 'toggle', hint: 'The board gives way from a point and the blocks fall in, cascading outward' }),
+      Object.freeze({ key: 'lemmings', label: 'Lemmings', kind: 'toggle', hint: 'A file of walkers crossing the board, one of them digging straight through a block' }),
+      Object.freeze({ key: 'marble', label: 'Marble', kind: 'toggle', hint: 'A ball that rolls downhill \u2014 it drains away from the big transactions, so it shows which way the block leans' }),
+      Object.freeze({ key: 'gradius', label: 'Options', kind: 'toggle', hint: 'A leader trailed by four satellites, each following exactly where it has been' }),
+      Object.freeze({ key: 'portal', label: 'Portal', kind: 'toggle', hint: 'Two gateways on opposite edges; something enters one and leaves the other' }),
     ]),
   }),
   Object.freeze({

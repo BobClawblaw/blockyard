@@ -948,7 +948,13 @@ export function fxAt(t, fx) {
     case 'minesweeper':
     case 'tempest':
     case 'lockon':
-    case 'scanvisor': {
+    case 'scanvisor':
+    case 'katamari':
+    case 'boulderdash':
+    case 'lemmings':
+    case 'marble':
+    case 'gradius':
+    case 'portal': {
       let best = FX_NONE, bw = 0;
       for (const hd of fx.heads ?? []) {
         const ddx = Math.max(t.x - hd.x, 0, hd.x - (t.x + t.s)), ddy = Math.max(t.y - hd.y, 0, hd.y - (t.y + t.s));
@@ -961,10 +967,17 @@ export function fxAt(t, fx) {
           // katamari, boulder dash and lemmings would all have drawn a glow and called it eating.
           // `hide` is a threshold rather than a blend: a cube is drawn or it is not, and a head
           // only hides what it has genuinely reached (w near 1), never what it is merely near.
+          // ALTERATION IS GATED ON REACH, NOT ON ALPHA. `w` folds the head's alpha into its
+          // distance falloff, which is right for LIGHTING -- a dim head lights dimly -- and wrong
+          // for hiding: boulder dash fades its ring out as it collapses (alpha 0.8 * shrink), so
+          // by the time a cube should vanish the alpha is near zero and the hide was cancelled by
+          // the very fade that meant it was working. Measured: 0 cubes hidden over a whole run.
+          // So the physical effect uses PROXIMITY alone and the visual effect keeps using w.
+          const reach = g(Math.hypot(ddx, ddy) / Math.max(0.2, hd.r ?? 0.8));
           best = {
             glow: 0.85 * w, outline: 0.8 * w, lift: (hd.lift ?? 0) * w, color: hd.color,
-            hide: (hd.hide ?? 0) > 0 && w > 0.55 ? 1 : 0,
-            scale: hd.scale == null ? 1 : 1 - (1 - hd.scale) * w,
+            hide: (hd.hide ?? 0) > 0 && reach > 0.45 ? 1 : 0,
+            scale: hd.scale == null ? 1 : 1 - (1 - hd.scale) * reach,
           };
         }
       }

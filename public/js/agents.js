@@ -1473,3 +1473,339 @@ defineAgent('scanvisor', {
     void lw;
   },
 });
+
+// ================================================================= BATCH FOUR
+//
+// The family that could not be built until heads carried `hide` and `scale` (see the commit that
+// wired them through). Three of these ALTER THE BOARD -- absorbing, collapsing, digging -- which
+// the operator allowed on the condition that it snaps back: "Allow it, it snaps back". It does,
+// by construction, because none of them touches a tile. They publish an override per frame and
+// the renderer applies it to a copy; when the effect ends, or a transition takes the stage, or
+// the tab is hidden, the override simply stops being computed.
+
+// --- 19. KATAMARI ---------------------------------------------------------
+//
+// A ball rolls the board ABSORBING the cubes it touches, growing as it goes -- so its size is a
+// running total of what it has taken, and the bare patch behind it is the path it rolled.
+defineAgent('katamari', {
+  build({ W, H, rnd, tiles }) {
+    // a lazy curve across the board, so it sweeps rather than runs a straight line
+    const pts = [];
+    const steps = 26;
+    const x0 = rnd() * W, y0 = rnd() * H;
+    const ax = (rnd() - 0.5) * 2, ay = (rnd() - 0.5) * 2;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      pts.push({
+        x: Math.max(0, Math.min(W, x0 + ax * W * t + Math.sin(t * 4.2) * W * 0.14)),
+        y: Math.max(0, Math.min(H, y0 + ay * H * t + Math.cos(t * 3.1) * H * 0.14)),
+      });
+    }
+    void tiles;
+    return { pts, W, H };
+  },
+  frame(a, u) {
+    const d = Math.max(0, Math.min(1, u)) * (a.pts.length - 1);
+    const at = alongPath(a.pts, d);
+    // it grows with what it has rolled over: the radius IS the running total
+    const size = 1.4 + u * 3.6;
+    const heads = [{ x: at.x, y: at.y, color: [255, 190, 120], alpha: 1, r: size, hide: 1 }];
+    // a short memory of where it has been, so the swept patch reads as swept
+    for (let k = 1; k <= 5; k++) {
+      const p = alongPath(a.pts, Math.max(0, d - k * 0.5));
+      heads.push({ x: p.x, y: p.y, color: [220, 160, 110], alpha: 0.5, r: size * 0.8, hide: 1 });
+    }
+    return { katamari: { at, size, u }, heads };
+  },
+  draw(ctx, view, lw) {
+    const k = view.fx?.katamari;
+    if (!k) return;
+    const U = view.unit ?? 8;
+    const c = project(k.at.x, k.at.y, k.size * 0.7, view);
+    const R = U * k.size;
+    // a lumpy ball: the clump of everything it has picked up, turning as it rolls
+    const lumps = [];
+    for (let i = 0; i < 13; i++) {
+      const ang = (i / 13) * Math.PI * 2 + k.u * 5;
+      const rad = R * (0.78 + 0.3 * hash01(i * 7 + 3));
+      lumps.push({ x: c.x + Math.cos(ang) * rad, y: c.y + Math.sin(ang) * rad * 0.8 });
+    }
+    poly(ctx, lumps, 'rgba(190,120,70,0.92)');
+    wire(ctx, lumps, 'rgba(255,215,160,0.9)', Math.max(lw * 2, U * 0.12));
+    // the cubes stuck to it, as little squares round the rim
+    for (let i = 0; i < 9; i++) {
+      const ang = (i / 9) * Math.PI * 2 - k.u * 5;
+      const px = c.x + Math.cos(ang) * R * 0.82, py = c.y + Math.sin(ang) * R * 0.66;
+      const q = U * 0.3;
+      poly(ctx, [{ x: px - q, y: py - q }, { x: px + q, y: py - q }, { x: px + q, y: py + q }, { x: px - q, y: py + q }],
+        `rgba(${120 + i * 12},${200 - i * 6},${140 + i * 8},0.95)`);
+    }
+    bloom(ctx, c.x, c.y, R * 0.5, [255, 210, 150], 0.35);
+  },
+});
+
+// --- 20. BOULDER DASH -----------------------------------------------------
+//
+// A column gives way and the cubes above it COLLAPSE, each shrinking to nothing in turn, the
+// cascade spreading outward from where it started.
+defineAgent('boulderdash', {
+  build({ W, H, rnd, tiles }) {
+    const at = { x: Math.floor(rnd() * W), y: Math.floor(rnd() * H) };
+    void tiles;
+    return { at, W, H, reach: 7 + Math.floor(rnd() * 5) };
+  },
+  frame(a, u) {
+    // the cascade front, spreading out from the collapse
+    const front = u * a.reach * 1.5;
+    const heads = [];
+    for (let r = 0; r <= Math.min(a.reach, Math.ceil(front)); r++) {
+      const age = (front - r) / 2.2;
+      if (age < 0 || age > 1.6) continue;
+      const shrink = Math.max(0, 1 - age);      // full height at the front, gone behind it
+      const n = Math.max(1, r * 4);
+      for (let i = 0; i < n; i++) {
+        const ang = (i / n) * Math.PI * 2;
+        heads.push({
+          x: a.at.x + Math.cos(ang) * r, y: a.at.y + Math.sin(ang) * r,
+          // THE RING MUST STILL BE VISIBLE WHERE IT IS WIDEST. alpha was 0.8 * shrink, and shrink
+          // goes to zero as a cube finishes collapsing -- so at u=0.9, with the front at its
+          // furthest, every head was alpha 0.00 and the collapse happened in the dark. Measured.
+          // A floor keeps the rim lit; `scale` carries the collapse, and it is gated on reach now
+          // rather than on alpha, so the two are properly separate.
+          color: [255, 190, 110], alpha: 0.35 + 0.55 * shrink, r: 1.1,
+          scale: 0.12 + 0.88 * shrink,
+        });
+      }
+    }
+    return { boulderdash: { at: a.at, front }, heads };
+  },
+  draw(ctx, view, lw) {
+    const b = view.fx?.boulderdash;
+    if (!b) return;
+    const U = view.unit ?? 8;
+    // dust where the front is passing, so a collapse has debris
+    for (let i = 0; i < 28; i++) {
+      const ang = hash01(i * 13 + 5) * Math.PI * 2;
+      const rad = b.front * (0.6 + 0.5 * hash01(i * 7 + 11));
+      const c = project(b.at.x + Math.cos(ang) * rad, b.at.y + Math.sin(ang) * rad, 0.5 + hash01(i) * 1.5, view);
+      const r = U * (0.18 + 0.3 * hash01(i * 3 + 19));
+      ctx.fillStyle = `rgba(210,190,150,${(0.28 * (1 - Math.min(1, b.front / 11))).toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    void lw;
+  },
+});
+
+// --- 21. LEMMINGS ---------------------------------------------------------
+//
+// A file of walkers crossing the board, turning at what they cannot climb -- and one of them DIGS,
+// shortening the cube under it until it is through.
+defineAgent('lemmings', {
+  build({ W, H, rnd, tiles }) {
+    const y = 1 + rnd() * (H - 2);
+    const dir = rnd() < 0.5 ? 1 : -1;
+    const tops = cellTops(tiles, W, H);
+    const digAt = Math.floor(W * (0.35 + rnd() * 0.3));
+    void tops;
+    return { y, dir, W, H, n: 6, digAt };
+  },
+  frame(a, u) {
+    const heads = [];
+    const walkers = [];
+    for (let i = 0; i < a.n; i++) {
+      const lag = i * 0.055;
+      const v = Math.max(0, (u - lag) / (1 - lag));
+      const x = a.dir > 0 ? v * a.W : a.W - v * a.W;
+      if (v <= 0 || v >= 1) continue;
+      // the one that digs stops at its spot and works
+      // a WIDE window: the first cut used 2.5 grid units, which the walker crossed in a
+      // couple of frames, so the dig almost never happened. It now digs for a real stretch.
+      const digging = i === 2 && Math.abs(x - a.digAt) < Math.max(4, a.W * 0.08);
+      walkers.push({ x: digging ? a.digAt : x, y: a.y, i, digging, step: Math.sin(u * 40 + i) });
+      heads.push({
+        x: digging ? a.digAt : x, y: a.y, color: digging ? [255, 200, 120] : [140, 230, 255],
+        alpha: 0.95, r: 1.2, ...(digging ? { scale: 0.25 } : {}),
+      });
+    }
+    return { lemmings: { walkers }, heads };
+  },
+  draw(ctx, view, lw) {
+    const l = view.fx?.lemmings;
+    if (!l) return;
+    const U = view.unit ?? 8;
+    for (const w of l.walkers) {
+      const c = project(w.x, w.y, 1.2, view);
+      const r = U * 0.55;
+      // a small body with a bright cap, and legs that shuffle
+      poly(ctx, [
+        { x: c.x - r * 0.7, y: c.y + r }, { x: c.x + r * 0.7, y: c.y + r },
+        { x: c.x + r * 0.55, y: c.y - r * 0.5 }, { x: c.x - r * 0.55, y: c.y - r * 0.5 },
+      ], w.digging ? 'rgba(255,200,120,0.95)' : 'rgba(120,215,255,0.95)');
+      ctx.fillStyle = 'rgba(60,255,170,0.95)';
+      ctx.beginPath(); ctx.arc(c.x, c.y - r * 0.75, r * 0.5, 0, Math.PI * 2); ctx.fill();
+      line(ctx, [{ x: c.x - r * 0.4, y: c.y + r }, { x: c.x - r * 0.4 + w.step * r * 0.4, y: c.y + r * 1.5 }],
+        'rgba(255,255,255,0.8)', Math.max(lw * 1.5, U * 0.07));
+      if (w.digging) bloom(ctx, c.x, c.y + r * 1.4, U * 0.8, [255, 190, 90], 0.7);
+    }
+  },
+});
+
+// --- 22. MARBLE -----------------------------------------------------------
+//
+// DATA-AWARE, and the only agent that obeys the board as TERRAIN: it rolls DOWNHILL, so it drains
+// away from the big transactions toward the cheap ones and shows you which way the block leans.
+defineAgent('marble', {
+  build({ W, H, tiles, rnd }) {
+    const tops = cellTops(tiles, W, H);
+    const top = (x, y) => (x >= 0 && x < W && y >= 0 && y < H ? tops[(y | 0) * W + (x | 0)] : 99);
+    let x = Math.floor(rnd() * W), y = Math.floor(rnd() * H);
+    const pts = [{ x, y }];
+    // greedy descent: step to the lowest neighbour, until nothing is lower
+    for (let i = 0; i < 70; i++) {
+      let bx = x, by = y, bh = top(x, y);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+        const h = top(x + dx, y + dy);
+        if (h < bh) { bh = h; bx = x + dx; by = y + dy; }
+      }
+      if (bx === x && by === y) break;          // a basin: it has found the bottom
+      x = bx; y = by;
+      pts.push({ x, y });
+    }
+    return { pts: pts.length > 1 ? pts : [{ x, y }, { x: x + 1, y }], tops, W, H };
+  },
+  frame(a, u) {
+    const d = Math.max(0, Math.min(1, u)) * (a.pts.length - 1);
+    const at = alongPath(a.pts, d);
+    const heads = [{ x: at.x, y: at.y, color: [220, 235, 255], alpha: 1, r: 1.5 }];
+    // the track it has left, cooling
+    for (let k = 1; k <= 7; k++) {
+      const p = alongPath(a.pts, Math.max(0, d - k * 0.8));
+      heads.push({ x: p.x, y: p.y, color: [150, 190, 230], alpha: 0.5 - k * 0.05, r: 1 });
+    }
+    return { marble: { at, d, pts: a.pts }, heads };
+  },
+  draw(ctx, view, lw) {
+    const m = view.fx?.marble;
+    if (!m) return;
+    const U = view.unit ?? 8;
+    // the route it has taken, so the downhill is visible as a line on the board
+    const upto = Math.floor(m.d);
+    const trail = [];
+    for (let i = 0; i <= upto && i < m.pts.length; i++) trail.push(project(m.pts[i].x, m.pts[i].y, 0.8, view));
+    if (trail.length > 1) {
+      line(ctx, trail, 'rgba(150,200,255,0.30)', U * 0.4);
+      line(ctx, trail, 'rgba(225,240,255,0.75)', U * 0.12);
+    }
+    const c = project(m.at.x, m.at.y, 1.2, view);
+    const R = U * 0.85;
+    bloom(ctx, c.x, c.y, R * 1.6, [180, 215, 255], 0.5);
+    ctx.fillStyle = 'rgba(240,248,255,0.98)';
+    ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, Math.PI * 2); ctx.fill();
+    // a highlight, so it reads as a sphere rather than a disc
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath(); ctx.arc(c.x - R * 0.3, c.y - R * 0.35, R * 0.32, 0, Math.PI * 2); ctx.fill();
+    void lw;
+  },
+});
+
+// --- 23. GRADIUS OPTIONS --------------------------------------------------
+//
+// A leader trailed by four satellites that follow its EXACT past path on a delay. Four lines of
+// code, and it reads as intelligence -- which is the whole trick of the original.
+defineAgent('gradius', {
+  build({ W, H, seed, rnd }) {
+    const pts = cyclePath(seed, W, H, rnd() < 0.5 ? 'left' : 'bottom');
+    return { pts, lag: 2.6 };
+  },
+  frame(a, u) {
+    const total = a.pts.length - 1;
+    const d = Math.max(0, Math.min(1, u)) * total;
+    const lead = alongPath(a.pts, d);
+    const opts = [];
+    const heads = [{ x: lead.x, y: lead.y, color: [255, 245, 190], alpha: 1, r: 1.7 }];
+    for (let i = 1; i <= 4; i++) {
+      const p = alongPath(a.pts, Math.max(0, d - i * a.lag));
+      if (d - i * a.lag < 0) continue;
+      opts.push({ x: p.x, y: p.y, i });
+      heads.push({ x: p.x, y: p.y, color: [255, 170, 60], alpha: 0.9, r: 1.2 });
+    }
+    return { gradius: { lead, opts, d, pts: a.pts }, heads };
+  },
+  draw(ctx, view, lw) {
+    const g = view.fx?.gradius;
+    if (!g) return;
+    const U = view.unit ?? 8;
+    const c = project(g.lead.x, g.lead.y, 1.3, view);
+    const R = U * 1.1;
+    // the ship: a wedge pointing along its route
+    poly(ctx, [
+      { x: c.x + R, y: c.y }, { x: c.x - R * 0.7, y: c.y - R * 0.7 },
+      { x: c.x - R * 0.35, y: c.y }, { x: c.x - R * 0.7, y: c.y + R * 0.7 },
+    ], 'rgba(255,250,215,0.96)');
+    bloom(ctx, c.x - R, c.y, R * 0.9, [255, 190, 90], 0.7);
+    // the options: small spheres, each exactly where the leader was
+    for (const o of g.opts) {
+      const p = project(o.x, o.y, 1.3, view);
+      const r = U * 0.45;
+      bloom(ctx, p.x, p.y, r * 2.1, [255, 170, 60], 0.55);
+      ctx.fillStyle = 'rgba(255,225,150,0.95)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    void lw;
+  },
+});
+
+// --- 24. PORTAL -----------------------------------------------------------
+//
+// Two portals open on opposite edges; an agent enters one and leaves the other, CARRYING ITS TRAIL
+// THROUGH the discontinuity -- which is a visual nothing else here can make.
+defineAgent('portal', {
+  build({ W, H, rnd }) {
+    const horiz = rnd() < 0.5;
+    const inAt = horiz ? { x: 0.5, y: 1 + rnd() * (H - 2) } : { x: 1 + rnd() * (W - 2), y: 0.5 };
+    const outAt = horiz ? { x: W - 0.5, y: 1 + rnd() * (H - 2) } : { x: 1 + rnd() * (W - 2), y: H - 0.5 };
+    return { horiz, inAt, outAt, W, H };
+  },
+  frame(a, u) {
+    const THROUGH = 0.5;
+    const heads = [
+      { x: a.inAt.x, y: a.inAt.y, color: [120, 170, 255], alpha: 0.9, r: 2.2 },
+      { x: a.outAt.x, y: a.outAt.y, color: [255, 150, 60], alpha: 0.9, r: 2.2 },
+    ];
+    // before halfway it runs toward the blue one; after, it comes out of the orange
+    let at;
+    if (u < THROUGH) {
+      const v = u / THROUGH;
+      const from = a.horiz ? { x: a.W * 0.72, y: a.inAt.y } : { x: a.inAt.x, y: a.H * 0.72 };
+      at = { x: from.x + (a.inAt.x - from.x) * v, y: from.y + (a.inAt.y - from.y) * v };
+    } else {
+      const v = (u - THROUGH) / (1 - THROUGH);
+      const to = a.horiz ? { x: a.W * 0.28, y: a.outAt.y } : { x: a.outAt.x, y: a.H * 0.28 };
+      at = { x: a.outAt.x + (to.x - a.outAt.x) * v, y: a.outAt.y + (to.y - a.outAt.y) * v };
+    }
+    heads.push({ x: at.x, y: at.y, color: [235, 245, 255], alpha: 1, r: 1.5 });
+    return { portal: { inAt: a.inAt, outAt: a.outAt, at, through: u >= THROUGH }, heads };
+  },
+  draw(ctx, view, lw) {
+    const p = view.fx?.portal;
+    if (!p) return;
+    const U = view.unit ?? 8;
+    const W2 = Math.max(lw * 2, U * 0.16);
+    const gate = (g, rgb) => {
+      const c = project(g.x, g.y, 1.8, view);
+      const rx = U * 1.1, ry = U * 2.2;
+      const oval = [];
+      for (let i = 0; i <= 24; i++) {
+        const ang = (i / 24) * Math.PI * 2;
+        oval.push({ x: c.x + Math.cos(ang) * rx, y: c.y + Math.sin(ang) * ry });
+      }
+      poly(ctx, oval, `rgba(${rgb.join(',')},0.22)`);
+      wire(ctx, oval, `rgba(${rgb.join(',')},0.95)`, W2);
+      bloom(ctx, c.x, c.y, rx * 1.4, rgb, 0.4);
+    };
+    gate(p.inAt, [110, 165, 255]);
+    gate(p.outAt, [255, 150, 60]);
+    const c = project(p.at.x, p.at.y, 1.3, view);
+    bloom(ctx, c.x, c.y, U * 1.1, p.through ? [255, 200, 140] : [200, 225, 255], 0.95);
+  },
+});

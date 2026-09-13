@@ -276,7 +276,32 @@ richest transactions in turn before firing, and scanvisor labels the blocks it c
 feerate. Three of the six are data-aware. `tetrisdrop` points the real, already-tested rules in
 `tetris.js` at the skyline instead of a well, so the piece shapes are not reinvented.
 
-Twenty agents.
+Batch four, the same day: **katamari (31), boulderdash (30), lemmings (23), marble (11),
+gradius (19), portal (38)**. This is the family that ALTERS the board, and it could not be built
+until heads carried `hide`/`scale` through to the renderer -- see the fourth lesson below. The
+katamari absorbs cubes as it rolls and grows with what it has taken; boulder dash collapses them
+outward from a point; a lemming digs straight through one. All of it snaps back, by construction:
+nothing touches a tile, the override just stops being computed. `marble` is data-aware in a new
+way -- it obeys the board as TERRAIN, rolling greedily downhill, so it drains away from the big
+transactions and shows which way the block leans.
+
+Twenty-six agents.
+
+**A fifth lesson, learned three times in one day: a measurement that contradicts a working picture
+is usually the measurement.** Three times a probe reported an effect doing nothing while the
+screenshot plainly showed it working. Every one announced itself the same way -- *results identical
+across cases that should differ*, or a zero where a picture showed something:
+
+- probing `hide` with `kind: 'katamari'`, which is not a registered kind, so every case fell to
+  `default: FX_NONE` and came back the same;
+- sweeping the board-alterers over a 96x96 grid holding only 3,700 tiles -- 38 rows of 96 -- so the
+  agents roamed empty space and touched nothing. On a fully-populated board the same sweep reports
+  katamari hiding 2,173 cube-frames and boulder dash shrinking 3,404;
+- judging invaders, bomberman and pacman from a four-phase capture of effects that run 6-9 s in
+  distinct phases.
+
+Before believing a null result, check the experiment ran: does the control case behave differently?
+Is the board the agent is walking actually occupied? Did the capture land inside the phase?
 
 **A fourth lesson, and the sharpest one: machinery nobody uses is machinery that does not work.**
 `hide` and `scale` were added to `fxAt`'s result so an effect could eat or collapse a cube and have

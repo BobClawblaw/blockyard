@@ -173,6 +173,43 @@ test('A HEAD CAN ACTUALLY HIDE AND SHRINK A CUBE, end to end from the caller', (
   assert.equal(unknown.glow, 0, 'an unregistered kind lights nothing, so identical results mean the test did not run');
 });
 
+test('an agent that alters the board actually alters it, on a REAL board', () => {
+  // THE SECOND DEAD-WIRE REGRESSION, and the reason this is measured on a real board rather than
+  // with a hand-placed head. The end-to-end test above passes a head sitting exactly on a tile, so
+  // it proved the pass-through and NOT that any agent reaches the threshold in situ. Measured on
+  // the live board, katamari and boulder dash hid zero cubes across a whole run: `w` folds the
+  // head's alpha into its falloff, and boulder dash fades its ring out AS it collapses, so the
+  // very fade that meant it was working cancelled the hiding. Alteration is gated on proximity
+  // now; alpha still governs lighting.
+  const W = 40, H = 30;
+  const board = [];
+  for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) board.push({ txid: `a${x}_${y}`, x, y, s: 1, tall: 1.2, color: '#333', rate: (x + y) % 40 });
+  const sweep = (kind) => {
+    const a = AGENTS[kind].build({ st: {}, seed: 5, W, H, tiles: board, tops: null, rnd: rng(5) });
+    let hid = 0, shrunk = 0;
+    for (let u = 0.02; u < 1; u += 0.02) {
+      const f = AGENTS[kind].frame(a, u, { ms: 8000, derezMs: 800, seed: 5 });
+      const fx = { kind, u, amp: 1, gridW: W, gridH: H, dx: 1, dy: 0, seed: 5, x: 0, y: 0, ...f };
+      for (const t of board) {
+        const v = fxAt(t, fx);
+        if (v.hide) hid++;
+        else if (v.scale < 0.9) shrunk++;
+      }
+    }
+    return { hid, shrunk };
+  };
+  const kat = sweep('katamari');
+  assert.ok(kat.hid > 0, `katamari absorbs cubes (${kat.hid} cube-frames hidden)`);
+  const bd = sweep('boulderdash');
+  assert.ok(bd.shrunk > 0, `boulder dash collapses cubes (${bd.shrunk} cube-frames shortened)`);
+  const lem = sweep('lemmings');
+  assert.ok(lem.shrunk > 0, `a lemming digs through one (${lem.shrunk} cube-frames shortened)`);
+  // and the control: an agent that alters nothing must alter nothing
+  const gr = sweep('gradius');
+  assert.equal(gr.hid, 0, 'an agent that only travels hides nothing');
+  assert.equal(gr.shrunk, 0, 'and shortens nothing');
+});
+
 test('hide and scale are transient, and default to "visible, full size"', () => {
   // FX_NONE is what every tile gets when nothing is happening to it, and what the airborne path
   // short-circuits to. If these defaults were wrong the board would vanish while an effect ran.
