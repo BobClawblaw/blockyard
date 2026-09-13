@@ -1005,15 +1005,93 @@ function drawAxes(ctx, view, axes, n) {
 // the price chart in the Markets display"). The close, hour by hour, at the candles' own depth and
 // through the same projection, drawn after them in the grid's light style -- a wide faint halo,
 // a glow, then a bright core -- so it cuts through the scene the way the neon grid does.
+// ONE CONTINUOUS PIPE, not a run of segments (operator, 2026-09-13: "the yellow price line is
+// made of line segments. Make it one continuous curved pipe").
+//
+// WHAT WAS WRONG. Every layer was stroked as a polyline through the projected closes and, worse,
+// during the pulse each SEGMENT was stroked separately so it could carry its own colour. Six
+// layers x forty segments is 240 strokes whose translucent ends overlap at every join: the line
+// beaded at each candle and the corners came to points. It read as forty things, because it was.
+//
+// WHAT IT IS NOW. The closes are a monotonic, evenly-spaced series in x (markets.js builds
+// `axes.line` at each candle's centre), so they interpolate cleanly: a centripetal-ish
+// Catmull-Rom through the points, converted to cubic Beziers, gives one smooth curve that passes
+// exactly through every close -- the data is not smoothed away, only the path between the readings
+// is. Each layer is then ONE stroke of that curve with round joins and caps, so a layer overlaps
+// itself nowhere and the whole thing reads as a tube.
+//
+// THE TAIL, which is why this needed a gradient. A single stroke cannot change colour along its
+// length without one, and the pulse's whole point is blue at the head easing back to yellow. The
+// canvas rules here forbid clip, globalAlpha, composite modes and shadowBlur -- gradients are not
+// on that list, and charts.js has used them all along. Because x is monotonic, a linear gradient
+// across the line's x-extent IS distance along the line, so the tint becomes continuous instead of
+// forty discrete steps.
+//
+// AND IT DEGRADES. A context that cannot build a gradient (every recording stub in test/, and any
+// software rasteriser that refuses) gets a flat colour instead of a throw -- goggles.js learned
+// that the hard way: "createLinearGradient once turned a green unit suite into a page that painted
+// nothing". Same doctrine here.
+function gradientOr(ctx, build, stops, fallback) {
+  try {
+    const g = build();
+    if (!g || typeof g.addColorStop !== 'function') return fallback;
+    for (const [o, c] of stops) g.addColorStop(o, c);
+    return g;
+  } catch { return fallback; }
+}
+
+/**
+ * The closes as one smooth curve, traced into `t` (a Path2D or the context itself).
+ *
+ * Catmull-Rom with a tension of 1/6 converted to cubic Beziers. The curve passes THROUGH every
+ * point -- an approximating spline would quietly redraw the prices -- and the ends duplicate the
+ * terminal points so the first and last stretches curve like the rest.
+ */
+function traceCurve(t, pts) {
+  t.moveTo(pts[0].x, pts[0].y);
+  if (pts.length === 2) { t.lineTo(pts[1].x, pts[1].y); return; }
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    t.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6,
+      p2.x, p2.y,
+    );
+  }
+}
+
+// The price curve, kept between frames: one entry, because there is one price line on screen.
+const CURVE = { key: null, path: null };
+
 function priceLine(ctx, view, axes) {
   const pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
   const lw = ctx.lineWidth;
+  const join = ctx.lineJoin, cap = ctx.lineCap;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // Built once and CACHED, not rebuilt every frame. All six layers stroke the same shape, and the
+  // shape only changes when the projected closes do -- which is when the series or the camera
+  // changes, not when a frame ticks. drawGround caches its Path2D the same way (l.path); doing it
+  // per frame here would allocate and re-trace thirty Beziers sixty times a second underneath an
+  // effect that is already the expensive thing on screen.
+  const P2 = typeof Path2D === 'function';
+  let path = null;
+  if (P2) {
+    const key = `${pts.length}|${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}|${pts[pts.length - 1].x.toFixed(2)},${pts[pts.length - 1].y.toFixed(2)}|${pts[(pts.length / 2) | 0].y.toFixed(2)}`;
+    if (CURVE.key === key && CURVE.path) path = CURVE.path;
+    else {
+      try { path = new Path2D(); traceCurve(path, pts); CURVE.key = key; CURVE.path = path; }
+      catch { path = null; CURVE.key = null; CURVE.path = null; }
+    }
+  }
   const stroke = (w, col) => {
     ctx.strokeStyle = col; ctx.lineWidth = lw * w;
-    ctx.beginPath();
-    pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-    ctx.stroke();
+    if (path) { ctx.stroke(path); return; }
+    ctx.beginPath(); traceCurve(ctx, pts); ctx.stroke();
   };
   // A BRIGHT NEON GLOW (operator, 2026-09-11, of the crackling light saber that was here: "that
   // effect is terrible. Remove it. I was hoping for a bright neon glow"). Steady -- no pulses, no
@@ -1026,15 +1104,12 @@ function priceLine(ctx, view, axes) {
   const GLOW = [[30, [255, 225, 40], 0.05, 'glow'], [18, [255, 228, 45], 0.10, 'glow'], [10, [255, 232, 55], 0.22, 'glow']];
   const CORE = [[5.5, [255, 236, 70], 0.78, 'core'], [3, [255, 246, 150], 1, 'core'], [1.3, [255, 255, 240], 1, 'core']];
   const fx = view.fx && view.fx.kind === 'pulse' ? view.fx : null;
+  const done = () => { ctx.lineWidth = lw; ctx.lineJoin = join; ctx.lineCap = cap; };
   if (!fx) {
     for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
-    ctx.lineWidth = lw;
+    done();
     return;
   }
-  // THE PULSE RUNS THE WIRE, trailing a short tail (operator, 2026-09-12: "it should fade out
-  // blue and fade back into yellow"). The tint is per SEGMENT, by how far behind the head it
-  // sits: full blue at the head, eased down to yellow a quarter of the line back -- so the charge
-  // is left ON the line and seen leaving it, left to right, rather than drawn across the floor.
   const n = pts.length - 1;
   const headAt = fx.u / PULSE_TRAVEL;                        // 0..1 along the line, then past it
   const BLUE = [110, 200, 255];                              // the core: electric
@@ -1082,33 +1157,57 @@ function priceLine(ctx, view, axes) {
       ctx.beginPath(); ctx.arc(px, py, rad * 0.5, 0, Math.PI * 2); ctx.fill();
     }
   }
+  // THE TUBE, AS ONE STROKE PER LAYER WITH A GRADIENT ALONG IT.
+  //
+  // This is what the operator's "one continuous curved pipe" costs and buys. Each layer used to be
+  // stroked segment by segment so a segment could carry its own colour -- that is how the blue tail
+  // was built, and it is also why the line beaded at every candle. Because the closes are evenly
+  // spaced and monotonic in x, a linear gradient across the line's x-extent IS distance along the
+  // line, so the same tail can be expressed as colour stops on ONE stroke of the curve.
+  //
+  // The stops are placed at the head, a short way behind it, and at the tail's end, with the same
+  // easing the per-segment version used (pow(1 - passed/TAIL, 1.4)) sampled at those places -- plus
+  // the overshoot to a hotter, whiter yellow just past the tail, which was a sine bump per segment
+  // and is a stop here. Fewer than forty steps, and continuous between them instead of stepped.
+  const x0 = pts[0].x, x1 = pts[pts.length - 1].x;
+  // where the head and the tail's end fall as a fraction of the x-extent, clamped into 0..1 so a
+  // head that has run off the far end still anchors its stops legally
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+  const headStop = clamp01(headAt);
+  const tailStop = clamp01(headAt - PULSE_TAIL);
   for (const [w, c, a, kind] of [...GLOW, ...CORE]) {
     const B = kind === 'glow' ? DEEP : BLUE;
-    ctx.lineWidth = lw * w;
-    for (let i = 0; i < n; i++) {
-      const at = n > 1 ? i / (n - 1) : 0;
-      const passed = headAt - at;
-      // eased, so the tail fades rather than steps: blue right behind the head, most of the
-      // yellow back by half the tail's length
+    // the charged stretch is FAT: a pulse is a thing travelling the line, not a colour on it.
+    // One width for the whole stroke now, so it swells while the head is on the line.
+    const onLine = headAt >= 0 && headAt <= 1 + PULSE_TAIL;
+    ctx.lineWidth = lw * w * (1 + (onLine ? 0.9 : 0));
+    const at = (passed) => {
       const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
-      // the charged stretch is FAT: a pulse is a thing travelling the line, not a colour on it
-      ctx.lineWidth = lw * w * (1 + 1.4 * tint);
-      // ...and a FLASH behind the tail (operator: "Maybe even a higher color pulse for a brighter
-      // yellow before it bounces back to normal yellow"): as the blue lets go, the wire overshoots
-      // to a hotter, whiter yellow and settles back. A sine bump over the stretch just past the
-      // tail, scaled by how little blue is left so the two never fight.
       const past = passed - PULSE_TAIL * 0.55;
       const hot = past > 0 && past < PULSE_TAIL ? Math.sin((past / PULSE_TAIL) * Math.PI) * (1 - tint) : 0;
       const mix = (j) => c[j] + (B[j] - c[j]) * tint + (HOT[j] - c[j]) * hot * 0.85;
-      const r = Math.round(Math.min(255, mix(0)));
-      const g = Math.round(Math.min(255, mix(1)));
-      const b = Math.round(Math.min(255, mix(2)));
-      ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
-      ctx.beginPath();
-      ctx.moveTo(pts[i].x, pts[i].y);
-      ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
-      ctx.stroke();
-    }
+      return `rgba(${Math.round(Math.min(255, mix(0)))},${Math.round(Math.min(255, mix(1)))},${Math.round(Math.min(255, mix(2)))},${a})`;
+    };
+    const yellow = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+    const col = gradientOr(
+      ctx,
+      () => ctx.createLinearGradient(x0, pts[0].y, x1, pts[pts.length - 1].y),
+      [
+        [0, yellow],                                       // far behind the tail: plain wire again
+        [Math.max(0, tailStop - 0.001), at(PULSE_TAIL)],
+        [tailStop, at(PULSE_TAIL * 0.999)],
+        [clamp01(tailStop + (headStop - tailStop) * 0.45), at(PULSE_TAIL * 0.55)],
+        [clamp01(tailStop + (headStop - tailStop) * 0.8), at(PULSE_TAIL * 0.2)],
+        [headStop, at(0)],
+        [Math.min(1, headStop + 0.001), yellow],           // ahead of the head: untouched wire
+        [1, yellow],
+      ].filter(([o], i, arr) => i === 0 || o >= arr[i - 1][0]),   // stops must not go backwards
+      // no gradient available: the flat wire, which is what every recording stub records
+      yellow,
+    );
+    ctx.strokeStyle = col;
+    if (path) ctx.stroke(path);
+    else { ctx.beginPath(); traceCurve(ctx, pts); ctx.stroke(); }
   }
   // SHIMMER on the charged stretch: a thin white-blue core whose brightness flickers per segment
   // on the frame clock, scaled by that segment's tint so it dies out exactly as the blue does.
@@ -1197,7 +1296,7 @@ function priceLine(ctx, view, axes) {
       ctx.beginPath(); ctx.arc(hx, hy, lw * r, 0, Math.PI * 2); ctx.fill();
     }
   }
-  ctx.lineWidth = lw;
+  done();
 }
 
 function axisLabels(ctx, view, axes, n, k, dpr) {

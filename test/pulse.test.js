@@ -19,19 +19,38 @@ function harness() {
   globalThis.requestAnimationFrame = (fn) => { rafPending = fn; return 42; };
   globalThis.cancelAnimationFrame = () => { rafPending = null; };
   globalThis.document = globalThis.document ?? {};
+  // A GRADIENT THE RECORDER CAN SEE INTO. The price line is one continuous stroke per layer now
+  // (operator, 2026-09-13: "make it one continuous curved pipe"), so the tail is colour STOPS on a
+  // gradient rather than a colour per segment. A stub that cannot build one makes priceLine degrade
+  // to the flat wire -- correct, but then there is nothing here to assert about the tail. So this
+  // harness returns a real recorder: addColorStop pushes into `stops`, and the tests read those.
+  const stops = [];
   const ctx = new Proxy({ canvas: {} }, {
     get(t, k) {
       if (k === 'canvas') return t.canvas;
-      if (k === 'measureText') return (s) => ({ width: String(s).length * 6 });
-      return (...a) => { ops.push(String(k)); return t.canvas; };
+      if (k === 'measureText') return (str) => ({ width: String(str).length * 6 });
+      if (k === 'createLinearGradient') {
+        return (...a) => {
+          const g = { __gradient: true, from: a.slice(0, 2), to: a.slice(2, 4), stops: [] };
+          g.addColorStop = (o, c) => { g.stops.push([o, c]); stops.push([o, c]); };
+          ops.push('createLinearGradient');
+          return g;
+        };
+      }
+      return () => { ops.push(String(k)); return t.canvas; };
     },
-    set(t, k, v) { ops.push('set:' + k + '=' + String(v).slice(0, 32)); t[k] = v; return true; },
+    set(t, k, v) {
+      // a gradient reaching strokeStyle is the pipe being painted; record it as such rather than
+      // as "[object Object]", which is what String() would give and what would hide the tail
+      ops.push('set:' + k + '=' + (v && v.__gradient ? `gradient(${v.stops.length})` : String(v).slice(0, 32)));
+      t[k] = v; return true;
+    },
   });
   const canvas = { clientWidth: 900, clientHeight: 500, width: 0, height: 0, style: {}, getContext: () => ctx, addEventListener: () => {}, setPointerCapture: () => {} };
   // drive the loop at a clock of OUR choosing: the shared harness resets to 16, 32... on every
   // pump, which would put a frame BEHIND an effect started later and make fxNow return null
   const step = (t) => { const fn = rafPending; rafPending = null; harness.t = t; if (fn) fn(t); return !!fn; };
-  return { canvas, ops, step, pending: () => !!rafPending };
+  return { canvas, ops, stops, step, pending: () => !!rafPending };
 }
 
 const LINE = [{ x: 1, z: 2 }, { x: 3, z: 4 }, { x: 5, z: 3 }, { x: 7, z: 5 }];
@@ -59,11 +78,22 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   // a TAIL, not a hold (operator: "it should fade out blue and fade back into yellow"): the segment
   // just behind the head is bluer than yellow, and the blend is a gradient, so the exact head
   // colour is not what to look for -- a stroke whose blue channel beats its red is
-  const tube = after.filter((o) => o.startsWith('set:strokeStyle=rgba(') && o.endsWith(',0.78)'))
-    .map((o) => o.match(/rgba\((\d+),(\d+),(\d+),/)).filter(Boolean).map((m) => m.slice(1, 4).map(Number));
-  assert.ok(tube.length >= 3, `the tube is stroked per segment (${tube.length})`);
-  assert.ok(tube.some(([r, , b]) => b > r), `a segment behind the head is tinted blue (${tube.map((c) => c.join('/')).join(' ')})`);
-  assert.ok(tube.some(([r, , b]) => r > b), 'and a segment ahead of it is still yellow: the tint is a tail, not the whole line');
+  // ONE STROKE PER LAYER, TINTED BY A GRADIENT (operator, 2026-09-13: "make it one continuous
+  // curved pipe"). This used to assert that the tube was stroked PER SEGMENT and that some segment
+  // came out blue -- which is precisely the mechanism the pipe removed: forty little strokes whose
+  // translucent ends overlapped at every candle. The intent survives unchanged, so it is asserted
+  // against the new mechanism: the blue is a TAIL on the gradient, not the whole wire.
+  assert.ok(after.includes('createLinearGradient'), 'the tinted pipe is painted with a gradient');
+  const painted = after.filter((o) => o.startsWith('set:strokeStyle=gradient('));
+  assert.ok(painted.length >= 6, `every layer of the pipe is one stroke of the curve (${painted.length})`);
+  const cols = h.stops.map(([, c]) => c).map((c) => String(c).match(/rgba\((\d+),(\d+),(\d+),/))
+    .filter(Boolean).map((m) => m.slice(1, 4).map(Number));
+  assert.ok(cols.length >= 6, `the gradient carries stops (${cols.length})`);
+  assert.ok(cols.some(([r, , b]) => b > r), `a stop behind the head is blue (${cols.map((c) => c.join('/')).slice(0, 8).join(' ')})`);
+  assert.ok(cols.some(([r, , b]) => r > b), 'and a stop ahead of it is still yellow: the tint is a tail, not the whole line');
+  // and the curve itself: a pipe, not a polyline of forty pieces
+  assert.ok(after.includes('bezierCurveTo'), 'the line is a curve through the closes, not straight hops');
+  assert.ok(after.some((o) => o === 'set:lineJoin=round'), 'with round joins, so it reads as a tube');
   assert.ok(after.some((o) => o.startsWith('set:fillStyle=rgba(235,250,255')), 'and the head bead is drawn');
   // The shimmer stays: a thin white-blue core flickering over the charged stretch.
   assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(210,240,255')), 'a shimmering core over the blue');
@@ -83,7 +113,9 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   // circles") -- emitted over the whole charged span rather than per segment, and drawn before the
   // tube, so it sits BEHIND the wire
   const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(48,110,255'));
-  const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=rgba(') && o.endsWith(',0.78)'));
+  // the tube is a gradient now, not a flat rgba -- the probe follows the mechanism, but the
+  // property it pins is unchanged: the cloud is painted BEFORE the wire, so it sits behind it
+  const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=gradient('));
   assert.ok(firstCloud >= 0, 'the nebula is drawn');
   assert.ok(firstCloud < firstTube, 'and it is drawn behind the wire, not over it');
 });
