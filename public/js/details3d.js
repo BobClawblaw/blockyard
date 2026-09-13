@@ -1132,8 +1132,14 @@ function priceLine(ctx, view, axes) {
   }
   const n = pts.length - 1;
   const headAt = fx.u / PULSE_TRAVEL;                        // 0..1 along the line, then past it
-  const BLUE = [110, 200, 255];                              // the core: electric
-  const DEEP = [30, 130, 255];                               // the bloom: saturated, so it reads BLUE
+  // BRIGHT NEON BLUE (operator, 2026-09-13: "make the energy pulse bright neon blue as it travels
+  // along the line"). Neon is saturation and luminance TOGETHER, so both move: the core goes
+  // brighter and further toward cyan, and the bloom drops its red channel to nothing so the
+  // surround reads as pure blue instead of the washed periwinkle it was. The tail's shape is
+  // untouched -- every pass still blends wire-yellow through these to HOT at the overshoot; only
+  // how blue "blue" is has changed.
+  const BLUE = [120, 225, 255];                              // the core: electric neon
+  const DEEP = [0, 120, 255];                                // the bloom: pure saturated blue
   const HOT = [255, 255, 215];                               // the flash: whiter than the wire
   // THE NEBULA BEHIND THE SURGE (operator, 2026-09-12: "like a blue nebula behind the energy pulse
   // that starts expanding and fading out to black"). Drawn FIRST, so it sits behind the wire: soft
@@ -1347,9 +1353,46 @@ function priceLine(ctx, view, axes) {
       // a head you cannot miss: a wide blue corona, a bright core, a white point -- all of it
       // scaled and faded together once it is off the wire
       const f = hp.fade;
-      for (const [r, c0, a0] of [[28, '60,160,255', 0.16], [15, '120,200,255', 0.34], [7, '235,250,255', 0.92], [3, '255,255,255', 1]]) {
+      for (const [r, c0, a0] of [[28, '20,140,255', 0.16], [15, '110,220,255', 0.34], [7, '235,250,255', 0.92], [3, '255,255,255', 1]]) {
         ctx.fillStyle = `rgba(${c0},${(a0 * f).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(hp.x, hp.y, lw * r * (0.55 + 0.45 * f), 0, Math.PI * 2); ctx.fill();
+      }
+      // THE HEAD CRACKLES (operator, 2026-09-13: "Did you copy the energy crackle from the grid
+      // effect, and add to the head of the energy ball travelling along the yellow price line?").
+      // It had not been. The crackle above is emitted per wire SEGMENT, gated on that segment's
+      // tint, so it lights the charged stretch BEHIND the head and -- this is the part that shows --
+      // cannot exist at all once the head runs off the last candle, because out there is no wire to
+      // hang it on. The ball spent its entire flight past the end as four bare discs.
+      //
+      // So this is the grid lightning ball's own vocabulary (drawBall, which strikes bolts from the
+      // ball to the crossings round it): bolts thrown OUTWARD from the head, re-rolled every frame,
+      // each drawn in the same three passes the wire crackle uses -- a wide dim halo, the arc, then
+      // a hot core stopping one leg short so it tapers to a point rather than ending in a stub.
+      // Struck from the rim of the bright core, not the centre, so the ball does not swallow them.
+      const R = lw * 7;
+      const bolts = 3 + ((Math.random() * 4 * f) | 0);
+      for (let k = 0; k < bolts; k++) {
+        const out = Math.random() * Math.PI * 2;
+        const reach = lw * (9 + Math.random() * 14) * (0.45 + 0.55 * f);
+        const legs = 5;
+        const bp = [{ x: hp.x + Math.cos(out) * R * 0.5, y: hp.y + Math.sin(out) * R * 0.5 }];
+        let bx = bp[0].x, by = bp[0].y;
+        for (let m = 0; m < legs; m++) {
+          // the same hard alternating zig as the wire's forks: a discharge kinks, it does not curve
+          const a = out + (m % 2 ? -1 : 1) * (0.3 + Math.random() * 0.5) + (Math.random() - 0.5) * 0.3;
+          const step = (reach / legs) * (1 - 0.15 * m);
+          bx += Math.cos(a) * step; by += Math.sin(a) * step;
+          bp.push({ x: bx, y: by });
+        }
+        const bolt = (upto, w, col) => {
+          ctx.strokeStyle = col; ctx.lineWidth = lw * w;
+          ctx.beginPath(); ctx.moveTo(bp[0].x, bp[0].y);
+          for (let m = 1; m <= upto; m++) ctx.lineTo(bp[m].x, bp[m].y);
+          ctx.stroke();
+        };
+        bolt(legs, 2.4, `rgba(70,190,255,${(0.32 * f).toFixed(3)})`);
+        bolt(legs, 0.95, `rgba(160,235,255,${(0.9 * f).toFixed(3)})`);
+        bolt(Math.max(1, legs - 1), 0.5, `rgba(250,255,255,${(0.95 * f).toFixed(3)})`);
       }
     }
   }

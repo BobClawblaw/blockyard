@@ -62,7 +62,18 @@ test('a board with a price line draws it plain yellow at rest', () => {
   board3d(h.canvas, TILES, { axes: AXES, gridW: 8, gridH: 8, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } });
   for (let i = 1; i <= 6; i++) h.step(i * 16);
   assert.ok(h.ops.some((o) => o.startsWith('set:strokeStyle=rgba(255,236,70,0.78)')), 'the yellow tube is stroked');
-  assert.ok(!h.ops.some((o) => o.startsWith('set:strokeStyle=rgba(110,200,255')), 'and nothing is blue before any pulse');
+  // NOTHING BLUE BEFORE A PULSE -- asserted against the mechanism, because the literal this used
+  // to pin (rgba(110,200,255) stopped being stroked directly the moment the tail became colour
+  // STOPS on a gradient, and changed again when the operator asked for brighter neon. A negative
+  // assertion on a string nothing emits any more is a guard that can only pass. The property it
+  // was always reaching for is this: at rest, no stop on any gradient is blue-dominant.
+  const isBlue = (c) => { const m = String(c).match(/rgba\((\d+),(\d+),(\d+)/); return !!m && Number(m[3]) > Number(m[1]); };
+  assert.equal(h.stops.some(([, c]) => isBlue(c)), false, 'and nothing is blue before any pulse');
+  // ...and that alone would pass because `stops` is EMPTY at rest, which is passing because nothing
+  // exists rather than because nothing is blue -- the same toothlessness as the literal it replaced.
+  // So the real property, which fails loudly if the line ever starts tinting itself with no pulse
+  // running: at rest the pipe is flat yellow and builds no gradient at all.
+  assert.equal(h.stops.length, 0, 'the resting line is flat colour, not a gradient waiting to be tinted');
 });
 
 test('triggering the pulse tints the line electric blue behind the head', () => {
@@ -118,6 +129,40 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=gradient('));
   assert.ok(firstCloud >= 0, 'the nebula is drawn');
   assert.ok(firstCloud < firstTube, 'and it is drawn behind the wire, not over it');
+});
+
+test('THE HEAD CARRIES ITS OWN CRACKLE, and still does past the end of the line', () => {
+  // (operator, 2026-09-13: "Did you copy the energy crackle from the grid effect, and add to the
+  // head of the energy ball travelling along the yellow price line?" -- it had not been done.)
+  //
+  // THE GAP THIS CLOSES, and why it was invisible in a still: the wire crackle is emitted per
+  // SEGMENT and gated on that segment's tint, so it lives on the charged stretch BEHIND the head.
+  // Once the head runs off the last candle there are no segments out there to hang a fork on, so
+  // the ball flew its whole overrun as four bare discs. Both halves are asserted here -- the head
+  // crackles on the wire, AND it keeps crackling where there is no wire, which is the half that
+  // was broken. The head's bolts carry their own literals, distinct from the wire's forks, so a
+  // pass here cannot be the wire's crackle being counted by mistake.
+  const HALO = 'set:strokeStyle=rgba(70,190,255';
+  const ARC = 'set:strokeStyle=rgba(160,235,255';
+  const CORE = 'set:strokeStyle=rgba(250,255,255';
+  const h = harness();
+  board3d(h.canvas, TILES, { axes: AXES, gridW: 8, gridH: 8, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } });
+  for (let i = 1; i <= 6; i++) h.step(i * 16);
+  harness.t = 1000;
+  assert.equal(triggerIdle(h.canvas, 'pulse'), true);
+
+  const onWire = (() => { const b = h.ops.length; h.step(1400); return h.ops.slice(b); })();
+  assert.ok(onWire.some((o) => o.startsWith(ARC)), 'the head throws bolts while it rides the line');
+  assert.ok(onWire.some((o) => o.startsWith(HALO)), 'each with a halo under it');
+  assert.ok(onWire.some((o) => o.startsWith(CORE)), 'and a hot core that stops short, so it tapers');
+
+  // PULSE_TRAVEL is 0.66 of a 7,000 ms effect, so the head reaches the last candle at ~4,620 ms
+  // and the overrun has it gone by ~6,190. 5,200 ms in is off the wire with roughly two thirds of
+  // its fade left -- exactly where the old head was four discs and nothing else.
+  const offEnd = (() => { const b = h.ops.length; h.step(6200); return h.ops.slice(b); })();
+  assert.ok(offEnd.some((o) => o.startsWith('set:fillStyle=rgba(235,250,255')), 'the head is still out there past the line');
+  assert.ok(offEnd.some((o) => o.startsWith(ARC)), 'and it is STILL crackling where there is no wire to crackle on');
+  assert.ok(offEnd.some((o) => o.startsWith(CORE)), 'core and all');
 });
 
 test('NOTHING BLINKS OUT AT THE END OF THE LINE: the head flies on and fades', async () => {
