@@ -124,6 +124,13 @@
       <div class="grid">
         <div data-sync-hero="overview"></div>
 
+        <!-- The markets summary, between the sync strip and Block flow (operator, 2026-09-13:
+             "We really need to squeeze this line into the top of the Overview"). Hidden unless
+             markets.overviewSummary is on: the figures need the exchange feed, and Overview is
+             the landing page -- see the note on that setting. Same class as the Markets page's
+             own line, and filled by the same summaryHtml(), so the two cannot drift. -->
+        <div class="mksum ovmksum" id="ovMkSummary" hidden></div>
+
         <!-- Two independent stacks (operator, 2026-09-11: "Still too much empty
              space here. Need to compress the mempool and fees view at the very
              least to sit side-by-side"). A shared grid row coupled the columns,

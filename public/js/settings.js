@@ -101,6 +101,16 @@ export const DEFAULTS = Object.freeze({
     // that answers "what is the price doing" at a glance, with axes and a crosshair. The board is
     // the showpiece, and it is one click away.
     priceView: '2d',     // '2d' (the flat chart) | '3d' (the candle board)
+    // THE SUMMARY LINE ON OVERVIEW (operator, 2026-09-13: "We really need to squeeze this line into
+    // the top of the Overview, between Sync status and Block Flow").
+    //
+    // OFF by default, and that is the whole point of it being a setting. Those four figures come
+    // from the full exchange feed, which is deliberately parked unless someone is on Markets or
+    // Kiosk -- and Overview is the page the app OPENS on. Defaulting this true would mean every
+    // deployment starts talking to five exchanges the moment anyone looks at it, which is exactly
+    // what docs/SECURITY.md promises it does not do. On, it is the operator's deliberate choice,
+    // and the outbound table says Overview counts as watching.
+    overviewSummary: false,
   }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
   // toggleable"). The keys are exactly details3d's FX_KINDS -- a test asserts the two lists match,
@@ -262,6 +272,12 @@ export const PANEL = Object.freeze([
       Object.freeze({
         key: 'range', label: 'Range', kind: 'choice', hint: 'How many hours the chart covers when the page opens',
         options: Object.freeze([['24', '24 hours'], ['48', '48 hours'], ['168', '7 days']]),
+      }),
+      Object.freeze({
+        key: 'overviewSummary', label: 'Price line on Overview', kind: 'toggle',
+        hint: 'Median, spread, 24 h volume and how many books reported, at the top of Overview. '
+          + 'Off by default: it needs the exchange feed, so turning it on means this monitor '
+          + 'contacts five exchanges whenever Overview is open, not only on Markets and Kiosk.',
       }),
       Object.freeze({
         key: 'priceView', label: 'Price view', kind: 'choice', hint: 'Which one the Markets page draws. Only one at a time — they show the same hours, and two tall panels of it filled the screen',

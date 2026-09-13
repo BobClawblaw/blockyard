@@ -14,7 +14,7 @@ import {
   SETTINGS_KEY, PANEL as SETTINGS_PANEL,
 } from './settings.js';
 import { renderExplorer } from './explorer.js';
-import { renderMarkets } from './markets.js';
+import { renderMarkets, summaryHtml as marketsSummaryHtml, REFRESH_MS as MARKETS_REFRESH_MS } from './markets.js';
 import { renderKiosk } from './kiosk.js';
 import { renderTetrust } from './tetrust.js';
 import { renderBlockout } from './blockout.js';
@@ -267,10 +267,27 @@ function expanded(s, sync, caveats) {
 
 // --------------------------------------------------------------- overview
 
+// The last /api/markets reply, for the Overview price strip. Module scope rather than `state`
+// because it is not node state and must not ride the SSE snapshot.
+let overviewMarkets = null;
+
 function renderOverview(s) {
   if (!s) return;
   document.querySelectorAll('[data-sync-hero]').forEach((box) => renderSyncHero(box, s));
   renderMiningOverview(s, state, helpers);
+
+  // THE PRICE STRIP, between the sync hero and Block flow (operator, 2026-09-13: "We really need
+  // to squeeze this line into the top of the Overview, between Sync status and Block Flow").
+  //
+  // Visibility only. NOTHING IS FETCHED HERE: render() runs on every SSE frame, about once a
+  // second, and a fetch on that path would poll five exchanges at 1 Hz. The data arrives on its
+  // own timer (see marketsStripTimer in boot), which is also where the setting gates the network.
+  const stripOn = !!loadSettings().markets?.overviewSummary;
+  const strip = document.getElementById('ovMkSummary');
+  if (strip) {
+    strip.hidden = !stripOn || !overviewMarkets;
+    if (stripOn && overviewMarkets) strip.innerHTML = marketsSummaryHtml(overviewMarkets, F);
+  }
 
   const mp = s.mempool ?? {};
   setText('ovMpCount', mp.count == null ? '–' : F.num(mp.count));
@@ -1133,6 +1150,21 @@ async function boot() {
   // Background collection, not foreground waiting. 20s keeps the charts filling
   // even if every SSE frame is lost, and only while the tab is actually visible.
   setInterval(() => { if (!document.hidden && !state.paused) backgroundRefresh(); }, 20_000);
+  // THE OVERVIEW PRICE STRIP'S OWN TIMER, and the one place its network cost is decided.
+  //
+  // GET /api/markets calls markets.touch() on the server, which is what starts the five-exchange
+  // polling -- so this must not run unless the operator switched the strip on. Turning it off
+  // stops asking, the server's feed parks itself after idleAfterMs, and the promise in
+  // docs/SECURITY.md holds again. Same cadence as the Markets page, and only while the tab is
+  // visible: a backgrounded tab has nobody reading the price.
+  const pullMarketsStrip = () => {
+    if (document.hidden || state.paused) return;
+    if (!loadSettings().markets?.overviewSummary) return;
+    if (state.page !== 'overview') return;      // Markets and Kiosk fetch their own
+    api('/api/markets').then((d) => { overviewMarkets = d; if (state.page === 'overview') render(); }).catch(() => {});
+  };
+  setInterval(pullMarketsStrip, MARKETS_REFRESH_MS);
+  pullMarketsStrip();
   // "Trigger Refresh Now" (operator, 2026-09-11: "a button for 'Trigger Refresh
   // Now' that is only enabled when the animation is idle"). A click makes the
   // viewer due at once and fetches; the ticker below keeps each button enabled

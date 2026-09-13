@@ -1349,6 +1349,29 @@ table.peertbl td { padding: 3px 7px; white-space: nowrap; }
 .mksum { display: flex; flex-wrap: wrap; gap: 6px 22px; font-family: var(--mono); font-size: 12px; align-items: baseline; }
 .mksum .k { color: var(--fg-faint); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin-right: 7px; }
 .mksum b { font-size: 16px; color: var(--fg); font-weight: 650; }
+
+/* The same line on Overview, squeezed (operator, 2026-09-13: "squeeze this line into the top of
+   the Overview, between Sync status and Block Flow"). It sits between two dense panels, so it is
+   tighter than the Markets page's copy and does not get a card of its own: it reads as a strip,
+   like the sync hero above it. */
+.ovmksum {
+  /* FULL WIDTH, like .ovcols. Without this it inherits the implicit placement of a .grid child --
+     one of twelve 1fr tracks, about 120px -- and because .mksum wraps, the four figures stacked
+     into a tall narrow column instead of a strip. The first cut shipped exactly that: a geometry
+     check confirmed the vertical ORDER (hero, strip, Block flow) and never measured the width,
+     which is the dimension that was wrong. */
+  grid-column: 1 / -1;
+  padding: 6px 12px;
+  margin: -2px 0 2px;
+  gap: 4px 20px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+.ovmksum b { font-size: 14px; }
+/* Each figure stays on one line: the label and its value are one unit, so "MEDIAN (USD)" must not
+   break across two rows the way it did at a twelfth of the width. */
+.ovmksum > span { white-space: nowrap; }
 /* `[hidden]`-style collapse for whichever price view is off: .hidden is display:none elsewhere in
    this sheet, but .mklayout sets `display: grid` on the same element, and a later display wins. */
 .mklayout.hidden { display: none; }
