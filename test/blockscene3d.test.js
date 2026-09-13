@@ -978,18 +978,38 @@ test('A TRAVELLING CUBE IS RE-RENDERED, not carried: its faces follow where it I
   assert.ok(flip.x > 10 && flip.x < W - 10, `and near the middle of the board, where the lean changes sign (x=${flip.x})`);
 });
 
-test('HOW MUCH A TRAVELLING CUBE RESHAPES -- the number per-corner work has to beat', () => {
+test('HOW MUCH A TRAVELLING CUBE RESHAPES -- and why per-corner projection is NOT the fix', () => {
   // The faces flip (test above), but the cube is still essentially CARRIED across the board rather
-  // than re-rendered: one settled lean shears the whole cube, so its SHAPE -- the top face measured
-  // about the cube's own centre, with position divided out -- changes by under two pixels over a
-  // full crossing, and the visible side face is a 0.6-3.4px sliver at its narrowest. That is why it
-  // reads as static in motion even though the face-set is correct.
+  // than re-rendered: its SHAPE -- the top face measured about the cube's own centre, with position
+  // divided out -- changes by under two pixels over a full crossing, and the visible side face is a
+  // 0.6-3.4px sliver at its narrowest. That is why it reads as static in motion even though the
+  // face-set is correct.
   //
-  // This records the shipped number rather than asserting it is good. It exists so that per-corner
-  // projection has a measurable target instead of an aesthetic argument, and so that a future change
-  // which makes the cube MORE static fails loudly. The flicker test below is the other half of the
-  // goal: per-corner drawing widens cubes with height, which changed the overlap set and took that
-  // test from 11 flickers to 25 when it was first attempted (reverted, 2026-09-13).
+  // PER-CORNER PROJECTION WAS TRIED TWICE AND DOES NOT FIX IT. Measured on this exact fixture with
+  // one variable changed:
+  //
+  //     per-corner   shape drift 1.78px, top width 32.3..34.1px (wobbles by 1.83)
+  //     pinned lean  shape drift 1.77px, top width 30.0px flat
+  //
+  // A hundredth of a pixel, bought at the price of a visibly wobbling cube. It also regressed the
+  // flicker test below from clean to 25 -- and that 25 is a FLOOR: replayed with that test's own
+  // hull and gate, the count was 198 flickers over 95 distinct pairs, 39 of them between cubes BOTH
+  // AT REST, which is the standing board churning rather than a departure artefact.
+  //
+  // THE 7.6px FIGURE THAT JUSTIFIED IT WAS MEASURING SOMETHING ELSE: a 6-unit cube at z=80 against
+  // a differently-centred reference, not anything a travelling cube does. It was quoted in a commit
+  // message and twice in conversation before anyone checked what it described. Recorded so the next
+  // person does not rediscover it as evidence.
+  //
+  // WHAT ACTUALLY MAKES IT STATIC: a travelling cube holds a CONSTANT lane height for the whole
+  // travel phase (measured: z=16.98, unchanging, for eleven seconds). Height is the only input the
+  // lean turns into visible change, so no amount of correctness in how corners lean can matter
+  // while z never moves. To make a cube visibly reshape as it crosses, vary its HEIGHT along the
+  // path -- an arc through travel instead of a flat lane. That makes the existing per-cube lean do
+  // real work and touches no ordering code, which is where the risk lives.
+  //
+  // This records the shipped number rather than asserting it is good, so a change that makes the
+  // cube MORE static fails loudly.
   const W = 44;
   const V = { unit: 10, zUnit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10, flight: 120 }, dome: 5,
     gridW: W, gridH: W, viewRect: { x0: -4, x1: W + 4, y0: -4, y1: W + 4 }, departures: 'normal' };
