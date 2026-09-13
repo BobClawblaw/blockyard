@@ -312,10 +312,32 @@ export function flowSvg(t, fmt, W = 1000) {
   const known = [...left, ...right].every((x) => Number.isFinite(x.value));
   const total = known ? Math.max(1, left.reduce((a, x) => a + x.value, 0), right.reduce((a, x) => a + x.value, 0) + (fee?.value ?? 0)) : 1;
   const thick = (x, n) => Math.max(MIN, known ? (x.value / total) * T : T / n);
-  const L = left.map((x) => ({ ...x, h: thick(x, left.length) }));
-  const Rt = right.map((x) => ({ ...x, h: thick(x, right.length) }));
-  const F = fee ? { ...fee, h: Math.max(1.5, known ? (fee.value / total) * T : 2) } : null;
   const sum = (xs) => xs.reduce((a, x) => a + x.h, 0);
+  const L0 = left.map((x) => ({ ...x, h: thick(x, left.length) }));
+  const R0 = right.map((x) => ({ ...x, h: thick(x, right.length) }));
+  const F0 = fee ? { ...fee, h: Math.max(1.5, known ? (fee.value / total) * T : 2) } : null;
+
+  // ONE RIVER, TWO BANKS THE SAME HEIGHT (operator, 2026-09-13: "how do we fix that broken seam in
+  // the middle so it smoothly transitions").
+  //
+  // The two halves of the trunk meet at x = W/2, and each used to be centred on its OWN total --
+  // the left on sum(L), the right on sum(R) + the fee. Those totals are equal in VALUE (in = out +
+  // fee, which is what `total` above is built from) but not in PIXELS, because MIN floors every
+  // band to 2px. Measured on the reported transaction -- one fat input, three dust outputs of
+  // 0.006px each floored to 2px -- the right bank gained 5.98px of padding the left never got, the
+  // two centre lines fell 3.7px apart, and the trunk stepped at the join on both edges.
+  //
+  // The clamp has to stay: a 0.006px band is invisible, and a dust output is still an output. So
+  // the surplus is spread instead of stepped. Each side is scaled to the same trunk height, which
+  // restores the invariant the picture is meant to show -- both banks of one river are the same
+  // height -- and makes the seam flush by construction rather than by luck. The distortion is the
+  // clamp's, not this: rescaling only stops one side carrying it alone.
+  const sumL0 = sum(L0), sumR0 = sum(R0) + (F0?.h ?? 0);
+  const trunk = Math.max(sumL0, sumR0);
+  const kL = sumL0 > 0 ? trunk / sumL0 : 1, kR = sumR0 > 0 ? trunk / sumR0 : 1;
+  const L = L0.map((x) => ({ ...x, h: x.h * kL }));
+  const Rt = R0.map((x) => ({ ...x, h: x.h * kR }));
+  const F = F0 ? { ...F0, h: F0.h * kR } : null;
   const span = (xs) => sum(xs) + GAP * Math.max(0, xs.length - 1);
   const feeRoom = F ? F.h + GAP * 2 : 0;
   const H = Math.ceil(Math.max(span(L), span(Rt) + feeRoom, T + 40) + PAD * 2);
@@ -329,7 +351,8 @@ export function flowSvg(t, fmt, W = 1000) {
   const fillOf = (k) => (k === 'cb' ? 'url(#xg-cb)' : k === 'nul' ? 'url(#xg-nul)' : k === 'more' ? 'url(#xg-more)' : 'url(#xg-flow)');
 
   // inputs: straight in from the edge, curving into the left half of the trunk
-  let y = (H - span(L)) / 2, c = (H - sum(L)) / 2;
+  // both banks start at the SAME trunk top, so the halves meet flush at x = W/2
+  let y = (H - span(L)) / 2, c = (H - trunk) / 2;
   const ins = L.map((x) => {
     const n = Math.min(14, x.h / 2 + 3);
     const d = `M0 ${r1(y)}L${r1(xa)} ${r1(y)}C${r1(cxL)} ${r1(y)} ${r1(cxL)} ${r1(c)} ${r1(xb)} ${r1(c)}L${r1(xm)} ${r1(c)}`
@@ -340,8 +363,7 @@ export function flowSvg(t, fmt, W = 1000) {
   }).join('');
 
   // the right half of the trunk: the fee on top, then the outputs
-  const trunkR = sum(Rt) + (F?.h ?? 0);
-  let cr = (H - trunkR) / 2;
+  let cr = (H - trunk) / 2;                 // the same top edge as the inputs: no step at the seam
   let feePath = '';
   if (F) {
     const top = PAD, xe = W * 0.97;

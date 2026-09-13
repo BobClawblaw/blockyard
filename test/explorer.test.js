@@ -218,6 +218,48 @@ test('the flow: a band per input, per output and for the fee, each a link, sized
   assert.doesNotMatch(cb, /xb-fee/, 'a coinbase pays no fee');
 });
 
+test('THE FLOW HAS NO SEAM: both banks of the trunk meet flush at the middle', () => {
+  // (operator, 2026-09-13, of a live transaction: "how do we fix that broken seam in the middle so
+  // it smoothly transitions".)
+  //
+  // The two halves meet at x = W/2 and each used to be centred on its OWN total -- the left on
+  // sum(inputs), the right on sum(outputs) + the fee. Those are equal in VALUE (in = out + fee) but
+  // not in PIXELS, because MIN floors every band to 2px. On the reported transaction -- one fat
+  // input and three dust outputs whose true shares were 0.006px each -- the right bank gained
+  // 5.98px of padding the left never got and the trunk stepped 3.7px at the join, on both edges.
+  //
+  // Nothing pinned the centring, which is why it shipped. This measures the rendered path data:
+  // every band crosses x = 500, so the inputs' span there must equal the fee+outputs' span.
+  const spanAt500 = (svg) => {
+    const side = { in: [Infinity, -Infinity], out: [Infinity, -Infinity] };
+    for (const [, cls, d] of svg.matchAll(/<path class="(xb-[a-z]+)" d="([^"]+)"/g)) {
+      const ys = [...d.matchAll(/[ML]500 (-?[\d.]+)/g)].map((m) => Number(m[1]));
+      if (!ys.length) continue;
+      const k = cls === 'xb-in' || cls === 'xb-cb' || cls === 'xb-more' ? 'in' : 'out';
+      side[k][0] = Math.min(side[k][0], ...ys);
+      side[k][1] = Math.max(side[k][1], ...ys);
+    }
+    return side;
+  };
+  const tx = (outs, feeSat) => ({
+    txid: TXA, vsize: 208, coinbase: false, fee: feeSat, outSat: outs.reduce((a, v) => a + v, 0),
+    vin: [{ txid: TXB, value: 0.15268988, address: 'bc1qsender', type: 'witness_v0_keyhash' }],
+    vout: outs.map((v, n) => ({ n, value: v, address: `bc1qout${n}`, type: 'witness_v0_keyhash' })),
+  });
+  // the shape that exposed it: dust outputs, each floored to MIN by the clamp
+  const dusty = spanAt500(flowSvg(tx([0.1523, 0.000006, 0.000006, 0.000006], 9000), fmt));
+  assert.ok(Math.abs(dusty.in[0] - dusty.out[0]) < 1e-6, `the trunk's top edge is flush (${dusty.in[0]} vs ${dusty.out[0]})`);
+  assert.ok(Math.abs(dusty.in[1] - dusty.out[1]) < 1e-6, `and its bottom edge too (${dusty.in[1]} vs ${dusty.out[1]})`);
+  // ...and the ordinary shapes, so the fix is not specific to dust
+  for (const [label, outs] of [['even', [0.0005, 0.0004]], ['single', [0.0009]], ['many', Array.from({ length: 6 }, () => 0.00015)]]) {
+    const s2 = spanAt500(flowSvg(tx(outs, 2000), fmt));
+    assert.ok(Math.abs(s2.in[0] - s2.out[0]) < 1e-6, `${label}: top edge flush`);
+    assert.ok(Math.abs(s2.in[1] - s2.out[1]) < 1e-6, `${label}: bottom edge flush`);
+  }
+  // the trunk is still a real height, not collapsed to nothing by the rescale
+  assert.ok(dusty.in[1] - dusty.in[0] > 100, `the trunk still has body (${(dusty.in[1] - dusty.in[0]).toFixed(1)}px)`);
+});
+
 test('blocks and transactions elsewhere in the app link into the explorer', () => {
   const src = (f) => readFileSync(new URL(`../public/js/${f}`, import.meta.url), 'utf8');
   assert.match(src('mining.js'), /href="#explorer\/block\/\$\{row\.height\}"/, 'the Block flow cards');
