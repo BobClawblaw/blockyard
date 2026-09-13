@@ -942,6 +942,83 @@ function outlinesOverlap(A, B, tol) {
   return true;
 }
 
+test('A TRAVELLING CUBE IS RE-RENDERED, not carried: its faces follow where it IS', () => {
+  // (operator, 2026-09-13: "if it starts on the left side, I would expect to see it's right face.
+  // if it translates right all the way, at the end of the movement, I should see the left side of
+  // the face ... I want to see blocks being redrawn every frame with proper perspective adjusting.")
+  //
+  // This is the property, pinned on the REAL transition path rather than on a scalar: replay a cube
+  // crossing the whole board and watch which faces are drawn.
+  const W = 44;
+  const V = { unit: 10, zUnit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10, flight: 120 }, dome: 5,
+    gridW: W, gridH: W, viewRect: { x0: -4, x1: W + 4, y0: -4, y1: W + 4 }, departures: 'normal' };
+  const before = [{ txid: 'mover', x: 2, y: 20, s: 3, tall: 3, color: '#33cc99', rate: 9 },
+                  { txid: 'anchor', x: 20, y: 2, s: 2, tall: 2, color: '#cc9933', rate: 5 }];
+  const after = [{ txid: 'mover', x: 38, y: 20, s: 3, tall: 3, color: '#33cc99', rate: 9 },
+                 { txid: 'anchor', x: 20, y: 2, s: 2, tall: 2, color: '#cc9933', rate: 5 }];
+  const plan = planTransition(before, after, { now: 0, gridN: W });
+  const seen = [];
+  for (let t = 0; t <= plan.settleAt; t += 200) {
+    const f = frameAt(plan, t, V);
+    const tile = (f.tiles ?? []).find((q) => q.txid === 'mover');
+    if (!tile) continue;
+    const keys = tileFaces(tile, V).sides.map((sd) => sd.key).sort().join('+');
+    if (keys !== seen[seen.length - 1]?.keys) seen.push({ t, x: tile.x + tile.s / 2, keys });
+  }
+  // it starts on the left half showing its RIGHT face...
+  assert.match(seen[0].keys, /right/, `starts showing its right face (${seen[0].keys} at x=${seen[0].x})`);
+  assert.doesNotMatch(seen[0].keys, /left/, 'and not its left one');
+  // ...and ends on the right half showing its LEFT face
+  const last = seen[seen.length - 1];
+  assert.match(last.keys, /left/, `ends showing its left face (${last.keys} at x=${last.x})`);
+  assert.doesNotMatch(last.keys, /right/, 'and not its right one');
+  // the change happens WHILE IT TRAVELS, not at the moment it lands
+  const flip = seen.find((r) => /left/.test(r.keys));
+  assert.ok(flip.t < plan.phases.travel, `the faces swap during travel (t=${flip.t} of ${plan.phases.travel})`);
+  assert.ok(flip.x > 10 && flip.x < W - 10, `and near the middle of the board, where the lean changes sign (x=${flip.x})`);
+});
+
+test('HOW MUCH A TRAVELLING CUBE RESHAPES -- the number per-corner work has to beat', () => {
+  // The faces flip (test above), but the cube is still essentially CARRIED across the board rather
+  // than re-rendered: one settled lean shears the whole cube, so its SHAPE -- the top face measured
+  // about the cube's own centre, with position divided out -- changes by under two pixels over a
+  // full crossing, and the visible side face is a 0.6-3.4px sliver at its narrowest. That is why it
+  // reads as static in motion even though the face-set is correct.
+  //
+  // This records the shipped number rather than asserting it is good. It exists so that per-corner
+  // projection has a measurable target instead of an aesthetic argument, and so that a future change
+  // which makes the cube MORE static fails loudly. The flicker test below is the other half of the
+  // goal: per-corner drawing widens cubes with height, which changed the overlap set and took that
+  // test from 11 flickers to 25 when it was first attempted (reverted, 2026-09-13).
+  const W = 44;
+  const V = { unit: 10, zUnit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10, flight: 120 }, dome: 5,
+    gridW: W, gridH: W, viewRect: { x0: -4, x1: W + 4, y0: -4, y1: W + 4 }, departures: 'normal' };
+  const before = [{ txid: 'mover', x: 2, y: 20, s: 3, tall: 3, color: '#33cc99', rate: 9 },
+                  { txid: 'anchor', x: 20, y: 2, s: 2, tall: 2, color: '#cc9933', rate: 5 }];
+  const after = [{ txid: 'mover', x: 38, y: 20, s: 3, tall: 3, color: '#33cc99', rate: 9 },
+                 { txid: 'anchor', x: 20, y: 2, s: 2, tall: 2, color: '#cc9933', rate: 5 }];
+  const plan = planTransition(before, after, { now: 0, gridN: W });
+  const shapeOf = (tile) => {
+    const f = tileFaces(tile, V);
+    const c = f.top.reduce((a, p) => ({ x: a.x + p.x / 4, y: a.y + p.y / 4 }), { x: 0, y: 0 });
+    return f.top.map((p) => ({ x: p.x - c.x, y: p.y - c.y }));
+  };
+  let first = null, drift = 0;
+  for (let t = plan.phases.rise; t <= plan.phases.travel; t += 200) {
+    const f = frameAt(plan, t, V);
+    const tile = (f.tiles ?? []).find((q) => q.txid === 'mover');
+    if (!tile) continue;
+    const sh = shapeOf(tile);
+    first ??= sh;
+    drift = Math.max(drift, ...sh.map((p, i) => Math.hypot(p.x - first[i].x, p.y - first[i].y)));
+  }
+  // the shipped value is ~1.8px. Held loosely on both sides: it must not silently collapse toward
+  // zero (a cube that never reshapes at all), and the ceiling is here so that when per-corner
+  // projection lands, this assertion is what has to be rewritten -- deliberately, with a new number.
+  assert.ok(drift > 0.5, `a travelling cube does reshape somewhat (${drift.toFixed(2)}px)`);
+  assert.ok(drift < 4, `and the shipped shear is small -- this is the number to beat (${drift.toFixed(2)}px)`);
+});
+
 test('the paint order does not flicker: no overlapping pair swaps back and forth', () => {
   // (operator, 2026-09-11: "still too much z fighting with smaller blocks rendering
   // behind larger blocks"). Replay a whole transition through the panel's camera
