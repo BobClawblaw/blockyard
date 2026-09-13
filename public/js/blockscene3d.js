@@ -1015,8 +1015,12 @@ export function fxAt(t, fx) {
 // "the black outlines for disappearing blocks do not fade out"). The stroke
 // now travels on the op as rgba scaled by the same alpha.
 // THE DENSE BOARD'S ORDER (Viewer Mode 2): thousands of low slabs whose footprints never overlap.
-// Under the oblique camera a slab's height leans up and to the right, so it can only cover what
-// lies further along that diagonal: resting slabs paint from the far corner in, the airborne
+// Under the oblique camera a slab's height leans STRAIGHT UP -- measured 2026-09-13: +1 of height
+// moves screen x by 0.00 and y by -3.06, and +1 of grid x moves screen x by 9.00 and y by 0.00.
+// So depth is grid Y alone; x contributes nothing to what can occlude what. (This comment used to
+// say "up and to the right", which is a leftover from an earlier camera and sent an investigation
+// of a paint-order report down the wrong path for an hour.) Resting slabs paint far row first, the
+// airborne
 // after them, lowest first. Linear-log where obliqueOrder's pairwise tests are quadratic -- at
 // 4,000 transactions that is the difference between a frame and a stall.
 export function diagonalOrder(tiles) {
@@ -1035,9 +1039,9 @@ export function buildScene(tiles, o = {}) {
   const vx0 = o.vanishX ?? 0, vy0 = o.vanishY ?? 0;
   const ordered = o.oblique && o.order === 'diagonal' ? diagonalOrder(tiles) : o.oblique ? obliqueOrder(tiles, o) : tiles.map((t) => (growth.has(t) ? { ...t, boost: growth.get(t) } : t))
     .map((t) => { const c = project(t.x + t.s / 2, t.y + t.s / 2, 0, o); return { t, top: (t.z ?? 0) + (t.floor ?? 0) + cubeHeight(t), d: Math.hypot(c.x - vx0, c.y - vy0) }; })
-    // Under the oblique camera a cube reaches up and to the right of its
-    // footprint, so it can only cover blocks further up-right: paint along the
-    // diagonal from the far corner, the airborne after the resting and lowest
+    // Under the oblique camera a cube reaches STRAIGHT UP from its footprint (measured: height
+    // moves screen y only, grid x moves screen x only), so it can only cover blocks at smaller
+    // grid y: paint from the far row in, the airborne after the resting and lowest
     // first. A fixed order -- nothing flips as blocks rise and fall past each
     // other at nearly the same height, which was the "z-fighting".
     .sort((p, q) => (p.top - q.top) || (q.d - p.d) || String(p.t.txid).localeCompare(String(q.t.txid)))
