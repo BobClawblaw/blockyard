@@ -722,18 +722,33 @@ defineAgent('centipede', {
     const c = view.fx?.centipede;
     if (!c) return;
     const U = view.unit ?? 8;
+    // BIG ENOUGH TO BE A BODY, not a row of lit cubes. The first cut drew each segment at about
+    // one cube wide in the board's own green, so on a field of 3,700 green cubes it read as
+    // highlighting rather than as a creature crawling over them -- verified on the live board.
+    // Now: segments half again as large, a SPINE joining them so the body is one thing, and a
+    // magenta-red that nothing else on this board wears.
+    const pts = c.body.map((b) => project(b.x, b.y, 1.2, view));
+    for (let i = 1; i < pts.length; i++) {
+      // the spine only joins segments that are actually adjacent -- after the split the two halves
+      // are far apart, and a line between them would draw the creature back together
+      const gap = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      if (gap > U * 3.5) continue;
+      line(ctx, [pts[i - 1], pts[i]], 'rgba(180,60,120,0.55)', U * 1.15);
+    }
     for (let i = c.body.length - 1; i >= 0; i--) {
       const b = c.body[i];
-      const p = project(b.x, b.y, 1, view);
-      bloom(ctx, p.x, p.y, U * (b.head ? 1.15 : 0.85), b.head ? [255, 225, 120] : [110, 225, 130], b.head ? 0.95 : 0.7);
+      const p = pts[i];
+      const r = U * (b.head ? 1.75 : 1.25);
+      bloom(ctx, p.x, p.y, r, b.head ? [255, 210, 90] : [235, 90, 150], b.head ? 1 : 0.9);
+      // a hard rim, so a segment has an edge against a bright cube instead of dissolving into it
+      ring(ctx, p.x, p.y, r * 0.55, b.head ? 'rgba(255,245,210,0.9)' : 'rgba(255,190,225,0.75)', lw * 2);
       if (b.head) {
-        for (const o of [-0.32, 0.32]) {
-          ctx.fillStyle = 'rgba(20,14,6,0.95)';
-          ctx.beginPath(); ctx.arc(p.x + o * U * 0.5, p.y - U * 0.2, U * 0.17, 0, Math.PI * 2); ctx.fill();
+        for (const o of [-0.34, 0.34]) {
+          ctx.fillStyle = 'rgba(25,10,20,0.95)';
+          ctx.beginPath(); ctx.arc(p.x + o * U * 0.62, p.y - U * 0.26, U * 0.22, 0, Math.PI * 2); ctx.fill();
         }
       }
     }
-    void lw;
   },
 });
 

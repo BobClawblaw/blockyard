@@ -266,7 +266,14 @@ uses `lift`, and it is data-aware: it takes the tallest transaction on the board
 
 Fourteen agents now. `test/agents.test.js` holds every one of them to the same contract -- builds,
 frames, draws, publishes heads, replays from a seed, and leaves the board's tiles untouched -- so a
-new batch is checked against all of it the moment it is registered. They live in
+new batch is checked against all of it the moment it is registered.
+
+A third lesson, from verifying batch two: **a four-phase capture is not enough to judge an effect.**
+Pac-Man was written up as "did not appear at all" on the strength of one frame; captured every
+500 ms instead, all five characters are plainly there -- the wedge mid-board with its mouth open
+and four ghosts in the corners, eyes tracking him. The effect was fine and the *photograph* was
+mistimed, which is the same mistake twice now (bomberman spends its first 35% walking). Capture
+across the whole run, or do not draw a conclusion. They live in
 `public/js/agents.js` behind the registry described below; `test/agents.test.js` drives the real
 build/frame/draw path for every registered kind.
 
