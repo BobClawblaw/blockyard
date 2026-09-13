@@ -214,7 +214,9 @@ function drawSky() {
 function draw(now = performance.now()) {
   const g = G.game;
   const well = el('tetWell');
-  el('tetWellWrap')?.classList.toggle('idle', !g);   // the board is drawn when you hit play
+  el('tetWellWrap')?.classList.toggle('idle', !g);
+  // the board is drawn when you hit play: `.tetwell.idle` is visibility:hidden, so an idle well is
+  // off screen and painting it would be a board3d pass for nothing
   if (well && g) board3d(well, [...tiles(g, tetrustOptions(loadSettings()).ghostColour), ...driftTiles(G.drift, now)], opts(WELL));
   // the preview only when the next piece changes: it is a second board, and redrawing it on
   // every key press was paying for two scenes per move

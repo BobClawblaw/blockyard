@@ -467,7 +467,38 @@ export function gridColours(hex, brightness = 1) {
 export function courtGridColours(hex, brightness = 1, alpha = 0.18) {
   const base = rgbOf(hex, [60, 200, 140]);
   const k = clamp(brightness, 0, 2, 1);
-  return { neonCell: rgbaOf(base, alpha * k), neonHalo: 'rgba(0,0,0,0)', gridGlow: 'rgba(0,0,0,0)' };
+  // THE KEYS THE FLOOR ACTUALLY DRAWS WITH. This used to set neonCell, neonHalo and gridGlow only
+  // -- and on a `space` board the visible grid is NOT neonCell. details3d strokes the floor twice:
+  // `gridGlow` wide and faint, then `gridColor` thin and bright, with `gridEdgeColor` round the
+  // board's rim. neonCell feeds boardGridLayers, a different layer. So the picker recoloured
+  // something invisible while gridColor kept the engine's default green, and the slider scaled an
+  // alpha nobody could see: measured, red-at-1 against blue-at-2 differed in neonCell and in
+  // nothing else. That is the whole of "the slider does not update the games grid".
+  //
+  // The courts stay QUIET, which is the part worth keeping: the lit ring and the wide halo are the
+  // board's treatment, not a playfield's. The line is the chosen colour, the glow under it is the
+  // same colour at a fraction of the alpha, and the rim is a touch brighter so the court still has
+  // an edge. Everything scales with `alpha` (the court's own weight) and `k` (the operator's).
+  const lit = liftRgb(base, 0.35);
+  // `neonLine` IS THE COURT'S GRID. boardGridLayers splits the lattice with
+  // `(i % gridStep ? cell : line)`: cells take `neonCell`, every gridStep-th line takes `neonLine`.
+  // The courts set gridStep: 1, so `i % 1` is always 0 -- EVERY line takes neonLine and neonCell is
+  // never used on a court at all. Omitting neonLine left the whole lattice at the engine default
+  // rgba(170,255,210,1), an opaque pale green, while the rim obediently changed colour: "grid color
+  // only seems to affect the border, not the grid itself for the games. I can't change the entire
+  // grid color from green."
+  // It is stroked at a higher alpha than the cell lines because it is the ONLY line on these
+  // boards -- at 0.18 the court would be a whisper -- and it is the colour that was picked, not a
+  // lifted one, so what is chosen is what is seen.
+  return {
+    neonLine: rgbaOf(base, Math.min(1, alpha * 3.6 * k)),
+    gridColor: rgbaOf(base, alpha * k),
+    gridGlow: rgbaOf(base, alpha * 0.35 * k),
+    gridEdgeColor: rgbaOf(lit, Math.min(1, alpha * 3.2 * k)),
+    neonCell: rgbaOf(base, alpha * k),
+    neonHalo: 'rgba(0,0,0,0)',
+    neonGlow: 'rgba(0,0,0,0)',
+  };
 }
 
 /**

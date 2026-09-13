@@ -170,6 +170,9 @@ function draw(now = performance.now()) {
   const g = G.game;
   const court = el('baWell');
   el('baWellWrap')?.classList.toggle('idle', !g);
+  // Only with a game on: `.tetwell.idle` is `visibility: hidden`, so an idle court is not on screen
+  // and painting it would be a full board3d pass for a canvas nobody can see. (Tried the other way
+  // to make a grid-colour change previewable before pressing play; it cannot be seen either way.)
   if (court && g) board3d(court, [...tiles(g), ...debrisTiles(G.debris, now)], opts(COURT));
   drawStats();
 }

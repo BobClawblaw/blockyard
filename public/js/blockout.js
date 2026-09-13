@@ -183,6 +183,8 @@ function draw(now = performance.now()) {
   const g = G.game;
   const court = el('boWell');
   el('boWellWrap')?.classList.toggle('idle', !g);
+  // only with a game on: `.tetwell.idle` is visibility:hidden, so an idle court cannot be seen and
+  // painting it would be a board3d pass thrown away
   if (court && g) board3d(court, [...tiles(g), ...debrisTiles(G.debris, now)], opts(COURT));
   drawStats();
 }

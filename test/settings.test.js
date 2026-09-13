@@ -548,10 +548,38 @@ test('a court\'s grid keeps the exact colour it was hand-tuned to, at its own we
   // reproduce them exactly, not approximately.
   assert.equal(courtGridColours('#3cc88c', 1, 0.18).neonCell, 'rgba(60,200,140,0.18)');
   assert.equal(courtGridColours('#3cc88c', 1, 0.06).neonCell, 'rgba(60,200,140,0.06)');
-  // the courts silence the ring layers outright: a lit lattice under the pieces is noise
+  // the courts keep the board's LIT RING off: a glowing lattice under the pieces is noise
   const c = courtGridColours('#3cc88c', 1, 0.18);
   assert.equal(c.neonHalo, 'rgba(0,0,0,0)');
-  assert.equal(c.gridGlow, 'rgba(0,0,0,0)');
+  assert.equal(c.neonGlow, 'rgba(0,0,0,0)');
+
+  // THE KEYS THE FLOOR ACTUALLY STROKES. This test used to check `neonCell` and then assert
+  // gridGlow was transparent -- and passed for weeks while the operator's colour picker and
+  // intensity slider did nothing visible on a game court ("Grid intensity setting slider or color
+  // is not updating the games grid"). On a `space` board details3d strokes the floor with
+  // `gridGlow` (wide, faint) then `gridColor` (thin, bright), and rims it with `gridEdgeColor`;
+  // `neonCell` belongs to a different layer. Pinning only neonCell pinned the invisible one.
+  for (const key of ['gridColor', 'gridGlow', 'gridEdgeColor', 'neonLine']) {
+    assert.ok(c[key], `${key} must be set: it is what the floor is drawn with`);
+  }
+  // `neonLine` IS THE COURT'S LATTICE, and it is the key this test was missing. boardGridLayers
+  // splits lines with `(i % gridStep ? neonCell : neonLine)`, and every court sets gridStep: 1 --
+  // so `i % 1` is always 0, EVERY line is a neonLine, and neonCell strokes nothing at all. The
+  // earlier version of this test pinned gridColor/gridGlow/gridEdgeColor and passed while the whole
+  // grid stayed the engine's default green: only the rim changed colour, which is exactly what the
+  // operator saw. Asserted first, because it is the one that matters.
+  assert.equal(courtGridColours('#ff0000', 1, 0.18).neonLine, 'rgba(255,0,0,0.648)',
+    'the lattice takes the chosen colour');
+  assert.equal(courtGridColours('#ff0000', 0, 0.18).neonLine, 'rgba(255,0,0,0)',
+    'and intensity 0 takes it away');
+
+  // ...and every stroked key has to MOVE with the setting, which is the whole of the bug.
+  const red = courtGridColours('#ff0000', 1, 0.18);
+  const blue = courtGridColours('#0000ff', 2, 0.18);
+  for (const key of ['neonLine', 'gridColor', 'gridGlow', 'gridEdgeColor', 'neonCell']) {
+    assert.notEqual(red[key], blue[key], `${key} must differ between two settings, or nothing on screen changes`);
+  }
+  assert.equal(red.gridColor, 'rgba(255,0,0,0.18)', 'the line is the colour that was picked');
 });
 
 test('the board\'s grid saturates rather than greys, and its solid lines stay where they were', () => {
