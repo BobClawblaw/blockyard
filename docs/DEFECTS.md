@@ -278,9 +278,11 @@ Kept as checked rather than deleted, so nobody re-derives them.
 
 ## Functional gaps
 
-- [ ] **Address history: Core has no index, so the explorer builds its own — what is left is the
-  UTXO list and the mempool view.** Found 2026-09-13 as "no address index, and cannot have one
-  from Core". `getaddressbalance` and `getaddresstxids` are insight-style extensions
+- [x] **Address history and balances on Bitcoin Core: resolved by an index of our own.** Found
+  2026-09-13 as "no address index, and cannot have one from Core"; closed 2026-09-14 by
+  `server/chain/index/` -- built from the node's block files, kept current by a follower, checked
+  to the satoshi against `scantxoutset` (MEASUREMENTS §30), reached by `npm run setup`. The two
+  things an address page still lacks are their own entry below. The record of how it got here: `getaddressbalance` and `getaddresstxids` are insight-style extensions
   that Bitcoin Core has never carried at any setting; measured against both configured
   nodes — an Umbrel and the local Core — each answers `Method not found`. mempool.space
   shows balance, total received, UTXO counts and a balance history for the same address
@@ -301,7 +303,6 @@ Kept as checked rather than deleted, so nobody re-derives them.
   into immutable layers and merges layers past 32. Checked live: caught 12 blocks up in 6.5 s, then
   40 of 40 balances equal `scantxoutset` at that tip, 38 of those addresses having rows only in the
   new tail. A reorganisation below what is folded stops the follower and the page says to rebuild.
-  **Not yet:** no UTXO list and no mempool view.
   **The dead RPCs are no longer sent on every view** (2026-09-14). `xAddress` remembers a
   "method not found" per node and skips `getaddressbalance`/`getaddresstxids` for
   `INDEX_RECHECK_MS` (10 minutes), then asks again, because the daemon behind a node id can
@@ -310,7 +311,9 @@ Kept as checked rather than deleted, so nobody re-derives them.
   calls; views 2 and 3 send `validateaddress` alone, with the same page result
   (`indexed: false`, `txCount: null`).
 
-- [ ] **We can read the block files after all — `-blocksxor`, not an unknown format.**
+- [x] **We can read the block files after all — `-blocksxor`, not an unknown format.** This finding
+  became the index build (`server/chain/blockfile.js`, `server/chain/index/build.js`): closed the
+  same day it was opened, 2026-09-14, and kept for the numbers.
   Found 2026-09-14, correcting a wrong conclusion reached the same day. Every
   `blk*.dat` on the local node opens with `1c33dfa8` rather than the mainnet magic
   `f9beb4d9`, and a 126.5 MB file contains **zero** occurrences of any network magic,
@@ -337,6 +340,14 @@ Kept as checked rather than deleted, so nobody re-derives them.
   input's spent output, checked against `getblock <hash> 3` with zero mismatches, so the
   spending side needs no UTXO replay.
 
+- [ ] **An address page has no unspent-output list and no mempool transactions.** The index
+  (above) carries one row per confirmed transaction with its net amount, so a balance and a
+  history are sums over it; which of an address's outputs are still unspent is not in it, and
+  a transaction still in the mempool is not either. `balance.utxos` is `null` and the page says
+  unconfirmed transactions are not included. Both need a design: an unspent flag per row would
+  need every spend to update the row it spends, which the append-only layers do not do cheaply;
+  the mempool view needs the follower to watch `getrawmempool` for the address's scripts.
+
 - [ ] **The explorer pays roughly 3–5x for verbose RPC it re-parses anyway.** Measured
   2026-09-13/14. `fetchTxs` fetches up to 25 transactions per page with
   `getrawtransaction <txid> 2`, and `xBlock` adds `getblock <hash> 1` plus
@@ -354,6 +365,9 @@ Kept as checked rather than deleted, so nobody re-derives them.
   124,129 outputs, zero disagreements. **The explorer does not use it yet**: raw bytes carry
   no prevout values or addresses, so fees and input addresses still need the spent
   outputs from somewhere, and choosing that source is the open part.
+  **Narrowed 2026-09-14:** the address page no longer asks the node for an address's history at
+  all -- the index supplies every (block, position, net amount) and the page fetches only the 25
+  transactions it shows, still at verbosity 2. Transaction and block pages are as measured.
 
 - [ ] **The transaction cache does not survive a restart.** `server/http/explorer.js`
   keeps a 3,000-entry in-memory LRU of confirmed transactions and nothing else. Every

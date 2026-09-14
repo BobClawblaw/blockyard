@@ -408,7 +408,7 @@ The smoke count is the one number here that is still typed by hand (60 before
 2026-09-09; the new checks cover the build stamp, CSP nonce, login throttle,
 drill-down routes, audit budget and breaker telemetry).
 
-Still open as of 2026-09-09: see `docs/DEFECTS.md` — six items then (eleven today), and each one says why it is still open.
+Still open as of 2026-09-09: see `docs/DEFECTS.md` — six items then (ten today), and each one says why it is still open.
 Four are node-side (mempool add/remove stream needs the `zmqpubsequence` the node
 refuses; per-peer byte and relay counts are not in `getpeerinfo` on the deployed
 build; the restart storm belongs to whoever owns the deploy). One is a deliberate
