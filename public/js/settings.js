@@ -329,14 +329,17 @@ const noRepeatRow = (max) => Object.freeze({ key: 'noRepeat', label: 'No repeats
 // THE CADENCE SLIDERS, on both tabs: how long the board rests between effects, as a random span
 // between a floor and a ceiling, and how soon the first one comes after the board lands. Ten
 // minutes is the top: an operator who wants a still board has the switches and all off.
-const CADENCE_ROWS = Object.freeze([
-  Object.freeze({ key: 'pauseMin', label: 'Between effects, at least', kind: 'range', min: 1, max: 600, step: 1, hint: 'Seconds the board rests after one effect before the next may start. The wait is a random span between this and the ceiling below; if this is set above the ceiling, the two swap' }),
-  Object.freeze({ key: 'pauseMax', label: 'Between effects, at most', kind: 'range', min: 1, max: 600, step: 1, hint: 'The ceiling on that wait, in seconds. Set both high for an effect only now and then; set both low for a busy board' }),
+// `top`: the sliders' ceiling in seconds -- ten minutes on the block board, five on the candle board
+// (operator, 2026-09-14: "600 seconds is too long for the market effects time sliders. Have the
+// range on the bars be between 1 and 300 seconds")
+const cadenceRows = (top) => Object.freeze([
+  Object.freeze({ key: 'pauseMin', label: 'Between effects, at least', kind: 'range', min: 1, max: top, step: 1, hint: 'Seconds the board rests after one effect before the next may start. The wait is a random span between this and the ceiling below; if this is set above the ceiling, the two swap' }),
+  Object.freeze({ key: 'pauseMax', label: 'Between effects, at most', kind: 'range', min: 1, max: top, step: 1, hint: 'The ceiling on that wait, in seconds. Set both high for an effect only now and then; set both low for a busy board' }),
 ]);
 // only the block board lands (the flight when the pool changes); the candle board has no landing
 // to time from, so it gets the two sliders and its first effect after a refresh keeps the cadence
 const LANDING_ROW = Object.freeze({ key: 'firstAfter', label: 'First effect after landing', kind: 'range', min: 0, max: 120, step: 0.1, hint: 'Seconds after the blocks land before the first effect, give or take a third. The board re-lays on every refresh, so this is also how soon one follows each refresh' });
-const fxRows = (keys, hintFor = {}, { landing = true } = {}) => Object.freeze([noRepeatRow(keys.length), ...CADENCE_ROWS, ...(landing ? [LANDING_ROW] : []), ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
+const fxRows = (keys, hintFor = {}, { landing = true, top = 600 } = {}) => Object.freeze([noRepeatRow(keys.length), ...cadenceRows(top), ...(landing ? [LANDING_ROW] : []), ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
 
 /** The scheduler's timers from a group's sliders, in ms: [floor, ceiling] between effects, and the first after landing (the same span where the board has no landing). */
 export function fxCadence(g) {
@@ -512,7 +515,7 @@ export const PANEL = Object.freeze([
     bulk: true,
     rows: fxRows([
       'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball',
-    ], MARKET_HINT, { landing: false }),
+    ], MARKET_HINT, { landing: false, top: 300 }),
   }),
   Object.freeze({
     group: 'tetrust',

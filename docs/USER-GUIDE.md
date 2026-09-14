@@ -949,7 +949,7 @@ default; 0 allows a repeat straight away).
 
 Each tab also sets **its board's cadence**: **Between effects, at least** and **Between
 effects, at most** (seconds; the board rests a random span between the two after each effect
-— 5 to 9 by default, up to ten minutes each; set the floor above the ceiling and they swap).
+— 5 to 9 by default, up to ten minutes each on Space effects and five on Market effects; set the floor above the ceiling and they swap).
 The Space effects tab has one more, **First effect after landing** (seconds, give or take a
 third, before the first effect once the blocks land — 1.2 by default, up to two minutes; the
 board re-lays on every refresh, so this is also how soon one follows each refresh). The candle

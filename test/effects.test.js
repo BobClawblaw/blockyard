@@ -240,7 +240,8 @@ test('the cadence sliders: each effects tab sets how long its board rests betwee
   for (const group of ['effects', 'marketEffects']) {
     const rows = PANEL.find((g) => g.group === group).rows;
     for (const key of ['pauseMin', 'pauseMax']) assert.equal(rows.find((r) => r.key === key)?.kind, 'range', `${group}: a ${key} slider`);
-    assert.equal(rows.find((r) => r.key === 'pauseMax').max, 600, `${group}: up to ten minutes between effects`);
+    assert.equal(rows.find((r) => r.key === 'pauseMax').max, group === 'effects' ? 600 : 300, `${group}: up to ten minutes between effects on the block board, five on the candle board`);
+    assert.equal(rows.find((r) => r.key === 'pauseMin').max, rows.find((r) => r.key === 'pauseMax').max);
     assert.deepEqual(fxCadence(DEFAULTS[group]).idleEvery, [5000, 9000], `${group}: the defaults reproduce the cadence there was`);
   }
   // ONLY THE BLOCK BOARD LANDS (operator: "there is no 'landing' for the markets display"): its tab
@@ -255,6 +256,7 @@ test('the cadence sliders: each effects tab sets how long its board rests betwee
   const slow = { effects: { pauseMin: 120, pauseMax: 600, firstAfter: 30 }, marketEffects: { pauseMin: 45, pauseMax: 20 } };
   assert.deepEqual(spaceOptions(slow).idleEvery, [120000, 600000]); assert.deepEqual(spaceOptions(slow).idleFirst, [20000, 40000]);
   assert.deepEqual(marketsOptions(slow).idleEvery, [20000, 45000]); assert.deepEqual(marketsOptions(slow).idleFirst, [20000, 45000]);
+  assert.deepEqual(marketsOptions({ marketEffects: { pauseMin: 1, pauseMax: 9999 } }).idleEvery, [1000, 300000], 'the candle board clamps at five minutes');
   // clamped to the sliders' own ranges
   assert.deepEqual(spaceOptions({ effects: { pauseMin: 9999, pauseMax: -4, firstAfter: 500 } }).idleEvery, [1000, 600000]);
 });
