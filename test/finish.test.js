@@ -212,3 +212,32 @@ test('a sphere tile is drawn round: nested discs, no cube faces', () => {
   assert.ok(cube.some((op) => op.face === 'top'), 'a tile without the flag keeps its faces');
   assert.ok(!cube.some((op) => op.face === 'ball'));
 });
+
+test('CHROME mirrors a horizon that differs from cube to cube and moves with the cube, and keeps the fee colour', () => {
+  // (operator, 2026-09-14: "make the specular metallic effect more prominent. Maybe give it a chrome
+  // or faux reflective effect ... really improve the metallic look")
+  const alpha = (fill) => Number(fill.match(/,([\d.]+)\)$/)[1]);
+  const chrome = (tiles) => buildScene(tiles, { ...O, sheen: true, sheenStyle: 'chrome' }).ops.filter((op) => op.face === 'sheen');
+  const s = chrome(TILES);
+  assert.ok(s.length > faces({ sheen: true }, 'sheen').length * 0.5, 'a real finish, not a token one');
+  // the horizon: a near-opaque white line across the top face
+  const horizonOf = (ops, id) => ops.find((op) => op.txid === id && op.fill.startsWith('rgba(255,255,255') && alpha(op.fill) > 0.85 && op.points.length === 4);
+  assert.ok(horizonOf(s, 'big') && horizonOf(s, 'small'), 'every cube carries a hard horizon line');
+  // ...placed by where the cube is, so neighbours do not line up into one stripe across the board
+  const yOf = (op) => op.points.reduce((acc, p) => acc + p.y, 0) / 4;
+  const at = (x, y) => horizonOf(chrome([{ txid: 'c', x, y, s: 3, z: 0, color: '#33cc99' }]), 'c');
+  const q = (op, tile) => { const top = buildScene([tile], O).ops.find((o2) => o2.face === 'top').points; const ys = top.map((p) => p.y); return (yOf(op) - Math.min(...ys)) / (Math.max(...ys) - Math.min(...ys)); };
+  const t1 = { txid: 'c', x: 4, y: 6, s: 3, z: 0 }, t2 = { txid: 'c', x: 9, y: 6, s: 3, z: 0 };
+  assert.ok(Math.abs(q(at(4, 6), t1) - q(at(9, 6), t2)) > 0.05, 'the horizon sits at a different depth on a cube five columns along');
+  // ...and it slides as the cube climbs: the reflection travels across a flying cube's face
+  const flying = (z) => horizonOf(chrome([{ txid: 'c', x: 4, y: 6, s: 3, z, color: '#33cc99' }]), 'c');
+  assert.notDeepEqual(flying(0).points, flying(12).points);
+  // the fee colour is the data: the sky reflection is the cube's own hue lifted, not a neutral grey
+  const sky = s.filter((op) => op.txid === 'small' && /^rgba\(2\d\d,\d+,\d+/.test(op.fill) && !op.fill.startsWith('rgba(255,255,255'));
+  assert.ok(sky.some((op) => { const [r, g, b] = op.fill.match(/\d+/g).map(Number); return r > g + 20 && r > b + 20; }), 'a red cube reflects a red-tinted sky');
+  // satin is untouched, and the setting reaches the renderer
+  assert.deepEqual(faces({ sheen: true, sheenStyle: 'satin' }, 'sheen'), faces({ sheen: true }, 'sheen'));
+  assert.equal(DEFAULTS.space.sheenStyle, 'chrome');
+  assert.equal(spaceOptions({ space: { sheen: true, sheenStyle: 'satin' } }).sheenStyle, 'satin');
+  assert.equal(spaceOptions({ space: { sheenStyle: 'mirror' } }).sheenStyle, 'chrome', 'an unknown finish falls back to chrome');
+});

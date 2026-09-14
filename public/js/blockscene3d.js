@@ -1408,7 +1408,74 @@ export function buildScene(tiles, o = {}) {
     // the sheen onto simple cube mode if I want"). Both are laid over the top face every tile
     // has, so they work at every level of detail. What was tried and rejected before is recorded
     // at the head of this section -- diagonal streaks -- and neither of these is a streak.
-    if (o.sheen === true) {
+    if (o.sheen === true && o.sheenStyle === 'chrome') {
+      // CHROME (operator, 2026-09-14: "make the specular metallic effect more prominent. Maybe give
+      // it a chrome or faux reflective effect ... really improve the metallic look"). The satin
+      // sheen below is a highlight along one edge -- a lit surface. Chrome is not lit, it REFLECTS:
+      // what reads as chrome is a hard horizon mirrored in the face -- bright sky above a white line,
+      // near-black ground below it, lightening again toward the near edge -- and a reflection that
+      // SLIDES as the object moves. So the horizon's place on each face comes from where the cube
+      // is on the board and how high it flies: cubes side by side show it at different heights,
+      // and a cube in flight has it travel across its faces. Hue is kept in the sky and the bounce
+      // so the fee colour still reads; the colour is the data, the chrome is the finish.
+      const [BL, BR, TR, TL] = f.top;
+      const L = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
+      const gw = o.gridW || 44, gh = o.gridH || gw;
+      // the horizon changes from cube to cube (a board of equal slabs is not one flat mirror) and
+      // travels with height, so a flight carries its reflection across its faces
+      const env = ((t.x + t.s / 2) / gw) * 2.3 + ((t.y + t.s / 2) / gh) * 1.1 + (t.z ?? 0) * 0.02;
+      const wave = (ph) => Math.sin(2 * Math.PI * (env + ph));
+      // the far edge of the top on screen is TL-TR, the near edge BL-BR; q runs far (0) to near (1)
+      const strip = (q0, q1) => [L(TL, BL, Math.max(0, q0)), L(TR, BR, Math.max(0, q0)), L(TR, BR, Math.min(1, q1)), L(TL, BL, Math.min(1, q1))];
+      const k = 0.45 + 0.25 * wave(0);
+      // RAMPS ARE NESTED BANDS, as the satin sheen's are: n translucent quads anchored on one line
+      // accumulate into an n-step gradient, where adjacent strips of differing alpha read as stripes.
+      out.push({ txid: t.txid, face: 'sheen', points: f.top, fill: `rgba(160,170,182,${round3(0.14 * a)})` });   // a light steel wash
+      const RAMP = 6;
+      for (let i = 0; i < RAMP; i++) {
+        const u = 1 - i / RAMP;                                        // 1 (widest) toward the horizon
+        // the sky: brightest at the horizon, still carrying the cube's hue
+        out.push({ txid: t.txid, face: 'sheen', points: strip(k - k * Math.pow(u, 1.3), k), fill: lift(c, 0.72, round3(0.1 * a)) });
+        // the ground: darkest just under the horizon, in the cube's own colour darkened, not black
+        out.push({ txid: t.txid, face: 'sheen', points: strip(k, k + (1 - k) * Math.pow(u, 1.6)), fill: shade(c, 0.18, round3(0.125 * a)) });
+        // the bounce: light again toward the near edge
+        out.push({ txid: t.txid, face: 'sheen', points: strip(1 - 0.28 * Math.pow(u, 1.5), 1), fill: lift(c, 0.5, round3(0.065 * a)) });
+      }
+      // the horizon itself: a soft glow over a hard white line
+      out.push({ txid: t.txid, face: 'sheen', points: strip(k - 0.1, k), fill: `rgba(240,248,255,${round3(0.3 * a)})` });
+      out.push({ txid: t.txid, face: 'sheen', points: strip(k - 0.03, k + 0.01), fill: `rgba(255,255,255,${round3(0.92 * a)})` });
+      // the sides mirror their own horizon, offset so it never lines up with the top's
+      for (const side of f.sides) {
+        const lamp = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * lampSide[0] + side.ny * lampSide[1]);
+        const [p0, p1, p2, p3] = side.points;                            // top edge p0-p1, bottom edge p3-p2
+        const band = (v0, v1) => [L(p0, p3, Math.max(0, v0)), L(p1, p2, Math.max(0, v0)), L(p1, p2, Math.min(1, v1)), L(p0, p3, Math.min(1, v1))];
+        const kv = 0.36 + 0.18 * wave(0.37 + (side.key === 'left' || side.key === 'right' ? 0.21 : 0));
+        for (let i = 0; i < 3; i++) {
+          const u = 1 - i / 3;
+          out.push({ txid: t.txid, face: 'sheen', points: band(kv - kv * u, kv), fill: lift(c, 0.65, round3((0.1 + 0.1 * lamp) * a)) });
+          out.push({ txid: t.txid, face: 'sheen', points: band(kv, kv + (1 - kv) * Math.pow(u, 1.4)), fill: shade(c, 0.15, round3(0.18 * a)) });
+        }
+        out.push({ txid: t.txid, face: 'sheen', points: band(0.88, 1), fill: lift(c, 0.4, round3(0.22 * a)) });
+        out.push({ txid: t.txid, face: 'sheen', points: band(kv - 0.05, kv + 0.02), fill: `rgba(255,255,255,${round3((0.5 + 0.4 * lamp) * a)})` });
+      }
+      // crisp polished edges, drawn whether or not the dark seam is on
+      out.push({ txid: t.txid, face: 'sheen', points: f.top, fill: 'rgba(0,0,0,0)', stroke: `rgba(255,255,255,${round3(0.55 * a)})`, lw: 0.9, always: true });
+      // a star glint on some cubes, at the corner facing the lamp; it moves on when the cube does
+      const g = env * 7.3 - Math.floor(env * 7.3);
+      if (g > 0.82) {
+        const corner = viewerLit ? BL : (flip > 0 ? TL : BL);
+        const across = viewerLit ? BR : (flip > 0 ? TR : BR), down = viewerLit ? TL : (flip > 0 ? BL : TL);
+        const cx = corner.x + (across.x - corner.x) * 0.16 + (down.x - corner.x) * 0.16;
+        const cy = corner.y + (across.y - corner.y) * 0.16 + (down.y - corner.y) * 0.16;
+        const r = Math.hypot(across.x - corner.x, across.y - corner.y) * (0.1 + 0.12 * (g - 0.82) / 0.18), w2 = r * 0.12;
+        const glint = (alpha, rr, ww) => {
+          out.push({ txid: t.txid, face: 'sheen', points: [{ x: cx - rr, y: cy }, { x: cx, y: cy - ww }, { x: cx + rr, y: cy }, { x: cx, y: cy + ww }], fill: `rgba(255,255,255,${round3(alpha * a)})` });
+          out.push({ txid: t.txid, face: 'sheen', points: [{ x: cx, y: cy - rr }, { x: cx + ww, y: cy }, { x: cx, y: cy + rr }, { x: cx - ww, y: cy }], fill: `rgba(255,255,255,${round3(alpha * a)})` });
+        };
+        glint(0.35, r * 1.5, w2 * 2.2);
+        glint(0.95, r, w2);
+      }
+    } else if (o.sheen === true) {
       // a specular band hugging the LIT edge of the top: the far edge under the upper-left lamp,
       // the near edge when the light sits at the viewer. Two nested bands, the inner one hotter:
       // a metallic gleam along an edge, not a gloss stripe across the face.

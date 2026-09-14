@@ -2421,7 +2421,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
-    opts.neon === true, opts.sheen === true, opts.overheadLight === true, opts.light,
+    opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
@@ -2521,7 +2521,7 @@ export function render3d(canvas, cells, options = {}) {
       // the finishes (settings.js space.neon / space.sheen). They were in the look signature and
       // in buildScene from the first cut, but not HERE, so a flipped switch repainted the same
       // picture (2026-09-12: "I don't see neon blocks working, nor the metallic sheen")
-      neon: opts.neon === true, sheen: opts.sheen === true,
+      neon: opts.neon === true, sheen: opts.sheen === true, sheenStyle: opts.sheenStyle,
       overheadLight: opts.overheadLight === true,   // the lamp straight above (Tetrust)
       light: opts.light,                            // or wherever settings.js space.light puts it
       neonSource: opts.neonSource, neonColour: opts.neonColour, neonBrightness: opts.neonBrightness,

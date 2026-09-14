@@ -51,6 +51,11 @@ export const DEFAULTS = Object.freeze({
     neonColour: '#3d8bff',       // the one colour, when chosen
     neonBrightness: 1,           // multiplies the tubes' alpha and width (0.2 .. 2)
     sheen: false,         // a metallic highlight along the lit edge of each top face
+    // WHICH METAL (operator, 2026-09-14: "give it a chrome or faux reflective effect ... really improve
+    // the metallic look"). 'chrome' mirrors a horizon in every face that slides as cubes move;
+    // 'satin' is the edge highlight the sheen always was. Chrome is the default because it is the
+    // answer to that ask; satin stays for anyone who preferred the quieter finish.
+    sheenStyle: 'chrome', // 'chrome' | 'satin'
     // ON (operator, 2026-09-13: "the current settings I have saved out should be the shipping
     // defaults"). It was opt-in because a twinkling field means the board never stops repainting.
     // That cost is now paid deliberately rather than avoided: it is the look that was chosen.
@@ -253,6 +258,10 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'neonColour', label: 'Neon colour', kind: 'colour', hint: 'The one colour, when chosen above' }),
       Object.freeze({ key: 'neonBrightness', label: 'Neon brightness', kind: 'range', min: 0.2, max: 2, step: 0.1, hint: 'How hard the tubes glow; 1 is the shipped glow' }),
       Object.freeze({ key: 'sheen', label: 'Metallic sheen', kind: 'toggle', hint: 'A specular highlight along the lit edge of each block’s top face. Works on Simple cubes too' }),
+      Object.freeze({
+        key: 'sheenStyle', label: 'Metallic finish', kind: 'choice', hint: 'Chrome mirrors a horizon in every face that slides as the blocks move; satin is a softer highlight along the lit edge. Needs Metallic sheen on',
+        options: Object.freeze([['chrome', 'Chrome'], ['satin', 'Satin']]),
+      }),
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'Stars behind the board. They twinkle, so the board keeps repainting while they are on' }),
       Object.freeze({
         key: 'detail', label: 'Level of detail', kind: 'choice', hint: 'Simpler cubes draw fewer polygons at the same size',
@@ -750,6 +759,7 @@ export function spaceOptions(s) {
     grid: sp.grid,
     neon: sp.neon,
     sheen: sp.sheen,
+    sheenStyle: sp.sheenStyle,
     // `space` is the board STYLE (no deck texture, a translucent floor); `stars` is the sky. They
     // travel together here, which is the block-space board's shipped behaviour, but they are two
     // options now so the markets board can keep its style while turning its sky off.
