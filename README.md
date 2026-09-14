@@ -13,8 +13,7 @@ server, the browser app, the 3D engine, the tests and these documents was writte
 under a human's direction, and all auditing has been performed by AI and is published in this
 repository ([docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md), [docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md), [docs/DEFECTS.md](docs/DEFECTS.md),
 [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md)). It is **experimental pre-release software: expect
-bugs.** If you appreciate the work, Bitcoin donations are welcome at
-**`bc1q249cv27lc2q7y0x53vkczgfvvgsjzhwxwv42gc`**.
+bugs.**
 
 ![Overview](docs/images/overview.jpg)
 
@@ -159,3 +158,7 @@ Coinbase, Kraken, Bitstamp, Bitfinex and OKX.
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). The block-space packer and feerate palette are an original implementation (public/js/blockpack.js, public/js/feepalette.js), inspired by the look of mempool.space but containing none of its code.
+
+---
+
+<sub>If BlockYard is useful to you: `bc1q249cv27lc2q7y0x53vkczgfvvgsjzhwxwv42gc`</sub>

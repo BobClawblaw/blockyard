@@ -78,9 +78,7 @@ export function banner(version, what = 'setup') {
     `${c.bold('Block')}${c.accent(c.bold('Yard'))}  ${c.dim(version)}   ${c.dim('·')}   ${c.bold(what)}`,
     c.dim('Live monitor, block explorer, markets and 3D block-space viewer for Bitcoin Core.'),
     c.dim('Zero dependencies, self-hosted, read-only. Apache-2.0.'),
-    '',
-    c.dim('bc1q249cv27lc2q7y0x53vkczgfvvgsjzhwxwv42gc  if it earns a tip'),
-    '', '', '',
+    '', '', '', '', '',
   ] : [
     `${c.bold('Block')}${c.accent(c.bold('Yard'))} ${c.dim(version)}  ${c.dim('·')}  ${what}`,
     c.dim('Live monitor, block explorer, markets and 3D block-space viewer for Bitcoin Core. Zero dependencies, self-hosted, read-only. Apache-2.0.'),
