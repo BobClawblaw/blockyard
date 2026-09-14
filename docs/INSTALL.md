@@ -78,7 +78,11 @@ node scripts/index-build.js --out /var/lib/blockyard-index --workers 16
 ```
 
 Progress goes to stderr once a second; the manifest, with every phase's timings, to stdout at
-the end. Then name the directory in the node's config and restart:
+the end. Each worker holds its file pair and a row buffer, so memory scales with `--workers`
+(the 16-worker build above peaked at 30 GB): on a 16-32 GB machine use `--workers 4`, which
+takes roughly four times as long. The block files are found through the node's `datadir` in
+`config/local.json` (`<datadir>/blocks`), so that must be set -- on macOS Core's default is
+`~/Library/Application Support/Bitcoin`. Then name the directory in the node's config and restart:
 
 ```json
 {
