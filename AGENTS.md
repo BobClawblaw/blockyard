@@ -308,6 +308,14 @@ board.
 pulse and the pipe bulge, each 2.5-6 min apart). The bulge is a ball that fits the line: exactly
 the tube at both ends, an arced skin, the core magnified through it, gravity along the pipe.
 
+**The first fresh install (a Mac, 2026-09-14) found the release's worst bug**, and it was not
+where the symptoms pointed: `gettxoutsetinfo` walked the whole UTXO set every minute on a node
+without `coinstatsindex`, and the address index build -- which started at the same moment -- took
+the blame for an hour of throttling. Measure a slow node ALONE before blaming anything running
+beside it: `npm run check` times every call. Also found there: 16 workers written into the config
+by pressing Enter, a pool map that lived only in `data/`, a bitcoin.conf nobody read, three
+half-block art seams, and 256 open file descriptors on a platform that allows 256.
+
 **What to do next, in order:** the Mac install (`git clone`, `npm run setup`); the re-audit;
 then move `v0.0.9` to the release commit when the operator says so.
 

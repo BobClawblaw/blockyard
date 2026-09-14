@@ -290,6 +290,22 @@ Kept as checked rather than deleted, so nobody re-derives them.
      behaviour deliberately and must keep it. A test should replay the measured sequence
      above and assert that neither `0` nor an understated rate comes out.
 
+- [x] **A node without `coinstatsindex` was sent a full UTXO-set walk every minute, and the index
+  build took the blame for an hour.** Found 2026-09-14 on the first fresh install (a Mac, Core
+  29.1, block files on a platter array). The symptoms -- 18 s RPC answers, 90 s timeouts, the
+  mempool read dropped, an empty block-space board -- appeared the moment the address index build
+  started, so the build was throttled four ways (its own connection, a pacer on the node's
+  latency, fewer workers, smaller batches) before anyone measured the node with nothing running:
+  `npm run check` then showed 10 ms / 921 ms / 1.0 s for chain info, a full block and the
+  mempool. The cause was `utxoStatsWanted` reading a missing `coinstatsindex` key as "not assumed
+  unindexed" and asking `gettxoutsetinfo` -- 165 M outputs without the index -- on the slow tier
+  every 60 s, past the timeout, with Core still walking and holding its chain lock. It was there on
+  the very first boot, before any build existed. Fixed: the indexes are asked first, alone, and the
+  UTXO figures only of a node that has said it keeps the index (`test/utxo-hashtype.test.js`).
+  The build throttling stays: it is right on a shared disk, it just was not the fault.
+  **The lesson, for the next slow node:** measure it alone first. `npm run check` now times every
+  call it makes, which is three lines that would have saved an hour.
+
 ## Functional gaps
 
 - [x] **Address history and balances on Bitcoin Core: resolved by an index of our own.** Found
