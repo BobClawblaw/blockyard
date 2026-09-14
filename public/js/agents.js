@@ -709,6 +709,8 @@ defineAgent('stormball', {
       return { x, y, z: a.alt + 0.6 * Math.sin(uu * 17) };
     };
     const ball = at(u);
+    // where it just was: the nebula it leaves behind is drawn there, fading
+    const trail = [0.01, 0.022, 0.036, 0.052, 0.07, 0.09].map((d) => (u - d >= 0 ? at(u - d) : null)).filter(Boolean);
     const live = [];
     const heads = [{ x: ball.x, y: ball.y, color: [70, 180, 255], alpha: 0.7, r: 4.5 }];
     for (const arc of a.arcs) {
@@ -730,7 +732,7 @@ defineAgent('stormball', {
       const glow = age <= 1 ? flicker : Math.max(0, 1 - (age - 1) / 1.2) * 0.7;
       heads.push({ x: hit.x, y: hit.y, color: [60, 190, 255], alpha: Math.min(1, glow * 1.25), r: 1.2 });
     }
-    return { stormball: { at: ball, arcs: live }, heads };
+    return { stormball: { at: ball, arcs: live, trail, t: u }, heads };
   },
   draw(ctx, view, lw) {
     const s = view.fx?.stormball;
@@ -738,7 +740,7 @@ defineAgent('stormball', {
     const U = view.unit ?? 8;
     const c = project(s.at.x, s.at.y, s.at.z, view);
     // sized in grid units, so it reads as the same bright object on every board (bloom's note above)
-    const R = U * 2.6;
+    const R = U * 3.4;   // bigger than the first cut: it is the one thing on the board (operator: "visually stunning")
     // a jagged bolt between two screen points, `kink` pixels of wander, re-rolled each frame
     const bolt = (p, q, kink, steps) => {
       const pts = [p];
@@ -764,18 +766,64 @@ defineAgent('stormball', {
       line(ctx, bolt(fork, forkEnd, U * 0.5, 4), `rgba(130,215,255,${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw, U * 0.08));
       bloom(ctx, end.x, end.y, U * 2.2, [90, 200, 255], arc.strength);
     }
-    // the sphere: a wide electric corona, then neon shells toward a white-hot core
-    bloom(ctx, c.x, c.y, R * 3.6, [30, 130, 255], 1);
-    for (const [rr, col] of [
-      [1.35, 'rgba(20,110,255,0.35)'],
-      [1.0, 'rgba(50,160,255,0.62)'],
-      [0.72, 'rgba(110,205,255,0.85)'],
-      [0.42, 'rgba(200,240,255,0.95)'],
-      [0.2, 'rgba(255,255,255,1)'],
-    ]) {
-      ctx.fillStyle = col;
-      ctx.beginPath(); ctx.arc(c.x, c.y, R * rr, 0, Math.PI * 2); ctx.fill();
+    // THE SPHERE IS ONE SMOOTH THING (operator, 2026-09-14: "needs a smooth gradient, not different
+    // discs around it. It needs to be visually stunning. Consider adding nebula effects"). Radial
+    // gradients, which the canvas rules never forbade -- clip, globalAlpha, composite modes and
+    // shadowBlur are the calls software rasterisers drop; a gradient fill is a fill. A harness
+    // without them gets the old shells.
+    // a gradient fill, or the first stop's colour where the canvas cannot make one (a test harness)
+    const gradientOf = (x, y, r, stops) => {
+      const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
+      if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
+      for (const [o, col] of stops) g.addColorStop(o, col);
+      return g;
+    };
+    const radial = (x, y, r, stops) => {
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = gradientOf(x, y, r, stops); ctx.fill();
+    };
+    const t = (s.t ?? 0) * 11;                                   // seconds into the run, for the drift
+    // THE NEBULA: three slow wisps of plasma around the ball, each a blob whose edge wanders with
+    // a few sines, turning at its own rate, in violet, magenta and cyan -- faint, wide, and drawn
+    // first so the sphere burns through them
+    const wisps = [[170, 70, 255, 0.42, 1.0], [255, 60, 190, 0.38, -0.7], [40, 220, 255, 0.28, 0.5], [255, 130, 80, 0.22, -1.3]];
+    wisps.forEach(([r, g, b, a, spin], k) => {
+      const cxk = c.x + Math.cos(t * spin * 0.6 + k * 2.1) * R * 0.5, cyk = c.y + Math.sin(t * spin * 0.45 + k * 1.3) * R * 0.4;
+      const base = R * (2.1 + 0.45 * k);
+      ctx.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const th = (i / 40) * Math.PI * 2;
+        const wobble = 1 + 0.28 * Math.sin(th * 3 + t * spin + k) + 0.17 * Math.sin(th * 5 - t * 0.8 * spin + k * 3) + 0.09 * Math.sin(th * 8 + t * 1.7);
+        const rr = base * wobble;
+        const x = cxk + Math.cos(th) * rr, y = cyk + Math.sin(th) * rr;
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = gradientOf(cxk, cyk, base * 1.4, [[0, `rgba(${r},${g},${b},${a})`], [0.35, `rgba(${r},${g},${b},${(a * 0.7).toFixed(3)})`], [0.7, `rgba(${r},${g},${b},${(a * 0.25).toFixed(3)})`], [1, `rgba(${r},${g},${b},0)`]]);
+      ctx.fill();
+    });
+    // the nebula it leaves behind: where the ball just was, each older and fainter
+    (s.trail ?? []).forEach((p, i) => {
+      const q = project(p.x, p.y, p.z, view);
+      const f = 1 - (i + 1) / ((s.trail?.length ?? 1) + 1);
+      radial(q.x, q.y, R * (1.8 + i * 0.6), [[0, `rgba(140,150,255,${(0.28 * f).toFixed(3)})`], [0.5, `rgba(120,60,230,${(0.16 * f).toFixed(3)})`], [1, 'rgba(60,20,160,0)']]);
+    });
+    // the corona: wide, electric, breathing
+    const breath = 1 + 0.06 * Math.sin(t * 5.3) + 0.04 * Math.sin(t * 8.9);
+    radial(c.x, c.y, R * 3.6 * breath, [[0, 'rgba(60,160,255,0.5)'], [0.3, 'rgba(40,120,255,0.22)'], [0.6, 'rgba(90,50,230,0.08)'], [1, 'rgba(90,50,230,0)']]);
+    // sparks in orbit: motes of light circling at their own speeds and radii, each a tiny gradient
+    for (let i = 0; i < 26; i++) {
+      const sp = 0.6 + (i % 7) * 0.23, ph = i * 2.399, rr = R * (1.5 + ((i * 37) % 11) / 11 * 2.2);
+      const ang = t * sp + ph, wob = 1 + 0.18 * Math.sin(t * 3.1 + i);
+      const x = c.x + Math.cos(ang) * rr * wob, y = c.y + Math.sin(ang) * rr * 0.55 * wob;
+      const tone = i % 3 === 0 ? '255,120,230' : i % 3 === 1 ? '120,200,255' : '200,160,255';
+      radial(x, y, Math.max(1.5, U * 0.22), [[0, `rgba(${tone},0.95)`], [0.4, `rgba(${tone},0.45)`], [1, `rgba(${tone},0)`]]);
     }
+    // the ball: white-hot centre through cyan to a violet rim, one gradient
+    radial(c.x, c.y, R * 1.35 * breath, [
+      [0, 'rgba(255,255,255,1)'], [0.18, 'rgba(235,250,255,1)'], [0.4, 'rgba(150,225,255,0.95)'],
+      [0.62, 'rgba(60,170,255,0.8)'], [0.82, 'rgba(90,80,255,0.45)'], [1, 'rgba(120,60,255,0)'],
+    ]);
     // THE CRACKLE: short filaments skittering over and just off the surface, new every frame
     for (let i = 0; i < 14; i++) {
       const ang = Math.random() * Math.PI * 2, r0 = R * (0.35 + 0.5 * Math.random()), r1 = R * (1.05 + 0.55 * Math.random());
