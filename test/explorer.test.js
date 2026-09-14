@@ -84,6 +84,31 @@ test('xTx: one lane turn for the transaction, one for its block height and who s
   assert.equal(log[0].opts.priority, 3, 'explorer requests queue ahead of the heavy tiers');
 });
 
+test('AN UNCONFIRMED TRANSACTION shows what its inputs spend and its fee, read from the parents', async () => {
+  // (operator, 2026-09-14: a mempool transaction whose 858 inputs all read "unknown script"). Core puts
+  // prevout in getrawtransaction <txid> 2 only for confirmed transactions.
+  _resetCache();
+  const unconfirmed = rawTx(TXA, { confirmations: undefined, blockhash: undefined, blocktime: undefined, fee: undefined });
+  for (const v of unconfirmed.vin) delete v.prevout;
+  const parent = { txid: TXB, confirmations: 7, vout: [
+    { n: 0, value: 0.0005, scriptPubKey: { type: 'witness_v0_keyhash', address: 'bc1qsenderexample', hex: '0014' } },
+    { n: 1, value: 0.00052, scriptPubKey: { type: 'witness_v1_taproot', address: 'bc1psenderexample', hex: '5120' } },
+  ] };
+  const asked = [];
+  const m = fakeNode((c) => {
+    asked.push(c.method + ':' + c.params[0] + ':' + c.params[1]);
+    if (c.method === 'getrawtransaction' && c.params[0] === TXA) return unconfirmed;
+    if (c.method === 'getrawtransaction' && c.params[0] === TXB && c.params[1] === 1) return parent;
+    if (c.method === 'gettxspendingprevout') return [];
+    return new Error(c.method);
+  });
+  const d = await xTx(m, { txid: TXA });
+  assert.equal(d.ok, true);
+  assert.deepEqual(d.tx.vin.map((v) => [v.address, v.value]), [['bc1qsenderexample', 50_000], ['bc1psenderexample', 52_000]], 'each input has its address and amount');
+  assert.equal(d.tx.fee, 2_000, 'and the fee is inputs minus outputs');
+  assert.equal(asked.filter((a) => a.startsWith(`getrawtransaction:${TXB}:1`)).length, 1, 'a parent spent twice is fetched once');
+});
+
 test('xTx: a malformed id and an unknown one are sentences, not throws', async () => {
   const m = fakeNode(() => new Error('No such mempool or blockchain transaction'));
   assert.equal((await xTx(m, { txid: 'zz' })).ok, false);

@@ -144,6 +144,31 @@ export async function xSearch(m, q) {
   return bad(`nothing on this node matches "${s}"`, 'a height is digits; a block hash or txid is 64 hex characters; an address starts 1, 3 or bc1');
 }
 
+// AN UNCONFIRMED TRANSACTION HAS NO PREVOUTS IN ITS VERBOSE REPLY (operator, 2026-09-14, a mempool
+// transaction with 858 inputs: every one "unknown script", no amounts, no fee). Core fills `prevout`
+// from block undo data, which a transaction still in the mempool does not have yet, so
+// getrawtransaction <txid> 2 answers those inputs with an outpoint and nothing else -- measured the same
+// on both configured nodes. The spent outputs are read from the parents instead: one batch of
+// getrawtransaction <parent> 1 (txindex for a confirmed parent, the mempool for an unconfirmed one),
+// each distinct parent once. A parent the node cannot supply leaves its inputs as they were.
+async function fillPrevouts(m, tx, key) {
+  const need = (tx.vin ?? []).filter((v) => v.coinbase == null && v.txid && !v.prevout);
+  if (!need.length) return tx;
+  const parents = [...new Set(need.map((v) => v.txid))];
+  const got = await batch(m, parents.map((p) => ({ method: 'getrawtransaction', params: [p, 1] })), key);
+  const tip = m.state?.chainInfo?.blocks ?? null;
+  const byId = new Map();
+  got.forEach((g, i) => { if (g.ok && g.result) byId.set(parents[i], g.result); });
+  for (const v of need) {
+    const parent = byId.get(v.txid);
+    const out = parent?.vout?.find((o) => o.n === v.vout);
+    if (!out) continue;
+    const conf = parent.confirmations ?? 0;
+    v.prevout = { value: out.value, scriptPubKey: out.scriptPubKey, height: conf > 0 && tip != null ? tip - conf + 1 : null, generated: false };
+  }
+  return tx;
+}
+
 export async function xTx(m, q) {
   const txid = String(q?.txid ?? '').trim().toLowerCase();
   if (!HEX64.test(txid)) return bad(`"${txid}" is not a 64-hex-character transaction id`);
@@ -152,7 +177,7 @@ export async function xTx(m, q) {
     const msg = r.error?.message ?? 'the node refused';
     return bad(msg, /not found|No such|information available/i.test(msg) ? 'not in this node\'s mempool or chain' : null);
   }
-  const tx = r.result;
+  const tx = await fillPrevouts(m, r.result, `${m.id}:x:txprev:${txid}`);
   // one more turn: the block's height, and who spent each output
   const calls = [];
   if (tx.blockhash) calls.push({ method: 'getblockheader', params: [tx.blockhash, true] });
