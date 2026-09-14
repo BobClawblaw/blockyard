@@ -321,7 +321,9 @@ async function main() {
   a.indexDir = await ask('index directory', arg('index-dir', path.join(ROOT, 'data', 'index')), validate.newDir);
   const built = existsSync(path.join(a.indexDir, 'manifest.json'));
   if (built) say(`${c.ok('✓')} an index is already built there; the server will follow the chain from it`);
-  else a.workers = await ask(`build workers ${c.dim('(each needs ~2.5 GB of memory)')}`, arg('workers', String(defaultWorkers())), validate.workers);
+  // the suggestion is the shared-machine number (at most four, half the cores), not a dedicated
+  // build's: the node reads the same disk, and the first Mac wrote 16 into its config by pressing Enter
+  else a.workers = await ask(`build workers ${c.dim('(1 on spinning disks; each needs ~2.5 GB of memory)')}`, arg('workers', String(Math.max(1, Math.min(4, Math.floor(defaultWorkers() / 2))))), validate.workers);
 
   // ------------------------------------------------------------------------------- 5. written
   out(step(5, STEPS, 'config/local.json'));
