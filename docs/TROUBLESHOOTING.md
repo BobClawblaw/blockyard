@@ -140,10 +140,20 @@ bitcoin-cli getindexinfo
 
 ## Explorer: address pages or "spent by" are missing
 
-Address pages need the node's address index, and "spent by" links need its spent-output
-index. Without them the explorer says the index is unavailable instead of showing an empty
-balance. Looking up an arbitrary historical transaction by id needs the transaction index;
-without it only mempool and recently seen transactions resolve.
+**On Bitcoin Core, address history cannot be listed, and this is not something you have
+misconfigured.** Core has no address index at any setting: `getaddressbalance` and
+`getaddresstxids` are insight-style extensions that only forks carry, and stock Core answers
+`Method not found` (measured 2026-09-13 on both an Umbrel node and a local Core). There is no
+option to enable, so nothing here will make it appear.
+
+What the address page does instead: it confirms the address and its type (`validateaddress` needs
+no index), and marks balance, totals and history as **not indexed**. It does not report a
+transaction count of `0` — nothing counted — and it does not print the node's error where a figure
+belongs.
+
+"Spent by" links need the node's spent-output index. Looking up an arbitrary historical
+transaction by id needs the transaction index; without it only mempool and recently seen
+transactions resolve. Core supports both of those.
 
 ## Explorer: no dollar figures
 

@@ -353,9 +353,17 @@ The address with a copy button, its type, transaction count and unspent outputs,
 newest first**, with the block each one was confirmed in (or "mempool") and the
 **change** it made to the balance, green for money in and red for money out.
 
-**Requirements:** transaction and address pages rely on the node's transaction index
-and address index. Without the address index, the address page shows the node's
-error in place of the missing figures.
+**On Bitcoin Core, most of that is unavailable** — see below. The address and its type are
+still confirmed; the figures read *not indexed*.
+
+**Requirements:** transaction pages rely on the node's transaction index, which Core
+supports and both shipped nodes have synced.
+
+Address history needs an **address index, which Bitcoin Core does not have** at any setting —
+the RPCs it would need belong to insight-style forks, and Core answers `Method not found`. So
+on a Core node the address page confirms the address and its type and marks balance, totals and
+history as **not indexed**. It does not show zero, and it does not print the node's error where
+a figure belongs: nothing counted, so nothing is claimed.
 
 ---
 

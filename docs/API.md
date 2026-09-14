@@ -767,7 +767,9 @@ Uses `getrawtransaction` verbosity 2, which carries the fee and every prevout. T
 | `addr` | string | 14–100 alphanumerics. |
 | `page` | int ≥ 0 | 25 transactions per page, newest first. |
 
-This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`). If they are missing or refused, `balanceError` / `indexError` carries the node's message and the page still answers.
+This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`). **Bitcoin Core has never had them** — they are insight-style extensions — so on a stock Core node they answer `Method not found` (measured 2026-09-13 against both configured nodes, one Umbrel and one local Core).
+
+When that happens the page still answers, but it answers *honestly*: `indexed` is `false`, `txCount` is **`null` rather than `0`**, `txs` is empty and the page says the node keeps no address index. A count nobody can answer is not zero. `validateaddress` works everywhere (script parsing, no index), so the address is still confirmed and typed. Transaction and block lookups are unaffected — those use `txindex`.
 
 ```json
 {
@@ -778,6 +780,7 @@ This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`
   "scriptType": null,
   "balance": { "balance": 221760, "received": 221760 },
   "balanceError": null,
+  "indexed": true,
   "txCount": 1,
   "indexError": null,
   "page": 0,
@@ -791,6 +794,8 @@ This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`
 ```
 
 - `type` is `witness v<N>`, `script` or `legacy`.
+- `indexed` says whether this node can answer address history at all. When `false`, `txCount` is
+  `null`, `balance` is `null`, and nothing on the page is derived from the refusal.
 - `balance` is the node's `getaddressbalance` reply, passed through as-is.
 - `delta` is the net change to this address in satoshis: outputs to it minus inputs from it.
 

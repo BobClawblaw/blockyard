@@ -6,7 +6,12 @@
 //     (in the descriptor), the height it was created -- so one call is a whole transaction page;
 //   * gettxspendingprevout answers for CONFIRMED outputs too (a spent-by index), many
 //     outpoints per call;
-//   * getaddressbalance / getaddresstxids are an address index (insight-style arguments).
+//   * getaddressbalance / getaddresstxids are an address index (insight-style arguments) -- and
+//     CORE DOES NOT HAVE THEM at any setting. Measured 2026-09-13 against both configured nodes,
+//     an Umbrel and a local Core: "Method not found" from each. xAddress therefore reports
+//     `indexed: false` with a NULL txCount rather than an empty list, because a refusal is not a
+//     count of zero. validateaddress answers everywhere (script parsing, no index), so the address
+//     is still confirmed and typed.
 //
 // Every call goes through the serialized lane like everything else (rule 1), and a page is ONE
 // batched request: the lane spaces requests 250 ms apart, so 25 transactions fetched one by one
@@ -108,6 +113,9 @@ export async function xSearch(m, q) {
   }
   if (/^[A-Za-z0-9]{14,100}$/.test(s)) {
     const [va] = await batch(m, [{ method: 'validateaddress', params: [s] }], `${m.id}:x:find:${s}`);
+    // validateaddress works on every node (script parsing, no index), so a valid address still
+    // resolves -- but the page it lands on can only confirm the address, not list its history,
+    // wherever the node has no address index. The search says so rather than implying a hit.
     if (va.ok && va.result?.isvalid) return { ok: true, type: 'address', id: s };
   }
   return bad(`nothing on this node matches "${s}"`, 'a height is digits; a block hash or txid is 64 hex characters; an address starts 1, 3 or bc1');
@@ -186,8 +194,18 @@ export async function xAddress(m, q) {
     { method: 'getaddresstxids', params: [{ addresses: [addr] }] },
   ], `${m.id}:x:addr:${addr}`);
   if (va.ok && va.result?.isvalid === false) return bad(`"${addr}" is not a valid address`);
-  // the index answers oldest first; a page reads newest first
-  const txids = ids.ok && Array.isArray(ids.result) ? ids.result.slice().reverse() : [];
+  // AN ABSENT INDEX IS NOT AN EMPTY ONE (operator, 2026-09-13: "fix broken search"). Measured
+  // against both configured nodes on 2026-09-13: getaddressbalance and getaddresstxids answer
+  // "Method not found" -- they are insight-style extensions that Core has never had, which
+  // docs/MEASUREMENTS.md already recorded as "Core has no such methods". validateaddress DOES
+  // answer on both (it is script parsing, no index), so the address itself can still be confirmed.
+  //
+  // The bug was here: a refused index became `[]`, which became txCount 0 and one empty page. The
+  // page then said "no transactions in this node's address index" -- indistinguishable from a real
+  // address with no history, and a figure this node never reported. A count nobody can answer is
+  // null, never zero.
+  const indexed = ids.ok && Array.isArray(ids.result);
+  const txids = indexed ? ids.result.slice().reverse() : [];   // the index answers oldest first
   const slice = txids.slice(page * PAGE, page * PAGE + PAGE);
   const txs = (await fetchTxs(m, slice, null, null, `${m.id}:x:atx:${addr}:${page}`)).map((s) => {
     if (s.missing) return s;
@@ -200,7 +218,11 @@ export async function xAddress(m, q) {
     type: va.ok ? (va.result?.iswitness ? `witness v${va.result.witness_version ?? '?'}` : va.result?.isscript ? 'script' : 'legacy') : null,
     scriptType: null,
     balance: bal.ok ? bal.result : null, balanceError: bal.ok ? null : bal.error?.message ?? null,
-    txCount: txids.length, indexError: ids.ok ? null : ids.error?.message ?? null,
-    page, pages: Math.max(1, Math.ceil(txids.length / PAGE)), txs, tip: m.state?.chainInfo?.blocks ?? null,
+    // `indexed` is the honest flag the page renders from; txCount stays NULL when nothing can
+    // answer it, so no figure on screen is invented from a refusal
+    indexed,
+    txCount: indexed ? txids.length : null,
+    indexError: ids.ok ? null : ids.error?.message ?? null,
+    page, pages: indexed ? Math.max(1, Math.ceil(txids.length / PAGE)) : 1, txs, tip: m.state?.chainInfo?.blocks ?? null,
   };
 }

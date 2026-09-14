@@ -145,15 +145,21 @@ export function txHtml(d, fmt) {
 export function addressHtml(d, fmt) {
   const bal = d.balance ?? {}, usd = d.usd ?? null;
   const sent = bal.received != null && bal.balance != null ? bal.received - bal.balance : null;
+  // WHAT THIS NODE CANNOT ANSWER, SAID ONCE AND PLAINLY. Core has no address index -- measured on
+  // both configured nodes, getaddressbalance and getaddresstxids return "Method not found" -- so
+  // balance, history and totals have no source here. Printing the raw refusal where a balance
+  // belongs, or a count of 0 where nothing was counted, both read as "this address is unused".
+  const noIndex = d.indexed === false;
+  const unknown = '<span class="xdim">not indexed</span>';
   const left = [
     ['Type', fmt.esc(d.type ?? '–')],
-    ['Transactions', d.indexError ? `<span class="xdim">${fmt.esc(d.indexError)}</span>` : fmt.num(d.txCount)],
-    ['Unspent outputs', bal.utxos != null ? fmt.num(bal.utxos) : '–'],
+    ['Transactions', noIndex ? unknown : fmt.num(d.txCount)],
+    ['Unspent outputs', bal.utxos != null ? fmt.num(bal.utxos) : unknown],
   ];
   const right = [
-    ['Balance', bal.balance != null ? `${btcv(fmt, bal.balance)}${usdFmt(usdOf(bal.balance, usd))}` : `<span class="xdim">${fmt.esc(d.balanceError ?? '–')}</span>`],
-    ['Total received', btcv(fmt, bal.received)],
-    ['Total sent', btcv(fmt, sent)],
+    ['Balance', bal.balance != null ? `${btcv(fmt, bal.balance)}${usdFmt(usdOf(bal.balance, usd))}` : unknown],
+    ['Total received', bal.received != null ? btcv(fmt, bal.received) : unknown],
+    ['Total sent', sent != null ? btcv(fmt, sent) : unknown],
   ];
   const txRows = d.txs.map((t) => (t.missing
     ? `<tr><td>${txLink(fmt, t.txid)}</td><td colspan="3" class="xdim">not decoded</td></tr>`
@@ -164,8 +170,9 @@ export function addressHtml(d, fmt) {
   return `${hero('Address', `<span class="xid">${fmt.esc(d.address)}</span>${copyBtn(fmt, d.address)}`)}
     ${cards(left, right)}
     ${section('Transactions', '<span class="xdim">newest first</span>')}
-    <div class="xtablecard"><table class="xtable"><thead><tr><th>transaction</th><th>block</th><th class="r">change</th><th class="r">fee rate</th></tr></thead><tbody>${txRows || '<tr><td colspan="4" class="xdim">no transactions in this node\'s address index</td></tr>'}</tbody></table></div>
-    ${pager(`address/${enc(d.address)}`, d.page, d.pages)}`;
+    ${noIndex ? `<div class="note tiny">This node keeps <b>no address index</b>, so an address's balance and history have no source here — the address above is confirmed valid and nothing more is claimed. Bitcoin Core has never had <span class="mono">getaddressbalance</span> or <span class="mono">getaddresstxids</span>; they belong to insight-style forks. Transaction and block lookups are unaffected: those use the node's <span class="mono">txindex</span>, which is synced.</div>` : ''}
+    <div class="xtablecard"><table class="xtable"><thead><tr><th>transaction</th><th>block</th><th class="r">change</th><th class="r">fee rate</th></tr></thead><tbody>${txRows || `<tr><td colspan="4" class="xdim">${noIndex ? 'no address index on this node — history cannot be listed' : 'no transactions for this address'}</td></tr>`}</tbody></table></div>
+    ${noIndex ? '' : pager(`address/${enc(d.address)}`, d.page, d.pages)}`;
 }
 
 // the fee band a block's median rate falls in, for its cube's colour (no inline styles: classes)

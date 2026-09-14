@@ -136,6 +136,54 @@ test('xAddress: newest first, with what each transaction did to this address', a
   assert.equal(spender.txs[0].delta, -50_000);
 });
 
+test('AN ABSENT ADDRESS INDEX IS NOT AN EMPTY ONE', async () => {
+  // (operator, 2026-09-13: "fix broken search".) Measured against both configured nodes the same
+  // day: getaddressbalance and getaddresstxids answer "Method not found" -- they are insight-style
+  // extensions Core has never had. validateaddress DOES answer on both, because it is script
+  // parsing with no index behind it.
+  //
+  // The bug: a refused index became [], which became txCount 0 and one empty page, and the page
+  // said "no transactions in this node's address index". Indistinguishable from a real address with
+  // no history -- and a figure the node never reported. The existing test above passes a fake node
+  // that ANSWERS those RPCs, which is why this went unnoticed; this one refuses them the way the
+  // real nodes do.
+  _resetCache();
+  const m = fakeNode((c) => {
+    if (c.method === 'validateaddress') return { isvalid: true, iswitness: true, witness_version: 0 };
+    // RETURNED, not thrown: fakeNode maps a returned Error to { ok: false }, which is how a real
+    // refusal arrives through rpc.batch. Throwing escapes the batch and kills validateaddress
+    // alongside it -- which is what the first draft of this test did, and why it read null.
+    if (c.method === 'getaddressbalance' || c.method === 'getaddresstxids') return new Error('Method not found');
+    return new Error(c.method);
+  });
+  const d = await xAddress(m, { addr: 'bc1qpayeeexample' });
+  assert.equal(d.ok, true, 'the page still answers: the address itself is confirmable');
+  assert.equal(d.type, 'witness v0', 'and validateaddress still types it');
+  assert.equal(d.indexed, false, 'the node has no address index, and says so');
+  assert.equal(d.txCount, null, 'a count nobody can answer is null, NEVER zero');
+  assert.deepEqual(d.txs, [], 'and no history is invented');
+
+  // the page must not read as "this address is unused", nor print the raw refusal as a figure
+  const html = addressHtml(d, fmt);
+  assert.match(html, /no address index/i, 'it says plainly that the index is absent');
+  assert.match(html, /not indexed/, 'and marks the unanswerable figures as such');
+  assert.doesNotMatch(html, /Method not found/, 'the raw RPC refusal is not shown where a balance belongs');
+  assert.doesNotMatch(html, /no transactions in this node/i, 'and it no longer implies an empty index');
+
+  // the working half is untouched: a node WITH the index still lists history
+  _resetCache();
+  const withIndex = fakeNode((c) => {
+    if (c.method === 'validateaddress') return { isvalid: true, iswitness: true, witness_version: 0 };
+    if (c.method === 'getaddressbalance') return { balance: 100_000, received: 150_000, utxos: 1 };
+    if (c.method === 'getaddresstxids') return [TXB, TXA];
+    if (c.method === 'getrawtransaction') return rawTx(c.params[0]);
+    throw new Error(c.method);
+  });
+  const ok = await xAddress(withIndex, { addr: 'bc1qpayeeexample' });
+  assert.equal(ok.indexed, true);
+  assert.equal(ok.txCount, 2, 'a real count where there is a real index');
+});
+
 test('xSearch: digits are a height, 64 hex is a block if the node knows the header else a tx, and addresses validate', async () => {
   const m = fakeNode((c) => {
     if (c.method === 'getblockheader') return c.params[0] === BLK ? { height: 98 } : new Error('Block not found');
@@ -180,8 +228,14 @@ test('the page renderers link everything and escape what the chain wrote', async
   assert.match(b, /href="#explorer\/block\/97"/);
   assert.match(b, /href="#explorer\/block\/99"/);
   assert.match(b, /href="#explorer\/block\/98\/1"/, 'the pager');
-  const a = addressHtml({ address: 'bc1q', balance: null, balanceError: 'no index', txs: [], page: 0, pages: 1, txCount: 0 }, fmt);
-  assert.match(a, /no index/);
+  // A NODE WITH NO ADDRESS INDEX. This used to pass `balanceError: 'no index'` and assert that the
+  // string appeared -- it was pinning the raw RPC refusal being printed where a balance belongs,
+  // which is the misleading half of the old behaviour (2026-09-13, "fix broken search"). The
+  // renderer no longer shows a node's error text as a figure, so the fixture now says what it means
+  // and the assertion checks the contract instead of the leak.
+  const a = addressHtml({ address: 'bc1q', indexed: false, balance: null, balanceError: 'Method not found', txs: [], page: 0, pages: 1, txCount: null }, fmt);
+  assert.match(a, /no address index/i, 'the page states the index is absent');
+  assert.doesNotMatch(a, /Method not found/, 'and never renders the raw refusal as a value');
   assert.match(homeHtml({ blocks: { recent: [{ height: 5, txs: 2, weight: 4e6, totalfee: 10 }] } }, fmt), /href="#explorer\/block\/5"/);
   assert.match(errorHtml({ error: { message: 'a<b' } }, fmt), /a&lt;b/);
   for (const html of [t, b, a]) assert.doesNotMatch(html, /style="/, 'the CSP forbids inline styles');

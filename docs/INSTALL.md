@@ -45,10 +45,16 @@ while and is unavoidable; the node reports progress, and `getindexinfo` tells yo
 `synced`. Everything else in the monitor — the dashboard, block space, mempool, fees, peers,
 mining, the block pages — works without it.
 
-Two further indexes are genuinely optional:
+Two further indexes affect the explorer:
 
-- an **address index** — address pages (balance, received, transaction history);
-- a **spent-output index** — "spent by" links on every output.
+- an **address index** — address pages (balance, received, transaction history). **Bitcoin Core
+  does not have one, at any setting**, so there is no flag here to turn on. `getaddressbalance`
+  and `getaddresstxids` are insight-style extensions carried by forks such as Bitcore; stock Core
+  answers `Method not found` (measured 2026-09-13 against both an Umbrel node and a local Core).
+  The address page still confirms an address and its type — `validateaddress` needs no index — and
+  marks balance and history as *not indexed*. Searching by transaction id or block is unaffected:
+  that uses `txindex` above.
+- a **spent-output index** — "spent by" links on every output. Core does support this one.
 
 Pages that need an index the node does not have say so, rather than showing empty data.
 
