@@ -113,20 +113,27 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   // surged every few picks (operator, 2026-09-14: "much too often ... Have it wait at least 30-120
   // seconds before firing"). This drives the REAL chooser -- no copy of it -- through two simulated
   // hours at the scheduler's own cadence, and measures the gaps.
+  // SEEDED, so the gaps are the same on every run. The first cut drew from Math.random with a bound
+  // of 120 s + 10 s, and failed about one run in ten at 130.7 s -- a real gap, not a bug: the wait
+  // ends between two scheduler ticks, and a tick can be as far as 9 s of idleEvery plus a 3 s
+  // effect away. The bound below is that worst case, not a guess with slack in it.
+  let seed = 20260914;
+  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+  const MAX_TICK = 9000 + 3000;
   const st = {};
   let t = 0, first = null, prev = null;
   const gaps = [];
   while (t < 2 * 3600e3) {
-    const k = chooseIdleFx(LINE_FX, st, t);
+    const k = chooseIdleFx(LINE_FX, st, t, rnd);
     if (k) st.lastFx = k;
     if (k === 'pulse') { if (prev === null) first = t; else gaps.push(t - prev); prev = t; }
-    t += 5000 + Math.random() * 4000 + (k === 'pulse' ? 9000 : k ? 3000 : 0);   // idleEvery, plus the effect itself
+    t += 5000 + rnd() * 4000 + (k === 'pulse' ? 9000 : k ? 3000 : 0);   // idleEvery, plus the effect itself
   }
   assert.ok(first >= PULSE_WAIT_MS[0], `a board that has just opened waits before its first pulse (${(first / 1000).toFixed(0)} s)`);
   assert.ok(gaps.length > 20, `and it does keep coming round (${gaps.length} pulses in two hours)`);
   const minGap = Math.min(...gaps), maxGap = Math.max(...gaps);
   assert.ok(minGap >= PULSE_WAIT_MS[0], `never sooner than 30 s after the last (shortest gap ${(minGap / 1000).toFixed(1)} s)`);
-  assert.ok(maxGap <= PULSE_WAIT_MS[1] + 10000, `and not left waiting far past 120 s (longest gap ${(maxGap / 1000).toFixed(1)} s)`);
+  assert.ok(maxGap <= PULSE_WAIT_MS[1] + MAX_TICK, `and never later than 120 s plus one scheduler tick (longest gap ${(maxGap / 1000).toFixed(1)} s)`);
   // with everything else switched off the pulse still plays -- after its wait, and nothing in between
   const lone = {};
   assert.equal(chooseIdleFx(['pulse'], lone, 0), null, 'a lone pulse still waits its turn');
