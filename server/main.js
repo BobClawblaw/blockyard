@@ -420,9 +420,17 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     // event -- which the browser toasts -- marks the start, the finish, or a failure. A node config
     // can say addressIndexBuild: "manual" to keep this from happening.
     const HMS = (sec) => (sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`);
-    const build = (dir, m) => {
+    const build = async (dir, m) => {
       // half the workers a dedicated build would take: the node shares this machine's disk and cores
       const workers = Math.max(1, Math.floor(defaultWorkers() / 2));
+      // ITS OWN CONNECTION (2026-09-14, the first Mac: the build's getblockhash batches sat at the back
+      // of the monitor's one-in-flight lane behind multi-second mempool and block reads, and both
+      // starved -- "heights 1,000 of 967,015" for a quarter of an hour). The build's calls are cheap
+      // and few, on a second lane, exactly as scripts/index-build.js has always run; the pacer still
+      // reads the monitor's lane, which is the measure of how the node is coping.
+      const { RpcClient } = await import('./rpc/client.js');
+      const quiet = { info() {}, warn() {}, error() {}, debug() {} };
+      const rpc = new RpcClient(m.cfg, { ...(cfg.rpc ?? {}), ...(m.cfg.rpc ?? {}) }, { log: quiet });
       const status = { dir, node: m.id, phase: 'starting', done: 0, total: 0, rows: 0, eta: null, startedAt: Date.now(), error: null, paused: false };
       registerIndexBuild(dir, status);
       m.indexBuild = status;
@@ -437,7 +445,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       say(`address index: building ${dir} from ${m.id}'s block files with ${workers} workers -- the Overview shows the progress`);
       let phase = null, phaseAt = Date.now(), lastFlag = 0;
       buildIndex({
-        rpc: m.rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers, pace,
+        rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers, pace,
         onProgress: (p) => {
           if (p.phase !== phase) { phase = p.phase; phaseAt = Date.now(); }
           const elapsed = (Date.now() - phaseAt) / 1000;
@@ -472,7 +480,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
         app.log({ level: 'warn', msg: `address index ${dir}: not built, and addressIndexBuild is "manual" -- run node scripts/index-build.js --out ${dir}` });
       } else if (!m.cfg?.datadir) {
         app.log({ level: 'warn', msg: `address index ${dir}: not built, and node ${m.id} has no datadir to build it from` });
-      } else build(dir, m);
+      } else build(dir, m).catch((err) => app.log({ level: 'warn', msg: `address index ${dir}: ${err.message}` }));
     }
   }
 
