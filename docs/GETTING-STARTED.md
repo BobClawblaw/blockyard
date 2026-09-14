@@ -17,7 +17,8 @@ txindex=1
 ```
 
 `txindex=1` on a node that has run without it triggers a one-off reindex that takes a while;
-`bitcoin-cli getindexinfo` says `"synced": true` when it is done. Everything but the explorer's
+`bitcoin-cli getindexinfo` says `"synced": true` when it is done (with the macOS app bundle,
+`bitcoin-cli` is inside it: `/Applications/Bitcoin-Qt.app/Contents/MacOS/bitcoin-cli`). Everything but the explorer's
 transaction-by-id pages works before that.
 
 Where `bitcoin.conf` and the data directory are, by default:
@@ -37,7 +38,9 @@ node -v        # v22.x or later
 
 If that prints nothing or an older version:
 
-- **macOS:** `brew install node@22` (or the installer from <https://nodejs.org>).
+- **macOS:** `brew install node` (Homebrew's current Node is newer than 22), or the installer
+  from <https://nodejs.org>. (`node@22` from Homebrew is keg-only and needs linking; the plain
+  `node` formula is simpler.)
 - **Linux:** your distribution's `nodejs` package if it is 22+, otherwise the installer or
   NodeSource repository from <https://nodejs.org>.
 

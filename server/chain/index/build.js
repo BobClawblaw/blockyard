@@ -85,15 +85,27 @@ export async function buildIndex({ rpc, blocksDir, out, workers = Math.max(2, Ma
   try {
     // --- scan -------------------------------------------------------------------
     t = performance.now();
-    const fds = new Array(256).fill(null);
+    // AT MOST 64 BUCKET FILES OPEN AT ONCE (2026-09-14): 256 held open for the whole scan is the
+    // entire soft limit on a stock macOS (`ulimit -n` 256). The least recently written is closed
+    // and reopened for append when a 65th is needed -- a few thousand extra opens over a build.
+    const fds = new Array(256).fill(null), lru = [];
+    const MAX_OPEN = 64;
     const bucketFile = (b) => path.join(out, `bucket-${b.toString(16).padStart(2, '0')}.unsorted`);
+    const fdFor = (b) => {
+      if (fds[b] === null) {
+        if (lru.length >= MAX_OPEN) { const old = lru.shift(); closeSync(fds[old]); fds[old] = null; }
+        fds[b] = openSync(bucketFile(b), 'a');
+      } else lru.splice(lru.indexOf(b), 1);
+      lru.push(b);
+      return fds[b];
+    };
     const seen = new Uint8Array(tip + 1);
     let rows = 0, scanned = 0, readMs = 0, workMs = 0, stale = 0, missingUndo = 0, dupHeights = 0;
     await pool.run(fileList.map((file) => ({ type: 'scan', file })), (msg) => {
       const data = Buffer.from(msg.data);
       for (const [b, from, to] of msg.parts) {
-        fds[b] ??= openSync(bucketFile(b), 'a');
-        for (let o = from; o < to;) o += writeSync(fds[b], data, o, to - o);
+        const fd = fdFor(b);
+        for (let o = from; o < to;) o += writeSync(fd, data, o, to - o);
       }
       for (const h of msg.heights) { if (seen[h]) dupHeights++; seen[h] = 1; }
       rows += msg.rows; scanned++; readMs += msg.readMs; workMs += msg.ms; stale += msg.stale; missingUndo += msg.missingUndo;

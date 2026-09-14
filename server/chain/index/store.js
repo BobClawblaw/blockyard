@@ -8,7 +8,7 @@
 //   tail    the newest blocks, in memory (live.js), handed in as an object with scan(key, visit)
 // A lookup binary-searches each sorted source's sparse keys and reads only the row blocks that can
 // hold its key.
-import { openSync, readSync, closeSync, readFileSync, fstatSync, readdirSync } from 'node:fs';
+import { openSync, readSync, closeSync, readFileSync, statSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { ROW, scriptKey, readRow } from './rows.js';
 import { FORMAT } from './build.js';
@@ -16,11 +16,14 @@ import { FORMAT } from './build.js';
 const LAYER = /^L(\d+)-(\d+)\.rows$/;
 const RING_MAX_BLIND = 4096;   // rows (86 KB) a page may keep without first counting the history
 
+// NO FILE IS HELD OPEN (2026-09-14): a store used to keep one descriptor per segment and layer --
+// 256 and more -- for the life of the process, which is the whole soft limit on a stock macOS
+// (`ulimit -n` 256) before the server has opened a socket. A lookup opens the one file it reads
+// and closes it: three syscalls on a 0.25 ms lookup.
 function openSorted(rowsFile, idxFile) {
   const raw = readFileSync(idxFile);
   const idx = new BigUint64Array(raw.buffer, raw.byteOffset, raw.length / 8).slice();
-  const fd = openSync(rowsFile, 'r');
-  return { idx, fd, rows: fstatSync(fd).size / ROW };
+  return { idx, file: rowsFile, rows: statSync(rowsFile).size / ROW };
 }
 
 export class IndexStore {
@@ -53,7 +56,6 @@ export class IndexStore {
     this.layers = live.filter((r) => { try { readFileSync(idxOf(r.f), { flag: 'r' }); return true; } catch { return false; } })
       .map((r) => ({ from: r.from, to: r.to, ...openSorted(path.join(dir, r.f), idxOf(r.f)) }))
       .sort((a, b) => a.from - b.from);
-    for (const l of old) closeSync(l.fd);
   }
 
   /** The highest block the base and its contiguous layers cover (the tail, if any, continues it). */
@@ -67,10 +69,7 @@ export class IndexStore {
     return this.tail?.tip != null && this.tail.tip > this.sortedTip ? this.tail.tip : this.sortedTip;
   }
 
-  close() {
-    for (const s of this.segments) if (s) closeSync(s.fd);
-    for (const l of this.layers) closeSync(l.fd);
-  }
+  close() { /* nothing is held open; kept for callers */ }
 
   // Visit every row for a key in one sorted source, without allocating per row. Keys are compared as
   // two unsigned 32-bit halves read straight from the page -- a BigInt per row was most of a lookup's
@@ -80,20 +79,23 @@ export class IndexStore {
     let lo = 0, hi = src.idx.length - 1;
     while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (src.idx[mid] < key) lo = mid; else hi = mid - 1; }
     const kh = Number(key >> 32n), kl = Number(key & 0xffffffffn);
-    for (let block = lo; block < src.idx.length; block++) {
-      const start = block * this.blockRows;
-      const want = Math.min(this.blockRows, src.rows - start) * ROW;
-      const got = readSync(src.fd, this.scratch, 0, want, start * ROW);
-      for (let at = 0; at < got; at += ROW) {
-        const h = this.scratch.readUInt32BE(at);
-        if (h < kh) continue;
-        if (h > kh) return;
-        const l = this.scratch.readUInt32BE(at + 4);
-        if (l < kl) continue;
-        if (l > kl) return;
-        visit(this.scratch, at);
+    const fd = openSync(src.file, 'r');
+    try {
+      for (let block = lo; block < src.idx.length; block++) {
+        const start = block * this.blockRows;
+        const want = Math.min(this.blockRows, src.rows - start) * ROW;
+        const got = readSync(fd, this.scratch, 0, want, start * ROW);
+        for (let at = 0; at < got; at += ROW) {
+          const h = this.scratch.readUInt32BE(at);
+          if (h < kh) continue;
+          if (h > kh) return;
+          const l = this.scratch.readUInt32BE(at + 4);
+          if (l < kl) continue;
+          if (l > kl) return;
+          visit(this.scratch, at);
+        }
       }
-    }
+    } finally { closeSync(fd); }
   }
 
   /** Every row for a key across base, layers and tail, oldest block first. */

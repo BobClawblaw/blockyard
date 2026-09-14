@@ -131,6 +131,13 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
 
 ### Fixed since the 2026-09-11 milestone
 
+- **Nothing holds hundreds of files open any more.** The index store kept one descriptor per
+  segment and layer -- 256 and more -- for the life of the process, and the build kept all 256
+  bucket files open through the scan; a stock macOS allows a process 256 (`ulimit -n`) before it
+  has opened a socket. A lookup opens the one file it reads and closes it (measured on the full
+  index afterwards: 0.02 ms median warm, 21 descriptors held by the whole process), and the build
+  keeps at most 64 bucket files open, least recently written closed first. Found while preparing
+  the first macOS install.
 - **The second AI security audit's findings, the same day** (`docs/SECURITY-AUDIT-2026-09-14.md`,
   which re-verified the 09-13 fixes live and covered the address index and explorer). Its one
   medium: `/api/x/address` sized an allocation by the request's page number, 525 MB for
