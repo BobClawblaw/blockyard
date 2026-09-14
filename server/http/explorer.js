@@ -213,10 +213,16 @@ export async function xBlock(m, q) {
 // index serves any node on the same chain. Opened once, and reopened when a rebuild replaces its
 // manifest. A missing or unreadable index is reported on the page, not fatal.
 const indexes = new Map();                 // dir -> { store, error, mtimeMs }
+// followers registered by main.js (server/chain/index/live.js): their store carries the live tail,
+// so a page served through one includes every block the follower has taken in
+const followers = new Map();
+export function registerLiveIndex(dir, live) { followers.set(dir, live); }
 function localIndex(m) {
   if (m.addressIndex) return { store: m.addressIndex, error: null };        // tests inject a store
   const dir = m.cfg?.addressIndex;
   if (!dir) return null;
+  const live = followers.get(dir);
+  if (live) return { store: live.store, error: null, live };
   let mtimeMs = null;
   try { mtimeMs = statSync(path.join(dir, 'manifest.json')).mtimeMs; } catch (err) { return { store: null, error: `no finished index at ${dir}` }; }
   const had = indexes.get(dir);
@@ -233,8 +239,14 @@ export function _resetIndexes() { for (const e of indexes.values()) { try { e.st
 const blockTxids = new Map();
 const BLOCK_TXIDS_MAX = 64;
 
-async function addressFromIndex(m, addr, page, store) {
-  const chain = m.state?.chainInfo?.chain ?? m.cfg?.chainHint ?? 'main';
+async function addressFromIndex(m0, addr, page, store, live = null) {
+  // THE BLOCKS AND TRANSACTIONS A PAGE NEEDS COME FROM THE FOLLOWER'S NODE when there is one. Confirmed
+  // chain data is the same on every node, and the follower's node is the one the index was built
+  // from -- here the local Core -- while the node selected on the page can be the slow one: measured
+  // just after a restart, the Umbrel answered RPC in 18-33 s and an address page waited 108-265 s in
+  // its queue, against ~1.5 s through the local node. The response names the node that answered.
+  const m = live?.rpc ? { ...m0, id: live.nodeId ?? m0.id, rpc: live.rpc } : m0;
+  const chain = m0.state?.chainInfo?.chain ?? m0.cfg?.chainHint ?? 'main';
   const script = addressToScript(addr, chain);
   const [va] = await batch(m, [{ method: 'validateaddress', params: [addr] }], `${m.id}:x:addr:${addr}`);
   if (!script || (va.ok && va.result?.isvalid === false)) return bad(`"${addr}" is not a valid ${chain === 'main' ? 'mainnet ' : ''}address`);
@@ -261,16 +273,20 @@ async function addressFromIndex(m, addr, page, store) {
     if (!s || s.missing) return { txid: txids[i], missing: true, height: r.height, delta: r.value };
     return { ...brief(s), height: r.height, delta: r.value };
   });
-  const nodeTip = m.state?.chainInfo?.blocks ?? null;
+  const nodeTip = m0.state?.chainInfo?.blocks ?? null;
   return {
-    ok: true, node: m.id, address: addr,
+    ok: true, node: m0.id, dataNode: m.id, address: addr,
     type: va.ok ? (va.result?.iswitness ? `witness v${va.result.witness_version ?? '?'}` : va.result?.isscript ? 'script' : 'legacy') : null,
     scriptType: null,
     indexed: true, source: 'local-index',
     // received and sent are sums of each transaction's NET for this address (see IndexStore)
     balance: { balance: sum.balance, received: sum.received, utxos: null },
     txCount: sum.txCount,
-    index: { tip: store.manifest.tip.height, behind: nodeTip != null ? Math.max(0, nodeTip - store.manifest.tip.height) : null, builtAt: store.manifest.builtAt },
+    // `tip` is how far the index reaches: the base, its layers and a follower's live tail together
+    index: {
+      tip: store.tip ?? store.manifest.tip.height, behind: nodeTip != null ? Math.max(0, nodeTip - (store.tip ?? store.manifest.tip.height)) : null,
+      builtAt: store.manifest.builtAt, following: !!live, stale: live?.stale ?? null,
+    },
     page, pages: Math.max(1, Math.ceil(sum.txCount / PAGE)), txs, tip: nodeTip,
   };
 }
@@ -280,7 +296,7 @@ export async function xAddress(m, q) {
   const page = pageOf(q);
   if (!/^[A-Za-z0-9]{14,100}$/.test(addr)) return bad(`"${addr}" is not an address`);
   const local = localIndex(m);
-  if (local?.store) return addressFromIndex(m, addr, page, local.store);
+  if (local?.store) return addressFromIndex(m, addr, page, local.store, local.live);
   const now = clock();
   const knownMissing = noIndex.has(m.id) && now - noIndex.get(m.id) < INDEX_RECHECK_MS;
   let va, bal, ids;

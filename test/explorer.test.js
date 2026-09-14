@@ -292,7 +292,7 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
   assert.equal(d.txCount, 2);
   assert.deepEqual(d.balance, { balance: 120_000, received: 150_000, utxos: null });
   assert.deepEqual(d.txs.map((t) => [t.txid, t.height, t.delta]), [[TXA, 99, -30_000], [TXB, 98, 150_000]], 'each position becomes its txid, with the index\'s own amount');
-  assert.deepEqual(d.index, { tip: 99, behind: 5, builtAt: '2026-09-14T06:00:00Z' }, 'and the page knows how far the index reaches');
+  assert.deepEqual(d.index, { tip: 99, behind: 5, builtAt: '2026-09-14T06:00:00Z', following: false, stale: null }, 'and the page knows how far the index reaches');
   const html = addressHtml(d, fmt);
   assert.match(html, /complete through block/, 'the page says what the index covers');
   assert.match(html, /5 newer blocks not yet included/, 'and that it is behind the node, by how much');

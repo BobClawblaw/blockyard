@@ -294,8 +294,13 @@ Kept as checked rather than deleted, so nobody re-derives them.
   MEASUREMENTS §30) and the address page reads history, balance and each transaction's net amount
   from it. Checked live: every row of four pages (including page 4 of a 2.3 M-transaction address)
   matched the node's decoded transaction for txid, height and amount.
-  **Not yet:** the index does not follow the chain -- it covers up to the block it was built at, and
-  the page says how many newer blocks are missing -- and it keeps no UTXO list or mempool view.
+  **It follows the chain (2026-09-14):** `server/chain/index/live.js`, started by the server for each
+  index directory, fetches every new block with `getblock <hash> 3`, logs its rows (CRC-framed,
+  replayed on restart) before serving them, rolls back on a reorganisation, folds blocks 100 deep
+  into immutable layers and merges layers past 32. Checked live: caught 12 blocks up in 6.5 s, then
+  40 of 40 balances equal `scantxoutset` at that tip, 38 of those addresses having rows only in the
+  new tail. A reorganisation below what is folded stops the follower and the page says to rebuild.
+  **Not yet:** no UTXO list and no mempool view.
   **The dead RPCs are no longer sent on every view** (2026-09-14). `xAddress` remembers a
   "method not found" per node and skips `getaddressbalance`/`getaddresstxids` for
   `INDEX_RECHECK_MS` (10 minutes), then asks again, because the daemon behind a node id can

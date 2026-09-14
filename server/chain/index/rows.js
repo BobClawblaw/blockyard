@@ -113,3 +113,33 @@ export class RowSink {
 export function readRow(buf, at = 0) {
   return { key: buf.readBigUInt64BE(at), height: buf.readUIntBE(at + 8, 3), pos: buf.readUInt16BE(at + 11), value: Number(buf.readBigInt64BE(at + 13)) };
 }
+
+/**
+ * The same rows from the node's own decoding: `getblock <hash> 3`, which carries every input's prevout.
+ * This is how the live index follows the chain -- through RPC, so it works for a node whose block
+ * files are on another machine -- and it must agree with blockRows row for row, which is checked on
+ * real blocks (test/chain-index-live.test.js and scripts/index-live-check.js). Amounts arrive as BTC
+ * floats and are rounded to satoshis, which is exact for every amount Core can express.
+ */
+export function verboseBlockRows(block, height, out) {
+  if (height > MAX_HEIGHT) throw new RangeError(`height ${height} does not fit the row format`);
+  if (block.tx.length - 1 > MAX_POS) throw new RangeError(`block ${height} has ${block.tx.length} transactions, past the row format's position field`);
+  let rows = 0;
+  const moved = new Map();
+  block.tx.forEach((tx, p) => {
+    moved.clear();
+    for (const o of tx.vout) {
+      const hex = o.scriptPubKey.hex;
+      if (hex.startsWith('6a')) continue;
+      const k = scriptKey(Buffer.from(hex, 'hex'));
+      moved.set(k, (moved.get(k) ?? 0) + Math.round(o.value * 1e8));
+    }
+    if (p > 0) for (const v of tx.vin) {
+      if (!v.prevout) throw new Error(`block ${height} tx ${p}: no prevout -- getblock must be called with verbosity 3`);
+      const k = scriptKey(Buffer.from(v.prevout.scriptPubKey.hex, 'hex'));
+      moved.set(k, (moved.get(k) ?? 0) - Math.round(v.prevout.value * 1e8));
+    }
+    for (const [k, v] of moved) { out.push(k, height, p, v); rows++; }
+  });
+  return rows;
+}

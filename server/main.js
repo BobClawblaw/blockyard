@@ -387,6 +387,36 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   seriesPush.unref?.();
   app.timers.push(seriesPush);
 
+  // THE ADDRESS INDEX FOLLOWS THE CHAIN (server/chain/index/live.js): one follower per index
+  // directory, fed by a node that uses it -- one with its block files on this machine if there is
+  // one, since that is the node the index was built from. A follower that cannot open its index
+  // logs why and the address page says the same; nothing else is held up by it.
+  const followers = new Map();
+  for (const m of app.monitors.values()) {
+    const dir = m.cfg?.addressIndex;
+    if (!dir) continue;
+    const had = followers.get(dir);
+    if (!had || (!had.cfg?.datadir && m.cfg?.datadir)) followers.set(dir, m);
+  }
+  if (followers.size) {
+    const { LiveIndex } = await import('./chain/index/live.js');
+    const { registerLiveIndex } = await import('./http/explorer.js');
+    for (const [dir, m] of followers) {
+      try {
+        const live = new LiveIndex(dir, { rpc: m.rpc, nodeId: m.id, log: { info: (msg) => app.log({ level: 'info', msg }), warn: (msg) => app.log({ level: 'warn', msg }) } });
+        registerLiveIndex(dir, live);
+        const tick = () => { live.poll().catch(() => {}); };
+        tick();
+        const t = setInterval(tick, 30_000);
+        t.unref?.();
+        app.timers.push(t);
+        app.log({ level: 'info', msg: `address index ${dir}: following ${m.id} from block ${live.tip}` });
+      } catch (err) {
+        app.log({ level: 'warn', msg: `address index ${dir}: ${err.message}` });
+      }
+    }
+  }
+
   installShutdown(app);
   return app;
 }
