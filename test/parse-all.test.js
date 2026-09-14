@@ -18,6 +18,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIRS = ['server', 'public/js', 'scripts'];
@@ -77,7 +78,7 @@ test('no shipped source carries a raw control character inside a string', () => 
 test('the user CLI actually runs, and says so when accounts are off', () => {
   // Parsing is necessary, not sufficient: this file is the documented password
   // recovery path, so run it the way an operator in trouble would.
-  const dir = fs.mkdtempSync(path.join('/tmp', 'blockyard-cli-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-cli-'));
   try {
     const out = execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'manage-users.js'), 'list'], {
       cwd: ROOT, encoding: 'utf8', env: { ...process.env, BLOCKYARD_CONFIG: 'none', BLOCKYARD_DATA: dir }, stdio: 'pipe',

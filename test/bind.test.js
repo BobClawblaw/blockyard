@@ -9,6 +9,8 @@ import {
   localAddresses, hasAddress, isBindableHost, bindProblemMessage, planBinds,
 } from '../server/netinfo.js';
 import { loadConfig, configProblems } from '../server/config.js';
+import os from 'node:os';
+import path from 'node:path';
 
 // A stand-in for this box: loopback, a LAN card, a tunnel, and a bridge.
 const IFACES = {
@@ -67,7 +69,7 @@ test('an in-use port says whether it is us double-binding or someone else', () =
 });
 
 test('the config accepts the LAN bind and rejects a non-address', () => {
-  const dir = fs.mkdtempSync('/tmp/blockyard-bind-');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-bind-'));
   const write = (obj) => {
     const f = `${dir}/local.json`;
     fs.writeFileSync(f, JSON.stringify(obj));
@@ -102,7 +104,7 @@ test('a bind plan separates what can be served from what is merely absent', () =
 });
 
 test('a comma list and an array mean the same thing', () => {
-  const dir = fs.mkdtempSync('/tmp/blockyard-bind2-');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-bind2-'));
   const f = `${dir}/local.json`;
   fs.writeFileSync(f, JSON.stringify({ server: { hosts: ['192.0.2.10', '198.51.100.7'] } }));
   const fromArray = loadConfig({ configFile: f, ifaces: IFACES });

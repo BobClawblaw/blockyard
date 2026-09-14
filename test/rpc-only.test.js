@@ -59,7 +59,7 @@ test('a monitor with no logFile has no tail and says which figures lose their so
 });
 
 test('a monitor with a logFile does not claim the mode is on', async () => {
-  const file = path.join(fs.mkdtempSync('/tmp/blockyard-log-'), 'bitcoin.main.log');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-log-')), 'bitcoin.main.log');
   fs.writeFileSync(file, '2026-09-08 05:45:47.799 [dlc] -- recv 81.2MB/s (avg 108.7MB/s) | write 62.8MB/s (avg 80.4MB/s) | floor 32.0 KB/s (median 5.1) | banned 8/114 | staged 1 --\n');
   const m = makeMonitor({ logFile: file });
   assert.equal(m.logEnabled, true);

@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseLine } from '../server/collect/logparse.js';
+import os from 'node:os';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SHAPES = fs.readFileSync(path.join(HERE, 'fixtures', 'log-samples-bench.txt'), 'utf8').split('\n').filter(Boolean);
@@ -140,7 +141,7 @@ test('a node shutdown in the log is surfaced, not left to look like a network fa
 test('323 handshake failures aggregate instead of flooding the feed', async () => {
   const { NodeMonitor } = await import('../server/collect/monitor.js');
   const { History } = await import('../server/store/history.js');
-  const dir = fs.mkdtempSync('/tmp/blockyard-hs-');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-hs-'));
   const store = { ringCapacity: 500, maxEventLog: 100, retentionHours: 1, snapshotEveryMs: 1e9 };
   const logger = () => {}; logger.child = () => logger;
   const m = new NodeMonitor({ id: 't', label: 't', rpcUrl: 'http://127.0.0.1:1', datadir: dir, chainHint: 'main', logFile: null },

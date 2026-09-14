@@ -1,0 +1,6 @@
+# LF everywhere, on every platform: several tests read source files and match line-anchored
+# patterns, and a Windows checkout with autocrlf turned every one of them into a miss
+# (2026-09-14, the first Windows CI run).
+* text=auto eol=lf
+*.jpg binary
+*.png binary
