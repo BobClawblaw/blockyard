@@ -312,7 +312,14 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
   if (!kinds.length) return null;
   const recent = st.recentFx ?? (st.recentFx = []);
   const window = Math.max(0, Math.min(Math.floor(noRepeat), kinds.length - 1));
-  const blocked = new Set(recent.slice(recent.length - window));
+  // FROM THE START, NOT FROM THE END (operator, 2026-09-15: "I keep seeing the same effect being
+  // played before new ones"). This was `recent.slice(recent.length - window)`, and while fewer
+  // effects had played than the window is wide that index was negative -- which slice counts from
+  // the END: nine plays under a window of eleven blocked only the last two. The rule was weakest
+  // right after the page opened, which is exactly when anyone is watching. Measured before the
+  // fix on the Markets list: a repeat at the tenth pick; after it: every effect plays once before
+  // any comes round again.
+  const blocked = new Set(recent.slice(Math.max(0, recent.length - window)));
   let pool = kinds.filter((k) => !blocked.has(k));
   if (!pool.length) {
     // every kind is inside the window: the ones played least recently

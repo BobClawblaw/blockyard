@@ -6,7 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **The no-repeat window holds from the first pick.** It was read with a slice whose index went
+  negative while fewer effects had played than the window is wide, and a negative index counts
+  from the end: nine plays under a window of eleven blocked only the last two, so an effect could
+  come round again before every other had played — right after the page opened, when anyone is
+  watching (measured on the Markets list: a repeat at the tenth pick). Every effect now plays
+  once before any repeats, from the first pick, on both boards.
 
 ## [0.0.9] — 2026-09-14
 

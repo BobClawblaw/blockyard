@@ -260,3 +260,25 @@ test('the cadence sliders: each effects tab sets how long its board rests betwee
   // clamped to the sliders' own ranges
   assert.deepEqual(spaceOptions({ effects: { pauseMin: 9999, pauseMax: -4, firstAfter: 500 } }).idleEvery, [1000, 600000]);
 });
+
+test('the no-repeat window holds from the very first pick: nothing repeats before every effect has had a turn', () => {
+  // operator, 2026-09-15: "I don't think the avoid repeats is working well in at least the market
+  // view. I keep seeing the same effect being played before new ones". The window was read with
+  // recent.slice(recent.length - window), and a negative index counts from the END: with fewer
+  // plays than the window is wide, only the last few were blocked. Measured: a repeat at the
+  // tenth pick of twelve.
+  let seed = 42;
+  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+  for (const [kinds, window] of [[MARKET_FX, 12], [SPACE_FX, 12], [MARKET_FX, 5], [SPACE_FX, 28]]) {
+    for (let run = 0; run < 20; run++) {
+      const st = {};
+      const seq = [];
+      for (let i = 0; i < 60; i++) seq.push(chooseIdleFx(kinds, st, i * 8000, rnd, window));
+      const w = Math.min(window, kinds.length - 1);
+      for (let i = 0; i < seq.length; i++) {
+        const back = seq.slice(Math.max(0, i - w), i);
+        assert.ok(!back.includes(seq[i]), `${kinds.length} kinds, window ${window}: ${seq[i]} at pick ${i + 1} repeats within the last ${w} (${back.join(' ')})`);
+      }
+    }
+  }
+});
