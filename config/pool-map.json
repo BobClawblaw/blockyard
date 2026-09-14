@@ -1,0 +1,2620 @@
+{
+ "source": "https://raw.githubusercontent.com/mempool/mining-pools/master/pools-v2.json",
+ "sourceSha256": "0491a15f88dbd7726f00b809b65f5fa86f4b072e44aefa93e4f3414a9a61aa90",
+ "fetchedAt": "2026-09-09T19:13:11.024Z",
+ "attribution": "mempool.space/mining-pools (MIT). Labels are their curated mapping, matched by literal coinbase text; unmatched blocks keep their raw tag and an unknown fingerprint.",
+ "matchRule": "longest literal tag substring wins, case-insensitive, on the whole coinbase scriptSig as text; tags shorter than 3 normalised characters are dropped",
+ "pools": [
+  {
+   "key": "blockfills",
+   "name": "BlockFills",
+   "slug": null,
+   "link": "https://www.blockfills.com/mining",
+   "tags": [
+    "/BlockfillsPool/"
+   ]
+  },
+  {
+   "key": "ultimuspool",
+   "name": "ULTIMUSPOOL",
+   "slug": null,
+   "link": "https://www.ultimuspool.com",
+   "tags": [
+    "/ultimus/"
+   ]
+  },
+  {
+   "key": "terra pool",
+   "name": "Terra Pool",
+   "slug": null,
+   "link": "https://terrapool.io",
+   "tags": [
+    "Validated with Clean Energy",
+    "terrapool.io"
+   ]
+  },
+  {
+   "key": "luxor",
+   "name": "Luxor",
+   "slug": null,
+   "link": "https://mining.luxor.tech",
+   "tags": [
+    "Luxor Tech",
+    "/LUXOR/"
+   ]
+  },
+  {
+   "key": "1thash",
+   "name": "1THash",
+   "slug": null,
+   "link": "https://www.1thash.top",
+   "tags": [
+    "/1THash&58COIN/",
+    "/1THash/"
+   ]
+  },
+  {
+   "key": "btc.com",
+   "name": "BTC.com",
+   "slug": null,
+   "link": "https://pool.btc.com",
+   "tags": [
+    "/BTC.COM/",
+    "/BTC.com/",
+    "btccom"
+   ]
+  },
+  {
+   "key": "bitfarms",
+   "name": "Bitfarms",
+   "slug": null,
+   "link": "https://www.bitfarms.io",
+   "tags": [
+    "BITFARMS"
+   ]
+  },
+  {
+   "key": "huobi.pool",
+   "name": "Huobi.pool",
+   "slug": null,
+   "link": "https://www.hpt.com",
+   "tags": [
+    "/HuoBi/",
+    "/Huobi/"
+   ]
+  },
+  {
+   "key": "wayi.cn",
+   "name": "WAYI.CN",
+   "slug": null,
+   "link": "https://www.easy2mine.com",
+   "tags": [
+    "/E2M & BTC.TOP/"
+   ]
+  },
+  {
+   "key": "canoepool",
+   "name": "CanoePool",
+   "slug": null,
+   "link": "https://btc.canoepool.com",
+   "tags": [
+    "/canoepool/",
+    "/CANOE/"
+   ]
+  },
+  {
+   "key": "btc.top",
+   "name": "BTC.TOP",
+   "slug": null,
+   "link": "https://btc.top",
+   "tags": [
+    "/BTC.TOP/"
+   ]
+  },
+  {
+   "key": "bitcoin.com",
+   "name": "Bitcoin.com",
+   "slug": null,
+   "link": "https://www.bitcoin.com",
+   "tags": [
+    "pool.bitcoin.com"
+   ]
+  },
+  {
+   "key": "175btc",
+   "name": "175btc",
+   "slug": null,
+   "link": "https://www.175btc.com",
+   "tags": [
+    "Mined By 175btc.com"
+   ]
+  },
+  {
+   "key": "gbminers",
+   "name": "GBMiners",
+   "slug": null,
+   "link": "https://gbminers.com",
+   "tags": [
+    "/mined by gbminers/"
+   ]
+  },
+  {
+   "key": "a-xbt",
+   "name": "A-XBT",
+   "slug": null,
+   "link": "https://www.a-xbt.com",
+   "tags": [
+    "/A-XBT/"
+   ]
+  },
+  {
+   "key": "asicminer",
+   "name": "ASICMiner",
+   "slug": null,
+   "link": "https://www.asicminer.co",
+   "tags": [
+    "ASICMiner"
+   ]
+  },
+  {
+   "key": "bitminter",
+   "name": "BitMinter",
+   "slug": null,
+   "link": "https://bitminter.com",
+   "tags": [
+    "BitMinter"
+   ]
+  },
+  {
+   "key": "bitcoinrussia",
+   "name": "BitcoinRussia",
+   "slug": null,
+   "link": "https://bitcoin-russia.ru",
+   "tags": [
+    "/Bitcoin-Russia.ru/"
+   ]
+  },
+  {
+   "key": "btcserv",
+   "name": "BTCServ",
+   "slug": null,
+   "link": "https://btcserv.net",
+   "tags": [
+    "btcserv"
+   ]
+  },
+  {
+   "key": "simplecoin.us",
+   "name": "simplecoin.us",
+   "slug": null,
+   "link": "https://simplecoin.us",
+   "tags": [
+    "simplecoin"
+   ]
+  },
+  {
+   "key": "btc guild",
+   "name": "BTC Guild",
+   "slug": null,
+   "link": "https://www.btcguild.com",
+   "tags": [
+    "BTC Guild"
+   ]
+  },
+  {
+   "key": "eligius",
+   "name": "Eligius",
+   "slug": null,
+   "link": "https://eligius.st",
+   "tags": [
+    "Eligius"
+   ]
+  },
+  {
+   "key": "ozcoin",
+   "name": "OzCoin",
+   "slug": null,
+   "link": "https://ozcoin.net",
+   "tags": [
+    "ozco.in",
+    "ozcoin"
+   ]
+  },
+  {
+   "key": "eclipsemc",
+   "name": "EclipseMC",
+   "slug": null,
+   "link": "https://eclipsemc.com",
+   "tags": [
+    "EMC ",
+    "EMC:"
+   ]
+  },
+  {
+   "key": "maxbtc",
+   "name": "MaxBTC",
+   "slug": null,
+   "link": "https://maxbtc.com",
+   "tags": [
+    "MaxBTC"
+   ]
+  },
+  {
+   "key": "triplemining",
+   "name": "TripleMining",
+   "slug": null,
+   "link": "https://www.triplemining.com",
+   "tags": [
+    "Triplemining.com",
+    "triplemining"
+   ]
+  },
+  {
+   "key": "coinlab",
+   "name": "CoinLab",
+   "slug": null,
+   "link": "https://coinlab.com",
+   "tags": [
+    "CoinLab"
+   ]
+  },
+  {
+   "key": "50btc",
+   "name": "50BTC",
+   "slug": null,
+   "link": "https://www.50btc.com",
+   "tags": [
+    "50BTC"
+   ]
+  },
+  {
+   "key": "ghash.io",
+   "name": "GHash.IO",
+   "slug": null,
+   "link": "https://ghash.io",
+   "tags": [
+    "ghash.io"
+   ]
+  },
+  {
+   "key": "st mining corp",
+   "name": "ST Mining Corp",
+   "slug": null,
+   "link": "https://bitcointalk.org/index.php?topic=77000.msg3207708#msg3207708",
+   "tags": [
+    "st mining corp"
+   ]
+  },
+  {
+   "key": "bitparking",
+   "name": "Bitparking",
+   "slug": null,
+   "link": "https://mmpool.bitparking.com",
+   "tags": [
+    "bitparking"
+   ]
+  },
+  {
+   "key": "mmpool",
+   "name": "mmpool",
+   "slug": null,
+   "link": "https://mmpool.org/pool",
+   "tags": [
+    "mmpool"
+   ]
+  },
+  {
+   "key": "polmine",
+   "name": "Polmine",
+   "slug": null,
+   "link": "https://polmine.pl",
+   "tags": [
+    "by polmine.pl",
+    "bypmneU"
+   ]
+  },
+  {
+   "key": "kncminer",
+   "name": "KnCMiner",
+   "slug": null,
+   "link": "https://portal.kncminer.com/pool",
+   "tags": [
+    "KnCMiner"
+   ]
+  },
+  {
+   "key": "bitalo",
+   "name": "Bitalo",
+   "slug": null,
+   "link": "https://bitalo.com/mining",
+   "tags": [
+    "Bitalo"
+   ]
+  },
+  {
+   "key": "f2pool",
+   "name": "F2Pool",
+   "slug": null,
+   "link": "https://www.f2pool.com",
+   "tags": [
+    "F2Pool",
+    "七彩神仙鱼",
+    "🐟"
+   ]
+  },
+  {
+   "key": "hhtt",
+   "name": "HHTT",
+   "slug": null,
+   "link": "https://hhtt.1209k.com",
+   "tags": [
+    "HHTT"
+   ]
+  },
+  {
+   "key": "megabigpower",
+   "name": "MegaBigPower",
+   "slug": null,
+   "link": "https://megabigpower.com",
+   "tags": [
+    "megabigpower.com"
+   ]
+  },
+  {
+   "key": "mt red",
+   "name": "Mt Red",
+   "slug": null,
+   "link": "https://mtred.com",
+   "tags": [
+    "/mtred/"
+   ]
+  },
+  {
+   "key": "nmcbit",
+   "name": "NMCbit",
+   "slug": null,
+   "link": "https://nmcbit.com",
+   "tags": [
+    "nmcbit.com"
+   ]
+  },
+  {
+   "key": "yourbtc.net",
+   "name": "Yourbtc.net",
+   "slug": null,
+   "link": "https://yourbtc.net",
+   "tags": [
+    "yourbtc.net"
+   ]
+  },
+  {
+   "key": "give me coins",
+   "name": "Give Me Coins",
+   "slug": null,
+   "link": "https://give-me-coins.com",
+   "tags": [
+    "Give-Me-Coins"
+   ]
+  },
+  {
+   "key": "braiins pool",
+   "name": "Braiins Pool",
+   "slug": null,
+   "link": "https://braiins.com/pool",
+   "tags": [
+    "/slush/"
+   ]
+  },
+  {
+   "key": "antpool",
+   "name": "AntPool",
+   "slug": null,
+   "link": "https://www.antpool.com",
+   "tags": [
+    "Mined By AntPool",
+    "Mined by AntPool",
+    "/AntPool/"
+   ]
+  },
+  {
+   "key": "multicoin.co",
+   "name": "MultiCoin.co",
+   "slug": null,
+   "link": "https://multicoin.co",
+   "tags": [
+    "Mined by MultiCoin.co"
+   ]
+  },
+  {
+   "key": "bcpool.io",
+   "name": "bcpool.io",
+   "slug": null,
+   "link": "https://bcpool.io",
+   "tags": [
+    "bcpool.io"
+   ]
+  },
+  {
+   "key": "cointerra",
+   "name": "Cointerra",
+   "slug": null,
+   "link": "https://cointerra.com",
+   "tags": [
+    "cointerra"
+   ]
+  },
+  {
+   "key": "kanopool",
+   "name": "KanoPool",
+   "slug": null,
+   "link": "https://kano.is",
+   "tags": [
+    "Kano"
+   ]
+  },
+  {
+   "key": "solo ck",
+   "name": "Solo CK",
+   "slug": null,
+   "link": "https://solo.ckpool.org",
+   "tags": [
+    "/solo.ckpool.org/"
+   ]
+  },
+  {
+   "key": "ckpool",
+   "name": "CKPool",
+   "slug": null,
+   "link": "https://ckpool.org",
+   "tags": [
+    "/ckpool.org/"
+   ]
+  },
+  {
+   "key": "nicehash",
+   "name": "NiceHash",
+   "slug": null,
+   "link": "https://www.nicehash.com",
+   "tags": [
+    "/NiceHashMining/",
+    "/NiceHashSolo",
+    "/NiceHash/"
+   ]
+  },
+  {
+   "key": "bitclub",
+   "name": "BitClub",
+   "slug": null,
+   "link": "https://bitclubpool.com",
+   "tags": [
+    "/BitClub Network/"
+   ]
+  },
+  {
+   "key": "bitcoin affiliate network",
+   "name": "Bitcoin Affiliate Network",
+   "slug": null,
+   "link": "https://mining.bitcoinaffiliatenetwork.com",
+   "tags": [
+    "bitcoinaffiliatenetwork.com"
+   ]
+  },
+  {
+   "key": "btcc",
+   "name": "BTCC",
+   "slug": null,
+   "link": "https://pool.btcc.com",
+   "tags": [
+    "BTCChina Pool",
+    "BTCChina.com",
+    "btcchina.com",
+    "/BTCC/"
+   ]
+  },
+  {
+   "key": "bwpool",
+   "name": "BWPool",
+   "slug": null,
+   "link": "https://bwpool.net",
+   "tags": [
+    "BW Pool",
+    "BWPool"
+   ]
+  },
+  {
+   "key": "exx&bw",
+   "name": "EXX&BW",
+   "slug": null,
+   "link": "https://xbtc.exx.com",
+   "tags": [
+    "xbtc.exx.com&bw.com"
+   ]
+  },
+  {
+   "key": "bitsolo",
+   "name": "Bitsolo",
+   "slug": null,
+   "link": "https://bitsolo.net",
+   "tags": [
+    "Bitsolo Pool"
+   ]
+  },
+  {
+   "key": "bitfury",
+   "name": "BitFury",
+   "slug": null,
+   "link": "https://bitfury.com",
+   "tags": [
+    "/BitFury/",
+    "/Bitfury/"
+   ]
+  },
+  {
+   "key": "21 inc.",
+   "name": "21 Inc.",
+   "slug": null,
+   "link": "https://21.co",
+   "tags": [
+    "/pool34/"
+   ]
+  },
+  {
+   "key": "digitalbtc",
+   "name": "digitalBTC",
+   "slug": null,
+   "link": "https://digitalbtc.com",
+   "tags": [
+    "/agentD/"
+   ]
+  },
+  {
+   "key": "8baochi",
+   "name": "8baochi",
+   "slug": null,
+   "link": "https://8baochi.com",
+   "tags": [
+    "/八宝池 8baochi.com/"
+   ]
+  },
+  {
+   "key": "mybtccoin pool",
+   "name": "myBTCcoin Pool",
+   "slug": null,
+   "link": "https://mybtccoin.com",
+   "tags": [
+    "myBTCcoin Pool"
+   ]
+  },
+  {
+   "key": "tbdice",
+   "name": "TBDice",
+   "slug": null,
+   "link": "https://tbdice.org",
+   "tags": [
+    "TBDice"
+   ]
+  },
+  {
+   "key": "hashpool",
+   "name": "HASHPOOL",
+   "slug": null,
+   "link": "https://hashpool.com",
+   "tags": [
+    "HASHPOOL"
+   ]
+  },
+  {
+   "key": "nexious",
+   "name": "Nexious",
+   "slug": null,
+   "link": "https://nexious.com",
+   "tags": [
+    "/Nexious/"
+   ]
+  },
+  {
+   "key": "bravo mining",
+   "name": "Bravo Mining",
+   "slug": null,
+   "link": "https://www.bravo-mining.com",
+   "tags": [
+    "/bravo-mining/"
+   ]
+  },
+  {
+   "key": "hotpool",
+   "name": "HotPool",
+   "slug": null,
+   "link": "https://hotpool.co",
+   "tags": [
+    "/HotPool/"
+   ]
+  },
+  {
+   "key": "okexpool",
+   "name": "OKExPool",
+   "slug": null,
+   "link": "https://www.okex.com",
+   "tags": [
+    "/www.okex.com/"
+   ]
+  },
+  {
+   "key": "bcmonster",
+   "name": "BCMonster",
+   "slug": null,
+   "link": "https://www.bcmonster.com",
+   "tags": [
+    "/BCMonster/"
+   ]
+  },
+  {
+   "key": "1hash",
+   "name": "1Hash",
+   "slug": null,
+   "link": "https://www.1hash.com",
+   "tags": [
+    "Mined by 1hash.com"
+   ]
+  },
+  {
+   "key": "bixin",
+   "name": "Bixin",
+   "slug": null,
+   "link": "https://haopool.com",
+   "tags": [
+    "/HaoBTC/",
+    "/Bixin/",
+    "HAOBTC"
+   ]
+  },
+  {
+   "key": "tatmas pool",
+   "name": "TATMAS Pool",
+   "slug": null,
+   "link": "https://tmsminer.com",
+   "tags": [
+    "/ViaBTC/TATMAS Pool/"
+   ]
+  },
+  {
+   "key": "viabtc",
+   "name": "ViaBTC",
+   "slug": null,
+   "link": "https://viabtc.com",
+   "tags": [
+    "viabtc.com deploy",
+    "/ViaBTC/"
+   ]
+  },
+  {
+   "key": "connectbtc",
+   "name": "ConnectBTC",
+   "slug": null,
+   "link": "https://www.connectbtc.com",
+   "tags": [
+    "/ConnectBTC - Home for Miners/"
+   ]
+  },
+  {
+   "key": "batpool",
+   "name": "BATPOOL",
+   "slug": null,
+   "link": "https://www.batpool.com",
+   "tags": [
+    "/BATPOOL/"
+   ]
+  },
+  {
+   "key": "waterhole",
+   "name": "Waterhole",
+   "slug": null,
+   "link": "https://btc.waterhole.io",
+   "tags": [
+    "/WATERHOLE.IO/"
+   ]
+  },
+  {
+   "key": "dcexploration",
+   "name": "DCExploration",
+   "slug": null,
+   "link": "https://dcexploration.cn",
+   "tags": [
+    "/DCExploration/"
+   ]
+  },
+  {
+   "key": "dcex",
+   "name": "DCEX",
+   "slug": null,
+   "link": "https://dcexploration.cn",
+   "tags": [
+    "/DCEX/"
+   ]
+  },
+  {
+   "key": "btpool",
+   "name": "BTPOOL",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "/BTPOOL/"
+   ]
+  },
+  {
+   "key": "58coin",
+   "name": "58COIN",
+   "slug": null,
+   "link": "https://www.58coin.com",
+   "tags": [
+    "/58coin.com/"
+   ]
+  },
+  {
+   "key": "bitcoin india",
+   "name": "Bitcoin India",
+   "slug": null,
+   "link": "https://bitcoin-india.org",
+   "tags": [
+    "/Bitcoin-India/"
+   ]
+  },
+  {
+   "key": "shawnp0wers",
+   "name": "shawnp0wers",
+   "slug": null,
+   "link": "https://www.brainofshawn.com",
+   "tags": [
+    "--Nug--"
+   ]
+  },
+  {
+   "key": "phash.io",
+   "name": "PHash.IO",
+   "slug": null,
+   "link": "https://phash.io",
+   "tags": [
+    "/phash.cn/",
+    "/phash.io/"
+   ]
+  },
+  {
+   "key": "rigpool",
+   "name": "RigPool",
+   "slug": null,
+   "link": "https://www.rigpool.com",
+   "tags": [
+    "/RigPool.com/"
+   ]
+  },
+  {
+   "key": "haozhuzhu",
+   "name": "HAOZHUZHU",
+   "slug": null,
+   "link": "https://haozhuzhu.com",
+   "tags": [
+    "/haozhuzhu/"
+   ]
+  },
+  {
+   "key": "7pool",
+   "name": "7pool",
+   "slug": null,
+   "link": "https://7pool.com",
+   "tags": [
+    "/$Mined by 7pool.com/"
+   ]
+  },
+  {
+   "key": "miningkings",
+   "name": "MiningKings",
+   "slug": null,
+   "link": "https://miningkings.com",
+   "tags": [
+    "/mined by poopbut/"
+   ]
+  },
+  {
+   "key": "hashbx",
+   "name": "HashBX",
+   "slug": null,
+   "link": "https://hashbx.io",
+   "tags": [
+    "/Mined by HashBX.io/"
+   ]
+  },
+  {
+   "key": "dpool",
+   "name": "DPOOL",
+   "slug": null,
+   "link": "https://www.dpool.top",
+   "tags": [
+    "/DPOOL.TOP/"
+   ]
+  },
+  {
+   "key": "rawpool",
+   "name": "Rawpool",
+   "slug": null,
+   "link": "https://www.rawpool.com",
+   "tags": [
+    "/Rawpool.com/"
+   ]
+  },
+  {
+   "key": "haominer",
+   "name": "haominer",
+   "slug": null,
+   "link": "https://haominer.com",
+   "tags": [
+    "/haominer/"
+   ]
+  },
+  {
+   "key": "helix",
+   "name": "Helix",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "/Helix/"
+   ]
+  },
+  {
+   "key": "bitcoin-ukraine",
+   "name": "Bitcoin-Ukraine",
+   "slug": null,
+   "link": "https://bitcoin-ukraine.com.ua",
+   "tags": [
+    "/Bitcoin-Ukraine.com.ua/"
+   ]
+  },
+  {
+   "key": "poolin",
+   "name": "Poolin",
+   "slug": null,
+   "link": "https://www.poolin.com",
+   "tags": [
+    "/poolin.com",
+    "/poolin/"
+   ]
+  },
+  {
+   "key": "secretsuperstar",
+   "name": "SecretSuperstar",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "/SecretSuperstar/"
+   ]
+  },
+  {
+   "key": "tigerpool.net",
+   "name": "tigerpool.net",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "/tigerpool.net"
+   ]
+  },
+  {
+   "key": "sigmapool.com",
+   "name": "Sigmapool.com",
+   "slug": null,
+   "link": "https://sigmapool.com",
+   "tags": [
+    "/Sigmapool.com/"
+   ]
+  },
+  {
+   "key": "okpool.top",
+   "name": "okpool.top",
+   "slug": null,
+   "link": "https://www.okpool.top",
+   "tags": [
+    "/www.okpool.top/"
+   ]
+  },
+  {
+   "key": "hummerpool",
+   "name": "Hummerpool",
+   "slug": null,
+   "link": "https://www.hummerpool.com",
+   "tags": [
+    "HummerPool",
+    "Hummerpool"
+   ]
+  },
+  {
+   "key": "tangpool",
+   "name": "Tangpool",
+   "slug": null,
+   "link": "https://www.tangpool.com",
+   "tags": [
+    "/Tangpool/"
+   ]
+  },
+  {
+   "key": "bytepool",
+   "name": "BytePool",
+   "slug": null,
+   "link": "https://www.bytepool.com",
+   "tags": [
+    "/bytepool.com/"
+   ]
+  },
+  {
+   "key": "spiderpool",
+   "name": "SpiderPool",
+   "slug": null,
+   "link": "https://www.spiderpool.com",
+   "tags": [
+    "SpiderPool"
+   ]
+  },
+  {
+   "key": "novablock",
+   "name": "NovaBlock",
+   "slug": null,
+   "link": "https://novablock.com",
+   "tags": [
+    "/NovaBlock/"
+   ]
+  },
+  {
+   "key": "miningcity",
+   "name": "MiningCity",
+   "slug": null,
+   "link": "https://www.miningcity.com",
+   "tags": [
+    "MiningCity"
+   ]
+  },
+  {
+   "key": "binance pool",
+   "name": "Binance Pool",
+   "slug": null,
+   "link": "https://pool.binance.com",
+   "tags": [
+    "/Binance/",
+    "binance"
+   ]
+  },
+  {
+   "key": "minerium",
+   "name": "Minerium",
+   "slug": null,
+   "link": "https://www.minerium.com",
+   "tags": [
+    "/Mined in the USA by: /Minerium.com/",
+    "/Minerium.com/"
+   ]
+  },
+  {
+   "key": "lubian.com",
+   "name": "Lubian.com",
+   "slug": null,
+   "link": "https://www.lubian.com",
+   "tags": [
+    "/lubian.com/",
+    "/Buffett/"
+   ]
+  },
+  {
+   "key": "okkong",
+   "name": "OKKONG",
+   "slug": null,
+   "link": "https://hash.okkong.com",
+   "tags": [
+    "/hash.okkong.com/"
+   ]
+  },
+  {
+   "key": "aao pool",
+   "name": "AAO Pool",
+   "slug": null,
+   "link": "https://btc.tmspool.top",
+   "tags": [
+    "/AAOPOOL/"
+   ]
+  },
+  {
+   "key": "emcdpool",
+   "name": "EMCDPool",
+   "slug": null,
+   "link": "https://pool.emcd.io",
+   "tags": [
+    "/one_more_mcd/",
+    "get___emcd",
+    "/EMCD/",
+    "emcd"
+   ]
+  },
+  {
+   "key": "foundry usa",
+   "name": "Foundry USA",
+   "slug": null,
+   "link": "https://foundrydigital.com",
+   "tags": [
+    "Foundry USA Pool",
+    "/2cDw/"
+   ]
+  },
+  {
+   "key": "sbi crypto",
+   "name": "SBI Crypto",
+   "slug": null,
+   "link": "https://sbicrypto.com",
+   "tags": [
+    "/SBICrypto.com Pool/",
+    "SBI Crypto",
+    "SBICrypto"
+   ]
+  },
+  {
+   "key": "arkpool",
+   "name": "ArkPool",
+   "slug": null,
+   "link": "https://www.arkpool.com",
+   "tags": [
+    "/ArkPool/"
+   ]
+  },
+  {
+   "key": "purebtc.com",
+   "name": "PureBTC.COM",
+   "slug": null,
+   "link": "https://purebtc.com",
+   "tags": [
+    "/PureBTC.COM/"
+   ]
+  },
+  {
+   "key": "mara pool",
+   "name": "MARA Pool",
+   "slug": null,
+   "link": "https://marapool.com",
+   "tags": [
+    "MARA Made in USA",
+    "MARA Pool"
+   ]
+  },
+  {
+   "key": "kucoinpool",
+   "name": "KuCoinPool",
+   "slug": null,
+   "link": "https://www.kucoin.com/mining-pool",
+   "tags": [
+    "KuCoinPool"
+   ]
+  },
+  {
+   "key": "entrust charity pool",
+   "name": "Entrust Charity Pool",
+   "slug": null,
+   "link": "pool.entustus.org",
+   "tags": [
+    "Entrustus"
+   ]
+  },
+  {
+   "key": "okminer",
+   "name": "OKMINER",
+   "slug": null,
+   "link": "https://okminer.com",
+   "tags": [
+    "okminer.com/euz"
+   ]
+  },
+  {
+   "key": "titan",
+   "name": "Titan",
+   "slug": null,
+   "link": "https://titan.io",
+   "tags": [
+    "Titan.io"
+   ]
+  },
+  {
+   "key": "pega pool",
+   "name": "PEGA Pool",
+   "slug": null,
+   "link": "https://www.pega-pool.com",
+   "tags": [
+    "/pegapool/"
+   ]
+  },
+  {
+   "key": "zulupool",
+   "name": "Zulupool",
+   "slug": null,
+   "link": "https://beta.zulupool.com/",
+   "tags": [
+    "ZULUPooL",
+    "ZU_test"
+   ]
+  },
+  {
+   "key": "secpool",
+   "name": "SECPOOL",
+   "slug": null,
+   "link": "https://www.secpool.com",
+   "tags": [
+    "SecPool"
+   ]
+  },
+  {
+   "key": "ocean",
+   "name": "OCEAN",
+   "slug": null,
+   "link": "https://ocean.xyz/",
+   "tags": [
+    "OCEAN.XYZ"
+   ]
+  },
+  {
+   "key": "whitepool",
+   "name": "WhitePool",
+   "slug": null,
+   "link": "https://whitebit.com/mining-pool",
+   "tags": [
+    "WhitePool"
+   ]
+  },
+  {
+   "key": "wiz",
+   "name": "wiz",
+   "slug": null,
+   "link": "https://wiz.biz/",
+   "tags": [
+    "/@wiz/"
+   ]
+  },
+  {
+   "key": "mononaut",
+   "name": "mononaut",
+   "slug": null,
+   "link": "https://twitter.com/mononautical",
+   "tags": [
+    "🐵🚀"
+   ]
+  },
+  {
+   "key": "rijndael",
+   "name": "rijndael",
+   "slug": null,
+   "link": "https://twitter.com/rot13maxi",
+   "tags": [
+    "rijndael's toaster"
+   ]
+  },
+  {
+   "key": "wk057",
+   "name": "wk057",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "wizkid057's block"
+   ]
+  },
+  {
+   "key": "futurebit apollo solo",
+   "name": "FutureBit Apollo Solo",
+   "slug": null,
+   "link": "https://www.futurebit.io",
+   "tags": [
+    "/mined by a Solo FutureBit Apollo/",
+    "FutureBit",
+    "Apollo"
+   ]
+  },
+  {
+   "key": "emzy",
+   "name": "emzy",
+   "slug": null,
+   "link": "https://twitter.com/emzy",
+   "tags": [
+    "Emzy was here."
+   ]
+  },
+  {
+   "key": "knorrium",
+   "name": "knorrium",
+   "slug": null,
+   "link": "https://twitter.com/knorrium",
+   "tags": [
+    "knorrium"
+   ]
+  },
+  {
+   "key": "portland.hodl",
+   "name": "Portland.HODL",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "Portland.HODL"
+   ]
+  },
+  {
+   "key": "phoenix",
+   "name": "Phoenix",
+   "slug": null,
+   "link": "https://phoenixpool.com",
+   "tags": [
+    "/Phoenix/"
+   ]
+  },
+  {
+   "key": "neopool",
+   "name": "Neopool",
+   "slug": null,
+   "link": "https://neopool.com/",
+   "tags": [
+    "/Neopool/"
+   ]
+  },
+  {
+   "key": "maxipool",
+   "name": "MaxiPool",
+   "slug": null,
+   "link": "https://maxipool.org/",
+   "tags": [
+    "/MaxiPool/"
+   ]
+  },
+  {
+   "key": "drdetroit",
+   "name": "DrDetroit",
+   "slug": null,
+   "link": "https://x.com/bankhatin",
+   "tags": [
+    "DrDetroit"
+   ]
+  },
+  {
+   "key": "bitfufupool",
+   "name": "BitFuFuPool",
+   "slug": null,
+   "link": "https://www.bitfufu.com/pool",
+   "tags": [
+    "/BitFuFu/"
+   ]
+  },
+  {
+   "key": "gdpool",
+   "name": "GDPool",
+   "slug": null,
+   "link": "",
+   "tags": [
+    "Lucky pool",
+    "GDPool"
+   ]
+  },
+  {
+   "key": "mining-dutch",
+   "name": "Mining-Dutch",
+   "slug": null,
+   "link": "https://www.mining-dutch.nl/",
+   "tags": [
+    "/Mining-Dutch/"
+   ]
+  },
+  {
+   "key": "public pool",
+   "name": "Public Pool",
+   "slug": null,
+   "link": "https://web.public-pool.io/",
+   "tags": [
+    "Public Pool on Umbrel",
+    "Public-Pool"
+   ]
+  },
+  {
+   "key": "mining squared",
+   "name": "Mining Squared",
+   "slug": null,
+   "link": "https://pool.bsquared.network/",
+   "tags": [
+    "BSquared Network",
+    "MiningSquared",
+    "/bsquared/"
+   ]
+  },
+  {
+   "key": "innopolis tech",
+   "name": "Innopolis Tech",
+   "slug": null,
+   "link": "https://innopolis.tech/",
+   "tags": [
+    "Innopolis.tech",
+    "Innopolis"
+   ]
+  },
+  {
+   "key": "nymkappa",
+   "name": "nymkappa",
+   "slug": null,
+   "link": "https://github.com/nymkappa",
+   "tags": [
+    "/@nymkappa/"
+   ]
+  },
+  {
+   "key": "btclab",
+   "name": "BTCLab",
+   "slug": null,
+   "link": "https://btclab.dev/",
+   "tags": [
+    "BTCLab.dev",
+    "BTCLab"
+   ]
+  },
+  {
+   "key": "parasite",
+   "name": "Parasite",
+   "slug": null,
+   "link": "https://parasite.space",
+   "tags": [
+    "parasite"
+   ]
+  },
+  {
+   "key": "redrock pool",
+   "name": "RedRock Pool",
+   "slug": null,
+   "link": "https://redrock.pro/",
+   "tags": [
+    "RedRock"
+   ]
+  },
+  {
+   "key": "est3lar",
+   "name": "Est3lar",
+   "slug": null,
+   "link": "https://est3lar.io",
+   "tags": [
+    "/Est3lar/",
+    "est3lar",
+    "Est3lar",
+    "EST3LAR"
+   ]
+  },
+  {
+   "key": "braiins solo",
+   "name": "Braiins Solo",
+   "slug": null,
+   "link": "https://solo.braiins.com",
+   "tags": [
+    "/braiinssolo/"
+   ]
+  },
+  {
+   "key": "solopool.com",
+   "name": "SoloPool.com",
+   "slug": null,
+   "link": "https://solopool.com",
+   "tags": [
+    "/Mined @ SoloPool.Com/"
+   ]
+  },
+  {
+   "key": "noderunners",
+   "name": "Noderunners",
+   "slug": null,
+   "link": "https://pool.noderunners.network",
+   "tags": [
+    "/Noderunners/"
+   ]
+  },
+  {
+   "key": "dmnd",
+   "name": "DMND",
+   "slug": null,
+   "link": "https://www.dmnd.work/",
+   "tags": [
+    "/DMND/"
+   ]
+  }
+ ],
+ "matchers": [
+  {
+   "tag": "/Mined in the USA by: /Minerium.com/",
+   "tagNorm": "/mined in the usa by: /minerium.com/",
+   "key": "minerium",
+   "name": "Minerium"
+  },
+  {
+   "tag": "/mined by a Solo FutureBit Apollo/",
+   "tagNorm": "/mined by a solo futurebit apollo/",
+   "key": "futurebit apollo solo",
+   "name": "FutureBit Apollo Solo"
+  },
+  {
+   "tag": "/ConnectBTC - Home for Miners/",
+   "tagNorm": "/connectbtc - home for miners/",
+   "key": "connectbtc",
+   "name": "ConnectBTC"
+  },
+  {
+   "tag": "Validated with Clean Energy",
+   "tagNorm": "validated with clean energy",
+   "key": "terra pool",
+   "name": "Terra Pool"
+  },
+  {
+   "tag": "bitcoinaffiliatenetwork.com",
+   "tagNorm": "bitcoinaffiliatenetwork.com",
+   "key": "bitcoin affiliate network",
+   "name": "Bitcoin Affiliate Network"
+  },
+  {
+   "tag": "/Bitcoin-Ukraine.com.ua/",
+   "tagNorm": "/bitcoin-ukraine.com.ua/",
+   "key": "bitcoin-ukraine",
+   "name": "Bitcoin-Ukraine"
+  },
+  {
+   "tag": "/Mined @ SoloPool.Com/",
+   "tagNorm": "/mined @ solopool.com/",
+   "key": "solopool.com",
+   "name": "SoloPool.com"
+  },
+  {
+   "tag": "Mined by MultiCoin.co",
+   "tagNorm": "mined by multicoin.co",
+   "key": "multicoin.co",
+   "name": "MultiCoin.co"
+  },
+  {
+   "tag": "/$Mined by 7pool.com/",
+   "tagNorm": "/$mined by 7pool.com/",
+   "key": "7pool",
+   "name": "7pool"
+  },
+  {
+   "tag": "Public Pool on Umbrel",
+   "tagNorm": "public pool on umbrel",
+   "key": "public pool",
+   "name": "Public Pool"
+  },
+  {
+   "tag": "/ViaBTC/TATMAS Pool/",
+   "tagNorm": "/viabtc/tatmas pool/",
+   "key": "tatmas pool",
+   "name": "TATMAS Pool"
+  },
+  {
+   "tag": "/Mined by HashBX.io/",
+   "tagNorm": "/mined by hashbx.io/",
+   "key": "hashbx",
+   "name": "HashBX"
+  },
+  {
+   "tag": "/SBICrypto.com Pool/",
+   "tagNorm": "/sbicrypto.com pool/",
+   "key": "sbi crypto",
+   "name": "SBI Crypto"
+  },
+  {
+   "tag": "Mined By 175btc.com",
+   "tagNorm": "mined by 175btc.com",
+   "key": "175btc",
+   "name": "175btc"
+  },
+  {
+   "tag": "/mined by gbminers/",
+   "tagNorm": "/mined by gbminers/",
+   "key": "gbminers",
+   "name": "GBMiners"
+  },
+  {
+   "tag": "/Bitcoin-Russia.ru/",
+   "tagNorm": "/bitcoin-russia.ru/",
+   "key": "bitcoinrussia",
+   "name": "BitcoinRussia"
+  },
+  {
+   "tag": "xbtc.exx.com&bw.com",
+   "tagNorm": "xbtc.exx.com&bw.com",
+   "key": "exx&bw",
+   "name": "EXX&BW"
+  },
+  {
+   "tag": "Mined by 1hash.com",
+   "tagNorm": "mined by 1hash.com",
+   "key": "1hash",
+   "name": "1Hash"
+  },
+  {
+   "tag": "/mined by poopbut/",
+   "tagNorm": "/mined by poopbut/",
+   "key": "miningkings",
+   "name": "MiningKings"
+  },
+  {
+   "tag": "rijndael's toaster",
+   "tagNorm": "rijndael's toaster",
+   "key": "rijndael",
+   "name": "rijndael"
+  },
+  {
+   "tag": "/solo.ckpool.org/",
+   "tagNorm": "/solo.ckpool.org/",
+   "key": "solo ck",
+   "name": "Solo CK"
+  },
+  {
+   "tag": "/BitClub Network/",
+   "tagNorm": "/bitclub network/",
+   "key": "bitclub",
+   "name": "BitClub"
+  },
+  {
+   "tag": "/八宝池 8baochi.com/",
+   "tagNorm": "/八宝池 8baochi.com/",
+   "key": "8baochi",
+   "name": "8baochi"
+  },
+  {
+   "tag": "viabtc.com deploy",
+   "tagNorm": "viabtc.com deploy",
+   "key": "viabtc",
+   "name": "ViaBTC"
+  },
+  {
+   "tag": "/SecretSuperstar/",
+   "tagNorm": "/secretsuperstar/",
+   "key": "secretsuperstar",
+   "name": "SecretSuperstar"
+  },
+  {
+   "tag": "/hash.okkong.com/",
+   "tagNorm": "/hash.okkong.com/",
+   "key": "okkong",
+   "name": "OKKONG"
+  },
+  {
+   "tag": "wizkid057's block",
+   "tagNorm": "wizkid057's block",
+   "key": "wk057",
+   "name": "wk057"
+  },
+  {
+   "tag": "/BlockfillsPool/",
+   "tagNorm": "/blockfillspool/",
+   "key": "blockfills",
+   "name": "BlockFills"
+  },
+  {
+   "tag": "pool.bitcoin.com",
+   "tagNorm": "pool.bitcoin.com",
+   "key": "bitcoin.com",
+   "name": "Bitcoin.com"
+  },
+  {
+   "tag": "Triplemining.com",
+   "tagNorm": "triplemining.com",
+   "key": "triplemining",
+   "name": "TripleMining"
+  },
+  {
+   "tag": "megabigpower.com",
+   "tagNorm": "megabigpower.com",
+   "key": "megabigpower",
+   "name": "MegaBigPower"
+  },
+  {
+   "tag": "Mined By AntPool",
+   "tagNorm": "mined by antpool",
+   "key": "antpool",
+   "name": "AntPool"
+  },
+  {
+   "tag": "Mined by AntPool",
+   "tagNorm": "mined by antpool",
+   "key": "antpool",
+   "name": "AntPool"
+  },
+  {
+   "tag": "/NiceHashMining/",
+   "tagNorm": "/nicehashmining/",
+   "key": "nicehash",
+   "name": "NiceHash"
+  },
+  {
+   "tag": "/www.okpool.top/",
+   "tagNorm": "/www.okpool.top/",
+   "key": "okpool.top",
+   "name": "okpool.top"
+  },
+  {
+   "tag": "Foundry USA Pool",
+   "tagNorm": "foundry usa pool",
+   "key": "foundry usa",
+   "name": "Foundry USA"
+  },
+  {
+   "tag": "MARA Made in USA",
+   "tagNorm": "mara made in usa",
+   "key": "mara pool",
+   "name": "MARA Pool"
+  },
+  {
+   "tag": "BSquared Network",
+   "tagNorm": "bsquared network",
+   "key": "mining squared",
+   "name": "Mining Squared"
+  },
+  {
+   "tag": "/1THash&58COIN/",
+   "tagNorm": "/1thash&58coin/",
+   "key": "1thash",
+   "name": "1THash"
+  },
+  {
+   "tag": "/E2M & BTC.TOP/",
+   "tagNorm": "/e2m & btc.top/",
+   "key": "wayi.cn",
+   "name": "WAYI.CN"
+  },
+  {
+   "tag": "/DCExploration/",
+   "tagNorm": "/dcexploration/",
+   "key": "dcexploration",
+   "name": "DCExploration"
+  },
+  {
+   "tag": "/Bitcoin-India/",
+   "tagNorm": "/bitcoin-india/",
+   "key": "bitcoin india",
+   "name": "Bitcoin India"
+  },
+  {
+   "tag": "/Sigmapool.com/",
+   "tagNorm": "/sigmapool.com/",
+   "key": "sigmapool.com",
+   "name": "Sigmapool.com"
+  },
+  {
+   "tag": "okminer.com/euz",
+   "tagNorm": "okminer.com/euz",
+   "key": "okminer",
+   "name": "OKMINER"
+  },
+  {
+   "tag": "st mining corp",
+   "tagNorm": "st mining corp",
+   "key": "st mining corp",
+   "name": "ST Mining Corp"
+  },
+  {
+   "tag": "myBTCcoin Pool",
+   "tagNorm": "mybtccoin pool",
+   "key": "mybtccoin pool",
+   "name": "myBTCcoin Pool"
+  },
+  {
+   "tag": "/bravo-mining/",
+   "tagNorm": "/bravo-mining/",
+   "key": "bravo mining",
+   "name": "Bravo Mining"
+  },
+  {
+   "tag": "/www.okex.com/",
+   "tagNorm": "/www.okex.com/",
+   "key": "okexpool",
+   "name": "OKExPool"
+  },
+  {
+   "tag": "/WATERHOLE.IO/",
+   "tagNorm": "/waterhole.io/",
+   "key": "waterhole",
+   "name": "Waterhole"
+  },
+  {
+   "tag": "/tigerpool.net",
+   "tagNorm": "/tigerpool.net",
+   "key": "tigerpool.net",
+   "name": "tigerpool.net"
+  },
+  {
+   "tag": "/bytepool.com/",
+   "tagNorm": "/bytepool.com/",
+   "key": "bytepool",
+   "name": "BytePool"
+  },
+  {
+   "tag": "/Minerium.com/",
+   "tagNorm": "/minerium.com/",
+   "key": "minerium",
+   "name": "Minerium"
+  },
+  {
+   "tag": "/one_more_mcd/",
+   "tagNorm": "/one_more_mcd/",
+   "key": "emcdpool",
+   "name": "EMCDPool"
+  },
+  {
+   "tag": "Emzy was here.",
+   "tagNorm": "emzy was here.",
+   "key": "emzy",
+   "name": "emzy"
+  },
+  {
+   "tag": "/Mining-Dutch/",
+   "tagNorm": "/mining-dutch/",
+   "key": "mining-dutch",
+   "name": "Mining-Dutch"
+  },
+  {
+   "tag": "Innopolis.tech",
+   "tagNorm": "innopolis.tech",
+   "key": "innopolis tech",
+   "name": "Innopolis Tech"
+  },
+  {
+   "tag": "by polmine.pl",
+   "tagNorm": "by polmine.pl",
+   "key": "polmine",
+   "name": "Polmine"
+  },
+  {
+   "tag": "Give-Me-Coins",
+   "tagNorm": "give-me-coins",
+   "key": "give me coins",
+   "name": "Give Me Coins"
+  },
+  {
+   "tag": "/NiceHashSolo",
+   "tagNorm": "/nicehashsolo",
+   "key": "nicehash",
+   "name": "NiceHash"
+  },
+  {
+   "tag": "BTCChina Pool",
+   "tagNorm": "btcchina pool",
+   "key": "btcc",
+   "name": "BTCC"
+  },
+  {
+   "tag": "/RigPool.com/",
+   "tagNorm": "/rigpool.com/",
+   "key": "rigpool",
+   "name": "RigPool"
+  },
+  {
+   "tag": "/Rawpool.com/",
+   "tagNorm": "/rawpool.com/",
+   "key": "rawpool",
+   "name": "Rawpool"
+  },
+  {
+   "tag": "/PureBTC.COM/",
+   "tagNorm": "/purebtc.com/",
+   "key": "purebtc.com",
+   "name": "PureBTC.COM"
+  },
+  {
+   "tag": "Portland.HODL",
+   "tagNorm": "portland.hodl",
+   "key": "portland.hodl",
+   "name": "Portland.HODL"
+  },
+  {
+   "tag": "MiningSquared",
+   "tagNorm": "miningsquared",
+   "key": "mining squared",
+   "name": "Mining Squared"
+  },
+  {
+   "tag": "/braiinssolo/",
+   "tagNorm": "/braiinssolo/",
+   "key": "braiins solo",
+   "name": "Braiins Solo"
+  },
+  {
+   "tag": "/Noderunners/",
+   "tagNorm": "/noderunners/",
+   "key": "noderunners",
+   "name": "Noderunners"
+  },
+  {
+   "tag": "terrapool.io",
+   "tagNorm": "terrapool.io",
+   "key": "terra pool",
+   "name": "Terra Pool"
+  },
+  {
+   "tag": "triplemining",
+   "tagNorm": "triplemining",
+   "key": "triplemining",
+   "name": "TripleMining"
+  },
+  {
+   "tag": "/ckpool.org/",
+   "tagNorm": "/ckpool.org/",
+   "key": "ckpool",
+   "name": "CKPool"
+  },
+  {
+   "tag": "BTCChina.com",
+   "tagNorm": "btcchina.com",
+   "key": "btcc",
+   "name": "BTCC"
+  },
+  {
+   "tag": "btcchina.com",
+   "tagNorm": "btcchina.com",
+   "key": "btcc",
+   "name": "BTCC"
+  },
+  {
+   "tag": "Bitsolo Pool",
+   "tagNorm": "bitsolo pool",
+   "key": "bitsolo",
+   "name": "Bitsolo"
+  },
+  {
+   "tag": "/58coin.com/",
+   "tagNorm": "/58coin.com/",
+   "key": "58coin",
+   "name": "58COIN"
+  },
+  {
+   "tag": "/lubian.com/",
+   "tagNorm": "/lubian.com/",
+   "key": "lubian.com",
+   "name": "Lubian.com"
+  },
+  {
+   "tag": "/canoepool/",
+   "tagNorm": "/canoepool/",
+   "key": "canoepool",
+   "name": "CanoePool"
+  },
+  {
+   "tag": "yourbtc.net",
+   "tagNorm": "yourbtc.net",
+   "key": "yourbtc.net",
+   "name": "Yourbtc.net"
+  },
+  {
+   "tag": "/BCMonster/",
+   "tagNorm": "/bcmonster/",
+   "key": "bcmonster",
+   "name": "BCMonster"
+  },
+  {
+   "tag": "/haozhuzhu/",
+   "tagNorm": "/haozhuzhu/",
+   "key": "haozhuzhu",
+   "name": "HAOZHUZHU"
+  },
+  {
+   "tag": "/DPOOL.TOP/",
+   "tagNorm": "/dpool.top/",
+   "key": "dpool",
+   "name": "DPOOL"
+  },
+  {
+   "tag": "/poolin.com",
+   "tagNorm": "/poolin.com",
+   "key": "poolin",
+   "name": "Poolin"
+  },
+  {
+   "tag": "/NovaBlock/",
+   "tagNorm": "/novablock/",
+   "key": "novablock",
+   "name": "NovaBlock"
+  },
+  {
+   "tag": "Public-Pool",
+   "tagNorm": "public-pool",
+   "key": "public pool",
+   "name": "Public Pool"
+  },
+  {
+   "tag": "/@nymkappa/",
+   "tagNorm": "/@nymkappa/",
+   "key": "nymkappa",
+   "name": "nymkappa"
+  },
+  {
+   "tag": "Luxor Tech",
+   "tagNorm": "luxor tech",
+   "key": "luxor",
+   "name": "Luxor"
+  },
+  {
+   "tag": "simplecoin",
+   "tagNorm": "simplecoin",
+   "key": "simplecoin.us",
+   "name": "simplecoin.us"
+  },
+  {
+   "tag": "bitparking",
+   "tagNorm": "bitparking",
+   "key": "bitparking",
+   "name": "Bitparking"
+  },
+  {
+   "tag": "nmcbit.com",
+   "tagNorm": "nmcbit.com",
+   "key": "nmcbit",
+   "name": "NMCbit"
+  },
+  {
+   "tag": "/NiceHash/",
+   "tagNorm": "/nicehash/",
+   "key": "nicehash",
+   "name": "NiceHash"
+  },
+  {
+   "tag": "/phash.cn/",
+   "tagNorm": "/phash.cn/",
+   "key": "phash.io",
+   "name": "PHash.IO"
+  },
+  {
+   "tag": "/phash.io/",
+   "tagNorm": "/phash.io/",
+   "key": "phash.io",
+   "name": "PHash.IO"
+  },
+  {
+   "tag": "/haominer/",
+   "tagNorm": "/haominer/",
+   "key": "haominer",
+   "name": "haominer"
+  },
+  {
+   "tag": "HummerPool",
+   "tagNorm": "hummerpool",
+   "key": "hummerpool",
+   "name": "Hummerpool"
+  },
+  {
+   "tag": "Hummerpool",
+   "tagNorm": "hummerpool",
+   "key": "hummerpool",
+   "name": "Hummerpool"
+  },
+  {
+   "tag": "/Tangpool/",
+   "tagNorm": "/tangpool/",
+   "key": "tangpool",
+   "name": "Tangpool"
+  },
+  {
+   "tag": "SpiderPool",
+   "tagNorm": "spiderpool",
+   "key": "spiderpool",
+   "name": "SpiderPool"
+  },
+  {
+   "tag": "MiningCity",
+   "tagNorm": "miningcity",
+   "key": "miningcity",
+   "name": "MiningCity"
+  },
+  {
+   "tag": "get___emcd",
+   "tagNorm": "get___emcd",
+   "key": "emcdpool",
+   "name": "EMCDPool"
+  },
+  {
+   "tag": "SBI Crypto",
+   "tagNorm": "sbi crypto",
+   "key": "sbi crypto",
+   "name": "SBI Crypto"
+  },
+  {
+   "tag": "KuCoinPool",
+   "tagNorm": "kucoinpool",
+   "key": "kucoinpool",
+   "name": "KuCoinPool"
+  },
+  {
+   "tag": "/pegapool/",
+   "tagNorm": "/pegapool/",
+   "key": "pega pool",
+   "name": "PEGA Pool"
+  },
+  {
+   "tag": "/MaxiPool/",
+   "tagNorm": "/maxipool/",
+   "key": "maxipool",
+   "name": "MaxiPool"
+  },
+  {
+   "tag": "Lucky pool",
+   "tagNorm": "lucky pool",
+   "key": "gdpool",
+   "name": "GDPool"
+  },
+  {
+   "tag": "/bsquared/",
+   "tagNorm": "/bsquared/",
+   "key": "mining squared",
+   "name": "Mining Squared"
+  },
+  {
+   "tag": "BTCLab.dev",
+   "tagNorm": "btclab.dev",
+   "key": "btclab",
+   "name": "BTCLab"
+  },
+  {
+   "tag": "/ultimus/",
+   "tagNorm": "/ultimus/",
+   "key": "ultimuspool",
+   "name": "ULTIMUSPOOL"
+  },
+  {
+   "tag": "/BTC.COM/",
+   "tagNorm": "/btc.com/",
+   "key": "btc.com",
+   "name": "BTC.com"
+  },
+  {
+   "tag": "/BTC.com/",
+   "tagNorm": "/btc.com/",
+   "key": "btc.com",
+   "name": "BTC.com"
+  },
+  {
+   "tag": "/BTC.TOP/",
+   "tagNorm": "/btc.top/",
+   "key": "btc.top",
+   "name": "BTC.TOP"
+  },
+  {
+   "tag": "ASICMiner",
+   "tagNorm": "asicminer",
+   "key": "asicminer",
+   "name": "ASICMiner"
+  },
+  {
+   "tag": "BitMinter",
+   "tagNorm": "bitminter",
+   "key": "bitminter",
+   "name": "BitMinter"
+  },
+  {
+   "tag": "BTC Guild",
+   "tagNorm": "btc guild",
+   "key": "btc guild",
+   "name": "BTC Guild"
+  },
+  {
+   "tag": "/AntPool/",
+   "tagNorm": "/antpool/",
+   "key": "antpool",
+   "name": "AntPool"
+  },
+  {
+   "tag": "bcpool.io",
+   "tagNorm": "bcpool.io",
+   "key": "bcpool.io",
+   "name": "bcpool.io"
+  },
+  {
+   "tag": "cointerra",
+   "tagNorm": "cointerra",
+   "key": "cointerra",
+   "name": "Cointerra"
+  },
+  {
+   "tag": "/BitFury/",
+   "tagNorm": "/bitfury/",
+   "key": "bitfury",
+   "name": "BitFury"
+  },
+  {
+   "tag": "/Bitfury/",
+   "tagNorm": "/bitfury/",
+   "key": "bitfury",
+   "name": "BitFury"
+  },
+  {
+   "tag": "/Nexious/",
+   "tagNorm": "/nexious/",
+   "key": "nexious",
+   "name": "Nexious"
+  },
+  {
+   "tag": "/HotPool/",
+   "tagNorm": "/hotpool/",
+   "key": "hotpool",
+   "name": "HotPool"
+  },
+  {
+   "tag": "/BATPOOL/",
+   "tagNorm": "/batpool/",
+   "key": "batpool",
+   "name": "BATPOOL"
+  },
+  {
+   "tag": "/Binance/",
+   "tagNorm": "/binance/",
+   "key": "binance pool",
+   "name": "Binance Pool"
+  },
+  {
+   "tag": "/Buffett/",
+   "tagNorm": "/buffett/",
+   "key": "lubian.com",
+   "name": "Lubian.com"
+  },
+  {
+   "tag": "/AAOPOOL/",
+   "tagNorm": "/aaopool/",
+   "key": "aao pool",
+   "name": "AAO Pool"
+  },
+  {
+   "tag": "SBICrypto",
+   "tagNorm": "sbicrypto",
+   "key": "sbi crypto",
+   "name": "SBI Crypto"
+  },
+  {
+   "tag": "/ArkPool/",
+   "tagNorm": "/arkpool/",
+   "key": "arkpool",
+   "name": "ArkPool"
+  },
+  {
+   "tag": "MARA Pool",
+   "tagNorm": "mara pool",
+   "key": "mara pool",
+   "name": "MARA Pool"
+  },
+  {
+   "tag": "Entrustus",
+   "tagNorm": "entrustus",
+   "key": "entrust charity pool",
+   "name": "Entrust Charity Pool"
+  },
+  {
+   "tag": "OCEAN.XYZ",
+   "tagNorm": "ocean.xyz",
+   "key": "ocean",
+   "name": "OCEAN"
+  },
+  {
+   "tag": "WhitePool",
+   "tagNorm": "whitepool",
+   "key": "whitepool",
+   "name": "WhitePool"
+  },
+  {
+   "tag": "FutureBit",
+   "tagNorm": "futurebit",
+   "key": "futurebit apollo solo",
+   "name": "FutureBit Apollo Solo"
+  },
+  {
+   "tag": "/Phoenix/",
+   "tagNorm": "/phoenix/",
+   "key": "phoenix",
+   "name": "Phoenix"
+  },
+  {
+   "tag": "/Neopool/",
+   "tagNorm": "/neopool/",
+   "key": "neopool",
+   "name": "Neopool"
+  },
+  {
+   "tag": "DrDetroit",
+   "tagNorm": "drdetroit",
+   "key": "drdetroit",
+   "name": "DrDetroit"
+  },
+  {
+   "tag": "/BitFuFu/",
+   "tagNorm": "/bitfufu/",
+   "key": "bitfufupool",
+   "name": "BitFuFuPool"
+  },
+  {
+   "tag": "Innopolis",
+   "tagNorm": "innopolis",
+   "key": "innopolis tech",
+   "name": "Innopolis Tech"
+  },
+  {
+   "tag": "/Est3lar/",
+   "tagNorm": "/est3lar/",
+   "key": "est3lar",
+   "name": "Est3lar"
+  },
+  {
+   "tag": "/1THash/",
+   "tagNorm": "/1thash/",
+   "key": "1thash",
+   "name": "1THash"
+  },
+  {
+   "tag": "BITFARMS",
+   "tagNorm": "bitfarms",
+   "key": "bitfarms",
+   "name": "Bitfarms"
+  },
+  {
+   "tag": "ghash.io",
+   "tagNorm": "ghash.io",
+   "key": "ghash.io",
+   "name": "GHash.IO"
+  },
+  {
+   "tag": "KnCMiner",
+   "tagNorm": "kncminer",
+   "key": "kncminer",
+   "name": "KnCMiner"
+  },
+  {
+   "tag": "/pool34/",
+   "tagNorm": "/pool34/",
+   "key": "21 inc.",
+   "name": "21 Inc."
+  },
+  {
+   "tag": "/agentD/",
+   "tagNorm": "/agentd/",
+   "key": "digitalbtc",
+   "name": "digitalBTC"
+  },
+  {
+   "tag": "HASHPOOL",
+   "tagNorm": "hashpool",
+   "key": "hashpool",
+   "name": "HASHPOOL"
+  },
+  {
+   "tag": "/HaoBTC/",
+   "tagNorm": "/haobtc/",
+   "key": "bixin",
+   "name": "Bixin"
+  },
+  {
+   "tag": "/ViaBTC/",
+   "tagNorm": "/viabtc/",
+   "key": "viabtc",
+   "name": "ViaBTC"
+  },
+  {
+   "tag": "/BTPOOL/",
+   "tagNorm": "/btpool/",
+   "key": "btpool",
+   "name": "BTPOOL"
+  },
+  {
+   "tag": "/poolin/",
+   "tagNorm": "/poolin/",
+   "key": "poolin",
+   "name": "Poolin"
+  },
+  {
+   "tag": "Titan.io",
+   "tagNorm": "titan.io",
+   "key": "titan",
+   "name": "Titan"
+  },
+  {
+   "tag": "ZULUPooL",
+   "tagNorm": "zulupool",
+   "key": "zulupool",
+   "name": "Zulupool"
+  },
+  {
+   "tag": "knorrium",
+   "tagNorm": "knorrium",
+   "key": "knorrium",
+   "name": "knorrium"
+  },
+  {
+   "tag": "parasite",
+   "tagNorm": "parasite",
+   "key": "parasite",
+   "name": "Parasite"
+  },
+  {
+   "tag": "/LUXOR/",
+   "tagNorm": "/luxor/",
+   "key": "luxor",
+   "name": "Luxor"
+  },
+  {
+   "tag": "/HuoBi/",
+   "tagNorm": "/huobi/",
+   "key": "huobi.pool",
+   "name": "Huobi.pool"
+  },
+  {
+   "tag": "/Huobi/",
+   "tagNorm": "/huobi/",
+   "key": "huobi.pool",
+   "name": "Huobi.pool"
+  },
+  {
+   "tag": "/CANOE/",
+   "tagNorm": "/canoe/",
+   "key": "canoepool",
+   "name": "CanoePool"
+  },
+  {
+   "tag": "/A-XBT/",
+   "tagNorm": "/a-xbt/",
+   "key": "a-xbt",
+   "name": "A-XBT"
+  },
+  {
+   "tag": "btcserv",
+   "tagNorm": "btcserv",
+   "key": "btcserv",
+   "name": "BTCServ"
+  },
+  {
+   "tag": "Eligius",
+   "tagNorm": "eligius",
+   "key": "eligius",
+   "name": "Eligius"
+  },
+  {
+   "tag": "ozco.in",
+   "tagNorm": "ozco.in",
+   "key": "ozcoin",
+   "name": "OzCoin"
+  },
+  {
+   "tag": "CoinLab",
+   "tagNorm": "coinlab",
+   "key": "coinlab",
+   "name": "CoinLab"
+  },
+  {
+   "tag": "bypmneU",
+   "tagNorm": "bypmneu",
+   "key": "polmine",
+   "name": "Polmine"
+  },
+  {
+   "tag": "/mtred/",
+   "tagNorm": "/mtred/",
+   "key": "mt red",
+   "name": "Mt Red"
+  },
+  {
+   "tag": "/slush/",
+   "tagNorm": "/slush/",
+   "key": "braiins pool",
+   "name": "Braiins Pool"
+  },
+  {
+   "tag": "BW Pool",
+   "tagNorm": "bw pool",
+   "key": "bwpool",
+   "name": "BWPool"
+  },
+  {
+   "tag": "/Bixin/",
+   "tagNorm": "/bixin/",
+   "key": "bixin",
+   "name": "Bixin"
+  },
+  {
+   "tag": "--Nug--",
+   "tagNorm": "--nug--",
+   "key": "shawnp0wers",
+   "name": "shawnp0wers"
+  },
+  {
+   "tag": "/Helix/",
+   "tagNorm": "/helix/",
+   "key": "helix",
+   "name": "Helix"
+  },
+  {
+   "tag": "binance",
+   "tagNorm": "binance",
+   "key": "binance pool",
+   "name": "Binance Pool"
+  },
+  {
+   "tag": "ZU_test",
+   "tagNorm": "zu_test",
+   "key": "zulupool",
+   "name": "Zulupool"
+  },
+  {
+   "tag": "SecPool",
+   "tagNorm": "secpool",
+   "key": "secpool",
+   "name": "SECPOOL"
+  },
+  {
+   "tag": "RedRock",
+   "tagNorm": "redrock",
+   "key": "redrock pool",
+   "name": "RedRock Pool"
+  },
+  {
+   "tag": "est3lar",
+   "tagNorm": "est3lar",
+   "key": "est3lar",
+   "name": "Est3lar"
+  },
+  {
+   "tag": "Est3lar",
+   "tagNorm": "est3lar",
+   "key": "est3lar",
+   "name": "Est3lar"
+  },
+  {
+   "tag": "EST3LAR",
+   "tagNorm": "est3lar",
+   "key": "est3lar",
+   "name": "Est3lar"
+  },
+  {
+   "tag": "btccom",
+   "tagNorm": "btccom",
+   "key": "btc.com",
+   "name": "BTC.com"
+  },
+  {
+   "tag": "ozcoin",
+   "tagNorm": "ozcoin",
+   "key": "ozcoin",
+   "name": "OzCoin"
+  },
+  {
+   "tag": "MaxBTC",
+   "tagNorm": "maxbtc",
+   "key": "maxbtc",
+   "name": "MaxBTC"
+  },
+  {
+   "tag": "mmpool",
+   "tagNorm": "mmpool",
+   "key": "mmpool",
+   "name": "mmpool"
+  },
+  {
+   "tag": "Bitalo",
+   "tagNorm": "bitalo",
+   "key": "bitalo",
+   "name": "Bitalo"
+  },
+  {
+   "tag": "F2Pool",
+   "tagNorm": "f2pool",
+   "key": "f2pool",
+   "name": "F2Pool"
+  },
+  {
+   "tag": "/BTCC/",
+   "tagNorm": "/btcc/",
+   "key": "btcc",
+   "name": "BTCC"
+  },
+  {
+   "tag": "BWPool",
+   "tagNorm": "bwpool",
+   "key": "bwpool",
+   "name": "BWPool"
+  },
+  {
+   "tag": "TBDice",
+   "tagNorm": "tbdice",
+   "key": "tbdice",
+   "name": "TBDice"
+  },
+  {
+   "tag": "HAOBTC",
+   "tagNorm": "haobtc",
+   "key": "bixin",
+   "name": "Bixin"
+  },
+  {
+   "tag": "/DCEX/",
+   "tagNorm": "/dcex/",
+   "key": "dcex",
+   "name": "DCEX"
+  },
+  {
+   "tag": "/EMCD/",
+   "tagNorm": "/emcd/",
+   "key": "emcdpool",
+   "name": "EMCDPool"
+  },
+  {
+   "tag": "/2cDw/",
+   "tagNorm": "/2cdw/",
+   "key": "foundry usa",
+   "name": "Foundry USA"
+  },
+  {
+   "tag": "/@wiz/",
+   "tagNorm": "/@wiz/",
+   "key": "wiz",
+   "name": "wiz"
+  },
+  {
+   "tag": "Apollo",
+   "tagNorm": "apollo",
+   "key": "futurebit apollo solo",
+   "name": "FutureBit Apollo Solo"
+  },
+  {
+   "tag": "GDPool",
+   "tagNorm": "gdpool",
+   "key": "gdpool",
+   "name": "GDPool"
+  },
+  {
+   "tag": "BTCLab",
+   "tagNorm": "btclab",
+   "key": "btclab",
+   "name": "BTCLab"
+  },
+  {
+   "tag": "/DMND/",
+   "tagNorm": "/dmnd/",
+   "key": "dmnd",
+   "name": "DMND"
+  },
+  {
+   "tag": "50BTC",
+   "tagNorm": "50btc",
+   "key": "50btc",
+   "name": "50BTC"
+  },
+  {
+   "tag": "七彩神仙鱼",
+   "tagNorm": "七彩神仙鱼",
+   "key": "f2pool",
+   "name": "F2Pool"
+  },
+  {
+   "tag": "EMC:",
+   "tagNorm": "emc:",
+   "key": "eclipsemc",
+   "name": "EclipseMC"
+  },
+  {
+   "tag": "HHTT",
+   "tagNorm": "hhtt",
+   "key": "hhtt",
+   "name": "HHTT"
+  },
+  {
+   "tag": "Kano",
+   "tagNorm": "kano",
+   "key": "kanopool",
+   "name": "KanoPool"
+  },
+  {
+   "tag": "emcd",
+   "tagNorm": "emcd",
+   "key": "emcdpool",
+   "name": "EMCDPool"
+  },
+  {
+   "tag": "🐵🚀",
+   "tagNorm": "🐵🚀",
+   "key": "mononaut",
+   "name": "mononaut"
+  },
+  {
+   "tag": "EMC ",
+   "tagNorm": "emc",
+   "key": "eclipsemc",
+   "name": "EclipseMC"
+  }
+ ]
+}

@@ -148,6 +148,18 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
 
 ### Fixed since the 2026-09-11 milestone
 
+- **A node without `coinstatsindex` was sent a full UTXO-set walk every minute.** Found on the
+  first Mac install: `getindexinfo` said there was no coinstats index, and the rule read that as
+  "not assumed unindexed" and asked `gettxoutsetinfo` anyway, on the slow tier, every 60 s -- a
+  walk of 165 M outputs that Core kept computing after the 90 s timeout, holding its chain lock,
+  so every other call answered in 18 s, the mempool read was dropped and the block-space board
+  stayed empty. Everything was blamed on the index build, which had nothing to do with it. The
+  UTXO figures are now asked only of a node that has said it keeps the index; the indexes are
+  asked first, alone, before anything expensive.
+- **A fresh install attributed no blocks** and showed raw coinbase tags: the curated pool map
+  lived only in `data/`, written by a script nobody had run. The map (mempool.space's
+  mining-pools list, MIT, 151 pools) ships in `config/` and is used until `scripts/pool-map.js`
+  writes a newer one into `data/`.
 - **Nothing holds hundreds of files open any more.** The index store kept one descriptor per
   segment and layer -- 256 and more -- for the life of the process, and the build kept all 256
   bucket files open through the scan; a stock macOS allows a process 256 (`ulimit -n`) before it

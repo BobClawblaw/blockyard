@@ -606,18 +606,30 @@ export class NodeMonitor extends EventEmitter {
   // full scan again, so a node that says so in getindexinfo is not asked at all: the UTXO figures
   // read as unknown (the panel already draws "–") and the reason is stated, which is cheaper and
   // more honest than 41 s of someone else's node every minute.
+  // NEVER A BLIND SCAN (2026-09-14, the first Mac install): "not known yet: ask once" put
+  // gettxoutsetinfo in the SAME batch as the getindexinfo that would have said no, so a node with
+  // no coinstatsindex was sent a full UTXO-set walk on its first slow tier -- minutes on that
+  // machine, past the 90 s timeout, and Core kept walking after the client gave up, holding its
+  // chain lock: every other call answered in 18 s, the mempool read was dropped, the board stayed
+  // empty. And because the batch had failed, the indexes were still unknown and the next tier
+  // asked again, every minute. The UTXO figures are asked only of a node that has SAID it keeps
+  // the index; a node that has not answered yet, or does not report indexes, is not asked.
   utxoStatsWanted() {
     const ix = this.state.indexes;
-    if (!ix || typeof ix !== 'object') return true;          // not known yet: ask once
-    const cs = ix.coinstatsindex;
-    if (cs === undefined) return true;                        // node does not report indexes at all
-    return !!cs?.synced;
+    if (!ix || typeof ix !== 'object') return false;         // not known yet: getindexinfo first, alone
+    return !!ix.coinstatsindex?.synced;
   }
 
   async tier_slow() {
     // The heavy reads: the UTXO-set summary, the indexes and the chain tx stats.
     // (The verbose mempool map moved to tier_pool on 2026-09-11.)
     const t0 = performance.now();
+    // the indexes first, on their own, the first time: what they say decides the expensive call
+    if (!this.state.indexes || typeof this.state.indexes !== 'object') {
+      const first = await this.callList([{ method: 'getindexinfo' }], { key: `${this.id}:slow:indexes`, priority: 5 });
+      const ix = first.get('getindexinfo');
+      if (ix && !(ix instanceof RpcError)) this.state.indexes = ix;
+    }
     const wantUtxo = this.utxoStatsWanted();
     const m = await this.callList([
       { method: 'getindexinfo' },

@@ -22,11 +22,11 @@ test('a node with no synced coinstatsindex is not asked for UTXO stats at all', 
   const want = NodeMonitor.prototype.utxoStatsWanted;
   assert.equal(typeof want, 'function');
   const at = (indexes) => want.call({ state: { indexes } });
-  assert.equal(at(undefined), true, 'not known yet: ask once');
-  assert.equal(at({}), true, 'a node that reports no indexes at all is still asked');
+  assert.equal(at(undefined), false, 'not known yet: NOT asked -- getindexinfo goes first, alone (2026-09-14: the blind first ask was a full UTXO walk on a node without the index)');
+  assert.equal(at({}), false, 'a node that reports no indexes is NOT asked: without the index the call is a full UTXO walk');
   assert.equal(at({ coinstatsindex: { synced: true, best_block_height: 966573 } }), true, 'indexed: ask');
   assert.equal(at({ coinstatsindex: { synced: false, best_block_height: 100 } }), false, 'still building: do not ask');
-  assert.equal(at({ txindex: { synced: true } }), true, 'a node without the key is not assumed to be unindexed');
+  assert.equal(at({ txindex: { synced: true } }), false, 'a node without the coinstatsindex key has no coinstatsindex -- this is what Core answers with it off, and what walked the Mac\'s UTXO set every minute');
 });
 
 test('the skip states its reason and is retracted when the index appears', () => {

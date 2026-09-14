@@ -213,8 +213,10 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       // A human-edited tag -> label map. Absent by default, which is the correct state:
       // the coinbase text is shown as the pool wrote it.
       aliasesFile: path.join(cfg.store.dir, 'pool-aliases.json'),
-      // Written by `node scripts/pool-map.js`; absent until someone runs it.
-      poolMapFile: process.env.BLOCKYARD_POOL_MAP ?? path.join(cfg.store.dir, 'pool-map.json'),
+      // Written by `node scripts/pool-map.js` into data/; until someone runs it, the copy shipped in
+      // config/ (mempool.space/mining-pools, MIT, fetched 2026-09-09) -- a fresh install attributed
+      // nothing and showed raw coinbase tags (operator, 2026-09-14: "Block attribution is fucked up")
+      poolMapFile: process.env.BLOCKYARD_POOL_MAP ?? (fs.existsSync(path.join(cfg.store.dir, 'pool-map.json')) ? path.join(cfg.store.dir, 'pool-map.json') : path.join(ROOT, 'config', 'pool-map.json')),
     } });
     m.node = nodeCfg;
     // Deliberately NOT `m.history = app.history`: the monitor wraps the shared store
