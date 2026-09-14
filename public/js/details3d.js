@@ -273,6 +273,10 @@ function fxNow(st, t) {
 // has three -- no kind can be twelve plays clear, so the pick is among those that have waited
 // longest: the rule degrades to taking turns, never to a repeat while something else is waiting.
 export const PULSE_WAIT_MS = [150000, 360000];
+// RARE (operator, 2026-09-14: "drastically increase the delay on the bulge effect, just like the
+// energy pulse effects. These should be rare"): each of these waits its own PULSE_WAIT_MS between
+// plays, counted from the last time it played, and plays as soon as it is due.
+export const RARE_FX = ['pulse', 'bulge'];
 export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
   if (!kinds.length) return null;
   const recent = st.recentFx ?? (st.recentFx = []);
@@ -285,15 +289,18 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
     const oldest = Math.min(...kinds.map(lastSeen));
     pool = kinds.filter((k) => lastSeen(k) === oldest);
   }
-  if (kinds.includes('pulse')) {
-    st.pulseReadyAt ??= now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
-    if (now < st.pulseReadyAt) {
-      const others = kinds.filter((k) => k !== 'pulse');
-      if (!others.length) return null;
-      pool = pool.filter((k) => k !== 'pulse');
-      if (!pool.length) pool = others;
+  const wait = () => now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
+  const rare = RARE_FX.filter((k) => kinds.includes(k));
+  if (rare.length) {
+    for (const k of rare) st[`${k}ReadyAt`] ??= wait();
+    const due = rare.filter((k) => now >= st[`${k}ReadyAt`]);
+    if (due.length) {
+      pool = due;
     } else {
-      pool = ['pulse'];
+      const others = kinds.filter((k) => !rare.includes(k));
+      if (!others.length) return null;
+      pool = pool.filter((k) => !rare.includes(k));
+      if (!pool.length) pool = others;
     }
   }
   // NO FAVOURITES (operator, 2026-09-13: "the tron lightcycles effect happens way too often").
@@ -307,7 +314,7 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
   // rare, so any one effect is a genuine surprise), so it is gone rather than merely reduced.
   const from = pool.length ? pool : kinds;
   const kind = from[(rnd() * from.length) | 0];
-  if (kind === 'pulse') st.pulseReadyAt = now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
+  if (rare.includes(kind)) st[`${kind}ReadyAt`] = wait();
   recent.push(kind);
   if (recent.length > 64) recent.splice(0, recent.length - 64);
   return kind;

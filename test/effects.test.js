@@ -89,7 +89,7 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   //
   // Nothing guarded it, which is why it survived four batches of new effects. This does: the
   // choice is replicated exactly as scheduleFx makes it, and no kind may run away with the board.
-  const LINE_FX = ['pulse', 'twinkle'];
+  const LINE_FX = ['pulse', 'twinkle', 'bulge'];   // the price board's list, as details3d.js has it
   const pick = (last) => {
     const kinds = FX_KINDS.filter((k) => k !== 'pulse');
     let pool = kinds.filter((k) => k !== last);
@@ -121,25 +121,35 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   // effect away. The bound below is that worst case, not a guess with slack in it.
   let seed = 20260914;
   const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
-  const MAX_TICK = 9000 + 3000;
+  // THE BULGE IS RARE THE SAME WAY (operator, 2026-09-14: "drastically increase the delay on the
+  // bulge effect, just like the energy pulse effects. These should be rare"): both are measured here.
+  // A tick is idleEvery plus the effect that played, and the bulge is the longest at 16 s; a rare
+  // effect that comes due while the other is already due can wait one more tick behind it.
+  const LEN = { pulse: 9000, bulge: 16000 };
+  const MAX_TICK = 9000 + 16000;
   const st = {};
-  let t = 0, first = null, prev = null;
-  const gaps = [];
-  while (t < 2 * 3600e3) {
+  let t = 0;
+  const first = {}, prev = {}, gaps = { pulse: [], bulge: [] };
+  while (t < 4 * 3600e3) {
     const k = chooseIdleFx(LINE_FX, st, t, rnd);
     if (k) st.lastFx = k;
-    if (k === 'pulse') { if (prev === null) first = t; else gaps.push(t - prev); prev = t; }
-    t += 5000 + rnd() * 4000 + (k === 'pulse' ? 9000 : k ? 3000 : 0);   // idleEvery, plus the effect itself
+    if (k in gaps) { if (prev[k] == null) first[k] = t; else gaps[k].push(t - prev[k]); prev[k] = t; }
+    t += 5000 + rnd() * 4000 + (k ? LEN[k] ?? 3000 : 0);   // idleEvery, plus the effect itself
   }
-  assert.ok(first >= PULSE_WAIT_MS[0], `a board that has just opened waits before its first pulse (${(first / 1000).toFixed(0)} s)`);
-  assert.ok(gaps.length > 20, `and it does keep coming round (${gaps.length} pulses in two hours)`);
-  const minGap = Math.min(...gaps), maxGap = Math.max(...gaps);
-  assert.ok(minGap >= PULSE_WAIT_MS[0], `never sooner than 30 s after the last (shortest gap ${(minGap / 1000).toFixed(1)} s)`);
-  assert.ok(maxGap <= PULSE_WAIT_MS[1] + MAX_TICK, `and never later than 120 s plus one scheduler tick (longest gap ${(maxGap / 1000).toFixed(1)} s)`);
+  for (const k of ['pulse', 'bulge']) {
+    assert.ok(first[k] >= PULSE_WAIT_MS[0], `a board that has just opened waits before its first ${k} (${(first[k] / 1000).toFixed(0)} s)`);
+    assert.ok(gaps[k].length > 30, `and the ${k} does keep coming round (${gaps[k].length} in four hours)`);
+    const minGap = Math.min(...gaps[k]), maxGap = Math.max(...gaps[k]);
+    assert.ok(minGap >= PULSE_WAIT_MS[0], `the ${k} never comes sooner than ${PULSE_WAIT_MS[0] / 1000} s after the last (shortest gap ${(minGap / 1000).toFixed(1)} s)`);
+    assert.ok(maxGap <= PULSE_WAIT_MS[1] + 2 * MAX_TICK, `and never later than ${PULSE_WAIT_MS[1] / 1000} s plus two scheduler ticks (longest gap ${(maxGap / 1000).toFixed(1)} s)`);
+  }
   // with everything else switched off the pulse still plays -- after its wait, and nothing in between
   const lone = {};
   assert.equal(chooseIdleFx(['pulse'], lone, 0), null, 'a lone pulse still waits its turn');
   assert.equal(chooseIdleFx(['pulse'], lone, lone.pulseReadyAt), 'pulse', 'and then it plays');
+  const lone2 = {};
+  assert.equal(chooseIdleFx(['bulge'], lone2, 0), null, 'a lone bulge waits its turn too');
+  assert.equal(chooseIdleFx(['bulge'], lone2, lone2.bulgeReadyAt), 'bulge', 'and then it plays');
 });
 
 test('with every effect switched off the board never schedules one, and it still draws', () => {
