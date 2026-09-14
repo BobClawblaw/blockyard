@@ -157,3 +157,60 @@ test('the defaults follow the platform and the machine', () => {
   assert.equal(defaultWorkers(8, 8e9), 3, 'memory is the limit on a small machine');
   assert.equal(defaultWorkers(2, 4e9), 1, 'never none');
 });
+
+test('WHAT AN ANSWER MUST BE: every prompt validates, explains, and normalises', async () => {
+  const { validate, expand, shortPath, portInUse } = await import('../scripts/setup.js');
+  assert.deepEqual(validate.rpcUrl('http://127.0.0.1:8332'), { value: 'http://127.0.0.1:8332' });
+  assert.deepEqual(validate.rpcUrl(' http://umbrel.local '), { value: 'http://umbrel.local:8332' }, 'no port: Core\'s default');
+  assert.deepEqual(validate.rpcUrl('https://node.example/'), { value: 'https://node.example' }, 'https keeps its implicit 443, and loses a trailing slash');
+  assert.match(validate.rpcUrl('127.0.0.1:8332').error, /not a URL/);
+  assert.match(validate.rpcUrl('ftp://x').error, /not http/);
+  assert.match(validate.port('0').error, /1 to 65535/); assert.match(validate.port('abc').error, /whole number/); assert.match(validate.port('21000.5').error, /whole number/);
+  assert.deepEqual(validate.port(' 21000 '), { value: 21000 });
+  assert.deepEqual(validate.host('localhost'), { value: '127.0.0.1' }, 'localhost is spelled as the address the validator accepts');
+  assert.deepEqual(validate.host('0.0.0.0'), { value: '0.0.0.0' }); assert.deepEqual(validate.host('::1'), { value: '::1' });
+  assert.match(validate.host('my-box.lan').error, /IP address literal/, 'the config refuses hostnames, so setup does too');
+  assert.deepEqual(validate.workers('4'), { value: 4 }); assert.match(validate.workers('0').error, /1 to 64/);
+  assert.match(validate.label('   ').error, /label/); assert.deepEqual(validate.label(' Mac '), { value: 'Mac' });
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-setup-'));
+  try {
+    assert.deepEqual(validate.dir(root), { value: root });
+    assert.match(validate.dir(path.join(root, 'nope')).error, /does not exist/);
+    assert.match(validate.dir('relative/path').error, /absolute/);
+    writeFileSync(path.join(root, 'afile'), '');
+    assert.match(validate.dir(path.join(root, 'afile')).error, /not a directory/);
+    assert.deepEqual(validate.newDir(path.join(root, 'later')), { value: path.join(root, 'later') }, 'an index directory need not exist yet');
+    assert.match(validate.newDir(path.join(root, 'afile')).error, /not a directory/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+  assert.equal(expand('~/x'), path.join(os.homedir(), 'x')); assert.equal(expand('/abs'), '/abs');
+  assert.equal(shortPath('/repo/config/local.json', '/repo', '/home/u'), 'config/local.json');
+  assert.equal(shortPath('/home/u/blockyard-index', '/repo', '/home/u'), '~/blockyard-index');
+  assert.equal(shortPath('/tmp/x.json', '/repo', '/home/u'), '/tmp/x.json');
+
+  // a port with nothing on it is free; one with a BlockYard on it says which
+  const http = await import('node:http');
+  const srv = http.createServer((req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ ok: true, version: '9.9.9' })); });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  try {
+    assert.deepEqual(await portInUse('127.0.0.1', srv.address().port), { busy: true, blockyard: '9.9.9' });
+    const closed = http.createServer(); await new Promise((r) => closed.listen(0, '127.0.0.1', r)); const freePort = closed.address().port; await new Promise((r) => closed.close(r));
+    assert.deepEqual(await portInUse('127.0.0.1', freePort), { busy: false, blockyard: null });
+  } finally { await new Promise((r) => srv.close(r)); }
+});
+
+test('the progress bar and the box are arithmetic, not decoration', async () => {
+  const { progressLine, strip, box, wrapText } = await import('../scripts/ui.js');
+  const half = strip(progressLine({ phase: 'scan', done: 50, total: 100, rows: 1_234_567, elapsed: 60 }, 100));
+  assert.match(half, /^  scan    █+░+  \s*50\/100 · 50% · 1\.2 M rows · about 60 s left$/, half);
+  const [filled, empty] = [(half.match(/█/g) ?? []).length, (half.match(/░/g) ?? []).length];
+  assert.equal(filled, empty, 'half done is half a bar');
+  assert.match(strip(progressLine({ phase: 'sort', done: 256, total: 256, elapsed: 190 }, 100)), /100% · done in 3 min$/);
+  assert.match(strip(progressLine({ phase: 'scan', done: 0, total: 5757, elapsed: 0 }, 100)), /0\/5757 · 0%$/, 'no rate yet, no ETA claimed');
+  assert.match(strip(progressLine({ phase: 'scan', done: 10, total: 5757, rows: 5, elapsed: 20 }, 100)), /about 3\.2 h left$/);
+  const b = box(['ab', 'abcd'], { title: 'T' });
+  const lines = strip(b).split('\n');
+  assert.equal(lines.length, 4);
+  assert.ok(lines.every((l) => l.length === lines[0].length), 'every line the same width');
+  assert.match(lines[0], /^╭─ T ─+╮$/); assert.match(lines[3], /^╰─+╯$/);
+  assert.equal(wrapText('one two three four', 9, 2), 'one two\n  three\n  four');
+});

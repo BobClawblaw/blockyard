@@ -15,6 +15,7 @@ import path from 'node:path';
 import { loadConfig, configProblems, resolveCookie } from '../server/config.js';
 import { RpcClient } from '../server/rpc/client.js';
 import { MAGIC, xorKey, readChainFile, records } from '../server/chain/blockfile.js';
+import { c, checkLine } from './ui.js';
 
 const QUIET = { info() {}, warn() {}, error() {}, debug() {} };
 
@@ -137,17 +138,16 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   return { ok: !checks.some((c) => c.status === 'fail'), checks, facts };
 }
 
-const MARK = { ok: '  ok  ', warn: ' warn ', fail: ' FAIL ', info: ' info ' };
 export function printChecks(label, { ok, checks }) {
-  console.log(`\n${label}`);
-  for (const c of checks) console.log(`  [${MARK[c.status]}] ${c.name.padEnd(18)} ${c.detail}`);
-  console.log(ok ? '  everything this needs is there' : '  something this needs is missing (FAIL above)');
+  console.log(`\n  ${c.bold(label)}`);
+  for (const ch of checks) console.log(checkLine(ch.status, ch.name, ch.detail));
+  console.log(ok ? `    ${c.ok(c.bold('everything this needs is there'))}` : `    ${c.bad(c.bold('something this needs is missing'))}${c.dim(' (the ✗ lines say what)')}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
   const arg = (name) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : null; };
   const cfg = loadConfig();
-  for (const p of configProblems()) console.log(`  [ FAIL ] config             ${p}`);
+  for (const p of configProblems()) console.log(checkLine('fail', 'config', p));
   const nodes = arg('node') ? cfg.nodes.filter((n) => n.id === arg('node')) : cfg.nodes;
   if (!nodes.length) { console.log(`no node ${arg('node') ?? ''} in ${cfg.__configFile ?? 'the configuration'}`); process.exit(2); }
   let allOk = configProblems().length === 0;

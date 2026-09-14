@@ -9,6 +9,7 @@ import { loadConfig } from '../server/config.js';
 import { RpcClient } from '../server/rpc/client.js';
 import { buildIndex } from '../server/chain/index/build.js';
 import path from 'node:path';
+import { progress, progressLine, strip, c, fmt } from './ui.js';
 
 const arg = (name, def) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : def; };
 const cfg = loadConfig();
@@ -18,19 +19,21 @@ const out = arg('out', null);
 if (!out) { console.error('--out <dir> is required'); process.exit(2); }
 const rpc = new RpcClient(node, { ...(cfg.rpc ?? {}), ...(node.rpc ?? {}) }, { log: { info() {}, warn() {}, error() {}, debug() {} } });
 
-let last = 0;
 const started = Date.now();
+let phase = null, phaseStart = started;
+const bar = progress();
 const manifest = await buildIndex({
   rpc, blocksDir: path.join(node.datadir, 'blocks'), out,
   workers: arg('workers', null) ? Number(arg('workers')) : undefined,
   files: arg('files', null) ? arg('files').split(',').map(Number) : null,
   onProgress: (p) => {
-    const now = Date.now();
-    if (now - last < 1000 && p.done !== p.total) return;
-    last = now;
-    const el = ((now - started) / 1000).toFixed(0);
-    process.stderr.write(`[${el}s] ${p.phase} ${p.done}/${p.total}${p.rows != null ? ` rows ${p.rows.toLocaleString()}` : ''}\n`);
+    if (p.phase !== phase) {
+      if (phase) bar.done(strip(progressLine({ phase, done: 1, total: 1, elapsed: (Date.now() - phaseStart) / 1000 })));
+      phase = p.phase; phaseStart = Date.now();
+    }
+    bar.update({ ...p, elapsed: (Date.now() - phaseStart) / 1000 });
   },
 });
+bar.done(`  ${c.ok('✓')} ${fmt.big(manifest.rows ?? 0)} rows to block ${Number(manifest.tip?.height ?? 0).toLocaleString()} in ${((Date.now() - started) / 60000).toFixed(1)} min -> ${out}`);
 console.log(JSON.stringify(manifest, (k, v) => (k === 'bucketRows' ? undefined : v), 1));
 process.exit(0);

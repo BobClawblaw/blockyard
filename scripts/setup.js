@@ -1,30 +1,37 @@
 #!/usr/bin/env node
 // SET UP A FRESH INSTALL: ask where the node is, prove the answers work (scripts/check.js: the
 // RPC server answers with the right chain, the credentials are accepted, txindex is on, the block
-// files open, the log is found), write config/local.json, and -- optionally -- start building the
-// address index straight away, so a new machine is running and indexing in one sitting.
+// files open, the log is found), write config/local.json, build the address index, and start the
+// monitor -- so a new machine goes from a clone to running and indexing in one sitting.
 //
 //   npm run setup                       # interactive
 //   node scripts/setup.js --yes [--rpc-url URL] [--datadir DIR] [--label L] [--rpc-user U --rpc-password P]
-//                         [--host 127.0.0.1] [--port 21000] [--index-dir DIR] [--workers N] [--no-build] [--force]
+//                         [--host 127.0.0.1] [--port 21000] [--index-dir DIR] [--workers N]
+//                         [--no-build] [--start] [--force]
 //
-// --yes takes every default without asking (a scripted install); --force overwrites an existing
-// config/local.json (a backup is kept either way). The written file is mode 0600: it may carry
-// an RPC password. Nothing here touches the node: every call is a read.
-import { existsSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+// --yes takes every default without asking (a scripted install); --force replaces an existing
+// config/local.json (a backup is kept either way); --start boots the monitor at the end without
+// asking. The written file is mode 0600: it may carry an RPC password. Nothing here touches the
+// node: every call is a read. (operator, 2026-09-14: "Make this npm installer absolutely beautiful")
+import { existsSync, statSync, writeFileSync, copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
+import net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { ROOT, loadConfig, resolveCookie } from '../server/config.js';
-import { runChecks, printChecks, clientFor } from './check.js';
+import { runChecks, clientFor } from './check.js';
 import { buildIndex } from '../server/chain/index/build.js';
+import { c, banner, step, checkLine, box, spinner, progress, progressLine, fmt, strip } from './ui.js';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
 const arg = (name, def = null) => { const i = argv.indexOf(`--${name}`); return i >= 0 && argv[i + 1] != null && !argv[i + 1].startsWith('--') ? argv[i + 1] : def; };
 const YES = flag('yes');
+const VERSION = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+const STEPS = 6;
 
+// ---------------------------------------------------------------- the answers, and their shape
 /** Where Bitcoin Core keeps its data by default on this platform. */
 export function defaultDatadir(platform = process.platform, home = os.homedir(), env = process.env) {
   if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Bitcoin');
@@ -56,96 +63,240 @@ export function writeLocalConfig(file, cfg, { force = false, now = new Date() } 
   writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
 }
 
+// ------------------------------------------------------------------------- what an answer must be
+// Each returns { value } or { error }: a bad answer is explained and asked again, never written.
+/** A path as a person would type it: relative to the checkout, or under ~. */
+export function shortPath(p, root = ROOT, home = os.homedir()) {
+  const rel = path.relative(root, p);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel;
+  return p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
+}
+export function expand(p) { return p.startsWith('~/') || p === '~' ? path.join(os.homedir(), p.slice(1)) : p; }
+export const validate = {
+  rpcUrl(s) {
+    let u;
+    try { u = new URL(String(s).trim()); } catch { return { error: 'not a URL -- something like http://127.0.0.1:8332' }; }
+    if (!/^https?:$/.test(u.protocol)) return { error: `${u.protocol.slice(0, -1)} is not http or https` };
+    if (!u.port) u.port = u.protocol === 'https:' ? '443' : '8332';
+    return { value: u.toString().replace(/\/$/, '') };
+  },
+  dir(s) {
+    const p = expand(String(s).trim());
+    if (!path.isAbsolute(p)) return { error: 'give an absolute path' };
+    if (!existsSync(p)) return { error: `${p} does not exist` };
+    if (!statSync(p).isDirectory()) return { error: `${p} is not a directory` };
+    return { value: p };
+  },
+  newDir(s) {
+    const p = expand(String(s).trim());
+    if (!path.isAbsolute(p)) return { error: 'give an absolute path' };
+    if (existsSync(p) && !statSync(p).isDirectory()) return { error: `${p} exists and is not a directory` };
+    return { value: p };
+  },
+  port(s) {
+    const n = Number(String(s).trim());
+    if (!Number.isInteger(n) || n < 1 || n > 65535) return { error: 'a port is a whole number from 1 to 65535' };
+    return { value: n };
+  },
+  host(s) {
+    const h = String(s).trim();
+    if (h === 'localhost') return { value: '127.0.0.1' };
+    if (!net.isIP(h)) return { error: 'an IP address literal: 127.0.0.1 for this machine only, 0.0.0.0 for everyone who can reach it, or one of this machine\'s addresses' };
+    return { value: h };
+  },
+  workers(s) {
+    const n = Number(String(s).trim());
+    if (!Number.isInteger(n) || n < 1 || n > 64) return { error: 'a whole number of workers, 1 to 64' };
+    return { value: n };
+  },
+  label(s) { const l = String(s).trim(); return l ? { value: l.slice(0, 40) } : { error: 'a label, even a short one' }; },
+};
+
+/** Is a BlockYard (or anything) already answering on this port? */
+export async function portInUse(host, port) {
+  const at = `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}/api/health`;
+  try {
+    const r = await fetch(at, { signal: AbortSignal.timeout(1500) });
+    const j = await r.json().catch(() => null);
+    return { busy: true, blockyard: j?.version ?? null };
+  } catch (err) {
+    const refused = /ECONNREFUSED/.test(err?.cause?.code ?? '') || /ECONNREFUSED/.test(err?.message ?? '') || err?.name === 'TimeoutError';
+    return { busy: !refused, blockyard: null };
+  }
+}
+
+// ------------------------------------------------------------------------------------ the flow
 async function main() {
-  const rl = YES ? null : readline.createInterface({ input: stdin, output: stdout });
   if (!YES && !stdin.isTTY) { console.error('no terminal to ask on: pass --yes with the --rpc-url/--datadir flags (see the header of scripts/setup.js)'); process.exit(2); }
-  const ask = async (q, def) => {
-    if (YES) return def;
-    const a = (await rl.question(`${q}${def != null && def !== '' ? ` [${def}]` : ''}: `)).trim();
-    return a === '' ? def : a;
+  const rl = YES ? null : readline.createInterface({ input: stdin, output: stdout });
+  const out = (s = '') => stdout.write(`${s}\n`);
+  const say = (s) => out(`    ${s}`);
+  const q = c.accent('?');
+
+  /** Ask until the answer validates; --yes takes the default (validated the same way). */
+  const ask = async (label, def, check, { secret = false } = {}) => {
+    for (;;) {
+      let raw;
+      if (YES) raw = def;
+      else {
+        const shown = def != null && def !== '' && !secret ? ` ${c.dim(`(${def})`)}` : '';
+        raw = (await rl.question(`    ${q} ${label}${shown} ${c.dim('›')} `)).trim();
+        if (raw === '') raw = def;
+      }
+      const r = check ? check(raw ?? '') : { value: raw };
+      if (!('error' in r)) return r.value;
+      say(`${c.bad('✗')} ${r.error}`);
+      if (YES) { out(); say(c.bad('--yes cannot answer that one; pass it as a flag')); process.exit(2); }
+    }
   };
-  const yes = async (q, def = true) => {
+  const yes = async (label, def = true) => {
     if (YES) return def;
-    const a = (await rl.question(`${q} [${def ? 'Y/n' : 'y/N'}]: `)).trim().toLowerCase();
+    const a = (await rl.question(`    ${q} ${label} ${c.dim(def ? '(Y/n)' : '(y/N)')} ${c.dim('›')} `)).trim().toLowerCase();
     return a === '' ? def : a.startsWith('y');
   };
+
   // the same file loadConfig reads: config/local.json, or BLOCKYARD_CONFIG where the environment names one
   const env = process.env.BLOCKYARD_CONFIG;
   const file = env && !/^(none|off|no|-)$/i.test(env) ? path.resolve(env) : path.join(ROOT, 'config', 'local.json');
   const defaults = loadConfig({ configFile: null });
 
-  console.log('\nBlockYard setup -- the node, checked, then config/local.json.\n');
-  console.log('BlockYard runs on the machine that runs Bitcoin Core: the address index is built from the');
-  console.log('node\'s block files. Every check below is a read; nothing is changed on the node.\n');
+  let building = null;
+  process.on('SIGINT', () => {
+    out(); out();
+    if (building) say(c.warn(`stopped. The index in ${building} is unfinished: run the build again (it starts over) before pointing BlockYard at it.`));
+    else say(c.dim('stopped; nothing written.'));
+    process.exit(130);
+  });
 
+  out(banner(VERSION));
+  say(c.dim('BlockYard runs on the machine that runs Bitcoin Core: the explorer\'s address index is built from'));
+  say(c.dim('the node\'s block files. Every check below is a read; nothing on the node is changed.'));
+  say(c.dim('Enter accepts the value shown. Ctrl-C leaves everything as it was.'));
+
+  // ---------------------------------------------------------------- 1. the node, until it answers
   const a = {};
   let result;
   for (;;) {
-    a.rpcUrl = await ask('Bitcoin Core RPC URL', arg('rpc-url', 'http://127.0.0.1:8332'));
-    a.datadir = await ask('Bitcoin Core data directory', arg('datadir', defaultDatadir()));
-    a.label = await ask('A label for this node', arg('label', 'Bitcoin Core'));
+    out(step(1, STEPS, 'Your Bitcoin Core node'));
+    a.rpcUrl = await ask('RPC URL', arg('rpc-url', 'http://127.0.0.1:8332'), validate.rpcUrl);
+    a.datadir = await ask('data directory', arg('datadir', defaultDatadir()), validate.dir);
+    a.label = await ask('a label for the node', arg('label', 'Bitcoin Core'), validate.label);
     a.rpcUser = arg('rpc-user'); a.rpcPassword = arg('rpc-password');
     const cookie = resolveCookie({ datadir: a.datadir, chainHint: 'main' });
-    if (cookie && cookie.source !== 'config') console.log(`  cookie found: ${cookie.source}`);
+    if (cookie && cookie.source !== 'config') say(`${c.ok('✓')} cookie found: ${c.dim(cookie.source)}`);
     else if (!a.rpcUser) {
-      console.log(`  no .cookie readable under ${a.datadir}; a node authenticating with rpcauth needs a user and password`);
-      a.rpcUser = await ask('  rpcUser', '');
-      if (a.rpcUser) a.rpcPassword = await ask('  rpcPassword', '');
+      say(`${c.warn('!')} no .cookie readable under ${a.datadir}: a node authenticating with rpcauth needs a user and password`);
+      a.rpcUser = await ask('rpcUser', '', null);
+      if (a.rpcUser) a.rpcPassword = await ask('rpcPassword', '', null, { secret: true });
     }
+
+    out(step(2, STEPS, 'Checking the node'));
     const node = localConfig({ ...a, host: '127.0.0.1', port: 0 }).nodes[0];
-    console.log('\nchecking...');
+    const spin = spinner(`asking ${a.rpcUrl} …`);
     result = await runChecks(node, { rpc: clientFor(node, defaults) });
     a.chain = result.facts.chain ?? 'main';
     if (a.chain !== 'main') { node.chainHint = a.chain; result = await runChecks(node, { rpc: clientFor(node, defaults) }); }
-    printChecks(`node at ${a.rpcUrl}`, result);
-    if (result.ok) break;
-    if (result.checks.some((c) => c.name === 'rpc' && c.status === 'fail')) {
-      if (await yes('\nThe RPC server did not answer. Try different answers?', !YES)) continue;
-    } else if (await yes('\nSomething is missing (FAIL above). Write the config anyway?', false)) break;
-    console.log('nothing written.'); rl?.close(); process.exit(1);
+    spin.stop();
+    for (const ch of result.checks) out(checkLine(ch.status, ch.name, ch.detail));
+    out();
+    if (result.ok) { say(c.ok(c.bold('everything this needs is there'))); break; }
+    if (result.checks.some((ch) => ch.name === 'rpc' && ch.status === 'fail')) {
+      say(c.bad(c.bold('the RPC server did not answer')));
+      say(c.dim('is the node running, is server=1 in its bitcoin.conf, and is that its RPC port (rpcport)?'));
+      if (await yes('try different answers?', !YES)) continue;
+    } else {
+      say(c.bad(c.bold('something this needs is missing')) + c.dim(' (the ✗ lines say what, and what to do)'));
+      if (await yes('write the config anyway?', false)) break;
+    }
+    out(); say(c.dim('nothing written.')); rl?.close(); process.exit(1);
   }
 
-  a.host = await ask('\nWeb interface: bind address (127.0.0.1 = this machine only; 0.0.0.0 = everyone who can reach it)', arg('host', '127.0.0.1'));
-  a.port = await ask('Web interface: port', arg('port', '21000'));
-  const gb = result.facts.blockBytes ? (result.facts.blockBytes / 1e9 * 0.14).toFixed(0) : '124';
-  console.log(`\nThe address index (history and balances on the explorer) is built from the block files -- about\n${gb} GB on disk, best on a different disk from the node's. It can be built now or later with\n  node scripts/index-build.js --out <dir>`);
-  a.indexDir = await ask('Address index directory', arg('index-dir', path.join(os.homedir(), 'blockyard-index')));
-  a.workers = Number(await ask('Build workers (each needs ~2.5 GB of memory)', arg('workers', String(defaultWorkers()))));
+  // ------------------------------------------------------------------------ 3. the web interface
+  out(step(3, STEPS, 'The web interface'));
+  say(c.dim('127.0.0.1 keeps it to this machine; 0.0.0.0 opens it to everyone who can reach the port (docs/SECURITY.md).'));
+  a.host = await ask('bind address', arg('host', '127.0.0.1'), validate.host);
+  for (;;) {
+    a.port = await ask('port', arg('port', '21000'), validate.port);
+    const inUse = await portInUse(a.host, a.port);
+    if (!inUse.busy) break;
+    say(`${c.warn('!')} ${inUse.blockyard ? `BlockYard ${inUse.blockyard} is already listening on ${a.port}` : `something is already listening on ${a.port}`}`);
+    if (YES || await yes('use it anyway?', false)) break;
+  }
 
+  // -------------------------------------------------------------------------- 4. the address index
+  out(step(4, STEPS, 'The address index'));
+  const gb = result.facts.blockBytes ? Math.round(result.facts.blockBytes / 1e9 * 0.141) : 124;
+  say(c.dim('History and balances on the explorer come from an index built from the node\'s block files: about'));
+  say(c.dim(`${gb} GB on disk, best on a different disk from the node's. It can be built now, or later with`));
+  say(c.dim('node scripts/index-build.js --out <dir>.'));
+  a.indexDir = await ask('index directory', arg('index-dir', path.join(os.homedir(), 'blockyard-index')), validate.newDir);
+  const built = existsSync(path.join(a.indexDir, 'manifest.json'));
+  if (built) say(`${c.ok('✓')} an index is already built there; the server will follow the chain from it`);
+  else a.workers = await ask(`build workers ${c.dim('(each needs ~2.5 GB of memory)')}`, arg('workers', String(defaultWorkers())), validate.workers);
+
+  // ------------------------------------------------------------------------------- 5. written
+  out(step(5, STEPS, 'config/local.json'));
   const cfg = localConfig(a);
-  console.log(`\n${JSON.stringify(cfg, (k, v) => (k === 'rpcPassword' ? '********' : v), 2)}`);
+  out(box(JSON.stringify(cfg, (k, v) => (k === 'rpcPassword' ? '••••••••' : v), 2).split('\n').map((l) => c.dim(l)), { title: shortPath(file) }).split('\n').map((l) => `    ${l}`).join('\n'));
   let force = flag('force');
-  if (existsSync(file) && !force) force = await yes(`${file} exists. Replace it (a backup is kept)?`, false);
+  if (existsSync(file) && !force) force = await yes(`${shortPath(file)} exists -- replace it? (a backup is kept)`, false);
   try { writeLocalConfig(file, cfg, { force }); }
-  catch (err) { console.log(`\n${err.message}`); rl?.close(); process.exit(1); }
-  console.log(`\nwrote ${file} (mode 0600)`);
+  catch (err) { out(); say(c.bad(err.message)); rl?.close(); process.exit(1); }
+  say(`${c.ok('✓')} written ${c.dim('(mode 0600)')}`);
 
-  const built = result.facts.indexTip != null || existsSync(path.join(a.indexDir, 'manifest.json'));
-  if (built) console.log(`\nan address index is already built in ${a.indexDir}; the server follows the chain from there`);
-  const build = !built && !flag('no-build') && await yes(`\nBuild the address index now into ${a.indexDir}? (${a.workers} workers; the whole chain takes ~30 min on 16)`, true);
-  rl?.close();
+  // --------------------------------------------------------------------------------- 6. build
+  out(step(6, STEPS, 'Building the index'));
+  const build = !built && !flag('no-build') && await yes(`build the address index now into ${a.indexDir}? ${c.dim(`(${a.workers} workers; ~30 min on 16, longer on fewer)`)}`, true);
   if (build) {
     const node = cfg.nodes[0];
     const rpc = clientFor(node, defaults);
     const started = Date.now();
-    let last = 0;
-    const manifest = await buildIndex({
-      rpc, blocksDir: path.join(node.datadir, 'blocks'), out: a.indexDir, workers: a.workers,
-      onProgress: (p) => {
-        const now = Date.now();
-        if (now - last < 1000 && p.done !== p.total) return;
-        last = now;
-        process.stderr.write(`[${((now - started) / 1000).toFixed(0)}s] ${p.phase} ${p.done}/${p.total}${p.rows != null ? ` rows ${p.rows.toLocaleString()}` : ''}\n`);
-      },
-    });
-    console.log(`\nindex built: ${manifest.rows?.toLocaleString?.() ?? ''} rows to block ${manifest.tip.height.toLocaleString()} in ${((Date.now() - started) / 60000).toFixed(1)} min`);
-  } else if (!built) {
-    console.log(`\nlater:  node scripts/index-build.js --out ${a.indexDir} --workers ${a.workers}\n(the address page says "not indexed" until then; restart BlockYard after the build)`);
-  }
-  console.log(`\nnow:    npm start\nthen:   http://${a.host === '0.0.0.0' ? '127.0.0.1' : a.host}:${a.port}\ncheck:  npm run check\n`);
-  process.exit(0);
+    let phaseStart = started, phase = null;
+    const bar = progress();
+    building = a.indexDir;
+    try {
+      const manifest = await buildIndex({
+        rpc, blocksDir: path.join(node.datadir, 'blocks'), out: a.indexDir, workers: a.workers,
+        onProgress: (p) => {
+          if (p.phase !== phase) {
+            if (phase) bar.done(strip(progressLine({ phase, done: 1, total: 1, elapsed: (Date.now() - phaseStart) / 1000 })));
+            phase = p.phase; phaseStart = Date.now();
+          }
+          bar.update({ ...p, elapsed: (Date.now() - phaseStart) / 1000 });
+        },
+      });
+      bar.done();
+      building = null;
+      const mins = (Date.now() - started) / 60000;
+      say(`${c.ok('✓')} index built: ${fmt.big(manifest.rows ?? 0)} rows to block ${Number(manifest.tip?.height ?? 0).toLocaleString()} in ${mins.toFixed(1)} min`);
+    } catch (err) {
+      bar.done();
+      building = null;
+      say(c.bad(`the build failed: ${err.message}`));
+      say(c.dim(`fix the cause and run: node scripts/index-build.js --out ${a.indexDir} --workers ${a.workers}`));
+    }
+  } else if (built) say(c.dim('nothing to build'));
+  else say(c.dim(`skipped. Later:  node scripts/index-build.js --out ${a.indexDir} --workers ${a.workers}   (the address page says "not indexed" until then; restart BlockYard after)`));
+
+  // --------------------------------------------------------------------------------- done
+  const url = `http://${a.host === '0.0.0.0' ? '127.0.0.1' : a.host}:${a.port}`;
+  out();
+  out(box([
+    `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('   (or answer yes below)') : ''}`,
+    `${c.bold('open it')}      ${c.cyan(url)}`,
+    `${c.bold('check it')}     ${c.accent('npm run check')}${c.dim('   the same checks, any time')}`,
+    `${c.bold('keep it up')}   ${c.dim('docs/GETTING-STARTED.md §6: systemd on Linux, launchd on macOS')}`,
+  ], { title: c.bold('BlockYard is set up') }).split('\n').map((l) => `    ${l}`).join('\n'));
+  out();
+  const start = flag('start') || (!YES && await yes('start BlockYard now, in this terminal? (Ctrl-C stops it)', true));
+  rl?.close();
+  if (!start) process.exit(0);
+  const { boot, banner: serverBanner } = await import('../server/main.js');
+  const app = await boot();
+  stdout.write(serverBanner(app) + '\n');
+  if (app.bootstrap) await app.audit({ type: 'bootstrap-admin', generated: app.bootstrap.generated, ip: 'local' });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
-  main().catch((err) => { console.error(err.message); process.exit(1); });
+  main().catch((err) => { console.error(c.bad(err.message)); process.exit(1); });
 }

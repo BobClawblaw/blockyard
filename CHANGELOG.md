@@ -88,7 +88,12 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   writes `config/local.json` (mode 0600, a backup of any previous one) and offers to build the
   address index on the spot. `npm run check` runs the same checks against every configured node
   and exits non-zero on a FAIL; `--yes` with flags is the scripted form. `docs/GETTING-STARTED.md`
-  walks a macOS or Linux command prompt through it.
+  walks a macOS or Linux command prompt through it. Six numbered steps, every answer validated and
+  explained before it is accepted (a URL that is not one, a port off the range, a directory that
+  is not there, a hostname where the config wants an address), a warning when something already
+  listens on the port, a progress bar with the rows so far and the time left for each phase of the
+  build (the same bar in `scripts/index-build.js`), Ctrl-C that leaves everything as it was, and a
+  last question that starts the monitor in the same terminal.
 - **An unconfirmed transaction shows its inputs and fee** (operator: "Unknown script?!", of a
   mempool transaction whose 858 inputs all read *unknown script*). Core carries no `prevout` on a
   mempool transaction's inputs, so `fillPrevouts` fetches the parents in one batch and fills each
