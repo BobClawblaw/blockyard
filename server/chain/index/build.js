@@ -83,7 +83,10 @@ export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()
  * Mac install: a build at full speed on the node's disk turned its RPC into 18 s answers and
  * 90 s timeouts.)
  */
-export function rpcPacer(rpc, { slowMs = 1000, easeMs = 750, holdMs = 10_000, onChange = null } = {}) {
+// `slowMs` is the monitor's own idea of slow (rpc.slowLatencyMs, 5 s by default): a node whose
+// heavy reads take a second when perfectly well -- the first Mac -- was being held at one second
+// and eased at a quarter of it, and a healthy build ran at a sixth of its speed (2026-09-14)
+export function rpcPacer(rpc, { slowMs = 5000, easeMs = 250, holdMs = 10_000, onChange = null } = {}) {
   let held = false;
   return async () => {
     for (;;) {
@@ -96,7 +99,7 @@ export function rpcPacer(rpc, { slowMs = 1000, easeMs = 750, holdMs = 10_000, on
         continue;
       }
       if (held) { held = false; onChange?.(false, t); }
-      if (avg > slowMs / 4) await new Promise((r) => setTimeout(r, easeMs));
+      if (avg > slowMs * 0.4) await new Promise((r) => setTimeout(r, easeMs));
       return;
     }
   };

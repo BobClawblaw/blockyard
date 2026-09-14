@@ -442,7 +442,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       // PACED BY THE NODE'S OWN ANSWERS: the workers read the block files the node is also reading, so
       // when its RPC slows past two seconds the next file waits until it recovers (2026-09-14, the first
       // Mac install: 18 s answers and 90 s timeouts while the build ran flat out)
-      const pace = rpcPacer(m.rpc, { onChange: (held, t) => {
+      const pace = rpcPacer(m.rpc, { slowMs: cfg.rpc?.slowLatencyMs ?? 5000, onChange: (held, t) => {
         status.paused = held;
         app.log({ level: 'info', msg: held ? `address index build: paused while the node's RPC is ${t.breakerOpen ? 'refused' : t.lastError ? 'failing' : `answering in ${((t.avgLatencyMs ?? 0) / 1000).toFixed(1)} s`}` : 'address index build: resumed' });
       } });
