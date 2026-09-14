@@ -7,11 +7,14 @@
 //   npm run setup                       # interactive
 //   node scripts/setup.js --yes [--rpc-url URL] [--datadir DIR] [--label L] [--rpc-user U --rpc-password P]
 //                         [--host 127.0.0.1] [--port 21000] [--index-dir DIR] [--workers N]
-//                         [--no-build] [--start] [--force]
+//                         [--build-here | --build-later] [--start] [--force]
 //
 // --yes takes every default without asking (a scripted install); --force replaces an existing
 // config/local.json (a backup is kept either way); --start boots the monitor at the end without
-// asking. The written file is mode 0600: it may carry an RPC password. Nothing here touches the
+// asking. The index is built by BlockYard itself, in the background, once it starts (the Overview shows
+// progress and an event says when it is done); --build-here builds it in this terminal instead, and
+// --build-later writes addressIndexBuild: "manual" so nothing builds until you run index-build.js.
+// The written file is mode 0600: it may carry an RPC password. Nothing here touches the
 // node: every call is a read. (operator, 2026-09-14: "Make this npm installer absolutely beautiful")
 import { existsSync, statSync, writeFileSync, copyFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
@@ -21,7 +24,7 @@ import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { ROOT, loadConfig, resolveCookie } from '../server/config.js';
 import { runChecks, clientFor } from './check.js';
-import { buildIndex } from '../server/chain/index/build.js';
+import { buildIndex, defaultWorkers } from '../server/chain/index/build.js';
 import { c, banner, step, checkLine, box, spinner, progress, progressLine, fmt, strip } from './ui.js';
 import { fileURLToPath } from 'node:url';
 
@@ -43,10 +46,7 @@ export function defaultDatadir(platform = process.platform, home = os.homedir(),
   return P.join(home, '.bitcoin');
 }
 
-/** Workers for the index build: leave four cores for the node, and count ~2.5 GB of memory each. */
-export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()) {
-  return Math.max(1, Math.min(16, cpus - 4, Math.floor(totalMem / 2.5e9)));
-}
+export { defaultWorkers };
 
 /** The config/local.json a set of answers produces. */
 export function localConfig(a) {
@@ -54,6 +54,7 @@ export function localConfig(a) {
   if (a.cookieFile) node.cookieFile = a.cookieFile;
   if (a.rpcUser) { node.rpcUser = a.rpcUser; node.rpcPassword = a.rpcPassword ?? ''; }
   if (a.indexDir) node.addressIndex = a.indexDir;
+  if (a.indexBuild === 'manual') node.addressIndexBuild = 'manual';   // the server builds a missing index on start unless told not to
   return { server: { host: a.host, port: Number(a.port) }, nodes: [node] };
 }
 
@@ -329,8 +330,19 @@ async function main() {
 
   // --------------------------------------------------------------------------------- 6. build
   out(step(6, STEPS, 'Building the index'));
-  const build = !built && !flag('no-build') && await yes(`build the address index now into ${a.indexDir}? ${c.dim(`(${a.workers} workers; ~30 min on 16, longer on fewer)`)}`, true);
-  if (build) {
+  // BACKGROUND BY DEFAULT (operator, 2026-09-14: "Is it possible to run step 6 in the background,
+  // and have a status notification in blockyard when the index process is finished?"): BlockYard
+  // builds a missing index itself when it starts, shows the progress on the Overview and the
+  // address page, and posts an event -- and a toast -- when it is done.
+  let how = built ? 'none' : flag('build-here') ? 'here' : flag('build-later') ? 'later' : 'background';
+  if (!built && !YES && !flag('build-here') && !flag('build-later')) {
+    say(c.dim('BlockYard can build it in the background once it starts: the Overview shows the progress, and'));
+    say(c.dim('a notification says when it is done (~30 min on 16 workers, longer on fewer). Or build it here, now.'));
+    how = await ask(`build it ${c.dim('(b)')}ackground when BlockYard starts, ${c.dim('(h)')}ere now, or ${c.dim('(l)')}ater by hand`, 'b',
+      (v) => ({ b: { value: 'background' }, h: { value: 'here' }, l: { value: 'later' } }[String(v).trim().toLowerCase()[0]] ?? { error: 'b, h or l' }));
+  }
+  if (how === 'later') { a.indexBuild = 'manual'; writeLocalConfig(file, localConfig(a), { force: true }); }
+  if (how === 'here') {
     const node = cfg.nodes[0];
     const rpc = clientFor(node, defaults);
     const started = Date.now();
@@ -358,14 +370,15 @@ async function main() {
       say(c.bad(`the build failed: ${err.message}`));
       say(c.dim(`fix the cause and run: node scripts/index-build.js --out ${a.indexDir} --workers ${a.workers}`));
     }
-  } else if (built) say(c.dim('nothing to build'));
-  else say(c.dim(`skipped. Later:  node scripts/index-build.js --out ${a.indexDir} --workers ${a.workers}   (the address page says "not indexed" until then; restart BlockYard after)`));
+  } else if (how === 'background') say(`${c.ok('✓')} BlockYard will build it when it starts ${c.dim(`(${a.workers} workers; progress on the Overview, a notification when done)`)}`);
+  else if (how === 'later') say(c.dim(`later:  node scripts/index-build.js --out ${a.indexDir} --workers ${a.workers}   (the address page says "not indexed" until then; restart BlockYard after)`));
+  else say(c.dim('nothing to build'));
 
   // --------------------------------------------------------------------------------- done
   const url = `http://${a.host === '0.0.0.0' ? '127.0.0.1' : a.host}:${a.port}`;
   out();
   out(box([
-    `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('   (or answer yes below)') : ''}`,
+    `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('   (or answer yes below)') : ''}${how === 'background' ? c.dim('   -- the index build starts with it') : ''}`,
     `${c.bold('open it')}      ${c.cyan(url)}`,
     `${c.bold('check it')}     ${c.accent('npm run check')}${c.dim('   the same checks, any time')}`,
     `${c.bold('keep it up')}   ${c.dim('docs/GETTING-STARTED.md §6: systemd on Linux, launchd on macOS')}`,

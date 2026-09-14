@@ -401,20 +401,67 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   }
   if (followers.size) {
     const { LiveIndex } = await import('./chain/index/live.js');
-    const { registerLiveIndex } = await import('./http/explorer.js');
+    const { registerLiveIndex, registerIndexBuild } = await import('./http/explorer.js');
+    const { buildIndex, defaultWorkers } = await import('./chain/index/build.js');
+    const follow = (dir, m) => {
+      const live = new LiveIndex(dir, { rpc: m.rpc, nodeId: m.id, log: { info: (msg) => app.log({ level: 'info', msg }), warn: (msg) => app.log({ level: 'warn', msg }) } });
+      registerLiveIndex(dir, live);
+      const tick = () => { live.poll().catch(() => {}); };
+      tick();
+      const t = setInterval(tick, 30_000);
+      t.unref?.();
+      app.timers.push(t);
+      app.log({ level: 'info', msg: `address index ${dir}: following ${m.id} from block ${live.tip}` });
+    };
+    // A MISSING INDEX IS BUILT HERE, IN THE BACKGROUND (operator, 2026-09-14: "Is it possible to run
+    // step 6 in the background, and have a status notification in blockyard when the index process
+    // is finished?"). The build runs on worker threads inside this process while every page keeps
+    // serving; its progress is a quality flag the Overview shows and the address page repeats; an
+    // event -- which the browser toasts -- marks the start, the finish, or a failure. A node config
+    // can say addressIndexBuild: "manual" to keep this from happening.
+    const HMS = (sec) => (sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`);
+    const build = (dir, m) => {
+      const workers = defaultWorkers();
+      const status = { dir, node: m.id, phase: 'starting', done: 0, total: 0, rows: 0, eta: null, startedAt: Date.now(), error: null };
+      registerIndexBuild(dir, status);
+      const say = (text, severity = 'info') => { m.addEvent?.({ kind: 'index', severity, tag: 'index', ts: Date.now(), text }); app.log({ level: severity === 'warn' ? 'warn' : 'info', msg: text }); };
+      say(`address index: building ${dir} from ${m.id}'s block files with ${workers} workers -- the Overview shows the progress`);
+      let phase = null, phaseAt = Date.now(), lastFlag = 0;
+      buildIndex({
+        rpc: m.rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers,
+        onProgress: (p) => {
+          if (p.phase !== phase) { phase = p.phase; phaseAt = Date.now(); }
+          const elapsed = (Date.now() - phaseAt) / 1000;
+          const rate = elapsed > 0 && p.done > 0 ? p.done / elapsed : 0;
+          Object.assign(status, { phase: p.phase, done: p.done, total: p.total, rows: p.rows ?? status.rows, eta: rate > 0 && p.total > p.done ? HMS((p.total - p.done) / rate) : null });
+          if (Date.now() - lastFlag > 5000) {
+            lastFlag = Date.now();
+            const pct = p.total ? Math.round((100 * p.done) / p.total) : 0;
+            m.flagQuality?.('address-index-building', `the address index is being built: ${p.phase} ${p.done.toLocaleString()} of ${p.total.toLocaleString()} (${pct}%)${p.rows ? `, ${p.rows.toLocaleString()} rows so far` : ''}${status.eta ? `, about ${status.eta} left` : ''}`, 'info');
+          }
+        },
+      }).then((manifest) => {
+        registerIndexBuild(dir, null);
+        m.clearQuality?.('address-index-building');
+        const mins = ((Date.now() - status.startedAt) / 60000).toFixed(1);
+        say(`address index built: ${Number(manifest.rows ?? 0).toLocaleString()} rows to block ${Number(manifest.tip?.height ?? 0).toLocaleString()} in ${mins} min -- address pages are live`);
+        try { follow(dir, m); } catch (err) { say(`address index ${dir}: built, but the follower could not start: ${err.message}`, 'warn'); }
+      }).catch((err) => {
+        status.error = err.message;
+        registerIndexBuild(dir, null);
+        m.flagQuality?.('address-index-build-failed', `the address index build failed: ${err.message} -- fix the cause and run node scripts/index-build.js --out ${dir}`, 'warn');
+        say(`address index build failed: ${err.message}`, 'warn');
+      });
+    };
     for (const [dir, m] of followers) {
-      try {
-        const live = new LiveIndex(dir, { rpc: m.rpc, nodeId: m.id, log: { info: (msg) => app.log({ level: 'info', msg }), warn: (msg) => app.log({ level: 'warn', msg }) } });
-        registerLiveIndex(dir, live);
-        const tick = () => { live.poll().catch(() => {}); };
-        tick();
-        const t = setInterval(tick, 30_000);
-        t.unref?.();
-        app.timers.push(t);
-        app.log({ level: 'info', msg: `address index ${dir}: following ${m.id} from block ${live.tip}` });
-      } catch (err) {
-        app.log({ level: 'warn', msg: `address index ${dir}: ${err.message}` });
-      }
+      const finished = fs.existsSync(path.join(dir, 'manifest.json'));
+      if (finished) {
+        try { follow(dir, m); } catch (err) { app.log({ level: 'warn', msg: `address index ${dir}: ${err.message}` }); }
+      } else if (m.cfg?.addressIndexBuild === 'manual') {
+        app.log({ level: 'warn', msg: `address index ${dir}: not built, and addressIndexBuild is "manual" -- run node scripts/index-build.js --out ${dir}` });
+      } else if (!m.cfg?.datadir) {
+        app.log({ level: 'warn', msg: `address index ${dir}: not built, and node ${m.id} has no datadir to build it from` });
+      } else build(dir, m);
     }
   }
 

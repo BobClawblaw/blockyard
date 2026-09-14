@@ -75,6 +75,14 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   count, the page says the index is absent, and the dead RPCs are not re-sent on every view: a
   "method not found" is remembered per node for ten minutes, then asked again, because the daemon
   behind a node id can change.
+- **A missing address index is built by BlockYard itself, in the background** (operator: "Is it
+  possible to run step 6 in the background, and have a status notification in blockyard when the
+  index process is finished?"). On start, an `addressIndex` directory with no index in it is built
+  on worker threads while every page keeps serving; the progress is a quality flag on the Overview
+  and a line on the address page (phase, files done, rows so far, time left); an event marks the
+  start, the finish and a failure, and the browser toasts it; when it finishes the follower starts
+  and address pages work with no restart. `addressIndexBuild: "manual"` keeps it from happening.
+  The installer's step 6 offers background (the default), here, or later.
 - **An address's unspent outputs are listed** (operator, the same day: "Why don't we do this"): the
   index names every transaction that touched the address, each one's outputs paying it are asked of
   `gettxout` (the UTXO set, less what the mempool already spends), and the page lists them with the

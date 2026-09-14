@@ -103,18 +103,23 @@ giving another path), and the number of build workers (each needs about 2.5 GB o
 fits the machine). It writes `config/local.json` (mode 0600; a backup is kept if one was there)
 and shows it.
 
-**"Build the address index now?"** — yes, unless you want the web interface first. The build
+**Building the index** — the default is **(b)ackground**: BlockYard builds it itself once it
+starts, on worker threads, while every page keeps working. The Overview's "what this panel
+cannot tell you" box shows the progress (`scan 1,234 of 5,757 (21%), about 20 min left`), the
+address page says the same in place of a history, and a notification pops up when it is done
+(and appears in the events feed) — the address pages fill in from then on, no restart. The build
 reads every block file once: **29 min 45 s on 16 workers** for the whole chain on the machine it
-was measured on; roughly four times that on four. A progress bar shows each phase, the rows so
-far and how long is left. If you answer no, it prints the command to run later:
+was measured on; roughly four times that on four. **(h)ere** builds it in this terminal instead,
+with a progress bar; **(l)ater** writes `addressIndexBuild: "manual"` so nothing builds until
+you run:
 
 ```bash
 node scripts/index-build.js --out data/index --workers 4
 ```
 
-The address page says **not indexed** until the build is done, and BlockYard needs a restart
-after it to pick the index up. Last question: **start BlockYard now, in this terminal?** — yes
-runs it right there (Ctrl-C stops it); `--start` does the same without asking.
+Last question: **start BlockYard now, in this terminal?** — yes runs it right there (Ctrl-C
+stops it, and stops a background build with it; it starts over on the next start); `--start`
+does the same without asking.
 
 Scripted, with no questions (a fresh machine, a Makefile):
 
@@ -123,8 +128,8 @@ node scripts/setup.js --yes --rpc-url http://127.0.0.1:8332 \
   --datadir "$HOME/Library/Application Support/Bitcoin" --index-dir "$PWD/data/index" --workers 4
 ```
 
-`--no-build` writes the config and stops; `--start` boots the monitor at the end; `--force`
-replaces an existing `config/local.json` (with a backup).
+`--build-here` builds in the terminal and `--build-later` leaves it to you; `--start` boots the
+monitor at the end; `--force` replaces an existing `config/local.json` (with a backup).
 
 ## 5. Run it
 
@@ -132,8 +137,9 @@ replaces an existing `config/local.json` (with a backup).
 npm start
 ```
 
-The log says `BlockYard 0.0.9 listening on http://127.0.0.1:21000` and, once the index exists,
-`address index /Users/you/blockyard/data/index: following main from block N`. Open
+The log says `BlockYard 0.0.9 listening on http://127.0.0.1:21000`, then `address index: building
+... with 4 workers` and, when that is done, `address index /Users/you/blockyard/data/index:
+following main from block N`. Open
 <http://127.0.0.1:21000>. The Overview fills in within about thirty seconds; Block space lands a
 little after. Open Explorer, click the latest block, then any output address: with the index
 built, its balance and history appear.

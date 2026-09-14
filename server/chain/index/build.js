@@ -64,7 +64,12 @@ class Pool {
   close() { return Promise.all(this.workers.map((w) => w.terminate())); }
 }
 
-export async function buildIndex({ rpc, blocksDir, out, workers = Math.max(2, Math.min(16, os.cpus().length - 4)), files = null, onProgress = () => {} }) {
+/** Workers for a build on this machine: four cores left for the node, ~2.5 GB of memory each, sixteen at most. */
+export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()) {
+  return Math.max(1, Math.min(16, cpus - 4, Math.floor(totalMem / 2.5e9)));
+}
+
+export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers(), files = null, onProgress = () => {} }) {
   const t0 = performance.now();
   const stats = { format: FORMAT, workers, phases: {} };
   const info = await rpc.batch([{ method: 'getblockchaininfo', params: [] }], { key: 'index:info', timeoutMs: 60_000 });

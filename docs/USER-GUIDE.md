@@ -377,6 +377,11 @@ The page says when the index is **behind** the node (it catches up within a poll
 has **stopped following** — which happens after a reorganisation deeper than the blocks it
 still holds in its tail, and means a rebuild.
 
+**While the index is being built** (BlockYard builds a missing one itself when it starts), the
+page says so with the phase, the progress and the time left, the Overview's "what this panel
+cannot tell you" box shows the same line, and a notification appears when the build finishes;
+the page fills in from then on.
+
 **Without an index configured**, the address and its type are still confirmed
 (`validateaddress` needs none), and balance, totals and history read **not indexed**. It does
 not show zero, and it does not print the node's error where a figure belongs: nothing counted,

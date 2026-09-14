@@ -556,3 +556,30 @@ test('the isometric block cubes have faces that meet: the corner cannot tear ope
   assert.match(top, /skewX\(-45deg\)/); assert.match(top, /transform-origin: bottom left/);
   assert.match(right, /skewY\(-45deg\)/); assert.match(right, /transform-origin: top left/);
 });
+
+test('WHILE THE SERVER BUILDS THE INDEX the address page says so, with the progress, instead of "no index"', async () => {
+  // (operator, 2026-09-14: "run step 6 in the background, and have a status notification in blockyard")
+  const { registerIndexBuild, indexBuildStatus } = await import('../server/http/explorer.js');
+  _resetCache();
+  const addr = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+  const m = fakeNode((c) => {
+    if (c.method === 'validateaddress') return { isvalid: true, iswitness: true, witness_version: 0 };
+    return { code: -32601, message: 'Method not found' };
+  });
+  m.cfg = { ...(m.cfg ?? {}), addressIndex: '/nowhere/index-being-built' };
+  registerIndexBuild('/nowhere/index-being-built', { dir: '/nowhere/index-being-built', node: 'n1', phase: 'scan', done: 1234, total: 5757, rows: 900_000_000, eta: '20 min', startedAt: 1, error: null });
+  try {
+    assert.equal(indexBuildStatus('/nowhere/index-being-built').phase, 'scan');
+    const d = await xAddress(m, { addr });
+    assert.equal(d.ok, true);
+    assert.equal(d.indexed, false, 'nothing is claimed while it builds');
+    assert.equal(d.txCount, null);
+    assert.deepEqual({ phase: d.indexBuilding.phase, done: d.indexBuilding.done, total: d.indexBuilding.total, eta: d.indexBuilding.eta }, { phase: 'scan', done: 1234, total: 5757, eta: '20 min' });
+    const html = addressHtml(d, fmt);
+    assert.match(html, /The address index is being built/, 'the page says it is being built');
+    assert.match(html, /scan 1,234 of 5,757 \(21%\)/, 'with the progress');
+    assert.match(html, /about 20 min left/, 'and the time left');
+    assert.doesNotMatch(html, /keeps <b>no address index<\/b>/, 'not that there is none');
+  } finally { registerIndexBuild('/nowhere/index-being-built', null); }
+  assert.equal(indexBuildStatus('/nowhere/index-being-built'), null, 'and it is gone when the build is');
+});

@@ -691,6 +691,8 @@ function connect() {
     if (state.pausedHard) return;
     for (const r of rows) {
       state.events.unshift(r);
+      // the address index build is the one thing worth interrupting a page for: it takes half an hour
+      if (r.kind === 'index') toast(r.text, r.severity === 'warn' ? 'bad' : 'ok');
     }
     // Bounded: an unbounded feed is a slow memory leak with a visible UI.
     if (state.events.length > 1500) state.events.length = 1500;

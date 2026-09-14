@@ -114,7 +114,11 @@ test('EACH THING AN INSTALL CAN GET WRONG IS A FAIL BY NAME', async () => {
     assert.equal(byName(r)['block files'].status, 'fail');
     // an index directory that is configured but not built, and one the follower cannot write to
     r = await runChecks({ ...node, addressIndex: path.join(root, 'noindex') }, { rpc: stubRpc() });
-    assert.equal(byName(r)['address index'].status, 'warn'); assert.match(byName(r)['address index'].detail, /index-build/);
+    assert.equal(byName(r)['address index'].status, 'info', 'an unbuilt index is not a fault: the server builds it');
+    assert.match(byName(r)['address index'].detail, /builds it when it starts/);
+    r = await runChecks({ ...node, addressIndex: path.join(root, 'noindex'), addressIndexBuild: 'manual' }, { rpc: stubRpc() });
+    assert.equal(byName(r)['address index'].status, 'warn', 'unless the config says the build is by hand');
+    assert.match(byName(r)['address index'].detail, /index-build/);
     if (process.platform !== 'win32' && process.getuid?.() !== 0) {   // Windows ignores directory modes
       const ro = path.join(root, 'ro'); mkdirSync(ro);
       writeFileSync(path.join(ro, 'manifest.json'), JSON.stringify({ tip: { height: 0 } }));

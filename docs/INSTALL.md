@@ -63,6 +63,13 @@ Pages that need an index the node does not have say so, rather than showing empt
 
 ### Building the address index
 
+**By default BlockYard builds it itself**, in the background, the first time it starts with an
+`addressIndex` directory that holds no index: the Overview shows the progress, the address page
+says it is being built, and an event (and a notification in the browser) says when it is done,
+after which address pages work without a restart. Stopping BlockYard stops the build; the next
+start begins it again. Set `"addressIndexBuild": "manual"` on the node to keep the server from
+building, and run the command below yourself.
+
 The index is built once from the node's own `blocks/blk*.dat` and `rev*.dat` files, so the
 build needs to run **on a machine that can read the node's data directory** -- the node's own
 machine, which is where BlockYard runs. After that the server keeps it current over RPC.

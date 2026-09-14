@@ -247,12 +247,19 @@ const indexes = new Map();                 // dir -> { store, error, mtimeMs }
 // so a page served through one includes every block the follower has taken in
 const followers = new Map();
 export function registerLiveIndex(dir, live) { followers.set(dir, live); }
+// a build the server is running in the background (main.js): its progress, so the page can say
+// "being built, 34%, about 20 min left" instead of "no index" (operator, 2026-09-14)
+const builds = new Map();
+export function registerIndexBuild(dir, status) { if (status) builds.set(dir, status); else builds.delete(dir); }
+export function indexBuildStatus(dir) { return builds.get(dir) ?? null; }
 function localIndex(m) {
   if (m.addressIndex) return { store: m.addressIndex, error: null };        // tests inject a store
   const dir = m.cfg?.addressIndex;
   if (!dir) return null;
   const live = followers.get(dir);
   if (live) return { store: live.store, error: null, live };
+  const building = builds.get(dir);
+  if (building) return { store: null, error: null, building };
   let mtimeMs = null;
   try { mtimeMs = statSync(path.join(dir, 'manifest.json')).mtimeMs; } catch (err) { return { store: null, error: `no finished index at ${dir}` }; }
   const had = indexes.get(dir);
@@ -404,6 +411,8 @@ export async function xAddress(m, q) {
     indexError: ids.ok ? null : ids.error?.message ?? null,
     // a configured local index that could not be opened says why, rather than looking unconfigured
     localIndexError: local?.error ?? null,
+    // ...and one the server is building right now says how far it has got
+    indexBuilding: local?.building ? { ...local.building } : null,
     page, pages: indexed ? Math.max(1, Math.ceil(txids.length / PAGE)) : 1, txs, tip: m.state?.chainInfo?.blocks ?? null,
   };
 }

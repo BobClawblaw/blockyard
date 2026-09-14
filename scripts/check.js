@@ -123,7 +123,7 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   if (node.addressIndex) {
     const dir = node.addressIndex;
     const manifest = path.join(dir, 'manifest.json');
-    if (!fs.existsSync(manifest)) add('address index', 'warn', `${dir}: no manifest.json -- not built yet (node scripts/index-build.js --out ${dir})`);
+    if (!fs.existsSync(manifest)) add('address index', node.addressIndexBuild === 'manual' ? 'warn' : 'info', `${dir}: not built yet${node.addressIndexBuild === 'manual' ? ` (node scripts/index-build.js --out ${dir})` : ' -- BlockYard builds it when it starts'}`);
     else {
       try {
         const m = JSON.parse(fs.readFileSync(manifest, 'utf8'));
