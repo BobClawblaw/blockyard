@@ -26,8 +26,8 @@ All notable changes to this project are documented here. The format follows
   a candle's top alone was invisible).
 - **Ball lightning strikes candles.** `cellTops` began each tile at its own fractional x and y,
   which on the candle board (tiles between grid lines) stored nothing, so every cell top was
-  zero and no arc found a target. One arc in four now chains on from the struck block to
-  another, a beat later, in electric green.
+  zero and no arc found a target. Half the arcs now chain on from the struck block to
+  another in electric green, the instant they land, and half of those on to a third block.
 - The lightning ball is one pale gradient with a white-hot heart, and a pale burn behind it,
   instead of five stacked discs of deepening blue that read as a dark blot.
 

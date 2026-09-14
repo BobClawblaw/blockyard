@@ -394,23 +394,29 @@ test('BALL LIGHTNING crosses the whole view off-screen to off-screen, and its ar
   // A CHAIN, SOMETIMES (operator, 2026-09-14: "a small chance for a second arc to spawn from the
   // block and arc to a different block"): some arcs carry one, most do not; a chained arc leaves
   // a struck block for a different block, lands on a real block too, and lights it
-  const chained = a.arcs.filter((arc) => arc.chain).length;
-  assert.ok(chained > 0 && chained < a.arcs.length / 2, `a small share of the arcs chain (${chained} of ${a.arcs.length})`);
-  let chainsSeen = 0;
+  const chained = a.arcs.filter((arc) => arc.chain).length, third = a.arcs.filter((arc) => arc.chain?.next).length;
+  assert.ok(chained > a.arcs.length * 0.3 && chained < a.arcs.length * 0.7, `about half the arcs chain (${chained} of ${a.arcs.length})`);
+  assert.ok(third > chained * 0.3 && third < chained * 0.7, `and about half of those chain again (${third} of ${chained})`);
+  let chainsSeen = 0, thirds = 0, atOnce = 0;
   for (let u = 0.2; u < 0.8; u += 0.005) {
     const f = AGENTS.stormball.frame(a, u, { ms: 11000 });
     for (const arc of f.stormball.arcs) {
       if (!arc.from) continue;
       chainsSeen++;
+      if (arc.chain === 2) { thirds++; assert.ok(f.stormball.arcs.some((o) => o.chain === 1 && o.to.x === arc.from.x && o.to.y === arc.from.y), 'a third arc leaves the block the second struck'); }
+      // no delay: the chain is in the same frame as the arc that threw it, from the block it struck
+      if (f.stormball.arcs.some((o) => !o.from && o.to.x === arc.from.x && o.to.y === arc.from.y)) atOnce++;
       assert.ok(f.stormball.arcs.some((o) => !o.from && o.to.x === arc.from.x && o.to.y === arc.from.y) || true, 'it leaves a struck block');
       assert.ok(Math.max(Math.abs(arc.to.x - arc.from.x), Math.abs(arc.to.y - arc.from.y)) >= 2, 'for a different block, two units clear');
-      assert.equal(arc.chain, true, 'marked as a chain, so it draws in its own colour');
+      assert.ok(arc.chain === 1 || arc.chain === 2, 'marked as a chain, so it draws in its own colour');
       const t = tiles.find((b) => arc.to.x > b.x && arc.to.x < b.x + b.s && arc.to.y > b.y && arc.to.y < b.y + b.s);
       assert.ok(t, `a chained arc lands on a block too (${arc.to.x}, ${arc.to.y})`);
       assert.ok(arc.strength > 0 && arc.strength <= 1 && arc.age >= 0 && arc.age <= 1, 'a strength and an age of its own');
     }
   }
   assert.ok(chainsSeen > 5, `chains are seen in flight (${chainsSeen} frames)`);
+  assert.ok(thirds > 0, `third arcs too (${thirds})`);
+  assert.ok(atOnce > 0, 'and a chain leaps the instant the first arc lands');
   // replays identically from its seed, and a different seed takes another path
   assert.deepEqual(build(7).arcs, a.arcs);
   assert.notDeepEqual(build(8).from, a.from);

@@ -301,7 +301,7 @@ const FX_ROW = Object.freeze({
   tractor: Object.freeze({ label: 'Tractor beam', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
   missile: Object.freeze({ label: 'Interception', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
   boulderdash: Object.freeze({ label: 'Collapse', hint: 'The board gives way from a point and the blocks fall in, cascading outward' }),
-  stormball: Object.freeze({ label: 'Ball lightning', hint: 'An electric blue sphere in a nebula drifts across the view, crackling, throwing arcs that electrify the blocks they strike; a struck block sometimes throws a green arc on to another' }),
+  stormball: Object.freeze({ label: 'Ball lightning', hint: 'An electric blue sphere in a nebula drifts across the view, crackling, throwing arcs that electrify the blocks they strike; a struck block often throws a green arc on to another, and that one sometimes on to a third' }),
 });
 // where an effect reads differently on the price board, the price board's hint
 const MARKET_HINT = Object.freeze({
@@ -310,7 +310,7 @@ const MARKET_HINT = Object.freeze({
   ball: 'A plasma ball riding the price line from left to right, throwing bolts and a pale dust trail',
   pulse: 'The surge that runs the price line, blue behind the head',
   bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes',
-  stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle sometimes throws a green arc on to another',
+  stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle often throws a green arc on to another, and that one sometimes on to a third',
   cascade: 'The candles light in order, tallest first',
   flare: 'One candle goes supernova and lights its neighbourhood',
 });

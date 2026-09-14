@@ -742,12 +742,16 @@ defineAgent('stormball', {
       const n = 1 + Math.floor(rnd() * 4);
       for (let k = 0; k < n; k++) {
         const arc = { u0: u + rnd() * 0.01, life: 0.02 + 0.035 * rnd(), ang: rnd() * Math.PI * 2, reach: 3.5 + 8 * rnd(), seed: Math.floor(rnd() * 1e9) };
-        // A SECOND ARC OFF THE STRUCK BLOCK, sometimes (operator, 2026-09-14: "When the ball
-        // lightning lights up a block with electricity, I want a small chance for a second arc to
-        // spawn from the block and arc to a different block"). One in four carries a chain: its own
-        // direction and reach from the block it lands on, aimed the same way the first was, at a
-        // different block. Decided here, so a replay throws the same chains.
-        if (rnd() < 0.25) arc.chain = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
+        // A SECOND ARC OFF THE STRUCK BLOCK, AND SOMETIMES A THIRD (operator, 2026-09-14: "a small
+        // chance for a second arc to spawn from the block and arc to a different block", then "Make
+        // the secondary arcing more frequent, and have a 50% for an additional third arc"). Half
+        // the arcs carry a chain -- its own direction and reach from the block the first lands on,
+        // to a different block -- and half of those chain once more from the second block to a
+        // third. Decided here, so a replay throws the same chains.
+        if (rnd() < 0.5) {
+          arc.chain = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
+          if (rnd() < 0.5) arc.chain.next = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
+        }
         arcs.push(arc);
       }
     }
@@ -764,13 +768,13 @@ defineAgent('stormball', {
     const trail = [0.01, 0.022, 0.036, 0.052, 0.07, 0.09].map((d) => (u - d >= 0 ? at(u - d) : null)).filter(Boolean);
     // the block an arc thrown at (aimX, aimY) strikes: the tallest cell near there, never `not`
     // (the block a chain leaves), and none if the floor is bare
-    const strike = (aimX, aimY, not = null) => {
+    const strike = (aimX, aimY, not = []) => {
       let hit = null;
       const consider = (cx, cy) => {
         const h = a.top(cx, cy);
-        // `not`: a chain must reach a different block -- two units clear of the one it leaves,
-        // which on the candle board is the next candle along
-        if (not && Math.max(Math.abs(cx + 0.5 - not.x), Math.abs(cy + 0.5 - not.y)) < 2) return;
+        // `not`: a chain must reach a different block -- two units clear of every block already
+        // struck in its chain, which on the candle board is the next candle along
+        if (not.some((n) => Math.max(Math.abs(cx + 0.5 - n.x), Math.abs(cy + 0.5 - n.y)) < 2)) return;
         if (h > 0 && (!hit || h > hit.z)) hit = { x: cx + 0.5, y: cy + 0.5, z: h };
       };
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) consider(Math.floor(aimX) + dx, Math.floor(aimY) + dy);
@@ -805,15 +809,18 @@ defineAgent('stormball', {
       // Violet was the first colour, and it vanished: the nebula the ball drags is violet and
       // magenta. Electric green is on nothing else here -- not the blue arcs, not the nebula, not
       // the price line's yellow -- and a chain lives 1.2 arc-lives, so it is on screen longer
-      // than the arc that threw it.
-      if (arc.chain && age >= 0.5) {
-        const c2 = arc.chain, age2 = (age - 0.5) / 1.2;
-        const hit2 = strike(hit.x + Math.cos(c2.ang) * c2.reach, hit.y + Math.sin(c2.ang) * c2.reach, hit);
-        if (hit2) {
-          if (age2 <= 1) live.push({ from: hit, to: hit2, seed: c2.seed, strength: Math.min(1, 1.2 * (1 - age2 * 0.5)), chain: true, age: age2 });
-          const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + c2.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
-          heads.push({ x: hit2.x, y: hit2.y, color: [120, 255, 170], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
-        }
+      // than the arc that threw it. NO DELAY (operator: "get rid of the delay on the secondary
+      // arcing"): the chain leaps the instant the first arc lands, and the third with it.
+      let from = hit, link = arc.chain, hop = 1;
+      const struck = [hit];
+      while (link) {
+        const age2 = age / 1.2;
+        const to = strike(from.x + Math.cos(link.ang) * link.reach, from.y + Math.sin(link.ang) * link.reach, struck);
+        if (!to) break;
+        if (age2 <= 1) live.push({ from, to, seed: link.seed, strength: Math.min(1, 1.2 * (1 - age2 * 0.5)), chain: hop, age: age2 });
+        const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + link.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
+        heads.push({ x: to.x, y: to.y, color: [120, 255, 170], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
+        struck.push(to); from = to; link = link.next; hop++;
       }
     }
     return { stormball: { at: ball, arcs: live, trail, t: u }, heads };
@@ -842,7 +849,7 @@ defineAgent('stormball', {
       // a chained arc leaves the block the first one struck, not the ball
       const from = arc.from ? project(arc.from.x, arc.from.y, arc.from.z, view) : c;
       const main = bolt(from, end, Math.hypot(end.x - from.x, end.y - from.y) * 0.18, 9);
-      // a chain is electric green, so it reads as the block discharging, not the ball
+      // a chain (hop 1 or 2 from the block) is electric green, so it reads as the block discharging, not the ball
       const [halo, body, edge] = arc.chain ? ['20,200,110', '110,255,170', '215,255,235'] : ['30,120,255', '60,170,255', '140,220,255'];
       const sz = arc.chain ? 0.85 : 1;
       line(ctx, main, `rgba(${halo},${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1) * sz);
