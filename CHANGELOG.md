@@ -6,6 +6,123 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.10.0] — 2026-09-14
+
+Everything in this release, like everything before it, was written by an AI directed by a human
+operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-release software.
+
+### The explorer's address history, from an index of our own
+
+- **Address pages show full history and balances on Bitcoin Core.** This was the explorer's one
+  real gap, and it was not a bug: Core has **no address index at any setting**. `getaddressbalance`
+  and `getaddresstxids` are insight-style extensions carried by forks, and stock Core answers
+  `Method not found` (measured 2026-09-13 against an Umbrel node and a local Core). mempool.space
+  shows the same address's history only because `electrs` builds that index from the block files
+  itself. So this monitor now does the same, in a form it can afford: `server/chain/`.
+- **Reading the node's own files, not asking the node.** `blk*.dat` on a current Core is
+  XOR-obfuscated at rest (`-blocksxor`, default since v28, the key in `blocks/xor.dat`) -- the
+  first spike concluded "not a Core datadir" and was wrong. De-obfuscated, `server/chain/blockfile.js`
+  frames the records; `server/chain/tx.js` decodes transactions and blocks, checked
+  **field-for-field** against `getblock <hash> 3` (91,813 spent coins in 16 sampled file pairs, 0
+  mismatches); and the undo (`rev*.dat`) records supply each spent coin's script and amount,
+  which is how the spending side is known without replaying the UTXO set. Pairing blocks with
+  undo records by trying every candidate was quadratic on the tiny early blocks (file 0: 35 minutes
+  and not finished); Core appends undo in connection order, so blocks are put in chain order by
+  their previous-block links and walked in step -- file 0 pairs in 5.9 s.
+- **A lean row.** One 21-byte row per (script, transaction that touched it): 8 bytes of
+  sha256(script), the height, the position in the block, and the **net satoshis** the transaction
+  moved for that script -- so a balance is a sum, with no node call. A script paid and spent in the
+  same transaction is one row (18% fewer). The full decoder builds Core's verbose shape and was 5.9
+  of the 9.5 single-core hours measured for the chain; the index needs only each output's value and
+  script bytes, so `server/chain/index/rows.js` walks the raw transaction itself and is checked
+  row-for-row against rows from the full decoder.
+- **Flat sorted files, no database.** Measured against `node:sqlite` on three real file pairs
+  (`docs/MEASUREMENTS.md` §29): 21 bytes per row against 24-27, a 5.5 M rows/s sort against a
+  1.4 M rows/s key-ordered load, and no B-tree collapse once the keys outgrow memory. 256 sorted
+  segments by key prefix with a sparse index (one key per 4,096 rows) held in memory; a lookup
+  binary-searches the sparse keys and reads the one 86 KB block that can hold its key.
+- **Built and measured** (§30): `node scripts/index-build.js --out <dir> --workers 16` read all
+  5,756 file pairs in **29 min 45 s** (7.8 CPU-hours across 16 workers) and wrote
+  **5,890,519,289 rows, 123.7 GB** -- every height present exactly once, two stale blocks skipped,
+  and within 1.5% of the projection. **40 of 40 balances equal `scantxoutset`** at the same
+  height, to the satoshi; every (script, transaction) pair of four whole blocks from 2009 to the
+  tip found at its height and position with its amount. Lookups: **0.25 ms** median first touch,
+  0.03 ms warm; a 2.3 M-transaction address's whole history summed for its balance in 83 ms.
+  For scale: `scantxoutset`, the only thing Core offers, took 26.5 s for one scan of 40 addresses
+  holding the node's RPC thread, and answers only the current balance, never a history.
+- **It follows the chain.** `server/chain/index/live.js`, started by the server for each configured
+  index directory, polls every 30 s, fetches each new block with `getblock <hash> 3` over RPC (so
+  it works for a node on another machine), and **logs the rows before serving them** in a
+  CRC-framed `live.log` that is replayed on restart and drops a record torn by a crash. A
+  reorganisation rolls the tail back to the fork; blocks 100 deep are **folded** into immutable
+  sorted layers and layers past 32 are merged; a reorganisation below what is folded stops the
+  follower and the page says to rebuild. Checked live: 12 blocks caught up in 6.5 s, 40 of 40
+  balances then equal to `scantxoutset`, and on release day the index reached a new block 16 s
+  after the node did. The rows it derives through RPC agree row-for-row with the rows built from
+  the files (`test/chain-index-live.test.js`).
+- **The address page reads it.** `addressIndex` in a node's config names the directory (one index
+  serves every node on the same chain); the page shows the transaction count, balance, total
+  received and sent, and the transactions newest first with the **net change each made**, 25 a
+  page, deep pages costing no more than the first. The reply carries `index.tip`, `index.behind`,
+  `index.following` and `index.stale`, and the page says when the index is behind the node or has
+  stopped following. Checked live: every row of four pages, including page 4 of a 2.3
+  M-transaction address, matched the node's decoded transaction for txid, height and amount.
+- **Without an index, the page is honest rather than empty.** A node's refusal used to become `[]`,
+  then `txCount: 0`, then "no transactions in this node's address index" -- a fabricated zero
+  indistinguishable from an unused address. The reply now carries `indexed: false` with a **null**
+  count, the page says the index is absent, and the dead RPCs are not re-sent on every view: a
+  "method not found" is remembered per node for ten minutes, then asked again, because the daemon
+  behind a node id can change.
+- **Not yet:** an address's unspent-output list, and its transactions still in the mempool.
+- **An unconfirmed transaction shows its inputs and fee** (operator: "Unknown script?!", of a
+  mempool transaction whose 858 inputs all read *unknown script*). Core carries no `prevout` on a
+  mempool transaction's inputs, so `fillPrevouts` fetches the parents in one batch and fills each
+  input's script and amount; checked on that transaction, 858 of 858 inputs, and a fee of 77,958
+  sat equal to `getmempoolentry`.
+
+### Block space and Markets since 0.9.0
+
+- **Agent effects.** The board's idle repertoire is **30 effects**, each with a switch: to the
+  fields (ripples, plasma, code rain, fireworks and the rest) the operator asked for things that
+  *happen* -- "think more TRON light cycles" -- and fifty video-game-inspired effects were designed
+  (`docs/EFFECTS-AGENTS.md`), built, watched, and cut to the ones that earned their place. The
+  agents that stayed: **light cycles**, the **lightning ball**, a **centipede** that weaves down the
+  board and splits, a **UFO** whose tractor beam lifts the tallest transaction and drops it back
+  under gravity, **Missile Command** arcs against rising interceptors, **Boulder Dash** where the
+  board gives way from a point, and **ball lightning** drifting across the whole view, its arcs
+  electrifying the blocks they strike (it replaced a portal pair). Every agent is checked on a
+  flat uniform board too, so none can be blinded by a skyline it happens not to read.
+- **No repeats within N** (default 12): an effect is never played again until that many others
+  have played; where fewer are switched on, the one that has waited longest plays next.
+- **The Markets price line is one continuous pipe** rather than forty segments, with a rarer
+  **energy pulse** and a new **pipe bulge**, each of them rare -- 2.5-6 minutes between plays: a ball forced through the tube,
+  swelling the wall with an arced, stretched skin, the bright core magnified through it as through
+  a fish-eye lens; it enters at the line's first point at exactly the tube's size, is as large as
+  fits for as long as possible, leaves at the last, and runs quicker downhill than up.
+- **A chrome finish** (Display settings → Metallic finish): every face mirrors a horizon that
+  slides as the blocks move; satin is the softer highlight that was there before.
+- **Depth**: a touch of perspective, off by default, so a cube's top grows a little wider than its
+  base and a flying block swells as it rises. Capped at 0.001 after larger values put flyers
+  through resting cubes.
+- **Departures and arrivals**: how blocks leave and rejoin the board on a refresh, chosen by
+  measurement (flights clear their neighbours before fanning, leave the frame rather than popping
+  at its edge, and take a lane per leg); a recoloured cube blends to its new colour instead of
+  popping; and where a flyer is clearly above a resting cube it paints over it.
+
+### Fixed since 0.9.0
+
+- **Display-settings sliders jumped as their value changed**: the readout's width changed with its
+  digits and pushed the slider about. The value is printed to the step's decimals in a fixed-width
+  box.
+- **The header's uptime blanked every second** and **the node you pick stays picked**.
+- **The travelling cube's perspective froze in flight** (a regression of our own, recorded).
+- **The pulse-gap simulation was flaky**: seeded now, its bound the real worst case.
+- The block-being-built card named a call it does not make; lightning stopped whiskering; the
+  paint-order comments described a camera the viewer no longer has.
+
+
 ### Changed
 
 - **The block being built is assembled here now, and costs your node nothing.** It used to be a

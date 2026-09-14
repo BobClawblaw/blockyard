@@ -19,6 +19,8 @@ npm run dev                   # port 18088 + an in-process fake node doing IBD
 npm test                      # node:test, zero dependencies; the count in this file is generated -- see "Counts" below
 node scripts/manage-users.js  # CLI user admin (list/create/passwd/role)
 node scripts/pool-map.js   # refresh coinbase-tag -> pool-name labels (manual by design; see MEASUREMENTS 25)
+node scripts/index-build.js --out <dir> --workers 16   # the address index, from the node's blk/rev files (30 min, 124 GB; MEASUREMENTS 28-30); name it as addressIndex in the node's config
+node scripts/index-benchmark.js   # check a built index against the node (scantxoutset) and time lookups
 bash scripts/smoke.sh         # boots on a spare port and asserts the API contract
 ```
 

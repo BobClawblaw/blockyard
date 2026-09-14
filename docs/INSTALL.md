@@ -47,16 +47,59 @@ mining, the block pages — works without it.
 
 Two further indexes affect the explorer:
 
-- an **address index** — address pages (balance, received, transaction history). **Bitcoin Core
-  does not have one, at any setting**, so there is no flag here to turn on. `getaddressbalance`
-  and `getaddresstxids` are insight-style extensions carried by forks such as Bitcore; stock Core
-  answers `Method not found` (measured 2026-09-13 against both an Umbrel node and a local Core).
-  The address page still confirms an address and its type — `validateaddress` needs no index — and
-  marks balance and history as *not indexed*. Searching by transaction id or block is unaffected:
-  that uses `txindex` above.
+- an **address index** — address pages (balance, received, sent, transaction history). **Bitcoin
+  Core does not have one, at any setting**, so there is no flag here to turn on: `getaddressbalance`
+  and `getaddresstxids` are insight-style extensions carried by forks such as Bitcore, and stock
+  Core answers `Method not found` (measured 2026-09-13 against both an Umbrel node and a local
+  Core). **blockyard builds its own** from the node's block files — see
+  [Building the address index](#building-the-address-index) below. Without one, the address page
+  still confirms an address and its type (`validateaddress` needs no index) and marks balance and
+  history as *not indexed*. Searching by transaction id or block is unaffected: that uses
+  `txindex` above.
 - a **spent-output index** — "spent by" links on every output. Core does support this one.
 
 Pages that need an index the node does not have say so, rather than showing empty data.
+
+### Building the address index
+
+The index is built once from the node's own `blocks/blk*.dat` and `rev*.dat` files, so the
+build needs to run **on a machine that can read the node's data directory** (a local node, or
+the appliance's disk mounted read-only). After that the server keeps it current over RPC alone,
+so it serves a node on another machine just as well.
+
+What it costs, measured on the full chain at height 966,930 (`docs/MEASUREMENTS.md` §30):
+**29 min 45 s** with 16 workers (7.8 CPU-hours; peak 30 GB of memory — use fewer workers on a
+smaller box), and **124 GB** of disk for 5.89 billion rows, one per (address, transaction) with
+the net amount, so a balance is a sum and never a node call. Put it on a different disk from the
+block files if you can; the build reads ~880 GB.
+
+```bash
+node scripts/index-build.js --out /var/lib/blockyard-index --workers 16
+```
+
+Progress goes to stderr once a second; the manifest, with every phase's timings, to stdout at
+the end. Then name the directory in the node's config and restart:
+
+```json
+{
+  "nodes": [
+    { "id": "main", "...": "...", "addressIndex": "/var/lib/blockyard-index" }
+  ]
+}
+```
+
+One index serves every node on the same chain. The server starts a follower per directory,
+which polls every 30 s, fetches each new block with `getblock <hash> 3`, and writes `live.log`
+and `layers/` **inside the index directory — so it must be writable by the service user**. A
+restart replays the log; a reorganisation rolls the tail back; blocks 100 deep are folded into
+sorted layers. The address page says when the index is behind the node or has stopped
+following. A reorganisation deeper than the tail it holds (100 blocks) cannot be repaired in
+place: the page says to rebuild — the same command, into a fresh directory, then point `addressIndex`
+at it.
+
+Balances are checked against the node: 40 of 40 sampled addresses equal `scantxoutset` to the
+satoshi (`node scripts/index-benchmark.js` runs that check and the lookup timings against your
+own build).
 
 **Outbound network access** is needed only for the Markets and Kiosk tabs and for the
 explorer's dollar figures (HTTPS to five exchanges' public APIs). Everything else talks only

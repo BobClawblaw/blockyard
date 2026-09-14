@@ -18,7 +18,7 @@ Snake, Identity disc, Recognizer, and the Glitch field effect.
 
 That is twenty-two of the thirty-two agents and one field. A second pass the same day removed
 **Laser, Lanes (`tempest`) and Sweep (`minesweeper`)**, and a third removed **Marble**.
-**Twenty-nine effects remain: seven agents and twenty-two fields.**
+**Twenty-nine effects remained: seven agents and twenty-two fields** — thirty since 2026-09-14, with the Markets pipe bulge, a line effect like the pulse.
 
 The agents that stayed:
 

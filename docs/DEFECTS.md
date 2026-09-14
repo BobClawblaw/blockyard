@@ -278,8 +278,9 @@ Kept as checked rather than deleted, so nobody re-derives them.
 
 ## Functional gaps
 
-- [ ] **The explorer has no address index, and cannot have one from Core.** Found
-  2026-09-13. `getaddressbalance` and `getaddresstxids` are insight-style extensions
+- [ ] **Address history: Core has no index, so the explorer builds its own — what is left is the
+  UTXO list and the mempool view.** Found 2026-09-13 as "no address index, and cannot have one
+  from Core". `getaddressbalance` and `getaddresstxids` are insight-style extensions
   that Bitcoin Core has never carried at any setting; measured against both configured
   nodes — an Umbrel and the local Core — each answers `Method not found`. mempool.space
   shows balance, total received, UTXO counts and a balance history for the same address

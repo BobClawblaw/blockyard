@@ -138,18 +138,37 @@ when it is done:
 bitcoin-cli getindexinfo
 ```
 
-## Explorer: address pages or "spent by" are missing
+## Explorer: address pages read "not indexed"
 
-**On Bitcoin Core, address history cannot be listed, and this is not something you have
-misconfigured.** Core has no address index at any setting: `getaddressbalance` and
-`getaddresstxids` are insight-style extensions that only forks carry, and stock Core answers
-`Method not found` (measured 2026-09-13 on both an Umbrel node and a local Core). There is no
-option to enable, so nothing here will make it appear.
+**Bitcoin Core has no address index at any setting, and this is not something you have
+misconfigured.** `getaddressbalance` and `getaddresstxids` are insight-style extensions that only
+forks carry; stock Core answers `Method not found` (measured 2026-09-13 on both an Umbrel node and
+a local Core). There is no node option to enable.
 
-What the address page does instead: it confirms the address and its type (`validateaddress` needs
-no index), and marks balance, totals and history as **not indexed**. It does not report a
-transaction count of `0` — nothing counted — and it does not print the node's error where a figure
-belongs.
+blockyard builds its own index from the node's block files instead — about 30 minutes on 16
+cores and 124 GB of disk for the whole chain — and the server keeps it current as blocks arrive.
+Build it and name the directory as `addressIndex` in the node's config:
+[Building the address index](INSTALL.md#building-the-address-index).
+
+Until then the address page confirms the address and its type (`validateaddress` needs no
+index) and marks balance, totals and history as **not indexed**. It does not report a
+transaction count of `0` — nothing counted — and it does not print the node's error where a
+figure belongs.
+
+## Explorer: the address page says the index is behind, or has stopped following
+
+**Behind** by a block or two is normal: the follower polls every 30 s and fetches each new block
+with `getblock <hash> 3`; it was measured reaching a new block 16 s after the node. Behind by
+many blocks means the follower is failing: usually because `live.log` and `layers/` live **inside
+the index directory**, which must be writable by the service user. A follower that cannot open
+its index is reported in the server log at boot (`address index <dir>: ...`); one whose poll fails
+keeps retrying every 30 s.
+
+**Stopped following** means a reorganisation deeper than the blocks the follower still holds in
+its tail (100), which cannot be repaired in place. Rebuild with the same `index-build.js` command
+**into a fresh directory**, point `addressIndex` at it and restart the server.
+
+## Explorer: "spent by" links are missing
 
 "Spent by" links need the node's spent-output index. Looking up an arbitrary historical
 transaction by id needs the transaction index; without it only mempool and recently seen

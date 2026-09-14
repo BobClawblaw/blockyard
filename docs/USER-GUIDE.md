@@ -210,8 +210,9 @@ both modes move to their new places rather than disappearing and reappearing.
 ### Idle effects
 
 While the board is at rest, one effect plays every seven to thirteen seconds — the first
-about a second after the board lands — and never the same one twice running. There are
-**26**, and each has its own switch under **Display settings → Effects**:
+about a second after the board lands — and never one that has played within the last twelve
+(**No repeats within**, on the Effects tab, 0 to 30). There are **30**, and each has its own
+switch under **Display settings → Effects**:
 
 | | |
 |---|---|
@@ -221,13 +222,17 @@ about a second after the board lands — and never the same one twice running. T
 | **Lightning ball** | a plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
 | **Shockwave**, **Nova**, **Fireworks**, **Solar flare** | a hard ring that throws blocks into the air; an implosion then a brighter blast; three bursts; one block going supernova |
 | **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
-| **Code rain**, **Radar**, **Vortex**, **Laser** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward; a white cutting beam |
-| **Power-up**, **Aurora**, **Plasma**, **Glitch** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma; data corruption, hard on and hard off |
-| **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head |
+| **Code rain**, **Radar**, **Vortex** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward |
+| **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
+| **Centipede**, **Missile command**, **Boulder dash** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
+| **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
+| **Ball lightning** | drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike |
+| **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head; rare — 2.5 to 6 minutes between plays |
+| **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up; as rare as the pulse |
 
 They are decoration only: they carry no data, they never play during a refresh, and they
 are switched off entirely under `prefers-reduced-motion`. The price board only ever plays
-the two that have a line to follow (**Energy pulse** and **Twinkle**).
+the three that have a line to follow (**Energy pulse**, **Pipe bulge** and **Twinkle**).
 
 The more you leave switched on, the less often you see any particular one — there is still
 only one effect every seven to thirteen seconds. The **all off** button on that tab leaves
@@ -348,22 +353,37 @@ block.
 
 ### Address page
 
-The address with a copy button, its type, transaction count and unspent outputs, then
-**balance**, **total received** and **total sent**. Below that, its **transactions,
-newest first**, with the block each one was confirmed in (or "mempool") and the
-**change** it made to the balance, green for money in and red for money out.
+The address with a copy button, its type, transaction count, then **balance**, **total
+received** and **total sent**. Below that, its **transactions, newest first**, 25 a page,
+with the block each one was confirmed in and the **change** it made to the balance, green for
+money in and red for money out. A transaction the node could not return still shows its
+height and amount, because those are the index's own.
 
-**On Bitcoin Core, most of that is unavailable** — see below. The address and its type are
-still confirmed; the figures read *not indexed*.
+**Where this comes from.** Bitcoin Core has **no address index at any setting** — the RPCs an
+explorer would ask (`getaddressbalance`, `getaddresstxids`) belong to insight-style forks, and
+Core answers `Method not found`. So blockyard builds its own: `scripts/index-build.js` reads
+the node's block and undo files and writes one row per (address, transaction) with the net
+amount — about 30 minutes on 16 cores and 124 GB for the whole chain — and the server keeps it
+current as blocks arrive. Balances are checked against the node's `scantxoutset` to the
+satoshi. See [Building the address index](INSTALL.md#building-the-address-index).
 
-**Requirements:** transaction pages rely on the node's transaction index, which Core
-supports and both shipped nodes have synced.
+**Received** and **sent** are sums of each transaction's *net* for the address, so a
+transaction that both paid and spent it counts once, by its net — not the gross figures an
+explorer that stores every output separately would show.
 
-Address history needs an **address index, which Bitcoin Core does not have** at any setting —
-the RPCs it would need belong to insight-style forks, and Core answers `Method not found`. So
-on a Core node the address page confirms the address and its type and marks balance, totals and
-history as **not indexed**. It does not show zero, and it does not print the node's error where
-a figure belongs: nothing counted, so nothing is claimed.
+The page says when the index is **behind** the node (it catches up within a poll, 30 s) or
+has **stopped following** — which happens after a reorganisation deeper than the blocks it
+still holds in its tail, and means a rebuild.
+
+**Without an index configured**, the address and its type are still confirmed
+(`validateaddress` needs none), and balance, totals and history read **not indexed**. It does
+not show zero, and it does not print the node's error where a figure belongs: nothing counted,
+so nothing is claimed.
+
+**Not yet:** the address's unspent outputs, and its transactions still in the mempool.
+
+**Requirements:** transaction pages rely on the node's transaction index (`txindex=1`), which
+Core supports.
 
 ---
 
@@ -845,7 +865,7 @@ these are the settings that buy it back, roughly most expensive first:
 | **Shadows** | Cubes casting shadows on the board and on each other. **Off by default**: it is the costliest single effect on a full board — one shadow per resting stone, more in flight — and the board is the first thing most people open. |
 | **Level of detail** | **Simple cubes by default.** *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
 | **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
-| **Idle effects** | The master switch for all 26 effects that play while the board rests. Which of them may play is the **Effects** tab. |
+| **Idle effects** | The master switch for all 30 effects that play while the board rests. Which of them may play is the **Effects** tab. |
 | **Stone edges** | The dark seam drawn around each stone. |
 | **Neon grid** | The glowing grid on the board. |
 | **Grid colour** | The grid's colour. One choice drives the whole grid: its lit core, the halo and glow around it, and the brighter line along the board's edge, so they stay a family rather than drifting apart. |
@@ -854,6 +874,9 @@ these are the settings that buy it back, roughly most expensive first:
 | **Neon colour from** | *The block's fee-rate colour* keeps the palette, so the tubes still tell you what the block costs. *One colour* lights every block the same. |
 | **Neon colour** / **Neon brightness** | The one colour, when you have chosen it, and how hard the tubes glow (0.2x to 2x). |
 | **Metallic sheen** | A specular highlight along the lit edge of each block's top face and a dark roll-off on the far one. Works on Simple cubes too. |
+| **Metallic finish** | *Chrome* mirrors a horizon in every face, and the reflection slides as the blocks move; *satin* is the softer highlight along the lit edge. Needs Metallic sheen on. |
+| **Departures and arrivals** | How blocks leave and rejoin the board on a refresh. |
+| **Depth** | How much height foreshortens, 0 to 0.001. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube's top grows a little wider than its base and a flying block swells slightly as it rises. |
 | **Star field** | Off by default here: the stars twinkle, so the board keeps repainting while they are on. What the stars *look* like is the **Sky** tab. |
 | **Board curve** | How far the board bows toward you. 0 is flat. |
 | **Light** | Where the lamp hangs: *straight above* (the default) lights the whole board evenly, which keeps the front rows as bright as the middle; a corner shades the far slope of the curve and the sides turned away from it. |
@@ -874,8 +897,9 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 
 ### Effects
 
-A switch for each of the **26** idle effects, listed under [Idle effects](#idle-effects) above,
-plus **all on** and **all off**. Turning them all off leaves the board still; so does the single
+A switch for each of the **30** idle effects, listed under [Idle effects](#idle-effects) above,
+plus **all on** and **all off**, and **No repeats within**: how many other effects must play
+before one can play again (12 by default; 0 allows a repeat straight away). Turning them all off leaves the board still; so does the single
 **Idle effects** switch on the Block space tab.
 
 ### Markets & Price

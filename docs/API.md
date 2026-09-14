@@ -767,22 +767,26 @@ Uses `getrawtransaction` verbosity 2, which carries the fee and every prevout. T
 | `addr` | string | 14–100 alphanumerics. |
 | `page` | int ≥ 0 | 25 transactions per page, newest first. |
 
-This needs the node's address index RPCs (`getaddressbalance`, `getaddresstxids`). **Bitcoin Core has never had them** — they are insight-style extensions — so on a stock Core node they answer `Method not found` (measured 2026-09-13 against both configured nodes, one Umbrel and one local Core).
-
-When that happens the page still answers, but it answers *honestly*: `indexed` is `false`, `txCount` is **`null` rather than `0`**, `txs` is empty and the page says the node keeps no address index. A count nobody can answer is not zero. `validateaddress` works everywhere (script parsing, no index), so the address is still confirmed and typed. Transaction and block lookups are unaffected — those use `txindex`.
+**Bitcoin Core has no address index** — `getaddressbalance` and `getaddresstxids` are insight-style
+extensions, and a stock Core node answers `Method not found` (measured 2026-09-13 against both
+configured nodes, one Umbrel and one local Core). So a node configured with `addressIndex` answers
+from **blockyard's own index**, built from the node's block files and kept current by a follower
+(see [Building the address index](INSTALL.md#building-the-address-index)); the reply says so in
+`source` and describes the index in `index`.
 
 ```json
 {
   "ok": true,
   "node": "main",
+  "dataNode": "main",
   "address": "bc1qqe2mj05z2q4zrqly789r59q5k53rhtgn8hznl0",
   "type": "witness v0",
   "scriptType": null,
-  "balance": { "balance": 221760, "received": 221760 },
-  "balanceError": null,
   "indexed": true,
+  "source": "local-index",
+  "balance": { "balance": 221760, "received": 221760, "utxos": null },
   "txCount": 1,
-  "indexError": null,
+  "index": { "tip": 966963, "behind": 0, "builtAt": "2026-09-14T06:54:06.609Z", "following": true, "stale": null },
   "page": 0,
   "pages": 1,
   "txs": [ { "txid": "9891f72b...", "fee": 16920, "feerate": 120, "vsize": 141, "outSat": 12116383,
@@ -793,11 +797,29 @@ When that happens the page still answers, but it answers *honestly*: `indexed` i
 }
 ```
 
+Without an index the page still answers, but it answers *honestly*: `indexed` is `false`,
+`txCount` is **`null` rather than `0`**, `balance` is `null`, `txs` is empty and the page says the
+node keeps no address index. A count nobody can answer is not zero. `validateaddress` works
+everywhere (script parsing, no index), so the address is still confirmed and typed. Transaction and
+block lookups are unaffected — those use `txindex`.
+
 - `type` is `witness v<N>`, `script` or `legacy`.
 - `indexed` says whether this node can answer address history at all. When `false`, `txCount` is
   `null`, `balance` is `null`, and nothing on the page is derived from the refusal.
-- `balance` is the node's `getaddressbalance` reply, passed through as-is.
-- `delta` is the net change to this address in satoshis: outputs to it minus inputs from it.
+- `source` is `local-index` when the answer comes from blockyard's index; `dataNode` is the node
+  whose RPC the follower reads (one index serves every node on the same chain).
+- `balance.balance` and `balance.received` are sums of each transaction's **net** for the address
+  (a transaction that both paid and spent it counts once, by its net); `utxos` is `null` — the index
+  keeps no unspent-output list yet.
+- `index.tip` is the highest block the index covers (base, folded layers and the follower's live
+  tail together); `behind` is how many blocks the node is ahead of it; `following` says a follower is
+  running; `stale` is a message when it has stopped (a reorganisation deeper than its tail, asking
+  for a rebuild).
+- `delta` is the net change to this address in satoshis: outputs to it minus inputs from it. A
+  transaction the node could not return is `{ "txid": ..., "missing": true, "height": ..., "delta": ... }`
+  — the height and amount are the index's own.
+- Pages are 25 rows, newest first, and a deep page costs no more than the first: the index keeps
+  only `skip + limit` rows in a ring while it sums the balance.
 
 ---
 
