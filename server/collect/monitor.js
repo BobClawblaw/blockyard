@@ -1728,10 +1728,10 @@ export class NodeMonitor extends EventEmitter {
     const t = this.rpc.telemetry();
     const slowAt = this.rpc.cfg.slowLatencyMs ?? 5000;
     if (t.failedCalls) {
-      this.flagQuality('rpc-timeouts', `${t.failedCalls} RPC attempt(s) failed outright, most recently after ${t.lastLatencyMs ?? '?'}ms; this node's RPC thread starves while its download worker is saturated, so panels may lag or show no data`, 'warn');
+      this.flagQuality('rpc-timeouts', `${t.failedCalls} RPC attempt(s) failed outright, most recently after ${t.lastLatencyMs ?? '?'}ms; ${this.indexBuild ? 'the address index build on this machine is competing for the disk (it pauses while the node is slow)' : 'the node is under load'}, so panels may lag or show no data`, 'warn');
     }
     if ((t.avgLatencyMs ?? 0) > slowAt) {
-      this.flagQuality('rpc-slow', `the node's RPC is answering in ~${(t.avgLatencyMs / 1000).toFixed(1)}s (the lane this monitor gives it allows ${this.rpc.cfg.maxInFlight} call(s) in flight, and was measured at 40s during initial block download), so polling has slowed itself down rather than queueing up`, 'warn');
+      this.flagQuality('rpc-slow', `the node's RPC is answering in ~${(t.avgLatencyMs / 1000).toFixed(1)}s (the lane this monitor gives it allows ${this.rpc.cfg.maxInFlight} call(s) in flight)${this.indexBuild ? ' -- the address index build on this machine is competing for the disk and pauses while this lasts' : ''}, so polling has slowed itself down rather than queueing up`, 'warn');
     } else {
       this.clearQuality('rpc-slow');
     }

@@ -106,7 +106,8 @@ test('BUILD AND LOOK UP: workers, 256 buckets, sort, manifest, and every script 
       if (c.method === 'getblockhash') return { ok: true, result: chain[c.params[0]].hash };
       return { ok: false, error: { message: c.method } };
     }) };
-    const manifest = await buildIndex({ rpc, blocksDir, out, workers: 2 });
+    let paced = 0;
+    const manifest = await buildIndex({ rpc, blocksDir, out, workers: 2, pace: async () => { paced++; } });
 
     // what the index must contain, computed independently from the blocks
     const expected = new Map();
@@ -118,6 +119,7 @@ test('BUILD AND LOOK UP: workers, 256 buckets, sort, manifest, and every script 
     });
 
     assert.equal(manifest.tip.height, 3);
+    assert.ok(paced >= 1, `pace is awaited before each file is handed to a worker (${paced})`);
     assert.equal(manifest.stats.check.missingHeights, 0, 'every height indexed');
     assert.equal(manifest.stats.scan.staleBlocks, 1, 'and the stale block skipped, not indexed');
     assert.equal(manifest.rows, expected.size, 'row for row what the blocks say');

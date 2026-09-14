@@ -421,14 +421,29 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     // can say addressIndexBuild: "manual" to keep this from happening.
     const HMS = (sec) => (sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`);
     const build = (dir, m) => {
-      const workers = defaultWorkers();
-      const status = { dir, node: m.id, phase: 'starting', done: 0, total: 0, rows: 0, eta: null, startedAt: Date.now(), error: null };
+      // half the workers a dedicated build would take: the node shares this machine's disk and cores
+      const workers = Math.max(1, Math.floor(defaultWorkers() / 2));
+      const status = { dir, node: m.id, phase: 'starting', done: 0, total: 0, rows: 0, eta: null, startedAt: Date.now(), error: null, paused: false };
       registerIndexBuild(dir, status);
+      m.indexBuild = status;
+      // PACED BY THE NODE'S OWN ANSWERS: the workers read the block files the node is also reading, so
+      // when its RPC slows past two seconds the next file waits until it recovers (2026-09-14, the first
+      // Mac install: 18 s answers and 90 s timeouts while the build ran flat out)
+      const SLOW_MS = 2000;
+      const pace = async () => {
+        for (;;) {
+          const t = m.rpc?.telemetry?.();
+          const slow = t && Number.isFinite(t.avgLatencyMs) && t.avgLatencyMs > SLOW_MS;
+          if (!slow) { if (status.paused) { status.paused = false; } return; }
+          if (!status.paused) { status.paused = true; app.log({ level: 'info', msg: `address index build: paused, the node's RPC is answering in ${(t.avgLatencyMs / 1000).toFixed(1)} s` }); }
+          await new Promise((r) => setTimeout(r, 10_000));
+        }
+      };
       const say = (text, severity = 'info') => { m.addEvent?.({ kind: 'index', severity, tag: 'index', ts: Date.now(), text }); app.log({ level: severity === 'warn' ? 'warn' : 'info', msg: text }); };
       say(`address index: building ${dir} from ${m.id}'s block files with ${workers} workers -- the Overview shows the progress`);
       let phase = null, phaseAt = Date.now(), lastFlag = 0;
       buildIndex({
-        rpc: m.rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers,
+        rpc: m.rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers, pace,
         onProgress: (p) => {
           if (p.phase !== phase) { phase = p.phase; phaseAt = Date.now(); }
           const elapsed = (Date.now() - phaseAt) / 1000;
@@ -437,11 +452,12 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
           if (Date.now() - lastFlag > 5000) {
             lastFlag = Date.now();
             const pct = p.total ? Math.round((100 * p.done) / p.total) : 0;
-            m.flagQuality?.('address-index-building', `the address index is being built: ${p.phase} ${p.done.toLocaleString()} of ${p.total.toLocaleString()} (${pct}%)${p.rows ? `, ${p.rows.toLocaleString()} rows so far` : ''}${status.eta ? `, about ${status.eta} left` : ''}`, 'info');
+            m.flagQuality?.('address-index-building', `the address index is being built: ${p.phase} ${p.done.toLocaleString()} of ${p.total.toLocaleString()} (${pct}%)${p.rows ? `, ${p.rows.toLocaleString()} rows so far` : ''}${status.eta ? `, about ${status.eta} left` : ''}${status.paused ? ' -- paused while the node\'s RPC is slow' : ''}`, 'info');
           }
         },
       }).then((manifest) => {
         registerIndexBuild(dir, null);
+        m.indexBuild = null;
         m.clearQuality?.('address-index-building');
         const mins = ((Date.now() - status.startedAt) / 60000).toFixed(1);
         say(`address index built: ${Number(manifest.rows ?? 0).toLocaleString()} rows to block ${Number(manifest.tip?.height ?? 0).toLocaleString()} in ${mins} min -- address pages are live`);
@@ -449,6 +465,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       }).catch((err) => {
         status.error = err.message;
         registerIndexBuild(dir, null);
+        m.indexBuild = null;
         m.flagQuality?.('address-index-build-failed', `the address index build failed: ${err.message} -- fix the cause and run node scripts/index-build.js --out ${dir}`, 'warn');
         say(`address index build failed: ${err.message}`, 'warn');
       });

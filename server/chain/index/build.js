@@ -24,11 +24,13 @@ export const BLOCK_ROWS = 4096;
 async function chainHashes(rpc, tip, onProgress) {
   const table = new HeightTable(1 << 21);
   const hashes = new Array(tip + 1);
-  const BATCH = 5000;
+  // small batches at the lowest priority: the monitor's own polls interleave between them, and
+  // on a machine shared with the node a 5,000-call batch held the lane for seconds (2026-09-14)
+  const BATCH = 1000;
   for (let from = 0; from <= tip; from += BATCH) {
     const calls = [];
     for (let h = from; h <= Math.min(tip, from + BATCH - 1); h++) calls.push({ method: 'getblockhash', params: [h] });
-    const got = await rpc.batch(calls, { key: `index:hashes:${from}`, timeoutMs: 120_000, maxWaitMs: 300_000, priority: 6 });
+    const got = await rpc.batch(calls, { key: `index:hashes:${from}`, timeoutMs: 120_000, maxWaitMs: 600_000, priority: 9 });
     got.forEach((g, i) => {
       if (!g.ok) throw new Error(`getblockhash ${from + i}: ${g.error?.message}`);
       hashes[from + i] = g.result;
@@ -43,13 +45,16 @@ class Pool {
   constructor(size, workerData) {
     this.workers = Array.from({ length: size }, () => new Worker(new URL('./worker.js', import.meta.url), { workerData }));
   }
-  // run jobs, at most one per worker; onResult may be async (it is awaited before that worker's next job)
-  async run(jobs, onResult) {
+  // run jobs, at most one per worker; onResult may be async (it is awaited before that worker's next
+  // job); `pace`, if given, is awaited before each job is handed out -- the server's background build
+  // uses it to hold the workers while the node's RPC is slow, since they share its disk
+  async run(jobs, onResult, pace = null) {
     let next = 0, failed = null;
     await Promise.all(this.workers.map((w) => new Promise((resolve) => {
-      const go = () => {
+      const go = async () => {
         if (failed || next >= jobs.length) { resolve(); return; }
         const job = jobs[next++];
+        if (pace) { try { await pace(); } catch (err) { failed = err; resolve(); return; } }
         w.once('message', async (msg) => {
           if (msg.type === 'error') { failed = new Error(`${JSON.stringify(msg.job)}: ${msg.message}`); resolve(); return; }
           try { await onResult(msg); } catch (err) { failed = err; resolve(); return; }
@@ -69,7 +74,7 @@ export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()
   return Math.max(1, Math.min(16, cpus - 4, Math.floor(totalMem / 2.5e9)));
 }
 
-export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers(), files = null, onProgress = () => {} }) {
+export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers(), files = null, onProgress = () => {}, pace = null }) {
   const t0 = performance.now();
   const stats = { format: FORMAT, workers, phases: {} };
   const info = await rpc.batch([{ method: 'getblockchaininfo', params: [] }], { key: 'index:info', timeoutMs: 60_000 });
@@ -115,7 +120,7 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
       for (const h of msg.heights) { if (seen[h]) dupHeights++; seen[h] = 1; }
       rows += msg.rows; scanned++; readMs += msg.readMs; workMs += msg.ms; stale += msg.stale; missingUndo += msg.missingUndo;
       onProgress({ phase: 'scan', done: scanned, total: fileList.length, rows, file: msg.file });
-    });
+    }, pace);
     for (const fd of fds) if (fd !== null) closeSync(fd);
     stats.phases.scanSec = (performance.now() - t) / 1000;
     stats.scan = { files: scanned, rawRows: rows, workerReadSec: readMs / 1000, workerCpuSec: workMs / 1000, staleBlocks: stale, missingUndo, duplicateHeights: dupHeights };
