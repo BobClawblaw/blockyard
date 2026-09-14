@@ -237,7 +237,12 @@ test('THE TRACTOR PUTS THE BLOCK DOWN AND LEAVES, rather than stopping mid-abduc
   const lift = (r) => r.lift ?? 0;
 
   const peak = Math.max(...rows.map(lift));
-  assert.ok(peak > 3, `the beam lifts the cube clear of the board (${peak})`);
+  assert.ok(peak >= 12, `the beam lifts the cube well clear of the board (${peak})`);
+  // (operator, 2026-09-14: "flying at least 2 x higher than it current is") -- it was 5 over the top
+  const tallest = 6;
+  const cruise = rows.find((r) => r.u === 0.4).ship.z;
+  assert.ok(cruise >= 2 * (tallest + 5), `the saucer works from at least twice its old altitude (${cruise})`);
+  assert.ok(cruise > tallest + peak, 'and above the cube it is lifting');
 
   // IT BOUNCES. Not merely "comes down" -- a bounce is a rebound, so after the peak the height must
   // go UP again at least once before settling. The fall is the board's own bounceDrop, so a dropped
@@ -260,12 +265,23 @@ test('THE TRACTOR PUTS THE BLOCK DOWN AND LEAVES, rather than stopping mid-abduc
   const held = rows.filter((r) => lift(r) > 0.01 && lift(r) < peak - 0.01 && (r.beam ?? 0) > 0.02 && r.dropped);
   assert.equal(held.length, 0, 'the beam is off while the cube falls');
 
-  // AND IT FLIES OFF. The saucer must actually leave the board, not drift a little.
-  const endX = rows[rows.length - 1].ship.x;
-  assert.ok(endX > W + 4 || endX < -4, `the saucer is off screen by the end (x=${endX}, board 0..${W})`);
+  // AND IT FLIES OFF, UP AND AWAY IN A DIRECTION OF ITS OWN (operator, 2026-09-14). The saucer must
+  // actually leave the board, not drift a little, and whichever way it heads.
+  const end = rows[rows.length - 1].ship;
+  assert.ok(end.x > W + 4 || end.x < -4 || end.y > H + 4 || end.y < -4, `the saucer is off the board by the end (${end.x.toFixed(1)}, ${end.y.toFixed(1)})`);
+  assert.ok(end.z > cruise + 12, `and it climbs as it goes (z ${cruise} -> ${end.z})`);
   // quickly: accelerating, so the second half of the exit covers more ground than the first
-  const x80 = rows.find((r) => r.u === 0.8).ship.x, x90 = rows.find((r) => r.u === 0.9).ship.x;
-  assert.ok(Math.abs(endX - x90) > Math.abs(x90 - x80), 'it accelerates away rather than drifting');
+  const s80 = rows.find((r) => r.u === 0.8).ship, s90 = rows.find((r) => r.u === 0.9).ship;
+  const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+  assert.ok(dist(end, s90) > dist(s90, s80), 'it accelerates away rather than drifting');
+  // RANDOM: the heading comes from the seed, so different runs leave different ways
+  const heading = (seed) => {
+    const b = AGENTS.tractor.build({ st: {}, seed, W, H, tiles, tops: null, rnd: rng(seed) });
+    const s = AGENTS.tractor.frame(b, 1, { ms: 6800, derezMs: 800, seed }).tractor.ship;
+    return Math.atan2(s.y - b.target.y, s.x - b.target.x);
+  };
+  const hs = [1, 2, 3, 4, 5, 6, 7, 8].map(heading);
+  assert.ok(Math.max(...hs) - Math.min(...hs) > Math.PI, `the exits spread round the compass (${hs.map((h) => h.toFixed(2)).join(' ')})`);
 });
 
 test('floodFrom spreads, stops at what blocks it, and never revisits', () => {

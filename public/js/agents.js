@@ -374,7 +374,10 @@ defineAgent('centipede', {
 defineAgent('tractor', {
   build({ tiles, W, H, rnd }) {
     const target = tallestTile(tiles) ?? { x: W / 2, y: H / 2, h: 1, tile: null };
-    return { target, from: { x: rnd() < 0.5 ? -4 : W + 4, y: target.y }, W, H };
+    // where it leaves for, picked now so the exit replays identically (operator, 2026-09-14: "After
+    // it drops them, have it fly up and away in a random direction")
+    const away = rnd() * Math.PI * 2;
+    return { target, from: { x: rnd() < 0.5 ? -4 : W + 4, y: target.y }, away: { dx: Math.cos(away), dy: Math.sin(away) }, W, H };
   },
   // IT PUTS THE BLOCK DOWN AND LEAVES (operator, 2026-09-13: "rather than just abruptly finish,
   // have the UFO drop the blocks causing them to slightly bounce, and then quickly flies off
@@ -385,7 +388,7 @@ defineAgent('tractor', {
   //   IN    0.00-0.30  the saucer flies in from one side
   //   HOLD  0.30-0.62  the beam comes on and the cube rises
   //   DROP  0.62-0.80  the beam CUTS and the cube falls, bouncing as it lands
-  //   AWAY  0.80-1.00  the saucer accelerates off the way it came
+  //   AWAY  0.80-1.00  the saucer climbs and accelerates off in a direction of its own
   //
   // The fall is the board's own bounceDrop, not a parabola written here: a cube dropped by the
   // saucer lands exactly as a cube dropped by a refresh does, which is the only way the two read as
@@ -397,8 +400,12 @@ defineAgent('tractor', {
   // the ground rather than land on it.
   frame(a, u) {
     const IN = 0.3, HOLD = 0.62, DROP = 0.8;
-    const alt = a.target.h + 5;
-    const LIFT = 4.5;
+    // HIGHER, AND IT LIFTS HIGHER (operator, 2026-09-14: "I want the ufo effect flying at least 2 x
+    // higher than it current is, and lift the blocks up much higher"). The saucer flew 5 over the
+    // cube's top and drew it up 4.5; now twice that altitude and a 12-unit lift -- and never lower
+    // than 4 units above the lifted cube's top, so a short cube is not pulled up through the ship.
+    const LIFT = 12;
+    const alt = Math.max(2 * (a.target.h + 5), a.target.h + LIFT + 4);
     if (u < IN) {
       const v = u / IN;
       const x = a.from.x + (a.target.x - a.from.x) * v;
@@ -432,13 +439,15 @@ defineAgent('tractor', {
         ],
       };
     }
-    // AWAY: t^2, so it pulls away rather than drifting off, and leaves the way it came in
+    // AWAY: up and off along its own heading, t^2 so it pulls away rather than drifting. Far enough
+    // to clear the board from wherever it was working, whichever way it points.
     const v = (u - DROP) / (1 - DROP);
-    const dir = a.from.x < a.target.x ? -1 : 1;
-    const x = a.target.x + dir * (a.W * 0.9 + 6) * v * v;
+    const dir = a.away ?? { dx: a.from.x < a.target.x ? -1 : 1, dy: 0 };
+    const reach = Math.max(a.W, a.H) + 8;
+    const x = a.target.x + dir.dx * reach * v * v, y = a.target.y + dir.dy * reach * v * v;
     return {
-      tractor: { ship: { x, y: a.target.y, z: alt + v * 2 }, beam: 0, lift: 0, leaving: true },
-      heads: [{ x, y: a.target.y, color: [180, 220, 255], alpha: Math.max(0, 1 - v), r: 1.6 }],
+      tractor: { ship: { x, y, z: alt + 24 * v * v }, beam: 0, lift: 0, leaving: true },
+      heads: [{ x, y, color: [180, 220, 255], alpha: Math.max(0, 1 - v), r: 1.6 }],
     };
   },
   draw(ctx, view, lw) {
