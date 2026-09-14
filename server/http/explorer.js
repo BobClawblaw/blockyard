@@ -31,7 +31,24 @@ function remember(txid, summary) {
   txCache.set(txid, summary);
   if (txCache.size > CACHE_MAX) txCache.delete(txCache.keys().next().value);
 }
-export function _resetCache() { txCache.clear(); }
+export function _resetCache() { txCache.clear(); noIndex.clear(); }
+
+// A NODE THAT HAS NO ADDRESS INDEX IS NOT ASKED AGAIN ON EVERY VIEW (docs/DEFECTS.md, "the explorer
+// has no address index"). Core refuses getaddressbalance and getaddresstxids at every setting, and
+// xAddress used to send both on every address page -- two guaranteed failures per view, queued on a
+// serialized lane that spaces requests 250 ms apart. A refusal is now remembered per node and the
+// two calls are skipped.
+//
+// REMEMBERED FOR A WHILE, NOT FOR EVER. What a node answers is a fact about the node behind that id
+// today: the config can point it at a different daemon, or an operator can swap in one that has the
+// index. So the refusal expires and the next view asks again (AGENTS.md: a cached answer is a
+// staleness bug with documentation attached). Only a real "method not found" counts -- a timeout or
+// a busy node says nothing about whether the method exists, and must not switch the lookup off.
+export const INDEX_RECHECK_MS = 10 * 60_000;
+const noIndex = new Map();                 // node id -> when its address index was last refused
+let clock = () => Date.now();
+export function _setClock(fn) { clock = fn ?? (() => Date.now()); }
+const methodMissing = (r) => !r.ok && (r.error?.code === -32601 || /method not found/i.test(String(r.error?.message ?? '')));
 
 const bad = (message, hint = null) => ({ ok: false, error: { message }, hint });
 const sat = (btc) => (Number.isFinite(btc) ? Math.round(btc * 1e8) : null);
@@ -188,11 +205,22 @@ export async function xAddress(m, q) {
   const addr = String(q?.addr ?? '').trim();
   const page = pageOf(q);
   if (!/^[A-Za-z0-9]{14,100}$/.test(addr)) return bad(`"${addr}" is not an address`);
-  const [va, bal, ids] = await batch(m, [
-    { method: 'validateaddress', params: [addr] },
-    { method: 'getaddressbalance', params: [{ addresses: [addr] }] },
-    { method: 'getaddresstxids', params: [{ addresses: [addr] }] },
-  ], `${m.id}:x:addr:${addr}`);
+  const now = clock();
+  const knownMissing = noIndex.has(m.id) && now - noIndex.get(m.id) < INDEX_RECHECK_MS;
+  let va, bal, ids;
+  if (knownMissing) {
+    [va] = await batch(m, [{ method: 'validateaddress', params: [addr] }], `${m.id}:x:addr:${addr}`);
+    // the refusal the node gave last time, marked as remembered rather than freshly asked
+    bal = ids = { ok: false, error: { code: -32601, message: 'Method not found', remembered: true } };
+  } else {
+    [va, bal, ids] = await batch(m, [
+      { method: 'validateaddress', params: [addr] },
+      { method: 'getaddressbalance', params: [{ addresses: [addr] }] },
+      { method: 'getaddresstxids', params: [{ addresses: [addr] }] },
+    ], `${m.id}:x:addr:${addr}`);
+    if (methodMissing(ids) && methodMissing(bal)) noIndex.set(m.id, now);
+    else if (ids.ok) noIndex.delete(m.id);
+  }
   if (va.ok && va.result?.isvalid === false) return bad(`"${addr}" is not a valid address`);
   // AN ABSENT INDEX IS NOT AN EMPTY ONE (operator, 2026-09-13: "fix broken search"). Measured
   // against both configured nodes on 2026-09-13: getaddressbalance and getaddresstxids answer

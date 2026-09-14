@@ -291,9 +291,13 @@ Kept as checked rather than deleted, so nobody re-derives them.
   carries `indexed: false` with a **null** count, and the page says the index is absent.
   **Not fixed on the capability axis:** there is still no history. That needs our own
   index (next entry).
-  **Waste that remains:** `xAddress` still issues both dead RPCs on every address page
-  view — two guaranteed failures per view against a single-threaded RPC server. They
-  should be skipped after the first refusal is learned per node.
+  **The dead RPCs are no longer sent on every view** (2026-09-14). `xAddress` remembers a
+  "method not found" per node and skips `getaddressbalance`/`getaddresstxids` for
+  `INDEX_RECHECK_MS` (10 minutes), then asks again, because the daemon behind a node id can
+  change. A timeout or other error is not a refusal and is never remembered. Measured
+  against both configured nodes: view 1 sends `validateaddress` plus the two refused
+  calls; views 2 and 3 send `validateaddress` alone, with the same page result
+  (`indexed: false`, `txCount: null`).
 
 - [ ] **We can read the block files after all — `-blocksxor`, not an unknown format.**
   Found 2026-09-14, correcting a wrong conclusion reached the same day. Every

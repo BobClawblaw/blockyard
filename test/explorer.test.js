@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { txSummary, xTx, xBlock, xAddress, xSearch, PAGE, _resetCache } from '../server/http/explorer.js';
+import { txSummary, xTx, xBlock, xAddress, xSearch, PAGE, _resetCache, _setClock, INDEX_RECHECK_MS } from '../server/http/explorer.js';
 import { parseRoute, blockHtml, txHtml, addressHtml, homeHtml, errorHtml } from '../public/js/explorer.js';
 import * as fmt from '../public/js/fmt.js';
 
@@ -182,6 +182,74 @@ test('AN ABSENT ADDRESS INDEX IS NOT AN EMPTY ONE', async () => {
   const ok = await xAddress(withIndex, { addr: 'bc1qpayeeexample' });
   assert.equal(ok.indexed, true);
   assert.equal(ok.txCount, 2, 'a real count where there is a real index');
+});
+
+test('A REFUSED ADDRESS INDEX IS NOT ASKED FOR AGAIN ON EVERY VIEW -- until the refusal expires', async () => {
+  // (docs/DEFECTS.md: "xAddress still issues both dead RPCs on every address page view -- two
+  // guaranteed failures per view against a single-threaded RPC server.")
+  _resetCache();
+  let now = 1_000_000;
+  _setClock(() => now);
+  try {
+    const sent = [];
+    const refusing = { code: -32601, message: 'Method not found' };
+    const m = fakeNode((c) => {
+      sent.push(c.method);
+      if (c.method === 'validateaddress') return { isvalid: true, iswitness: true, witness_version: 0 };
+      if (c.method === 'getaddressbalance' || c.method === 'getaddresstxids') return Object.assign(new Error(refusing.message), refusing);
+      return new Error(c.method);
+    });
+    const index = (list) => list.filter((x) => x.startsWith('getaddress')).length;
+
+    const first = await xAddress(m, { addr: 'bc1qpayeeexample' });
+    assert.equal(index(sent), 2, 'the first view asks, and learns the node has no index');
+    assert.equal(first.indexed, false);
+
+    sent.length = 0;
+    const second = await xAddress(m, { addr: 'bc1qsenderexample' });
+    assert.equal(index(sent), 0, 'the next view does not send the two calls that are certain to fail');
+    assert.deepEqual(sent, ['validateaddress'], 'only the call that can answer');
+    assert.equal(second.indexed, false, 'and the page says the same thing it did');
+    assert.equal(second.txCount, null);
+    assert.equal(second.type, 'witness v0');
+
+    // the node behind an id can change: the refusal expires and the next view asks again
+    now += INDEX_RECHECK_MS + 1;
+    sent.length = 0;
+    await xAddress(m, { addr: 'bc1qpayeeexample' });
+    assert.equal(index(sent), 2, 'after the recheck interval it asks again');
+
+    // a node that is merely busy or slow has told us nothing about whether the method exists
+    _resetCache();
+    const flaky = fakeNode((c) => {
+      sent.push(c.method);
+      if (c.method === 'validateaddress') return { isvalid: true };
+      if (c.method.startsWith('getaddress')) return new Error('request timed out');
+      return new Error(c.method);
+    });
+    await xAddress(flaky, { addr: 'bc1qpayeeexample' });
+    sent.length = 0;
+    await xAddress(flaky, { addr: 'bc1qpayeeexample' });
+    assert.equal(index(sent), 2, 'a timeout is not a refusal, so it is asked again next time');
+
+    // and a node that HAS the index is never skipped
+    _resetCache();
+    const indexed = fakeNode((c) => {
+      sent.push(c.method);
+      if (c.method === 'validateaddress') return { isvalid: true };
+      if (c.method === 'getaddressbalance') return { balance: 1, received: 1, utxos: 1 };
+      if (c.method === 'getaddresstxids') return [];
+      return new Error(c.method);
+    });
+    await xAddress(indexed, { addr: 'bc1qpayeeexample' });
+    sent.length = 0;
+    const again = await xAddress(indexed, { addr: 'bc1qpayeeexample' });
+    assert.equal(index(sent), 2, 'a working index is asked every time');
+    assert.equal(again.indexed, true);
+  } finally {
+    _setClock(null);
+    _resetCache();
+  }
 });
 
 test('xSearch: digits are a height, 64 hex is a block if the node knows the header else a tx, and addresses validate', async () => {
