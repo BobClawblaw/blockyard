@@ -1,6 +1,6 @@
 {
   "name": "blockyard",
-  "version": "0.10.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Live web monitor, 3D block-space viewer, block explorer and markets view for a Bitcoin Core node",
   "license": "Apache-2.0",

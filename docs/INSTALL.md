@@ -94,8 +94,9 @@ and `layers/` **inside the index directory — so it must be writable by the ser
 restart replays the log; a reorganisation rolls the tail back; blocks 100 deep are folded into
 sorted layers. The address page says when the index is behind the node or has stopped
 following. A reorganisation deeper than the tail it holds (100 blocks) cannot be repaired in
-place: the page says to rebuild — the same command, into a fresh directory, then point `addressIndex`
-at it.
+place: the page says to rebuild: stop the server, run the same command again, start it. **The build
+empties `--out` first**, the follower's log and layers included, so nothing of the old index
+survives it (tested in `test/chain-index-live.test.js`).
 
 Balances are checked against the node: 40 of 40 sampled addresses equal `scantxoutset` to the
 satoshi (`node scripts/index-benchmark.js` runs that check and the lookup timings against your
@@ -256,7 +257,7 @@ Compatibility claims here are separated by how they were established, because "s
 | Blocks, Block flow | recent blocks with sizes, weights and fees |
 | Explorer | working -- `txindex` was synced on that node |
 | Block space (3D) | both viewer modes |
-| Block being built | assembled here from the mempool since 0.9.0 — no call to the node at all (before: `getblocktemplate`, ~0.5 s after tuning, 4.0-4.5 s before) |
+| Block being built | assembled here from the mempool since 2026-09-13 — no call to the node at all (before: `getblocktemplate`, ~0.5 s after tuning, 4.0-4.5 s before) |
 | Mining / pool attribution | 34 blocks attributed across 9 pools |
 | Markets, Kiosk | unaffected by the node; they read exchange APIs |
 

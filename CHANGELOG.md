@@ -8,9 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 Nothing yet.
 
-## [0.10.0] — 2026-09-14
+## [0.1.0] — 2026-09-14
 
-Everything in this release, like everything before it, was written by an AI directed by a human
+The first official release. Everything in it, like everything before it, was written by an AI directed by a human
 operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-release software.
 
 ### The explorer's address history, from an index of our own
@@ -82,7 +82,7 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   input's script and amount; checked on that transaction, 858 of 858 inputs, and a fee of 77,958
   sat equal to `getmempoolentry`.
 
-### Block space and Markets since 0.9.0
+### Block space and Markets since the 2026-09-11 milestone
 
 - **Agent effects.** The board's idle repertoire is **30 effects**, each with a switch: to the
   fields (ripples, plasma, code rain, fireworks and the rest) the operator asked for things that
@@ -111,7 +111,7 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   at its edge, and take a lane per leg); a recoloured cube blends to its new colour instead of
   popping; and where a flyer is clearly above a resting cube it paints over it.
 
-### Fixed since 0.9.0
+### Fixed since the 2026-09-11 milestone
 
 - **Display-settings sliders jumped as their value changed**: the readout's width changed with its
   digits and pushed the slider about. The value is printed to the step's decimals in a fixed-width
@@ -397,9 +397,9 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   wrong magnitude was "of the right order", which is why it survived; it now checks the figure
   could be true rather than restating the implementation.
 
-## [0.9.0] — 2026-09-11
+## Milestone 2026-09-11 (labelled 0.9.0 internally; never tagged or released)
 
-The first public release, licensed Apache-2.0. The block-space packer and feerate palette
+Licensed Apache-2.0 from here on. The block-space packer and feerate palette
 are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.js`).
 
 ### Monitor
@@ -476,10 +476,9 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
 - Built-in HTTPS, multi-address binding, a CIDR gate, and a strict Content Security Policy
   with no inline styles and no third-party assets.
 
-## [0.1.0] — 2026-09-08
+## Milestone 2026-09-08 (labelled 0.1.0 internally; never released)
 
 Internal first version: multi-user monitor with charts, sync viewer, mempool view, peers and
 event feed.
 
-[0.9.0]: https://github.com/BobClawblaw/blockyard/releases/tag/v0.9.0
-[0.1.0]: https://github.com/BobClawblaw/blockyard/commits/main
+[0.1.0]: https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.0

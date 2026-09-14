@@ -118,7 +118,7 @@ return them as structured entries:
   ] }
 ```
 
-`CHANGELOG.md` already has the required shape (`## [0.9.0] — 2026-09-11`). Markdown is rendered as
+`CHANGELOG.md` already has the required shape (`## [0.1.0] — 2026-09-14`). Markdown is rendered as
 **text, not HTML** — see §7.
 
 ### 4.3 Apply
@@ -240,7 +240,7 @@ an unsigned tag must fail closed.
    private and the feature cannot work for anyone else.
 2. ~~**Fix the version scheme.**~~ **Done 2026-09-13.** `package.json` and `server/main.js` said
    **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is this newer?" comparison
-   would have been wrong, and that field is what the whole feature compares. 0.9.0 is current, and
+   would have been wrong, and that field is what the whole feature compares. 0.1.0 is current, and
    every source now says so. The two values are no longer written down twice (see §10.1 note).
 3. **Create the first tag.** There are none, so there is no release channel to subscribe to.
 4. **Decide the open-mode question** in §6 knowingly.

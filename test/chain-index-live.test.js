@@ -3,7 +3,7 @@
 // checked by looking addresses up and comparing against what the chain says at that moment.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, readdirSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, readdirSync, appendFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { hash256 } from '../server/chain/tx.js';
@@ -55,8 +55,9 @@ async function tinyBase(root) {
     if (c.method === 'getblockhash') return { ok: true, result: FX.genesis.expect.hash };
     return { ok: false, error: { message: c.method } };
   }) };
-  await buildIndex({ rpc, blocksDir, out, workers: 1 });
-  return out;
+  const rebuild = () => buildIndex({ rpc, blocksDir, out, workers: 1 });
+  await rebuild();
+  return { dir: out, rebuild };
 }
 
 // a node whose chain can be replaced from any height
@@ -88,7 +89,7 @@ function check(live, node, label) {
 test('THE INDEX FOLLOWS THE CHAIN: catch up, restart, torn log, reorg, fold, merge, and a reorg too deep to repair', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-live-'));
   try {
-    const dir = await tinyBase(root);
+    const { dir, rebuild } = await tinyBase(root);
     const node = fakeNode();
     const opts = { rpc: node.rpc, confirmations: 3, foldBlocks: 4, maxLayers: 2, maxBlocksPerPoll: 100 };
 
@@ -139,6 +140,18 @@ test('THE INDEX FOLLOWS THE CHAIN: catch up, restart, torn log, reorg, fold, mer
     node.reorg(3, 23, 77);
     await live.poll();
     assert.match(live.status().stale ?? '', /rebuild/, 'stale, asking for a rebuild');
+
+    // A REBUILD IN PLACE: the same command into the same directory. The build empties the directory
+    // first, so the old follower's log and layers -- which hold the reorganised-away blocks -- cannot
+    // survive into the new index; a fresh follower then catches up on the chain as it is now.
+    live.close?.();
+    await rebuild();
+    assert.ok(!existsSync(path.join(dir, 'live.log')), 'the old log is gone');
+    assert.ok(!existsSync(path.join(dir, 'layers')), 'and the old layers');
+    live = new LiveIndex(dir, opts);
+    assert.equal(live.status().stale, null, 'the rebuilt index is not stale');
+    await live.poll();
+    check(live, node, 'after a rebuild in place');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

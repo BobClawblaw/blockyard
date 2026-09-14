@@ -76,7 +76,7 @@ measured 2026-09-13 at 1, 4 and 8: four 200 ms jobs took ~807 ms with peak concu
 case. Treat it as documentation of intent, not a tuning knob.
 
 What costs time on a mainnet node is the expensive reads, and how much depends on how the node is
-configured. The sharpest example used to be the block template -- since 0.9.0 the monitor
+configured. The sharpest example used to be the block template -- since 2026-09-13 the monitor
 assembles that from the mempool and never calls `getblocktemplate`, so the numbers below are kept
 as the clearest illustration of what appliance tuning is worth, not as a call this software still
 makes. Measured on an Umbrel running Core 31.1.0 on 2026-09-13, **before** its RPC settings were
@@ -165,8 +165,8 @@ its index is reported in the server log at boot (`address index <dir>: ...`); on
 keeps retrying every 30 s.
 
 **Stopped following** means a reorganisation deeper than the blocks the follower still holds in
-its tail (100), which cannot be repaired in place. Rebuild with the same `index-build.js` command
-**into a fresh directory**, point `addressIndex` at it and restart the server.
+its tail (100), which cannot be repaired in place. Stop the server, run the same `index-build.js` command into the same directory — the build
+empties it first, the old log and layers included — and start the server again.
 
 ## Explorer: "spent by" links are missing
 

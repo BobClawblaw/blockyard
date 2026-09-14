@@ -156,7 +156,7 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.10.0** — pre-release, and the word is meant literally. The test suite is
+Version **0.1.0** — the first official release, and pre-release software: the word is meant literally. The test suite is
 comprehensive (849 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index blockyard builds itself** from the
