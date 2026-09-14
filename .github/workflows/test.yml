@@ -22,14 +22,17 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         # engines says ">=22". 22 is the floor the project promises; 24 catches what the
-        # next LTS changes under it before a user does.
+        # next LTS changes under it before a user does. macOS is in the matrix because
+        # BlockYard runs on the node's machine and a Mac is one of them (2026-09-14): the
+        # suite had never run there before the first Mac install was attempted.
+        os: [ubuntu-latest, macos-latest]
         node: ['22', '24']
-    name: node ${{ matrix.node }}
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
     steps:
       # v4 targets Node 20, which GitHub deprecated -- the runner force-ran it on 24 and said
       # so in an annotation on the first run. v7 is current for both.
