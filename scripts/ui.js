@@ -18,20 +18,22 @@ export const MARK = {
 
 // THE MONOGRAM, IN PIXELS (operator, 2026-09-14: "I want the installer to have amazing ANSI Art here
 // for the BY logo"). The same tile the favicon is: a rounded orange tile shaded light to dark
-// across the diagonal, a dark B and Y, and three courses of blocks along the foot. One character
+// across the diagonal, a dark B and Y with uprights two cells wide (a cell is twice as tall as it is
+// wide, so a two-cell upright and a one-row crossbar are the same thickness on screen -- operator:
+// "The black letters need to be thicker"), and three courses of blocks along the foot. One character
 // cell per pixel, painted as a background colour, from the 256-colour table -- solid in every
 // terminal font; without colour it falls back to three lines of box drawing.
 const ART = [
   '  ......................  ',
   ' ........................ ',
-  '...######.....#.......#...',
-  '...#.....#.....#.....#....',
-  '...#.....#......#...#.....',
-  '...######........#.#......',
-  '...#.....#........#.......',
-  '...#.....#........#.......',
-  '...#.....#........#.......',
-  '...######.........#.......',
+  '...#######...##......##...',
+  '...##....##..##......##...',
+  '...##....##...##....##....',
+  '...#######.....##..##.....',
+  '...##....##.....####......',
+  '...##....##......##.......',
+  '...##....##......##.......',
+  '...#######.......##.......',
   ' .ooooooo.oooooo.ooooooo. ',
   '  ......................  ',
 ];
