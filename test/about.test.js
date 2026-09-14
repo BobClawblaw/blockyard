@@ -15,6 +15,8 @@ const api = read('../server/http/api.js');
 const app = read('../public/js/app.js');
 const css = read('../public/css/app.css');
 const about = read('../public/js/about.js');
+const fmt = read('../public/js/fmt.js');
+const readme = read('../README.md');
 
 test('the monogram IS the About link, and it satisfies the same contract a nav tab does', () => {
   // It lives outside <nav>, so it cannot inherit the nav's delegated click handler.
@@ -37,6 +39,16 @@ test('About shows what the operator asked for, and nothing is a placeholder', ()
   assert.match(section, /github\.com\/BobClawblaw\/blockyard/, 'a link to the project');
   assert.match(section, /<svg viewBox="0 0 16 16"[^>]*>[\s\S]*?<\/svg>/, 'the GitHub mark, drawn inline');
   assert.match(section, /Entirely made by machines\. Directed by human hands\./, 'the closing line, verbatim');
+  // the donation address, and one click copies it (operator, 2026-09-14: "Add the bitcoin donation
+  // address to the about screen ... Clicking on the address should copy to clipboard")
+  const ADDR = 'bc1q249cv27lc2q7y0x53vkczgfvvgsjzhwxwv42gc';
+  assert.match(section, new RegExp(`<button type="button" class="abdon" id="abDonate" data-copy="${ADDR}"`), 'the address is a button carrying itself to copy');
+  assert.ok(section.includes(`<code>${ADDR}</code>`), 'and shown in full');
+  assert.ok(readme.includes(ADDR), 'the same address the README gives');
+  assert.match(about, /getElementById\('abDonate'\)/, 'about.js finds it');
+  assert.match(about, /copyText\(btn\.dataset\.copy\)/, 'and copies what it carries');
+  assert.match(about, /bindDonate\(h\)/, 'from the render');
+  assert.match(fmt, /export function copyText/, 'the copy helper is shared from fmt.js');
   // the galaxy is forced on here rather than following the sky switch: this page has no data for
   // it to obscure, which is the whole reason it is the backdrop
   assert.match(about, /stars: true, galaxy: true/, 'the galaxy is on for About regardless of the board switches');

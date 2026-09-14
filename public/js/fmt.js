@@ -139,3 +139,24 @@ export function nodeWarnings(list) {
   if (!Array.isArray(list)) return [];
   return list.filter((w) => typeof w === 'string' && w.trim() && !PRE_RELEASE.test(w));
 }
+
+/**
+ * Copy text to the clipboard. The monitor is served over plain http on the LAN, where
+ * navigator.clipboard does not exist (it needs a secure context), so a select-and-copy fallback is
+ * kept. Resolves when copied, rejects when the browser refused. (public/js/explorer.js keeps its
+ * own copy of this: that file imports nothing by design.)
+ */
+export function copyText(text) {
+  if (globalThis.navigator?.clipboard && globalThis.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.className = 'xclip';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand?.('copy');
+    ta.remove();
+    if (ok) resolve(); else reject(new Error('copy refused'));
+  });
+}

@@ -186,6 +186,19 @@ if (doing('settings')) {
   } catch (e) { fail('settings', e); }
 }
 
+// ----------------------------------------------------------------------- about
+// Not in the README; captured so the page can be looked at after a change (the donation address).
+if (doing('about')) {
+  try {
+    await evl(`document.getElementById('brandAbout')?.click()`);
+    await sleep(3000);
+    // About is not a nav tab, so page() cannot see it: ask the section itself
+    const open = await evl(`(() => { const s=document.querySelector('section.page[data-page="about"]'); return !!s && s.offsetParent !== null; })()`);
+    if (!open) throw new Error('the brand button did not open About');
+    done.push(await shoot('about', { settle: 2500, height: 900 }));
+  } catch (e) { fail('about', e); }
+}
+
 // --------------------------------------------------------------------- tetrust
 if (doing('tetrust')) {
   try {

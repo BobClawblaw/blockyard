@@ -12,6 +12,7 @@
 // watching costs one cheap repaint rather than a megapixel one.
 import { board3d } from './details3d.js';
 import { loadSettings, spaceOptions } from './settings.js';
+import { copyText } from './fmt.js';
 
 const SKY = {
   gridW: 24, gridH: 16,
@@ -50,8 +51,21 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
  * code at boot), the host from /api/about, and the node's own version string from the snapshot
  * that every other page is already using.
  */
+// the donation address copies on click, once bound (the section is static markup, so once is enough)
+function bindDonate(h) {
+  const btn = document.getElementById('abDonate');
+  if (!btn || btn.__bound) return;
+  btn.__bound = true;
+  btn.addEventListener('click', () => {
+    copyText(btn.dataset.copy)
+      .then(() => { btn.classList.add('done'); btn.querySelector('.abdonhint').textContent = 'copied'; setTimeout(() => { btn.classList.remove('done'); btn.querySelector('.abdonhint').textContent = 'click to copy'; }, 1600); h.toast?.('address copied', 'ok'); })
+      .catch(() => h.toast?.('the browser refused to copy', 'bad'));
+  });
+}
+
 export function renderAbout(s, state, h) {
   drawSky();
+  bindDonate(h);
 
   // one fetch, once -- the host's OS does not change while the page is open
   if (!S.asked) {

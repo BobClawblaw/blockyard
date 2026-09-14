@@ -640,7 +640,18 @@ export function blockFlow(el, { tipHeight = null, recent = [], stats = [], next 
 // The link between two blocks in the train. It is a picture of the thing the cards
 // are actually describing -- each block commits to the one before it -- and it is
 // markup rather than a ::before so the row's flex gaps stay predictable.
-const LINK = '<span class="chainlink" aria-hidden="true"><i></i><i></i></span>';
+// Drawn as two INTERLOCKED links of a real chain (operator, 2026-09-14: "That chain graphic between
+// the blocks looks bad on a black background. Re-do it to be much more stylized and visible"): each
+// link is a dark accent tube with a bright highlight along it, and the left link's top strand is
+// painted again over the right link so the pair weaves -- over at the top, under at the bottom.
+const CHAIN_SVG = (() => {
+  const a = '<rect x="2" y="4.5" width="20" height="11" rx="5.5"/>';
+  const b = '<rect x="16" y="4.5" width="20" height="11" rx="5.5"/>';
+  const weave = '<path d="M16.5 4.5a5.5 5.5 0 0 1 5.5 5.5"/>';
+  const tube = (shape) => `<g class="cl-base">${shape}</g><g class="cl-hi">${shape}</g>`;
+  return `<svg viewBox="0 0 38 20" aria-hidden="true">${tube(a)}${tube(b)}${tube(weave)}</svg>`;
+})();
+const LINK = `<span class="chainlink" aria-hidden="true">${CHAIN_SVG}</span>`;
 
 /*
  * THE FORECAST SLIVERS ARE GONE (2026-09-11, operator: "too much space is
