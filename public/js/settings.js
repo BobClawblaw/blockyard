@@ -71,11 +71,12 @@ export const DEFAULTS = Object.freeze({
     // to avoid ("nothing ever changes size -- so there is no growth to police and nothing to
     // flicker"), and this area has already regressed the paint order three times. It ships as a
     // control to be looked at and compared, not as a new default.
-    // RANGE x8 (operator, 2026-09-14: "allow us a much greater range on the slider to adjust Depth"):
-    // 0.01 was the old ceiling. Measured on the paint order across a whole refresh, pops rise with depth
-    // -- 6 at 0.01, 24 at 0.03, 44 at 0.08, with 4 brief swap-backs at the top -- so the far end is a
-    // look to choose knowingly, and the default stays 0.
-    perspective: 0,       // 0 = the parallel camera; 0.004 gentle, 0.01 pronounced, 0.08 extreme
+    // RANGE: 0.01, then 0.08 (operator, 2026-09-14: "allow us a much greater range on the slider to
+    // adjust Depth"), then CAPPED AT 0.03 the same day ("Lock depth at 0.03. too many issues higher than
+    // that"). Measured on the paint order across a refresh, pops rise with depth -- 6 at 0.01, 24 at
+    // 0.03, 44 at 0.08 -- and past 0.03 a rising cube swells over its neighbours enough to be seen.
+    // A stored value above the cap is clamped to it on load; the default stays 0.
+    perspective: 0,       // 0 = the parallel camera; 0.004 gentle, 0.01 pronounced, 0.03 the most allowed
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
@@ -281,7 +282,7 @@ export const PANEL = Object.freeze([
         options: Object.freeze([['normal', 'Along the board’s curve'], ['arcing', 'Arcing (original)']]),
       }),
       Object.freeze({ key: 'dome', label: 'Board curve', kind: 'range', min: 0, max: 12, step: 1, hint: 'How far the board bows toward you; 0 is flat' }),
-      Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.08, step: 0.001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows wider than its base and a flying block swells as it comes toward you. Past about 0.03 blocks in flight swell dramatically and occasionally paint over one another for a frame' }),
+      Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.03, step: 0.001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows wider than its base and a flying block swells as it comes toward you. Blocks in flight swell as they rise; near the top of the range a landing block can briefly swap with a neighbour' }),
       Object.freeze({
         key: 'light', label: 'Light', kind: 'choice', hint: 'Where the lamp hangs. Straight above lights the whole board evenly; a corner shades the far slope of the curve and the sides turned away',
         options: Object.freeze([['overhead', 'Straight above'], ['upper-left', 'Upper left'], ['upper-right', 'Upper right'], ['front', 'From the viewer']]),

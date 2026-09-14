@@ -1683,7 +1683,11 @@ export function obliqueOrder(tiles, o = {}) {
     // to was tried (2026-09-14) and made pairs flip on every bounce; what fixed the resting-over-flyer
     // errors was the path instead -- flightOffset rises straight up until clear of the neighbours.
     const dx = 0, dy = 0;
-    return { t, i, zv0: z0, zv1: z0 + h, hull: hullOf(pts), bx0: x0, bx1: x1, by0: y0, by1: y1,
+    // the drawn base and top, for the one decision that must follow the picture (nearer, below)
+    const air = (t.z ?? 0) > 0 || (t.entry ?? 0) > 0;
+    const ccx = t.x + t.s / 2, ccy = t.y + t.s / 2;
+    const dBottom = (air ? flightOffset(ccx, ccy, visualBase(t, o), o).z : 0) + (t.floor ?? 0) + capZ(ccx, ccy, o);
+    return { t, i, air, dBottom, dTop: dBottom + h, zv0: z0, zv1: z0 + h, hull: hullOf(pts), bx0: x0, bx1: x1, by0: y0, by1: y1,
       fx0: t.x + dx, fx1: t.x + t.s + dx, fy0: t.y + dy, fy1: t.y + t.s + dy, key: String(t.txid), diag: t.x + t.y + t.s };
   });
   // The priority among cubes nothing constrains, and where a cycle is cut: the
@@ -1702,7 +1706,38 @@ export function obliqueOrder(tiles, o = {}) {
   // real space the planner guarantees no two cubes intersect, so some axis always
   // separates a pair, and a bouncing cube (which keeps crossing its neighbour's
   // top) stays decided by the footprints.
+  const memo = o.orderMemo instanceof Map ? o.orderMemo : null;
+  const ABOVE_BAND = 0.75;
   const nearer = (a, b) => {
+    // A CUBE DRAWN WHOLLY ABOVE A RESTING ONE IS IN FRONT OF IT (operator, 2026-09-14, twice: "The small
+    // blocks that remain on the board always sort over the cubes flying above it", then, on Depth
+    // 0.023 with Arcing: "items that remain on the board during transitions ... still sort above
+    // everything else" and "blocks moving through other tall blocks"). Depth scales a point by its
+    // height, so a rising cube's picture swells over the cube BESIDE it, and the footprint rules
+    // below -- right for a parallel camera -- let the resting neighbour paint over it: 362 such pairs
+    // on one live refresh at the operator's settings. The camera looks down, so a surface drawn above
+    // another's top is nearer. First tried when flights still drifted sideways from the floor, this
+    // rule made a bouncing cube swap with its neighbour on every hop; flights now rise straight up
+    // until clear (flightOffset), and it is measured again here rather than assumed.
+    // WITH A DEAD BAND, because the plain comparison was measured and failed: correct for the pair
+    // (362 wrong -> 5) but a landing cube's bottom crosses its neighbour's top on every hop, and each
+    // crossing swapped the pair over pictures Depth had already made overlap -- 844 px changing hands.
+    // Clearly above: the flyer in front. Clearly below: the footprint rules. In between, whatever the
+    // pair was last frame, so a hop that only grazes the neighbour's top changes nothing.
+    // ONLY WITH DEPTH ON. At Depth 0 nothing swells, the footprint rules alone measured 0 wrong pairs
+    // and 0 pops, and this rule added 82 px of pops there for nothing. With Depth it is a trade, and
+    // the numbers chose it (Depth 0.023, Arcing, one refresh): wrong pairs 362 -> 72, visible pops
+    // 0 -> 356 px, mostly small landings. Wider bands gave fewer pops and more wrong pairs (1.5: 164 /
+    // 269 px; 3: 337 / 257 px), so 0.75 is where most of the errors go for the fewest pops.
+    if (a.air !== b.air && (o.oblique?.rise ?? 0) > 0) {
+      const fly = a.air ? a : b, rest = a.air ? b : a;
+      const gap = fly.dBottom - rest.dTop;
+      if (gap >= ABOVE_BAND) return a.air ? 1 : -1;
+      if (gap > -ABOVE_BAND && memo) {
+        const pa = memo.get(a.key), pb = memo.get(b.key);
+        if (pa !== undefined && pb !== undefined && pa !== pb) return pa > pb ? 1 : -1;
+      }
+    }
     if (a.fy1 <= b.fy0 + EPS) return flipped ? 1 : -1;
     if (b.fy1 <= a.fy0 + EPS) return flipped ? -1 : 1;
     // ACROSS COLUMNS THE LEAN DECIDES, not "left after right" (operator, 2026-09-14: "shit popping
@@ -1851,7 +1886,6 @@ export function obliqueOrder(tiles, o = {}) {
   // the tangle formed -- and only cubes with no last frame fall in by depth. In and out of a
   // tangle the pair's order is then the same, so nothing can flicker; a cube genuinely passing
   // another is decided by the edges again the moment the tangle dissolves.
-  const memo = o.orderMemo instanceof Map ? o.orderMemo : null;
   const prev = memo ? (v) => memo.get(String(tiles[v].txid)) : () => undefined;
   const out = [];
   while (heap.length) {
