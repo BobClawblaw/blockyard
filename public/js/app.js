@@ -245,12 +245,15 @@ function expanded(s, sync, caveats) {
     ['chain size', sync.sizeOnDisk == null ? '–' : F.bytes(sync.sizeOnDisk, 0)],
     ['utxos', sync.txouts == null ? '–' : F.num(sync.txouts)],
     ['peers', sync.peers == null ? '–' : F.num(sync.peers)],
-    ['node\'s own progress ([dlc] ==)', ibd.nodeProgress == null ? 'not printed by this build'
-      : `${ibd.nodeProgress.pct == null ? '–' : `${ibd.nodeProgress.pct}% stored`} · ${ibd.nodeProgress.stored ?? '–'}/${ibd.nodeProgress.total ?? '?'} blocks${ibd.nodeProgress.etaText ? ` · their own eta ${ibd.nodeProgress.etaText}` : ''}${ibd.nodeProgress.rateText ? ` · ${ibd.nodeProgress.rateText}` : ''}`],
-    ['applying thread ([utxo_live])', ibd.nodeCatchup == null ? 'not printed by this build'
-      : `${ibd.nodeCatchup.pct == null ? '–' : `${ibd.nodeCatchup.pct}%`} caught up${ibd.nodeCatchup.blocksPerSec != null ? ` at ${ibd.nodeCatchup.blocksPerSec} blk/s` : ''}${ibd.nodeCatchup.eta ? ` · their own eta ${ibd.nodeCatchup.eta}` : ''}`],
-    ['apply rate ([dl] updating utxo)', ibd.applyRate == null ? 'not printed by this build'
-      : `${ibd.applyRate.perSec ?? '–'} tx/s over ${ibd.applyRate.windowSec ?? '?'}s`],
+    // ROWS ONLY WHERE THE FIGURE EXISTS (2026-09-14): these three are read from an experimental
+    // node's log; Bitcoin Core prints none of them, and a row saying "not printed by this build"
+    // was three lines of nothing on every Core install
+    ...(ibd.nodeProgress == null ? [] : [['node\'s own progress ([dlc] ==)',
+      `${ibd.nodeProgress.pct == null ? '–' : `${ibd.nodeProgress.pct}% stored`} · ${ibd.nodeProgress.stored ?? '–'}/${ibd.nodeProgress.total ?? '?'} blocks${ibd.nodeProgress.etaText ? ` · their own eta ${ibd.nodeProgress.etaText}` : ''}${ibd.nodeProgress.rateText ? ` · ${ibd.nodeProgress.rateText}` : ''}`]]),
+    ...(ibd.nodeCatchup == null ? [] : [['applying thread ([utxo_live])',
+      `${ibd.nodeCatchup.pct == null ? '–' : `${ibd.nodeCatchup.pct}%`} caught up${ibd.nodeCatchup.blocksPerSec != null ? ` at ${ibd.nodeCatchup.blocksPerSec} blk/s` : ''}${ibd.nodeCatchup.eta ? ` · their own eta ${ibd.nodeCatchup.eta}` : ''}`]]),
+    ...(ibd.applyRate == null ? [] : [['apply rate ([dl] updating utxo)',
+      `${ibd.applyRate.perSec ?? '–'} tx/s over ${ibd.applyRate.windowSec ?? '?'}s`]]),
     // Deliberately separate rows: three different threads reporting three
     // different rates is information, and averaging them would be a fabrication
     // (rules 4 and 9). They stay out of the strip for the same reason -- the <=60px
