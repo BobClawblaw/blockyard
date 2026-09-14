@@ -178,7 +178,15 @@ test('the shadows option survives the whole path: settings -> render3d -> the sc
   const builtAt = src.indexOf('shadows: opts.shadows !== false');
   assert.ok(viewAt > 0, 'the view object is still built here');
   assert.ok(builtAt > viewAt, 'and it carries the shadows option into the scene');
-  assert.ok(builtAt - viewAt < 1200, 'inside the same view literal, not somewhere else entirely');
+  // INSIDE THE SAME LITERAL, asserted by finding its end rather than by counting characters. This
+  // was `builtAt - viewAt < 1200`, which is a proxy for the property, not the property: adding two
+  // comment lines to the camera pushed `shadows:` past 1200 bytes and failed the test while the
+  // option was still in exactly the right place (2026-09-13). Raising the number would only defer
+  // the same false alarm to the next edit. The literal ends at the first line that closes it at
+  // this indentation, so anything before that really is inside it.
+  const endAt = src.indexOf('\n    };', viewAt);
+  assert.ok(endAt > viewAt, 'the view literal is still a literal we can find the end of');
+  assert.ok(builtAt < endAt, 'inside the same view literal, not somewhere else entirely');
 });
 
 test('simple cubes carry no divot at any size, and flat carries nothing at all', () => {

@@ -2502,7 +2502,10 @@ export function render3d(canvas, cells, options = {}) {
       // placements can be compared on the same data before one is chosen.
       vanishX: st.gridW * opts.unit * opts.vanish.fx, vanishY: -st.gridH * opts.unit * (1 - opts.vanish.fy), persp: opts.persp,
       boardW: st.gridW * opts.unit, boardH: st.gridH * opts.unit, dome: opts.dome, gridW: st.gridW, gridH: st.gridH,
-      seamAlpha: opts.seamAlpha, fx: fxNow(st, t), oblique: opts.oblique, now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
+      // the camera, plus settings.js space.perspective folded in: `rise` is how much height
+      // foreshortens, and 0 (the default) is the parallel camera this board has always drawn
+      seamAlpha: opts.seamAlpha, fx: fxNow(st, t), now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
+      oblique: opts.obliqueRise ? { ...opts.oblique, rise: opts.obliqueRise } : opts.oblique,
       // the departure path (settings.js space.departures): it reaches the geometry AND the paint
       // order through the same view object, which is the only way those two can agree
       departures: opts.departures,

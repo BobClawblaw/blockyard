@@ -262,7 +262,42 @@ export function project(gx, gy, gz, o = {}) {
   // every frame). Here every cube shows its top and its west and south faces,
   // a fall is visible motion up and down the screen, and nothing ever changes
   // size -- so there is no growth to police and nothing to flicker.
-  if (o.oblique) return { x: x0 + z * (o.leanFixed ?? obliqueLean(gx, o)) * unit, y: y0 - (flipY ? 1 : -1) * z * o.oblique.oy * unit };
+  if (o.oblique) {
+    const px = x0 + z * (o.leanFixed ?? obliqueLean(gx, o)) * unit;
+    const py = y0 - (flipY ? 1 : -1) * z * o.oblique.oy * unit;
+    // HEIGHT WITH A PERSPECTIVE, NOT JUST AN OFFSET (operator, 2026-09-13: "I'm not seeing the
+    // bottom or the front face changing at all during movement ... fix camera stuff").
+    //
+    // The two lines above are the whole oblique camera: height moves a point up the screen and a
+    // little sideways, and NOTHING scales. Measured, that is why a cube's front face is 11.0px tall
+    // at z=0 and 11.0px at z=80 -- there is no term that could foreshorten it, so no lean policy
+    // could ever make faces change with altitude. It is an oblique projection in the strict sense:
+    // parallel, sizeless, and flat in depth.
+    //
+    // `rise` adds the missing term: a point is scaled about the vanishing point by 1 + gz*rise, so
+    // its distance from the camera finally does something. A resting cube's top is then slightly
+    // larger than its base (a real cube seen from above, rather than a parallelogram), and a cube
+    // in flight visibly grows as it comes toward the viewer.
+    //
+    // IT SCALES BY gz, NOT BY z, and the difference is the whole board. `z` above is
+    // `gz + capZ(...)`: on a domed board EVERY floor point carries the dome's own height, so
+    // scaling by `z` moved the floor too -- measured, the grid point (10,10,0) slid 97.490 ->
+    // 95.756 -> 93.155 as rise went 0 -> 0.004 -> 0.01, and a first version of this comment claimed
+    // the floor was untouched. It was not. Height ABOVE the board is what should foreshorten; the
+    // board's own curvature is the board. With gz the factor at a footprint is exactly 1 and the
+    // grid, the deck and every resting footprint are genuinely unchanged.
+    //
+    // Default 0, so nothing changes until it is switched on. That is deliberate: size changing with
+    // height is precisely what the oblique camera was chosen to avoid ("nothing ever changes size
+    // -- so there is no growth to police and nothing to flicker"), and three attempts at this area
+    // have already regressed the paint order. It ships as a control to be compared, and the flicker
+    // test is the gate on making it the default.
+    const rise = o.oblique.rise ?? 0;
+    if (!rise) return { x: px, y: py };
+    const k = 1 + Math.max(0, gz || 0) * rise;
+    const vx = o.vanishX ?? 0, vy = o.vanishY ?? 0;
+    return { x: vx + (px - vx) * k, y: vy + (py - vy) * k };
+  }
   const k = 1 + z * risePerUnit * persp;       // > 1: nearer, and larger
   return { x: vanishX + (x0 - vanishX) * k, y: vanishY + (y0 - vanishY) * k };
 }

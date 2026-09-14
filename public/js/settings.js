@@ -56,6 +56,17 @@ export const DEFAULTS = Object.freeze({
     // That cost is now paid deliberately rather than avoided: it is the look that was chosen.
     stars: true,
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
+    // HEIGHT THAT FORESHORTENS (operator, 2026-09-13: "I'm not seeing the bottom or the front face
+    // changing at all during movement ... fix camera stuff"). The oblique camera is parallel: height
+    // moves a cube up the screen and nothing scales, so a face is the same size at z=0 and z=80 --
+    // measured at 11.0px either way. This scales a point about the vanishing point by 1 + gz*rise,
+    // so a cube's top is larger than its base and a flying cube grows as it comes toward you.
+    //
+    // Off by default: a size that changes with height is exactly what the oblique camera was chosen
+    // to avoid ("nothing ever changes size -- so there is no growth to police and nothing to
+    // flicker"), and this area has already regressed the paint order three times. It ships as a
+    // control to be looked at and compared, not as a new default.
+    perspective: 0,       // 0 = the parallel camera; 0.004 is a gentle depth, 0.01 pronounced
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
@@ -257,6 +268,7 @@ export const PANEL = Object.freeze([
         options: Object.freeze([['normal', 'Along the board’s curve'], ['arcing', 'Arcing (original)']]),
       }),
       Object.freeze({ key: 'dome', label: 'Board curve', kind: 'range', min: 0, max: 12, step: 1, hint: 'How far the board bows toward you; 0 is flat' }),
+      Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.01, step: 0.001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows wider than its base and a flying block swells as it comes toward you' }),
       Object.freeze({
         key: 'light', label: 'Light', kind: 'choice', hint: 'Where the lamp hangs. Straight above lights the whole board evenly; a corner shades the far slope of the curve and the sides turned away',
         options: Object.freeze([['overhead', 'Straight above'], ['upper-left', 'Upper left'], ['upper-right', 'Upper right'], ['front', 'From the viewer']]),
@@ -763,6 +775,9 @@ export function spaceOptions(s) {
   if (motion) out.transition = motion;
   out.departures = sp.departures;
   out.light = sp.light;
+  // merged into the camera by details3d (it owns the oblique constants); 0 leaves it exactly as it
+  // has always been, so the switch costs nothing until someone moves it
+  out.obliqueRise = sp.perspective;
   out.fxKinds = enabledEffects(n);
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;
   // THE GRID'S OWN COLOUR. Until now these were never set here at all, so the board fell through to
