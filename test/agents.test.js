@@ -472,6 +472,9 @@ test('on the price board the light cycles ride in from the left and the right, a
   for (let seed = 1; seed <= 10; seed++) {
     const a = AGENTS.stormball.build({ st: { axes: { line } }, seed, W, H, tiles, tops: null, rnd: rng(seed) });
     assert.ok(a.alt > 5 && a.alt < 17, `seed ${seed}: it flies through the chart's height (${a.alt.toFixed(1)}), not at 3.5 over a bare floor`);
+    // and it has LEFT before the run ends (operator: "have it fully moved off the display before you
+    // remove it"): the corona reaches 12 units from the centre, so both ends sit 16 past the edges
+    assert.ok(Math.min(a.from.x, a.to.x) <= -16 && Math.max(a.from.x, a.to.x) >= W + 16, `seed ${seed}: in from and out past the edges by the corona's reach (${a.from.x}, ${a.to.x})`);
     for (let u = 0.05; u < 0.95; u += 0.01) { frames++; const f = AGENTS.stormball.frame(a, u); if (f.stormball.arcs.length) struck++; }
   }
   assert.ok(struck / frames > 0.25, `arcs reach a candle in ${(100 * struck / frames).toFixed(0)}% of frames`);

@@ -732,7 +732,11 @@ defineAgent('stormball', {
     // the block board's view is far wider than the board, so the run starts well past its edges;
     // the price board's view is fitted to its width (obliqueFit), and the same margin there kept
     // the ball off-screen for the first third of its run (a third of a 7-day board is 190 units)
-    const margin = st?.axes?.line?.length > 1 ? 8 : Math.max(W, H) * 0.55 + 6;
+    // ...but far enough that the whole thing has LEFT before the effect ends (operator, 2026-09-14:
+    // "have it fully moved off the display before you remove it"): the corona reaches 12 units
+    // from the centre and the trail seven behind, and at 8 the run ended with the glow still
+    // on the chart and cut off dead
+    const margin = st?.axes?.line?.length > 1 ? 16 : Math.max(W, H) * 0.55 + 6;
     const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
     const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
     const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
