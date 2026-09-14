@@ -239,30 +239,46 @@ test('THE PIPE BULGE rolls in and out with no pop, stays inside the line, and sw
   // (second cut, the same day: "slow it down to half the current speed ... a large sphere being forced
   // through the tube, deforming a spherical bulge ... bulge up much sooner on the line, and last longer
   // before it shrinks. the bulge and shrink effects should take 1 second each at the extents")
-  const { bulgeAt, bulgeProfile, bulgeReach, BULGE_RAMP_MS } = await import('../public/js/details3d.js');
+  const { bulgeAt, bulgeProfile, bulgeReach, bulgeFit } = await import('../public/js/details3d.js');
   const src = (await import('node:fs')).readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   const MS = Number(src.match(/\bbulge: (\d+),/)[1]);
   assert.equal(MS, 16000, 'half the speed of the first cut (8 s)');
-  assert.equal(BULGE_RAMP_MS, 3000, 'three seconds each way (it was one, and read as too quick)');
-  const at = (ms) => bulgeAt(ms / MS, MS);
-  assert.equal(at(0).amp, 0, 'nothing at the start');
-  assert.equal(at(MS).amp, 0, 'nothing at the end');
-  assert.equal(at(3000).amp, 1, 'full size after exactly three seconds');
-  assert.ok(at(1500).amp > 0.3 && at(1500).amp < 0.7, 'growing gradually, half way at a second and a half');
-  assert.equal(at(MS - 3000).amp, 1, 'full size until three seconds before the end');
-  assert.ok(at(MS - 1500).amp > 0.3 && at(MS - 1500).amp < 0.7, 'then shrinking just as gradually');
-  // back to normal tube size ON the last movement frame, not before it
-  assert.ok(at(MS - 16).amp > 0, 'still a little swollen one frame before the end');
-  assert.equal(at(MS).amp, 0, 'and exactly the tube on the last');
-  assert.equal(at(MS).t, 1, 'which is the frame the movement ends');
-  let worst = 0, prev = at(0);
-  for (let ms = 16; ms <= MS; ms += 16) { const b = at(ms); worst = Math.max(worst, Math.abs(b.amp - prev.amp)); assert.ok(b.t >= prev.t, 'left to right only'); prev = b; }
-  assert.ok(worst < 0.03, `no frame (60 fps) steps the size by a pop (largest ${worst.toFixed(4)})`);
-  assert.equal(at(0).t, 0, 'it starts at the beginning of the usable line');
-  assert.equal(at(MS).t, 1, 'and finishes at its end');
+  assert.equal(bulgeAt(0, MS).t, 0, 'it starts at the beginning of the line');
+  assert.equal(bulgeAt(1, MS).t, 1, 'and finishes at its end');
+  assert.equal(bulgeAt(0.25, MS).t, 0.25, 'at constant speed');
+  // THE SIZE IS WHAT FITS (operator, 2026-09-14: "time it so that it's exactly normal pipe sized starts and
+  // finishes. Have the bulge last as long as possible before it's no longer discernable")
+  const r0 = 2.5, Rfull = r0 * 4.2, reachFull = bulgeReach(Rfull, r0);
+  assert.equal(bulgeFit(0, Rfull, r0), r0, 'exactly the tube at the line\'s first point');
+  assert.equal(bulgeFit(reachFull, Rfull, r0), Rfull, 'full size as soon as the full bulge fits');
+  assert.equal(bulgeFit(1e9, Rfull, r0), Rfull, 'and no bigger than that ever');
+  let prevR = r0;
+  for (let room = 0.1; room < reachFull; room += 0.1) {
+    const R = bulgeFit(room, Rfull, r0);
+    assert.ok(R >= prevR, 'it only grows as it comes in');
+    assert.ok(R < Rfull, 'not full before the full bulge fits');
+    assert.ok(bulgeReach(R, r0) <= room + 1e-6, 'its bulge never hangs off the end of the line');
+    assert.ok(room - bulgeReach(R, r0) < 1e-6, 'and it is as big as it can be: full for as long as possible');
+    prevR = R;
+  }
+  // GRAVITY (operator: "Faster to drop down on the pipe and slower to rise up the pipe"): on a V, the
+  // fall takes less of the time than the climb; on the level the ball runs at constant speed
+  const { bulgeTravel } = await import('../public/js/details3d.js');
+  const V = Array.from({ length: 201 }, (_, k) => ({ y: k <= 100 ? k : 200 - k, len: k * Math.SQRT2 }));  // down 100 at 45deg, up 100
+  const vee = bulgeTravel(V);
+  assert.equal(vee(0), 0, 'at the start at t=0');
+  assert.ok(Math.abs(vee(1) - V[200].len) < 1e-9, 'at the end at t=1');
+  const tBottom = ((lo, hi) => { for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; if (vee(m) < V[100].len) lo = m; else hi = m; } return lo; })(0, 1);
+  assert.ok(tBottom < 0.3, `the fall takes under 30% of the time (${(tBottom * 100).toFixed(0)}%), the climb the rest`);
+  let prevS = 0;
+  for (let t = 0; t <= 1; t += 1 / 960) { const s = vee(t); assert.ok(s >= prevS, 'never backwards'); prevS = s; }
+  const level = bulgeTravel(Array.from({ length: 101 }, (_, k) => ({ y: 0, len: k * 10 })));
+  assert.ok(Math.abs(level(0.25) - 250) < 1e-6 && Math.abs(level(0.5) - 500) < 1e-6, 'on the level: constant speed');
+  const down = bulgeTravel(Array.from({ length: 101 }, (_, k) => ({ y: k, len: k * Math.SQRT2 })));
+  assert.ok(Math.abs(down(0.5) - 50 * Math.SQRT2) < 1e-6, 'a steady slope is steady too: the time is the trip\'s, whatever the speed');
 
-  // THE SHAPE IS A BALL IN A HOSE: round over the ball, straight flanks, a rounded shoulder into the tube
-  const R = 10, r0 = 2.5, reach = bulgeReach(R, r0);
+  // THE SHAPE IS A BALL IN A HOSE: round over the ball, then an arc of skin easing down onto the tube
+  const R = 10, reach = bulgeReach(R, r0);
   assert.equal(bulgeProfile(0, R, r0), R, 'the crest is the ball\'s own radius');
   assert.ok(Math.abs(bulgeProfile(3, R, r0) - Math.sqrt(R * R - 9)) < 1e-9, 'and near the crest the wall is a circle');
   assert.equal(bulgeProfile(reach + 0.01, R, r0), r0, 'past its reach the tube is untouched');
@@ -277,7 +293,7 @@ test('THE PIPE BULGE rolls in and out with no pop, stays inside the line, and sw
     last = y; lastSlope = slope;
   }
   assert.ok(maxJump < 0.1, `a continuous wall (largest step ${maxJump.toFixed(3)} over 0.05 px)`);
-  assert.ok(maxBend < 0.5, `with no kink where flank meets ball or tube (largest slope change ${maxBend.toFixed(3)})`);
+  assert.ok(maxBend < 0.5, `with no kink where the arc meets ball or tube (largest slope change ${maxBend.toFixed(3)})`);
   assert.equal(bulgeProfile(4, 2, 2.5), 2.5, 'a ball smaller than the tube does not dent it');
 
   // on the real board: the swell is drawn as extra fills around the pipe, only while it runs
@@ -294,6 +310,10 @@ test('THE PIPE BULGE rolls in and out with no pop, stays inside the line, and sw
   assert.ok(!mid.some((o) => /set:fillStyle=rgba\(255,(205|246|255),(40|190|255),/.test(o) && o.includes('arc')), 'no ball is drawn');
   assert.ok(!mid.includes('arc'), 'nothing round is drawn at all: the shape is the tube\'s wall');
   assert.ok(mid.some((o) => o.startsWith('set:strokeStyle=rgba(255,250,215')), 'the stretched outline catches the light');
+  assert.ok(mid.some((o) => /^set:fillStyle=rgba\(255,236,70,1\)$/.test(o)), 'and the swollen wall is solid yellow, not see-through');
+  // (operator: "the yellow line running through the center of the bulge needs to fish-eye lense distort out")
+  assert.ok(mid.some((o) => /^set:fillStyle=rgba\(255,246,150,1\)$/.test(o)), 'the inner tube is magnified through the bulge');
+  assert.ok(mid.some((o) => /^set:fillStyle=rgba\(255,255,240,1\)$/.test(o)), 'and so is the white thread at its centre');
 });
 
 test('NO EFFECT REPEATS within the configured window, picks stay random, and a short list takes turns', async () => {

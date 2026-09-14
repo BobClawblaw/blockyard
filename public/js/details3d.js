@@ -1130,52 +1130,56 @@ function headPoint(pts, at, overrun) {
 // was a Gaussian swell -- a soft hump, not a ball -- that eased in and out over 18% of the run at each
 // end. Now:
 //   * the tube's wall is the SHAPE A BALL MAKES in a hose: round over the ball (a circle of radius
-//     R), then straight flanks tangent to it running down to the tube's own radius, with a short
-//     rounded shoulder where the flank meets the tube (bulgeProfile)
-//   * it travels at constant speed from as near the start as the ball's own length allows to as near
-//     the end, so it bulges up where the line begins and shrinks where the line ends
-//   * it grows to full size in exactly one second and shrinks in exactly one second (BULGE_RAMP_MS),
-//     full size for everything between
-// 1000, then 3000 (operator, the same day: "It's fading in/out too quickly. I want to time it so the ball
-// shrinks to normal tube size at the last movement frame"): three seconds of growing from the first
-// movement frame and three of shrinking that end, at normal tube size, exactly on the last one
-export const BULGE_RAMP_MS = 3000;
-const BULGE_TAPER = Math.tan((24 * Math.PI) / 180);   // the flank's slope: a 24-degree cone off the ball
+//     R), then an ARC of stretched skin, tangent to the ball and tangent to the tube (bulgeProfile)
+//   * the ball travels the WHOLE line at constant speed, and its size is whatever fits: at the
+//     line's first point the tube is exactly the tube, the ball grows as fast as its own bulge can
+//     stay on the line, is full size for everything between, and shrinks back to exactly the tube
+//     at the last point (bulgeFit). No clock: the size is a function of where the ball is.
+// The timing went through 1000 ms ramps, 3000 ("time it so the ball shrinks to normal tube size at
+// the last movement frame"), 500, 100, and then geometry (operator, 2026-09-14: "the bulge is
+// appearing/disappearing too far from the edge, I want to time it so that it's exactly normal pipe
+// sized starts and finishes. Have the bulge last as long as possible before it's no longer
+// discernable"): full for as long as a ball that enters and leaves at the line's ends can be.
+// The tapering was straight flanks off the ball at 24 degrees (an oval), then 58 (a sphere with a
+// hard edge: "Now the sphere is too obvious. Can we arc the tapering?"), now a concave arc: the skin
+// leaving the ball and easing down onto the tube, the way a stretched hose does.
+const BULGE_FILLET = 1.6;                                // the skin arc's radius, in ball radii
 const BULGE_BALL = 4.2;                                  // the ball's radius, in tube radii (of the core)
 
-// At effect progress u of an `ms`-long run: travel 0..1 along the usable line, and the size 0..1.
+// At effect progress u of an `ms`-long run: travel 0..1 along the line. (The size is bulgeFit's.)
 export function bulgeAt(u, ms = FX_MS.bulge) {
-  const c = Math.max(0, Math.min(1, u));
-  const ramp = Math.min(0.5, BULGE_RAMP_MS / Math.max(1, ms));
-  const ss = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
-  return { t: c, amp: ss(c / ramp) * ss((1 - c) / ramp) };
+  return { t: Math.max(0, Math.min(1, u)) };
+}
+
+// the arc's geometry: its centre sits rf above the tube wall and R + rf from the ball's centre, so
+// it touches both
+function fillet(R, r0) {
+  const rf = R * BULGE_FILLET, cy = r0 + rf;
+  const cx = Math.sqrt((R + rf) * (R + rf) - cy * cy);
+  return { rf, cx, cy, xt: (cx * R) / (R + rf) };
 }
 
 // The wall's distance from the axis at d pixels from the ball's centre, for a ball of radius R in a
-// tube of radius r0. Continuous, with a continuous slope everywhere except nowhere a pixel could
-// show: round over the ball, a straight flank tangent to it, a quadratic shoulder into the tube.
+// tube of radius r0. Continuous, with a continuous slope: round over the ball, then the arc, then
+// the tube.
 export function bulgeProfile(d, R, r0) {
   const x = Math.abs(d);
   if (R <= r0) return r0;
-  const sin = BULGE_TAPER / Math.hypot(1, BULGE_TAPER), cos = 1 / Math.hypot(1, BULGE_TAPER);
-  const xt = R * sin, yt = R * cos;                       // where the flank leaves the ball
+  const { rf, cx, cy, xt } = fillet(R, r0);
   if (x <= xt) return Math.sqrt(R * R - x * x);
-  const xFlankEnd = xt + (yt - r0) / BULGE_TAPER;         // where a straight flank would reach the tube
-  const shoulder = Math.min((yt - r0) / BULGE_TAPER, R * 0.9);  // rounded over this length, centred there
-  const s0 = xFlankEnd - shoulder / 2, s1 = xFlankEnd + shoulder / 2;
-  if (x <= s0) return yt - (x - xt) * BULGE_TAPER;
-  if (x >= s1) return r0;
-  // a quadratic that leaves the flank with its slope and arrives at the tube flat
-  const k = (x - s0) / shoulder;
-  const y0 = yt - (s0 - xt) * BULGE_TAPER;
-  return y0 - BULGE_TAPER * shoulder * (k - k * k / 2);
+  if (x >= cx) return r0;
+  return cy - Math.sqrt(rf * rf - (x - cx) * (x - cx));
 }
 // how far from the ball's centre the bulge reaches, in pixels
-export const bulgeReach = (R, r0) => {
-  if (R <= r0) return 0;
-  const sin = BULGE_TAPER / Math.hypot(1, BULGE_TAPER), cos = 1 / Math.hypot(1, BULGE_TAPER);
-  return R * sin + (R * cos - r0) / BULGE_TAPER + Math.min((R * cos - r0) / BULGE_TAPER, R * 0.9) / 2;
-};
+export const bulgeReach = (R, r0) => (R <= r0 ? 0 : fillet(R, r0).cx);
+// the largest ball, up to Rfull, whose bulge stays within `room` pixels of its centre
+export function bulgeFit(room, Rfull, r0) {
+  if (room <= 0 || Rfull <= r0) return r0;
+  if (bulgeReach(Rfull, r0) <= room) return Rfull;
+  let lo = r0, hi = Rfull;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (bulgeReach(mid, r0) <= room) lo = mid; else hi = mid; }
+  return lo;
+}
 
 // A point on the drawn curve, and its unit normal: the same Catmull-Rom Beziers traceCurve strokes, so
 // the swell is laid on exactly the line the eye sees and never separates from it at a candle.
@@ -1195,7 +1199,51 @@ function curveAt(pts, s) {
   return { x, y, nx: -dy / len, ny: dx / len };
 }
 
-// The curve by arc length, sampled once per draw: `at(px)` is the point that far along the line.
+// GRAVITY (operator, 2026-09-14: "Can we have gravity working against it? Faster to drop down on the
+// pipe and slower to rise up the pipe?"). The ball's speed along the pipe follows the pipe's slope
+// on screen: a run downhill (screen y increasing) is quicker, a climb slower, the level pipe at the
+// base speed. The speed is averaged over a stretch of pipe either side, so the ball carries some
+// momentum through a candle rather than snapping to each new slope; and the whole trip still takes
+// the effect's time, so a steep line simply spends more of it climbing than falling.
+//   v = 1 + BULGE_GRAVITY * (dy/ds), held within BULGE_SPEED   (dy/ds: +1 straight down, -1 straight up)
+const BULGE_GRAVITY = 1.6;
+const BULGE_SPEED = [0.35, 2.6];
+const BULGE_MOMENTUM = 0.03;                                     // averaged over this much of the line each way
+
+/**
+ * Where a ball is at time t (0..1) along a line sampled as [{ y, len }] (screen y, and distance along
+ * the line), given gravity: returns a distance in the same units as `len`, 0 at t=0, the full length
+ * at t=1, never going backwards.
+ */
+export function bulgeTravel(table) {
+  const n = table.length - 1;
+  if (n < 1) return () => 0;
+  const total = table[n].len;
+  const raw = [];
+  for (let k = 0; k < n; k++) {
+    const a = table[k], b = table[k + 1], ds = b.len - a.len;
+    const slope = ds > 0 ? Math.max(-1, Math.min(1, (b.y - a.y) / ds)) : 0;
+    raw.push(Math.max(BULGE_SPEED[0], Math.min(BULGE_SPEED[1], 1 + BULGE_GRAVITY * slope)));
+  }
+  const win = Math.max(0, Math.round(n * BULGE_MOMENTUM));
+  const T = [0];
+  for (let k = 0; k < n; k++) {
+    let sum = 0, cnt = 0;
+    for (let j = Math.max(0, k - win); j <= Math.min(n - 1, k + win); j++) { sum += raw[j]; cnt++; }
+    T.push(T[k] + (table[k + 1].len - table[k].len) / (sum / cnt));
+  }
+  const span = T[n] || 1;
+  return (t) => {
+    const want = Math.max(0, Math.min(1, t)) * span;
+    let lo = 0, hi = n;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (T[mid] < want) lo = mid; else hi = mid; }
+    const f = T[hi] > T[lo] ? (want - T[lo]) / (T[hi] - T[lo]) : 0;
+    return Math.min(total, table[lo].len + (table[hi].len - table[lo].len) * f);
+  };
+}
+
+// The curve by arc length, sampled once per draw: `at(px)` is the point that far along the line,
+// `travel(t)` how far along a ball under gravity has got at time t (0..1).
 function curveByLength(pts, samples = 400) {
   const table = [{ s: 0, len: 0, ...curveAt(pts, 0) }];
   for (let k = 1; k <= samples; k++) {
@@ -1210,21 +1258,21 @@ function curveByLength(pts, samples = 400) {
     const a = table[lo], b = table[hi], f = b.len > a.len ? (L - a.len) / (b.len - a.len) : 0;
     return curveAt(pts, a.s + (b.s - a.s) * f);
   };
-  return { total, at };
+  return { total, at, travel: bulgeTravel(table) };
 }
 
 function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
   const lw = Number.isFinite(lw0) && lw0 > 0 ? lw0 : 1;         // a canvas that will not say: one pixel
-  const { t, amp } = bulgeAt(u, ms);
-  if (amp < 0.002) return;
+  const { t } = bulgeAt(u, ms);
   const coreR = (lw * 5.5) / 2;
-  const R = coreR + (coreR * BULGE_BALL - coreR) * amp;       // the ball grows with the envelope
   const Rfull = coreR * BULGE_BALL;
   const curve = curveByLength(pts);
-  // the ball's centre travels between the two points where its FULL bulge just fits on the line
-  const reach = bulgeReach(Rfull, coreR);
-  const usable = Math.max(0, curve.total - 2 * reach);
-  const centre = reach + usable * t;
+  // the ball's centre travels the whole line, quicker downhill and slower up (bulgeTravel); the ball
+  // is as big as fits between it and the nearer end
+  const centre = curve.travel(t);
+  const R = bulgeFit(Math.min(centre, curve.total - centre), Rfull, coreR);
+  const amp = (R - coreR) / (Rfull - coreR || 1);
+  if (amp < 0.002) return;
   const span = bulgeReach(R, coreR);
   const STEPS = 72;
   const samples = [];
@@ -1237,8 +1285,11 @@ function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
   // stretches into the round profile and thins, its hot core keeps running straight through the
   // middle, and light catches the stretched outline.
   //   glow layers    follow the swollen wall at their own constant offset (the skin keeps its halo)
-  //   the outer core the WALL: filled out to the profile, but as thinner, more translucent skin
-  //   inner cores    do not swell at all, so the bright thread visibly runs through a swollen chamber
+  //   the outer core the WALL: filled out to the profile, as solid as the rest of the line
+  //   inner cores    MAGNIFIED with the wall, as through a fish-eye lens: each keeps its share of the
+  //                  tube's width, so the bright thread swells out through the middle of the bulge
+  //                  (operator: "the yellow line running through the center of the bulge needs to
+  //                  fish-eye lense distort out instead of staying uniformly thin")
   // Only the part beyond the tube already stroked is filled, so translucent layers never double up.
   const band = (rOf, fill, side) => {
     ctx.fillStyle = fill;
@@ -1249,9 +1300,15 @@ function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
   for (const [w, c, a, kind] of layers) {
     const r0 = (lw * w) / 2;
     const isWall = kind === 'core' && w === Math.max(...layers.filter((l) => l[3] === 'core').map((l) => l[0]));
-    if (kind === 'core' && !isWall) continue;                        // the hot thread keeps its width
+    if (kind === 'core' && !isWall) {
+      const lens = (q) => r0 * (q.r / coreR);
+      for (const side of [1, -1]) band(lens, `rgba(${c[0]},${c[1]},${c[2]},${a})`, side)(r0);
+      continue;
+    }
     const off = r0 - coreR;
-    const alpha = isWall ? a * 0.72 : a;                             // stretched skin is a little thinner
+    // OPAQUE (operator: "Get rid of the transparency effect and keep the yellow line opaque, not clear"):
+    // the swollen wall is filled solid, where it had been drawn as thinner see-through skin
+    const alpha = isWall ? 1 : a;
     for (const side of [1, -1]) band((q) => q.r + off, `rgba(${c[0]},${c[1]},${c[2]},${alpha})`, side)(r0);
   }
   // the stretched outline catching the light, brightest where it is stretched furthest, and on the
