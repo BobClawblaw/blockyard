@@ -278,6 +278,63 @@ Kept as checked rather than deleted, so nobody re-derives them.
 
 ## Functional gaps
 
+- [ ] **The explorer has no address index, and cannot have one from Core.** Found
+  2026-09-13. `getaddressbalance` and `getaddresstxids` are insight-style extensions
+  that Bitcoin Core has never carried at any setting; measured against both configured
+  nodes — an Umbrel and the local Core — each answers `Method not found`. mempool.space
+  shows balance, total received, UTXO counts and a balance history for the same address
+  because `electrs` builds that index itself from the block files; it does not ask Core,
+  because Core cannot answer.
+  **Fixed on the honesty axis** (commit `46e378f`): a refusal used to become `[]`, then
+  `txCount: 0`, then the words "no transactions in this node's address index" — a
+  fabricated zero indistinguishable from a genuinely unused address. The reply now
+  carries `indexed: false` with a **null** count, and the page says the index is absent.
+  **Not fixed on the capability axis:** there is still no history. That needs our own
+  index (next entry).
+  **Waste that remains:** `xAddress` still issues both dead RPCs on every address page
+  view — two guaranteed failures per view against a single-threaded RPC server. They
+  should be skipped after the first refusal is learned per node.
+
+- [ ] **We can read the block files after all — `-blocksxor`, not an unknown format.**
+  Found 2026-09-14, correcting a wrong conclusion reached the same day. Every
+  `blk*.dat` on the local node opens with `1c33dfa8` rather than the mainnet magic
+  `f9beb4d9`, and a 126.5 MB file contains **zero** occurrences of any network magic,
+  which read as "this is not a Core datadir". It is: Core XOR-obfuscates block data at
+  rest (default since v28) with the 8-byte key in `blocks/xor.dat`. XOR the file by
+  `offset % 8` and the magic, the size field and every record appear.
+  **Verified rather than assumed**, because two earlier spikes produced numbers that
+  were void and I nearly published both: the first parsed **zero** blocks and still
+  reported "337 MB/s"; the second desynced and crashed on a garbage varint. A parser
+  that walks nothing measures an empty loop. The third decodes block records and checks
+  them against the node — heights 918042, 918304, 918323, transaction counts (3865,
+  2968, 4255) and byte sizes (1614012, 1746797, 1571713) all matching `getblock`
+  exactly. Only then were its timings used.
+  **Measured cost of a full read**, on 5,756 files / ~711 GB: **~0.7 h of disk** at the
+  296 MB/s this device sustains on files not already in cache (203 / 414 / 360 MB/s
+  across three), overlapping ~0.16 h of CPU for the XOR and record framing. A re-read of
+  the same file takes 30 ms against 630 ms cold — which is why the first throughput
+  figure (1258 MB/s, implying a 10-minute chain) was page cache and is not used here.
+  Framing only: full transaction parsing and address extraction cost more and are not
+  yet measured. Chain-wide there are ~1.6 billion transactions, so index sizing is the
+  open question, not read speed.
+
+- [ ] **The explorer pays roughly 3–5x for verbose RPC it re-parses anyway.** Measured
+  2026-09-13/14. `fetchTxs` fetches up to 25 transactions per page with
+  `getrawtransaction <txid> 2`, and `xBlock` adds `getblock <hash> 1` plus
+  `getblockstats`. On the same block, verbosity 2 returns 10.77 MB against 3.17 MB of
+  raw hex at verbosity 0 — and the cost is worst where the node is slowest: on the
+  Umbrel, **1,843 ms for v2 against 373 ms for v0**, of which 880 ms is the node's own
+  serialization (time to first byte) versus 73 ms locally. Fetching raw and decoding
+  locally would cut both the bytes and the node's CPU. The disk parser in the entry
+  above is the same decoding work, so this is one piece of code, not two.
+
+- [ ] **The transaction cache does not survive a restart.** `server/http/explorer.js`
+  keeps a 3,000-entry in-memory LRU of confirmed transactions and nothing else. Every
+  restart re-asks the node for pages it served minutes earlier, which on the Umbrel is
+  seconds per page. Confirmed transactions are immutable, so they are the safest thing
+  in the system to persist; the ring/history machinery under `server/store/` already
+  writes to disk and is the obvious place to put them.
+
 - [x] **Coverage is now measured per shape, not globally.** `SHAPES` in
   `logparse.js` declares which measurements must keep arriving with gates derived from
   measured cadences (p95 x 8, clamped to [10, 30] min — table in `MEASUREMENTS 19`),
