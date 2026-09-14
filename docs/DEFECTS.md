@@ -318,9 +318,13 @@ Kept as checked rather than deleted, so nobody re-derives them.
   across three), overlapping ~0.16 h of CPU for the XOR and record framing. A re-read of
   the same file takes 30 ms against 630 ms cold — which is why the first throughput
   figure (1258 MB/s, implying a 10-minute chain) was page cache and is not used here.
-  Framing only: full transaction parsing and address extraction cost more and are not
-  yet measured. Chain-wide there are ~1.6 billion transactions, so index sizing is the
-  open question, not read speed.
+  **Measured in full on 2026-09-14 (MEASUREMENTS 28):** decoding every block and every
+  undo record with addresses is **9.5 single-core hours** (5.9 of them block decoding),
+  over 1.44 billion transactions (calibrated against `getchaintxstats` to 0.7%), 3.63 B
+  funding rows and 3.51 B spending rows. Raw index rows: **85.6 GB** history-only, **142.7 GB**
+  with amounts, before storage-engine overhead. Undo data (`rev*.dat`) supplies every
+  input's spent output, checked against `getblock <hash> 3` with zero mismatches, so the
+  spending side needs no UTXO replay.
 
 - [ ] **The explorer pays roughly 3–5x for verbose RPC it re-parses anyway.** Measured
   2026-09-13/14. `fetchTxs` fetches up to 25 transactions per page with

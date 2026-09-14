@@ -1087,3 +1087,51 @@ somebody else's call.
 read-only console via its vendor method-name prefix. What each could supply is listed in
 DEFECTS (Functional gaps) as an
 opportunity, not a feature.
+
+## 28. What an address index over the chain costs, read from the node's own files (2026-09-14)
+
+`scripts/blockfile-measure.js --sample 16 --verify` on the local Core datadir: 16 of 5,756
+`blk`/`rev` file pairs, evenly spaced from file 0 to 5754, each decoded end to end with
+`server/chain/tx.js` and `server/chain/blockfile.js`, one block per file checked against
+`getblock <hash> 3` (every prevout: value, script, height, coinbase flag) — **0 mismatches**
+in 91,813 spent coins. Totals are interpolated between the samples, because a file's
+contents change enormously over the chain's history (file 0 holds 119,960 blocks; file 5754
+holds 84).
+
+**Calibrated against the node, not only extrapolated.** Interpolated transactions:
+1,448,817,382; `getchaintxstats` at height 966,921: **1,438,794,396** — 0.7% high (the blk
+files also carry stale blocks). The unspent-output cross-check is looser and says so:
+funding rows minus spending rows is 121.3 M against `gettxoutsetinfo` txouts **165.2 M**.
+That is a small difference of two ~3.5 B figures, each within a couple of percent, so treat
+row totals as ±2% and the difference between them as not measured by this method.
+
+| | Whole chain (interpolated) |
+|---|---|
+| block files / undo files | 768.3 GB / 108.8 GB |
+| transactions | 1.449 B |
+| outputs / funding rows (spendable) | 3.823 B / 3.627 B |
+| inputs = spending rows | 3.506 B |
+
+Single-core time, by stage:
+
+| stage | hours | note |
+|---|---|---|
+| read | 0.62 | **warm cache for some files** (file 0 and 5754 read in ~40 ms); cold device read is the 0.7 h of the earlier spike (DEFECTS) |
+| XOR | 0.23 | |
+| decode blocks, addresses included | 5.87 | the dominant cost |
+| pair blocks with undo | 0.34 | after the fix below |
+| decode undo, addresses included | 3.06 | early files cost most: uncompressed-key P2PK coins are rebuilt with BigInt modular arithmetic |
+| **CPU total** | **9.5** | per core; files are independent, and this box has 32 cores |
+
+Raw index rows, before any storage engine's overhead:
+**85.6 GB** history only (12 B per row: an 8-byte script-hash or outpoint prefix and a 4-byte
+height) and **142.7 GB** with an 8-byte amount on every row, so a balance needs no node call.
+Free space on `/storage` at the time: 653 GB.
+
+**The pairing bug this run found.** Pairing each block with its undo record by trying every
+candidate of the same transaction count is quadratic where blocks are tiny: file 0 ran 35
+minutes without finishing, and a second attempt (one hash per distinct record) still took
+230 s. Core appends undo records in connection order, so `pairBlocksWithUndo` puts each
+file's blocks in chain order by their previous-block links and walks the records in step,
+checksum-verified: file 0 pairs in 5.9 s, a recent file in ~15 ms, and every block but
+genesis (which has no undo) pairs.
