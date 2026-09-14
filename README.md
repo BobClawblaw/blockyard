@@ -144,7 +144,7 @@ not yet have: an unspent-output list, or an address's mempool transactions.
 
 Everything here was written by an AI directed by a human, and audited by AI:
 [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) is the audit, findings and remediation included.
-[docs/DEFECTS.md](docs/DEFECTS.md) lists ten open items, honestly stated, with the
+[docs/DEFECTS.md](docs/DEFECTS.md) lists five open items, honestly stated, with the
 measurements behind each. Read it before deploying: several are node-capability limits
 rather than bugs, and knowing which is which matters.
 

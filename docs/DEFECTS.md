@@ -3,6 +3,16 @@
 Open items, honestly stated. Checked items keep their entry so the reasoning is
 not re-litigated.
 
+**Scope, settled 2026-09-14.** BlockYard supports **Bitcoin Core, on the machine that runs it**:
+the explorer's address index is built from the node's block files, so the monitor lives next
+to the node. Two things this register was written against are therefore no longer supported and
+no longer defects here: the **experimental node** whose RPC surface, log grammar and counters
+several entries below were measured on (its measurements are kept, as records), and **reading a
+node elsewhere over RPC alone** -- the Umbrel-on-the-LAN path, tried on 2026-09-13 and dropped,
+because real-time explorer data over RPC was a failed idea (INSTALL, "It runs on the node's
+machine"). Entries whose only subject was one of those are closed below with that reason, and
+the record says which.
+
 ## Done since the first draft
 
 Kept as checked rather than deleted, so nobody re-derives them.
@@ -233,9 +243,13 @@ Kept as checked rather than deleted, so nobody re-derives them.
   characters anywhere, and the CLI must actually run. It asserts how many files it
   checked, so the glob cannot quietly match nothing.
 
-- [ ] **`CounterRate` fabricates a `0 B/s` download rate after every peer disconnect
+- [x] **`CounterRate` fabricates a `0 B/s` download rate after every peer disconnect
   on `deploy-20260910ag`, and understates it silently after smaller ones.** Found
-  2026-09-11 (MEASUREMENTS 27); not fixed. `server/store/ring.js` `CounterRate.add`
+  2026-09-11 (MEASUREMENTS 27). **Closed 2026-09-14 by scope:** the defect is that build's
+  `getnettotals`, which sums the *live* peer table and so drops when a peer leaves. Bitcoin
+  Core's `getnettotals` is a lifetime counter for the process (it only ever grows), so on the
+  supported node the reset-on-decrease rule is exactly right: a decrease *is* a restart. The
+  candidate fixes stay below for whoever supports a node whose counters forget. `server/store/ring.js` `CounterRate.add`
   treats any value below the window's oldest sample as a node restart:
   `if (value < this.samples[0].value) { this.samples = [{ t, value }]; return 0; }`.
   That is right for a lifetime counter, and this build's `getnettotals` is not one. It
@@ -375,6 +389,9 @@ Kept as checked rather than deleted, so nobody re-derives them.
   seconds per page. Confirmed transactions are immutable, so they are the safest thing
   in the system to persist; the ring/history machinery under `server/store/` already
   writes to disk and is the obvious place to put them.
+  **Narrowed 2026-09-14:** the cost that made this hurt was the remote node -- seconds per page
+  over the LAN. On the node's machine, where BlockYard now runs, a page's re-ask is ~70 ms of
+  the node's time per transaction (measured on the local Core), so this is a nicety, not a wound.
 
 - [x] **Coverage is now measured per shape, not globally.** `SHAPES` in
   `logparse.js` declares which measurements must keep arriving with gates derived from
@@ -401,8 +418,10 @@ Kept as checked rather than deleted, so nobody re-derives them.
     `node-restarting` on a node that had been up since. The flag is now age-gated and
     is cleared the moment `getblockchaininfo` answers. The event still reaches the
     feed, where its timestamp speaks for itself.
-- [ ] **The RPC circuit breaker is per-node, so in principle one slow method can blind
-  every panel — unproven as harmful, and now measurable.** Observed at 10:35–10:38:
+- [x] **The RPC circuit breaker is per-node, so in principle one slow method can blind
+  every panel — unproven as harmful, and now measurable.** **Closed 2026-09-14:** measured not
+  harmful (0 trips in clean running, below), the policy kept on purpose, and `rpc.breaker` in
+  `/api/telemetry` names what opened it if it ever bites. Kept as the record of the question. Observed at 10:35–10:38:
   `online false (breaker open, retry in 26s)` → `online true` → `online false` within
   25 s, while a direct `getblockcount` answered in 1 ms in between. That looked like
   granularity until it could be measured properly: over 15 minutes of clean running
@@ -427,7 +446,9 @@ Kept as checked rather than deleted, so nobody re-derives them.
   so work already queued when it opened still fired at the node — "back off for 30 s"
   meant "back off for new questions only". Fixed, with a test
   (`test/breaker.test.js`).
-- [ ] **Production was restarted nine times before 10:39** (18 shutdown lines in one
+- [x] **Production was restarted nine times before 10:39** -- **closed 2026-09-14 by scope:** the
+  deploy that did it belonged to the experimental node; what this repo owed (say the shape out
+  loud: `node-restart-storm`) was done on 2026-09-09. The record: (18 shutdown lines in one
   log file: 06:21, 06:31, 06:35, 09:53, 10:11, 10:34, 10:36, 10:38, …) by a concurrent
   deploying session. Not this repo's bug, but it is the single biggest determinant of
   what the dashboard looks like, and every monitor reading during those windows is
@@ -506,6 +527,12 @@ Kept as checked rather than deleted, so nobody re-derives them.
   real `EventSource` reconnect semantics, and anything a stub agrees with itself about.
   The stub is a parser of the markup this app writes, not a layout engine; do not read
   its green as "the page renders".
+  **Narrowed again 2026-09-14:** there is a browser now, outside `npm test` -- headless Chromium
+  driven over CDP by `scripts/browser-check.mjs`, `scripts/live-render-check.mjs`,
+  `scripts/motion-check.mjs` and `scripts/shots.mjs`, which is how the block-space paint order
+  was measured pixel by pixel, the README screenshots are taken, and the About page's
+  click-to-copy was proven by reading the clipboard back. Not in the suite because it needs a
+  browser on the box; still the only thing that sees layout.
 - [x] **The page says which build it is running, and complains when it is not
   current.** The static layer stamps `data-blockyard-build` and rewrites asset URLs to
   `?v=<build>` (build id = version + digest of asset sizes and mtimes, `0.1.0-3faef7bb00`
@@ -553,6 +580,10 @@ Kept as checked rather than deleted, so nobody re-derives them.
   opt-in accelerator for operators who publish those ports, with the 20 s poll as the floor for
   everyone else. The `feed:{kind:'poll', …}` field stays honest either way; it would report
   `kind:'zmq'` when a stream is actually connected.
+  **2026-09-14:** BlockYard now runs on the node's machine, so the container objection is gone:
+  `zmqpubsequence=tcp://127.0.0.1:28335` in `bitcoin.conf` puts the stream within reach. What is
+  left is the client -- ZMTP is small enough to write without a dependency -- and the poll stays
+  the floor for a node that does not publish. Open, and now buildable.
 - [x] No per-peer **byte** counters: **closed on `deploy-20260910ag`, still
   build-dependent.** 2026-09-11 09:22:05Z: `getpeerinfo` 9 rows, and
   `getconnectioncount` 9. `bytesrecv` summed to **109,027,561** against
@@ -567,11 +598,15 @@ Kept as checked rather than deleted, so nobody re-derives them.
   divergence from Core, and it broke the rate maths (open item under Security /
   correctness). Measured on a synced node only: no download-worker rows
   (`id` ≥ 100000) were present, because the vendor download-info method was inactive.
-- [ ] No per-peer **relay transaction** counts: not in `getpeerinfo` on any build
+- [x] No per-peer **relay transaction** counts -- **closed 2026-09-14:** Bitcoin Core exposes no
+  such figure either (`relaytxes` is a boolean), the panel claims none, and the log legs that
+  carried one belonged to the experimental node. Not in `getpeerinfo` on any build
   measured (`[txrelay]` legs are the only source), and no method exposes them.
   Re-checked on `deploy-20260910ag` 2026-09-11 09:22:05Z: rows carry `relaytxes: true`,
   a per-peer boolean, and no count.
-- [ ] **Three RPC sources on `deploy-20260910ag` that nothing reads yet**
+- [x] **Three RPC sources on `deploy-20260910ag` that nothing reads yet** -- **closed 2026-09-14
+  by scope:** all three are the experimental node's own methods and fields; Bitcoin Core has none
+  of them, and Core is what is supported. Kept for the record
   (opportunities, not features; MEASUREMENTS 27). Verified by `grep` over `server/` on
   2026-09-11: no call site for either method and no read of either field. The only
   mention is the allowlist comment admitting that vendor read method to the read-only
