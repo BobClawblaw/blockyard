@@ -151,7 +151,7 @@ export const departMode = (o = {}) => o.departures ?? 'arcing';
 export function flightGeom(tile, zv, o = {}) {
   const cxRest = tile.x + tile.s / 2, cyRest = tile.y + tile.s / 2;
   const mode = departMode(o);
-  const drift = zv * flightDir(cxRest, cyRest, o).x;       // along the sphere's normal
+  const drift = flightOffset(cxRest, cyRest, zv, o).x;     // along the sphere's normal, once clear
   // THE LEAN IS ALSO THE CUBE'S SHAPE. Height enters the projection as `x += z * lean * unit`, so
   // the same term that pushes a flight sideways is what makes a cube's side faces lean. A mode
   // cannot simply zero it to change a path: that would flatten an airborne cube and then SNAP it at
@@ -161,7 +161,7 @@ export function flightGeom(tile, zv, o = {}) {
   // THE SETTLED LEAN at a given flight height. A cube's lean is a fixed point: it leans by where it
   // is, and leaning moves where it is, so this iterates twice -- the shipped rule, unchanged.
   const settleAt = (h) => {
-    const d = h * flightDir(cxRest, cyRest, o).x;
+    const d = flightOffset(cxRest, cyRest, h, o).x;
     const height = h + capZ(cxRest + d, cyRest, o) + (tile.floor ?? 0) + cubeHeight(tile) / 2;
     let lean = obliqueLean(cxRest + d, o);
     for (let i = 0; i < 2; i++) lean = obliqueLean(cxRest + d + height * lean, o);
@@ -199,6 +199,25 @@ export function flightGeom(tile, zv, o = {}) {
   // touchdown are untouched.
   const lean = settleAt(zv);
   return { drift, lean, leanPath: mode === 'arcing' ? lean : settleAt(0), cx: cxRest + drift };
+}
+
+// WHERE A FLIGHT HAS GOT TO at drawn height zv: straight up until it clears its neighbours, then out
+// along the sphere's normal (operator, 2026-09-14: "The small blocks that remain on the board always
+// sort over the cubes flying above it"). Flights used to fan from the floor, so a cube a unit up had
+// already moved a fraction of a unit sideways -- into the space of the cube beside it. Two boxes that
+// overlap on every axis have no correct paint order, and every rule for them flips as the cube
+// bounces: measured on a live refresh, ordering those pairs by drawn height took the resting-over-
+// flyer errors from 115 to 5 and the pops from 0 to 518; by the drifted footprint, 1 error and 1,100
+// pops. The path was the fault, not the order. Rising straight up through FLIGHT_CLEAR first means
+// nothing moves sideways until it is above the cubes around it, so a low cube never shares space with
+// a neighbour; above that it fans exactly as before, and at rest nothing has moved at all. The
+// projector, the lean and the paint order all read this one function.
+export const FLIGHT_CLEAR = 3;
+export function flightOffset(gx, gy, zv, o = {}) {
+  const c = o.oblique?.clear ?? FLIGHT_CLEAR;
+  if (!(zv > c)) return { x: 0, y: 0, z: Math.max(0, zv) };
+  const n = flightDir(gx, gy, o), t = zv - c;
+  return { x: n.x * t, y: n.y * t, z: c + n.z * t };
 }
 
 export function surfaceNormal(gx, gy, o = {}) {
@@ -596,8 +615,8 @@ function liftProjectorAt(tile, o, z, zvGiven) {
     // is DRAWN, so the difference to where it stands is put back: the flight
     // is measured from the block's own spot on the sphere.
     const zv = zvGiven ?? visualBase(tile, o);
-    const n = flightDir(tile.x + tile.s / 2, tile.y + tile.s / 2, o);
-    const sx = zv * n.x, sy = zv * n.y, sz = zv * n.z;
+    const off = flightOffset(tile.x + tile.s / 2, tile.y + tile.s / 2, zv, o);
+    const sx = off.x, sy = off.y, sz = off.z;
     if (!sx && !sy) return (gx, gy, gz) => project(gx, gy, sz + (gz - z), o);
     return (gx, gy, gz) => project(gx + sx, gy + sy, sz + (gz - z) + capZ(gx, gy, o) - capZ(gx + sx, gy + sy, o), o);
   }
@@ -1660,8 +1679,12 @@ export function obliqueOrder(tiles, o = {}) {
     for (const gx of [t.x, t.x + t.s]) for (const gy of [t.y, t.y + t.s]) for (const gz of [z0, z0 + h]) pts.push(P(gx, gy, gz));
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const p of pts) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+    // Footprints are the SLOT, deliberately, even in flight. Judging a flight by where it had drifted
+    // to was tried (2026-09-14) and made pairs flip on every bounce; what fixed the resting-over-flyer
+    // errors was the path instead -- flightOffset rises straight up until clear of the neighbours.
+    const dx = 0, dy = 0;
     return { t, i, zv0: z0, zv1: z0 + h, hull: hullOf(pts), bx0: x0, bx1: x1, by0: y0, by1: y1,
-      fx0: t.x, fx1: t.x + t.s, fy0: t.y, fy1: t.y + t.s, key: String(t.txid), diag: t.x + t.y + t.s };
+      fx0: t.x + dx, fx1: t.x + t.s + dx, fy0: t.y + dy, fy1: t.y + t.s + dy, key: String(t.txid), diag: t.x + t.y + t.s };
   });
   // The priority among cubes nothing constrains, and where a cycle is cut: the
   // old diagonal order, by FOOTPRINT only. It used to include the current height

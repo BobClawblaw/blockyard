@@ -21,7 +21,7 @@
 // the real projector, and the modes are pinned by what they DO, not by what they are called.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { liftProjector, buildScene, obliqueLean, departMode } from '../public/js/blockscene3d.js';
+import { liftProjector, buildScene, obliqueLean, departMode, FLIGHT_CLEAR } from '../public/js/blockscene3d.js';
 import { DEFAULTS, PANEL, spaceOptions, normalise } from '../public/js/settings.js';
 
 const BASE = {
@@ -37,16 +37,39 @@ function at(gx, z, mode) {
   return liftProjector(t, o)(t.x + t.s / 2, t.y + t.s / 2, z);
 }
 // screen dx per unit of dy: the slope of the drawn path. 0 is straight up the screen.
-function slope(gx, z, mode) {
-  const b = at(gx, 0, mode), p = at(gx, z, mode);
+// Measured from where the fan begins: a flight rises straight up through FLIGHT_CLEAR first (2026-09-14,
+// so a low cube never moves into its neighbour's space), and only the part above it fans.
+const FAN_FROM = FLIGHT_CLEAR * 2;
+function slope(gx, z, mode, from = FAN_FROM) {
+  const b = at(gx, from, mode), p = at(gx, z, mode);
   return p.y - b.y ? (p.x - b.x) / (p.y - b.y) : 0;
 }
+
+test('A FLIGHT RISES STRAIGHT UP UNTIL IT CLEARS ITS NEIGHBOURS, then fans', () => {
+  // (operator, 2026-09-14: "The small blocks that remain on the board always sort over the cubes flying
+  // above it.") A flight that fanned from the floor was a unit sideways into the next cube's space a
+  // unit up, and two boxes sharing space have no correct paint order. Below FLIGHT_CLEAR the only
+  // sideways movement is the camera's own lean -- the same a resting cube of that height shows.
+  for (const gx of [2, 93]) {
+    const z = FLIGHT_CLEAR * 0.9;
+    const low = slope(gx, z, 'normal', 0);
+    // a resting cube's own column: the same point raised by the same drawn height, no flight at all
+    const t = { txid: 't', x: gx, y: 40, s: 2, tall: 2, z: 0, color: '#33cc99' };
+    const P = liftProjector(t, BASE), c = t.x + t.s / 2, dz = at(gx, z, 'normal').y - at(gx, 0, 'normal').y;
+    const base = P(c, 41, 0), up = P(c, 41, 1);
+    const column = (up.x - base.x) / (up.y - base.y);
+    const fan = slope(gx, 80, 'normal');
+    assert.ok(Math.abs(low - column) < 0.02, `at gx=${gx} the climb leans ${low.toFixed(3)}: the camera's own ${column.toFixed(3)}, no drift`);
+    assert.ok(Math.abs(fan - column) > 0.2, `and above it the flight fans away from that (${fan.toFixed(3)})`);
+    assert.ok(dz < 0, 'while it does climb the screen');
+  }
+});
 
 test('ALONG THE CURVE is a straight line, and ARCING is not', () => {
   // The distinction the operator asked to see. `normal` holds its lean at the resting value, so the
   // slope is identical at every height; `arcing` re-settles it as the cube climbs, so it drifts.
   for (const gx of [2, 93]) {
-    const n5 = slope(gx, 5, 'normal'), n80 = slope(gx, 80, 'normal');
+    const n5 = slope(gx, 20, 'normal'), n80 = slope(gx, 80, 'normal');
     assert.ok(Math.abs(n5 - n80) < 1e-6, `normal is straight at gx=${gx} (${n5.toFixed(4)} vs ${n80.toFixed(4)})`);
     // BOTH STILL FAN, deliberately. This is the thing the original screenshot objected to, kept
     // after the comparison: the fan is the domed board being honest about itself, and it is why
@@ -61,9 +84,9 @@ test('ALONG THE CURVE is a straight line, and ARCING is not', () => {
   // where the signal is, rather than loosening the threshold until the edges scraped through: a
   // bound below the float noise would have pinned nothing at all.
   for (const gx of [20, 76]) {
-    const a5 = slope(gx, 5, 'arcing'), a80 = slope(gx, 80, 'arcing');
+    const a5 = slope(gx, 20, 'arcing'), a80 = slope(gx, 80, 'arcing');
     assert.ok(Math.abs(a5 - a80) > 1e-2, `arcing bends at gx=${gx} (${a5.toFixed(4)} vs ${a80.toFixed(4)})`);
-    const n5 = slope(gx, 5, 'normal'), n80 = slope(gx, 80, 'normal');
+    const n5 = slope(gx, 20, 'normal'), n80 = slope(gx, 80, 'normal');
     assert.ok(Math.abs(n5 - n80) < 1e-6, `and normal does not, at the same place (${n5.toFixed(4)} vs ${n80.toFixed(4)})`);
   }
   // over the middle column every mode goes essentially straight up -- which is why the complaint
