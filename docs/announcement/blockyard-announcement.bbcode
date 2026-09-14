@@ -1,0 +1,92 @@
+[size=14pt][b][ANN] BlockYard 0.0.9 — a live monitor, 3D block-space viewer and block explorer for your own Bitcoin Core node. Zero dependencies. 100% AI-written, human-directed.[/b][/size]
+
+[b]Repository:[/b] [url]https://github.com/BobClawblaw/blockyard[/url]
+[b]Release:[/b] [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9[/url]
+[b]npm:[/b] [tt]npm install -g blockyard[/tt]
+[b]Licence:[/b] Apache-2.0
+
+[img width=800]IMAGE-URL-FOR:overview.jpg[/img]
+
+
+[size=12pt][b]What it is[/b][/size]
+
+BlockYard is a self-hosted web app you point at [b]your own Bitcoin Core node[/b]. Open a browser and you get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a full block / transaction / address explorer, exchange prices with order-book depth, and a kiosk view for a wall screen. Every number on every page comes from your node or from a public exchange API — no third party sits between you and the chain.
+
+It is written in plain JavaScript on Node.js with [b]zero dependencies[/b]. Not "few": zero. [tt]package.json[/tt] has no [tt]dependencies[/tt] and no [tt]devDependencies[/tt]. No framework, no bundler, no CSS library, no chart library, no 3D library, no test framework beyond [tt]node:test[/tt]. There is no CDN in the browser app and no telemetry anywhere. [tt]npm install[/tt] installs nothing but BlockYard itself. The 862 unit tests run with [tt]npm test[/tt] and need nothing but Node.
+
+It is read-only toward your node by default. It never signs, never spends, never asks for a wallet.
+
+
+[size=12pt][b]What it does[/b][/size]
+
+[b]Live monitor.[/b] The Overview is the node at a glance: sync state with an honest ETA, block flow (the blocks being projected, the block being built, recent blocks with who mined them), mempool size and fee charts, peers and bandwidth, the node's event stream, and a provenance table that says where every figure came from and how old it is. Pages for Chain & Sync, Mempool, Peers, Network, Mining, Events, and a read-only RPC console behind a default-deny allowlist. Everything updates live over one server-sent-events stream; several people can watch the same node from several screens.
+
+[b]Block space, in 3D.[/b] The next block's worth of the mempool as a board of glowing stones: area is vbytes, colour is feerate. When the pool changes, the blocks lift, travel in collision-free lanes and land under gravity. At rest the board comes alive with thirty idle effects — ripples, light cycles, a lightning ball, ball lightning that arcs from stone to stone, a UFO's tractor beam, Missile Command, a centipede, fireworks, a code rain, a spiral galaxy turning behind it — every one of them a switch, with sliders for how often they play. Neon tubes, metallic and chrome finishes, a movable lamp, perspective, a star field. It is the part of the project we spent the most time on because it is the part that makes people stop and look.
+
+[img width=800]IMAGE-URL-FOR:block-space-neon.jpg[/img]
+
+[b]An explorer that looks the part.[/b] Search a height, a block hash, a txid or an address. Block pages with the full transaction list, fee distribution and miner attribution (151 pools). Transaction pages with fee, fee rate and dollar value, feature badges (SegWit, Taproot, RBF, consolidation, OP_RETURN, coinbase), a flow diagram from inputs to outputs, and links to where every coin came from and where it went. [b]Address pages with full history, balance and unspent outputs.[/b] Bitcoin Core has no address index at any setting — [tt]getaddressbalance[/tt] and friends belong to forks, and stock Core answers [i]Method not found[/i] — so BlockYard builds its own from the node's block and undo files: one row per (address, transaction) with the net amount, kept current as blocks arrive, balances checked against [tt]scantxoutset[/tt] to the satoshi. It builds in the background the first time you start (expect a few hours, and ~125 GB of disk) while every other page keeps working.
+
+[img width=800]IMAGE-URL-FOR:explorer-tx.jpg[/img]
+
+[b]Markets.[/b] Public prices from Coinbase, Kraken, Bitstamp, Bitfinex and OKX: a 3D candle board on the same engine as the block space, with a neon price line and its own set of effects; a precise flat candlestick chart; an exchange table; and a bitcoinity-style order-book depth chart. Fetched by the server only while someone is looking at the page.
+
+[img width=800]IMAGE-URL-FOR:markets.jpg[/img]
+
+[b]Kiosk.[/b] The 3D markets board, a price panel and the block-space board side by side, full screen in one click. Put it on the wall.
+
+[b]Diversions.[/b] Three playable games built on the same 3D engine, because we could: Tetrust (Tetris in the block-space well, with music synthesised in the browser), Blockout (Breakout against a wall of block-space stones) and Blockanoid (Arkanoid, with capsules and enemies).
+
+[b]Multi-user, with accounts.[/b] Viewer, operator and admin roles, rate limiting, a security posture documented in the repo. Display settings live on the server, so every screen sees the same board.
+
+
+[size=12pt][b]Setting it up[/b][/size]
+
+You need Bitcoin Core 25.0 or later with [tt]server=1[/tt] and [tt]txindex=1[/tt], Node.js 22 or later, and BlockYard [b]on the same machine as the node[/b] — it reads the node's block files to build the address index, so a node on another machine is not supported.
+
+[b]From npm[/b] (the package is [tt]blockyard[/tt]; a global install keeps its config and index under [tt]~/.blockyard[/tt]):
+
+[code]npm install -g blockyard
+blockyard setup
+blockyard start[/code]
+
+[b]From GitHub[/b] (a checkout keeps its config in [tt]config/[/tt] and its index in [tt]data/[/tt] inside the checkout — handy if you want to read the code, run the tests, or run the current [tt]main[/tt]):
+
+[code]git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
+npm test          # optional: the 862 unit tests, nothing to install first
+npm run setup
+npm start[/code]
+
+Either way, [tt]setup[/tt] finds your [tt]bitcoin.conf[/tt], reads the RPC settings out of it, proves the credentials, the chain, [tt]txindex[/tt], the block files and how fast the node answers, writes its config, and starts the address index build in the background with a notification in the app when it is done. Then open [url]http://127.0.0.1:21000[/url]. The 0.0.9 release tarball is also on the GitHub release page. Full walk-through for macOS and Linux in [tt]docs/GETTING-STARTED.md[/tt]; Windows is in the CI matrix.
+
+
+[b]Uninstalling.[/b] BlockYard touches nothing outside its own directories — it never edits [tt]bitcoin.conf[/tt] and leaves the node exactly as it found it — so removing it is deleting them. From npm: stop it, then
+
+[code]npm uninstall -g blockyard
+rm -rf ~/.blockyard          # its config, history, accounts and the address index[/code]
+
+From a GitHub checkout: stop it and delete the checkout ([tt]config/[/tt] and [tt]data/[/tt], index included, live inside it). If you put the index somewhere else at setup time, delete that directory too; if you installed the systemd unit, [tt]docs/INSTALL.md[/tt] §12 has the three lines for that.
+
+[size=12pt][b]How it was made — a love letter to Bitcoin and to agentic AI[/b][/size]
+
+[b]Every line of BlockYard was written by an AI, directed by a human.[/b] The server, the browser app, the 3D engine, the games, the tests, the installer and every document in the repository — 100% machine-generated code, under the direction of one human operator who never typed a line of it. The direction was real work: what to build, what was wrong, what was ugly, what was too often, what was too dark, what did not translate. The coding was the machine's.
+
+The auditing was also done by AI, and it is all published in the repository: two security audits, a defects register with the measurements behind every claim, and a measurements log where every performance number in the docs was actually taken. When the audit found something, the fix and the finding are both in the history. We think that is the honest way to ship a thing like this: not "trust us", but "here is everything, including what we got wrong".
+
+This is a love letter to Bitcoin — a node is a beautiful thing, and it deserves a front end that shows you what it is doing without asking anyone else — and a love letter to agentic AI, because a year ago a project of this size with this level of polish was not something one person could direct into existence in their spare time. Now it is. We wanted to find out what that looks like when you take it all the way, and this is what it looks like.
+
+It is [b]experimental pre-release software[/b]. Expect bugs. The number is 0.0.9 for a reason. If you run it, tell us what broke — issues and pull requests are open — and if you read the code, tell us what you think of code that no human wrote.
+
+
+[size=12pt][b]Links[/b][/size]
+
+[list][li]Source: [url]https://github.com/BobClawblaw/blockyard[/li][/url]
+[li]Release 0.0.9: [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9[/li][/url]
+[li]Getting started: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md[/li][/url]
+[li]User guide: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/USER-GUIDE.md[/li][/url]
+[li]Security: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY.md[/li][/url]
+[li]The audits: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY-AUDIT-2026-09-14.md[/li][/url]
+[li]Defects and measurements: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/DEFECTS.md[/url] · [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/MEASUREMENTS.md[/li][/list][/url]
+
+Apache-2.0. Run your own node.

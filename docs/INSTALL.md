@@ -470,6 +470,22 @@ have open is older than the server.
 
 ## 12. Uninstalling
 
+BlockYard touches nothing outside its own directories: it reads `bitcoin.conf` and never writes
+it, and it leaves the node as it found it. Removing it is deleting those directories.
+
+**Installed from npm** (`npm install -g blockyard`): stop it, then
+
+```bash
+npm uninstall -g blockyard
+rm -rf ~/.blockyard               # local.json, data/ (history, accounts, the audit trail) and data/index
+```
+
+**A checkout** run with `npm start`: stop it and delete the checkout; `config/` and `data/`,
+the index included, live inside it. If you pointed the index elsewhere at setup time
+(`addressIndex` in `config/local.json`), delete that directory too.
+
+**The systemd service** of section 6:
+
 ```bash
 sudo systemctl disable --now blockyard
 sudo rm /etc/systemd/system/blockyard.service && sudo systemctl daemon-reload
