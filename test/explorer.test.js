@@ -342,9 +342,10 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
   await xAddress(m, { addr, page: 1 });
   assert.equal(asked.at(-1).skip, PAGE);
   // an address that does not decode is refused before any lookup
+  const lookupsBefore = asked.length;
   const bad = await xAddress(m, { addr: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5' });
   assert.equal(bad.ok, false);
-  assert.equal(asked.length, 2, 'no lookup for an invalid address');
+  assert.equal(asked.length, lookupsBefore, 'no lookup for an invalid address');
 });
 
 test('xSearch: digits are a height, 64 hex is a block if the node knows the header else a tx, and addresses validate', async () => {
