@@ -4,7 +4,7 @@
 // exported so the pieces with arithmetic in them (the bar, the ETA) are tested without a terminal.
 import { stdout } from 'node:process';
 
-export const COLOUR = !!(stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== 'dumb');
+export const COLOUR = !!((stdout.isTTY || process.env.FORCE_COLOR) && !process.env.NO_COLOR && process.env.TERM !== 'dumb');
 const wrap = (open, close) => (s) => (COLOUR ? `\x1b[${open}m${s}\x1b[${close}m` : String(s));
 export const c = {
   bold: wrap('1', '22'), dim: wrap('2', '22'), italic: wrap('3', '23'),
@@ -16,14 +16,78 @@ export const MARK = {
   ok: () => c.ok('✓'), warn: () => c.warn('!'), fail: () => c.bad('✗'), info: () => c.dim('·'),
 };
 
-/** The banner: the monogram, the name, what this is. */
+// THE MONOGRAM, IN PIXELS (operator, 2026-09-14: "I want the installer to have amazing ANSI Art here
+// for the BY logo"). The same tile the favicon is: a rounded orange tile shaded light to dark
+// across the diagonal, a dark B and Y, and three courses of blocks along the foot. Drawn two
+// pixels per character row with the half-block, colours from the 256-colour table, so it needs
+// nothing but a terminal; without colour it falls back to three lines of box drawing.
+const ART = [
+  '    ............................    ',
+  '  ................................  ',
+  ' .................................. ',
+  '.....##########....##........##.....',
+  '.....##........#...##........##.....',
+  '.....##........#....##......##......',
+  '.....##........#....##......##......',
+  '.....##########......##....##.......',
+  '.....##........#.....##....##.......',
+  '.....##........#......##..##........',
+  '.....##........#.......####.........',
+  '.....##........#........##..........',
+  '.....##........#........##..........',
+  '.....##........#........##..........',
+  '.....##########.........##..........',
+  '....................................',
+  '...oooooooooo..oooooo..oooooooooo...',
+  ' ..oooooooooo..oooooo..oooooooooo.. ',
+  '  ................................  ',
+  '    ............................    ',
+];
+const TILE = [223, 222, 215, 214, 208, 172, 166];   // light to dark, the favicon's gradient in 256 colours
+const INK = 233;
+function pixel(ch, x, y) {
+  if (ch === ' ') return null;
+  const t = (x / (ART[0].length - 1) + y / (ART.length - 1)) / 2;
+  const tone = TILE[Math.min(TILE.length - 1, Math.floor(t * TILE.length))];
+  if (ch === '#') return INK;
+  if (ch === 'o') return TILE[Math.min(TILE.length - 1, Math.floor(t * TILE.length) + 1)];
+  return tone;
+}
+export function monogram() {
+  if (!COLOUR) return [`${c.accent('▗▄▖')}`, `${c.accent('▐BY')}`, `${c.accent('▝▀▘')}`];
+  const rows = [];
+  for (let y = 0; y < ART.length; y += 2) {
+    let line = '';
+    for (let x = 0; x < ART[y].length; x++) {
+      const top = pixel(ART[y][x], x, y), bot = pixel(ART[y + 1]?.[x] ?? ' ', x, y + 1);
+      if (top == null && bot == null) line += ' ';
+      else if (top != null && bot != null) line += `\x1b[38;5;${top}m\x1b[48;5;${bot}m▀\x1b[49m\x1b[39m`;
+      else if (top != null) line += `\x1b[38;5;${top}m▀\x1b[39m`;
+      else line += `\x1b[38;5;${bot}m▄\x1b[39m`;
+    }
+    rows.push(line);
+  }
+  return rows;
+}
+
+/** The banner: the monogram beside the name, the version and what this is. */
 export function banner(version, what = 'setup') {
-  const lines = [
-    `${c.accent('▗▄▖')} ${c.bold('Block')}${c.accent(c.bold('Yard'))} ${c.dim(version)}  ${c.dim('·')}  ${what}`,
-    `${c.accent('▐BY')} ${c.dim('a self-hosted monitor and block explorer for a Bitcoin Core node')}`,
-    `${c.accent('▝▀▘')}`,
+  const art = monogram();
+  const text = COLOUR ? [
+    '', '',
+    `${c.bold('Block')}${c.accent(c.bold('Yard'))}  ${c.dim(version)}   ${c.dim('·')}   ${c.bold(what)}`,
+    c.dim('Live monitor, block explorer, markets and 3D block-space viewer for Bitcoin Core.'),
+    c.dim('Zero dependencies, self-hosted, read-only. Apache-2.0.'),
+    '',
+    c.dim('bc1q249cv27lc2q7y0x53vkczgfvvgsjzhwxwv42gc  if it earns a tip'),
+    '', '', '',
+  ] : [
+    `${c.bold('Block')}${c.accent(c.bold('Yard'))} ${c.dim(version)}  ${c.dim('·')}  ${what}`,
+    c.dim('Live monitor, block explorer, markets and 3D block-space viewer for Bitcoin Core. Zero dependencies, self-hosted, read-only. Apache-2.0.'),
+    '',
   ];
-  return '\n' + lines.join('\n') + '\n';
+  const width = strip(art[0]).length;
+  return '\n' + art.map((row, i) => `  ${row}${' '.repeat(Math.max(0, width - strip(row).length))}   ${text[i] ?? ''}`).join('\n') + '\n';
 }
 
 /** A numbered step heading with a rule out to the right. */
