@@ -146,6 +146,3 @@ function fmtBytes(n) {
   return n >= 1048576 ? `${(n / 1048576).toFixed(0)} MB` : `${Math.round(n / 1024)} KB`;
 }
 
-export function auditFileExists(file) {
-  return fs.existsSync(file);
-}

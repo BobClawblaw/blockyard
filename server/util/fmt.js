@@ -26,20 +26,4 @@ export function formatBytes(n, dp = 1) {
   return `${(n < 0 ? '-' : '')}${v.toFixed(i === 0 ? 0 : dp)} ${UNITS[i]}`;
 }
 
-export function formatAge(sec) {
-  if (sec == null || !Number.isFinite(sec)) return 'n/a';
-  if (sec < 60) return `${Math.round(sec)}s`;
-  if (sec < 3600) return `${(sec / 60).toFixed(1)}m`;
-  if (sec < 86400) return `${(sec / 3600).toFixed(1)}h`;
-  return `${(sec / 86400).toFixed(1)}d`;
-}
 
-export function formatCompact(n, dp = 1) {
-  if (n == null || !Number.isFinite(n)) return 'n/a';
-  const abs = Math.abs(n);
-  if (abs >= 1e12) return `${(n / 1e12).toFixed(dp)}T`;
-  if (abs >= 1e9) return `${(n / 1e9).toFixed(dp)}G`;
-  if (abs >= 1e6) return `${(n / 1e6).toFixed(dp)}M`;
-  if (abs >= 1e3) return `${(n / 1e3).toFixed(dp)}k`;
-  return String(Math.round(n));
-}

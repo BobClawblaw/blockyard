@@ -119,9 +119,6 @@ function aggregate(kind, acc) {
   }
 }
 
-export function bucketMsFor(rangeMs, targetPoints = 240) {
-  return Math.max(1000, Math.round(rangeMs / targetPoints / 1000) * 1000);
-}
 
 export function lowerBound(rows, t) {
   let lo = 0;

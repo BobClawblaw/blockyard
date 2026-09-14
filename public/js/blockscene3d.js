@@ -302,9 +302,6 @@ export function project(gx, gy, gz, o = {}) {
   return { x: vanishX + (x0 - vanishX) * k, y: vanishY + (y0 - vanishY) * k };
 }
 
-// kept under the old name so callers and tests need not all change at once
-export const isoProject = project;
-
 // OUTWARD, THROUGH A REAL CAMERA (operator, 2026-09-11, the latest of several
 // rounds: "I think we need to have blocks moving outwards instead of directly
 // up. Having issues really selling the 3D-ness of it"). An airborne block is
@@ -1927,15 +1924,6 @@ export function jitterOf(txid, salt = '') {
   return ((h >>> 0) % 10007) / 10007;
 }
 
-// Whole-cell travel. A tetromino does not drift diagonally across the board;
-// it occupies one cell, then the next. `cells` is the Chebyshev distance, so
-// a move of 7 columns takes 7 visible steps however long the phase lasts.
-export function steppedProgress(t, cells) {
-  const c = Math.max(0, Math.min(1, t));
-  const n = Math.max(1, Math.round(cells));
-  if (c >= 1) return 1;
-  return Math.floor(c * n) / n;
-}
 
 // --- the choreography --------------------------------------------------
 // rise + travel + drop = 5.4 s by default: inside a 10 s refresh, and slow

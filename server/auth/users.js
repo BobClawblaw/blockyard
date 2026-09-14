@@ -241,6 +241,3 @@ export function randomPassword(len = 20) {
   return out;
 }
 
-export function usersFileExists(file) {
-  return fs.existsSync(file);
-}

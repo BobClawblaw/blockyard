@@ -210,6 +210,3 @@ export class StaticFiles {
   }
 }
 
-export function weakEtag(obj) {
-  return 'W/"' + crypto.createHash('sha1').update(JSON.stringify(obj)).digest('base64url').slice(0, 24) + '"';
-}

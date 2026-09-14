@@ -153,7 +153,6 @@ export const ENEMY_S = 2.06;        // DRAWN: 2.4x the old 0.86 (4x was a bit la
 // leave one-unit gaps, so anything wider than a unit could never pass and would sit at the top
 // for ever. This is also the box the ball and the laser must hit, and the box that costs a life.
 export const ENEMY_BOX = 0.92;
-export const ENEMY_COLOR = '#7de3c8';
 
 // ---------------------------------------------------------------- the minions
 // Arkanoid's minions were solids that tumbled down the court -- a cone, a cube, a sphere, a

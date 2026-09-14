@@ -45,11 +45,6 @@ export function isBindableHost(host) {
   return false;
 }
 
-// Which of the "not served" interfaces are actually on this box, so the startup note
-// can name the ones that stop working instead of reciting a generic list.
-export function unservedNames(ifaces = networkInterfaces()) {
-  return Object.keys(ifaces ?? {});
-}
 
 /**
  * Split a bind configuration into addresses, and say which this machine can take.

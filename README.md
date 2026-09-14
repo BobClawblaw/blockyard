@@ -146,9 +146,15 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.9.0** — pre-release. The feature set is complete and covered by the test
-suite; expect polish and fixes before 1.0. Known limits are listed in
-[docs/DEFECTS.md](docs/DEFECTS.md).
+Version **0.9.0** — pre-release, and the word is meant literally. The test suite is
+comprehensive (824 tests, plus a live smoke run) and the monitoring side is solid, but
+the explorer has a real gap: **address history cannot work against Bitcoin Core**, which
+has no address index at any setting. The address page confirms an address and says so
+rather than inventing a balance. Transaction and block lookups are unaffected.
+
+[docs/DEFECTS.md](docs/DEFECTS.md) lists eleven open items, honestly stated, with the
+measurements behind each. Read it before deploying: several are node-capability limits
+rather than bugs, and knowing which is which matters.
 
 ## Acknowledgements
 

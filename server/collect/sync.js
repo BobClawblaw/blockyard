@@ -364,16 +364,6 @@ export function stateLabel(state) {
   }[state] ?? state;
 }
 
-export function stateTone(state) {
-  return {
-    [STATE.UNKNOWN]: 'muted',
-    [STATE.IBD]: 'sync',
-    [STATE.CATCHING_UP]: 'sync',
-    [STATE.SYNCED]: 'ok',
-    [STATE.STALLED]: 'bad',
-    [STATE.REORG]: 'warn',
-  }[state] ?? 'muted';
-}
 
 function clamp(v) {
   if (!Number.isFinite(v)) return null;

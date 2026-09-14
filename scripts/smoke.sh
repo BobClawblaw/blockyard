@@ -3,7 +3,13 @@
 # ports and asserts the API contract. `npm test` covers units; this covers the
 # thing units cannot see -- wiring, auth, CSRF, the SSE frame, the RPC guard.
 #
-# Exits non-zero on the first failure and always reaps the server it started.
+# Tallies failures and exits non-zero if any check failed; always reaps the servers it
+# started. It deliberately does NOT `set -e`: an abort would skip the cleanup trap and
+# leave a server and a temp dir behind. The cost of that choice, found 2026-09-14: a
+# line reading `OPID is reaped by the single cleanup trap at the top` -- a comment with
+# no `#` -- was executed as a command and printed "OPID: command not found" while the
+# run still reported 109 passed. A harness that cannot fail on its own broken line is
+# worth less than it looks, so `check()` is the only thing that may decide the exit.
 set -uo pipefail
 
 PORT="${BLOCKYARD_SMOKE_PORT:-18099}"
@@ -284,7 +290,7 @@ echo "== open access: the default posture, no sign-in =="
 OPEN_PORT="${BLOCKYARD_SMOKE_OPEN_PORT:-18199}"
 OPEN_DIR="$(mktemp -d /tmp/blockyard-open.XXXXXX)"
 OPID=""
-OPID is reaped by the single cleanup trap at the top
+# OPID is reaped by the single cleanup trap at the top
 BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 \
 BLOCKYARD_DATA="$OPEN_DIR" BLOCKYARD_FAKE_NODE=1 BLOCKYARD_PORT="$OPEN_PORT" \
 BLOCKYARD_LOG_LEVEL=warn FAKE_PORT="$((FAKE_PORT + 1))" node server/main.js >"$OPEN_DIR/server.log" 2>&1 &
