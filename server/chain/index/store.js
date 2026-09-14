@@ -61,23 +61,26 @@ export class IndexStore {
   rowsForScript(script) { return this.rowsForKey(scriptKey(script)); }
 
   /**
-   * What an address page needs: transaction count, balance, and the newest `limit` rows. Balance is
+   * What an address page needs: transaction count, balance, and `limit` rows newest first after
+   * skipping the newest `skip` (a page). Balance is
    * the sum of every row's net; `received` and `sent` are sums of those nets by sign, so a transaction
    * that both paid and spent a script counts once, by its net -- not the gross figures an explorer
    * that stores every output separately would show.
    */
-  summaryForKey(key, { limit = 25 } = {}) {
+  summaryForKey(key, { limit = 25, skip = 0 } = {}) {
     let txCount = 0, balance = 0, received = 0, sent = 0;
-    // the newest `limit` rows in a ring of raw bytes: no object per row, whatever the address's size
-    const ring = Buffer.allocUnsafe(Math.max(1, limit) * ROW);
+    // the newest skip+limit rows in a ring of raw bytes: no object per row, whatever the address's
+    // size; a page deep into a huge history keeps skip+limit rows, never the whole history
+    const keep = Math.max(0, skip) + Math.max(0, limit);
+    const ring = Buffer.allocUnsafe(Math.max(1, keep) * ROW);
     this.#scan(key, (buf, at) => {
       const hi = buf.readInt32BE(at + 13), lo = buf.readUInt32BE(at + 17);
       const v = hi * 4294967296 + lo;
       txCount++; balance += v; if (v > 0) received += v; else sent -= v;
-      if (limit > 0) buf.copy(ring, ((txCount - 1) % limit) * ROW, at, at + ROW);
+      if (keep > 0) buf.copy(ring, ((txCount - 1) % keep) * ROW, at, at + ROW);
     });
     const recent = [];
-    for (let k = 0; k < Math.min(limit, txCount); k++) recent.push(readRow(ring, (((txCount - 1 - k) % limit) + limit) % limit * ROW));
+    for (let k = skip; k < Math.min(keep, txCount); k++) recent.push(readRow(ring, ((((txCount - 1 - k) % keep) + keep) % keep) * ROW));
     return { txCount, balance, received, sent, recent };
   }
 

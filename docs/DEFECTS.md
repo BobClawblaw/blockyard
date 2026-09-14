@@ -289,8 +289,13 @@ Kept as checked rather than deleted, so nobody re-derives them.
   `txCount: 0`, then the words "no transactions in this node's address index" — a
   fabricated zero indistinguishable from a genuinely unused address. The reply now
   carries `indexed: false` with a **null** count, and the page says the index is absent.
-  **Not fixed on the capability axis:** there is still no history. That needs our own
-  index (next entry).
+  **Fixed on the capability axis (2026-09-14)** where a node has `addressIndex` configured:
+  `server/chain/index/` builds the index from the node's own blk/rev files (30 minutes, 124 GB,
+  MEASUREMENTS §30) and the address page reads history, balance and each transaction's net amount
+  from it. Checked live: every row of four pages (including page 4 of a 2.3 M-transaction address)
+  matched the node's decoded transaction for txid, height and amount.
+  **Not yet:** the index does not follow the chain -- it covers up to the block it was built at, and
+  the page says how many newer blocks are missing -- and it keeps no UTXO list or mempool view.
   **The dead RPCs are no longer sent on every view** (2026-09-14). `xAddress` remembers a
   "method not found" per node and skips `getaddressbalance`/`getaddresstxids` for
   `INDEX_RECHECK_MS` (10 minutes), then asks again, because the daemon behind a node id can

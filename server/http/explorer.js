@@ -19,6 +19,12 @@
 // may wait 45 s rather than being dropped as stale. Decoded confirmed transactions are cached.
 // Handlers answer { ok: false, error, hint } rather than throwing, so a bad query is a sentence.
 
+import { statSync } from 'node:fs';
+import path from 'node:path';
+import { IndexStore } from '../chain/index/store.js';
+import { scriptKey } from '../chain/index/rows.js';
+import { addressToScript } from '../chain/tx.js';
+
 const HEX64 = /^[0-9a-fA-F]{64}$/;
 export const PAGE = 25;
 const OPTS = (key) => ({ key, priority: 3, maxWaitMs: 45_000 });
@@ -201,10 +207,80 @@ export async function xBlock(m, q) {
   };
 }
 
+// THE LOCAL ADDRESS INDEX (server/chain/index/, built by scripts/index-build.js from the node's own
+// block files). Core has no address lookup at any setting, so without this the page can only confirm
+// that an address is valid. A node gets one with `"addressIndex": "<dir>"` in its config; the same
+// index serves any node on the same chain. Opened once, and reopened when a rebuild replaces its
+// manifest. A missing or unreadable index is reported on the page, not fatal.
+const indexes = new Map();                 // dir -> { store, error, mtimeMs }
+function localIndex(m) {
+  if (m.addressIndex) return { store: m.addressIndex, error: null };        // tests inject a store
+  const dir = m.cfg?.addressIndex;
+  if (!dir) return null;
+  let mtimeMs = null;
+  try { mtimeMs = statSync(path.join(dir, 'manifest.json')).mtimeMs; } catch (err) { return { store: null, error: `no finished index at ${dir}` }; }
+  const had = indexes.get(dir);
+  if (had && had.mtimeMs === mtimeMs) return had;
+  try { had?.store?.close(); } catch { /* already closed */ }
+  let entry;
+  try { entry = { store: new IndexStore(dir), error: null, mtimeMs }; } catch (err) { entry = { store: null, error: err.message, mtimeMs }; }
+  indexes.set(dir, entry);
+  return entry;
+}
+export function _resetIndexes() { for (const e of indexes.values()) { try { e.store?.close(); } catch { /* closed */ } } indexes.clear(); }
+
+// block height -> its txids in order, for turning an index row (height, position) into a transaction
+const blockTxids = new Map();
+const BLOCK_TXIDS_MAX = 64;
+
+async function addressFromIndex(m, addr, page, store) {
+  const chain = m.state?.chainInfo?.chain ?? m.cfg?.chainHint ?? 'main';
+  const script = addressToScript(addr, chain);
+  const [va] = await batch(m, [{ method: 'validateaddress', params: [addr] }], `${m.id}:x:addr:${addr}`);
+  if (!script || (va.ok && va.result?.isvalid === false)) return bad(`"${addr}" is not a valid ${chain === 'main' ? 'mainnet ' : ''}address`);
+  if (store.manifest.chain && store.manifest.chain !== chain) return bad(`the address index on this node is for ${store.manifest.chain}, and this node is on ${chain}`);
+  const sum = store.summaryForKey(scriptKey(script), { limit: PAGE, skip: page * PAGE });
+  // positions -> txids: the page's blocks, their hashes in one batch and their txid lists in another
+  const need = [...new Set(sum.recent.map((r) => r.height))].filter((h) => !blockTxids.has(h));
+  if (need.length) {
+    const hashes = await batch(m, need.map((h) => ({ method: 'getblockhash', params: [h] })), `${m.id}:x:ahash:${need[0]}`);
+    const blocks = await batch(m, hashes.map((h) => ({ method: 'getblock', params: [h.ok ? h.result : '', 1] })), `${m.id}:x:ablk:${need[0]}`);
+    blocks.forEach((b, i) => {
+      if (!b.ok || !Array.isArray(b.result?.tx)) return;
+      blockTxids.set(need[i], { hash: b.result.hash, tx: b.result.tx });
+      if (blockTxids.size > BLOCK_TXIDS_MAX) blockTxids.delete(blockTxids.keys().next().value);
+    });
+  }
+  const txids = sum.recent.map((r) => blockTxids.get(r.height)?.tx?.[r.pos] ?? null);
+  const summaries = await fetchTxs(m, txids.filter(Boolean), null, null, `${m.id}:x:atx:${addr}:${page}`);
+  const byId = new Map(summaries.map((t) => [t.txid, t]));
+  const txs = sum.recent.map((r, i) => {
+    const s = txids[i] ? byId.get(txids[i]) : null;
+    // the amount is the index's own: what this transaction paid to the address minus what it spent
+    // from it, which the page shows even when the transaction itself could not be fetched
+    if (!s || s.missing) return { txid: txids[i], missing: true, height: r.height, delta: r.value };
+    return { ...brief(s), height: r.height, delta: r.value };
+  });
+  const nodeTip = m.state?.chainInfo?.blocks ?? null;
+  return {
+    ok: true, node: m.id, address: addr,
+    type: va.ok ? (va.result?.iswitness ? `witness v${va.result.witness_version ?? '?'}` : va.result?.isscript ? 'script' : 'legacy') : null,
+    scriptType: null,
+    indexed: true, source: 'local-index',
+    // received and sent are sums of each transaction's NET for this address (see IndexStore)
+    balance: { balance: sum.balance, received: sum.received, utxos: null },
+    txCount: sum.txCount,
+    index: { tip: store.manifest.tip.height, behind: nodeTip != null ? Math.max(0, nodeTip - store.manifest.tip.height) : null, builtAt: store.manifest.builtAt },
+    page, pages: Math.max(1, Math.ceil(sum.txCount / PAGE)), txs, tip: nodeTip,
+  };
+}
+
 export async function xAddress(m, q) {
   const addr = String(q?.addr ?? '').trim();
   const page = pageOf(q);
   if (!/^[A-Za-z0-9]{14,100}$/.test(addr)) return bad(`"${addr}" is not an address`);
+  const local = localIndex(m);
+  if (local?.store) return addressFromIndex(m, addr, page, local.store);
   const now = clock();
   const knownMissing = noIndex.has(m.id) && now - noIndex.get(m.id) < INDEX_RECHECK_MS;
   let va, bal, ids;
@@ -251,6 +327,8 @@ export async function xAddress(m, q) {
     indexed,
     txCount: indexed ? txids.length : null,
     indexError: ids.ok ? null : ids.error?.message ?? null,
+    // a configured local index that could not be opened says why, rather than looking unconfigured
+    localIndexError: local?.error ?? null,
     page, pages: indexed ? Math.max(1, Math.ceil(txids.length / PAGE)) : 1, txs, tip: m.state?.chainInfo?.blocks ?? null,
   };
 }

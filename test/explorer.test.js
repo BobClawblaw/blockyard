@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { txSummary, xTx, xBlock, xAddress, xSearch, PAGE, _resetCache, _setClock, INDEX_RECHECK_MS } from '../server/http/explorer.js';
+import { addressToScript } from '../server/chain/tx.js';
+import { scriptKey } from '../server/chain/index/rows.js';
 import { parseRoute, blockHtml, txHtml, addressHtml, homeHtml, errorHtml } from '../public/js/explorer.js';
 import * as fmt from '../public/js/fmt.js';
 
@@ -250,6 +252,59 @@ test('A REFUSED ADDRESS INDEX IS NOT ASKED FOR AGAIN ON EVERY VIEW -- until the 
     _setClock(null);
     _resetCache();
   }
+});
+
+test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never asks Core for what it refuses', async () => {
+  // (operator, 2026-09-14: "wire it into the address page"). The index answers (height, position,
+  // net amount) rows; the node turns positions into txids and supplies the transactions.
+  _resetCache();
+  const addr = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+  const key = scriptKey(addressToScript(addr));
+  const rows = [                                         // newest first, as summaryForKey returns them
+    { key, height: 99, pos: 1, value: -30_000 },
+    { key, height: 98, pos: 0, value: 150_000 },
+  ];
+  const asked = [];
+  const store = {
+    manifest: { chain: 'main', tip: { height: 99 }, builtAt: '2026-09-14T06:00:00Z' },
+    summaryForKey(k, { limit, skip }) {
+      asked.push({ k, limit, skip });
+      return { txCount: rows.length, balance: 120_000, received: 150_000, sent: 30_000, recent: k === key ? rows.slice(skip, skip + limit) : [] };
+    },
+  };
+  const calls = [];
+  const m = fakeNode((c) => {
+    calls.push(c.method);
+    if (c.method === 'validateaddress') return { isvalid: true, iswitness: true, witness_version: 0 };
+    if (c.method === 'getblockhash') return H(String(c.params[0] % 10));
+    if (c.method === 'getblock') return { hash: c.params[0], tx: c.params[0] === H('9') ? [TXB, TXA] : [TXB] };
+    if (c.method === 'getrawtransaction') return rawTx(c.params[0]);
+    return new Error(c.method);
+  });
+  m.addressIndex = store;
+  m.state.chainInfo = { blocks: 104, chain: 'main' };
+  const d = await xAddress(m, { addr });
+  assert.equal(d.ok, true);
+  assert.equal(d.indexed, true, 'the page has an index to read');
+  assert.equal(d.source, 'local-index');
+  assert.ok(!calls.some((c) => c.startsWith('getaddress')), 'Core is never asked for the address RPCs it refuses');
+  assert.equal(asked[0].k, key, 'looked up by the address\'s own script');
+  assert.equal(d.txCount, 2);
+  assert.deepEqual(d.balance, { balance: 120_000, received: 150_000, utxos: null });
+  assert.deepEqual(d.txs.map((t) => [t.txid, t.height, t.delta]), [[TXA, 99, -30_000], [TXB, 98, 150_000]], 'each position becomes its txid, with the index\'s own amount');
+  assert.deepEqual(d.index, { tip: 99, behind: 5, builtAt: '2026-09-14T06:00:00Z' }, 'and the page knows how far the index reaches');
+  const html = addressHtml(d, fmt);
+  assert.match(html, /complete through block/, 'the page says what the index covers');
+  assert.match(html, /5 newer blocks not yet included/, 'and that it is behind the node, by how much');
+  assert.match(html, /not tracked/, 'unspent outputs are not claimed');
+  assert.doesNotMatch(html, /no address index/, 'and it no longer says there is no index');
+  // page 2 skips the first PAGE rows
+  await xAddress(m, { addr, page: 1 });
+  assert.equal(asked[1].skip, PAGE);
+  // an address that does not decode is refused before any lookup
+  const bad = await xAddress(m, { addr: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5' });
+  assert.equal(bad.ok, false);
+  assert.equal(asked.length, 2, 'no lookup for an invalid address');
 });
 
 test('xSearch: digits are a height, 64 hex is a block if the node knows the header else a tx, and addresses validate', async () => {
