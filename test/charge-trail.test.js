@@ -38,10 +38,15 @@ for (let y = 0; y < 12; y += 2) for (let x = 0; x < 12; x += 2) TILES.push({ txi
 // honest when they move.
 // 2026-09-13: the puff body went deeper and more saturated, and gained a lighter core on every
 // other puff, when the operator said "the nebula emissions are not substantial enough".
-const PUFF = 'set:fillStyle=rgba(48,110,255,';
-const PUFF_CORE = 'set:fillStyle=rgba(120,180,255,';
-const TUBE = 'set:strokeStyle=rgba(110,200,255,';
+// 2026-09-14: the BALL's cloud went pale (chargeTrail's `pale`: body 150,200,255, core 215,238,255,
+// tube 170,222,255) when the operator said "The energy ball blue plasma is way too dark. Need to
+// make it way subtler like the ball lightning stuff"; the deep tones below are the pulse's and
+// the light cycles' negative control still counts both.
+const PUFF = 'set:fillStyle=rgba(150,200,255,';
+const PUFF_CORE = 'set:fillStyle=rgba(215,238,255,';
+const TUBE = 'set:strokeStyle=rgba(170,222,255,';
 const MOTE = 'set:fillStyle=rgba(200,236,255,';
+const DEEP_PUFF = 'set:fillStyle=rgba(48,110,255,';
 
 function chargeOf(kind) {
     const h = harness();
@@ -57,6 +62,7 @@ function chargeOf(kind) {
       h.step(1000 + i * 60);
       const frame = h.ops.slice(before);
       seen.puff += frame.filter((o) => o.startsWith(PUFF)).length;
+      seen.deep = (seen.deep ?? 0) + frame.filter((o) => o.startsWith(DEEP_PUFF)).length;
       seen.puffCore += frame.filter((o) => o.startsWith(PUFF_CORE)).length;
       seen.tube += frame.filter((o) => o.startsWith(TUBE)).length;
       seen.mote += frame.filter((o) => o.startsWith(MOTE)).length;
@@ -72,6 +78,7 @@ test('the lightning ball carries the charge: blue puffs behind it, an electric t
   assert.ok(seen.puffCore > 10, `the cloud has depth, not one flat wash: ${seen.puffCore} lit cores`);
   assert.ok(seen.tube > 5, `tube: ${seen.tube}`);
   assert.ok(seen.mote > 20, `motes: ${seen.mote}`);
+  assert.equal(seen.deep, 0, 'and none of the deep blue the pulse carries: the ball is pale');
 });
 
 test('the light cycles do NOT: a rider whose point is a clean light wall is not an electrical storm', () => {
@@ -79,6 +86,7 @@ test('the light cycles do NOT: a rider whose point is a clean light wall is not 
   // to both riders when the ball got it, and on the cycles it read as static over the wall)
   const seen = chargeOf('lightcycle');
   assert.equal(seen.puff, 0, 'no blue puffs behind the wall');
+  assert.equal(seen.deep, 0, 'in either tone');
   assert.equal(seen.puffCore, 0, 'not even the lighter cores the cloud gained in 2026-09-13');
   assert.equal(seen.mote, 0, 'and no motes');
 });

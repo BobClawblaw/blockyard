@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **Each 3D board has its own effects list.** The one Effects tab is now two: **Space effects**
+  (the Block space board's 28 switches — every effect but the two drawn on a price line) and
+  **Market effects** (the Markets board's 24). Each has its own no-repeat window and its own
+  all on / all off, which the no-repeat slider had silently taken away. A saved settings store is
+  migrated (schema 4): the Markets list starts as a copy of the list there was.
+- **Everything on the Markets board moves along the hours** — left or right, never toward the
+  viewer — and lights the candles or the line: fronts (outline, scan, tide, wave) run along the
+  chart, rings (ripple, shockwave, nova) start on the candle row, the light cycles ride in from
+  the two ends with their walls on the candle tops, the lightning ball rides the price line, and
+  ball lightning flies through the chart's own height. Code rain, power-up, radar and vortex —
+  which fall down the depth or turn in place — are off the Markets list, with collapse and the
+  tractor beam. Candle faces light under an effect now (the camera is low, and a glow painted on
+  a candle's top alone was invisible).
+- **Ball lightning strikes candles.** `cellTops` began each tile at its own fractional x and y,
+  which on the candle board (tiles between grid lines) stored nothing, so every cell top was
+  zero and no arc found a target. One arc in four now chains on from the struck block to
+  another.
+- The lightning ball is one pale gradient with a white-hot heart, and a pale burn behind it,
+  instead of five stacked discs of deepening blue that read as a dark blot.
 
 ## [0.0.9] — 2026-09-14
 
@@ -15,7 +35,7 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`, `docs/SECURITY-AUDIT-2026
 experimental pre-release software. BlockYard runs **on the machine that runs Bitcoin Core** (25.0 or
 later), because the explorer's address index is built from the node's own block files; a node on
 another machine, and the experimental node that earlier measurements were taken on, are not supported.
-858 unit tests, no dependencies. Tagged `v0.0.9`.
+863 unit tests, no dependencies. Tagged `v0.0.9`.
 
 ### The explorer's address history, from an index of our own
 

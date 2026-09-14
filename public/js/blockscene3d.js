@@ -1574,11 +1574,19 @@ export function buildScene(tiles, o = {}) {
     }
     // the lock: the whole cell flashes white for a moment, then settles
     if (pulse > 0.03) out.push({ txid: t.txid, face: 'glow', points: f.top, fill: `rgba(${fxv.color.join(',')},${round3(0.5 * pulse * a)})` });
+    // ON THE PRICE BOARD THE SIDES LIGHT TOO. The camera there is low (Markets' CAMERA_3D: the
+    // depth drawn at 0.3), so a candle's top is a sliver and a glow painted on it alone is
+    // invisible: a scan crossed the board in 2026-09-14's captures and lit nothing anyone could
+    // see. The faces the camera sees carry the glow, at a little under the top's weight.
+    // The faces the camera sees carry the glow, and heavily: a candle is already a bright body, so
+    // a tint at the top's weight (0.5) was there in the pixels and nowhere to the eye (measured:
+    // the scan's peak moved a candle's face by a 0.26 cyan wash). At 0.85 it reads as struck.
+    if (pulse > 0.03 && o.axes) for (const side of f.sides) out.push({ txid: t.txid, face: 'glow', points: side.points, fill: `rgba(${fxv.color.join(',')},${round3(0.85 * pulse * a)})` });
     if (fxv.outline > 0.03) {
       const col = fxv.color.join(',');
       out.push({ txid: t.txid, face: 'outline', points: f.top, fill: 'rgba(0,0,0,0)', stroke: `rgba(${col},${round3(0.95 * fxv.outline * a)})`, lw: 1 + 4 * fxv.outline });
       // and round the sides the camera sees, so the whole cube is traced
-      if (fxv.outline > 0.15) for (const side of f.sides) {
+      if (fxv.outline > (o.axes ? 0.05 : 0.15)) for (const side of f.sides) {
         out.push({ txid: t.txid, face: 'outline', points: side.points, fill: 'rgba(0,0,0,0)', stroke: `rgba(${col},${round3(0.7 * fxv.outline * a)})`, lw: 1 + 2 * fxv.outline });
       }
     }
@@ -2530,13 +2538,19 @@ function lcg(seed) {
   let s = (seed >>> 0) || 1;
   return () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296);
 }
-export function cyclePath(seed, W, H, from = 'left') {
+// `lanes` [lo, hi]: the side-to-side room the route may use, in grid lines; the whole board by
+// default. The price board hands the candles' own rows, so a rider's wall runs along the candle
+// tops rather than out to the empty front (operator, 2026-09-14: "Always interacting with either
+// the grid price line or candles").
+export function cyclePath(seed, W, H, from = 'left', lanes = null) {
   const rnd = lcg(seed);
   const horiz = from === 'left' || from === 'right';
   const sign = from === 'left' || from === 'bottom' ? 1 : -1;
   const lenMain = horiz ? W : H, lenSide = horiz ? H : W;
+  const qLo = lanes ? Math.max(1, Math.floor(lanes[0])) : 1, qHi = lanes ? Math.min(lenSide - 1, Math.ceil(lanes[1])) : lenSide - 1;
   let m = sign > 0 ? 0 : lenMain;
-  let q = 2 + Math.floor(rnd() * Math.max(1, lenSide - 4));
+  let q = lanes ? qLo + Math.floor(rnd() * Math.max(1, qHi - qLo + 1)) : 2 + Math.floor(rnd() * Math.max(1, lenSide - 4));
+  q = Math.max(qLo, Math.min(qHi, q));
   const pts = [];
   const push = () => pts.push(horiz ? { x: m, y: q } : { x: q, y: m });
   push();
@@ -2547,8 +2561,8 @@ export function cyclePath(seed, W, H, from = 'left') {
     if (done()) break;
     let dir = rnd() < 0.5 ? -1 : 1;
     const jink = 1 + Math.floor(rnd() * 5);
-    if (q + dir * jink < 1 || q + dir * jink > lenSide - 1) dir = -dir;
-    const steps = Math.max(0, Math.min(jink, dir > 0 ? lenSide - 1 - q : q - 1));
+    if (q + dir * jink < qLo || q + dir * jink > qHi) dir = -dir;
+    const steps = Math.max(0, Math.min(jink, dir > 0 ? qHi - q : q - qLo));
     for (let i = 0; i < steps; i++) { q += dir; push(); }
   }
   return pts;
@@ -2635,8 +2649,13 @@ export function cellTops(tiles, W, H) {
   const tops = new Float32Array(Math.max(0, W * H));
   for (const t of tiles ?? []) {
     const top = (t.z ?? 0) + (t.floor ?? 0) + cubeHeight(t);
-    for (let cy = Math.max(0, t.y); cy < Math.min(H, t.y + t.s); cy++) {
-      for (let cx = Math.max(0, t.x); cx < Math.min(W, t.x + t.s); cx++) if (top > tops[cy * W + cx]) tops[cy * W + cx] = top;
+    // EVERY CELL THE TILE TOUCHES. The loops began at t.x and t.y themselves, which on the block
+    // board are whole numbers; the candles sit between grid lines (x = 2i + 0.3, y = 3, s = 1.4),
+    // and a fractional index into a typed array stores nothing -- so the price board's tops were
+    // all zero, no route rode a candle and ball lightning had nothing to strike (operator,
+    // 2026-09-14: "the ball lightning was not arcing out to any of the candles").
+    for (let cy = Math.max(0, Math.floor(t.y)); cy < Math.min(H, Math.ceil(t.y + t.s)); cy++) {
+      for (let cx = Math.max(0, Math.floor(t.x)); cx < Math.min(W, Math.ceil(t.x + t.s)); cx++) if (top > tops[cy * W + cx]) tops[cy * W + cx] = top;
     }
   }
   return tops;

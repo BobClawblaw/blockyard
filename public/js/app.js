@@ -1123,10 +1123,11 @@ async function boot() {
     const tabs = `<div class="cfgtabs" role="tablist">${SETTINGS_PANEL.map((g) =>
       `<button type="button" class="cfgtab${g.group === cfgTab ? ' on' : ''}" role="tab" aria-selected="${g.group === cfgTab}" data-cfgtab="${g.group}">${g.title}</button>`).join('')}</div>`;
     cfgBody.innerHTML = tabs + SETTINGS_PANEL.filter((g) => g.group === cfgTab).map((g) => {
-      // ALL / NONE, where a group is nothing but switches: twenty-six of them is a lot of clicking
-      // to answer "just show me the quiet board"
-      const allToggles = g.rows.every((r) => r.kind === 'toggle');
-      const bulk = allToggles
+      // ALL / NONE, on the groups that ask for it (the two effects tabs): twenty-eight switches is
+      // a lot of clicking to answer "just show me the quiet board". This was "every row is a
+      // toggle" until the no-repeat slider joined the effects group and silently took the buttons
+      // with it.
+      const bulk = g.bulk
         ? `<div class="cfgbulk"><button type="button" class="btn" data-cfgall="${g.group}">all on</button><button type="button" class="btn" data-cfgnone="${g.group}">all off</button></div>`
         : '';
       return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${bulk}${g.rows.map((r) => {

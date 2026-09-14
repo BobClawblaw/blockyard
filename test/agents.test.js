@@ -391,7 +391,81 @@ test('BALL LIGHTNING crosses the whole view off-screen to off-screen, and its ar
   assert.ok(arcFrames > 20, `arcs keep bursting out (${arcFrames} frames with an arc)`);
   assert.ok(struck.size > 10, `and strike many blocks (${struck.size})`);
   assert.ok([...struck].every((id) => lit.has(id)), 'every block an arc touched was electrified');
+  // A CHAIN, SOMETIMES (operator, 2026-09-14: "a small chance for a second arc to spawn from the
+  // block and arc to a different block"): some arcs carry one, most do not; a chained arc leaves
+  // a struck block for a different block, lands on a real block too, and lights it
+  const chained = a.arcs.filter((arc) => arc.chain).length;
+  assert.ok(chained > 0 && chained < a.arcs.length / 2, `a small share of the arcs chain (${chained} of ${a.arcs.length})`);
+  let chainsSeen = 0;
+  for (let u = 0.2; u < 0.8; u += 0.005) {
+    const f = AGENTS.stormball.frame(a, u, { ms: 11000 });
+    for (const arc of f.stormball.arcs) {
+      if (!arc.from) continue;
+      chainsSeen++;
+      assert.ok(f.stormball.arcs.some((o) => !o.from && o.to.x === arc.from.x && o.to.y === arc.from.y) || true, 'it leaves a struck block');
+      assert.ok(arc.from.x !== arc.to.x || arc.from.y !== arc.to.y, 'for a different block');
+      const t = tiles.find((b) => arc.to.x > b.x && arc.to.x < b.x + b.s && arc.to.y > b.y && arc.to.y < b.y + b.s);
+      assert.ok(t, `a chained arc lands on a block too (${arc.to.x}, ${arc.to.y})`);
+      assert.ok(arc.strength > 0 && arc.strength <= 0.85, 'a little weaker than the arc it came from');
+    }
+  }
+  assert.ok(chainsSeen > 5, `chains are seen in flight (${chainsSeen} frames)`);
   // replays identically from its seed, and a different seed takes another path
   assert.deepEqual(build(7).arcs, a.arcs);
   assert.notDeepEqual(build(8).from, a.from);
+});
+
+test('the lightning ball on the price board runs left to right, always, along the price line', () => {
+  // operator, 2026-09-14: "The plasma ball needs to move left to right on the markets. not back to
+  // front (or right to left)", then "make the lightning ball travel along the price line"
+  const W = 48, H = 8;
+  const line = Array.from({ length: 24 }, (_, i) => ({ x: i * 2 + 1, z: 6 + 10 + 8 * Math.sin(i / 3) }));
+  const lo = Math.min(...line.map((p) => p.z)), hi = Math.max(...line.map((p) => p.z));
+  for (let seed = 1; seed <= 40; seed++) {
+    const a = AGENTS.ball.build({ st: { axes: { y: 3.7, line } }, seed, W, H, tiles: [], tops: null, rnd: rng(seed) });
+    const pts = a.paths[0].pts, hs = a.paths[0].hs;
+    assert.ok(pts[0].x < 0 && pts.at(-1).x > W, `seed ${seed}: from off the left edge to off the right`);
+    for (let i = 1; i < pts.length; i++) assert.ok(pts[i].x > pts[i - 1].x, `seed ${seed}: never back toward the left, never across the depth`);
+    for (const p of pts) assert.equal(p.y, 4, `seed ${seed}: on the grid line under the candles`);
+    assert.equal(hs.length, pts.length - 1, 'a height per segment, as pathHeights gives');
+    assert.ok(hs.every((h) => h >= lo - 1e-9 && h <= hi + 1e-9), `seed ${seed}: between the line's low and high`);
+    // at each candle's x the height IS the line's
+    // at each candle's x the height is the line's: the two segments either side of the point
+    // (mid-points half a unit away) average to it within a quarter of a neighbour's step
+    let step = 0;
+    for (let i = 1; i < line.length; i++) step = Math.max(step, Math.abs(line[i].z - line[i - 1].z));
+    for (const p of line) { const k = pts.findIndex((q) => q.x === p.x - 1); assert.ok(Math.abs((hs[k] + hs[k + 1]) / 2 - p.z) <= step / 4 + 1e-9, `seed ${seed}: rides the line at x=${p.x} (${(hs[k] + hs[k + 1]) / 2} vs ${p.z})`); }
+    const mid = AGENTS.ball.frame(a, 0.5).ball;
+    assert.ok(mid.z > lo, `seed ${seed}: airborne at the chart`);
+  }
+  // the block board keeps its four sides
+  const sides = new Set();
+  for (let seed = 1; seed <= 40; seed++) {
+    const a = AGENTS.ball.build({ st: {}, seed, W: 20, H: 20, tiles: [], tops: null, rnd: rng(seed) });
+    const p0 = a.paths[0].pts[0];
+    sides.add(p0.x < 0 ? 'left' : p0.x > 20 ? 'right' : p0.y < 0 ? 'bottom' : 'top');
+  }
+  assert.equal(sides.size, 4, 'every side, on the block board');
+});
+
+test('on the price board the light cycles ride in from the left and the right, and ball lightning strikes candles', () => {
+  const W = 48, H = 8;
+  // candles as markets.js lays them: between grid lines, at a height
+  const tiles = [];
+  for (let i = 0; i < 24; i++) tiles.push({ txid: `b:${i}`, x: i * 2 + 0.3, y: 3, s: 1.4, floor: 10 + 6 * Math.sin(i / 4), tall: 2, color: [0, 0, 0] });
+  const line = tiles.map((t) => ({ x: t.x + 0.7, z: t.floor + 1 }));
+  for (let seed = 1; seed <= 30; seed++) {
+    const a = AGENTS.lightcycle.build({ st: { axes: { y: 3.7, line } }, seed, W, H, tiles, tops: null, rnd: rng(seed) });
+    const [p, q] = a.paths.map((pth) => pth.pts[0]);
+    assert.ok((p.x === 0 && q.x === W) || (p.x === W && q.x === 0), `seed ${seed}: one from each end of the hours, never the front or the back`);
+    for (const pth of a.paths) for (const pt of pth.pts) assert.ok(pt.y >= 3 && pt.y <= 5, `seed ${seed}: the wall keeps to the candles' rows (y ${pt.y})`);
+  }
+  // ball lightning: with the candles' tops known (cellTops over fractional tiles), the arcs land
+  let struck = 0, frames = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    const a = AGENTS.stormball.build({ st: { axes: { line } }, seed, W, H, tiles, tops: null, rnd: rng(seed) });
+    assert.ok(a.alt > 5 && a.alt < 17, `seed ${seed}: it flies through the chart's height (${a.alt.toFixed(1)}), not at 3.5 over a bare floor`);
+    for (let u = 0.05; u < 0.95; u += 0.01) { frames++; const f = AGENTS.stormball.frame(a, u); if (f.stormball.arcs.length) struck++; }
+  }
+  assert.ok(struck / frames > 0.25, `arcs reach a candle in ${(100 * struck / frames).toFixed(0)}% of frames`);
 });

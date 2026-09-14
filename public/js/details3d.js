@@ -142,7 +142,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // THE THIRTY -- twenty-six at the time (operator, 2026-09-12: "Think of many more other video-game inspired effects ...
 // at least 25 total different effects, all toggleable"). Nine were here; seventeen more live in
 // fxAt (blockscene3d) as pure per-tile functions. Each is one entry here -- how long it runs --
-// and one toggle in settings.js (the `effects` group), and the two are checked against each other
+// and one toggle in settings.js (the `effects` and `marketEffects` groups), and the lists are checked against each other
 // by a test, so an effect cannot ship without a switch or a switch without an effect.
 const FX_MS = {
   ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
@@ -197,15 +197,47 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // LIGHT CYCLES AND THE LIGHTNING BALL RIDE THE CANDLE GRID TOO (operator, 2026-09-14: "Lightcycles
 // don't work anymore on the market view" -- the line-only list had cut them, while the Markets
 // switch still promised them)
-const LINE_FX = ['pulse', 'twinkle', 'bulge', 'stormball', 'lightcycle', 'ball'];
+// EVERY EFFECT PLAYS ON THE PRICE BOARD except the two that ALTER the board (operator, 2026-09-14:
+// "a lot of effects that don't work on the market display"): the fields are light patterns over
+// tiles and light candles as well as cubes; boulder dash collapses tiles and the tractor beam
+// lifts one, and a candle is a price, not a thing to move. The line effects stay the board's own.
+// ...AND THE PRICE BOARD MOVES LEFT AND RIGHT ONLY (operator, 2026-09-14: "For the markets effects,
+// it all needs to be left/right or right/left movement. Not coming towards the viewer. Always
+// interacting with either the grid price line or candles"). The board is eight units deep and as
+// wide as the hours, so anything that travels the depth axis comes at the viewer: code rain falls
+// down the columns and the power-up fills from the front, and the radar and the vortex turn in
+// place. Those four stay off the candles; the fronts, the rings and the riders are steered along
+// the hours by fxDirection/fxOrigin below.
+const NOT_ON_CANDLES = new Set(['boulderdash', 'tractor', 'rain', 'powerup', 'radar', 'vortex']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
 const LINE_ONLY = new Set(['pulse', 'bulge']);
+// EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
+// list ... the Block Space effects specific to that panel, and settings specific to market panel"):
+// settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
+// for the price board), and test/effects.test.js holds each group to its list here.
+export const SPACE_FX = FX_KINDS.filter((k) => !LINE_ONLY.has(k));
+export const MARKET_FX = FX_KINDS.filter((k) => !NOT_ON_CANDLES.has(k));
 const DEREZ_MS = 800;   // how long a crashed light cycle takes to shatter and fade
 
-function startFx(st, kind, now) {
+/** A board with a price line: the Markets board (and Kiosk's), never the block board. */
+export const onPriceBoard = (st) => (st?.axes?.line?.length ?? 0) > 1;
+/** Which way a front (outline, scan, tide, wave) travels: any of seven ways on the block board; along the hours, either way, on the price board. */
+export function fxDirection(kind, st, rnd = Math.random) {
+  if (onPriceBoard(st)) return rnd() < 0.5 ? [1, 0] : [-1, 0];
   const dirs = kind === 'scan' ? [[0, 1], [0, -1], [1, 0], [-1, 0]]
     : [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, -0.7071], [0.7071, -0.7071]];
-  const d = dirs[(Math.random() * dirs.length) | 0];
+  return dirs[(rnd() * dirs.length) | 0];
+}
+/** Where a ring (ripple, shockwave, nova) starts: anywhere on the block board; on the candles' own row on the price board, so it spreads along them. */
+export function fxOrigin(st, rnd = Math.random) {
+  const x = rnd() * st.gridW;
+  if (onPriceBoard(st)) return { x, y: Number.isFinite(st.axes.y) ? st.axes.y : st.gridH / 2 };
+  return { x, y: rnd() * st.gridH };
+}
+
+function startFx(st, kind, now) {
+  const d = fxDirection(kind, st);
+  const origin = fxOrigin(st);
   let rank = null;
   if (kind === 'cascade') {
     const byRate = [...(st.restTiles || [])].sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0));
@@ -225,7 +257,7 @@ function startFx(st, kind, now) {
     const tiles = st.restTiles || [];
     agent = spec.build({ st, seed, W, H, tiles, tops: cellTops(tiles, W, H), rnd: rng(seed) });
   }
-  st.fx = { kind, t0: now, ms: FX_MS[kind] ?? 4500, x: Math.random() * st.gridW, y: Math.random() * st.gridH, dx: d[0], dy: d[1], rank, seed, agent,
+  st.fx = { kind, t0: now, ms: FX_MS[kind] ?? 4500, x: origin.x, y: origin.y, dx: d[0], dy: d[1], rank, seed, agent,
     // `paths`/`crashes` stay on the record because drawCycles reads view.fx.cycles, which the
     // agent's frame() produces from them; nothing outside agents.js builds them any more.
     paths: agent?.paths ?? null, crashes: agent?.crashes ?? null };
@@ -348,7 +380,7 @@ function scheduleFx(canvas, st, opts, soon = false) {
     // every effect is switchable (settings.js `effects`): opts.fxKinds is the operator's list, and
     // an empty one means the board rests in peace -- idleFx off is not the only way to say so
     const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
-    const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => !LINE_ONLY.has(k))).filter((k) => !allowed || allowed.has(k));
+    const kinds = (onALine ? MARKET_FX : SPACE_FX).filter((k) => !allowed || allowed.has(k));
     if (!kinds.length) return;
     const kind = chooseIdleFx(kinds, st, now, Math.random, opts.fxNoRepeat ?? 12, onALine ? RARE_FX : []);
     if (!kind) { scheduleFx(canvas, st, opts); return; }   // only the pulse is on, and it is still waiting
@@ -649,8 +681,14 @@ export function drawCycles(ctx, view, lw) {
 // an emitter of soft blue puffs behind, a fat electric-blue tube over the stretch, a flickering
 // white-blue core with crackle forks re-rolled every frame, and a spray of hashed motes -- so
 // the two effects are visibly the same energy.
-function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
+// `pale`: the lightning ball's charge (operator, 2026-09-14: "The energy ball blue plasma is way too
+// dark. Need to make it way subtler like the ball lightning stuff"). The cloud below is 22 puffs of
+// deep blue (48,110,255) per segment over sixteen segments, which stacks into a dark blue mass with
+// the ball lost in it; the ball asks for the same cloud in the stormball's pale tones and at a
+// fraction of the alpha, so it reads as a haze the ball lights rather than a shadow it drags.
+function chargeTrail(ctx, segs, lw, now, seedBase = 0, pale = false) {
   if (!segs.length) return;
+  const body = pale ? '150,200,255' : '48,110,255', core = pale ? '215,238,255' : '120,180,255', dim = pale ? 0.45 : 1;
   for (const g of segs) {
     if (g.tint < 0.04) continue;
     const i = g.i + seedBase;
@@ -665,12 +703,12 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
       const a1 = hash01(i * 47 + k * 11 + 3) * Math.PI * 2;
       const spread = lw * (5 + 46 * g.age) * (0.35 + 0.65 * hash01(i * 13 + k * 5 + 29));
       const rad = lw * (9 + 22 * hash01(i * 7 + k * 17 + 61)) * (1 + 1.35 * g.age);
-      const al = 0.2 * g.tint * (1 - 0.6 * g.age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
+      const al = 0.2 * dim * g.tint * (1 - 0.6 * g.age) * (0.5 + 0.5 * hash01(i * 3 + k * 23 + 97));
       const px = mx + Math.cos(a1) * spread, py = my + Math.sin(a1) * spread;
-      ctx.fillStyle = `rgba(48,110,255,${al.toFixed(3)})`;
+      ctx.fillStyle = `rgba(${body},${al.toFixed(3)})`;
       ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
       if (k % 2 === 0) {
-        ctx.fillStyle = `rgba(120,180,255,${(al * 0.7).toFixed(3)})`;
+        ctx.fillStyle = `rgba(${core},${(al * 0.7).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(px, py, rad * 0.5, 0, Math.PI * 2); ctx.fill();
       }
     }
@@ -678,8 +716,8 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
   const line = (g, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = lw * w; ctx.beginPath(); ctx.moveTo(g.a.x, g.a.y); ctx.lineTo(g.b.x, g.b.y); ctx.stroke(); };
   for (const g of segs) {
     if (g.tint < 0.04) continue;
-    line(g, 14 * (1 + 0.8 * g.tint), `rgba(30,130,255,${(0.16 * g.tint).toFixed(3)})`);
-    line(g, 5 * (1 + 0.8 * g.tint), `rgba(110,200,255,${(0.7 * g.tint).toFixed(3)})`);
+    line(g, 14 * (1 + 0.8 * g.tint), `rgba(${pale ? '140,200,255' : '30,130,255'},${(0.16 * dim * g.tint).toFixed(3)})`);
+    line(g, 5 * (1 + 0.8 * g.tint), `rgba(${pale ? '170,222,255' : '110,200,255'},${(0.7 * g.tint).toFixed(3)})`);
   }
   for (const g of segs) {
     if (g.tint < 0.08) continue;
@@ -745,7 +783,7 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0) {
 }
 
 // THE LIGHTNING BALL, over the cubes: the grid line it has traced burning behind it and cooling
-// over 16 units, a plasma ball of stacked glows with a white-hot heart, and bolts jumping from it
+// over 16 units, a plasma ball of one pale gradient with a white-hot heart, and bolts jumping from it
 // to the grid crossings round it, new every frame. Plain rgba fills and strokes only.
 function drawBall(ctx, view, lw) {
   const b = view.fx?.ball;
@@ -771,22 +809,34 @@ function drawBall(ctx, view, lw) {
     const a = at(s0), c = at(s1), h = b.hs[k] ?? 0;
     const heat = Math.pow(Math.max(0, 1 - (b.d - (s0 + s1) / 2) / TR), 1.6);
     const seg = [P(a.x, a.y, h), P(c.x, c.y, h)];
-    stroke(seg, 12, `rgba(90,170,255,${(0.16 * heat).toFixed(3)})`);
-    stroke(seg, 4, `rgba(140,210,255,${(0.6 * heat).toFixed(3)})`);
+    // the burn behind it is pale too: a wide wash of the ball's own light, not a dark blue bar
+    stroke(seg, 12, `rgba(150,200,255,${(0.09 * heat).toFixed(3)})`);
+    stroke(seg, 4, `rgba(170,222,255,${(0.5 * heat).toFixed(3)})`);
     stroke(seg, 1.6, `rgba(235,248,255,${(0.95 * heat).toFixed(3)})`);
     charged.push({ a: seg[0], b: seg[1], tint: heat, age: 1 - heat, i: k });
   }
   // the dust and the crackle behind the ball, the same charge the light cycles and the Markets
   // pulse carry (chargeTrail)
-  chargeTrail(ctx, charged, lw, view.now ?? 0, 977);
+  chargeTrail(ctx, charged, lw, view.now ?? 0, 977, true);
   const c = P(b.x, b.y, b.z);
-  const disc = (r, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(c.x, c.y, r * U, 0, Math.PI * 2); ctx.fill(); };
+  // ONE GRADIENT, NOT STACKED DISCS (operator, 2026-09-14: "The energy ball blue plasma is way too
+  // dark. Need to make it way subtler like the ball lightning stuff"). Five discs of deepening blue
+  // read as a dark blue blot with a dot in it; this is the stormball's recipe -- a white-hot heart
+  // falling off through pale cyan to nothing, one radial gradient -- with the blue kept pale and
+  // thin so the ball is light on the board rather than a shadow over it.
   const flick = 0.85 + 0.15 * Math.random();
-  disc(4.2, `rgba(70,140,255,${(0.05 * flick).toFixed(3)})`);
-  disc(2.8, `rgba(100,170,255,${(0.1 * flick).toFixed(3)})`);
-  disc(1.7, `rgba(140,205,255,${(0.28 * flick).toFixed(3)})`);
-  disc(1.0, 'rgba(190,230,255,0.78)');
-  disc(0.55, 'rgba(255,255,255,1)');
+  const R = 4.2 * U;
+  const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R) : null;
+  if (g && typeof g.addColorStop === 'function') {
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.1, 'rgba(240,250,255,1)');
+    g.addColorStop(0.22, 'rgba(200,236,255,0.85)');
+    g.addColorStop(0.4, `rgba(170,220,255,${(0.32 * flick).toFixed(3)})`);
+    g.addColorStop(0.68, `rgba(160,205,255,${(0.1 * flick).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(160,200,255,0)');
+    ctx.fillStyle = g;
+  } else ctx.fillStyle = 'rgba(220,240,255,0.5)';
+  ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, Math.PI * 2); ctx.fill();
   const z0 = b.z - 0.9;
   const bolts = 4 + ((Math.random() * 4) | 0);
   for (let i = 0; i < bolts; i++) {
@@ -2677,6 +2727,7 @@ export function render3d(canvas, cells, options = {}) {
   // top edge, the same licence blocks in flight already have.
   bindHover(canvas, st);
   st.restTiles = tiles;          // resting footprints, for the pointer
+  st.axes = opts.axes ?? null;   // the price board's axes and line, so an agent's build() knows which board it is on
   st.gridW = Math.max(1, laid ? (opts.gridW ?? opts.resolution) : opts.resolution);
   st.gridH = laid ? Math.max(1, opts.gridH ?? st.gridW) : st.gridW;
   st.gridN = st.gridW;
@@ -2807,6 +2858,7 @@ export function render3d(canvas, cells, options = {}) {
       // the camera, plus settings.js space.perspective folded in: `rise` is how much height
       // foreshortens, and 0 (the default) is the parallel camera this board has always drawn
       seamAlpha: opts.seamAlpha, fx: fxNow(st, t), now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
+      axes: opts.axes ?? null,   // the price board's axes: buildScene lights candle sides where these exist
       oblique: opts.obliqueRise ? { ...opts.oblique, rise: opts.obliqueRise } : opts.oblique,
       // the departure path (settings.js space.departures): it reaches the geometry AND the paint
       // order through the same view object, which is the only way those two can agree

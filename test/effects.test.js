@@ -9,17 +9,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
-import { FX_KINDS, board3d, triggerIdle, chooseIdleFx, PULSE_WAIT_MS } from '../public/js/details3d.js';
+import { FX_KINDS, SPACE_FX, MARKET_FX, board3d, triggerIdle, chooseIdleFx, PULSE_WAIT_MS, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
 import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
   assert.ok(FX_KINDS.length >= 25, `${FX_KINDS.length} effects`);
-  // the group also holds one number, noRepeat (2026-09-14); the SWITCHES are exactly the effects
-  assert.deepEqual(Object.keys(DEFAULTS.effects).filter((k) => typeof DEFAULTS.effects[k] === 'boolean'), FX_KINDS, 'the switches are exactly the effects, in order');
-  const rows = PANEL.find((g) => g.group === 'effects')?.rows.filter((r) => r.kind === 'toggle').map((r) => r.key);
-  assert.deepEqual(rows, FX_KINDS, 'and the panel lists exactly the effects, in order');
-  assert.equal(DEFAULTS.effects.noRepeat, 12, 'and the no-repeat window defaults to 12');
-  assert.ok(FX_KINDS.every((k) => DEFAULTS.effects[k] === true), 'all on: they were asked for');
+  // EACH BOARD ITS OWN GROUP (operator, 2026-09-14: "I want the markets tab to have a separate
+  // effects list"): each group also holds one number, noRepeat; the SWITCHES are exactly the
+  // board's list, and between them the two lists cover every effect
+  const switches = (group) => Object.keys(DEFAULTS[group]).filter((k) => typeof DEFAULTS[group][k] === 'boolean');
+  const panelRows = (group) => PANEL.find((g) => g.group === group)?.rows.filter((r) => r.kind === 'toggle').map((r) => r.key);
+  assert.deepEqual(switches('effects'), SPACE_FX, 'the block board switches are exactly SPACE_FX, in order');
+  assert.deepEqual(panelRows('effects'), SPACE_FX, 'and its tab lists exactly those');
+  assert.deepEqual(switches('marketEffects'), MARKET_FX, 'the price board switches are exactly MARKET_FX, in order');
+  assert.deepEqual(panelRows('marketEffects'), MARKET_FX, 'and its tab lists exactly those');
+  assert.deepEqual([...new Set([...SPACE_FX, ...MARKET_FX])].sort(), [...FX_KINDS].sort(), 'between them, every effect has a switch');
+  assert.ok(SPACE_FX.length >= 25 && MARKET_FX.length >= 20, 'twenty-five or more on the block board, twenty or more on the price board');
+  assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge'], 'the block board lacks only the two drawn on a price line');
+  assert.deepEqual(FX_KINDS.filter((k) => !MARKET_FX.includes(k)).sort(), ['boulderdash', 'powerup', 'radar', 'rain', 'tractor', 'vortex'], 'the price board lacks the two that move tiles and the four that travel the depth or turn in place');
+  for (const group of ['effects', 'marketEffects']) {
+    assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);
+    assert.ok(switches(group).every((k) => DEFAULTS[group][k] === true), `${group}: all on, they were asked for`);
+    assert.equal(PANEL.find((g) => g.group === group).bulk, true, `${group}: the tab has all on / all off`);
+  }
 });
 
 test('every effect lights something at some point in its run, and nothing before or after it', () => {
@@ -71,10 +83,16 @@ test('an effect is the same picture every time it replays: no Math.random in the
 
 test('the switches reach the scheduler: the enabled list is what the boards are given', () => {
   const all = spaceOptions({});
-  assert.deepEqual(all.fxKinds, FX_KINDS, 'everything on by default');
+  assert.deepEqual(all.fxKinds, SPACE_FX, 'everything on by default');
   const few = spaceOptions({ effects: Object.fromEntries(FX_KINDS.map((k) => [k, k === 'ripple' || k === 'nova'])) });
-  assert.deepEqual(few.fxKinds, ['ripple', 'nova'], 'only what is left on, in FX_KINDS order');
-  assert.deepEqual(marketsOptions({}).fxKinds, FX_KINDS, 'the price board is given the same list');
+  assert.deepEqual(few.fxKinds, ['ripple', 'nova'], 'only what is left on, in list order');
+  assert.deepEqual(marketsOptions({}).fxKinds, MARKET_FX, 'the price board is given its own list');
+  assert.equal(marketsOptions({}).fxNoRepeat, 12, 'and its own window');
+  // THE LISTS ARE INDEPENDENT: the block board's switches say nothing about the price board's
+  const split = { effects: Object.fromEntries(SPACE_FX.map((k) => [k, false])), marketEffects: { noRepeat: 3, ...Object.fromEntries(MARKET_FX.map((k) => [k, k === 'pulse' || k === 'plasma'])) } };
+  assert.deepEqual(spaceOptions(split).fxKinds, [], 'the block board rests');
+  assert.deepEqual(marketsOptions(split).fxKinds, ['pulse', 'plasma'], 'while the price board plays its two');
+  assert.equal(marketsOptions(split).fxNoRepeat, 3);
   assert.deepEqual(enabledEffects({ effects: Object.fromEntries(FX_KINDS.map((k) => [k, false])) }), [], 'all off is a board at rest');
 });
 
@@ -89,7 +107,7 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   //
   // Nothing guarded it, which is why it survived four batches of new effects. This does: the
   // choice is replicated exactly as scheduleFx makes it, and no kind may run away with the board.
-  const LINE_FX = ['pulse', 'twinkle', 'bulge', 'stormball', 'lightcycle', 'ball'];   // the price board's list, as details3d.js has it
+  const LINE_FX = MARKET_FX;   // the price board's list
   const pick = (last) => {
     const kinds = FX_KINDS.filter((k) => k !== 'pulse');
     let pool = kinds.filter((k) => k !== last);
@@ -211,4 +229,30 @@ test('the settings panel is tabbed, one tab per group, with all-on/all-off where
   assert.match(app, /data-cfgall="\$\{g\.group\}"/, 'all on, where a group is nothing but switches');
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
   assert.match(css, /\.cfgtab\.on \{/, 'the open tab is marked');
+});
+
+test('on the price board every front runs along the hours and every ring starts on the candles', () => {
+  // operator, 2026-09-14: "For the markets effects, it all needs to be left/right or right/left
+  // movement. Not coming towards the viewer. Always interacting with either the grid price line or candles"
+  const price = { gridW: 48, gridH: 8, axes: { y: 3.7, line: [{ x: 1, z: 10 }, { x: 3, z: 12 }] } };
+  const blocks = { gridW: 20, gridH: 20 };
+  assert.equal(onPriceBoard(price), true); assert.equal(onPriceBoard(blocks), false); assert.equal(onPriceBoard({ axes: { line: [] } }), false);
+  const rnd = (() => { let s = 7; return () => ((s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296); })();
+  const seen = new Set();
+  for (let i = 0; i < 200; i++) {
+    for (const kind of ['outline', 'scan', 'tide', 'wave']) {
+      const [dx, dy] = fxDirection(kind, price, rnd);
+      assert.equal(dy, 0, `${kind}: never along the depth`);
+      assert.ok(dx === 1 || dx === -1, `${kind}: left to right or right to left`);
+      seen.add(dx);
+    }
+    const o = fxOrigin(price, rnd);
+    assert.equal(o.y, 3.7, 'a ring starts on the candle row');
+    assert.ok(o.x >= 0 && o.x <= 48, 'anywhere along the hours');
+  }
+  assert.deepEqual([...seen].sort(), [-1, 1], 'both ways, over time');
+  // the block board keeps its seven ways and its free origin
+  const dirs = new Set(), ys = new Set();
+  for (let i = 0; i < 300; i++) { dirs.add(fxDirection('outline', blocks, rnd).join(',')); ys.add(Math.floor(fxOrigin(blocks, rnd).y)); }
+  assert.equal(dirs.size, 7); assert.ok(ys.size > 10);
 });

@@ -19,7 +19,7 @@
 // survivable, and `sky` below is the first one to take it.
 
 export const SETTINGS_KEY = 'blockyard.settings';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const DEFAULTS = Object.freeze({
   space: Object.freeze({
@@ -158,20 +158,38 @@ export const DEFAULTS = Object.freeze({
     overviewSummary: true,
   }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
-  // toggleable"). The keys are exactly details3d's FX_KINDS -- a test asserts the two lists match,
-  // so an effect cannot ship without a switch or a switch outlive its effect. All on: they were
-  // asked for, and the board picks among whatever is left on (scheduleFx). Turn them all off and
-  // the board simply rests, which `idleFx` also does in one click.
+  // toggleable"), AND EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have
+  // a separate effects list ... the Block Space effects specific to that panel, and settings specific
+  // to market panel"). This group is the block board's: its keys are exactly details3d's SPACE_FX --
+  // every effect but the two drawn on a price line -- and a test asserts the lists match, so an
+  // effect cannot ship without a switch or a switch outlive its effect. All on: they were asked
+  // for, and the board picks among whatever is left on (scheduleFx). Turn them all off and the
+  // board simply rests, which `idleFx` also does in one click.
   effects: Object.freeze({
     ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
-    lightcycle: true, ball: true, pulse: true,
-    bulge: true,          // the price line on Markets: a sphere rolls through the pipe and it swells round it
+    lightcycle: true, ball: true,
     shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
-    rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true, // the agents: something happening on the board, rather than a pattern over it
+    rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true,
+    // the agents: something happening on the board, rather than a pattern over it
     centipede: true, tractor: true, missile: true, boulderdash: true, stormball: true,
     // NO REPEATS (operator, 2026-09-14: "add a config field that defaults to 12. Make sure to pick a
     // random effect to play, but never pick one that has been played in the last 12 sequences"). A
     // number, not a switch: enabledEffects reads only the switches.
+    noRepeat: 12,
+  }),
+  // THE PRICE BOARD'S OWN LIST: details3d's MARKET_FX -- every effect but the two that move tiles
+  // (a candle is a price, not a thing to collapse or lift) and the four that travel the depth or
+  // turn in place (code rain, power-up, radar, vortex: operator, 2026-09-14, "it all needs to be
+  // left/right or right/left movement. Not coming towards the viewer"), plus the two that only a
+  // price line can carry. Its own no-repeat window too. Same defaults: all on, twelve.
+  marketEffects: Object.freeze({
+    ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
+    lightcycle: true, ball: true,
+    pulse: true,          // the surge that runs the price line
+    bulge: true,          // a sphere rolls through the pipe and it swells round it
+    shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
+    sparkle: true, checker: true, combo: true, aurora: true, plasma: true,
+    centipede: true, missile: true, stormball: true,
     noRepeat: 12,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
@@ -251,6 +269,54 @@ const MOTION = {
 // What the panel draws. Kept beside the values so a new setting cannot be added without a
 // control, or a control without a value -- and, since normalise reads its bounds from here, so
 // that a slider and the clamp behind it cannot disagree. They used to be written out twice.
+// THE EFFECT ROWS, one table for both boards' groups: the label and the hint of each effect are
+// written once, and each group below lists the keys it offers.
+const FX_ROW = Object.freeze({
+  ripple: Object.freeze({ label: 'Ripple', hint: 'A ring spreading from a point on the board' }),
+  outline: Object.freeze({ label: 'Outline sweep', hint: 'A front that traces each block\u2019s edges as it passes' }),
+  tide: Object.freeze({ label: 'Tide', hint: 'A swell that lifts the blocks it passes under' }),
+  cascade: Object.freeze({ label: 'Cascade', hint: 'The blocks light in feerate order, richest first' }),
+  twinkle: Object.freeze({ label: 'Twinkle', hint: 'Scattered blocks flash white, each on its own beat' }),
+  scan: Object.freeze({ label: 'Scan line', hint: 'A tight line crossing the board, edge to edge' }),
+  lightcycle: Object.freeze({ label: 'Light cycles', hint: 'Two riders from opposite edges, leaving light walls, until one crashes' }),
+  ball: Object.freeze({ label: 'Lightning ball', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
+  pulse: Object.freeze({ label: 'Energy pulse', hint: 'The surge that runs the price line on Markets, blue behind the head' }),
+  bulge: Object.freeze({ label: 'Pipe bulge', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
+  shockwave: Object.freeze({ label: 'Shockwave', hint: 'A hard ring that throws the blocks it passes into the air' }),
+  nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
+  firework: Object.freeze({ label: 'Fireworks', hint: 'Three bursts, each at its own moment and place' }),
+  flare: Object.freeze({ label: 'Solar flare', hint: 'One block goes supernova and lights its neighbourhood' }),
+  wave: Object.freeze({ label: 'Wave', hint: 'Several crests rolling across the board, the blocks riding them' }),
+  quake: Object.freeze({ label: 'Quake', hint: 'The board shakes, hardest at the start, and settles' }),
+  rain: Object.freeze({ label: 'Code rain', hint: 'A drop falls down every column with a white head and a green tail' }),
+  sparkle: Object.freeze({ label: 'Sparkle', hint: 'A constellation lighting a few blocks at a time, each its own colour' }),
+  checker: Object.freeze({ label: 'Checkerboard', hint: 'The board flips like a chessboard, dark squares against light' }),
+  radar: Object.freeze({ label: 'Radar', hint: 'A sweep hand turning once, the blocks behind it fading like phosphor' }),
+  vortex: Object.freeze({ label: 'Vortex', hint: 'Spiral arms turning, draining the board inward' }),
+  powerup: Object.freeze({ label: 'Power-up', hint: 'The board charges from the floor up, gold, with a bright lip' }),
+  combo: Object.freeze({ label: 'Combo chain', hint: 'A chain reaction running the diagonal, each link popping in turn' }),
+  aurora: Object.freeze({ label: 'Aurora', hint: 'Slow curtains of colour drifting over the board' }),
+  plasma: Object.freeze({ label: 'Plasma', hint: 'The demoscene plasma: sines over the board, the colour cycling' }),
+  centipede: Object.freeze({ label: 'Centipede', hint: 'A column weaving down the board that splits in two partway, each half carrying on' }),
+  tractor: Object.freeze({ label: 'Tractor beam', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
+  missile: Object.freeze({ label: 'Interception', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
+  boulderdash: Object.freeze({ label: 'Collapse', hint: 'The board gives way from a point and the blocks fall in, cascading outward' }),
+  stormball: Object.freeze({ label: 'Ball lightning', hint: 'An electric blue sphere in a nebula drifts across the view, crackling, throwing arcs that electrify the blocks they strike; a struck block sometimes arcs on to another' }),
+});
+// where an effect reads differently on the price board, the price board's hint
+const MARKET_HINT = Object.freeze({
+  twinkle: 'Scattered candles flash white, each on its own beat',
+  lightcycle: 'Two riders in from the left and the right, their light walls running the candle tops, until one crashes',
+  ball: 'A plasma ball riding the price line from left to right, throwing bolts and a pale dust trail',
+  pulse: 'The surge that runs the price line, blue behind the head. Rare: 2.5 to 6 minutes between plays',
+  bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes. As rare as the pulse',
+  stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle sometimes arcs on to another. As rare as the pulse',
+  cascade: 'The candles light in order, tallest first',
+  flare: 'One candle goes supernova and lights its neighbourhood',
+});
+const NO_REPEAT_ROW = Object.freeze({ key: 'noRepeat', label: 'No repeats within', kind: 'range', min: 0, max: 30, step: 1, hint: 'An effect is never played again until this many other effects have played since. Where fewer effects are switched on, the one that has waited longest plays next' });
+const fxRows = (keys, hintFor = {}) => Object.freeze([NO_REPEAT_ROW, ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
+
 export const PANEL = Object.freeze([
   Object.freeze({
     group: 'space',
@@ -258,7 +324,7 @@ export const PANEL = Object.freeze([
     note: 'The 3D board on Overview, Block space, Mempool and Kiosk. Turn things off here if the board is heavy on this machine.',
     rows: Object.freeze([
       Object.freeze({ key: 'shadows', label: 'Shadows', kind: 'toggle', hint: 'Cubes casting shadows on the board and on each other' }),
-      Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'Ripples, scans, light cycles and the lightning ball while the board rests' }),
+      Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'The effects while the board rests: which of them is the Space effects tab' }),
       Object.freeze({ key: 'edges', label: 'Stone edges', kind: 'toggle', hint: 'The dark seam around each stone' }),
       Object.freeze({ key: 'grid', label: 'Neon grid', kind: 'toggle', hint: 'The glowing grid on the board' }),
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The grid’s colour: its lit core, and the halo and glow around it, all take it together' }),
@@ -324,7 +390,7 @@ export const PANEL = Object.freeze([
     note: 'The candle board on Markets and Kiosk.',
     rows: Object.freeze([
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
-      Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'Ripples, light cycles and the lightning ball while the board rests, and the flight when the candles refresh. Off draws the board and leaves it alone' }),
+      Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'The idle effects while the board rests (which of them is the Market effects tab) and the flight when the candles refresh. Off draws the board and leaves it alone' }),
       Object.freeze({
         key: 'exchange', label: 'Exchange', kind: 'choice', hint: 'Whose candles the chart and the 3D board draw. The others stay as overlay lines',
         options: Object.freeze([['coinbase', 'Coinbase'], ['kraken', 'Kraken'], ['bitstamp', 'Bitstamp'], ['bitfinex', 'Bitfinex'], ['okx', 'OKX']]),
@@ -396,43 +462,30 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'Vaus, the bricks, the capsules, the laser and a lost ball' }),
     ]),
   }),
+  // TWO EFFECTS TABS, one per board (operator, 2026-09-14: "I want the markets tab to have a
+  // separate effects list"). The rows come from FX_ROW above; the key lists are the boards' own and
+  // test/effects.test.js holds them to details3d's SPACE_FX and MARKET_FX.
   Object.freeze({
     group: 'effects',
-    title: 'Effects',
-    note: 'What the board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The price board plays the ones that follow its line or ride its grid \u2014 pulse, bulge, ball lightning, light cycles, the lightning ball and twinkle \u2014 and the pulse, the bulge and ball lightning are rare there on top of that.',
-    rows: Object.freeze([
-      Object.freeze({ key: 'ripple', label: 'Ripple', kind: 'toggle', hint: 'A ring spreading from a point on the board' }),
-      Object.freeze({ key: 'outline', label: 'Outline sweep', kind: 'toggle', hint: 'A front that traces each block\u2019s edges as it passes' }),
-      Object.freeze({ key: 'tide', label: 'Tide', kind: 'toggle', hint: 'A swell that lifts the blocks it passes under' }),
-      Object.freeze({ key: 'cascade', label: 'Cascade', kind: 'toggle', hint: 'The blocks light in feerate order, richest first' }),
-      Object.freeze({ key: 'twinkle', label: 'Twinkle', kind: 'toggle', hint: 'Scattered blocks flash white, each on its own beat' }),
-      Object.freeze({ key: 'scan', label: 'Scan line', kind: 'toggle', hint: 'A tight line crossing the board, edge to edge' }),
-      Object.freeze({ key: 'lightcycle', label: 'Light cycles', kind: 'toggle', hint: 'Two riders from opposite edges, leaving light walls, until one crashes' }),
-      Object.freeze({ key: 'ball', label: 'Lightning ball', kind: 'toggle', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
-      Object.freeze({ key: 'noRepeat', label: 'No repeats within', kind: 'range', min: 0, max: 30, step: 1, hint: 'An effect is never played again until this many other effects have played since. Where fewer effects are switched on, the one that has waited longest plays next' }),
-      Object.freeze({ key: 'pulse', label: 'Energy pulse', kind: 'toggle', hint: 'The surge that runs the price line on Markets, blue behind the head' }),
-      Object.freeze({ key: 'bulge', label: 'Pipe bulge', kind: 'toggle', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
-      Object.freeze({ key: 'shockwave', label: 'Shockwave', kind: 'toggle', hint: 'A hard ring that throws the blocks it passes into the air' }),
-      Object.freeze({ key: 'nova', label: 'Nova', kind: 'toggle', hint: 'An implosion to the middle, then a brighter blast back out' }),
-      Object.freeze({ key: 'firework', label: 'Fireworks', kind: 'toggle', hint: 'Three bursts, each at its own moment and place' }),
-      Object.freeze({ key: 'flare', label: 'Solar flare', kind: 'toggle', hint: 'One block goes supernova and lights its neighbourhood' }),
-      Object.freeze({ key: 'wave', label: 'Wave', kind: 'toggle', hint: 'Several crests rolling across the board, the blocks riding them' }),
-      Object.freeze({ key: 'quake', label: 'Quake', kind: 'toggle', hint: 'The board shakes, hardest at the start, and settles' }),
-      Object.freeze({ key: 'rain', label: 'Code rain', kind: 'toggle', hint: 'A drop falls down every column with a white head and a green tail' }),
-      Object.freeze({ key: 'sparkle', label: 'Sparkle', kind: 'toggle', hint: 'A constellation lighting a few blocks at a time, each its own colour' }),
-      Object.freeze({ key: 'checker', label: 'Checkerboard', kind: 'toggle', hint: 'The board flips like a chessboard, dark squares against light' }),
-      Object.freeze({ key: 'radar', label: 'Radar', kind: 'toggle', hint: 'A sweep hand turning once, the blocks behind it fading like phosphor' }),
-      Object.freeze({ key: 'vortex', label: 'Vortex', kind: 'toggle', hint: 'Spiral arms turning, draining the board inward' }),
-      Object.freeze({ key: 'powerup', label: 'Power-up', kind: 'toggle', hint: 'The board charges from the floor up, gold, with a bright lip' }),
-      Object.freeze({ key: 'combo', label: 'Combo chain', kind: 'toggle', hint: 'A chain reaction running the diagonal, each link popping in turn' }),
-      Object.freeze({ key: 'aurora', label: 'Aurora', kind: 'toggle', hint: 'Slow curtains of colour drifting over the board' }),
-      Object.freeze({ key: 'plasma', label: 'Plasma', kind: 'toggle', hint: 'The demoscene plasma: sines over the board, the colour cycling' }),
-      Object.freeze({ key: 'centipede', label: 'Centipede', kind: 'toggle', hint: 'A column weaving down the board that splits in two partway, each half carrying on' }),
-      Object.freeze({ key: 'tractor', label: 'Tractor beam', kind: 'toggle', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
-      Object.freeze({ key: 'missile', label: 'Interception', kind: 'toggle', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
-      Object.freeze({ key: 'boulderdash', label: 'Collapse', kind: 'toggle', hint: 'The board gives way from a point and the blocks fall in, cascading outward' }),
-      Object.freeze({ key: 'stormball', label: 'Ball lightning', kind: 'toggle', hint: 'On Markets too, rarely, crossing the candles and charging the price line. An electric blue sphere drifts across the view, crackling, throwing arcs that electrify the blocks they strike' }),
+    title: 'Space effects',
+    note: 'What the Block space board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The Markets board has a list of its own, on the next tab.',
+    bulk: true,
+    rows: fxRows([
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'lightcycle', 'ball', 'shockwave', 'nova',
+      'firework', 'flare', 'wave', 'quake', 'rain', 'sparkle', 'checker', 'radar', 'vortex', 'powerup',
+      'combo', 'aurora', 'plasma', 'centipede', 'tractor', 'missile', 'boulderdash', 'stormball',
     ]),
+  }),
+  Object.freeze({
+    group: 'marketEffects',
+    title: 'Market effects',
+    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from this list: everything that moves along the hours or lights the candles where they stand, plus the pulse and the bulge that only a price line can carry. Those two and ball lightning are rare here, 2.5 to 6 minutes apart. The Board effects switch on the Markets & Price tab is the master.',
+    bulk: true,
+    rows: fxRows([
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'lightcycle', 'ball', 'pulse', 'bulge',
+      'shockwave', 'nova', 'firework', 'flare', 'wave', 'quake', 'sparkle', 'checker',
+      'combo', 'aurora', 'plasma', 'centipede', 'missile', 'stormball',
+    ], MARKET_HINT),
   }),
   Object.freeze({
     group: 'tetrust',
@@ -608,6 +661,14 @@ const MIGRATIONS = {
     const mk = raw.markets && typeof raw.markets === 'object' ? raw.markets : {};
     const { glow, ...markets } = mk;
     return { ...raw, markets };
+  },
+  // v3 -> v4: the price board gets its own effects group. Until now one list governed both boards,
+  // so the store's list is the operator's choice for both: it is copied to `marketEffects` (normalise
+  // drops the keys the price board does not offer). A store that already has the group keeps it.
+  3: (raw) => {
+    if (raw.marketEffects && typeof raw.marketEffects === 'object') return raw;
+    const fx = raw.effects && typeof raw.effects === 'object' ? raw.effects : {};
+    return { ...raw, marketEffects: { ...fx } };
   },
 };
 
@@ -830,9 +891,9 @@ export function formatRangeValue(step, v) {
   return Number(v).toFixed(decimals);
 }
 
-export function enabledEffects(s) {
+export function enabledEffects(s, group = 'effects') {
   const n = normalise(s);
-  return Object.keys(n.effects).filter((k) => n.effects[k] === true);
+  return Object.keys(n[group]).filter((k) => n[group][k] === true);
 }
 
 /** Blockout's switches, with the sky's make-up from the Sky group (as tetrustOptions does). */
@@ -913,9 +974,9 @@ export function marketsOptions(s) {
     // renderer's defaults and ran the refresh flight, and neither had a control of its own: the
     // Block space switches next to them govern a different board entirely.
     ...(mk.effects ? {} : { idleFx: false, transition: MOTION.still }),
-    // the per-effect switches govern this board too: the price line's own two (pulse, twinkle)
-    // are in the same list as the grid's
-    fxKinds: enabledEffects(n),
-    fxNoRepeat: n.effects.noRepeat,
+    // ITS OWN SWITCHES (operator, 2026-09-14: "settings specific to market panel"): the Market
+    // effects group, not the block board's
+    fxKinds: enabledEffects(n, 'marketEffects'),
+    fxNoRepeat: n.marketEffects.noRepeat,
   };
 }

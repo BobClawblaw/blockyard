@@ -132,12 +132,18 @@ defineAgent('lightcycle', {
   draw(ctx, view, lw, api) { api.drawCycles(ctx, view, lw); },
   build({ st, seed, W, H, tiles, rnd }) {
     const tops = cellTops(tiles, W, H);
-    const sides = rnd() < 0.5 ? ['left', 'right'] : ['bottom', 'top'];
+    // on the price board the riders come in from the left and the right, never from the front
+    // (operator, 2026-09-14: "it all needs to be left/right or right/left movement")
+    const priceBoard = st?.axes?.line?.length > 1;
+    const sides = priceBoard || rnd() < 0.5 ? ['left', 'right'] : ['bottom', 'top'];
+    // ...and their walls run the candles' rows (axes.y is the middle of the candle row), so they
+    // ride the candle tops rather than the empty floor in front
+    // (axes.y 3.7 and a body 1.4 deep: grid lines 3 to 5, whose stretches all ride a candle cell)
+    const lanes = priceBoard && Number.isFinite(st.axes.y) ? [Math.floor(st.axes.y - 0.7), Math.ceil(st.axes.y + 0.7)] : null;
     const paths = sides.map((side, i) => {
-      const pts = cyclePath(seed + i * 7919, W, H, side);
+      const pts = cyclePath(seed + i * 7919, W, H, side, lanes);
       return { pts, hs: pathHeights(pts, tops, W, H), color: i ? [255, 150, 40] : [80, 220, 255], lag: i * 0.06 };
     });
-    void st;
     return { paths, crashes: cycleCrashes(paths) };
   },
   frame(a, u, { ms, derezMs }) {
@@ -173,8 +179,32 @@ defineAgent('lightcycle', {
 // moving along the grid, illuminating everything it comes near".)
 defineAgent('ball', {
   draw(ctx, view, lw, api) { api.drawBall(ctx, view, lw); },
-  build({ W, H, seed, tiles, rnd }) {
+  build({ st, W, H, seed, tiles, rnd }) {
     const tops = cellTops(tiles, W, H);
+    const line = st?.axes?.line;
+    if (line?.length > 1) {
+      // ON THE PRICE BOARD IT TRAVELS THE PRICE LINE (operator, 2026-09-14: "The plasma ball needs
+      // to move left to right on the markets. not back to front (or right to left). It needs to
+      // move across the entire chart randomly", then "make the lightning ball travel along the
+      // price line"). A route picked from any of four sides ran the depth axis half the time,
+      // which on eight units of depth is a ball crossing the board's thickness. Now: in from off
+      // the left edge, out past the right, along the grid line under the candles, and its height
+      // at every step is the line's own -- the ball rides the price, and its burn runs the line.
+      const y = Math.max(1, Math.min(H - 1, Math.round(Number.isFinite(st.axes.y) ? st.axes.y : H / 2)));
+      const E = 6;
+      const pts = [];
+      for (let x = -E; x <= W + E; x++) pts.push({ x, y });
+      const zAt = (x) => {
+        if (x <= line[0].x) return line[0].z;
+        for (let i = 1; i < line.length; i++) {
+          if (x <= line[i].x) { const a = line[i - 1], b = line[i]; return a.z + (b.z - a.z) * ((x - a.x) / Math.max(1e-9, b.x - a.x)); }
+        }
+        return line[line.length - 1].z;
+      };
+      const hs = [];
+      for (let k = 0; k + 1 < pts.length; k++) hs.push(zAt((pts[k].x + pts[k + 1].x) / 2));
+      return { paths: [{ pts, hs, color: [150, 215, 255] }] };
+    }
     const side = ['left', 'right', 'bottom', 'top'][(rnd() * 4) | 0];
     const pts = ballPath(seed, W, H, side, Math.ceil(Math.max(W, H) * 0.35) + 8);
     return { paths: [{ pts, hs: pathHeights(pts, tops, W, H), color: [150, 215, 255] }] };
@@ -682,23 +712,41 @@ defineAgent('boulderdash', {
 // The crackle on the sphere itself is re-rolled every frame (Math.random, as this file allows for
 // sparkle that is never asserted frame to frame): electrical precisely because it never repeats.
 defineAgent('stormball', {
-  build({ W, H, tiles, tops, rnd }) {
+  build({ st, W, H, tiles, tops, rnd }) {
     tops ??= cellTops(tiles ?? [], W, H);
     const top = (cx, cy) => (cx >= 0 && cx < W && cy >= 0 && cy < H ? tops[cy * W + cx] : 0);
     let highest = 0;
     for (let i = 0; i < W * H; i++) highest = Math.max(highest, tops[i] ?? 0);
+    // ON THE PRICE BOARD IT FLIES THROUGH THE CHART, not over it: a height inside the line's own
+    // range, so the candles it passes are beside it and the arcs strike what it comes near
+    // (operator, 2026-09-14: "electrifying any elements it comes near")
+    const line = st?.axes?.line;
+    let alt = highest + 3.5;
+    if (line?.length > 1) {
+      let lo = Infinity, hi = -Infinity;
+      for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
+      alt = lo + (hi - lo) * (0.35 + 0.5 * rnd());
+    }
     // across the board the long way round, far enough past both edges to start and end off-screen
     const leftToRight = rnd() < 0.5;
     const margin = Math.max(W, H) * 0.55 + 6;
     const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
     const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
     const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
-    const alt = highest + 3.5;
     // bursts of arcs: a few a second, one to three at a time, each alive for a moment
     const arcs = [];
     for (let u = 0.03; u < 0.97; u += 0.016 + 0.035 * rnd()) {
       const n = 1 + Math.floor(rnd() * 4);
-      for (let k = 0; k < n; k++) arcs.push({ u0: u + rnd() * 0.01, life: 0.02 + 0.035 * rnd(), ang: rnd() * Math.PI * 2, reach: 3.5 + 8 * rnd(), seed: Math.floor(rnd() * 1e9) });
+      for (let k = 0; k < n; k++) {
+        const arc = { u0: u + rnd() * 0.01, life: 0.02 + 0.035 * rnd(), ang: rnd() * Math.PI * 2, reach: 3.5 + 8 * rnd(), seed: Math.floor(rnd() * 1e9) };
+        // A SECOND ARC OFF THE STRUCK BLOCK, sometimes (operator, 2026-09-14: "When the ball
+        // lightning lights up a block with electricity, I want a small chance for a second arc to
+        // spawn from the block and arc to a different block"). One in four carries a chain: its own
+        // direction and reach from the block it lands on, aimed the same way the first was, at a
+        // different block. Decided here, so a replay throws the same chains.
+        if (rnd() < 0.25) arc.chain = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
+        arcs.push(arc);
+      }
     }
     return { from, to, weave, alt, arcs, W, H, top };
   },
@@ -711,6 +759,22 @@ defineAgent('stormball', {
     const ball = at(u);
     // where it just was: the nebula it leaves behind is drawn there, fading
     const trail = [0.01, 0.022, 0.036, 0.052, 0.07, 0.09].map((d) => (u - d >= 0 ? at(u - d) : null)).filter(Boolean);
+    // the block an arc thrown at (aimX, aimY) strikes: the tallest cell near there, never `not`
+    // (the block a chain leaves), and none if the floor is bare
+    const strike = (aimX, aimY, not = null) => {
+      let hit = null;
+      const consider = (cx, cy) => {
+        const h = a.top(cx, cy);
+        if (h > 0 && !(not && cx + 0.5 === not.x && cy + 0.5 === not.y) && (!hit || h > hit.z)) hit = { x: cx + 0.5, y: cy + 0.5, z: h };
+      };
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) consider(Math.floor(aimX) + dx, Math.floor(aimY) + dy);
+      // A THIN BOARD (the price board: eight deep, hundreds wide): an arc thrown at a random angle
+      // lands off the front or the back more often than not, so the strike falls back to the
+      // tallest thing in the three columns it was thrown toward, at any depth -- a candle
+      // (operator, 2026-09-14: "the ball lightning was not arcing out to any of the candles")
+      if (!hit && a.H <= 12) for (let dx = -1; dx <= 1; dx++) for (let cy = 0; cy < a.H; cy++) consider(Math.floor(aimX) + dx, cy);
+      return hit;
+    };
     const live = [];
     const heads = [{ x: ball.x, y: ball.y, color: [70, 180, 255], alpha: 0.7, r: 4.5 }];
     for (const arc of a.arcs) {
@@ -718,12 +782,7 @@ defineAgent('stormball', {
       if (age < 0 || age > 2.2) continue;                         // alive, then an afterglow on the block
       const p = at(arc.u0);
       // the block the arc strikes: the tallest cell near where it is thrown, and none if the floor is bare
-      const aimX = p.x + Math.cos(arc.ang) * arc.reach, aimY = p.y + Math.sin(arc.ang) * arc.reach;
-      let hit = null;
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-        const cx = Math.floor(aimX) + dx, cy = Math.floor(aimY) + dy, h = a.top(cx, cy);
-        if (h > 0 && (!hit || h > hit.z)) hit = { x: cx + 0.5, y: cy + 0.5, z: h };
-      }
+      const hit = strike(p.x + Math.cos(arc.ang) * arc.reach, p.y + Math.sin(arc.ang) * arc.reach);
       if (!hit) continue;
       if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6 });
       // THE BLOCK IT TOUCHES IS ELECTRIFIED: a hard blue flare that flickers while the arc lives and
@@ -731,6 +790,17 @@ defineAgent('stormball', {
       const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
       const glow = age <= 1 ? flicker : Math.max(0, 1 - (age - 1) / 1.2) * 0.7;
       heads.push({ x: hit.x, y: hit.y, color: [60, 190, 255], alpha: Math.min(1, glow * 1.25), r: 1.2 });
+      // ...and the chain, if this arc carries one: from the struck block to another, a beat after
+      // the first lands, aimed and found the same way, never back at the block it left
+      if (arc.chain && age >= 0.3) {
+        const c2 = arc.chain, age2 = (age - 0.3) / 0.7;
+        const hit2 = strike(hit.x + Math.cos(c2.ang) * c2.reach, hit.y + Math.sin(c2.ang) * c2.reach, hit);
+        if (hit2) {
+          if (age2 <= 1) live.push({ from: hit, to: hit2, seed: c2.seed, strength: 0.85 * (1 - age2 * 0.6) });
+          const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + c2.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
+          heads.push({ x: hit2.x, y: hit2.y, color: [60, 190, 255], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
+        }
+      }
     }
     return { stormball: { at: ball, arcs: live, trail, t: u }, heads };
   },
@@ -755,7 +825,9 @@ defineAgent('stormball', {
     // the arcs first, so the sphere sits over the roots of its own lightning
     for (const arc of s.arcs) {
       const end = project(arc.to.x, arc.to.y, arc.to.z, view);
-      const main = bolt(c, end, Math.hypot(end.x - c.x, end.y - c.y) * 0.18, 9);
+      // a chained arc leaves the block the first one struck, not the ball
+      const from = arc.from ? project(arc.from.x, arc.from.y, arc.from.z, view) : c;
+      const main = bolt(from, end, Math.hypot(end.x - from.x, end.y - from.y) * 0.18, 9);
       line(ctx, main, `rgba(30,120,255,${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1));
       line(ctx, main, `rgba(60,170,255,${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw * 4, U * 0.45));
       line(ctx, main, `rgba(140,220,255,${(0.95 * arc.strength).toFixed(3)})`, Math.max(lw * 2, U * 0.2));

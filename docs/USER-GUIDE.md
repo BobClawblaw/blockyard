@@ -218,28 +218,37 @@ both modes move to their new places rather than disappearing and reappearing.
 
 While the board is at rest, one effect plays every seven to thirteen seconds — the first
 about a second after the board lands — and never one that has played within the last twelve
-(**No repeats within**, on the Effects tab, 0 to 30). There are **30**, and each has its own
-switch under **Display settings → Effects**:
+(**No repeats within**, 0 to 30). There are **30**, and each has its own switch. **Each board
+has its own list**: the Block space board's switches are the **Space effects** tab, the
+Markets board's are the **Market effects** tab, and each tab has its own no-repeat window, so
+trimming one board's effects leaves the other's alone.
 
 | | |
 |---|---|
 | **Ripple**, **Outline sweep**, **Scan line**, **Tide** | fronts crossing the board: a spreading ring, traced edges, a tight line, a swell that lifts the cubes it passes under |
 | **Cascade**, **Twinkle**, **Sparkle** | the blocks light in fee-rate order; scattered flashes; a constellation, each block its own colour |
 | **Light cycles** | a TRON-style race in blue and orange from opposite edges, leaving light walls, until one crashes and de-rezzes |
-| **Lightning ball** | a plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
+| **Lightning ball** | a pale plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust; on Markets it rides the price line from left to right |
 | **Shockwave**, **Nova**, **Fireworks**, **Solar flare** | a hard ring that throws blocks into the air; an implosion then a brighter blast; three bursts; one block going supernova |
 | **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
 | **Code rain**, **Radar**, **Vortex** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward |
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
 | **Centipede**, **Interception**, **Collapse** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
 | **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
-| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike; on Markets it crosses the candles and charges the price line where it passes, rarely, like the pulse |
+| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike — and one arc in four chains on from the struck block to another; on Markets it flies through the chart, striking candles and charging the price line where it passes, rarely, like the pulse |
 | **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head; rare — 2.5 to 6 minutes between plays |
 | **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up; as rare as the pulse |
 
 They are decoration only: they carry no data, they never play during a refresh, and they
-are switched off entirely under `prefers-reduced-motion`. The price board only ever plays
-the ones that follow its line or ride its candle grid: **Energy pulse**, **Pipe bulge** and **Ball lightning** (each rare there, 2.5 to 6 minutes apart), **Light cycles**, **Lightning ball** and **Twinkle**.
+are switched off entirely under `prefers-reduced-motion`. The Block space list is every effect
+but the two drawn on a price line (**Energy pulse**, **Pipe bulge**). The Markets board is eight
+units deep and as wide as the hours, so everything there moves **along the hours, left or right,
+never toward you**, and lights the candles or the line: fronts run along the chart, rings start
+on the candle row, the light cycles ride in from the two ends along the candle tops, the
+lightning ball rides the price line. Its list leaves out the two that move tiles (**Collapse**,
+**Tractor beam** — a candle is a price) and the four that travel the depth or turn in place
+(**Code rain**, **Power-up**, **Radar**, **Vortex**); **Energy pulse**, **Pipe bulge** and
+**Ball lightning** are rare there, 2.5 to 6 minutes apart.
 
 The more you leave switched on, the less often you see any particular one — there is still
 only one effect every seven to thirteen seconds. The **all off** button on that tab leaves
@@ -885,9 +894,9 @@ same whatever you choose here.
 
 ![Display settings](images/settings.jpg)
 
-The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Blockanoid, Effects and
-Tetrust. The **Effects** tab is nothing but switches, so it also gets **all on** and **all off**;
-thirty of them is a lot of clicking otherwise.
+The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Blockanoid, Space
+effects, Market effects and Tetrust. The two **effects** tabs are lists of switches, so they
+also get **all on** and **all off**; twenty-eight of them is a lot of clicking otherwise.
 
 ### Block space
 
@@ -899,7 +908,7 @@ these are the settings that buy it back, roughly most expensive first:
 | **Shadows** | Cubes casting shadows on the board and on each other. **Off by default**: it is the costliest single effect on a full board — one shadow per resting stone, more in flight — and the board is the first thing most people open. |
 | **Level of detail** | **Simple cubes by default.** *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
 | **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
-| **Idle effects** | The master switch for all 30 effects that play while the board rests. Which of them may play is the **Effects** tab. |
+| **Idle effects** | The master switch for the effects that play while the board rests. Which of them may play is the **Space effects** tab. |
 | **Stone edges** | The dark seam drawn around each stone. |
 | **Neon grid** | The glowing grid on the board. |
 | **Grid colour** | The grid's colour. One choice drives the whole grid: its lit core, the halo and glow around it, and the brighter line along the board's edge, so they stay a family rather than drifting apart. |
@@ -929,18 +938,22 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 | **Star colours** | Warm old stars in the nucleus, blue-white young ones in the arms. Off is one colour of starlight. |
 | **Star glints** | The halo and cross glint on the brightest stars. |
 
-### Effects
+### Space effects and Market effects
 
-A switch for each of the **30** idle effects, listed under [Idle effects](#idle-effects) above,
-plus **all on** and **all off**, and **No repeats within**: how many other effects must play
-before one can play again (12 by default; 0 allows a repeat straight away). Turning them all off leaves the board still; so does the single
-**Idle effects** switch on the Block space tab.
+One tab per board. **Space effects** is a switch for each of the **28** idle effects the Block
+space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
+switch for each of the **24** the Markets board can play (the same list less Collapse, Tractor
+beam, Code rain, Power-up, Radar and Vortex, plus Energy pulse and Pipe bulge). Each tab has **all on** and **all off**, and its own
+**No repeats within**: how many other effects must play before one can play again (12 by
+default; 0 allows a repeat straight away). Turning a tab's switches all off leaves that board
+still; so does the single **Idle effects** switch on the Block space tab, or **Board effects** on
+Markets & Price.
 
 ### Markets & Price
 
 The candle board on Markets and Kiosk: the **star field** on or off, and **board effects** — one
 switch for everything that moves on this board, both the idle effects and the flight when the
-candles refresh.
+candles refresh. Which idle effects may play is the **Market effects** tab.
 
 Your toolbar choices are remembered too: the **exchange** whose candles are drawn and the
 **range** (24 hours, 48 hours or 7 days). Click them on the Markets page or set them here; either
