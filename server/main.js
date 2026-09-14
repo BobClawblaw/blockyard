@@ -423,7 +423,9 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     const build = async (dir, m) => {
       // at most four, and half what a dedicated build would take: the node shares this machine's disk
       // (an external one, on the first Mac), and the pacer only sees trouble after it has started
-      const workers = Math.max(1, Math.min(4, Math.floor(defaultWorkers() / 2)));
+      // ...or the number the config names: on spinning disks one reader is the fast one (parallel
+      // readers seek against each other and against the node), so addressIndexWorkers: 1 there
+      const workers = Number.isInteger(m.cfg?.addressIndexWorkers) && m.cfg.addressIndexWorkers > 0 ? m.cfg.addressIndexWorkers : Math.max(1, Math.min(4, Math.floor(defaultWorkers() / 2)));
       // ITS OWN CONNECTION (2026-09-14, the first Mac: the build's getblockhash batches sat at the back
       // of the monitor's one-in-flight lane behind multi-second mempool and block reads, and both
       // starved -- "heights 1,000 of 967,015" for a quarter of an hour). The build's calls are cheap

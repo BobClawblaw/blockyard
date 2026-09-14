@@ -55,6 +55,7 @@ export function localConfig(a) {
   if (a.rpcUser) { node.rpcUser = a.rpcUser; node.rpcPassword = a.rpcPassword ?? ''; }
   if (a.indexDir) node.addressIndex = a.indexDir;
   if (a.indexBuild === 'manual') node.addressIndexBuild = 'manual';   // the server builds a missing index on start unless told not to
+  if (Number.isInteger(a.workers) && a.workers > 0) node.addressIndexWorkers = a.workers;   // the server's background build uses the same number
   return { server: { host: a.host, port: Number(a.port) }, nodes: [node] };
 }
 
@@ -313,7 +314,8 @@ async function main() {
   const gb = result.facts.blockBytes ? Math.round(result.facts.blockBytes / 1e9 * 0.141) : 124;
   say(c.dim('History and balances on the explorer come from an index built from the'));
   say(c.dim(`node's block files: about ${gb} GB on disk, best on a different disk from`));
-  say(c.dim('the node\'s.'));
+  say(c.dim('the node\'s. If the block files are on spinning disks, answer 1 worker below:'));
+  say(c.dim('parallel readers seek against each other and against the node.'));
   // inside the checkout by default (operator, 2026-09-14, on the Mac: "It should honor the directory
   // it's run out of"): data/ is where this install keeps everything it writes, and it is gitignored
   a.indexDir = await ask('index directory', arg('index-dir', path.join(ROOT, 'data', 'index')), validate.newDir);
