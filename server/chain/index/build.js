@@ -74,6 +74,33 @@ export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()
   return Math.max(1, Math.min(16, cpus - 4, Math.floor(totalMem / 2.5e9)));
 }
 
+/**
+ * A pace for a build that shares its machine with the node (every build does now): before each
+ * file is handed to a worker, wait while the node's RPC is failing, its breaker is open, or its
+ * answers average more than `slowMs`; ease off (one file per `easeMs`) while they are merely slow.
+ * Reads from the lane's own telemetry, so it costs the node nothing to ask. (2026-09-14, the first
+ * Mac install: a build at full speed on the node's disk turned its RPC into 18 s answers and
+ * 90 s timeouts.)
+ */
+export function rpcPacer(rpc, { slowMs = 2000, easeMs = 750, holdMs = 10_000, onChange = null } = {}) {
+  let held = false;
+  return async () => {
+    for (;;) {
+      const t = rpc?.telemetry?.() ?? {};
+      const failing = !!t.breakerOpen || (t.lastError && (!t.lastGoodAt || t.lastError.at > t.lastGoodAt) && Date.now() - t.lastError.at < 60_000);
+      const avg = Number.isFinite(t.avgLatencyMs) ? t.avgLatencyMs : 0;
+      if (failing || avg > slowMs) {
+        if (!held) { held = true; onChange?.(true, t); }
+        await new Promise((r) => setTimeout(r, holdMs));
+        continue;
+      }
+      if (held) { held = false; onChange?.(false, t); }
+      if (avg > slowMs / 4) await new Promise((r) => setTimeout(r, easeMs));
+      return;
+    }
+  };
+}
+
 export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers(), files = null, onProgress = () => {}, pace = null }) {
   const t0 = performance.now();
   const stats = { format: FORMAT, workers, phases: {} };

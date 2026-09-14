@@ -24,7 +24,7 @@ import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { ROOT, loadConfig, resolveCookie } from '../server/config.js';
 import { runChecks, clientFor } from './check.js';
-import { buildIndex, defaultWorkers } from '../server/chain/index/build.js';
+import { buildIndex, defaultWorkers, rpcPacer } from '../server/chain/index/build.js';
 import { c, banner, step, checkLine, box, spinner, progress, progressLine, fmt, strip, wrapText, cols } from './ui.js';
 import { fileURLToPath } from 'node:url';
 
@@ -356,6 +356,7 @@ async function main() {
     try {
       const manifest = await buildIndex({
         rpc, blocksDir: path.join(node.datadir, 'blocks'), out: a.indexDir, workers: a.workers,
+        pace: rpcPacer(rpc, { onChange: (held) => bar.done(held ? c.dim('  paused while the node\'s RPC is slow or failing') : c.dim('  resumed')) }),
         onProgress: (p) => {
           if (p.phase !== phase) {
             if (phase) bar.done(strip(progressLine({ phase, done: 1, total: 1, elapsed: (Date.now() - phaseStart) / 1000 })));

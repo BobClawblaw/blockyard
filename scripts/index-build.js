@@ -7,7 +7,7 @@
 // stderr once a second; the manifest, with every phase's timings, goes to stdout at the end.
 import { loadConfig } from '../server/config.js';
 import { RpcClient } from '../server/rpc/client.js';
-import { buildIndex } from '../server/chain/index/build.js';
+import { buildIndex, rpcPacer } from '../server/chain/index/build.js';
 import path from 'node:path';
 import { progress, progressLine, strip, c, fmt } from './ui.js';
 
@@ -24,6 +24,7 @@ let phase = null, phaseStart = started;
 const bar = progress();
 const manifest = await buildIndex({
   rpc, blocksDir: path.join(node.datadir, 'blocks'), out,
+  pace: rpcPacer(rpc, { onChange: (held) => process.stderr.write(held ? '  paused while the node\'s RPC is slow or failing\n' : '  resumed\n') }),
   workers: arg('workers', null) ? Number(arg('workers')) : undefined,
   files: arg('files', null) ? arg('files').split(',').map(Number) : null,
   onProgress: (p) => {

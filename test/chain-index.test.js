@@ -158,3 +158,22 @@ test('BUILD AND LOOK UP: workers, 256 buckets, sort, manifest, and every script 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('THE PACER holds a build while the node is failing or slow, eases while it is merely slow, and lets it run when it is well', async () => {
+  const { rpcPacer } = await import('../server/chain/index/build.js');
+  let t = { avgLatencyMs: 100, lastError: null, lastGoodAt: Date.now(), breakerOpen: false };
+  const changes = [];
+  const pace = rpcPacer({ telemetry: () => t }, { slowMs: 2000, easeMs: 5, holdMs: 5, onChange: (held) => changes.push(held) });
+  let t0 = Date.now(); await pace(); assert.ok(Date.now() - t0 < 50, 'a well node: no wait');
+  t = { ...t, avgLatencyMs: 900 }; t0 = Date.now(); await pace(); assert.ok(Date.now() - t0 >= 4, 'merely slow: eased');
+  t = { ...t, avgLatencyMs: 5000 };
+  const p = pace(); await new Promise((r) => setTimeout(r, 12));
+  assert.deepEqual(changes, [true], 'too slow: held, and said so once');
+  t = { ...t, avgLatencyMs: 100 }; await p;
+  assert.deepEqual(changes, [true, false], 'released when the node recovers');
+  t = { ...t, lastError: { at: Date.now(), message: 'timeout' }, lastGoodAt: Date.now() - 1000 };
+  const q = pace(); await new Promise((r) => setTimeout(r, 12));
+  assert.equal(changes.at(-1), true, 'a fresh failure holds too');
+  t = { ...t, lastGoodAt: Date.now() + 1 }; await q;
+  assert.equal(changes.at(-1), false, 'and a good answer after it releases');
+});

@@ -402,7 +402,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   if (followers.size) {
     const { LiveIndex } = await import('./chain/index/live.js');
     const { registerLiveIndex, registerIndexBuild } = await import('./http/explorer.js');
-    const { buildIndex, defaultWorkers } = await import('./chain/index/build.js');
+    const { buildIndex, defaultWorkers, rpcPacer } = await import('./chain/index/build.js');
     const follow = (dir, m) => {
       const live = new LiveIndex(dir, { rpc: m.rpc, nodeId: m.id, log: { info: (msg) => app.log({ level: 'info', msg }), warn: (msg) => app.log({ level: 'warn', msg }) } });
       registerLiveIndex(dir, live);
@@ -429,16 +429,10 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       // PACED BY THE NODE'S OWN ANSWERS: the workers read the block files the node is also reading, so
       // when its RPC slows past two seconds the next file waits until it recovers (2026-09-14, the first
       // Mac install: 18 s answers and 90 s timeouts while the build ran flat out)
-      const SLOW_MS = 2000;
-      const pace = async () => {
-        for (;;) {
-          const t = m.rpc?.telemetry?.();
-          const slow = t && Number.isFinite(t.avgLatencyMs) && t.avgLatencyMs > SLOW_MS;
-          if (!slow) { if (status.paused) { status.paused = false; } return; }
-          if (!status.paused) { status.paused = true; app.log({ level: 'info', msg: `address index build: paused, the node's RPC is answering in ${(t.avgLatencyMs / 1000).toFixed(1)} s` }); }
-          await new Promise((r) => setTimeout(r, 10_000));
-        }
-      };
+      const pace = rpcPacer(m.rpc, { onChange: (held, t) => {
+        status.paused = held;
+        app.log({ level: 'info', msg: held ? `address index build: paused while the node's RPC is ${t.breakerOpen ? 'refused' : t.lastError ? 'failing' : `answering in ${((t.avgLatencyMs ?? 0) / 1000).toFixed(1)} s`}` : 'address index build: resumed' });
+      } });
       const say = (text, severity = 'info') => { m.addEvent?.({ kind: 'index', severity, tag: 'index', ts: Date.now(), text }); app.log({ level: severity === 'warn' ? 'warn' : 'info', msg: text }); };
       say(`address index: building ${dir} from ${m.id}'s block files with ${workers} workers -- the Overview shows the progress`);
       let phase = null, phaseAt = Date.now(), lastFlag = 0;

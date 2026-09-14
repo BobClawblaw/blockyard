@@ -634,7 +634,7 @@ tr.cpfp td:first-child::before { content: '↳ '; color: var(--accent); }
    scroll, the panel half-empty of look yet technically overflowing. Cards now start at
    132 px, may tighten to 116 px, and expand to fill, so the usual train exactly fills
    the panel with no scrollbar and no dead column. */
-.bcard { flex: 0 0 auto; width: 168px; min-width: 0; }
+.bcard { flex: 0 0 auto; width: 178px; min-width: 0; }
 /* A block that does not exist yet gets a sliver, not a card: three 156 px ghost cards
    used to OPEN the train, so the left third of the panel was dashed boxes reading
    "not yet assembled" and the real data started at x=500 px. */
@@ -660,7 +660,7 @@ canvas#ovGnTreemap { display: block }
 .delt { font-style: normal; color: var(--fg-faint); font-size: 10px }
 .bwhen { font-size: 10.5px; color: var(--fg-dim); margin: 3px 0 5px; font-variant-numeric: tabular-nums }
 .bwhen.longgap { color: var(--warn) }
-.bgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px }
+.bgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 6px }
 .bgrid > div { display: flex; justify-content: space-between; gap: 4px; font-size: 10.5px }
 .bgrid i { font-style: normal; color: var(--fg-faint) }
 .bgrid span { font-family: var(--mono); font-variant-numeric: tabular-nums }
@@ -1048,7 +1048,10 @@ canvas.chart.xs, .chart.xs { height: 86px }
 .bcard { width: 186px; }
 .bcard.next, .bcard.next.empty { width: 212px; }
 .bcard.tip { flex-basis: 186px; }
-.bgrid span, .brows span { font-size: 10px; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+/* A NUMBER NEVER BREAKS IN TWO (2026-09-14, the first Mac: "sat/tx 604" drew as "60" over "4" because
+   overflow-wrap: anywhere let a value wrap where the font ran wider). The value keeps its line;
+   the card is wide enough for six digits beside its label in any monospace at this size. */
+.bgrid span, .brows span { font-size: 10px; text-align: right; min-width: 0; white-space: nowrap; }
 .brows > div { gap: 6px }
 
 /* the zone labels are gone; reclaim the space they reserved */
