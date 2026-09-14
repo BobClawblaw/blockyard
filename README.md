@@ -23,7 +23,7 @@ bugs.**
 |---|---|
 | **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with **30 idle effects**, from ripples and light cycles to a lightning ball, ball lightning, a UFO's tractor beam, Missile Command, fireworks, code rain and a demoscene plasma. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
 | **A board you can tune.** Neon-tube blocks, a metallic sheen or a chrome finish that mirrors a horizon, a movable lamp, a touch of perspective, a spiral galaxy behind the board, and a switch for every one of the 30 effects — in a tabbed settings panel. Stored on the server (`config/blockyard.json`), so every screen sees the same board; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
-| **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so BlockYard builds its own from the node's block files (30 minutes, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
+| **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so BlockYard builds its own from the node's block files (**a few hours** on first start, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
 | **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
 | **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, full screen with one click. | ![Kiosk](docs/images/kiosk.jpg) |
 | **Tetrust, Blockout and Blockanoid.** Three playable games built on the same 3D engine — trust, but verify. Tetrust is Tetris: the well is the block-space board and the music is synthesised in the browser. Blockout is Breakout, where the wall is made of block-space stones and the bat follows your mouse. Blockanoid is Arkanoid: a different wall every level, silver bricks that take more than one hit, gold that takes none, and capsules that fall out of what you break — laser, wide, catch, slow, three balls, a life. All three pause when you look away and keep high scores per browser. | ![Tetrust](docs/images/tetrust.jpg) |
@@ -48,15 +48,16 @@ git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
 npm test            # optional: 862 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
-npm start           # builds the address index in the background; open http://127.0.0.1:21000
+npm start           # builds the address index in the background (a few hours); open http://127.0.0.1:21000
 ```
 
 `npm run setup` asks for the node's data directory, reads its `bitcoin.conf` for the rest,
 proves the credentials, the chain, `txindex`, the block files and how fast the node answers,
 writes `config/local.json`, and offers to start BlockYard there and then. The address index is
-built **by BlockYard itself, in the background**, the first time it starts: about 30 minutes on
-16 workers, longer on the default four, with progress on the Overview and a notification when it
-is done. Step by step for macOS and Linux: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**.
+built **by BlockYard itself, in the background**, the first time it starts, and **it takes a few
+hours** — about two on the default four workers on NVMe, longer on spinning disks (30 minutes on
+16 workers) — with progress on the Overview and a notification when it is done; every other page
+works meanwhile, and address pages fill in once it finishes. Step by step for macOS and Linux: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**.
 To try it first without a node: `npm run dev` runs against a built-in fake one on port 18088.
 To check a setup again later: `npm run check`.
 

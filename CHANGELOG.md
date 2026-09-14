@@ -6,7 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
+Nothing yet.
+
+## [0.0.9] — 2026-09-14
+
+The initial release. Everything in it, like everything before it, was written by an AI directed by a human
+operator, and audited by AI (`docs/SECURITY-AUDIT.md`, `docs/SECURITY-AUDIT-2026-09-14.md`). It is
+experimental pre-release software. BlockYard runs **on the machine that runs Bitcoin Core** (25.0 or
+later), because the explorer's address index is built from the node's own block files; a node on
+another machine, and the experimental node that earlier measurements were taken on, are not supported.
+864 unit tests, no dependencies. Tagged `v0.0.9`. **The address index takes a few hours to build** on first start (about two on four workers on NVMe); every other page works meanwhile.
+
+### The 3D boards' effects, per board
 
 - **Each 3D board has its own effects list.** The one Effects tab is now two: **Space effects**
   (the Block space board's 28 switches — every effect but the two drawn on a price line) and
@@ -35,15 +46,6 @@ All notable changes to this project are documented here. The format follows
   another in electric green, the instant they land, and half of those on to a third block.
 - The lightning ball is one pale gradient with a white-hot heart, and a pale burn behind it,
   instead of five stacked discs of deepening blue that read as a dark blot.
-
-## [0.0.9] — 2026-09-14
-
-The initial release. Everything in it, like everything before it, was written by an AI directed by a human
-operator, and audited by AI (`docs/SECURITY-AUDIT.md`, `docs/SECURITY-AUDIT-2026-09-14.md`). It is
-experimental pre-release software. BlockYard runs **on the machine that runs Bitcoin Core** (25.0 or
-later), because the explorer's address index is built from the node's own block files; a node on
-another machine, and the experimental node that earlier measurements were taken on, are not supported.
-863 unit tests, no dependencies. Tagged `v0.0.9`.
 
 ### The explorer's address history, from an index of our own
 

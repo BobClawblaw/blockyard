@@ -118,7 +118,7 @@ It writes `config/local.json` (mode 0600; a backup is kept if one was there) and
 number of workers is written as `addressIndexWorkers`, so the background build uses the same one.
 
 **Step 6, building the index** — the default is **(b)ackground**: BlockYard builds it itself
-once it starts, on worker threads, while every page keeps working. The Overview's "What this
+once it starts, on worker threads, while every page keeps working. **Expect the build to take a few hours** — about two on the installer's default of four workers on NVMe, longer on spinning disks — during which every other page works and address pages show the build's progress in place of a history. The Overview's "What this
 panel cannot tell you" box shows the progress (`the address index is being built: scan 1,234 of
 5,757 (21%), 1,204,511,033 rows so far, about 20 min left`), the address page says the same in
 place of a history, and a notification pops up at the start and when it is done (both appear in

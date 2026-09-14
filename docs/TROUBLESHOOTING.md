@@ -159,8 +159,8 @@ so far and an ETA; the address page repeats it. Things it says, and what they me
   [INSTALL](INSTALL.md#bitcoinconf-settings-worth-having), or let it run overnight.
 - **The ETA is wrong at first** — it is computed from the files done so far in the current phase
   and settles after the first few; files are not all the same size.
-- **Hours, not minutes** — 29 min 45 s is 16 workers on NVMe. Four workers (the installer's
-  default) are roughly four times slower; **spinning disks** are slower still whatever the
+- **Hours, not minutes** — expect **a few hours**: 29 min 45 s is 16 workers on NVMe, and four
+  workers (the installer's default) are roughly four times slower; **spinning disks** are slower still whatever the
   number, and there one worker is the fast setting, because parallel readers only seek against
   each other and against the node. Set `addressIndexWorkers` on the node entry in
   `config/local.json` (the installer writes the number you gave it) and restart: there is no

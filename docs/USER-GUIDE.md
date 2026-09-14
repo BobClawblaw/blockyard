@@ -379,8 +379,9 @@ height and amount, because those are the index's own.
 **Where this comes from.** Bitcoin Core has **no address index at any setting** — the RPCs an
 explorer would ask (`getaddressbalance`, `getaddresstxids`) belong to insight-style forks, and
 Core answers `Method not found`. So BlockYard builds its own from the node's block and undo
-files, one row per (address, transaction) with the net amount — about 30 minutes on 16 workers
-and 124 GB for the whole chain — and the server keeps it current as blocks arrive. The server
+files, one row per (address, transaction) with the net amount — **a few hours** for the whole
+chain on the installer's default of four workers (30 minutes on 16, on NVMe) and 124 GB — and the
+server keeps it current as blocks arrive. The server
 builds a missing index itself, in the background, the first time it starts with an index
 directory configured (`scripts/index-build.js` does the same by hand). Balances are checked
 against the node's `scantxoutset` to the satoshi. See

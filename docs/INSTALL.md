@@ -93,6 +93,8 @@ The index is built once from the node's own `blocks/blk*.dat` and `rev*.dat` fil
 build needs to run **on a machine that can read the node's data directory** -- the node's own
 machine, which is where BlockYard runs. After that the server keeps it current over RPC.
 
+**Expect the build to take a few hours** — about two on the installer's default of four workers on NVMe, longer on spinning disks — during which every other page works and address pages show the build's progress in place of a history.
+
 What it costs, measured on the full chain at height 966,930 (`docs/MEASUREMENTS.md` §30):
 **29 min 45 s** with 16 workers on NVMe (7.8 CPU-hours; peak 30 GB of memory, so about 2.5 GB
 per worker), and **124 GB** of disk for 5.89 billion 21-byte rows, one per (address, transaction)
