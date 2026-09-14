@@ -818,6 +818,18 @@ export function spaceOptions(s) {
  * decides whether there is a sky and a galaxy and where the galaxy sits; what the sky is made of
  * is one preference for every board.
  */
+// A slider's value as the panel prints it: to its step's decimals, always (operator, 2026-09-14: "these
+// sliders jump around when changing values. Many of our bars do this"). The panel row is a grid whose
+// control column sizes to fit, and the value was printed with String(): `1`, `0.9`, `0.35`, `0.0005`
+// -- a different width almost every notch, so the column resized and the slider moved under the
+// pointer. Fixed decimals make every value of a row the same width, and the CSS box (.cfgrow .val,
+// 6.5ch) holds the widest any row can print, which test/settings.test.js checks for every slider.
+export function formatRangeValue(step, v) {
+  const s = String(step);
+  const decimals = s.includes('e-') ? Number(s.split('e-')[1]) : (s.split('.')[1] ?? '').length;
+  return Number(v).toFixed(decimals);
+}
+
 export function enabledEffects(s) {
   const n = normalise(s);
   return Object.keys(n.effects).filter((k) => n.effects[k] === true);

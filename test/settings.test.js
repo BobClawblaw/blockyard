@@ -675,3 +675,30 @@ test('the grid settings actually reach the boards that draw them', () => {
   assert.equal(tetrustOptions({ tetrust: { gridColour: '#0000ff' } }).gridOpts.neonCell, 'rgba(0,0,255,0.093)',
     'and the shipped 1.55 lifts it, which is what makes the blue read at all');
 });
+
+test('A SLIDER\'S VALUE NEVER CHANGES WIDTH as it moves, and always fits its box', async () => {
+  // (operator, 2026-09-14: "these sliders jump around when changing values. Many of our bars do this").
+  // The value printed with String() changed width almost every notch -- "0", "0.0004" -- which resized
+  // the panel row's control column and slid the slider under the pointer.
+  const { PANEL, formatRangeValue } = await import('../public/js/settings.js');
+  const css = (await import('node:fs')).readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+  const box = Number(css.match(/\.cfgrow \.val \{[^}]*width: ([\d.]+)ch/)?.[1]);
+  assert.ok(box > 0, 'the value has a fixed width, not a minimum');
+  let sliders = 0;
+  for (const g of PANEL) for (const r of g.rows) {
+    if (r.kind !== 'range') continue;
+    sliders++;
+    const widths = new Set();
+    for (let v = r.min; v <= r.max + r.step / 2; v += r.step) {
+      const text = formatRangeValue(r.step, v);
+      assert.ok(!/e|\d{7,}/.test(text), `${g.group}.${r.key}: "${text}" is a number a person reads, not float noise`);
+      assert.ok(text.length <= box, `${g.group}.${r.key}: "${text}" fits the ${box}ch box`);
+      if (r.min >= 0 && Math.max(Math.abs(r.min), Math.abs(r.max)) < 10) widths.add(text.length);
+    }
+    if (widths.size) assert.equal(widths.size, 1, `${g.group}.${r.key}: every value is printed the same width (${[...widths]})`);
+  }
+  assert.ok(sliders >= 10, `every slider checked (${sliders})`);
+  assert.equal(formatRangeValue(0.0001, 0.0004), '0.0004');
+  assert.equal(formatRangeValue(0.0001, 0), '0.0000', 'zero is as wide as any other Depth');
+  assert.equal(formatRangeValue(0.1, 0.30000000000000004), '0.3');
+});

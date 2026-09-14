@@ -11,7 +11,7 @@ import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } fr
 import { viewerIdle } from './details3d.js';
 import {
   loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush,
-  SETTINGS_KEY, PANEL as SETTINGS_PANEL,
+  SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue,
 } from './settings.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets, summaryHtml as marketsSummaryHtml, REFRESH_MS as MARKETS_REFRESH_MS } from './markets.js';
@@ -1133,7 +1133,7 @@ async function boot() {
           ? `<select id="${id}" data-cfg="${g.group}.${r.key}">${r.options.map(([val, label]) => `<option value="${val}"${val === v ? ' selected' : ''}>${label}</option>`).join('')}</select>`
           : r.kind === 'colour'
             ? `<input type="color" id="${id}" data-cfg="${g.group}.${r.key}" value="${v}">`
-            : `<input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${v}</span>`;
+            : `<span class="cfgrange"><input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${formatRangeValue(r.step, v)}</span></span>`;
       return `<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
       }).join('')}</div>`;
     }).join('');
@@ -1188,7 +1188,8 @@ async function boot() {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'range' ? Number(el.value) : el.value;
     setSetting(loadSettings(), el.dataset.cfg, value);
     const out = cfgBody.querySelector(`[data-val-for="${el.dataset.cfg}"]`);
-    if (out) out.textContent = String(value);
+    // fixed decimals from the slider's own step, so the number never changes width (formatRangeValue)
+    if (out) out.textContent = el.type === 'range' ? formatRangeValue(el.step, value) : String(value);
     repaintSoon();     // the boards pick the new options up on their next paint
   });
 
