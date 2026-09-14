@@ -228,7 +228,7 @@ trimming one board's effects leaves the other's alone.
 | **Ripple**, **Outline sweep**, **Scan line**, **Tide** | fronts crossing the board: a spreading ring, traced edges, a tight line, a swell that lifts the cubes it passes under |
 | **Cascade**, **Twinkle**, **Sparkle** | the blocks light in fee-rate order; scattered flashes; a constellation, each block its own colour |
 | **Light cycles** | a TRON-style race in blue and orange from opposite edges, leaving light walls, until one crashes and de-rezzes |
-| **Lightning ball** | a pale plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust; on Markets it rides the price line from left to right |
+| **Lightning ball** | a pale plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
 | **Shockwave**, **Nova**, **Fireworks**, **Solar flare** | a hard ring that throws blocks into the air; an implosion then a brighter blast; three bursts; one block going supernova |
 | **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
 | **Code rain**, **Radar**, **Vortex** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward |
@@ -243,13 +243,13 @@ They are decoration only: they carry no data, they never play during a refresh, 
 are switched off entirely under `prefers-reduced-motion`. The Block space list is every effect
 but the two drawn on a price line (**Energy pulse**, **Pipe bulge**). The Markets board is eight
 units deep and as wide as the hours, so everything there moves **along the hours, left or right,
-never toward you**, and lights the candles or the line: fronts run along the chart, rings start
-on the candle row, the light cycles ride in from the two ends along the candle tops, the
-lightning ball rides the price line. Its list leaves out the two that move tiles (**Collapse**,
-**Tractor beam** — a candle is a price) and the four that travel the depth or turn in place
-(**Code rain**, **Power-up**, **Radar**, **Vortex**). Nothing on it waits its turn: the pulse,
-the bulge and ball lightning are picks like any other, and how often you see one is the
-length of the list you leave switched on.
+never toward you**, and lights the candles or the line. Its list is the **twelve** that
+translate to a chart: **Ripple**, **Outline sweep**, **Tide**, **Cascade**, **Twinkle**, **Scan
+line**, **Fireworks**, **Solar flare**, **Wave**, and the price line's own **Energy pulse**,
+**Pipe bulge** and **Ball lightning** (half its Block space size there). Fronts run along the
+chart, rings start on the candle row, the candles light where they stand. Nothing on it waits
+its turn: the pulse, the bulge and ball lightning are picks like any other, and how often you
+see one is the length of the list you leave switched on.
 
 The more you leave switched on, the less often you see any particular one — there is still
 only one effect every seven to thirteen seconds. The **all off** button on that tab leaves
@@ -943,8 +943,7 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 
 One tab per board. **Space effects** is a switch for each of the **28** idle effects the Block
 space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
-switch for each of the **24** the Markets board can play (the same list less Collapse, Tractor
-beam, Code rain, Power-up, Radar and Vortex, plus Energy pulse and Pipe bulge). Each tab has **all on** and **all off**, and its own
+switch for each of the **12** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
 **No repeats within**: how many other effects must play before one can play again (12 by
 default; 0 allows a repeat straight away). Turning a tab's switches all off leaves that board
 still; so does the single **Idle effects** switch on the Block space tab, or **Board effects** on

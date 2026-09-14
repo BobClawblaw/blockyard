@@ -177,19 +177,15 @@ export const DEFAULTS = Object.freeze({
     // number, not a switch: enabledEffects reads only the switches.
     noRepeat: 12,
   }),
-  // THE PRICE BOARD'S OWN LIST: details3d's MARKET_FX -- every effect but the two that move tiles
-  // (a candle is a price, not a thing to collapse or lift) and the four that travel the depth or
-  // turn in place (code rain, power-up, radar, vortex: operator, 2026-09-14, "it all needs to be
-  // left/right or right/left movement. Not coming towards the viewer"), plus the two that only a
-  // price line can carry. Its own no-repeat window too. Same defaults: all on, twelve.
+  // THE PRICE BOARD'S OWN LIST: details3d's MARKET_FX -- the twelve that translate to a candle
+  // chart (operator, 2026-09-14: "the selection I have made for the market effects is what we
+  // should ship with ... Many of the effects don't translate over to the market chart"). Its own
+  // no-repeat window too. All on, twelve.
   marketEffects: Object.freeze({
     ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
-    lightcycle: true, ball: true,
     pulse: true,          // the surge that runs the price line
     bulge: true,          // a sphere rolls through the pipe and it swells round it
-    shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
-    sparkle: true, checker: true, combo: true, aurora: true, plasma: true,
-    centipede: true, missile: true, stormball: true,
+    firework: true, flare: true, wave: true, stormball: true,
     noRepeat: 12,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
@@ -306,8 +302,6 @@ const FX_ROW = Object.freeze({
 // where an effect reads differently on the price board, the price board's hint
 const MARKET_HINT = Object.freeze({
   twinkle: 'Scattered candles flash white, each on its own beat',
-  lightcycle: 'Two riders in from the left and the right, their light walls running the candle tops, until one crashes',
-  ball: 'A plasma ball riding the price line from left to right, throwing bolts and a pale dust trail',
   pulse: 'The surge that runs the price line, blue behind the head',
   bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes',
   stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle often throws a green arc on to another, and that one sometimes on to a third',
@@ -479,12 +473,10 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'marketEffects',
     title: 'Market effects',
-    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from this list: everything that moves along the hours or lights the candles where they stand, plus the pulse and the bulge that only a price line can carry. The Board effects switch on the Markets & Price tab is the master.',
+    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the twelve that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'lightcycle', 'ball', 'pulse', 'bulge',
-      'shockwave', 'nova', 'firework', 'flare', 'wave', 'quake', 'sparkle', 'checker',
-      'combo', 'aurora', 'plasma', 'centipede', 'missile', 'stormball',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball',
     ], MARKET_HINT),
   }),
   Object.freeze({

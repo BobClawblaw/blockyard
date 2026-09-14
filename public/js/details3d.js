@@ -201,14 +201,15 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // "a lot of effects that don't work on the market display"): the fields are light patterns over
 // tiles and light candles as well as cubes; boulder dash collapses tiles and the tractor beam
 // lifts one, and a candle is a price, not a thing to move. The line effects stay the board's own.
-// ...AND THE PRICE BOARD MOVES LEFT AND RIGHT ONLY (operator, 2026-09-14: "For the markets effects,
-// it all needs to be left/right or right/left movement. Not coming towards the viewer. Always
-// interacting with either the grid price line or candles"). The board is eight units deep and as
-// wide as the hours, so anything that travels the depth axis comes at the viewer: code rain falls
-// down the columns and the power-up fills from the front, and the radar and the vortex turn in
-// place. Those four stay off the candles; the fronts, the rings and the riders are steered along
-// the hours by fxDirection/fxOrigin below.
-const NOT_ON_CANDLES = new Set(['boulderdash', 'tractor', 'rain', 'powerup', 'radar', 'vortex']);
+// THE MARKETS LIST IS THE TWELVE THAT TRANSLATE (operator, 2026-09-14: "I think the selection I
+// have made for the market effects is what we should ship with, and remove all the unchecked
+// options from selection. Many of the effects don't translate over to the market chart"). The
+// board is eight units deep and as wide as the hours: what works on it runs along the hours
+// (the fronts, the wave), spreads from the candle row (ripple, the bursts), lights candles
+// where they stand (cascade, twinkle, the flare), or is the price line's own (pulse, bulge, ball
+// lightning). The rest -- riders and walkers, the field patterns, anything that falls down the
+// depth or turns in place, anything that moves a tile -- stays on the block board.
+const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
 const LINE_ONLY = new Set(['pulse', 'bulge']);
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
@@ -216,7 +217,7 @@ const LINE_ONLY = new Set(['pulse', 'bulge']);
 // settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
 // for the price board), and test/effects.test.js holds each group to its list here.
 export const SPACE_FX = FX_KINDS.filter((k) => !LINE_ONLY.has(k));
-export const MARKET_FX = FX_KINDS.filter((k) => !NOT_ON_CANDLES.has(k));
+export const MARKET_FX = FX_KINDS.filter((k) => ON_CANDLES.has(k));
 const DEREZ_MS = 800;   // how long a crashed light cycle takes to shatter and fade
 
 /** A board with a price line: the Markets board (and Kiosk's), never the block board. */

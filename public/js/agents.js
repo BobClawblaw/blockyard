@@ -835,7 +835,10 @@ defineAgent('stormball', {
     const U = view.unit ?? 8;
     const c = project(s.at.x, s.at.y, s.at.z, view);
     // sized in grid units, so it reads as the same bright object on every board (bloom's note above)
-    const R = U * 3.4;   // bigger than the first cut: it is the one thing on the board (operator: "visually stunning")
+    // bigger than the first cut on the block board: it is the one thing there (operator: "visually
+    // stunning"); half that on the price board (operator, 2026-09-14: "make the ball lightning half
+    // the size it is now"), where it shares the view with the line
+    const R = U * (view.axes?.line?.length > 1 ? 1.7 : 3.4);
     // a jagged bolt between two screen points, `kink` pixels of wander, re-rolled each frame
     const bolt = (p, q, kink, steps) => {
       const pts = [p];

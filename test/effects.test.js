@@ -24,9 +24,10 @@ test('there are at least twenty-five effects, and every one has a switch of its 
   assert.deepEqual(switches('marketEffects'), MARKET_FX, 'the price board switches are exactly MARKET_FX, in order');
   assert.deepEqual(panelRows('marketEffects'), MARKET_FX, 'and its tab lists exactly those');
   assert.deepEqual([...new Set([...SPACE_FX, ...MARKET_FX])].sort(), [...FX_KINDS].sort(), 'between them, every effect has a switch');
-  assert.ok(SPACE_FX.length >= 25 && MARKET_FX.length >= 20, 'twenty-five or more on the block board, twenty or more on the price board');
+  assert.ok(MARKET_FX.every((k) => SPACE_FX.includes(k) || k === 'pulse' || k === 'bulge'), 'the price board offers nothing the block board lacks but the two line effects');
+  assert.ok(SPACE_FX.length >= 25, 'twenty-five or more on the block board');
+  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14), in FX_KINDS order');
   assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge'], 'the block board lacks only the two drawn on a price line');
-  assert.deepEqual(FX_KINDS.filter((k) => !MARKET_FX.includes(k)).sort(), ['boulderdash', 'powerup', 'radar', 'rain', 'tractor', 'vortex'], 'the price board lacks the two that move tiles and the four that travel the depth or turn in place');
   for (const group of ['effects', 'marketEffects']) {
     assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);
     assert.ok(switches(group).every((k) => DEFAULTS[group][k] === true), `${group}: all on, they were asked for`);
@@ -89,9 +90,9 @@ test('the switches reach the scheduler: the enabled list is what the boards are 
   assert.deepEqual(marketsOptions({}).fxKinds, MARKET_FX, 'the price board is given its own list');
   assert.equal(marketsOptions({}).fxNoRepeat, 12, 'and its own window');
   // THE LISTS ARE INDEPENDENT: the block board's switches say nothing about the price board's
-  const split = { effects: Object.fromEntries(SPACE_FX.map((k) => [k, false])), marketEffects: { noRepeat: 3, ...Object.fromEntries(MARKET_FX.map((k) => [k, k === 'pulse' || k === 'plasma'])) } };
+  const split = { effects: Object.fromEntries(SPACE_FX.map((k) => [k, false])), marketEffects: { noRepeat: 3, ...Object.fromEntries(MARKET_FX.map((k) => [k, k === 'pulse' || k === 'wave'])) } };
   assert.deepEqual(spaceOptions(split).fxKinds, [], 'the block board rests');
-  assert.deepEqual(marketsOptions(split).fxKinds, ['pulse', 'plasma'], 'while the price board plays its two');
+  assert.deepEqual(marketsOptions(split).fxKinds, ['pulse', 'wave'], 'while the price board plays its two');
   assert.equal(marketsOptions(split).fxNoRepeat, 3);
   assert.deepEqual(enabledEffects({ effects: Object.fromEntries(FX_KINDS.map((k) => [k, false])) }), [], 'all off is a board at rest');
 });
