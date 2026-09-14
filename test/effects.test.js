@@ -32,6 +32,9 @@ test('there are at least twenty-five effects, and every one has a switch of its 
     assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);
     assert.ok(switches(group).every((k) => DEFAULTS[group][k] === true), `${group}: all on, they were asked for`);
     assert.equal(PANEL.find((g) => g.group === group).bulk, true, `${group}: the tab has all on / all off`);
+    const slider = PANEL.find((g) => g.group === group).rows.find((r) => r.key === 'noRepeat');
+    assert.equal(slider.max, switches(group).length, `${group}: the no-repeat slider tops out at the list's length (${slider.max})`);
+    assert.ok(DEFAULTS[group].noRepeat <= slider.max, `${group}: the default sits on the slider`);
   }
 });
 

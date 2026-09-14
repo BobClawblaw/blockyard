@@ -218,7 +218,7 @@ both modes move to their new places rather than disappearing and reappearing.
 
 While the board is at rest, one effect plays every seven to thirteen seconds — the first
 about a second after the board lands — and never one that has played within the last twelve
-(**No repeats within**, 0 to 30). There are **30**, and each has its own switch. **Each board
+(**No repeats within**, 0 up to the length of that board's list). There are **30**, and each has its own switch. **Each board
 has its own list**: the Block space board's switches are the **Space effects** tab, the
 Markets board's are the **Market effects** tab, and each tab has its own no-repeat window, so
 trimming one board's effects leaves the other's alone.

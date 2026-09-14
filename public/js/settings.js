@@ -308,8 +308,11 @@ const MARKET_HINT = Object.freeze({
   cascade: 'The candles light in order, tallest first',
   flare: 'One candle goes supernova and lights its neighbourhood',
 });
-const NO_REPEAT_ROW = Object.freeze({ key: 'noRepeat', label: 'No repeats within', kind: 'range', min: 0, max: 30, step: 1, hint: 'An effect is never played again until this many other effects have played since. Where fewer effects are switched on, the one that has waited longest plays next' });
-const fxRows = (keys, hintFor = {}) => Object.freeze([NO_REPEAT_ROW, ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
+// THE WINDOW'S TOP IS THE LIST'S LENGTH (operator, 2026-09-14: "for the markets page, all we have
+// is 12 effects, so max the slider out at max effects"): a window wider than the list is the same
+// as one the list's length (chooseIdleFx clamps it), so the slider stops where the meaning does.
+const noRepeatRow = (max) => Object.freeze({ key: 'noRepeat', label: 'No repeats within', kind: 'range', min: 0, max, step: 1, hint: `An effect is never played again until this many other effects have played since (at ${max}, every effect on the list plays before any comes round again). Where fewer effects are switched on, the one that has waited longest plays next` });
+const fxRows = (keys, hintFor = {}) => Object.freeze([noRepeatRow(keys.length), ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
 
 export const PANEL = Object.freeze([
   Object.freeze({
