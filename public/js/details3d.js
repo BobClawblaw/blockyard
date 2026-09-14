@@ -158,7 +158,8 @@ const FX_MS = {
   // written as a number here -- it went stale twice as effects were culled.
   // tractor 6800 -> 8000 (2026-09-14): the drop is timed by real gravity now and needs the room
   centipede: 7400, tractor: 8000, missile: 7400,
-  boulderdash: 6400, portal: 7200,};
+  // stormball replaced portal (2026-09-14); slow on purpose -- it drifts across the whole view
+  boulderdash: 6400, stormball: 11000,};
 export const FX_KINDS = Object.keys(FX_MS);
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap

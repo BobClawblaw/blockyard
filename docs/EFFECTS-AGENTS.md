@@ -30,7 +30,7 @@ The agents that stayed:
 | `tractor` | a saucer that draws the tallest transaction up and puts it back |
 | `missile` | arcs raining down against interceptors rising to meet them |
 | `boulderdash` | the board gives way from a point, cubes collapsing outward |
-| `portal` | in one gateway, out the other, trail carried through |
+| `stormball` | ball lightning drifting across the whole view, off-screen to off-screen; its arcs electrify the blocks they strike (replaced `portal`, 2026-09-14) |
 
 Two consequences worth knowing. **No surviving agent HIDES a cube** -- boulder dash shortens rather
 than absorbs -- so the `hide` path is now covered only by the synthetic end-to-end test in

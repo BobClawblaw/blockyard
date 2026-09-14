@@ -206,8 +206,9 @@ test('an agent that alters the board actually alters it, on a REAL board', () =>
   assert.ok(bd.shrunk > 0, `boulder dash collapses cubes (${bd.shrunk} cube-frames shortened)`);
   assert.equal(bd.hid, 0, 'it shortens rather than hides -- nothing left on the board absorbs a cube');
   // and the control: an agent that alters nothing must alter nothing. This was `marble` until it
-  // was removed (2026-09-13); portal travels the same way and makes the same promise.
-  const pt = sweep('portal');
+  // was removed (2026-09-13), then `portal` until that was replaced (2026-09-14); ball lightning
+  // electrifies blocks -- light only -- and makes the same promise.
+  const pt = sweep('stormball');
   assert.equal(pt.hid, 0, 'an agent that only travels hides nothing');
   assert.equal(pt.shrunk, 0, 'and shortens nothing');
 });
@@ -353,3 +354,44 @@ test('NO AGENT IS BLINDED BY A FLAT BOARD -- the guard for a bug found three tim
   }
 });
 
+
+test('BALL LIGHTNING crosses the whole view off-screen to off-screen, and its arcs electrify only what they strike', () => {
+  // (operator, 2026-09-14: "Remove the Portal effect, and replace it with a bright electric blue neon
+  // sphere of slow moving ball lightning ... random arcs of energy burst out from the ball lightning
+  // and electrifies the blocks the arcs touch. Have it move from one end of the view space to the
+  // other disappearing off-screen.")
+  assert.equal(AGENTS.portal, undefined, 'the portal is gone');
+  const W = 44, H = 44;
+  const tiles = [];
+  for (let x = 0; x < W; x += 2) for (let y = 0; y < H; y += 2) if ((x + y) % 6 !== 0) tiles.push({ txid: `b${x}_${y}`, x, y, s: 2, tall: 1 + ((x * y) % 3), color: '#335577', rate: 5 });
+  const build = (seed) => AGENTS.stormball.build({ st: {}, seed, W, H, tiles, tops: null, rnd: rng(seed) });
+  const a = build(7);
+  const at = (u) => AGENTS.stormball.frame(a, u, { ms: 11000 }).stormball.at;
+  // off-screen at both ends: past a real panel's extent (obliqueFit for a square 44-unit board spans
+  // x -4.8 .. 48.8) by more than the sphere and its corona
+  for (const u of [0, 0.999]) assert.ok(at(u).x < -4.8 - 6 || at(u).x > 48.8 + 6, `off the panel at u=${u} (x=${at(u).x.toFixed(1)})`);
+  assert.ok(Math.sign(at(0).x - W / 2) !== Math.sign(at(0.999).x - W / 2), 'and it ends on the opposite side');
+  const tallest = Math.max(...tiles.map((t) => t.tall));
+  assert.ok(at(0.5).z > tallest + 2, 'floating above the tallest block');
+  // arcs: they land only on real blocks, and only the blocks struck light up
+  const struck = new Set(), lit = new Set();
+  let arcFrames = 0;
+  for (let u = 0.2; u < 0.8; u += 0.005) {
+    const f = AGENTS.stormball.frame(a, u, { ms: 11000 });
+    if (f.stormball.arcs.length) arcFrames++;
+    for (const arc of f.stormball.arcs) {
+      const t = tiles.find((b) => arc.to.x > b.x && arc.to.x < b.x + b.s && arc.to.y > b.y && arc.to.y < b.y + b.s);
+      assert.ok(t, `an arc lands on a block, not on bare floor (${arc.to.x}, ${arc.to.y})`);
+      assert.equal(arc.to.z, t.tall, 'on its top');
+      struck.add(t.txid);
+    }
+    const fx = { kind: 'stormball', u, amp: 1, gridW: W, gridH: H, ...f };
+    for (const t of tiles) if (fxAt(t, fx).glow > 0.3) lit.add(t.txid);
+  }
+  assert.ok(arcFrames > 20, `arcs keep bursting out (${arcFrames} frames with an arc)`);
+  assert.ok(struck.size > 10, `and strike many blocks (${struck.size})`);
+  assert.ok([...struck].every((id) => lit.has(id)), 'every block an arc touched was electrified');
+  // replays identically from its seed, and a different seed takes another path
+  assert.deepEqual(build(7).arcs, a.arcs);
+  assert.notDeepEqual(build(8).from, a.from);
+});

@@ -669,74 +669,121 @@ defineAgent('boulderdash', {
 
 
 
-// --- 24. PORTAL -----------------------------------------------------------
+// --- 24. BALL LIGHTNING ---------------------------------------------------
 //
-// Two portals open on opposite edges; an agent enters one and leaves the other, CARRYING ITS TRAIL
-// THROUGH the discontinuity -- which is a visual nothing else here can make.
-defineAgent('portal', {
-  build({ W, H, rnd }) {
-    const horiz = rnd() < 0.5;
-    const inAt = horiz ? { x: 0.5, y: 1 + rnd() * (H - 2) } : { x: 1 + rnd() * (W - 2), y: 0.5 };
-    const outAt = horiz ? { x: W - 0.5, y: 1 + rnd() * (H - 2) } : { x: 1 + rnd() * (W - 2), y: H - 0.5 };
-    return { horiz, inAt, outAt, W, H };
+// (operator, 2026-09-14: "Remove the Portal effect, and replace it with a bright electric blue neon
+// sphere of slow moving ball lightning that crackles with energy, and random arcs of energy burst out
+// from the ball lightning and electrifies the blocks the arcs touch. Have it move from one end of the
+// view space to the other disappearing off-screen.")
+//
+// The route and every arc are decided at build, from the seeded rnd -- the board is still while an
+// effect runs -- so a frame only asks where the ball is and which arcs are alive. An arc is aimed at a
+// real block near the ball, never at empty floor: the ask is that arcs electrify what they touch.
+// The crackle on the sphere itself is re-rolled every frame (Math.random, as this file allows for
+// sparkle that is never asserted frame to frame): electrical precisely because it never repeats.
+defineAgent('stormball', {
+  build({ W, H, tiles, tops, rnd }) {
+    tops ??= cellTops(tiles ?? [], W, H);
+    const top = (cx, cy) => (cx >= 0 && cx < W && cy >= 0 && cy < H ? tops[cy * W + cx] : 0);
+    let highest = 0;
+    for (let i = 0; i < W * H; i++) highest = Math.max(highest, tops[i] ?? 0);
+    // across the board the long way round, far enough past both edges to start and end off-screen
+    const leftToRight = rnd() < 0.5;
+    const margin = Math.max(W, H) * 0.55 + 6;
+    const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
+    const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
+    const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
+    const alt = highest + 3.5;
+    // bursts of arcs: a few a second, one to three at a time, each alive for a moment
+    const arcs = [];
+    for (let u = 0.03; u < 0.97; u += 0.016 + 0.035 * rnd()) {
+      const n = 1 + Math.floor(rnd() * 4);
+      for (let k = 0; k < n; k++) arcs.push({ u0: u + rnd() * 0.01, life: 0.02 + 0.035 * rnd(), ang: rnd() * Math.PI * 2, reach: 3.5 + 8 * rnd(), seed: Math.floor(rnd() * 1e9) });
+    }
+    return { from, to, weave, alt, arcs, W, H, top };
   },
   frame(a, u) {
-    const THROUGH = 0.5;
-    const heads = [
-      { x: a.inAt.x, y: a.inAt.y, color: [120, 170, 255], alpha: 0.9, r: 2.2 },
-      { x: a.outAt.x, y: a.outAt.y, color: [255, 150, 60], alpha: 0.9, r: 2.2 },
-    ];
-    // before halfway it runs toward the blue one; after, it comes out of the orange
-    let at;
-    if (u < THROUGH) {
-      const v = u / THROUGH;
-      const from = a.horiz ? { x: a.W * 0.72, y: a.inAt.y } : { x: a.inAt.x, y: a.H * 0.72 };
-      at = { x: from.x + (a.inAt.x - from.x) * v, y: from.y + (a.inAt.y - from.y) * v };
-    } else {
-      const v = (u - THROUGH) / (1 - THROUGH);
-      const to = a.horiz ? { x: a.W * 0.28, y: a.outAt.y } : { x: a.outAt.x, y: a.H * 0.28 };
-      at = { x: a.outAt.x + (to.x - a.outAt.x) * v, y: a.outAt.y + (to.y - a.outAt.y) * v };
+    const at = (uu) => {
+      const x = a.from.x + (a.to.x - a.from.x) * uu;
+      const y = a.from.y + (a.to.y - a.from.y) * uu + a.weave.amp * Math.sin(uu * Math.PI * 2 * a.weave.cycles + a.weave.phase);
+      return { x, y, z: a.alt + 0.6 * Math.sin(uu * 17) };
+    };
+    const ball = at(u);
+    const live = [];
+    const heads = [{ x: ball.x, y: ball.y, color: [70, 180, 255], alpha: 0.7, r: 4.5 }];
+    for (const arc of a.arcs) {
+      const age = (u - arc.u0) / arc.life;
+      if (age < 0 || age > 2.2) continue;                         // alive, then an afterglow on the block
+      const p = at(arc.u0);
+      // the block the arc strikes: the tallest cell near where it is thrown, and none if the floor is bare
+      const aimX = p.x + Math.cos(arc.ang) * arc.reach, aimY = p.y + Math.sin(arc.ang) * arc.reach;
+      let hit = null;
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        const cx = Math.floor(aimX) + dx, cy = Math.floor(aimY) + dy, h = a.top(cx, cy);
+        if (h > 0 && (!hit || h > hit.z)) hit = { x: cx + 0.5, y: cy + 0.5, z: h };
+      }
+      if (!hit) continue;
+      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6 });
+      // THE BLOCK IT TOUCHES IS ELECTRIFIED: a hard blue flare that flickers while the arc lives and
+      // dies away after it -- lit through fxAt's heads, so only the cubes actually struck light up
+      const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
+      const glow = age <= 1 ? flicker : Math.max(0, 1 - (age - 1) / 1.2) * 0.7;
+      heads.push({ x: hit.x, y: hit.y, color: [60, 190, 255], alpha: Math.min(1, glow * 1.25), r: 1.2 });
     }
-    // the traveller lights the cubes in its own yellow, so the board glows with it rather than
-    // in a colour the ball is not (operator, 2026-09-13: "a glowing yellow neon ball")
-    heads.push({ x: at.x, y: at.y, color: [255, 225, 90], alpha: 1, r: 1.5 });
-    return { portal: { inAt: a.inAt, outAt: a.outAt, at, through: u >= THROUGH }, heads };
+    return { stormball: { at: ball, arcs: live }, heads };
   },
   draw(ctx, view, lw) {
-    const p = view.fx?.portal;
-    if (!p) return;
+    const s = view.fx?.stormball;
+    if (!s) return;
     const U = view.unit ?? 8;
-    const W2 = Math.max(lw * 2, U * 0.16);
-    const gate = (g, rgb) => {
-      const c = project(g.x, g.y, 1.8, view);
-      const rx = U * 1.1, ry = U * 2.2;
-      const oval = [];
-      for (let i = 0; i <= 24; i++) {
-        const ang = (i / 24) * Math.PI * 2;
-        oval.push({ x: c.x + Math.cos(ang) * rx, y: c.y + Math.sin(ang) * ry });
+    const c = project(s.at.x, s.at.y, s.at.z, view);
+    // sized in grid units, so it reads as the same bright object on every board (bloom's note above)
+    const R = U * 2.6;
+    // a jagged bolt between two screen points, `kink` pixels of wander, re-rolled each frame
+    const bolt = (p, q, kink, steps) => {
+      const pts = [p];
+      for (let i = 1; i < steps; i++) {
+        const f = i / steps, nx = -(q.y - p.y), ny = q.x - p.x, L = Math.hypot(nx, ny) || 1;
+        const off = (Math.random() - 0.5) * 2 * kink * Math.sin(Math.PI * f);
+        pts.push({ x: p.x + (q.x - p.x) * f + (nx / L) * off, y: p.y + (q.y - p.y) * f + (ny / L) * off });
       }
-      poly(ctx, oval, `rgba(${rgb.join(',')},0.22)`);
-      wire(ctx, oval, `rgba(${rgb.join(',')},0.95)`, W2);
-      bloom(ctx, c.x, c.y, rx * 1.4, rgb, 0.4);
+      pts.push(q);
+      return pts;
     };
-    gate(p.inAt, [110, 165, 255]);
-    gate(p.outAt, [255, 150, 60]);
-    // A GLOWING YELLOW NEON BALL (operator, 2026-09-13: "Have the Portal effect rendering a glowing
-    // yellow neon ball"). It was a single bloom in white-blue going in and pale orange coming out,
-    // which read as a smudge rather than an object. Now a real ball: a wide soft corona, three
-    // stacked bodies and a hot pale centre, all plain rgba fills -- no shadowBlur, no globalAlpha,
-    // no composite modes, the same rules the rest of this file is scanned for.
-    const c = project(p.at.x, p.at.y, 1.3, view);
-    const R = U * 0.78;
-    bloom(ctx, c.x, c.y, R * 2.8, [255, 210, 40], 0.9);
+    // the arcs first, so the sphere sits over the roots of its own lightning
+    for (const arc of s.arcs) {
+      const end = project(arc.to.x, arc.to.y, arc.to.z, view);
+      const main = bolt(c, end, Math.hypot(end.x - c.x, end.y - c.y) * 0.18, 9);
+      line(ctx, main, `rgba(30,120,255,${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1));
+      line(ctx, main, `rgba(60,170,255,${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw * 4, U * 0.45));
+      line(ctx, main, `rgba(140,220,255,${(0.95 * arc.strength).toFixed(3)})`, Math.max(lw * 2, U * 0.2));
+      line(ctx, main, `rgba(245,252,255,${arc.strength.toFixed(3)})`, Math.max(lw, U * 0.08));
+      // a fork off the main channel, and a spark where it lands
+      const k = 3 + Math.floor(Math.random() * 4);
+      const fork = main[k], forkEnd = { x: fork.x + (Math.random() - 0.5) * U * 3, y: fork.y + (Math.random() - 0.5) * U * 3 };
+      line(ctx, bolt(fork, forkEnd, U * 0.5, 4), `rgba(130,215,255,${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw, U * 0.08));
+      bloom(ctx, end.x, end.y, U * 2.2, [90, 200, 255], arc.strength);
+    }
+    // the sphere: a wide electric corona, then neon shells toward a white-hot core
+    bloom(ctx, c.x, c.y, R * 3.6, [30, 130, 255], 1);
     for (const [rr, col] of [
-      [1.95, 'rgba(255,185,15,0.30)'],
-      [1.30, 'rgba(255,215,55,0.58)'],
-      [0.85, 'rgba(255,238,130,0.93)'],
-      [0.48, 'rgba(255,252,205,1)'],
+      [1.35, 'rgba(20,110,255,0.35)'],
+      [1.0, 'rgba(50,160,255,0.62)'],
+      [0.72, 'rgba(110,205,255,0.85)'],
+      [0.42, 'rgba(200,240,255,0.95)'],
+      [0.2, 'rgba(255,255,255,1)'],
     ]) {
       ctx.fillStyle = col;
       ctx.beginPath(); ctx.arc(c.x, c.y, R * rr, 0, Math.PI * 2); ctx.fill();
+    }
+    // THE CRACKLE: short filaments skittering over and just off the surface, new every frame
+    for (let i = 0; i < 14; i++) {
+      const ang = Math.random() * Math.PI * 2, r0 = R * (0.35 + 0.5 * Math.random()), r1 = R * (1.05 + 0.55 * Math.random());
+      const p = { x: c.x + Math.cos(ang) * r0, y: c.y + Math.sin(ang) * r0 };
+      const q = { x: c.x + Math.cos(ang + (Math.random() - 0.5) * 0.9) * r1, y: c.y + Math.sin(ang + (Math.random() - 0.5) * 0.9) * r1 };
+      const pts = bolt(p, q, R * 0.22, 4);
+      line(ctx, pts, 'rgba(90,190,255,0.55)', Math.max(lw * 2.2, U * 0.12));
+      line(ctx, pts, 'rgba(230,248,255,0.95)', Math.max(lw, U * 0.04));
     }
   },
 });
