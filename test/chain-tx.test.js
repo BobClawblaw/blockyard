@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { decodeTx, decodeBlock, classifyScript, segwitAddress, base58check, Reader } from '../server/chain/tx.js';
+import { decodeTx, decodeBlock, classifyScript, segwitAddress, base58check, Reader, addressToScript } from '../server/chain/tx.js';
 
 const FX = JSON.parse(readFileSync(new URL('./fixtures/chain-tx.json', import.meta.url), 'utf8'));
 
@@ -96,4 +96,22 @@ test('a truncated or padded transaction is an error, never a partial decode', ()
   assert.throws(() => decodeTx(f.hex.slice(0, -10)), /truncated/);
   assert.throws(() => decodeTx(f.hex + '00'), /trailing/);
   assert.throws(() => new Reader(Buffer.alloc(8)).bytes(9), RangeError);
+});
+
+test('an address decodes back to exactly the script it was encoded from, and a bad one is null', () => {
+  // every real output address in the fixtures round-trips: address -> script == the output's script
+  let n = 0;
+  for (const f of FX.txs) for (const o of decodeTx(f.hex).vout) {
+    if (!o.scriptPubKey.address) continue;
+    assert.equal(addressToScript(o.scriptPubKey.address)?.toString('hex'), o.scriptPubKey.hex, o.scriptPubKey.address);
+    n++;
+  }
+  assert.ok(n >= 8, `round-tripped ${n} real addresses across every address type`);
+  assert.equal(addressToScript('1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa').toString('hex'), '76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac');
+  assert.equal(addressToScript('BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4').toString('hex'), '0014751e76e8199196d454941c45d1b3a323f1433bd6', 'upper case is valid bech32');
+  for (const bad of ['1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNb', 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5', 'bc1Qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+    'tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', 'bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', '', 'hello']) {
+    assert.equal(addressToScript(bad), null, `"${bad}" is not a mainnet address`);
+  }
+  assert.match(addressToScript('tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx', 'testnet4').toString('hex'), /^0014/);
 });

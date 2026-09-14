@@ -48,13 +48,24 @@ export function readChainFile(file, key) {
 /**
  * The records in a de-obfuscated blk or rev file: { offset, size, body } for each, where body is a
  * subarray (no copy). `trailer` is 32 for rev files (the checksum after each record), 0 for blk.
+ * Pass the file's `key` so a preallocated tail is recognised after de-obfuscation.
  * A zero magic is the unwritten tail Core preallocates, so framing stops there.
  */
-export function* records(buf, magic = MAGIC.main, trailer = 0) {
+export function* records(buf, magic = MAGIC.main, trailer = 0, key = null) {
   let pos = 0;
   while (pos + 8 <= buf.length) {
     const m = buf.readUInt32LE(pos);
     if (m === 0) return;                                    // preallocated, never written
+    // THE UNWRITTEN TAIL IS ZEROS ON DISK, NOT OBFUSCATED ZEROS. Core preallocates the file it is
+    // appending to and never XORs the space it has not written, so once the buffer is de-obfuscated
+    // that tail reads as the key itself. Found on the live file (blk05755.dat) at the end of a full
+    // index build: "bad magic 716b8de5" is e5 8d 6b 71, the first half of xor.dat. With the key
+    // given, raw zeros are recognised as the end.
+    if (m !== magic && key && !key.every((b) => b === 0)) {
+      let raw0 = true;
+      for (let i = 0; i < 8 && raw0; i++) raw0 = (buf[pos + i] ^ key[(pos + i) % key.length]) === 0;
+      if (raw0) return;
+    }
     if (m !== magic) throw new Error(`bad magic ${m.toString(16)} at offset ${pos}`);
     const size = buf.readUInt32LE(pos + 4);
     const start = pos + 8;

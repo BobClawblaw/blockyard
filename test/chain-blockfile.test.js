@@ -87,6 +87,12 @@ test('records frame blk and rev files, stop at the preallocated tail, and XOR by
   assert.ok(got[0].body.equals(block));
   // a record cut off by the end of a file still being written is not returned
   assert.equal([...records(back.subarray(0, 8 + block.length + 20), MAGIC.main)].length, 1);
+  // THE LIVE FILE'S TAIL IS RAW ZEROS: Core preallocates without obfuscating, so once the whole file
+  // is de-obfuscated that tail reads as the key (found on blk05755.dat: "bad magic 716b8de5")
+  const live = Buffer.concat([unxor(Buffer.from(frame(block)), key, 0), Buffer.alloc(64)]);
+  const opened = unxor(Buffer.from(live), key, 0);
+  assert.throws(() => [...records(opened, MAGIC.main)], /bad magic/, 'without the key the tail looks like garbage');
+  assert.equal([...records(opened, MAGIC.main, 0, key)].length, 1, 'with it, the raw zeros are the end of the file');
 
   // a rev record carries Core's checksum: hash256(previous block hash || undo bytes)
   const undoBody = Buffer.from([0]);

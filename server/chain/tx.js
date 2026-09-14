@@ -98,6 +98,57 @@ export function segwitAddress(hrp, version, program) {
   return hrp + '1' + [...data, ...check].map((d) => CHARSET[d]).join('');
 }
 
+// --- addresses back to scripts -------------------------------------------
+// The inverse of the encoders above, for lookups that start from an address someone typed. Returns
+// the scriptPubKey an address pays, or null for anything that is not a valid address on `network`
+// -- a checksum that fails is null, never a best guess.
+function base58decode(str) {
+  let n = 0n;
+  for (const ch of str) { const v = B58.indexOf(ch); if (v < 0) return null; n = n * 58n + BigInt(v); }
+  let hex = n.toString(16); if (hex.length % 2) hex = '0' + hex;
+  const lead = str.match(/^1*/)[0].length;
+  return Buffer.concat([Buffer.alloc(lead), n === 0n ? Buffer.alloc(0) : Buffer.from(hex, 'hex')]);
+}
+function bech32decode(addr) {
+  const lower = addr.toLowerCase();
+  if (addr !== lower && addr !== addr.toUpperCase()) return null;           // mixed case is invalid
+  const sep = lower.lastIndexOf('1');
+  if (sep < 1 || sep + 7 > lower.length || lower.length > 90) return null;
+  const hrp = lower.slice(0, sep);
+  const data = [];
+  for (const ch of lower.slice(sep + 1)) { const v = CHARSET.indexOf(ch); if (v < 0) return null; data.push(v); }
+  const expand = [...hrp].map((c) => c.charCodeAt(0) >> 5).concat([0], [...hrp].map((c) => c.charCodeAt(0) & 31));
+  const mod = polymod([...expand, ...data]);
+  const version = data[0];
+  const constant = version === 0 ? 1 : 0x2bc830a3;
+  if (mod !== constant) return null;
+  let acc = 0, bits = 0;
+  const program = [];
+  for (const v of data.slice(1, -6)) {
+    acc = (acc << 5) | v; bits += 5;
+    while (bits >= 8) { bits -= 8; program.push((acc >>> bits) & 255); }
+  }
+  if (bits >= 5 || ((acc << (8 - bits)) & 255)) return null;                  // non-zero padding
+  return { hrp, version, program: Buffer.from(program) };
+}
+export function addressToScript(address, network = 'main') {
+  const net = netOf(network);
+  const a = String(address ?? '').trim();
+  const sw = a.toLowerCase().startsWith(net.hrp + '1') ? bech32decode(a) : null;
+  if (sw) {
+    if (sw.hrp !== net.hrp || sw.version > 16 || sw.program.length < 2 || sw.program.length > 40) return null;
+    if (sw.version === 0 && sw.program.length !== 20 && sw.program.length !== 32) return null;
+    return Buffer.concat([Buffer.from([sw.version === 0 ? 0 : 0x50 + sw.version, sw.program.length]), sw.program]);
+  }
+  const raw = base58decode(a);
+  if (!raw || raw.length !== 25) return null;
+  if (!hash256(raw.subarray(0, 21)).subarray(0, 4).equals(raw.subarray(21))) return null;
+  const hash = raw.subarray(1, 21);
+  if (raw[0] === net.p2pkh) return Buffer.concat([Buffer.from([0x76, 0xa9, 0x14]), hash, Buffer.from([0x88, 0xac])]);
+  if (raw[0] === net.p2sh) return Buffer.concat([Buffer.from([0xa9, 0x14]), hash, Buffer.from([0x87])]);
+  return null;
+}
+
 // --- scripts -------------------------------------------------------------
 // Core's Solver (script/solver.cpp), in its order, with its names.
 const OP_0 = 0x00, OP_PUSHDATA1 = 0x4c, OP_PUSHDATA2 = 0x4d, OP_PUSHDATA4 = 0x4e, OP_1 = 0x51, OP_16 = 0x60;

@@ -1135,3 +1135,92 @@ minutes without finishing, and a second attempt (one hash per distinct record) s
 file's blocks in chain order by their previous-block links and walks the records in step,
 checksum-verified: file 0 pairs in 5.9 s, a recent file in ~15 ms, and every block but
 genesis (which has no undo) pairs.
+
+## 29. Storing the address index: SQLite against sorted flat files (2026-09-14)
+
+`node --no-warnings scripts/index-bench.js --files 384,2685,5370` builds real index rows from three
+file pairs (2015, 2021 and 2026 — 436 blocks, 695,639 transactions) and stores them two ways.
+
+**The row.** One per (address script, transaction that touched it): an output paying the script, or
+an input spending an output that paid it, the spent script taken from the undo file. Key: the first
+8 bytes of sha256(script), block height, position in the block. Value: the net satoshis that
+transaction moved for the script. The transaction itself stays in the node (`txindex`). A script
+paid and spent in the same transaction is one row, which removes **18.3%** of raw rows here
+(21.6% on the 2026 file alone): 3,827,812 raw rows became **3,128,638**, 4.50 per transaction.
+
+| | SQLite (`node:sqlite`, WITHOUT ROWID) | sorted flat file |
+|---|---|---|
+| bytes per row | 26.5 as inserted; 24.1 after VACUUM; 27.4 bulk-loaded in key order | **21.0** with amounts; **13.0** history only (+ a sparse index of one key per 4,096 rows) |
+| build rate | 418 k rows/s in arrival order; **1.40 M rows/s** in key order | sort **5.53 M rows/s**, write **2.99 M rows/s** |
+| lookup (warm, 20,000 real scripts) | **0.0027 ms** | 0.057 ms (one 86 KB read per lookup) |
+
+**What these numbers do not show.** The whole sample fits in memory, so every figure is the
+in-memory regime. At full size the arrival-order SQLite rate will not hold: a B-tree fed random
+keys past RAM pays a disk seek per insert. That collapse was not measured and nothing here should
+be read as its rate. Key-order loading avoids it, but requires sorting every row first -- the same
+sort the flat file needs.
+
+**Extrapolated to the chain** (MEASUREMENTS 28: 7.13 B raw rows, less the 18.3% merged here ≈
+**5.8 B rows**; the merge share varies by era, so ±10%):
+
+| design | size |
+|---|---|
+| flat, history only (13 B) | ≈ 76 GB |
+| flat, with amounts (21 B) | ≈ 122 GB |
+| SQLite, with amounts (24–27 B) | ≈ 140–160 GB, before any second index for reorg deletes by height |
+
+A key-order SQLite load of 5.8 B rows at 1.40 M rows/s is ≈ 69 minutes on one thread; the flat
+file's sort is ≈ 18 minutes of single-thread CPU if bucketed by hash prefix so each bucket sorts in
+memory. Both sit on top of the 9.5 single-core hours of decoding (§28), which splits across cores
+because files are independent.
+
+## 30. The address index, built and compared (2026-09-14)
+
+`node scripts/index-build.js --out ~/blockyard-index --workers 16` read every blk/rev pair from the
+local node's `/storage` NVMe and wrote to a separate NVMe (`/`). `node scripts/index-benchmark.js`
+then measured it against the node.
+
+**Build.** 29 min 45 s wall, 16 workers (1,633% CPU; 7.8 CPU-hours; peak RSS 30 GB):
+
+| phase | time |
+|---|---|
+| block hashes 0..966,930 (`getblockhash`, batches of 5,000) | 49 s |
+| scan 5,756 file pairs (lean rows, not the full decoder) | 25 min 45 s |
+| sort 256 buckets | 3 min 10 s |
+
+5,890,519,289 rows, **123.7 GB**, every height 0..966,930 present exactly once, 2 stale blocks
+skipped, 0 missing undo records, 0 duplicate rows. §29 projected ≈5.8 B rows and ≈122 GB: both
+within 1.5%. The first attempt failed on its last file, the one the node is still writing: Core
+preallocates it as raw zeros, which read as the XOR key once de-obfuscated (`records` now takes the key).
+
+**Correct.** 40 of 40 addresses (the heavy ones below except the genesis address, and a sample from
+across the chain) have an index balance equal, to the satoshi, to `scantxoutset` at the same height.
+Before that, every (script, transaction) pair of four whole blocks from 2009 to the tip was found
+at its height and position with its net amount (21,351 pairs, a 5-file test build). The genesis
+address is excluded from the balance check on purpose: its first 50 BTC is the genesis coinbase,
+which Core never added to the UTXO set; the index counts it as received, as explorers do.
+
+**Lookups** (344 distinct addresses sampled from 24 blocks spread over the chain; median history 14
+transactions, largest 3,195,827):
+
+| | p50 | p90 | p99 | max |
+|---|---|---|---|---|
+| first lookup | 0.248 ms | 1.108 ms | 28.3 ms | 119 ms |
+| repeated (warm) | 0.028 ms | — | 25.0 ms | — |
+
+Heavy addresses, whole history summed for the balance: 2,326,967 transactions in 82.9 ms; 65,786 in
+2.5 ms; 5,583 in 0.5 ms. Opening the index (the sparse keys into memory) takes 84 ms.
+
+**Against the alternatives.**
+
+| method | what it answers | cost |
+|---|---|---|
+| this index | full history, balance, per-transaction amounts | 0.25 ms p50 lookup; 124 GB; 30 min build on 16 cores |
+| `scantxoutset` (Core, no index) | current balance / UTXOs only, no history | **26.5 s** for one scan of 40 addresses, holding the node's RPC thread |
+| `getaddresstxids` (insight-style) | — | refused by Core at every setting (DEFECTS) |
+| SQLite, same rows (§29, in memory only) | same | 24–27 B/row ≈ 140–160 GB; 1.4 M rows/s sorted load |
+| romanz/electrs (published) | history, no amounts | ≈2 h on 6 cores; 56 GB |
+| mempool/electrs, what mempool.space runs (published) | history, amounts, full tx store | "a few hours"; 1.3 TB |
+
+The published figures are the projects' own READMEs, on other hardware; they are context, not a
+race run on this box.
