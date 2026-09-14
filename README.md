@@ -136,13 +136,18 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.0.9** — the initial release, and pre-release software: the word is meant literally. The test suite is
+Version **0.0.9** — the initial release, and pre-release software: the word is meant literally.
+Published 2026-09-14: on [npm](https://www.npmjs.com/package/blockyard) as `blockyard`, as a
+[GitHub release](https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9), and announced on
+[bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
+reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
+The test suite is
 comprehensive (862 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node
-(every balance equal to `scantxoutset`, to the satoshi) and costs ~30 minutes on 16 workers and
-124 GB of disk, built in the background the first time BlockYard starts and paced so the node's
+(every balance equal to `scantxoutset`, to the satoshi) and costs a few hours on the default four
+workers (~30 minutes on 16) and 124 GB of disk, built in the background the first time BlockYard starts and paced so the node's
 RPC stays responsive; without one, the address page says *not indexed* rather than showing a
 zero. An address's unspent outputs are listed too (for a history of up to 100 transactions).
 What it does not yet have: an address's mempool transactions.

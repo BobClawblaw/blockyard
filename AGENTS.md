@@ -264,7 +264,12 @@ silently ate another test's result line — rule 22.
 ## Current state (2026-09-14)
 
 Release day: **0.0.9, the initial release**, tagged `v0.0.9` (the operator names the number; do
-not bump it). Everything below is committed, tested (858) and live on this box.
+not bump it). **Shipped 2026-09-14 evening:** published to npm as `blockyard@0.0.9`, the GitHub
+release carries the tarball and the changelog, the repository is public, and the announcement is
+posted on bitcointalk (https://bitcointalk.org/index.php?topic=5594141.msg67144312; the post and
+its pictures are in `docs/announcement/`). `main` is a few docs commits ahead of the tag
+(screenshots re-shot at 0.0.9, uninstall for every layout, the settings panel's note); the next
+version is the operator's call. Everything below is committed, tested (862) and live on this box.
 
 **Scope, settled.** BlockYard supports **Bitcoin Core on the machine that runs it**. The
 experimental node this repo was first written against is not supported (its measurements are
