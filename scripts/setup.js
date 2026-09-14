@@ -13,7 +13,7 @@
 // config/local.json (a backup is kept either way); --start boots the monitor at the end without
 // asking. The written file is mode 0600: it may carry an RPC password. Nothing here touches the
 // node: every call is a read. (operator, 2026-09-14: "Make this npm installer absolutely beautiful")
-import { existsSync, statSync, writeFileSync, copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync, copyFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
@@ -23,6 +23,7 @@ import { ROOT, loadConfig, resolveCookie } from '../server/config.js';
 import { runChecks, clientFor } from './check.js';
 import { buildIndex } from '../server/chain/index/build.js';
 import { c, banner, step, checkLine, box, spinner, progress, progressLine, fmt, strip } from './ui.js';
+import { fileURLToPath } from 'node:url';
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -297,6 +298,6 @@ async function main() {
   if (app.bootstrap) await app.audit({ type: 'bootstrap-admin', generated: app.bootstrap.generated, ip: 'local' });
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   main().catch((err) => { console.error(c.bad(err.message)); process.exit(1); });
 }

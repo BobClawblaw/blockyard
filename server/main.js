@@ -12,6 +12,7 @@ import { createAppServer } from './http/server.js';
 import { computeBuildId } from './http/static.js';
 import { NodeMonitor } from './collect/monitor.js';
 import { localAddresses, bindProblemMessage, planBinds } from './netinfo.js';
+import { fileURLToPath } from 'node:url';
 
 // ONE PLACE, NOT TWO. This was a literal here AND a "version" field in package.json, and on
 // 2026-09-13 they had drifted: this said 0.0.9 while CHANGELOG.md released [0.9.0]. Harmless until
@@ -544,7 +545,9 @@ export function banner(app) {
   return lines.join('\n');
 }
 
-const isMain = process.argv[1] && import.meta.url === `file://${fs.realpathSync(process.argv[1])}`;
+// run-as-main, portably: on Windows a file URL's path is "/C:/x" and realpath gives "C:\\x", so the
+// two are compared as paths, never as strings (2026-09-14, the first Windows CI run)
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1]);
 if (isMain) {
   const app = await boot();
   process.stdout.write(banner(app) + '\n');

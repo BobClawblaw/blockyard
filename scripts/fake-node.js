@@ -11,6 +11,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SYNTH_TIP = 900000;
 
@@ -521,7 +522,7 @@ export async function startFakeNode(opts) {
   return n;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
   const port = Number(process.env.FAKE_PORT || 18331);
   const logFile = process.env.FAKE_LOG || '/tmp/blockyard-fake/bitcoin.main.log';
   const node = await startFakeNode({ port, logFile, ibd: process.env.FAKE_IBD !== '0' });

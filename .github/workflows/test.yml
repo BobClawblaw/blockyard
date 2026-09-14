@@ -30,7 +30,7 @@ jobs:
         # next LTS changes under it before a user does. macOS is in the matrix because
         # BlockYard runs on the node's machine and a Mac is one of them (2026-09-14): the
         # suite had never run there before the first Mac install was attempted.
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: ['22', '24']
     name: ${{ matrix.os }} / node ${{ matrix.node }}
     steps:

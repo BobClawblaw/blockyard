@@ -81,7 +81,7 @@ export function rewriteDocs(count, { root = ROOT, dry = false } = {}) {
   return changes;
 }
 
-const isMain = process.argv[1] && import.meta.url === `file://${fs.realpathSync(process.argv[1])}`;
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1]);
 if (isMain) {
   const scan = scanTests();
   const mode = process.argv.includes('--check') ? 'check' : process.argv.includes('--fix') ? 'fix' : 'print';

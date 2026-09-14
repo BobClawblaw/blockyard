@@ -10,12 +10,13 @@
 // Prints one line per check and exits 1 if anything FAILED. `npm run setup` runs the same checks
 // on the answers it is given before it writes config/local.json. The checks are a function
 // (runChecks) so they can be tested against a stub node, with the printing kept out here.
-import { existsSync, statSync, readdirSync, accessSync, readFileSync, constants as FS } from 'node:fs';
+import { existsSync, statSync, readdirSync, accessSync, readFileSync, realpathSync, constants as FS } from 'node:fs';
 import path from 'node:path';
 import { loadConfig, configProblems, resolveCookie } from '../server/config.js';
 import { RpcClient } from '../server/rpc/client.js';
 import { MAGIC, xorKey, readChainFile, records } from '../server/chain/blockfile.js';
 import { c, checkLine } from './ui.js';
+import { fileURLToPath } from 'node:url';
 
 const QUIET = { info() {}, warn() {}, error() {}, debug() {} };
 
@@ -144,7 +145,7 @@ export function printChecks(label, { ok, checks }) {
   console.log(ok ? `    ${c.ok(c.bold('everything this needs is there'))}` : `    ${c.bad(c.bold('something this needs is missing'))}${c.dim(' (the ✗ lines say what)')}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url).pathname) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   const arg = (name) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : null; };
   const cfg = loadConfig();
   for (const p of configProblems()) console.log(checkLine('fail', 'config', p));
