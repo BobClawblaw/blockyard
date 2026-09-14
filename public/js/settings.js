@@ -176,6 +176,16 @@ export const DEFAULTS = Object.freeze({
     // random effect to play, but never pick one that has been played in the last 12 sequences"). A
     // number, not a switch: enabledEffects reads only the switches.
     noRepeat: 12,
+    // THE CADENCE (operator, 2026-09-14: "add sliders to each the market and block space effects
+    // panels so we can tune the randomized timing of the events being triggered ... maximum
+    // configurability on how often they see effects trigger for each panel, based on the current
+    // defaults ... delay effects being triggered even longer than they are now"). The scheduler
+    // waits a random span between pauseMin and pauseMax seconds after one effect before the next
+    // (details3d idleEvery, 5-9 s since 2026-09-11), and firstAfter seconds, give or take a third,
+    // for the first after the board lands (idleFirst, 0.8-1.6 s). Up to ten minutes between.
+    pauseMin: 5,
+    pauseMax: 9,
+    firstAfter: 1.2,
   }),
   // THE PRICE BOARD'S OWN LIST: details3d's MARKET_FX -- the twelve that translate to a candle
   // chart (operator, 2026-09-14: "the selection I have made for the market effects is what we
@@ -187,6 +197,9 @@ export const DEFAULTS = Object.freeze({
     bulge: true,          // a sphere rolls through the pipe and it swells round it
     firework: true, flare: true, wave: true, stormball: true,
     noRepeat: 12,
+    pauseMin: 5,
+    pauseMax: 9,
+    firstAfter: 1.2,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -312,7 +325,21 @@ const MARKET_HINT = Object.freeze({
 // is 12 effects, so max the slider out at max effects"): a window wider than the list is the same
 // as one the list's length (chooseIdleFx clamps it), so the slider stops where the meaning does.
 const noRepeatRow = (max) => Object.freeze({ key: 'noRepeat', label: 'No repeats within', kind: 'range', min: 0, max, step: 1, hint: `An effect is never played again until this many other effects have played since (at ${max}, every effect on the list plays before any comes round again). Where fewer effects are switched on, the one that has waited longest plays next` });
-const fxRows = (keys, hintFor = {}) => Object.freeze([noRepeatRow(keys.length), ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
+// THE CADENCE SLIDERS, on both tabs: how long the board rests between effects, as a random span
+// between a floor and a ceiling, and how soon the first one comes after the board lands. Ten
+// minutes is the top: an operator who wants a still board has the switches and all off.
+const CADENCE_ROWS = Object.freeze([
+  Object.freeze({ key: 'pauseMin', label: 'Between effects, at least', kind: 'range', min: 1, max: 600, step: 1, hint: 'Seconds the board rests after one effect before the next may start. The wait is a random span between this and the ceiling below; if this is set above the ceiling, the two swap' }),
+  Object.freeze({ key: 'pauseMax', label: 'Between effects, at most', kind: 'range', min: 1, max: 600, step: 1, hint: 'The ceiling on that wait, in seconds. Set both high for an effect only now and then; set both low for a busy board' }),
+  Object.freeze({ key: 'firstAfter', label: 'First effect after landing', kind: 'range', min: 0, max: 120, step: 0.1, hint: 'Seconds after the board comes to rest before its first effect, give or take a third. The block board re-lays on every refresh, so this is also how soon one follows each refresh' }),
+]);
+const fxRows = (keys, hintFor = {}) => Object.freeze([noRepeatRow(keys.length), ...CADENCE_ROWS, ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
+
+/** The scheduler's timers from a group's sliders, in ms: [floor, ceiling] between effects, and the first after landing. */
+export function fxCadence(g) {
+  const lo = Math.min(g.pauseMin, g.pauseMax), hi = Math.max(g.pauseMin, g.pauseMax);
+  return { idleEvery: [lo * 1000, hi * 1000], idleFirst: [Math.round(g.firstAfter * 1000 * (2 / 3)), Math.round(g.firstAfter * 1000 * (4 / 3))] };
+}
 
 export const PANEL = Object.freeze([
   Object.freeze({
@@ -861,6 +888,7 @@ export function spaceOptions(s) {
   out.obliqueRise = sp.perspective;
   out.fxKinds = enabledEffects(n);
   out.fxNoRepeat = n.effects.noRepeat;
+  Object.assign(out, fxCadence(n.effects));
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;
   // THE GRID'S OWN COLOUR. Until now these were never set here at all, so the board fell through to
   // the hand-tuned greens in details3d.js and there was no way to change them. The shipped values
@@ -973,5 +1001,6 @@ export function marketsOptions(s) {
     // effects group, not the block board's
     fxKinds: enabledEffects(n, 'marketEffects'),
     fxNoRepeat: n.marketEffects.noRepeat,
+    ...fxCadence(n.marketEffects),
   };
 }

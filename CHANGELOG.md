@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows
   that translate to a candle chart; ball lightning is half its Block space size there). Each has its own no-repeat window and its own
   all on / all off, which the no-repeat slider had silently taken away. A saved settings store is
   migrated (schema 4): the Markets list starts as a copy of the list there was.
+- **Each effects tab sets its board's cadence.** Three sliders per tab — *Between effects, at
+  least* / *at most* (seconds, 5–9 by default, up to ten minutes) and *First effect after
+  landing* (1.2 s by default, up to two minutes) — drive the scheduler's own timers, per board.
+  The no-repeat slider on each tab tops out at that list's length.
 - **Nothing on the Markets board waits its turn.** The pulse, the bulge and ball lightning were
   held to a clock of 2.5-6 minutes between plays; they are ordinary picks now, and the list you
   leave on decides how often any one of them comes round.

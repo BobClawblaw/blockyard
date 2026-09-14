@@ -945,7 +945,16 @@ One tab per board. **Space effects** is a switch for each of the **28** idle eff
 space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
 switch for each of the **12** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
 **No repeats within**: how many other effects must play before one can play again (12 by
-default; 0 allows a repeat straight away). Turning a tab's switches all off leaves that board
+default; 0 allows a repeat straight away).
+
+Each tab also sets **its board's cadence**, three sliders: **Between effects, at least** and
+**Between effects, at most** (seconds; the board rests a random span between the two after
+each effect — 5 to 9 by default, up to ten minutes each; set the floor above the ceiling and
+they swap), and **First effect after landing** (seconds, give or take a third, before the first
+effect once the board comes to rest — 1.2 by default, up to two minutes; on Block space the
+board re-lays on every refresh, so this is also how soon one follows each refresh). Push both
+"between" sliders up for an effect only now and then; the switches and **all off** are still
+the way to a board that never plays one. Turning a tab's switches all off leaves that board
 still; so does the single **Idle effects** switch on the Block space tab, or **Board effects** on
 Markets & Price.
 

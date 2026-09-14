@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
 import { FX_KINDS, SPACE_FX, MARKET_FX, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
-import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions } from '../public/js/settings.js';
+import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions, fxCadence } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
   assert.ok(FX_KINDS.length >= 25, `${FX_KINDS.length} effects`);
@@ -231,4 +231,25 @@ test('on the price board every front runs along the hours and every ring starts 
   const dirs = new Set(), ys = new Set();
   for (let i = 0; i < 300; i++) { dirs.add(fxDirection('outline', blocks, rnd).join(',')); ys.add(Math.floor(fxOrigin(blocks, rnd).y)); }
   assert.equal(dirs.size, 7); assert.ok(ys.size > 10);
+});
+
+test('the cadence sliders: each effects tab sets how long its board rests between effects, up to ten minutes', () => {
+  // operator, 2026-09-14: "add sliders to each the market and block space effects panels so we can
+  // tune the randomized timing of the events being triggered ... based on the current defaults ...
+  // delay effects being triggered even longer than they are now"
+  for (const group of ['effects', 'marketEffects']) {
+    const rows = PANEL.find((g) => g.group === group).rows;
+    for (const key of ['pauseMin', 'pauseMax', 'firstAfter']) assert.equal(rows.find((r) => r.key === key)?.kind, 'range', `${group}: a ${key} slider`);
+    assert.equal(rows.find((r) => r.key === 'pauseMax').max, 600, `${group}: up to ten minutes between effects`);
+    // the defaults ARE the scheduler's own numbers: 5-9 s between, 0.8-1.6 s for the first
+    assert.deepEqual(fxCadence(DEFAULTS[group]), { idleEvery: [5000, 9000], idleFirst: [800, 1600] }, `${group}: the defaults reproduce the cadence there was`);
+  }
+  assert.deepEqual(spaceOptions({}).idleEvery, [5000, 9000]); assert.deepEqual(spaceOptions({}).idleFirst, [800, 1600]);
+  assert.deepEqual(marketsOptions({}).idleEvery, [5000, 9000]); assert.deepEqual(marketsOptions({}).idleFirst, [800, 1600]);
+  // longer than now, per board, independently; a floor above its ceiling swaps rather than jams
+  const slow = { effects: { pauseMin: 120, pauseMax: 600, firstAfter: 30 }, marketEffects: { pauseMin: 45, pauseMax: 20, firstAfter: 0 } };
+  assert.deepEqual(spaceOptions(slow).idleEvery, [120000, 600000]); assert.deepEqual(spaceOptions(slow).idleFirst, [20000, 40000]);
+  assert.deepEqual(marketsOptions(slow).idleEvery, [20000, 45000]); assert.deepEqual(marketsOptions(slow).idleFirst, [0, 0]);
+  // clamped to the sliders' own ranges
+  assert.deepEqual(spaceOptions({ effects: { pauseMin: 9999, pauseMax: -4, firstAfter: 500 } }).idleEvery, [1000, 600000]);
 });
