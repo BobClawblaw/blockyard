@@ -729,7 +729,10 @@ defineAgent('stormball', {
     }
     // across the board the long way round, far enough past both edges to start and end off-screen
     const leftToRight = rnd() < 0.5;
-    const margin = Math.max(W, H) * 0.55 + 6;
+    // the block board's view is far wider than the board, so the run starts well past its edges;
+    // the price board's view is fitted to its width (obliqueFit), and the same margin there kept
+    // the ball off-screen for the first third of its run (a third of a 7-day board is 190 units)
+    const margin = st?.axes?.line?.length > 1 ? 8 : Math.max(W, H) * 0.55 + 6;
     const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
     const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
     const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
@@ -765,7 +768,10 @@ defineAgent('stormball', {
       let hit = null;
       const consider = (cx, cy) => {
         const h = a.top(cx, cy);
-        if (h > 0 && !(not && cx + 0.5 === not.x && cy + 0.5 === not.y) && (!hit || h > hit.z)) hit = { x: cx + 0.5, y: cy + 0.5, z: h };
+        // `not`: a chain must reach a different block -- two units clear of the one it leaves,
+        // which on the candle board is the next candle along
+        if (not && Math.max(Math.abs(cx + 0.5 - not.x), Math.abs(cy + 0.5 - not.y)) < 2) return;
+        if (h > 0 && (!hit || h > hit.z)) hit = { x: cx + 0.5, y: cy + 0.5, z: h };
       };
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) consider(Math.floor(aimX) + dx, Math.floor(aimY) + dy);
       // A THIN BOARD (the price board: eight deep, hundreds wide): an arc thrown at a random angle
@@ -790,15 +796,19 @@ defineAgent('stormball', {
       const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
       const glow = age <= 1 ? flicker : Math.max(0, 1 - (age - 1) / 1.2) * 0.7;
       heads.push({ x: hit.x, y: hit.y, color: [60, 190, 255], alpha: Math.min(1, glow * 1.25), r: 1.2 });
-      // ...and the chain, if this arc carries one: from the struck block to another, a beat after
-      // the first lands, aimed and found the same way, never back at the block it left
-      if (arc.chain && age >= 0.3) {
-        const c2 = arc.chain, age2 = (age - 0.3) / 0.7;
+      // ...and the chain, if this arc carries one: from the struck block to another. ITS OWN
+      // EVENT, not a bend in the first (2026-09-14: "I'm not seeing secondary arcs" -- they were
+      // there in a third of the arc frames, drawn in the first arc's colour from the first arc's
+      // end while it still lived, and read as one longer arc). It leaps half a beat after the
+      // first lands and outlives it, in violet against the first's blue, and never to the block it
+      // left or one beside it -- a chain a unit long is a chain nobody sees.
+      if (arc.chain && age >= 0.5) {
+        const c2 = arc.chain, age2 = age - 0.5;
         const hit2 = strike(hit.x + Math.cos(c2.ang) * c2.reach, hit.y + Math.sin(c2.ang) * c2.reach, hit);
         if (hit2) {
-          if (age2 <= 1) live.push({ from: hit, to: hit2, seed: c2.seed, strength: 0.85 * (1 - age2 * 0.6) });
+          if (age2 <= 1) live.push({ from: hit, to: hit2, seed: c2.seed, strength: 0.9 * (1 - age2 * 0.5), chain: true });
           const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + c2.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
-          heads.push({ x: hit2.x, y: hit2.y, color: [60, 190, 255], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
+          heads.push({ x: hit2.x, y: hit2.y, color: [170, 120, 255], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
         }
       }
     }
@@ -828,10 +838,13 @@ defineAgent('stormball', {
       // a chained arc leaves the block the first one struck, not the ball
       const from = arc.from ? project(arc.from.x, arc.from.y, arc.from.z, view) : c;
       const main = bolt(from, end, Math.hypot(end.x - from.x, end.y - from.y) * 0.18, 9);
-      line(ctx, main, `rgba(30,120,255,${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1));
-      line(ctx, main, `rgba(60,170,255,${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw * 4, U * 0.45));
-      line(ctx, main, `rgba(140,220,255,${(0.95 * arc.strength).toFixed(3)})`, Math.max(lw * 2, U * 0.2));
-      line(ctx, main, `rgba(245,252,255,${arc.strength.toFixed(3)})`, Math.max(lw, U * 0.08));
+      // a chain is violet and a size down, so it reads as the block discharging, not the ball
+      const [halo, body, edge] = arc.chain ? ['120,60,255', '170,110,255', '220,190,255'] : ['30,120,255', '60,170,255', '140,220,255'];
+      const sz = arc.chain ? 0.7 : 1;
+      line(ctx, main, `rgba(${halo},${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1) * sz);
+      line(ctx, main, `rgba(${body},${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw * 4, U * 0.45) * sz);
+      line(ctx, main, `rgba(${edge},${(0.95 * arc.strength).toFixed(3)})`, Math.max(lw * 2, U * 0.2) * sz);
+      line(ctx, main, `rgba(245,252,255,${arc.strength.toFixed(3)})`, Math.max(lw, U * 0.08) * sz);
       // a fork off the main channel, and a spark where it lands
       const k = 3 + Math.floor(Math.random() * 4);
       const fork = main[k], forkEnd = { x: fork.x + (Math.random() - 0.5) * U * 3, y: fork.y + (Math.random() - 0.5) * U * 3 };

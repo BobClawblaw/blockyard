@@ -403,10 +403,11 @@ test('BALL LIGHTNING crosses the whole view off-screen to off-screen, and its ar
       if (!arc.from) continue;
       chainsSeen++;
       assert.ok(f.stormball.arcs.some((o) => !o.from && o.to.x === arc.from.x && o.to.y === arc.from.y) || true, 'it leaves a struck block');
-      assert.ok(arc.from.x !== arc.to.x || arc.from.y !== arc.to.y, 'for a different block');
+      assert.ok(Math.max(Math.abs(arc.to.x - arc.from.x), Math.abs(arc.to.y - arc.from.y)) >= 2, 'for a different block, two units clear');
+      assert.equal(arc.chain, true, 'marked as a chain, so it draws in its own colour');
       const t = tiles.find((b) => arc.to.x > b.x && arc.to.x < b.x + b.s && arc.to.y > b.y && arc.to.y < b.y + b.s);
       assert.ok(t, `a chained arc lands on a block too (${arc.to.x}, ${arc.to.y})`);
-      assert.ok(arc.strength > 0 && arc.strength <= 0.85, 'a little weaker than the arc it came from');
+      assert.ok(arc.strength > 0 && arc.strength <= 0.9, 'a little weaker than the arc it came from');
     }
   }
   assert.ok(chainsSeen > 5, `chains are seen in flight (${chainsSeen} frames)`);

@@ -235,7 +235,7 @@ trimming one board's effects leaves the other's alone.
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
 | **Centipede**, **Interception**, **Collapse** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
 | **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
-| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike — and one arc in four chains on from the struck block to another; on Markets it flies through the chart, striking candles and charging the price line where it passes, rarely, like the pulse |
+| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike — and one arc in four chains on from the struck block to another as a violet discharge, a beat later; on Markets it flies through the chart, striking candles and charging the price line where it passes, rarely, like the pulse |
 | **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head; rare — 2.5 to 6 minutes between plays |
 | **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up; as rare as the pulse |
 
