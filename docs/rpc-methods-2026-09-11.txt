@@ -9,7 +9,7 @@ addnode
 addpeeraddress
 analyzepsbt
 backupwallet
-bmcgetdownloadinfo
+(a vendor download-info method, the experimental node's own)
 bumpfee
 clearbanned
 combinepsbt

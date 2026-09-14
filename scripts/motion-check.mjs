@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 
 const BASE = process.env.BLOCKYARD_BASE;
 const CDP = process.env.BROWSER_CDP ?? 'http://127.0.0.1:9333';
-const CA = process.env.BLOCKYARD_CA ?? '/etc/ssl/bmc-local/ca.crt';
+const CA = process.env.BLOCKYARD_CA ?? null;   // a CA file for an https monitor, if one is needed
 const OUT = process.env.MOTION_OUT ?? `/tmp/motion-check-${process.pid}.png`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 if (!BASE) { console.log('usage: BLOCKYARD_BASE=https://<address>:8088 node scripts/motion-check.mjs'); process.exit(2); }

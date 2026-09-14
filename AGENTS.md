@@ -11,7 +11,7 @@ serves charts plus a live event feed to several users at once. This box watches 
 ## Run it
 
 ```bash
-npm start                     # port 21000, NO sign-in by default; bound to config/local.json server.hosts (this box: 0.0.0.0 since 2026-09-11; bmc-port-guard admits the LAN interface and lo, and tailscale0 for 21000 only)
+npm start                     # port 21000, NO sign-in by default; bound to config/local.json server.hosts (this box: 0.0.0.0 since 2026-09-11; the host's port-guard script admits the LAN interface and lo, and tailscale0 for 21000 only)
 BLOCKYARD_AUTH=1 npm start      # accounts on: login, roles, sessions, CSRF, per-user audit
 BLOCKYARD_TLS_CERT=… BLOCKYARD_TLS_KEY=… npm start  # HTTPS on every listener; cookie becomes Secure
 BLOCKYARD_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it lost
@@ -71,7 +71,7 @@ and node writes refuse to be enabled at all while accounts are off unless
 
 **THE PORT MOVED TO 21000 on 2026-09-13** (operator: "make default web port 21000 for access").
 `server.port` now defaults to 21000, the unit sets `BLOCKYARD_PORT=21000`, and
-`bmc-port-guard.sh` was rewritten so 21000 takes 8088's place in every rule -- ACCEPT on
+the host's port-guard script was rewritten so 21000 takes 8088's place in every rule -- ACCEPT on
 `enp14s0` and `lo`, ACCEPT on `tailscale0`, REJECT otherwise; 8081/8443 and loopback-only 8999
 are untouched. Verified after the restart: 21000 answers on `lo`, 8088 no longer connects, and
 the jump is installed on v4 and v6. **Everything below this line that says 8088 is a record of
@@ -80,14 +80,14 @@ measured rather than rewritten -- the reasoning is what makes them worth keeping
 
 **Since 2026-09-11 this box binds `0.0.0.0`** (operator: "Rebind the server to 0.0.0.0").
 Measured after the restart: one socket, `0.0.0.0:8088`; `/api/health` 200 over `lo` and
-over the LAN address; `bmc-port-guard.sh status` unchanged -- ACCEPT on `enp14s0` and `lo`,
+over the LAN address; the port guard's `status` unchanged -- ACCEPT on `enp14s0` and `lo`,
 REJECT otherwise for 8081/8088/8443 -- so the docker bridges were still refused, by the
 guard rather than the bind, and so were tailnet peers (operator: "I can't reach via
 Tailscale"; the REJECT counter rose by 14 while they tried). **Also since 2026-09-11 the guard
 ACCEPTs the monitor port on `tailscale0`** (IPv4 and IPv6; tcp/8088 then, tcp/21000 since
 2026-09-13), inserted before the REJECT; 8081/8443 stay
-LAN-only and 8999 loopback-only. The installed `/usr/local/sbin/bmc-port-guard.sh` carries the
-reasoning next to the rule; the previous version is `bmc-port-guard.sh.bak-2026-09-11`. With
+LAN-only and 8999 loopback-only. The installed port-guard script (in `/usr/local/sbin`, outside this repo) carries the
+reasoning next to the rule; its previous version is kept beside it, dated 2026-09-11. With
 accounts off, every tailnet device reads everything as `viewer` (the role ceiling still holds).
 Only a real tailnet peer moves that rule's counter -- this box reaches its own tailnet address
 over lo. Seen the same day: the port answers plain HTTP, not TLS, so
@@ -101,19 +101,19 @@ like faults and are not:
 - `curl http://127.0.0.1:8088/...` **refuses**, twice over: the address is not bound, and
   since 2026-09-09 the port speaks TLS only (`BLOCKYARD_TLS_CERT`/`_KEY` in the unit), so a
   plaintext request fails on scheme before it fails on bind. Every local check is
-  `curl --cacert /etc/ssl/bmc-local/ca.crt https://192.0.2.10:8088/api/health`.
+  `curl --cacert <the host's local CA certificate> https://192.0.2.10:8088/api/health`.
 - **The bridges needed a packet filter; the bind did not do it.** The sentence that used
   to be here — "the docker bridges are not served" — was measured against a bridge
   *address* (`172.17.0.1:8088` refuses, correct) and then generalised to something the
   kernel does not do. A named-address bind selects a **destination**, not an interface:
   measured 2026-09-09 from a container on the bridge, `192.0.2.10:8088` connected, as did
-  the UI and API ports beside it. What enforces it now is `BMC-MON-INPUT`
-  (`/usr/local/sbin/bmc-port-guard.sh`, systemd `bmc-port-guard.service`): ACCEPT on
+  the UI and API ports beside it. What enforces it now is the port guard's own
+  iptables chain (the script in `/usr/local/sbin` and its systemd unit, outside this repo): ACCEPT on
   `enp14s0` and `lo`, REJECT otherwise, for these four ports only, inserted *above* the
   tailscale jump in `INPUT` because `ts-input`'s second rule accepts everything arriving
   on the tunnel. It fails closed — if `enp14s0` is renamed, LAN clients get a refusal
   rather than a wider audience. Verify with the rule counters
-  (`bmc-port-guard.sh status`), not with a curl from this box: traffic from a host to its
+  (the guard's `status`), not with a curl from this box: traffic from a host to its
   own address arrives over `lo`, so a local curl tests the ACCEPT rule and proves nothing.
 - **Tailnet peers cannot reach it.** This is the cost of the decision, and it is the
   same trap that produced "still no response" at 15:00 on 2026-09-08 — recorded here so
@@ -130,7 +130,7 @@ like faults and are not:
   which serves tailnet clients by *destination* without serving anything else; or bind
   `0.0.0.0` (serves the bridges too, don't); or advertise `192.0.2.0/24` as a subnet
   route and approve it in the tailnet, which is a network-wide change and needs the
-  operator's deliberate yes. Whichever you choose, `bmc-port-guard.sh` has to be taught
+  operator's deliberate yes. Whichever you choose, the port guard has to be taught
   about it: it filters on interface, so a tunnel address added to `server.hosts` while
   the guard only ACCEPTs `enp14s0` produces a monitor that is bound and unreachable —
   the failure looks identical to the tailnet being down, which is how this file got

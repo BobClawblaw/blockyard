@@ -38,22 +38,15 @@ const DENY_EXACT = new Set([
   'logging',
 ]);
 
-// This node prefaces every command of its own with bmc* (the operator's rule,
-// 2026-09-10; the same marker its bmc.* config keys carry, so a name Core does
-// not have can never collide with one Core might later add). Those still have
-// to earn a read classification: the marker plus a READ VERB is allowed, a
-// bare "bmc" prefix is not. "bmc" alone would pre-authorise a future
-// bmcsetban or bmcimportmempool -- exactly the hole this file's header warns
-// about -- whereas bmcgetdownloadinfo matches bmcget and a bmcset* does not
-// match anything and stays denied by default.
-const ALLOW_PREFIXES = ['get', 'list', 'estimate', 'verify', 'estimat', 'help', 'uptime', 'decoderaw', 'decodescript', 'createraw', 'analyzepsbt', 'decodepsbt', 'convertbits', 'getrpcinfo',
-  'bmcget', 'bmclist', 'bmcestimate', 'bmcverify'];
+// Bitcoin Core's own read verbs, and nothing else: an earlier node this was written against
+// namespaced its own commands with a vendor prefix, and those prefixes were admitted here by
+// read verb. That node is not supported (2026-09-14), and its prefixes are gone with it -- a
+// prefix nobody uses is a hole waiting for a name.
+const ALLOW_PREFIXES = ['get', 'list', 'estimate', 'verify', 'estimat', 'help', 'uptime', 'decoderaw', 'decodescript', 'createraw', 'analyzepsbt', 'decodepsbt', 'convertbits', 'getrpcinfo'];
 
 // Explicitly not allowed even though they look read-shaped: they build or sign
 // transactions, which is a write in every way that matters.
-const DENY_PREFIXES = ['generate', 'invalidate', 'reconsider', 'import', 'send', 'set', 'unload', 'load', 'sign',
-  // the bmc* mutating shapes, named rather than left to default-deny
-  'bmcset', 'bmcsend', 'bmcimport', 'bmcload', 'bmcsign', 'bmcgenerate', 'bmcinvalidate', 'bmcreconsider'];
+const DENY_PREFIXES = ['generate', 'invalidate', 'reconsider', 'import', 'send', 'set', 'unload', 'load', 'sign'];
 
 export function classifyMethod(method) {
   if (typeof method !== 'string' || !method) return { allowed: false, kind: 'unknown', reason: 'method name must be a string' };

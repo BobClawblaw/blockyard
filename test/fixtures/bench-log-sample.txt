@@ -1,10 +1,10 @@
 ======================================================================
 2026-09-08 03:02:14.445 [config] net  : port=8462 bind=0.0.0.0 listen=1 blocksonly=0 timeout=5000ms peertimeout=60s
-2026-09-08 03:02:14.445 [boot] chain=main datadir=/mnt/2tbssd/bmc-bench/data/main port=8462 dnsseed=1
+2026-09-08 03:02:14.445 [boot] chain=main datadir=/mnt/2tbssd/bench/data/main port=8462 dnsseed=1
 2026-09-08 03:02:14.744 [check] checklevel=3 over 6 block(s) [136156..136161]: 1 examined, 5 hole(s), 1 problem(s)
 2026-09-08 03:02:14.861 [rpc] gettxout answers via the download worker (IPC)
 2026-09-08 03:02:14.893 [net] listening on IPv6 [::]:8462 (cjdns peers arrive here)
-2026-09-08 03:02:15.178 [utxo_live] init dir=/mnt/2tbssd/bmc-bench/data/main slots=2^16 reload applied_height=135638 manifest_n=5 live=520759
+2026-09-08 03:02:15.178 [utxo_live] init dir=/mnt/2tbssd/bench/data/main slots=2^16 reload applied_height=135638 manifest_n=5 live=520759
 2026-09-08 03:02:15.250 [dl] dial: 8 of 64 candidate(s) answered within the budget
 2026-09-08 03:02:15.870 [dlc] discovered +0 peers (book now 339)
 2026-09-08 03:03:06.439 [utxo_live] catchup progress: height=135639/966010 (14.0%) 23.3 blk/s (avg 23.3) eta 00:09:55:05 | read 0% idx 0% verify 70% get 1% put 2% ckpt 27% flush 0% csi 0% other 0% (42.40 ms/blk over 1)

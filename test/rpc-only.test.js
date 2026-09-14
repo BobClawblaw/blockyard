@@ -133,20 +133,12 @@ test('the new RPC sources are allowed reads, not holes', () => {
   }
 });
 
-test("the node's own bmc* commands are admitted by read verb, not by the bmc marker alone", () => {
-  // 2026-09-10: this node prefaces every command of its own with bmc*. Its
-  // first one, bmcgetdownloadinfo, was DENIED here because "bmc..." matched no
-  // read-shaped prefix. Admitting a bare "bmc" would have been the hole this
-  // file's header warns about, so the rule is the marker PLUS a read verb.
-  for (const m of ['bmcgetdownloadinfo', 'bmclistsomething', 'bmcestimatesomething']) {
-    assert.equal(classifyMethod(m).allowed, true, `${m} is read-shaped and must be callable`);
+test('a vendor-prefixed method is denied by default: no prefix outside Core\'s own read verbs is admitted', () => {
+  // 2026-09-14: an earlier node's vendor prefixes were admitted here by read verb; that node is
+  // not supported and the prefixes are gone, so a name shaped like them is simply unknown
+  for (const m of ['vendorgetdownloadinfo', 'vendorlistsomething', 'vendorsetban', 'vendorfrobnicate']) {
+    assert.equal(classifyMethod(m).allowed, false, `${m} must be denied by default`);
   }
-  // A bare bmc prefix would have let all of these through. They must not pass.
-  for (const m of ['bmcsetban', 'bmcimportmempool', 'bmcsendrawtransaction', 'bmcloadtxoutset', 'bmcgeneratetoaddress', 'bmcsignrawtransaction']) {
-    assert.equal(classifyMethod(m).allowed, false, `${m} mutates and must stay denied`);
-  }
-  // ...and an unrecognised bmc shape is denied by default, not allowed.
-  assert.equal(classifyMethod('bmcfrobnicate').allowed, false, 'an unknown bmc* shape must be denied by default');
 });
 
 test('a build that counts nothing yields an absent rate, never 0 B/s', async () => {

@@ -58,8 +58,8 @@ test('the writes-while-open guard is a boot error with both ways out named', () 
 
 test('a node reached over BLOCKYARD_NODE_URL is not still called the built-in node', () =>
   // Operator, 2026-09-12, looking at a second instance pointed at Bitcoin Core:
-  // "we're not on BMC Mainnet. We're using Core Mainnet there". The header said
-  // "BMC mainnet (production)" while the endpoint was Core on :8335 answering
+  // "we're not on [the other node's] Mainnet. We're using Core Mainnet there". The header said
+  // "[the other node] mainnet (production)" while the endpoint was Core on :8335 answering
   // /Satoshi:31.99.0/ -- because BLOCKYARD_NODE_URL, DATADIR and COOKIE all existed
   // and there was no way to say the node's NAME. The line whose only job is to say
   // which node you are looking at must not be the line that is wrong.

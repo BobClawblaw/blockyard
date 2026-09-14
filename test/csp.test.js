@@ -84,7 +84,7 @@ test('renderHtml versions assets and nothing else', () => {
   assert.ok(out.includes('href="/"'), 'pages are no-cache already, and ?v= on "/" collides with the app\'s own ?node=/?range= space');
   assert.ok(out.includes('href="data:image'), 'a data: URL is not a path');
   assert.ok(out.includes('nonce="NONCE123"'), 'the nonce placeholder must be filled');
-  // THE PATTERN MUST MATCH THE PLACEHOLDERS THAT EXIST. This guarded /%BMC[A-Z]+%/, a naming
+  // THE PATTERN MUST MATCH THE PLACEHOLDERS THAT EXIST. This guarded a placeholder prefix spelled with the project's old name, a naming
   // convention that has not existed since the rename to BlockYard -- static.js fills
   // %BLOCKYARD_NONCE% and %BLOCKYARD_BUILD% -- so it could never fire and had been passing
   // vacuously. The positive control below is what stops that happening again silently.

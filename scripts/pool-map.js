@@ -132,7 +132,7 @@ try {
   // Same family:4 path as the fetch above, plus the box's own CA: the monitor serves TLS
   // from a local CA that is not in the system trust store, and "could not verify" is a
   // different fact from "could not reach".
-  const caFile = process.env.BLOCKYARD_CA_FILE ?? '/etc/ssl/bmc-local/ca.crt';
+  const caFile = process.env.BLOCKYARD_CA_FILE ?? null;   // a CA file, only where the fetch needs a private one
   const body = await getOverHttps(`https://${host}:8088/api/mining?node=main`, 0, fs.existsSync(caFile) ? { ca: fs.readFileSync(caFile) } : {});
   const d = JSON.parse(body);
   const rows = d.recent ?? [];
