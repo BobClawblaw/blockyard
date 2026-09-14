@@ -214,3 +214,33 @@ test('the progress bar and the box are arithmetic, not decoration', async () => 
   assert.match(lines[0], /^╭─ T ─+╮$/); assert.match(lines[3], /^╰─+╯$/);
   assert.equal(wrapText('one two three four', 9, 2), 'one two\n  three\n  four');
 });
+
+test('THE NODE\'S OWN bitcoin.conf answers the questions: port, chain, credentials, sections, includes', async () => {
+  // (operator, 2026-09-14, on the Mac: "can't you look through the user's .conf and find the rpc values?")
+  const { readBitcoinConf, RPC_PORT } = await import('../scripts/setup.js');
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-conf-'));
+  try {
+    assert.equal(readBitcoinConf(root).found, false, 'no file: nothing claimed');
+    writeFileSync(path.join(root, 'bitcoin.conf'), [
+      '# a comment', 'server=1', 'txindex=1   # trailing comment', 'rpcuser=monitor', 'rpcpassword=hunter2',
+      'rpcauth=alice:salt$hash', 'rpcport=8339', 'includeconf=extra.conf', '',
+      '[main]', 'rpcbind=127.0.0.1', '[test]', 'rpcport=18339', 'rpcauth=bob:salt$hash',
+    ].join('\n'));
+    writeFileSync(path.join(root, 'extra.conf'), 'prune=550\nrpccookiefile=/var/run/cookie\n');
+    const c = readBitcoinConf(root);
+    assert.equal(c.found, true); assert.equal(c.chain, 'main');
+    assert.equal(c.values.server, '1'); assert.equal(c.values.txindex, '1', 'a trailing comment is stripped');
+    assert.deepEqual([c.values.rpcuser, c.values.rpcpassword], ['monitor', 'hunter2']);
+    assert.equal(c.values.rpcport, '8339', 'top-level rpcport applies to mainnet when [main] does not override it');
+    assert.equal(c.values.rpcbind, '127.0.0.1', '[main] keys apply on mainnet');
+    assert.deepEqual(c.rpcauthUsers, ['alice'], 'the [test] rpcauth is not for mainnet');
+    assert.equal(c.values.prune, '550', 'includeconf is followed'); assert.equal(c.values.rpccookiefile, '/var/run/cookie');
+    // testnet selected at the top level: the [test] section wins
+    writeFileSync(path.join(root, 'bitcoin.conf'), 'testnet=1\nrpcport=8339\n[test]\nrpcport=18339\nrpcauth=bob:x\n');
+    const t = readBitcoinConf(root);
+    assert.equal(t.chain, 'test'); assert.equal(t.values.rpcport, '18339'); assert.deepEqual(t.rpcauthUsers, ['bob']);
+    writeFileSync(path.join(root, 'bitcoin.conf'), 'chain=signet\n');
+    assert.equal(readBitcoinConf(root).chain, 'signet');
+    assert.deepEqual(RPC_PORT, { main: 8332, test: 18332, testnet4: 48332, signet: 38332, regtest: 18443 }, 'Core\'s default RPC ports per chain');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

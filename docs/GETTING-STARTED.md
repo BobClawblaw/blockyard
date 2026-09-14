@@ -57,16 +57,19 @@ npm test              # optional: the unit tests; there is no npm install -- no 
 npm run setup
 ```
 
-It asks four things, checks the answers against the node, writes `config/local.json`, and
-offers to build the address index straight away. Every check is a read; nothing on the node is
-changed.
+It asks for the data directory first and **reads the node's own `bitcoin.conf`** there -- the
+chain, `rpcport`, `rpcconnect`, `rpcuser`/`rpcpassword`, `rpcauth` users, a cookie file the node
+was told to write elsewhere, `server=` and `txindex=`, sections (`[main]`, `[test]`, ...) and
+`includeconf=` all understood -- so the rest arrive as defaults to accept rather than questions
+to answer. Then it checks the answers against the node, writes `config/local.json`, and offers
+to build the address index straight away. Every check is a read; nothing on the node is changed.
 
 | it asks | default | what it does with the answer |
 |---|---|---|
-| Bitcoin Core RPC URL | `http://127.0.0.1:8332` | connects, reads the chain and height |
-| Bitcoin Core data directory | the platform default above | finds the `.cookie` for RPC authentication, the `blocks/` directory, and `debug.log` |
+| Bitcoin Core data directory | the platform default above | reads `bitcoin.conf`; finds the `.cookie` for RPC authentication, the `blocks/` directory, and `debug.log` |
+| Bitcoin Core RPC URL | from `bitcoin.conf`: `rpcconnect` and `rpcport`, else `http://127.0.0.1:8332` (the chain's default port) | connects, reads the chain and height |
 | a label | `Bitcoin Core` | what the header calls the node |
-| rpcUser / rpcPassword | *(only asked if no cookie is readable)* | a node using `rpcauth` instead of the cookie |
+| rpcUser / rpcPassword | from `bitcoin.conf` when it has them; *asked only if no cookie is readable* -- an `rpcauth` user is pre-filled, its password is not in the file | a node using `rpcauth` instead of the cookie |
 
 Then it prints the checks. This is what a good node looks like:
 

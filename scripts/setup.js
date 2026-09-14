@@ -51,6 +51,7 @@ export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()
 /** The config/local.json a set of answers produces. */
 export function localConfig(a) {
   const node = { id: 'main', label: a.label, rpcUrl: a.rpcUrl, datadir: a.datadir, chainHint: a.chain ?? 'main' };
+  if (a.cookieFile) node.cookieFile = a.cookieFile;
   if (a.rpcUser) { node.rpcUser = a.rpcUser; node.rpcPassword = a.rpcPassword ?? ''; }
   if (a.indexDir) node.addressIndex = a.indexDir;
   return { server: { host: a.host, port: Number(a.port) }, nodes: [node] };
@@ -115,6 +116,62 @@ export const validate = {
   },
   label(s) { const l = String(s).trim(); return l ? { value: l.slice(0, 40) } : { error: 'a label, even a short one' }; },
 };
+
+/**
+ * THE NODE'S OWN bitcoin.conf (operator, 2026-09-14: "can't you look through the user's .conf and find
+ * the rpc values?"): read from the data directory, so the RPC port, the chain, rpcconnect, a
+ * rpcuser/rpcpassword pair, rpcauth users, a cookie file the node was told to write elsewhere, and
+ * server= / txindex= all arrive as defaults instead of questions. Core's rules: `key=value`, `#`
+ * comments, `[main]` / `[test]` / `[signet]` / `[regtest]` sections whose keys apply to that chain
+ * only, the chain chosen by testnet=1 / signet=1 / regtest=1 / chain=, and includeconf= pulling in
+ * another file relative to the data directory. The last value of a key wins, except rpcauth, which
+ * may repeat. Returns { found, file, chain, values, rpcauthUsers }.
+ */
+export function readBitcoinConf(datadir, { file = null, depth = 0 } = {}) {
+  const conf = file ?? path.join(datadir, 'bitcoin.conf');
+  const out = { found: false, file: conf, chain: 'main', values: {}, rpcauthUsers: [] };
+  let text;
+  try { text = readFileSync(conf, 'utf8'); } catch { return out; }
+  out.found = true;
+  const top = {}, sections = {};
+  const rpcauth = { top: [], sections: {} };
+  let section = null;
+  const includes = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const sec = line.match(/^\[([a-z0-9]+)\]$/i);
+    if (sec) { section = sec[1].toLowerCase(); continue; }
+    const eq = line.indexOf('=');
+    if (eq < 0) continue;
+    const key = line.slice(0, eq).trim().toLowerCase(), value = line.slice(eq + 1).trim();
+    if (key === 'includeconf') { includes.push(value); continue; }
+    if (key === 'rpcauth') { (section ? (rpcauth.sections[section] ??= []) : rpcauth.top).push(value); continue; }
+    if (section) (sections[section] ??= {})[key] = value; else top[key] = value;
+  }
+  // the chain: only the top level may choose it
+  const chain = top.chain ? { main: 'main', test: 'test', testnet3: 'test', testnet4: 'testnet4', signet: 'signet', regtest: 'regtest' }[top.chain] ?? top.chain
+    : top.regtest === '1' ? 'regtest' : top.signet === '1' ? 'signet' : top.testnet4 === '1' ? 'testnet4' : top.testnet === '1' ? 'test' : 'main';
+  out.chain = chain;
+  const secName = { main: 'main', test: 'test', signet: 'signet', regtest: 'regtest', testnet4: 'testnet4' }[chain];
+  // on mainnet, a few keys are only honoured inside [main]; everywhere else the top level applies too
+  const MAIN_ONLY = new Set(['rpcport', 'rpcbind', 'port', 'bind', 'wallet', 'addnode', 'connect']);
+  const values = {};
+  for (const [k, v] of Object.entries(top)) if (!(chain === 'main' && MAIN_ONLY.has(k)) || true) values[k] = v;
+  if (chain === 'main') for (const k of MAIN_ONLY) if (k in top && !(k in (sections.main ?? {}))) values[k] = top[k];
+  Object.assign(values, sections[secName] ?? {});
+  out.values = values;
+  out.rpcauthUsers = [...rpcauth.top, ...(rpcauth.sections[secName] ?? [])].map((v) => v.split(':')[0]).filter(Boolean);
+  // included files, once, relative to the data directory
+  if (depth < 3) for (const inc of includes) {
+    const sub = readBitcoinConf(datadir, { file: path.isAbsolute(inc) ? inc : path.join(datadir, inc), depth: depth + 1 });
+    if (!sub.found) continue;
+    Object.assign(out.values, sub.values);
+    out.rpcauthUsers.push(...sub.rpcauthUsers);
+  }
+  return out;
+}
+export const RPC_PORT = { main: 8332, test: 18332, testnet4: 48332, signet: 38332, regtest: 18443 };
 
 /** Is a BlockYard (or anything) already answering on this port? */
 export async function portInUse(host, port) {
@@ -182,15 +239,36 @@ async function main() {
   let result;
   for (;;) {
     out(step(1, STEPS, 'Your Bitcoin Core node'));
-    a.rpcUrl = await ask('RPC URL', arg('rpc-url', 'http://127.0.0.1:8332'), validate.rpcUrl);
+    // the data directory first: its bitcoin.conf answers most of the rest
     a.datadir = await ask('data directory', arg('datadir', defaultDatadir()), validate.dir);
-    a.label = await ask('a label for the node', arg('label', 'Bitcoin Core'), validate.label);
+    let conf = readBitcoinConf(a.datadir);
+    if (conf.found && conf.values.datadir && conf.values.datadir !== a.datadir && existsSync(conf.values.datadir)) {
+      say(`${c.warn('!')} ${shortPath(conf.file)} moves the data directory to ${conf.values.datadir}; using that`);
+      a.datadir = conf.values.datadir; conf = readBitcoinConf(a.datadir, { file: conf.file });
+    }
+    a.chain = conf.chain;
+    if (conf.found) {
+      const v = conf.values;
+      const bits = [`chain ${conf.chain}`, v.rpcport ? `rpcport ${v.rpcport}` : null, v.server === '1' ? 'server=1' : c.warn('no server=1'),
+        v.txindex === '1' ? 'txindex=1' : c.warn('no txindex=1'), v.rpcuser ? `rpcuser ${v.rpcuser}` : conf.rpcauthUsers.length ? `rpcauth ${conf.rpcauthUsers.join(', ')}` : 'cookie auth',
+        v.prune && v.prune !== '0' ? c.bad(`prune=${v.prune}`) : null].filter(Boolean);
+      say(`${c.ok('✓')} read ${c.dim(shortPath(conf.file))}: ${bits.join(c.dim(' · '))}`);
+    } else say(c.dim(`no bitcoin.conf under ${a.datadir}: Core's defaults assumed`));
+    const host = conf.values.rpcconnect ?? '127.0.0.1';
+    const port = conf.values.rpcport ?? RPC_PORT[conf.chain] ?? 8332;
+    a.rpcUrl = await ask('RPC URL', arg('rpc-url', `http://${host}:${port}`), validate.rpcUrl);
+    a.label = await ask('a label for the node', arg('label', conf.chain === 'main' ? 'Bitcoin Core' : `Bitcoin Core (${conf.chain})`), validate.label);
     a.rpcUser = arg('rpc-user'); a.rpcPassword = arg('rpc-password');
-    const cookie = resolveCookie({ datadir: a.datadir, chainHint: 'main' });
+    a.cookieFile = conf.values.rpccookiefile ? (path.isAbsolute(conf.values.rpccookiefile) ? conf.values.rpccookiefile : path.join(a.datadir, conf.values.rpccookiefile)) : null;
+    const cookie = resolveCookie({ datadir: a.datadir, chainHint: a.chain, cookieFile: a.cookieFile ?? undefined });
     if (cookie && cookie.source !== 'config') say(`${c.ok('✓')} cookie found: ${c.dim(cookie.source)}`);
-    else if (!a.rpcUser) {
-      say(`${c.warn('!')} no .cookie readable under ${a.datadir}: a node authenticating with rpcauth needs a user and password`);
-      a.rpcUser = await ask('rpcUser', '', null);
+    else if (!a.rpcUser && conf.values.rpcuser && conf.values.rpcpassword) {
+      a.rpcUser = conf.values.rpcuser; a.rpcPassword = conf.values.rpcpassword;
+      say(`${c.ok('✓')} rpcuser/rpcpassword taken from ${shortPath(conf.file)}`);
+    } else if (!a.rpcUser) {
+      const who = conf.rpcauthUsers[0] ?? '';
+      say(`${c.warn('!')} no .cookie readable under ${a.datadir}${who ? `; ${shortPath(conf.file)} has rpcauth for "${who}", whose password is not in the file` : ': a node authenticating with rpcauth needs a user and password'}`);
+      a.rpcUser = await ask('rpcUser', who, null);
       if (a.rpcUser) a.rpcPassword = await ask('rpcPassword', '', null, { secret: true });
     }
 
@@ -198,8 +276,7 @@ async function main() {
     const node = localConfig({ ...a, host: '127.0.0.1', port: 0 }).nodes[0];
     const spin = spinner(`asking ${a.rpcUrl} …`);
     result = await runChecks(node, { rpc: clientFor(node, defaults) });
-    a.chain = result.facts.chain ?? 'main';
-    if (a.chain !== 'main') { node.chainHint = a.chain; result = await runChecks(node, { rpc: clientFor(node, defaults) }); }
+    if (result.facts.chain && result.facts.chain !== a.chain) { a.chain = result.facts.chain; node.chainHint = a.chain; result = await runChecks(node, { rpc: clientFor(node, defaults) }); }
     spin.stop();
     for (const ch of result.checks) out(checkLine(ch.status, ch.name, ch.detail));
     out();

@@ -99,6 +99,10 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   listens on the port, a progress bar with the rows so far and the time left for each phase of the
   build (the same bar in `scripts/index-build.js`), Ctrl-C that leaves everything as it was, and a
   last question that starts the monitor in the same terminal.
+  It reads the node's own `bitcoin.conf` first (operator: "can't you look through the user's
+  .conf and find the rpc values?"): chain, `rpcport`, `rpcconnect`, `rpcuser`/`rpcpassword`,
+  `rpcauth` users, a cookie file named elsewhere, `server=`, `txindex=`, `prune=`, sections and
+  `includeconf=`, so the RPC URL and the credentials arrive as defaults rather than questions.
 - **An unconfirmed transaction shows its inputs and fee** (operator: "Unknown script?!", of a
   mempool transaction whose 858 inputs all read *unknown script*). Core carries no `prevout` on a
   mempool transaction's inputs, so `fillPrevouts` fetches the parents in one batch and fills each
