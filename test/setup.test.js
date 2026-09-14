@@ -1,0 +1,159 @@
+// THE INSTALLER'S CHECKS AND ITS CONFIG (scripts/check.js, scripts/setup.js): against a stub node
+// and a temporary data directory holding a real genesis block, every check that should pass
+// passes, and each thing a fresh install can get wrong -- no RPC answer, txindex off, a pruned
+// node, a missing datadir, a wrong chain, an unwritable index directory -- is a FAIL by name.
+// (operator, 2026-09-14: "build a test into the installer so we can verify it properly connects to
+// an RPC server and finds the bitcoin logs ... something that writes out a config/local.json at
+// the end ... that we can up and run immediately to start building the transaction set")
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync, statSync, chmodSync, readdirSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { MAGIC } from '../server/chain/blockfile.js';
+import { runChecks } from '../scripts/check.js';
+import { localConfig, writeLocalConfig, defaultDatadir, defaultWorkers } from '../scripts/setup.js';
+
+const FX = JSON.parse(readFileSync(new URL('./fixtures/chain-tx.json', import.meta.url), 'utf8'));
+
+// a data directory the way Core leaves one: blocks/blk00000.dat starting with genesis, its undo
+// file, a cookie, and a debug.log
+function datadir(root, { chain = 'main', cookie = true } = {}) {
+  const dir = path.join(root, 'bitcoin');
+  mkdirSync(path.join(dir, 'blocks'), { recursive: true });
+  const body = Buffer.from(FX.genesis.hex, 'hex');
+  const head = Buffer.alloc(8); head.writeUInt32LE(MAGIC[chain], 0); head.writeUInt32LE(body.length, 4);
+  writeFileSync(path.join(dir, 'blocks', 'blk00000.dat'), Buffer.concat([head, body, Buffer.alloc(64)]));
+  writeFileSync(path.join(dir, 'blocks', 'rev00000.dat'), Buffer.alloc(0));
+  if (cookie) writeFileSync(path.join(dir, '.cookie'), '__cookie__:secret');
+  writeFileSync(path.join(dir, 'debug.log'), '2026-09-14T00:00:00Z Bitcoin Core version v29.0.0\n');
+  return dir;
+}
+
+// a node that answers the way Core 29 does, with knobs for what an install can get wrong
+function stubRpc({ chain = 'main', txindex = true, pruned = false, version = 290000, refuse = false, prevouts = true } = {}) {
+  const genesis = FX.genesis.expect.hash;
+  return { batch: async (calls) => {
+    if (refuse) { const e = new Error('connect ECONNREFUSED 127.0.0.1:8332'); e.kind = 'transport'; throw e; }
+    return calls.map(({ method, params }) => {
+      switch (method) {
+        case 'getblockchaininfo': return { ok: true, result: { chain, blocks: 0, headers: 0, initialblockdownload: false, pruned } };
+        case 'getnetworkinfo': return { ok: true, result: { version, subversion: `/Satoshi:${(version / 10000).toFixed(1)}.0/` } };
+        case 'getindexinfo': return { ok: true, result: txindex ? { txindex: { synced: true, best_block_height: 0 } } : {} };
+        case 'getbestblockhash': return { ok: true, result: genesis };
+        case 'getblock': return params[1] === 3
+          ? { ok: true, result: { tx: [{ vin: [{ coinbase: '00' }] }, { vin: [prevouts ? { prevout: {} } : {}] }] } }
+          : { ok: false, error: { message: 'wrong verbosity' } };
+        default: return { ok: false, error: { code: -32601, message: 'Method not found' } };
+      }
+    });
+  } };
+}
+
+const byName = (r) => Object.fromEntries(r.checks.map((c) => [c.name, c]));
+
+test('A GOOD NODE PASSES EVERY CHECK: rpc, credentials, chain, txindex, getblock 3, the block files, the log, the index', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-setup-'));
+  try {
+    const dir = datadir(root);
+    const idx = path.join(root, 'index'); mkdirSync(idx);
+    writeFileSync(path.join(idx, 'manifest.json'), JSON.stringify({ format: 3, tip: { height: 0 }, builtAt: '2026-09-14T00:00:00Z' }));
+    const r = await runChecks({ id: 'main', rpcUrl: 'http://127.0.0.1:8332', datadir: dir, chainHint: 'main', addressIndex: idx }, { rpc: stubRpc() });
+    const c = byName(r);
+    assert.equal(r.ok, true, JSON.stringify(r.checks, null, 1));
+    assert.equal(c.credentials.status, 'ok'); assert.match(c.credentials.detail, /\.cookie$/, 'the cookie file is named');
+    assert.equal(c.rpc.status, 'ok'); assert.match(c.rpc.detail, /chain main/);
+    assert.equal(c.version.status, 'ok'); assert.match(c.version.detail, /29\.0/);
+    assert.equal(c.txindex.status, 'ok');
+    assert.equal(c['getblock 3'].status, 'ok');
+    assert.equal(c['address index rpc'].status, 'info'); assert.match(c['address index rpc'].detail, /no address index/);
+    assert.equal(c['block files'].status, 'ok'); assert.match(c['block files'].detail, /1 block files and 1 undo files/);
+    assert.equal(c['read a block'].status, 'ok', c['read a block'].detail); assert.match(c['read a block'].detail, /genesis/);
+    assert.equal(c['node log'].status, 'info'); assert.match(c['node log'].detail, /debug\.log/, 'the log is found');
+    assert.equal(c['address index'].status, 'ok'); assert.match(c['address index'].detail, /0 behind/);
+    assert.equal(c['index writable'].status, 'ok');
+    assert.deepEqual({ chain: r.facts.chain, blockFiles: r.facts.blockFiles, version: r.facts.version }, { chain: 'main', blockFiles: 1, version: 290000 });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('EACH THING AN INSTALL CAN GET WRONG IS A FAIL BY NAME', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-setup-'));
+  try {
+    const dir = datadir(root);
+    const node = { id: 'main', rpcUrl: 'http://127.0.0.1:8332', datadir: dir, chainHint: 'main' };
+    // nothing listening
+    let r = await runChecks(node, { rpc: stubRpc({ refuse: true }) });
+    assert.equal(r.ok, false); assert.equal(byName(r).rpc.status, 'fail'); assert.match(byName(r).rpc.detail, /ECONNREFUSED/);
+    assert.ok(!byName(r).txindex, 'and nothing further is asked of a node that does not answer');
+    // no credential at all
+    r = await runChecks({ ...node, datadir: datadir(path.join(root, 'nocookie'), { cookie: false }) }, { rpc: stubRpc() });
+    assert.equal(byName(r).credentials.status, 'fail');
+    r = await runChecks({ ...node, datadir: datadir(path.join(root, 'userpass'), { cookie: false }), rpcUser: 'u', rpcPassword: 'p' }, { rpc: stubRpc() });
+    assert.equal(byName(r).credentials.status, 'ok'); assert.match(byName(r).credentials.detail, /rpcUser "u"/);
+    // txindex off, a pruned node, an old node, no prevouts
+    r = await runChecks(node, { rpc: stubRpc({ txindex: false }) });
+    assert.equal(byName(r).txindex.status, 'fail'); assert.match(byName(r).txindex.detail, /txindex=1/);
+    r = await runChecks(node, { rpc: stubRpc({ pruned: true }) });
+    assert.equal(byName(r).pruned.status, 'fail');
+    r = await runChecks(node, { rpc: stubRpc({ version: 240000 }) });
+    assert.equal(byName(r).version.status, 'fail'); assert.match(byName(r).version.detail, /25\.0/);
+    r = await runChecks(node, { rpc: stubRpc({ prevouts: false }) });
+    assert.equal(byName(r)['getblock 3'].status, 'fail');
+    // the wrong chain, both ways: config says main but the node is on signet; block files of another chain
+    r = await runChecks(node, { rpc: stubRpc({ chain: 'signet' }) });
+    assert.equal(byName(r).chain.status, 'fail'); assert.match(byName(r).chain.detail, /signet/);
+    r = await runChecks({ ...node, chainHint: 'signet', datadir: datadir(path.join(root, 'wrongfiles'), { chain: 'signet' }) }, { rpc: stubRpc() });
+    assert.equal(byName(r)['read a block'].status, 'fail', 'main-chain magic against signet files');
+    // no datadir, a datadir that is not there, no block files
+    r = await runChecks({ ...node, datadir: undefined, rpcUser: 'u', rpcPassword: 'p' }, { rpc: stubRpc() });
+    assert.equal(byName(r).datadir.status, 'fail');
+    r = await runChecks({ ...node, datadir: path.join(root, 'missing') }, { rpc: stubRpc() });
+    assert.equal(byName(r).datadir.status, 'fail'); assert.match(byName(r).datadir.detail, /does not exist/);
+    const empty = path.join(root, 'empty'); mkdirSync(path.join(empty, 'blocks'), { recursive: true }); writeFileSync(path.join(empty, '.cookie'), 'a:b');
+    r = await runChecks({ ...node, datadir: empty }, { rpc: stubRpc() });
+    assert.equal(byName(r)['block files'].status, 'fail');
+    // an index directory that is configured but not built, and one the follower cannot write to
+    r = await runChecks({ ...node, addressIndex: path.join(root, 'noindex') }, { rpc: stubRpc() });
+    assert.equal(byName(r)['address index'].status, 'warn'); assert.match(byName(r)['address index'].detail, /index-build/);
+    if (process.getuid?.() !== 0) {
+      const ro = path.join(root, 'ro'); mkdirSync(ro);
+      writeFileSync(path.join(ro, 'manifest.json'), JSON.stringify({ tip: { height: 0 } }));
+      chmodSync(ro, 0o500);
+      r = await runChecks({ ...node, addressIndex: ro }, { rpc: stubRpc() });
+      assert.equal(byName(r)['index writable'].status, 'fail');
+      chmodSync(ro, 0o700);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('THE CONFIG THE ANSWERS PRODUCE, and the file it is written to', () => {
+  const cfg = localConfig({ label: 'Mac Core 29', rpcUrl: 'http://127.0.0.1:8332', datadir: '/Users/x/Library/Application Support/Bitcoin', chain: 'main', host: '127.0.0.1', port: '21000', indexDir: '/Users/x/blockyard-index' });
+  assert.deepEqual(cfg, { server: { host: '127.0.0.1', port: 21000 }, nodes: [{ id: 'main', label: 'Mac Core 29', rpcUrl: 'http://127.0.0.1:8332', datadir: '/Users/x/Library/Application Support/Bitcoin', chainHint: 'main', addressIndex: '/Users/x/blockyard-index' }] });
+  const withPass = localConfig({ label: 'x', rpcUrl: 'http://127.0.0.1:8332', datadir: '/d', host: '0.0.0.0', port: 21000, rpcUser: 'u', rpcPassword: 'p' });
+  assert.deepEqual(withPass.nodes[0], { id: 'main', label: 'x', rpcUrl: 'http://127.0.0.1:8332', datadir: '/d', chainHint: 'main', rpcUser: 'u', rpcPassword: 'p' }, 'a user/password node carries both, and no index until one is chosen');
+  assert.equal(localConfig({ label: 'x', rpcUrl: 'u', datadir: '/d', host: 'h', port: 1, chain: 'signet' }).nodes[0].chainHint, 'signet', 'the chain the node reported');
+
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-setup-'));
+  try {
+    const file = path.join(root, 'config', 'local.json');
+    writeLocalConfig(file, cfg);
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), cfg);
+    if (process.platform !== 'win32') assert.equal(statSync(file).mode & 0o777, 0o600, 'the file may carry a password: owner-only');
+    assert.throws(() => writeLocalConfig(file, withPass), /exists/, 'an existing config is not overwritten by accident');
+    writeLocalConfig(file, withPass, { force: true, now: new Date('2026-09-14T20:00:00Z') });
+    assert.deepEqual(JSON.parse(readFileSync(file, 'utf8')), withPass);
+    const bak = readdirSync(path.dirname(file)).find((f) => f.startsWith('local.json.bak-'));
+    assert.ok(bak, 'and a backup of what was there is kept');
+    assert.deepEqual(JSON.parse(readFileSync(path.join(path.dirname(file), bak), 'utf8')), cfg);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('the defaults follow the platform and the machine', () => {
+  assert.equal(defaultDatadir('darwin', '/Users/x', {}), '/Users/x/Library/Application Support/Bitcoin');
+  assert.equal(defaultDatadir('linux', '/home/x', {}), '/home/x/.bitcoin');
+  assert.equal(defaultDatadir('win32', 'C:\\Users\\x', { APPDATA: 'C:\\Users\\x\\AppData\\Roaming' }), path.join('C:\\Users\\x\\AppData\\Roaming', 'Bitcoin'));
+  assert.equal(defaultWorkers(32, 132e9), 16, 'capped at sixteen');
+  assert.equal(defaultWorkers(10, 16e9), 6, 'four cores left for the node, and memory allows six');
+  assert.equal(defaultWorkers(8, 8e9), 3, 'memory is the limit on a small machine');
+  assert.equal(defaultWorkers(2, 4e9), 1, 'never none');
+});

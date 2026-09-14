@@ -136,6 +136,11 @@ every page, and it is what the test suite uses. Stop it with `Ctrl-C`.
 
 ## 4. Point it at your node
 
+**The short way:** `npm run setup` asks for the RPC URL and data directory, checks them against
+the node (RPC, credentials, chain, `txindex`, the block files, the log), writes `config/local.json`
+and offers to build the address index -- [GETTING-STARTED.md](GETTING-STARTED.md). What follows
+is the same configuration by hand, and what each key means.
+
 Create `config/local.json` (it is git-ignored, so your settings never end up in a commit).
 
 **Same machine, cookie authentication** — the common case. The monitor finds the cookie
@@ -231,6 +236,7 @@ lists exactly which figures each source provides.
 ## 5. First run
 
 ```bash
+npm run check       # every configured node: RPC, credentials, txindex, block files, index
 npm start
 ```
 

@@ -47,29 +47,16 @@ index Core does not have; BlockYard can build one from the node's block files �
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 849 unit tests, all built in
-npm run dev         # try it first against a built-in fake node: http://127.0.0.1:18088
+npm test            # optional: 853 unit tests, all built in
+npm run setup       # asks where the node is, checks it, writes config/local.json, builds the index
+npm start           # then open http://127.0.0.1:21000
 ```
 
-To watch your own node, create `config/local.json`:
-
-```json
-{
-  "server": { "host": "127.0.0.1", "port": 21000 },
-  "nodes": [
-    {
-      "id": "main",
-      "label": "My node",
-      "rpcUrl": "http://127.0.0.1:8332",
-      "datadir": "/home/you/.bitcoin",
-      "chainHint": "main"
-    }
-  ]
-}
-```
-
-then `npm start` and open <http://127.0.0.1:21000>. There is no `npm install` step — there
-is nothing to install.
+`npm run setup` connects to the node, proves the credentials, the chain, `txindex`, the block
+files and the log, writes `config/local.json`, and offers to start building the address index
+on the spot. Step by step for macOS and Linux: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**.
+To try it first without a node: `npm run dev` runs against a built-in fake one on port 18088.
+To check a setup again later: `npm run check`.
 
 **Why the same machine?** Running BlockYard elsewhere and reading a node over RPC alone was
 tried (against a node appliance, 2026-09-13) and abandoned: the charts filled in, but the explorer
@@ -86,6 +73,7 @@ is in **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 | document | what it covers |
 |---|---|
+| [Getting started](docs/GETTING-STARTED.md) | macOS or Linux, from a command prompt: Core settings, Node 22, `npm run setup`, the index build, running it |
 | [Install](docs/INSTALL.md) | requirements, first run, systemd service, exposure, accounts, TLS, reverse proxy, updating |
 | [Configuration](docs/CONFIGURATION.md) | every config key and environment variable, with examples |
 | [User guide](docs/USER-GUIDE.md) | a tour of every tab and panel, and how to read them |
@@ -133,7 +121,9 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm test             # 849 unit tests (node:test, no dependencies)
+npm run setup        # interactive install: check the node, write config/local.json, build the index
+npm run check        # the same checks against every configured node; exits 1 on a FAIL
+npm test             # 853 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -144,7 +134,7 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 ## Status
 
 Version **0.1.0** — the first official release, and pre-release software: the word is meant literally. The test suite is
-comprehensive (849 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (853 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

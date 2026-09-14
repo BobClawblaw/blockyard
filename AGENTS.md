@@ -18,6 +18,8 @@ BLOCKYARD_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it
 npm run dev                   # port 18088 + an in-process fake node doing IBD
 npm test                      # node:test, zero dependencies; the count in this file is generated -- see "Counts" below
 node scripts/manage-users.js  # CLI user admin (list/create/passwd/role)
+npm run setup                 # a fresh machine: check the node, write config/local.json, build the index (scripts/setup.js)
+npm run check                 # the same checks against every configured node (scripts/check.js); exit 1 on a FAIL
 node scripts/pool-map.js   # refresh coinbase-tag -> pool-name labels (manual by design; see MEASUREMENTS 25)
 node scripts/index-build.js --out <dir> --workers 16   # the address index, from the node's blk/rev files (30 min, 124 GB; MEASUREMENTS 28-30); name it as addressIndex in the node's config
 node scripts/index-benchmark.js   # check a built index against the node (scantxoutset) and time lookups
@@ -393,7 +395,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 849 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 853 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

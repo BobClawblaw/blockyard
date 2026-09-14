@@ -27,6 +27,8 @@
   "main": "server/main.js",
   "scripts": {
     "start": "node server/main.js",
+    "setup": "node scripts/setup.js",
+    "check": "node scripts/check.js",
     "dev": "BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_PORT=18088 BLOCKYARD_FAKE_NODE=1 node server/main.js",
     "fake-node": "node scripts/fake-node.js",
     "user": "node scripts/manage-users.js",

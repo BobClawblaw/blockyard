@@ -76,6 +76,19 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   "method not found" is remembered per node for ten minutes, then asked again, because the daemon
   behind a node id can change.
 - **Not yet:** an address's unspent-output list, and its transactions still in the mempool.
+- **An installer: `npm run setup`** (operator: "build a test into the installer so we can verify it
+  properly connects to an RPC server and finds the bitcoin logs ... something that writes out a
+  config/local.json at the end ... that we can up and run immediately to start building the
+  transaction set"). It asks for the RPC URL and data directory, finds the cookie (or asks for
+  `rpcUser`/`rpcPassword`), and proves the answers before writing anything: the RPC server answers
+  and on which chain, the node's version is 25.0 or later, `txindex` is on and synced,
+  `getblock <tip> 3` carries prevouts, the node is not pruned, `blocks/` holds matched block and
+  undo files and the first one opens to the genesis block through the XOR key, `debug.log` is where
+  it should be, and a configured index directory is readable, writable and not far behind. Then it
+  writes `config/local.json` (mode 0600, a backup of any previous one) and offers to build the
+  address index on the spot. `npm run check` runs the same checks against every configured node
+  and exits non-zero on a FAIL; `--yes` with flags is the scripted form. `docs/GETTING-STARTED.md`
+  walks a macOS or Linux command prompt through it.
 - **An unconfirmed transaction shows its inputs and fee** (operator: "Unknown script?!", of a
   mempool transaction whose 858 inputs all read *unknown script*). Core carries no `prevout` on a
   mempool transaction's inputs, so `fillPrevouts` fetches the parents in one batch and fills each
