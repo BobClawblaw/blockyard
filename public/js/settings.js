@@ -399,7 +399,7 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'effects',
     title: 'Effects',
-    note: 'What the board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The price board only ever plays the three that follow the line, and the pulse and the bulge are rare on top of that.',
+    note: 'What the board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The price board plays the ones that follow its line or ride its grid \u2014 pulse, bulge, ball lightning, light cycles, the lightning ball and twinkle \u2014 and the pulse, the bulge and ball lightning are rare there on top of that.',
     rows: Object.freeze([
       Object.freeze({ key: 'ripple', label: 'Ripple', kind: 'toggle', hint: 'A ring spreading from a point on the board' }),
       Object.freeze({ key: 'outline', label: 'Outline sweep', kind: 'toggle', hint: 'A front that traces each block\u2019s edges as it passes' }),
@@ -431,7 +431,7 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'tractor', label: 'Tractor beam', kind: 'toggle', hint: 'A saucer draws the tallest transaction up in a beam, and puts it back' }),
       Object.freeze({ key: 'missile', label: 'Interception', kind: 'toggle', hint: 'Arcs rain toward the board while interceptors rise to meet them, each catch a ring of light' }),
       Object.freeze({ key: 'boulderdash', label: 'Collapse', kind: 'toggle', hint: 'The board gives way from a point and the blocks fall in, cascading outward' }),
-      Object.freeze({ key: 'stormball', label: 'Ball lightning', kind: 'toggle', hint: 'An electric blue sphere drifts across the view, crackling, throwing arcs that electrify the blocks they strike' }),
+      Object.freeze({ key: 'stormball', label: 'Ball lightning', kind: 'toggle', hint: 'On Markets too, rarely, crossing the candles and charging the price line. An electric blue sphere drifts across the view, crackling, throwing arcs that electrify the blocks they strike' }),
     ]),
   }),
   Object.freeze({

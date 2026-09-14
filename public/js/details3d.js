@@ -191,7 +191,13 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // scan, tide), the light cycles and the lightning ball all travel the FLOOR, which on the candle
 // board is empty space -- which is what "through space on an invisible grid" describes. Where a
 // line exists, the effects that run are the ones with something to run along.
-const LINE_FX = ['pulse', 'twinkle', 'bulge'];
+// ...and ball lightning crosses the price board too (operator, 2026-09-14: "Add rare ball lightning
+// travelling the 3D Markets from one side to the other and electrifying any elements it comes
+// near. Same rarity as the other effects for the markets")
+// LIGHT CYCLES AND THE LIGHTNING BALL RIDE THE CANDLE GRID TOO (operator, 2026-09-14: "Lightcycles
+// don't work anymore on the market view" -- the line-only list had cut them, while the Markets
+// switch still promised them)
+const LINE_FX = ['pulse', 'twinkle', 'bulge', 'stormball', 'lightcycle', 'ball'];
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
 const LINE_ONLY = new Set(['pulse', 'bulge']);
 const DEREZ_MS = 800;   // how long a crashed light cycle takes to shatter and fade
@@ -276,8 +282,11 @@ export const PULSE_WAIT_MS = [150000, 360000];
 // RARE (operator, 2026-09-14: "drastically increase the delay on the bulge effect, just like the
 // energy pulse effects. These should be rare"): each of these waits its own PULSE_WAIT_MS between
 // plays, counted from the last time it played, and plays as soon as it is due.
-export const RARE_FX = ['pulse', 'bulge'];
-export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
+export const RARE_FX = ['pulse', 'bulge', 'stormball'];   // rare on a price board; on the block board only the first two apply, and they never play there
+export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12, rare = null) {
+  // which kinds wait their turn: on a price board (told by the caller, or by pulse/bulge being in
+  // the list) all of RARE_FX; on the block board none -- ball lightning there is an ordinary pick
+  rare ??= kinds.some((k) => LINE_ONLY.has(k)) ? RARE_FX : [];
   if (!kinds.length) return null;
   const recent = st.recentFx ?? (st.recentFx = []);
   const window = Math.max(0, Math.min(Math.floor(noRepeat), kinds.length - 1));
@@ -290,7 +299,7 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
     pool = kinds.filter((k) => lastSeen(k) === oldest);
   }
   const wait = () => now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
-  const rare = RARE_FX.filter((k) => kinds.includes(k));
+  rare = rare.filter((k) => kinds.includes(k));
   if (rare.length) {
     for (const k of rare) st[`${k}ReadyAt`] ??= wait();
     const due = rare.filter((k) => now >= st[`${k}ReadyAt`]);
@@ -341,7 +350,7 @@ function scheduleFx(canvas, st, opts, soon = false) {
     const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
     const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => !LINE_ONLY.has(k))).filter((k) => !allowed || allowed.has(k));
     if (!kinds.length) return;
-    const kind = chooseIdleFx(kinds, st, now, Math.random, opts.fxNoRepeat ?? 12);
+    const kind = chooseIdleFx(kinds, st, now, Math.random, opts.fxNoRepeat ?? 12, onALine ? RARE_FX : []);
     if (!kind) { scheduleFx(canvas, st, opts); return; }   // only the pulse is on, and it is still waiting
     startFx(st, kind, now);
     st.wake?.();
@@ -1339,6 +1348,39 @@ function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
   trace(-upSide, (q) => coreR + (q.r - coreR) * 0.7, (lift) => `rgba(110,70,0,${(0.3 * lift * amp).toFixed(3)})`, Math.max(0.8, lw * 2.2));
 }
 
+// THE LINE, ELECTRIFIED where ball lightning passes: every segment within reach of the ball takes
+// a blue charge that fades with distance, plus a few sparks jumping off it -- the line is one of
+// the "elements it comes near"
+function electrifyLine(ctx, pts, view, lw) {
+  const s = view.fx.stormball;
+  const U = view.unit ?? 8;
+  const c = project(s.at.x, s.at.y, s.at.z, view);
+  const reach = U * 9;
+  const charged = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+    const d = Math.hypot(mx - c.x, my - c.y);
+    if (d < reach) charged.push([i, 1 - d / reach]);
+  }
+  if (!charged.length) return;
+  const seg = (i, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke(); };
+  for (const [i, k] of charged) {
+    const a = k * k;
+    seg(i, lw * 16, `rgba(40,120,255,${(0.28 * a).toFixed(3)})`);
+    seg(i, lw * 7, `rgba(90,190,255,${(0.7 * a).toFixed(3)})`);
+    seg(i, lw * 2.4, `rgba(220,245,255,${(0.95 * a).toFixed(3)})`);
+    // sparks off the charged wire, new every frame
+    if (a > 0.35 && Math.random() < 0.6) {
+      const p = pts[i], ang = Math.random() * Math.PI * 2, len = U * (0.6 + Math.random() * 1.4);
+      ctx.strokeStyle = `rgba(200,240,255,${(0.9 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.05);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + Math.cos(ang) * len * 0.5 + (Math.random() - 0.5) * U, p.y + Math.sin(ang) * len * 0.5);
+      ctx.lineTo(p.x + Math.cos(ang) * len, p.y + Math.sin(ang) * len);
+      ctx.stroke();
+    }
+  }
+}
+
 function priceLine(ctx, view, axes) {
   const pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
@@ -1386,6 +1428,7 @@ function priceLine(ctx, view, axes) {
   }
   if (!fx) {
     for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    if (view.fx?.kind === 'stormball' && view.fx.stormball) electrifyLine(ctx, pts, view, lw);
     done();
     return;
   }

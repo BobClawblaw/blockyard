@@ -950,7 +950,7 @@ export function renderMiningOverview(s, state, h) {
 /** The block being built, as the side panel shows it. Pure: markup from readings. */
 export function nextHud(nb, { meter = '', fresh = null, mempool = null } = {}, fmt) {
   const head = (k) => `<div class="hudh"><span class="live"></span><b>Being built</b>${k}</div>`;
-  if (!nb) return `${head('')}<div class="note tiny">No block template yet. The page asks the node for one when it opens; answering costs the node about four seconds of its single RPC thread, so it is asked at most every 20 s.</div>`;
+  if (!nb) return `${head('')}<div class="note tiny">No block template yet. It is assembled here from the node's mempool, which is read every twenty seconds; if it stays empty, the node's RPC is slow or the mempool read is being dropped -- <span class="mono">npm run check</span> times the node alone.</div>`;
   if (nb.unavailable) return `${head('')}<div class="note tiny">No block template: ${fmt.esc(nb.unavailable)}</div>`;
   const cap = Number(nb.weightLimit) || WU_CAP_FALLBACK;
   const pct = Number.isFinite(nb.weightPct) ? nb.weightPct : 100 * (Number(nb.weight) || 0) / cap;

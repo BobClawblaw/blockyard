@@ -89,7 +89,7 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   //
   // Nothing guarded it, which is why it survived four batches of new effects. This does: the
   // choice is replicated exactly as scheduleFx makes it, and no kind may run away with the board.
-  const LINE_FX = ['pulse', 'twinkle', 'bulge'];   // the price board's list, as details3d.js has it
+  const LINE_FX = ['pulse', 'twinkle', 'bulge', 'stormball', 'lightcycle', 'ball'];   // the price board's list, as details3d.js has it
   const pick = (last) => {
     const kinds = FX_KINDS.filter((k) => k !== 'pulse');
     let pool = kinds.filter((k) => k !== last);
@@ -125,18 +125,18 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   // bulge effect, just like the energy pulse effects. These should be rare"): both are measured here.
   // A tick is idleEvery plus the effect that played, and the bulge is the longest at 16 s; a rare
   // effect that comes due while the other is already due can wait one more tick behind it.
-  const LEN = { pulse: 9000, bulge: 16000 };
+  const LEN = { pulse: 9000, bulge: 16000, stormball: 11000 };
   const MAX_TICK = 9000 + 16000;
   const st = {};
   let t = 0;
-  const first = {}, prev = {}, gaps = { pulse: [], bulge: [] };
+  const first = {}, prev = {}, gaps = { pulse: [], bulge: [], stormball: [] };
   while (t < 4 * 3600e3) {
     const k = chooseIdleFx(LINE_FX, st, t, rnd);
     if (k) st.lastFx = k;
     if (k in gaps) { if (prev[k] == null) first[k] = t; else gaps[k].push(t - prev[k]); prev[k] = t; }
     t += 5000 + rnd() * 4000 + (k ? LEN[k] ?? 3000 : 0);   // idleEvery, plus the effect itself
   }
-  for (const k of ['pulse', 'bulge']) {
+  for (const k of ['pulse', 'bulge', 'stormball']) {
     assert.ok(first[k] >= PULSE_WAIT_MS[0], `a board that has just opened waits before its first ${k} (${(first[k] / 1000).toFixed(0)} s)`);
     assert.ok(gaps[k].length > 30, `and the ${k} does keep coming round (${gaps[k].length} in four hours)`);
     const minGap = Math.min(...gaps[k]), maxGap = Math.max(...gaps[k]);
@@ -150,6 +150,13 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   const lone2 = {};
   assert.equal(chooseIdleFx(['bulge'], lone2, 0), null, 'a lone bulge waits its turn too');
   assert.equal(chooseIdleFx(['bulge'], lone2, lone2.bulgeReadyAt), 'bulge', 'and then it plays');
+  // BALL LIGHTNING IS RARE ON THE PRICE BOARD ONLY (operator, 2026-09-14: "Same rarity as the other
+  // effects for the markets"): told it is a price board it waits; on the block board it is an ordinary pick
+  const lone3 = {};
+  assert.equal(chooseIdleFx(['stormball'], lone3, 0, Math.random, 12, ['pulse', 'bulge', 'stormball']), null, 'on a price board it waits its turn');
+  assert.equal(chooseIdleFx(['stormball'], lone3, lone3.stormballReadyAt, Math.random, 12, ['pulse', 'bulge', 'stormball']), 'stormball', 'and then it plays');
+  assert.equal(chooseIdleFx(['stormball', 'ripple'], {}, 0, () => 0.1, 12, []), 'stormball', 'on the block board it is picked at once');
+  assert.equal(chooseIdleFx(['stormball', 'ripple'], {}, 0, () => 0.1), 'stormball', 'and the default, with no line effect in the list, is the block board\'s rule');
 });
 
 test('with every effect switched off the board never schedules one, and it still draws', () => {
