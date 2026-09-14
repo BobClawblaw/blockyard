@@ -421,8 +421,9 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     // can say addressIndexBuild: "manual" to keep this from happening.
     const HMS = (sec) => (sec < 90 ? `${Math.round(sec)} s` : sec < 5400 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} h`);
     const build = async (dir, m) => {
-      // half the workers a dedicated build would take: the node shares this machine's disk and cores
-      const workers = Math.max(1, Math.floor(defaultWorkers() / 2));
+      // at most four, and half what a dedicated build would take: the node shares this machine's disk
+      // (an external one, on the first Mac), and the pacer only sees trouble after it has started
+      const workers = Math.max(1, Math.min(4, Math.floor(defaultWorkers() / 2)));
       // ITS OWN CONNECTION (2026-09-14, the first Mac: the build's getblockhash batches sat at the back
       // of the monitor's one-in-flight lane behind multi-second mempool and block reads, and both
       // starved -- "heights 1,000 of 967,015" for a quarter of an hour). The build's calls are cheap

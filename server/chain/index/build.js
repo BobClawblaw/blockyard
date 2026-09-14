@@ -83,7 +83,7 @@ export function defaultWorkers(cpus = os.cpus().length, totalMem = os.totalmem()
  * Mac install: a build at full speed on the node's disk turned its RPC into 18 s answers and
  * 90 s timeouts.)
  */
-export function rpcPacer(rpc, { slowMs = 2000, easeMs = 750, holdMs = 10_000, onChange = null } = {}) {
+export function rpcPacer(rpc, { slowMs = 1000, easeMs = 750, holdMs = 10_000, onChange = null } = {}) {
   let held = false;
   return async () => {
     for (;;) {
