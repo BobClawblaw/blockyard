@@ -323,7 +323,9 @@ async function main() {
   if (built) say(`${c.ok('✓')} an index is already built there; the server will follow the chain from it`);
   // the suggestion is the shared-machine number (at most four, half the cores), not a dedicated
   // build's: the node reads the same disk, and the first Mac wrote 16 into its config by pressing Enter
-  else a.workers = await ask(`build workers ${c.dim('(1 on spinning disks; each needs ~2.5 GB of memory)')}`, arg('workers', String(Math.max(1, Math.min(4, Math.floor(defaultWorkers() / 2))))), validate.workers);
+  // four by default (operator, 2026-09-14): the number that shares an NVMe with a node without
+  // trouble; fewer only on a machine with fewer cores or less memory, and 1 on spinning disks
+  else a.workers = await ask(`build workers ${c.dim('(1 on spinning disks; each needs ~2.5 GB of memory)')}`, arg('workers', String(Math.max(1, Math.min(4, defaultWorkers())))), validate.workers);
 
   // ------------------------------------------------------------------------------- 5. written
   out(step(5, STEPS, 'config/local.json'));

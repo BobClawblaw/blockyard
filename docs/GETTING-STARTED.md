@@ -100,7 +100,7 @@ opens it to everyone who can reach the port, see [SECURITY.md](SECURITY.md)), th
 directory (`data/index` inside the checkout, alongside everything else this install writes;
 about 124 GB for the whole chain -- put it on a different disk from the node's if you can, by
 giving another path), and the number of build workers (each needs about 2.5 GB of memory; the default
-is at most four, half the machine's cores -- **answer 1 if the block files are on spinning disks**, where parallel readers
+is four, fewer on a small machine -- **answer 1 if the block files are on spinning disks**, where parallel readers
 only seek against each other and against the node, and expect the build to take hours there). It writes `config/local.json` (mode 0600; a backup is kept if one was there)
 and shows it.
 
