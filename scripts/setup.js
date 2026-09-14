@@ -35,9 +35,12 @@ const STEPS = 6;
 // ---------------------------------------------------------------- the answers, and their shape
 /** Where Bitcoin Core keeps its data by default on this platform. */
 export function defaultDatadir(platform = process.platform, home = os.homedir(), env = process.env) {
-  if (platform === 'darwin') return path.join(home, 'Library', 'Application Support', 'Bitcoin');
-  if (platform === 'win32') return path.join(env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), 'Bitcoin');
-  return path.join(home, '.bitcoin');
+  // joined with the named platform's own separator, so the answer for a Mac is a Mac path
+  // whatever machine asks (the tests ask for all three from one)
+  const P = platform === 'win32' ? path.win32 : path.posix;
+  if (platform === 'darwin') return P.join(home, 'Library', 'Application Support', 'Bitcoin');
+  if (platform === 'win32') return P.join(env.APPDATA ?? P.join(home, 'AppData', 'Roaming'), 'Bitcoin');
+  return P.join(home, '.bitcoin');
 }
 
 /** Workers for the index build: leave four cores for the node, and count ~2.5 GB of memory each. */
@@ -70,7 +73,7 @@ export function writeLocalConfig(file, cfg, { force = false, now = new Date() } 
 export function shortPath(p, root = ROOT, home = os.homedir()) {
   const rel = path.relative(root, p);
   if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel;
-  return p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
+  return p.startsWith(home + '/') || p.startsWith(home + '\\') ? `~${p.slice(home.length)}` : p;
 }
 export function expand(p) { return p.startsWith('~/') || p === '~' ? path.join(os.homedir(), p.slice(1)) : p; }
 export const validate = {

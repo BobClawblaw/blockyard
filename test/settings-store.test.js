@@ -54,7 +54,7 @@ test('a saved blob round-trips, and the file is written for this user only', asy
     assert.deepEqual(r.body.settings, settings, 'what went in is what comes back out');
 
     // 0600: this is a file the web server writes on behalf of whoever can reach the page.
-    assert.equal(fs.statSync(app.settingsFile).mode & 0o777, 0o600,
+    if (process.platform !== 'win32') assert.equal(fs.statSync(app.settingsFile).mode & 0o777, 0o600,
       'the settings file must not be world-readable');
   });
 });

@@ -32,6 +32,7 @@ const DECL = /^(?:test|test\.skip|test\.todo|test\.only)\s*\(/;
 /** Test declarations per file: top-level (counted) and nested (a scanner gap). */
 export function scanTests({ root = ROOT, dir = 'test' } = {}) {
   const base = path.join(root, dir);
+  const rel = (f) => path.relative(root, f).split(path.sep).join('/');   // keyed with '/', on every platform
   const files = fs.readdirSync(base, { recursive: true, withFileTypes: true })
     .filter((e) => e.isFile() && e.name.endsWith('.test.js'))
     .map((e) => path.join(e.parentPath ?? e.path, e.name))
@@ -43,10 +44,10 @@ export function scanTests({ root = ROOT, dir = 'test' } = {}) {
       const trimmed = line.trimStart();
       if (!DECL.test(trimmed)) continue;
       // Indented means it sits inside another test's body or a helper: a subtest.
-      if (/^\s/.test(line)) out.nested.push(`${path.relative(root, f)}: ${trimmed.slice(0, 60)}`);
+      if (/^\s/.test(line)) out.nested.push(`${rel(f)}: ${trimmed.slice(0, 60)}`);
       else top += 1;
     }
-    out.perFile[path.relative(root, f)] = top;
+    out.perFile[rel(f)] = top;
     out.total += top;
   }
   return out;

@@ -115,7 +115,7 @@ test('EACH THING AN INSTALL CAN GET WRONG IS A FAIL BY NAME', async () => {
     // an index directory that is configured but not built, and one the follower cannot write to
     r = await runChecks({ ...node, addressIndex: path.join(root, 'noindex') }, { rpc: stubRpc() });
     assert.equal(byName(r)['address index'].status, 'warn'); assert.match(byName(r)['address index'].detail, /index-build/);
-    if (process.getuid?.() !== 0) {
+    if (process.platform !== 'win32' && process.getuid?.() !== 0) {   // Windows ignores directory modes
       const ro = path.join(root, 'ro'); mkdirSync(ro);
       writeFileSync(path.join(ro, 'manifest.json'), JSON.stringify({ tip: { height: 0 } }));
       chmodSync(ro, 0o500);
@@ -151,7 +151,7 @@ test('THE CONFIG THE ANSWERS PRODUCE, and the file it is written to', () => {
 test('the defaults follow the platform and the machine', () => {
   assert.equal(defaultDatadir('darwin', '/Users/x', {}), '/Users/x/Library/Application Support/Bitcoin');
   assert.equal(defaultDatadir('linux', '/home/x', {}), '/home/x/.bitcoin');
-  assert.equal(defaultDatadir('win32', 'C:\\Users\\x', { APPDATA: 'C:\\Users\\x\\AppData\\Roaming' }), path.join('C:\\Users\\x\\AppData\\Roaming', 'Bitcoin'));
+  assert.equal(defaultDatadir('win32', 'C:\\Users\\x', { APPDATA: 'C:\\Users\\x\\AppData\\Roaming' }), 'C:\\Users\\x\\AppData\\Roaming\\Bitcoin', 'a Windows path, whatever machine asks');
   assert.equal(defaultWorkers(32, 132e9), 16, 'capped at sixteen');
   assert.equal(defaultWorkers(10, 16e9), 6, 'four cores left for the node, and memory allows six');
   assert.equal(defaultWorkers(8, 8e9), 3, 'memory is the limit on a small machine');
@@ -183,7 +183,7 @@ test('WHAT AN ANSWER MUST BE: every prompt validates, explains, and normalises',
     assert.match(validate.newDir(path.join(root, 'afile')).error, /not a directory/);
   } finally { rmSync(root, { recursive: true, force: true }); }
   assert.equal(expand('~/x'), path.join(os.homedir(), 'x')); assert.equal(expand('/abs'), '/abs');
-  assert.equal(shortPath('/repo/config/local.json', '/repo', '/home/u'), 'config/local.json');
+  assert.equal(shortPath('/repo/config/local.json', '/repo', '/home/u'), path.join('config', 'local.json'), 'relative to the checkout, in this platform\'s spelling');
   assert.equal(shortPath('/home/u/blockyard-index', '/repo', '/home/u'), '~/blockyard-index');
   assert.equal(shortPath('/tmp/x.json', '/repo', '/home/u'), '/tmp/x.json');
 
