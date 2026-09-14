@@ -1,6 +1,6 @@
-# blockyard HTTP API
+# BlockYard HTTP API
 
-blockyard serves its browser UI and a JSON API from the same port. Everything the dashboard draws comes from the endpoints documented here, so any script can read the same data. This reference is derived from `server/http/api.js` (the route table), `server/http/server.js` (routing, auth, limits), `server/http/sse.js` (the event stream), `server/http/explorer.js`, `server/collect/markets.js`, `server/collect/monitor.js` and `server/rpc/allowlist.js`.
+BlockYard serves its browser UI and a JSON API from the same port. Everything the dashboard draws comes from the endpoints documented here, so any script can read the same data. This reference is derived from `server/http/api.js` (the route table), `server/http/server.js` (routing, auth, limits), `server/http/sse.js` (the event stream), `server/http/explorer.js`, `server/collect/markets.js`, `server/collect/monitor.js` and `server/rpc/allowlist.js`.
 
 Contents
 
@@ -54,7 +54,7 @@ An unknown id is a `404`:
 { "error": { "message": "no node \"nope\"; known: main", "kind": "api", "code": null } }
 ```
 
-These endpoints are **not** per-node: `/api/health`, `/api/build`, `/api/nodes`, `/api/telemetry`, `/api/config`, `/api/events` (rows carry a `node` field but there is no node filter), `/api/markets*`, and the account/admin routes.
+These endpoints are **not** per-node: `/api/health`, `/api/build`, `/api/nodes`, `/api/telemetry`, `/api/config`, `/api/config/node*` (they always address `nodes[0]`), `/api/settings`, `/api/events` (rows carry a `node` field but there is no node filter), `/api/markets*`, and the account/admin routes.
 
 ### Errors and status codes
 
@@ -112,14 +112,14 @@ The roles are `viewer` < `operator` < `admin`. No route in the table requires `v
 
 | Cookie | Attributes | Purpose |
 |---|---|---|
-| `blockyard_sid` (configurable as `auth.cookieName`) | `HttpOnly; SameSite=Strict; Path=/; Max-Age=28800` (+ `Secure` over TLS or with `BLOCKYARD_SECURE_COOKIE=1`) | The session token. Only its SHA-256 is stored server-side. |
+| `blockyard_sid` (configurable as `auth.cookieName`) | `HttpOnly; SameSite=Strict; Path=/; Max-Age=259200` (+ `Secure` over TLS or with `BLOCKYARD_SECURE_COOKIE=1`) | The session token. Only its SHA-256 is stored server-side. |
 | `blockyard_csrf` | Same, but **not** `HttpOnly` | The CSRF double-submit value, readable by page JavaScript. |
 
-Sessions expire 8 hours after creation (`auth.sessionTtlMs`). A role change or a disable takes effect on the next request, not at next login.
+Sessions expire 72 hours after creation (`auth.sessionTtlMs`), or after 8 hours without a request (`auth.idleTtlMs`). A role change or a disable takes effect on the next request, not at next login.
 
 ### CSRF: the `X-CSRF-Token` header
 
-With accounts on, every mutating route (`POST /api/logout`, `/api/logout-all`, `/api/rpc`, `/api/action`, `/api/password`, and all `POST /api/users*`) needs the session's CSRF token. Send it in the `X-CSRF-Token` header, or as a `csrf` field in the body. The cookie alone is **not** accepted, because a cross-site request would carry it too. The value is returned by `/api/login` as `csrf` and is also in the `blockyard_csrf` cookie.
+With accounts on, every mutating route (`POST /api/logout`, `/api/logout-all`, `/api/rpc`, `/api/action`, `/api/password`, `/api/config/node/test`, `/api/config/node`, `/api/settings`, and all `POST /api/users*`) needs the session's CSRF token. Send it in the `X-CSRF-Token` header, or as a `csrf` field in the body. The cookie alone is **not** accepted, because a cross-site request would carry it too. The value is returned by `/api/login` as `csrf` and is also in the `blockyard_csrf` cookie.
 
 `/api/login` itself is exempt. In open mode there is no session, so no CSRF check runs.
 
@@ -204,6 +204,10 @@ HTML pages get a per-response script nonce (`script-src 'self' 'nonce-...'`). `S
 | GET | `/api/audit` | admin | [15](#15-accounts-sessions-users-and-audit) |
 | GET | `/api/telemetry` | any | [16](#16-telemetry-and-configuration) |
 | GET | `/api/config` | any | [16](#16-telemetry-and-configuration) |
+| POST | `/api/config/node/test` | any + CSRF (admin with accounts on) | [16](#16-telemetry-and-configuration) |
+| POST | `/api/config/node` | any + CSRF (admin with accounts on) | [16](#16-telemetry-and-configuration) |
+| GET | `/api/settings` | any | [16](#16-telemetry-and-configuration) |
+| POST | `/api/settings` | any + CSRF (admin with accounts on) | [16](#16-telemetry-and-configuration) |
 | GET | `/api/stream` | any (checked in `server.js`) | [17](#17-the-event-stream-apistream) |
 
 Any other path that is not an `/api/*` path is served from `public/` as a static file (`/` is `index.html`, `/login` is `login.html`). A missing page gets `404.html` with status 404.
@@ -238,7 +242,7 @@ Auth `none`, not rate limited. Built for uptime probes. `ok` is `true` when at l
 What the About page shows: the monitor's version and live build, and the **shape** of the machine it runs on.
 
 ```json
-{ "version": "0.9.0", "build": "0.9.0-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
+{ "version": "0.1.0", "build": "0.1.0-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
   "arch": "x64", "cpus": 32, "cpuModel": "AMD Ryzen 9 9950X3D 16-Core Processor",
   "totalMemGb": 132.3, "node": "v22.23.2", "uptimeSec": 2355 }
 ```
@@ -769,8 +773,8 @@ Uses `getrawtransaction` verbosity 2, which carries the fee and every prevout. T
 
 **Bitcoin Core has no address index** — `getaddressbalance` and `getaddresstxids` are insight-style
 extensions, and a stock Core node answers `Method not found` (measured 2026-09-13 against both
-configured nodes, one Umbrel and one local Core). So a node configured with `addressIndex` answers
-from **blockyard's own index**, built from the node's block files and kept current by a follower
+configured nodes, both Bitcoin Core). So a node configured with `addressIndex` answers
+from **BlockYard's own index**, built from the node's block files and kept current by a follower
 (see [Building the address index](INSTALL.md#building-the-address-index)); the reply says so in
 `source` and describes the index in `index`.
 
@@ -805,8 +809,11 @@ block lookups are unaffected — those use `txindex`.
 
 - `type` is `witness v<N>`, `script` or `legacy`.
 - `indexed` says whether this node can answer address history at all. When `false`, `txCount` is
-  `null`, `balance` is `null`, and nothing on the page is derived from the refusal.
-- `source` is `local-index` when the answer comes from blockyard's index; `dataNode` is the node
+  `null`, `balance` is `null`, and nothing on the page is derived from the refusal; `indexError` and
+  `balanceError` carry the node's own message (`Method not found` on Core), and `localIndexError`
+  says why a configured `addressIndex` could not be opened, so a broken index does not look like an
+  unconfigured one.
+- `source` is `local-index` when the answer comes from BlockYard's index; `dataNode` is the node
   whose RPC the follower reads (one index serves every node on the same chain).
 - `balance.balance` and `balance.received` are sums of each transaction's **net** for the address
   (a transaction that both paid and spent it counts once, by its net); `utxos` is `null` — the index
@@ -990,9 +997,9 @@ To poll incrementally, keep `maxSeq` and pass it back as `since`. The filters ar
 
 ## 12. Markets
 
-Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex and OKX. **This is the only outbound connection blockyard makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
+Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex and OKX. **This is the only outbound connection BlockYard makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
 
-- **On demand.** Nothing is fetched until someone calls `/api/markets` or `/api/markets/depth`. Each call "touches" the feed. While touched, it polls tickers every 15 s, hourly candles every 5 min and order books every 30 s. It stops 10 minutes after the last touch.
+- **On demand.** Nothing is fetched until someone calls `/api/markets` or `/api/markets/depth`. Each call "touches" the feed. The dashboard's Overview makes that call by default (Display settings → Markets & Price → Price line on Overview), so a monitor with anyone on its landing page is polling. While touched, it polls tickers every 15 s, hourly candles every 5 min and order books every 30 s. It stops 10 minutes after the last touch.
 - `BLOCKYARD_MARKETS=0` (or `markets.enabled=false`) turns it off. Both endpoints then answer `{ "ok": true, "enabled": false, "note": "market data is off on this monitor (...)" }`.
 - An exchange that fails keeps its last data and reports `error`. It is never dropped or zero-filled.
 
@@ -1328,7 +1335,7 @@ Auth `admin`.
 }
 ```
 
-The file rotates at 8 MB and keeps 5 files (`store.auditMaxBytes`, `store.auditKeep`). Entry `type` values: `login`, `login-throttled`, `logout`, `logout-all`, `kdf-upgrade`, `rpc`, `rpc-denied`, `action`, `action-denied`, `user-create`, `user-role`, `user-disabled`, `password-change`, `csrf-rejected`. Passwords are never recorded.
+The file rotates at 8 MB and keeps 5 files (`store.auditMaxBytes`, `store.auditKeep`). Entry `type` values: `login`, `login-throttled`, `logout`, `logout-all`, `kdf-upgrade`, `rpc`, `rpc-denied`, `action`, `action-denied`, `user-create`, `user-role`, `user-disabled`, `password-change`, `csrf-rejected`, `config-node`. Passwords are never recorded.
 
 ---
 
@@ -1381,6 +1388,42 @@ The effective, non-secret configuration and the access posture.
 ```
 
 With accounts on, `access` is `{ "mode": "accounts", "anonymous": false }`. `sources` states which data source backs each dashboard panel in the current mode (log tail on or off). The numbers above are the shipped defaults.
+
+### `POST /api/config/node/test` and `POST /api/config/node`
+
+The Node connection form on Node & RPC. Auth `any` + CSRF; with accounts on, both need the `admin` role. Both take the same body and accept **only four fields** — `rpcUrl` (required, `http(s)://host:port`), `datadir`, `chainHint` (default: the current node's, else `main`) and `label`. `rpcUser`, `rpcPassword` and `cookieFile` are refused: authentication is the datadir cookie, and a password is not taken over an endpoint that is open by default. Without a `datadir` (given or already configured) and with no `cookieFile` configured, the answer is `400 need_datadir`; a bad URL is `400 bad_rpc_url`.
+
+`/test` writes nothing. It probes `getblockchaininfo` with a throwaway client on its own lane (timeout at most 8 s). **Credentials go to one endpoint only**: the cookie is sent when `rpcUrl` equals the endpoint this monitor is already configured for, and to any other address the probe carries no `Authorization` header at all — a `401` from a new endpoint is reported as `ok: true, reachable: true, authenticated: false` with a `note`, since it proves an RPC server answered.
+
+```json
+{ "ok": true, "ms": 41, "authenticated": true, "chain": "main", "blocks": 966546, "ibd": false }
+```
+
+A failed probe is `200` with `{ "ok": false, "ms", "authenticated", "error": { "message", "kind", "code" } }`.
+
+`/api/config/node` needs `"confirm": "save"` in the body (`400 confirm_required` otherwise) and merges the four fields onto `nodes[0]` of the configuration file, leaving every other key as it was; the file is written `0600` by temporary file, fsync and rename. A process started with `BLOCKYARD_CONFIG=none` has nowhere to save and answers `409 no_config_file`. The write is audited as `config-node`.
+
+```json
+{ "ok": true, "file": "/path/to/config/local.json", "restartRequired": true,
+  "envOverrides": [ "BLOCKYARD_NODE_URL" ],
+  "note": "saved, but this process takes its node from BLOCKYARD_NODE_URL, which the environment sets and which beats the file — ..." }
+```
+
+`envOverrides` lists the node environment variables currently set, because the environment is applied after the file and a restart would keep the old endpoint.
+
+### `GET /api/settings` and `POST /api/settings`
+
+The Display settings, kept on the server in `config/blockyard.json` (beside the configuration file) so every browser sees the same choices. The server stores the blob and nothing else: it has no schema, and `public/js/settings.js` clamps every value on the way in.
+
+`GET` is auth `any`. Nothing saved yet is the normal first-run answer, not an error:
+
+```json
+{ "settings": { "version": 3, "space": { "...": "..." }, "...": "..." }, "file": "/path/to/config/blockyard.json", "stored": true }
+```
+
+With no file: `{ "settings": null, "file": "...", "stored": false }`; an unreadable file adds `"error": "unreadable: ..."`.
+
+`POST` is auth `any` + CSRF, `admin` with accounts on. Body: `{ "settings": { ... } }` (an object; anything else is `400 bad_settings`). The serialised text is capped at 256 KB (`413 too_large`), and the file is written `0600` by temporary file, fsync and rename. Reply: `{ "ok": true, "file": "...", "bytes": 2431 }`.
 
 ---
 

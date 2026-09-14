@@ -1106,10 +1106,10 @@ function mempoolView(m) {
     // stream to show and no UI wording should imply one (docs/DEFECTS.md).
     feed: {
       kind: 'poll',
-      cadenceSec: 60,
+      cadenceSec: 20,
       streamAvailable: false,
       why: 'the node refuses zmqpubsequence: it can publish adds but has no clean "removed" choke point, so a diff of successive polls would report evictions as removes only when the poll happened to straddle them',
-      source: 'getrawmempool verbose on the 20 s pool tier + [tx_accept]/[txrelay] log lines',
+      source: 'getrawmempool verbose on the 20 s pool tier',
     },
     info: s.mempool,
     // The full distribution including the scatter points, which the snapshot

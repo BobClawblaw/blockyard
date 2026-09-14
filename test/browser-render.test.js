@@ -33,7 +33,7 @@ function monitorWith(rpcFixture, logLines) {
   const logger = () => {}; logger.child = () => logger;
   const store = { ringCapacity: 500, maxEventLog: 100, retentionHours: 1, snapshotEveryMs: 1e9 };
   const m = new NodeMonitor(
-    { id: 'bmc-main', label: 'BMC mainnet (production)', rpcUrl: 'http://127.0.0.1:8331', datadir: dir, chainHint: 'main', logFile: null, color: '#f7931a' },
+    { id: 'core-main', label: 'Core mainnet (production)', rpcUrl: 'http://127.0.0.1:8331', datadir: dir, chainHint: 'main', logFile: null, color: '#f7931a' },
     { rpc: { maxInFlight: 1, minIntervalMs: 250, timeoutMs: 500, slowLatencyMs: 5000 }, poll: {}, store, log: logger, history: new History(dir, store, { log: logger }) });
   m.callList = async (calls) => new Map(calls.map((c) => [c.method, rpcFixture[c.method]]));
   m.onLogEvents(logLines.map(parseLine).filter(Boolean));
@@ -84,7 +84,7 @@ function runAllPages(snap, label) {
   // skeleton: charts.js reads canvas.__hasData, so handing it null is a harness bug,
   // not a product bug -- and the first version of this file got that wrong.
   const { el } = installDom();
-  const state = { page: 'chain', node: 'bmc-main', byNode: new Map(), events: [], snap: null, series: {}, cfg: { sources: [] }, user: { role: 'admin' } };
+  const state = { page: 'chain', node: 'core-main', byNode: new Map(), events: [], snap: null, series: {}, cfg: { sources: [] }, user: { role: 'admin' } };
   const h = {
     api: async () => ({}), toast: () => {}, state, fmt: F, charts,
     setText: (id, v) => { el(id).textContent = String(v); },
@@ -143,7 +143,7 @@ const snapWithMining = (base) => {
 
 function runMining(snap, label) {
   const { el } = installDom();
-  const state = { page: 'mining', node: 'bmc-main', byNode: new Map(), events: [], snap, series: {}, cfg: { sources: [] } };
+  const state = { page: 'mining', node: 'core-main', byNode: new Map(), events: [], snap, series: {}, cfg: { sources: [] } };
   const h = {
     api: async () => ({}), toast: () => {}, state, fmt: F, charts,
     setText: (id, v) => { el(id).textContent = String(v); },
@@ -172,14 +172,14 @@ test('every page renderer survives a mid-IBD snapshot', () => {
 test('every page renderer survives an all-null snapshot', () => {
   // The shape a node produces while it is refusing RPC: nothing missing, nothing
   // present. A renderer that assumes a field is there throws here and blanks a page.
-  const blank = { id: 'bmc-main', label: 'x', sync: { node: 'bmc-main', status: 'unknown' }, online: false, health: {}, log: { ibd: {} }, peers: {}, net: {}, mempool: {}, chainInfo: null, blocks: { recent: [] }, fees: {}, mining: {}, utxo: {}, indexes: null, tips: [], deployments: null, rpcInfo: null, series: {} };
+  const blank = { id: 'core-main', label: 'x', sync: { node: 'core-main', status: 'unknown' }, online: false, health: {}, log: { ibd: {} }, peers: {}, net: {}, mempool: {}, chainInfo: null, blocks: { recent: [] }, fees: {}, mining: {}, utxo: {}, indexes: null, tips: [], deployments: null, rpcInfo: null, series: {} };
   const errs = runAllPages(blank, 'blank');
   assert.deepEqual(errs, [], `renderers threw:\n${errs.join('\n')}`);
 });
 
 test('a page with nothing to show says so, rather than rendering silence', () => {
   const { el } = installDom();
-  const state = { page: 'chain', node: 'bmc-main', byNode: new Map(), events: [], snap: null, series: {}, cfg: { sources: [] } };
+  const state = { page: 'chain', node: 'core-main', byNode: new Map(), events: [], snap: null, series: {}, cfg: { sources: [] } };
   const h = { api: async () => ({}), toast: () => {}, state, fmt: F, charts, setText: () => {}, canvas: (id) => el(id), renderFeed: () => {}, render: () => {}, renderSyncHero: () => {}, peersDetail: async () => [] };
   assert.doesNotThrow(() => panels.renderChain(null, state, h));
   assert.doesNotThrow(() => panels.renderNode(null, state, h));

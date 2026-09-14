@@ -280,7 +280,7 @@ export class RpcClient {
       'Content-Type': 'text/plain', // Core's httprpc accepts any; plain matches bitcoin-cli
       'Content-Length': Buffer.byteLength(bodyStr),
       Connection: 'close',
-      'User-Agent': 'Blockyard/0.1',
+      'User-Agent': 'BlockYard/0.1',
     };
     if (auth) headers.Authorization = 'Basic ' + Buffer.from(`${auth.user}:${auth.password}`).toString('base64');
 

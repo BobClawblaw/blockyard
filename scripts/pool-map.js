@@ -89,7 +89,7 @@ import { execFileSync } from 'node:child_process';
 
 function getOverHttps(url, redirectsLeft = 3, extra = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { family: 4, ...extra, headers: { 'user-agent': 'blockyard pool-map/1' }, timeout: 20_000 }, (res) => {
+    const req = https.get(url, { family: 4, ...extra, headers: { 'user-agent': 'BlockYard pool-map/1' }, timeout: 20_000 }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
         res.resume();
         return resolve(getOverHttps(new URL(res.headers.location, url).toString(), redirectsLeft - 1));

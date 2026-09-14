@@ -10,7 +10,10 @@ RPC** page usually name the problem. This page collects the cases people actuall
 - [The node's RPC is slow](#the-nodes-rpc-is-slow)
 - [Markets or Kiosk show no prices](#markets-or-kiosk-show-no-prices)
 - [An exchange shows an error](#an-exchange-shows-an-error)
-- [Explorer: address pages or "spent by" are missing](#explorer-address-pages-or-spent-by-are-missing)
+- [Explorer: a transaction id is not found](#explorer-a-transaction-id-is-not-found)
+- [Explorer: address pages read "not indexed"](#explorer-address-pages-read-not-indexed)
+- [Explorer: the address page says the index is behind, or has stopped following](#explorer-the-address-page-says-the-index-is-behind-or-has-stopped-following)
+- [Explorer: "spent by" links are missing](#explorer-spent-by-links-are-missing)
 - [Explorer: no dollar figures](#explorer-no-dollar-figures)
 - [The 3D views are slow or blank](#the-3d-views-are-slow-or-blank)
 - [Full screen does not work on the Kiosk](#full-screen-does-not-work-on-the-kiosk)
@@ -78,8 +81,8 @@ case. Treat it as documentation of intent, not a tuning knob.
 What costs time on a mainnet node is the expensive reads, and how much depends on how the node is
 configured. The sharpest example used to be the block template -- since 2026-09-13 the monitor
 assembles that from the mempool and never calls `getblocktemplate`, so the numbers below are kept
-as the clearest illustration of what appliance tuning is worth, not as a call this software still
-makes. Measured on an Umbrel running Core 31.1.0 on 2026-09-13, **before** its RPC settings were
+as the clearest illustration of what node tuning is worth, not as a call this software still
+makes. Measured on a Core 31.1.0 node on 2026-09-13, **before** its RPC settings were
 tuned: `getblockchaininfo` 95-110 ms, `getmempoolinfo` ~100 ms, but `getblocktemplate`
 **4.0-4.5 s**, five times in a row with no warming -- while the same call on a local Core node
 answered in **51 ms**. Two concurrent templates contended rather than overlapped there (6.9 s and
@@ -87,20 +90,10 @@ answered in **51 ms**. Two concurrent templates contended rather than overlapped
 
 **After** applying `dbcache=4096` plus the RPC settings in [INSTALL](INSTALL.md), the same node
 answered `getblocktemplate` in **488-565 ms** and the monitor's lane stopped timing out entirely,
-with average latency sampling between ~180 ms and a few seconds. If your appliance shows
+with average latency sampling between ~180 ms and a few seconds. If your node shows
 `rpc-slow`, check those settings before concluding the node is simply slow -- and note that a
 rebuilding index (`coinstatsindex` takes hours from genesis) competes for the same disk and will
 keep latency up until it finishes.
-
-## An appliance node's pages do not fill in
-
-On **Umbrel**, check `dbcache` first: it ships at 450 MB, and an operator reported on 2026-09-13
-that the monitor's pages populate properly only after raising it to 4096 and restarting the
-Bitcoin app (`dbcache` is read at start-up). Applied together with the RPC settings in
-[INSTALL](INSTALL.md#recommended-bitcoinconf-overrides-on-an-appliance), that node's
-`getblocktemplate` went from 4.0-4.5 s to 488-565 ms and the monitor stopped reporting
-`rpc-slow` entirely. (The monitor no longer makes that call -- see above -- but the same tuning
-moves every other read on the lane, which is why the advice stands.)
 
 ## Markets or Kiosk show no prices
 
@@ -108,7 +101,7 @@ moves every other read on the lane, which is why the advice stands.)
 - **"asking the exchanges…" for a long time** — the server cannot reach the exchanges. Test
   from the server: `curl -sI https://api.exchange.coinbase.com/products/BTC-USD/ticker`. Check
   outbound firewall rules and DNS.
-- Market data is only fetched while the Markets or Kiosk tab is open; the first prices take a
+- Market data is only fetched while the Markets, Kiosk or Overview tab is open; the first prices take a
   few seconds, the order-book depth up to half a minute.
 
 ## An exchange shows an error
@@ -142,10 +135,9 @@ bitcoin-cli getindexinfo
 
 **Bitcoin Core has no address index at any setting, and this is not something you have
 misconfigured.** `getaddressbalance` and `getaddresstxids` are insight-style extensions that only
-forks carry; stock Core answers `Method not found` (measured 2026-09-13 on both an Umbrel node and
-a local Core). There is no node option to enable.
+forks carry; stock Core answers `Method not found` (measured 2026-09-13 on two Core nodes). There is no node option to enable.
 
-blockyard builds its own index from the node's block files instead — about 30 minutes on 16
+BlockYard builds its own index from the node's block files instead — about 30 minutes on 16
 cores and 124 GB of disk for the whole chain — and the server keeps it current as blocks arrive.
 Build it and name the directory as `addressIndex` in the node's config:
 [Building the address index](INSTALL.md#building-the-address-index).
@@ -170,9 +162,11 @@ empties it first, the old log and layers included — and start the server again
 
 ## Explorer: "spent by" links are missing
 
-"Spent by" links need the node's spent-output index. Looking up an arbitrary historical
-transaction by id needs the transaction index; without it only mempool and recently seen
-transactions resolve. Core supports both of those.
+"Spent by" links come from `gettxspendingprevout`, which Bitcoin Core (24.0 and later) answers
+from its **mempool** only: an output spent by a transaction that is still unconfirmed gets a link,
+an output spent in a block does not, and there is no node index to turn on for that. Looking up
+an arbitrary historical transaction by id is a different matter — that needs `txindex` (see
+[above](#explorer-a-transaction-id-is-not-found)).
 
 ## Explorer: no dollar figures
 

@@ -1,4 +1,4 @@
-// A stand-in for the BMC node: enough of the JSON-RPC surface, plus a log file in
+// A stand-in for the Bitcoin node: enough of the JSON-RPC surface, plus a log file in
 // the node's own format, so the monitor can be developed, demoed and tested
 // without pointing a browser at a mainnet node that is syncing real blocks.
 //

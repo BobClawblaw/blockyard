@@ -1,10 +1,10 @@
 # Configuration reference
 
-This is the complete reference for configuring blockyard: every configuration
+This is the complete reference for configuring BlockYard: every configuration
 key, every environment variable, what lives in the data directory, and which
 mistakes stop the server from starting.
 
-blockyard needs no configuration file to start. The built-in defaults describe
+BlockYard needs no configuration file to start. The built-in defaults describe
 a stock local Bitcoin Core node, though, so most deployments want at least a
 `config/local.json` that says where the node is.
 
@@ -78,6 +78,13 @@ paths, credentials) belong there and never in a committed file.
 
 The file is read once at startup. Restart the server after editing it.
 
+Two things write into `config/` while the server runs, both from the web UI: the **Node
+connection** form on Node & RPC saves `nodes[0]` back into this file (`POST /api/config/node`;
+a restart applies it), and **Display settings** are kept in `config/blockyard.json` beside it
+(`POST /api/settings`; it holds no secrets and is also in `.gitignore`). Both are written mode
+`0600` by temporary file, fsync and rename, and with accounts on both need the admin role. The
+service account therefore needs write access to `config/` if either is to be saved from the UI.
+
 ---
 
 ## Configuration keys
@@ -126,8 +133,9 @@ node gets its own charts and event stream.
 
 **Credentials.** A node needs **either** a cookie path (`datadir`, optionally with `chainHint`,
 or an explicit `cookieFile`) **or** `rpcUser` + `rpcPassword`. Cookie auth is the usual case on the
-same machine; user/password is the only option for a node on another machine -- an appliance such
-as Umbrel, Start9 or myNode -- whose cookie file this process cannot read. A node with neither is
+same machine; user/password is for a node that authenticates with `rpcauth` rather than the cookie
+file. (BlockYard runs on the node's machine: reading a node elsewhere over RPC alone was tried and
+dropped -- see INSTALL, "It runs on the node's machine".) A node with neither is
 refused at boot, and `rpcUser` without `rpcPassword` is refused too, rather than sending
 `Basic dXNlcjo=` and failing with a confusing 401.
 Before every connection that lacks a credential, and again after any HTTP 401, the
@@ -141,7 +149,7 @@ client looks for a credential in this order and uses the first one found:
 
 A cookie file that can be read always wins over `rpcUser`. The node rewrites its
 cookie on every restart, and the monitor picks up the new one automatically. The
-account running blockyard needs read access to the cookie file, and to `logFile` if
+account running BlockYard needs read access to the cookie file, and to `logFile` if
 you use one.
 
 **Skipped nodes.** A node that has `datadir`, has no `cookieFile`, and whose
@@ -167,8 +175,8 @@ configured. It is Bitcoin Core's own mainnet layout: RPC on the standard port
 If your node lives elsewhere, override it with a `nodes` array in
 `config/local.json`, or for the first node only, with `BLOCKYARD_NODE_URL`,
 `BLOCKYARD_DATADIR`, `BLOCKYARD_COOKIE`, `BLOCKYARD_LOGFILE` and `BLOCKYARD_NODE_LABEL`.
-An appliance (Umbrel, Start9, myNode) usually keeps its data directory somewhere
-else, and a node with an `rpcport=` line of its own is not on 8332 at all: a
+A node built from source or run by a distribution package may keep its data directory
+somewhere else, and a node with an `rpcport=` line of its own is not on 8332 at all: a
 non-default RPC port is the most common reason this monitor reports a healthy node
 as offline, so check the node's own `rpcport`.
 
@@ -183,7 +191,7 @@ entry; either one wins over both.
 ### rpc
 
 The node's RPC server handles one connection at a time on a single thread.
-blockyard therefore sends requests one at a time, in priority order, and these
+BlockYard therefore sends requests one at a time, in priority order, and these
 limits protect the node from the monitor. They apply to each node separately.
 
 | key | default | meaning |
@@ -242,8 +250,8 @@ sessions, CSRF protection and a per-user audit trail.
 |---|---|---|
 | `auth.enabled` | `false` | Turn accounts on. |
 | `auth.dataDir` | same as `store.dir` | Where `users.json` and `sessions.json` live. |
-| `auth.sessionTtlMs` | `28800000` (8 h) | Absolute session lifetime, counted from sign-in. |
-| `auth.idleTtlMs` | `259200000` (72 h) | A session unused for this long expires. With the defaults the 8-hour absolute lifetime always expires first. |
+| `auth.sessionTtlMs` | `259200000` (72 h) | Absolute session lifetime, counted from sign-in. |
+| `auth.idleTtlMs` | `28800000` (8 h) | A session unused for this long expires. Until 2026-09-13 the two defaults were the other way round, so the idle check could never fire and a session was 8 h whatever you did. |
 | `auth.scrypt.N` | `16384` | scrypt cost parameter for password hashes. |
 | `auth.scrypt.r` | `8` | scrypt block size. |
 | `auth.scrypt.p` | `1` | scrypt parallelism. |
@@ -288,7 +296,7 @@ state.
 
 ### actions
 
-Actions are the only node **writes** blockyard can make. Everything is off by
+Actions are the only node **writes** BlockYard can make. Everything is off by
 default. An action runs only when all of these are true:
 
 1. `actions.enabled` is `true`;
@@ -329,11 +337,14 @@ Available actions:
 
 The Markets tab fetches public BTC/USD prices, hourly candles and order books from
 five exchanges over HTTPS: Coinbase, Kraken, Bitstamp, Bitfinex and OKX (OKX quotes
-BTC/USDT). The fetches run on the server, not in the browser. This is blockyard's
+BTC/USDT). The fetches run on the server, not in the browser. This is BlockYard's
 only outbound connection other than the node. Exchanges see this server's IP
-address and a User-Agent, nothing about the node. Polling starts when someone opens
-the Markets tab and stops `idleAfterMs` after the last request from that tab, so an
-unwatched monitor makes no exchange traffic. The exchange list is fixed in code.
+address and a User-Agent, nothing about the node. Polling starts when a browser asks
+for market data -- the Markets and Kiosk tabs, and Overview's price line, which is on by
+default (Display settings → Markets & Price → Price line on Overview) -- and stops
+`idleAfterMs` after the last request, so an unwatched monitor makes no exchange traffic.
+With that line switched off, only Markets and Kiosk start it. The exchange list is fixed
+in code.
 
 | key | default | meaning |
 |---|---|---|
@@ -409,6 +420,7 @@ These are read only by scripts under `scripts/`, never by the server.
 | variable | used by | meaning |
 |---|---|---|
 | `FAKE_LOG` | `scripts/fake-node.js` (standalone) | Log file the standalone simulated node writes. Default `/tmp/blockyard-fake/bitcoin.main.log`. |
+| `BLOCKYARD_SMOKE_PORT`, `BLOCKYARD_SMOKE_FAKE` | `scripts/smoke.sh` | Ports for the smoke run's monitor (default `18099`) and its simulated node (default `18461`). |
 | `BLOCKYARD_CA_FILE` | `scripts/pool-map.js` | CA certificate used for the optional `--check` against a TLS-serving monitor. It has a built-in default path; see `scripts/pool-map.js`. |
 | `BLOCKYARD_BASE` | browser and render check scripts | Base URL of the monitor to test. |
 | `BLOCKYARD_CA` | `live-render-check.mjs`, `motion-check.mjs` | CA certificate for a TLS-serving monitor. |
@@ -436,7 +448,7 @@ addresses; substitute your own.
 
 ### A single node on the same machine
 
-The usual case: the node runs on this machine, and blockyard reads its cookie from
+The usual case: the node runs on this machine, and BlockYard reads its cookie from
 the data directory. The node here keeps its data in `/var/lib/bitcoind`, with the
 mainnet cookie at `/var/lib/bitcoind/main/.cookie`:
 
@@ -681,7 +693,8 @@ Environment=BLOCKYARD_DATA=/var/lib/blockyard
 ```
 
 The service account needs read access to the node's cookie file (and log file, if
-used), and write access to the data directory.
+used), write access to the data directory, and write access to `config/` if the Node
+connection form or Display settings are to be saved from the web UI.
 
 ---
 
@@ -708,7 +721,7 @@ Other secrets outside the data directory:
 
 - `config/local.json`, if it contains `rpcPassword`.
 - The TLS private key named by `server.tls.key`.
-- The node's own cookie file, which blockyard reads but never copies or logs.
+- The node's own cookie file, which BlockYard reads but never copies or logs.
 
 The server's own log (stdout, or the journal under systemd) masks credentials that
 look like passwords, cookies or URL passwords. The banner line that prints a
@@ -747,7 +760,8 @@ Error: Invalid configuration:
 | `store.blockMapCap` not an integer of at least 100 | `store.blockMapCap must be an integer >= 100; …` |
 | `store.auditMaxBytes` below 65536 | `store.auditMaxBytes must be >= 65536; below that the audit rotates on every write` |
 | A node's `rpcUrl` missing or not `http(s)://` | `node <id>: rpcUrl must be http(s)://host:port` |
-| A node with neither `datadir` nor `cookieFile` | `node <id>: need datadir or cookieFile for cookie auth` |
+| A node with neither a cookie path (`datadir` / `cookieFile`) nor `rpcUser` + `rpcPassword` | `node <id>: needs either datadir/cookieFile (cookie auth, same machine) or rpcUser + rpcPassword (a node authenticating with rpcauth)` |
+| `rpcUser` set without `rpcPassword` | `node <id>: rpcUser is set but rpcPassword is empty` |
 
 Failures after validation, while the server starts:
 

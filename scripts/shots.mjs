@@ -20,7 +20,7 @@
 //
 // Zero dependencies: chromium speaks CDP over a plain WebSocket and Node 22 ships one.
 //
-//   BLOCKYARD_BASE=http://127.0.0.1:21000 [BROWSER_CDP=http://127.0.0.1:9445] \
+//   BLOCKYARD_BASE=http://127.0.0.1:21000 [BROWSER_CDP=http://127.0.0.1:9445] [BLOCKYARD_NODE=main] \
 //     node scripts/shots.mjs [name ...]
 import { writeFileSync } from 'node:fs';
 
@@ -97,9 +97,22 @@ async function shoot(name, { settle = 6000, height = null, cap = 2600 } = {}) {
 await send('Page.enable');
 await send('Runtime.enable');
 await metrics(1000);
+// WHICH NODE. The header remembers the last node picked, per browser, in localStorage; a fresh
+// profile gets the first node in the config. On the operator's box that is the Umbrel over the
+// LAN, whose RPC answers in ~30 s: the 2026-09-14 run photographed an empty Block space board,
+// "no block template yet" and a column of collector errors -- true of that node, and useless as
+// a picture of the product. BLOCKYARD_NODE names the node to shoot against (the local Core here).
+const NODE = process.env.BLOCKYARD_NODE ?? null;
+if (NODE) {
+  await send('Page.navigate', { url: `${BASE}/?shots=${Date.now()}` });
+  await sleep(3000);
+  await evl(`localStorage.setItem('blockyard.node', ${JSON.stringify(NODE)})`);
+}
 await send('Page.navigate', { url: `${BASE}/?shots=${Date.now()}#overview` });
 await sleep(9000);
-console.log(`base ${BASE}`);
+const onNode = await evl(`document.getElementById('nodeSel')?.value ?? '(none)'`);
+if (NODE && onNode !== NODE) { console.log(`asked for node "${NODE}", the header shows "${onNode}"`); process.exit(1); }
+console.log(`base ${BASE}  node ${onNode}`);
 
 const want = new Set(process.argv.slice(2));
 const doing = (n) => !want.size || want.has(n);
@@ -146,7 +159,10 @@ if (doing('explorer-block')) {
 }
 if (doing('explorer-tx')) {
   try {
-    const ok = await evl(`(() => { const a=document.querySelector('a[href*="#explorer/tx/"]'); if(!a) return false; a.click(); return true; })()`);
+    // THE SECOND transaction, not the first: the first is the coinbase, whose page says "fee:
+    // none" and shows one input -- a poor picture of a transaction page. The second is an
+    // ordinary transaction with inputs, a fee and a fee rate.
+    const ok = await evl(`(() => { const as=document.querySelectorAll('a[href*="#explorer/tx/"]'); const a=as[1]??as[0]; if(!a) return false; a.click(); return true; })()`);
     if (!ok) throw new Error('no tx link on the block page (is a block page open?)');
     done.push(await shoot('explorer-tx', { settle: 5000 }));
   } catch (e) { fail('explorer-tx', e); }

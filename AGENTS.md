@@ -1,11 +1,11 @@
-# AGENTS.md — resuming work on blockyard
+# AGENTS.md — resuming work on BlockYard
 
 Read this first, then `docs/MEASUREMENTS.md` (and, on a working copy that keeps one, the
 latest file in the local `worklog/`).
 
 This is a multi-user web monitor for a **Bitcoin Core** node. It reads the node's
-JSON-RPC and follows its log, and serves charts plus a live event feed to several users
-at once. This box watches the node configured in `config/local.json` / the unit's
+JSON-RPC (a log follower exists, but it does not understand Core's log -- see below), and
+serves charts plus a live event feed to several users at once. This box watches the node configured in `config/local.json` / the unit's
 `BLOCKYARD_NODE_*` environment.
 
 ## Run it
@@ -210,7 +210,8 @@ silently ate another test's result line — rule 22.
    `getlogevents` on either build (171 identical methods on 2026-09-08; 165 on
    deploy-20260910ag on 2026-09-11, still no log feed -- MEASUREMENTS §27). See rule 15 and
    `docs/MEASUREMENTS.md` §3, §4, §11, §15 before "fixing" a panel by adding an RPC
-   call, or a `logFile` by guessing.
+   call, or a `logFile` by guessing. (All of this was measured on the experimental node; on
+   Core the log source stays off and per-peer bytes come over RPC -- see the log note above.)
 3. **Never fabricate a number to fill a gap.** Absent is rendered as `–` with a
    reason. `health.quality` and the Overview "what this panel cannot tell you"
    card exist for this. This mirrors the node's own documented ethos.
@@ -280,7 +281,8 @@ trap a level), and the `capsules` / `enemies` switches live ON THE GAME (`setOpt
 the renderer's options, because they change the rules; `blockanoid.js` re-applies them on a flip so
 the control is not dead until the next life.
 
-**The arcade.** 26 idle effects (was 9). The seventeen new ones are pure functions in `fxAt`;
+**The arcade.** 26 idle effects at the time (was 9; 30 today, after the agent effects of
+2026-09-13/14 and the removals in `docs/EFFECTS-AGENTS.md`). The seventeen new ones are pure functions in `fxAt`;
 board-level choices come from `fxHash(seed)`, never `Math.random`, so they replay identically and
 are tested rather than watched. Each has a switch in `settings.js`; a test holds `FX_KINDS`, the
 defaults and the panel rows to the same list in the same order.
@@ -404,15 +406,15 @@ The smoke count is the one number here that is still typed by hand (60 before
 2026-09-09; the new checks cover the build stamp, CSP nonce, login throttle,
 drill-down routes, audit budget and breaker telemetry).
 
-Still open: see `docs/DEFECTS.md` — six items, and each one says why it is still open.
+Still open as of 2026-09-09: see `docs/DEFECTS.md` — six items then (eleven today), and each one says why it is still open.
 Four are node-side (mempool add/remove stream needs the `zmqpubsequence` the node
 refuses; per-peer byte and relay counts are not in `getpeerinfo` on the deployed
 build; the restart storm belongs to whoever owns the deploy). One is a deliberate
 non-change (per-tier circuit breakers — the policy is unchanged, but `rpc.breaker`
 in telemetry now answers which method opened it and what it froze). One needs a
 browser engine: layout, CSS cascade and real `EventSource` reconnect behaviour. TLS,
-by contrast, is no longer open: TLS is available (see README, "TLS: the lack of it was
-a gap, not a trade-off"), and the plaintext default is now a boot-time warning rather
+by contrast, is no longer open: TLS is available (see `docs/SECURITY.md`, "Transport
+security"), and the plaintext default is now a boot-time warning rather
 than a footnote. The licence is Apache-2.0 (`LICENSE`, `NOTICE`).
 
 ## Conventions

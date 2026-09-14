@@ -1,4 +1,4 @@
-# Contributing to blockyard
+# Contributing to BlockYard
 
 Thank you for helping. This project has a small set of firm rules; most of them exist because
 breaking them once caused a real, hard-to-see failure. They are listed with their reasons in
@@ -84,5 +84,5 @@ header), your browser, and the relevant part of the start-up log. For security p
 
 ## License of contributions
 
-blockyard is licensed under the Apache License 2.0. By contributing you agree that your
+BlockYard is licensed under the Apache License 2.0. By contributing you agree that your
 contribution is licensed under the same terms (see [LICENSE](LICENSE)).

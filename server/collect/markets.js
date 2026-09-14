@@ -135,7 +135,7 @@ export function depthOf(book, p0, n, step = DEPTH_STEP) {
   return { bids: B, asks: A };
 }
 
-const UA = 'Blockyard (self-hosted Bitcoin node monitor)';
+const UA = 'BlockYard (self-hosted Bitcoin node monitor)';
 const median = (xs) => (xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2) : null);
 
 export class MarketFeed {

@@ -69,7 +69,7 @@ tag     v0.1.0, v0.1.1, ...
 ```
 
 The updater does a **shallow tag fetch** (`git fetch --tags --depth=1 origin`) — the repository is
-12 MB today, but a user's appliance should not pay for history it will never read.
+12 MB today, but a user's machine should not pay for history it will never read.
 
 > **Blocker for public use:** the repository is **private**. `git fetch` from a user's deployment
 > needs credentials that do not exist. On this box it works only because `gh` puts a `GH_TOKEN` in
@@ -241,8 +241,10 @@ an unsigned tag must fail closed.
 2. ~~**Fix the version scheme.**~~ **Done 2026-09-13.** `package.json` and `server/main.js` said
    **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is this newer?" comparison
    would have been wrong, and that field is what the whole feature compares. 0.1.0 is current, and
-   every source now says so. The two values are no longer written down twice (see §10.1 note).
-3. **Create the first tag.** There are none, so there is no release channel to subscribe to.
+   every source now says so. The version is no longer written down twice: `server/main.js` reads
+   it from `package.json`.
+3. ~~**Create the first tag.**~~ **Done 2026-09-14:** `v0.1.0`, the first official release, is
+   tagged, so the release channel in §3 exists.
 4. **Decide the open-mode question** in §6 knowingly.
 
 ## 11. Tests

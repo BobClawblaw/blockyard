@@ -1,4 +1,4 @@
-# blockyard -- multi-user web monitor for a Bitcoin Core node.
+# BlockYard -- multi-user web monitor for a Bitcoin Core node.
 #
 # Install:
 #   sudo cp systemd/blockyard.service /etc/systemd/system/
@@ -12,7 +12,7 @@
 # so real usernames and host addresses belong in config/local.json, which is
 # gitignored. Two lines below are therefore placeholders you must edit.
 [Unit]
-Description=Blockyard - Bitcoin node monitor
+Description=BlockYard - Bitcoin node monitor
 Documentation=file:///storage/blockyard/AGENTS.md
 After=network-online.target
 Wants=network-online.target

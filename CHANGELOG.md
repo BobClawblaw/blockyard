@@ -18,7 +18,7 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
 - **Address pages show full history and balances on Bitcoin Core.** This was the explorer's one
   real gap, and it was not a bug: Core has **no address index at any setting**. `getaddressbalance`
   and `getaddresstxids` are insight-style extensions carried by forks, and stock Core answers
-  `Method not found` (measured 2026-09-13 against an Umbrel node and a local Core). mempool.space
+  `Method not found` (measured 2026-09-13 against two Core nodes). mempool.space
   shows the same address's history only because `electrs` builds that index from the block files
   itself. So this monitor now does the same, in a form it can afford: `server/chain/`.
 - **Reading the node's own files, not asking the node.** `blk*.dat` on a current Core is
@@ -148,21 +148,19 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
 
 ### Added
 
-- **Node appliance support: Umbrel, Start9, myNode.** A node on another machine has no cookie file
-  this process can read, so it authenticates with `rpcUser` / `rpcPassword` and **no `datadir`**.
-  That configuration was already the documented advice and was *refused at boot* -- the validator
-  demanded `datadir` or `cookieFile` regardless, so the recommended setup could not start. Found by
-  following our own install instructions against a real Umbrel. A node with no way to authenticate
-  at all is still refused, and `rpcUser` without `rpcPassword` is now caught too.
-  `docs/CONFIGURATION.md`'s old workaround -- point `cookieFile` at a path that does not exist --
-  is obsolete and marked as such.
-- **Verified against an Umbrel running Bitcoin Core 31.1.0** on 2026-09-13: chain, mempool, peers,
-  blocks, explorer and the block-being-built card all read over JSON-RPC alone. `docs/INSTALL.md`
-  gains an appliance section with the `config/local.json` block, the `bitcoin.conf` settings that
-  make it perform (`dbcache=4096`, `rpcthreads`, `rpcworkqueue`, `rpcservertimeout`, `txindex`,
-  `coinstatsindex`), and an annotation of what each line does **for this monitor** -- including
-  `rest=1`, which does nothing here, because repeating a config block as received wisdom is how a
-  document starts lying.
+- **A node on another machine, over RPC alone: tried, and dropped.** On 2026-09-13 the monitor was
+  pointed at a node appliance on the LAN with `rpcUser` / `rpcPassword` and no `datadir` -- a
+  configuration the validator had refused at boot until it was fixed -- and the monitor half
+  worked: chain, mempool, peers, blocks, the block being built. The explorer did not, and no
+  setting would make it: Core has no address index, `scantxoutset` holds the node's single RPC
+  thread for tens of seconds per query and knows no history, and a node answering over the
+  network in seconds left address pages waiting minutes. **Real-time explorer data over RPC was
+  a failed idea.** The address data is rebuilt from the block files and stored locally instead,
+  the way mempool.space's `electrs` does it (above), which is why BlockYard runs on the node's
+  machine. The install guide's appliance section is gone; `rpcUser` / `rpcPassword` remain for a
+  node that uses `rpcauth` instead of the cookie file, and the `bitcoin.conf` lines that measured
+  as worth having (`txindex`, `coinstatsindex`, `dbcache`) are kept, each annotated with what it
+  does for this monitor.
 
 ### Changed
 

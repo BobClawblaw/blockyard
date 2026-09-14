@@ -576,16 +576,16 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   for (const n of cfg.nodes) {
     if (!n.rpcUrl || !/^https?:\/\//.test(n.rpcUrl)) problems.push(`node ${n.id}: rpcUrl must be http(s)://host:port`);
     // AUTHENTICATION CAN COME FROM EITHER PLACE. Cookie auth needs a datadir (or an explicit
-    // cookieFile) to read <datadir>/<chain>/.cookie -- but a node on ANOTHER machine has no
-    // readable cookie, and rpcUser/rpcPassword is the only way in. resolveCookie() has always
+    // cookieFile) to read <datadir>/<chain>/.cookie -- but a node that authenticates with rpcauth
+    // has no cookie to read, and rpcUser/rpcPassword is the way in. resolveCookie() has always
     // supported that (it falls through to the configured user/password); this validator did not,
-    // so the exact configuration docs/INSTALL.md recommends for a node appliance -- Umbrel,
-    // Start9, myNode -- was refused at boot with "need datadir or cookieFile". Found 2026-09-13
-    // by following our own install instructions against an Umbrel node.
+    // so a user/password node was refused at boot with "need datadir or cookieFile". Found
+    // 2026-09-13 by pointing the monitor at a node on another machine (a path since dropped:
+    // the explorer needs the node's block files, so BlockYard runs on the node's machine).
     const hasCookiePath = !!(n.datadir || n.cookieFile);
     const hasUserPass = !!(n.rpcUser && n.rpcPassword);
     if (!hasCookiePath && !hasUserPass) {
-      problems.push(`node ${n.id}: needs either datadir/cookieFile (cookie auth, same machine) or rpcUser + rpcPassword (a node on another machine, e.g. an appliance)`);
+      problems.push(`node ${n.id}: needs either datadir/cookieFile (cookie auth, same machine) or rpcUser + rpcPassword (a node authenticating with rpcauth)`);
     }
     if (n.rpcUser && !n.rpcPassword) problems.push(`node ${n.id}: rpcUser is set but rpcPassword is empty`);
   }

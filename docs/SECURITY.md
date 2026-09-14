@@ -1,6 +1,6 @@
 # Security and privacy
 
-blockyard watches a Bitcoin node and shows what it sees to the people you let in. This
+BlockYard watches a Bitcoin node and shows what it sees to the people you let in. This
 page describes the access model, what protects it, and exactly what leaves your machine.
 To report a vulnerability, see [SECURITY.md](../SECURITY.md) at the repository root.
 
@@ -60,7 +60,8 @@ The last enabled admin cannot be demoted, disabled or deleted.
   parameters are stored with the hash; raising them in the configuration upgrades an
   account on its next successful sign-in.
 - **Sessions** use 32-byte random tokens, stored hashed, in an `HttpOnly`, `SameSite=Strict`
-  cookie (`Secure` over HTTPS). Sessions expire after 8 hours, with a 72-hour idle ceiling.
+  cookie (`Secure` over HTTPS). A session ends 8 hours after its last request, and 72 hours
+  after sign-in whatever happens.
   Roles are re-read on every request, so a demotion takes effect immediately.
 - **CSRF**: every state-changing request must carry an `X-CSRF-Token` header matching the
   session; the cookie alone is never accepted as proof. With accounts off there is no session

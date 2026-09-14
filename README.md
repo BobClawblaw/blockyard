@@ -1,4 +1,4 @@
-# blockyard
+# BlockYard
 
 A live, multi-user web monitor and block explorer for
 [Bitcoin Core](https://github.com/bitcoin/bitcoin).
@@ -23,8 +23,8 @@ bugs.** If you appreciate the work, Bitcoin donations are welcome at
 | | |
 |---|---|
 | **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with **30 idle effects**, from ripples and light cycles to a lightning ball, ball lightning, a UFO's tractor beam, Missile Command, fireworks, code rain and a demoscene plasma. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
-| **A board you can tune.** Neon-tube blocks, a metallic sheen or a chrome finish that mirrors a horizon, a movable lamp, a touch of perspective, a spiral galaxy behind the board, and a switch for every one of the 30 effects — in a tabbed settings panel. Kept in your browser; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
-| **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so blockyard builds its own from the node's block files (30 minutes, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
+| **A board you can tune.** Neon-tube blocks, a metallic sheen or a chrome finish that mirrors a horizon, a movable lamp, a touch of perspective, a spiral galaxy behind the board, and a switch for every one of the 30 effects — in a tabbed settings panel. Stored on the server (`config/blockyard.json`), so every screen sees the same board; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
+| **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so BlockYard builds its own from the node's block files (30 minutes, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
 | **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
 | **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, full screen with one click. | ![Kiosk](docs/images/kiosk.jpg) |
 | **Tetrust, Blockout and Blockanoid.** Three playable games built on the same 3D engine — trust, but verify. Tetrust is Tetris: the well is the block-space board and the music is synthesised in the browser. Blockout is Breakout, where the wall is made of block-space stones and the bat follows your mouse. Blockanoid is Arkanoid: a different wall every level, silver bricks that take more than one hit, gold that takes none, and capsules that fall out of what you break — laser, wide, catch, slow, three balls, a life. All three pause when you look away and keep high scores per browser. | ![Tetrust](docs/images/tetrust.jpg) |
@@ -37,11 +37,11 @@ board without a reload.
 
 ## Quick start
 
-You need **Node.js 22 or newer** and a running Bitcoin Core node with JSON-RPC enabled — your own
-build, a distribution package, or a node appliance such as **Umbrel**, **Start9** or **myNode**.
+You need **Node.js 22 or newer** and a running Bitcoin Core node with JSON-RPC enabled, **on the
+same machine** — BlockYard reads the node's block files to build the explorer's address index.
 Set **`txindex=1`** on the node if you want the explorer to look up transactions by id — everything
 else works without it (see [Requirements](docs/INSTALL.md#1-requirements)). Address history needs an
-index Core does not have; blockyard can build one from the node's block files — see
+index Core does not have; BlockYard can build one from the node's block files — see
 [Building the address index](docs/INSTALL.md#building-the-address-index).
 
 ```bash
@@ -71,26 +71,13 @@ To watch your own node, create `config/local.json`:
 then `npm start` and open <http://127.0.0.1:21000>. There is no `npm install` step — there
 is nothing to install.
 
-**On an Umbrel, Start9 or myNode?** The node is on another machine, so there is no cookie file to
-read — use the RPC username and password from the appliance, and no `datadir`:
-
-```json
-{
-  "nodes": [
-    {
-      "id": "umbrel",
-      "label": "Umbrel",
-      "rpcUrl": "http://umbrel.local:8332",
-      "rpcUser": "umbrel",
-      "rpcPassword": "the RPC password from the Bitcoin app",
-      "chainHint": "main"
-    }
-  ]
-}
-```
-
-See [Appliance setup](docs/INSTALL.md#a-node-appliance-umbrel-start9-mynode) for the
-`bitcoin.conf` settings that make it perform, and what is verified against what.
+**Why the same machine?** Running BlockYard elsewhere and reading a node over RPC alone was
+tried (against a node appliance, 2026-09-13) and abandoned: the charts filled in, but the explorer
+could not be made to work in real time over RPC — Core has no address index, and the one RPC
+that can answer a balance holds the node's RPC thread for tens of seconds per query. The address
+data has to be rebuilt from the block files and stored locally, the way mempool.space's `electrs`
+does it, so BlockYard lives next to the node. See
+[It runs on the node's machine](docs/INSTALL.md#it-runs-on-the-nodes-machine).
 
 The full walkthrough — service install, network exposure, accounts, TLS, a reverse proxy —
 is in **[docs/INSTALL.md](docs/INSTALL.md)**.
@@ -159,7 +146,7 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 Version **0.1.0** — the first official release, and pre-release software: the word is meant literally. The test suite is
 comprehensive (849 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
-answer at any setting, now come from an **address index blockyard builds itself** from the
+answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node
 (every balance equal to `scantxoutset`, to the satoshi) and costs ~30 minutes on 16 cores and
 124 GB of disk; without one, the address page says so rather than showing a zero. What it does

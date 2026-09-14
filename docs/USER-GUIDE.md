@@ -1,10 +1,10 @@
-# blockyard user guide
+# BlockYard user guide
 
-This guide covers what you see after opening blockyard in a browser: what each tab
+This guide covers what you see after opening BlockYard in a browser: what each tab
 shows, how to read it, and which controls do what. For installation, configuration
 and the security posture, see the [README](../README.md).
 
-blockyard is read-only. Nothing in this guide changes your node. The only exceptions
+BlockYard is read-only. Nothing in this guide changes your node. The only exceptions
 are node actions, which are off unless an operator explicitly enables them (see
 [Admin](#admin)).
 
@@ -19,6 +19,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Kiosk](#kiosk)
 - [Tetrust](#tetrust)
 - [Blockout](#blockout)
+- [Blockanoid](#blockanoid)
 - [Peers](#peers)
 - [Network](#network)
 - [Mining](#mining)
@@ -27,6 +28,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Admin](#admin)
 - [Reading the data honestly](#reading-the-data-honestly)
 - [Links, URLs and keyboard tips](#links-urls-and-keyboard-tips)
+- [Display settings](#display-settings)
 
 ---
 
@@ -58,8 +60,8 @@ are node actions, which are off unless an operator explicitly enables them (see
 
 | Item | What it tells you |
 |---|---|
-| **blockyard v… · build** | The version and build this tab is running. |
-| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The two games live at the end, under the **Diversions** pop-down. |
+| **BlockYard v… · build** | The version and build this tab is running. |
+| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The three games live at the end, under the **Diversions** pop-down. |
 | **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. |
 | **stream** | The live link to the server. `connecting` on load, then `live`. `reconnecting` means the link dropped and the browser is retrying. `stale` means the link is up but no fresh data has arrived for more than 90 seconds. |
 | **rpc** | The node's last RPC round-trip time. It turns red when the average climbs above five seconds. |
@@ -224,7 +226,7 @@ switch under **Display settings → Effects**:
 | **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
 | **Code rain**, **Radar**, **Vortex** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward |
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
-| **Centipede**, **Missile command**, **Boulder dash** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
+| **Centipede**, **Interception**, **Collapse** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
 | **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
 | **Ball lightning** | drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike |
 | **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head; rare — 2.5 to 6 minutes between plays |
@@ -361,7 +363,7 @@ height and amount, because those are the index's own.
 
 **Where this comes from.** Bitcoin Core has **no address index at any setting** — the RPCs an
 explorer would ask (`getaddressbalance`, `getaddresstxids`) belong to insight-style forks, and
-Core answers `Method not found`. So blockyard builds its own: `scripts/index-build.js` reads
+Core answers `Method not found`. So BlockYard builds its own: `scripts/index-build.js` reads
 the node's block and undo files and writes one row per (address, transaction) with the net
 amount — about 30 minutes on 16 cores and 124 GB for the whole chain — and the server keeps it
 current as blocks arrive. Balances are checked against the node's `scantxoutset` to the
@@ -390,16 +392,20 @@ Core supports.
 ## Markets
 
 The BTC/USD price from five exchanges' public APIs. The server fetches market data
-**only while someone has the Markets or Kiosk tab open**, and stops about ten minutes
-after the last viewer leaves. If no one opens these tabs, the monitor makes no
-exchange requests at all.
+**only while someone is reading it** — the Markets or Kiosk tab, or Overview, whose price
+line (**Display settings → Markets & Price → Price line on Overview**, on by default) reads
+the same feed — and stops about ten minutes after the last request. Switch that line off
+and, with no one on Markets or Kiosk, the monitor makes no exchange requests at all.
 
 ![Markets](images/markets.jpg)
 
-### The 3D price chart
+### The price chart
 
-The first panel is the selected exchange's **hourly candles** drawn on the same 3D
-engine as Block space, from a low camera looking at the chart from the side.
+The price panel draws the selected exchange's **hourly candles** in one of two views,
+chosen with the **2D / 3D** buttons in the toolbar and remembered (**Display settings →
+Markets & Price → Price view**). **2D**, the default, is the flat candlestick chart
+described below. **3D** draws the same hours on the same 3D engine as Block space, from a
+low camera looking at the chart from the side.
 
 - Each hour is a candle **floating at its price**. The body runs from open to close
   (green if the hour closed up, red if down) and a thin wick runs from the hour's low
@@ -413,8 +419,8 @@ engine as Block space, from a low camera looking at the chart from the side.
 - **Hover a candle** for its exchange, hour, open, high, low, close, change and volume.
 - The legend beside the board gives the price range from floor to top.
 
-The board shows at most the last 72 hours. The flat chart below covers the full
-selected range.
+The board shows at most the last 72 hours; the flat chart covers the full selected
+range.
 
 ### Controls and summary
 
@@ -422,6 +428,7 @@ selected range.
   with candle data are listed. The selected exchange provides the candles, and the
   others appear on the flat chart as lines.
 - **Range**: **24 h**, **48 h** or **7 d**.
+- **View**: **2D** or **3D**. One at a time; they draw the same hours.
 - **Summary strip**: the **USD median** across books, the **spread across
   exchanges**, **24 h volume**, and how many USD books are reporting.
 
@@ -758,7 +765,7 @@ admin.
 
 ## Reading the data honestly
 
-blockyard never shows a number it did not measure, and it tells you when a figure is
+BlockYard never shows a number it did not measure, and it tells you when a figure is
 old or missing.
 
 **Stale is marked, not hidden.** If a chart already has data and fresh samples stop
@@ -791,8 +798,8 @@ dashed and flat, and the depth chart draws a lower-bound total as a dotted line.
 
 **Check provenance on Node & RPC.** *Panel sources* lists the source of every panel,
 and *Data quality* lists every known gap with a timestamp. When a figure surprises
-you, check there first. The README has a longer
-[explanation of which number came from where](../README.md#which-number-came-from-where).
+you, check there first. The same provenance table is served as `sources` by
+[`GET /api/config`](API.md#16-telemetry-and-configuration).
 
 **Switching nodes wipes the charts.** The pixels on screen belong to the node you were
 looking at, so they are cleared when you pick another. Returning to a node you have
@@ -814,6 +821,9 @@ can bookmark it or send it to someone who can reach the same monitor:
 | Explorer | `#explorer`, `#explorer/block/<height or hash>[/<page>]`, `#explorer/tx/<txid>`, `#explorer/address/<address>[/<page>]` |
 | Markets | `#markets` |
 | Kiosk | `#kiosk` |
+| Tetrust | `#tetrust` |
+| Blockout | `#blockout` |
+| Blockanoid | `#blockanoid` |
 | Peers | `#peers` |
 | Network | `#network` |
 | Mining | `#mining` |
@@ -842,9 +852,11 @@ the Block space idle effects are switched off. Every number stays.
 
 ## Display settings
 
-The gear in the header opens **Display settings**. They are kept in your browser (nothing is sent to
-the server, and no account is needed), they apply as soon as you change them, and **reset** puts
-every one back to the shipped default.
+The gear in the header opens **Display settings**. They are stored on the server, in
+`config/blockyard.json` beside `config/local.json`, so every browser that opens this monitor sees
+the same choices; each browser also keeps a copy so it can draw before the server answers. No
+account is needed (with accounts on, saving needs the admin role). They apply as soon as you
+change them, and **reset** puts every one back to the shipped default.
 
 They change how the pages are *drawn*, never what is measured: every figure on the page reads the
 same whatever you choose here.
@@ -853,7 +865,7 @@ same whatever you choose here.
 
 The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Blockanoid, Effects and
 Tetrust. The **Effects** tab is nothing but switches, so it also gets **all on** and **all off**;
-twenty-six of them is a lot of clicking otherwise.
+thirty of them is a lot of clicking otherwise.
 
 ### Block space
 
@@ -877,7 +889,7 @@ these are the settings that buy it back, roughly most expensive first:
 | **Metallic finish** | *Chrome* mirrors a horizon in every face, and the reflection slides as the blocks move; *satin* is the softer highlight along the lit edge. Needs Metallic sheen on. |
 | **Departures and arrivals** | How blocks leave and rejoin the board on a refresh. |
 | **Depth** | How much height foreshortens, 0 to 0.001. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube's top grows a little wider than its base and a flying block swells slightly as it rises. |
-| **Star field** | Off by default here: the stars twinkle, so the board keeps repainting while they are on. What the stars *look* like is the **Sky** tab. |
+| **Star field** | On by default. The stars twinkle, so the board keeps repainting while they are on; switch it off to save that. What the stars *look* like is the **Sky** tab. |
 | **Board curve** | How far the board bows toward you. 0 is flat. |
 | **Light** | Where the lamp hangs: *straight above* (the default) lights the whole board evenly, which keeps the front rows as bright as the middle; a corner shades the far slope of the curve and the sides turned away from it. |
 
@@ -888,12 +900,12 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 
 | setting | what it does |
 |---|---|
-| **Density** / **Brightness** | How many stars (up to 8x the shipped number) and how strongly they burn. |
+| **Star density** / **Star brightness** | How many stars (up to 8x the shipped number) and how strongly they burn. |
 | **Spiral galaxy** | Lays the same stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about a quarter of an hour. |
 | **Galaxy centre** | Behind the board, or any of the four corners. A corner crowds the bright nucleus there and sweeps the arms across the panel. |
 | **Nebulae**, **Dust lanes**, **Star clusters**, **Distant galaxies** | The layers of the sky, each its own switch: gas clouds along the arms, dark ribbons on their inner edges, tight knots out in the halo, and small faint galaxies in the deep field behind everything. |
 | **Star colours** | Warm old stars in the nucleus, blue-white young ones in the arms. Off is one colour of starlight. |
-| **Glints** | The halo and cross glint on the brightest stars. |
+| **Star glints** | The halo and cross glint on the brightest stars. |
 
 ### Effects
 
@@ -911,6 +923,11 @@ candles refresh.
 Your toolbar choices are remembered too: the **exchange** whose candles are drawn and the
 **range** (24 hours, 48 hours or 7 days). Click them on the Markets page or set them here; either
 way the page opens where you left it.
+
+| setting | what it does |
+|---|---|
+| **Price line on Overview** | The USD median, spread, 24 h volume and how many books reported, at the top of Overview. **On by default** — and because it needs the exchange feed, this monitor then contacts five exchanges whenever Overview is open, not only on Markets and Kiosk. Switch it off and the landing page talks to nothing but your node. |
+| **Price view** | Which price panel Markets draws: the *flat chart* (default) or the *3D candle board*. One at a time; the 2D / 3D buttons on the page set the same thing. |
 
 ### Blockout
 

@@ -85,7 +85,7 @@ test('renderHtml versions assets and nothing else', () => {
   assert.ok(out.includes('href="data:image'), 'a data: URL is not a path');
   assert.ok(out.includes('nonce="NONCE123"'), 'the nonce placeholder must be filled');
   // THE PATTERN MUST MATCH THE PLACEHOLDERS THAT EXIST. This guarded /%BMC[A-Z]+%/, a naming
-  // convention that has not existed since the rename to Blockyard -- static.js fills
+  // convention that has not existed since the rename to BlockYard -- static.js fills
   // %BLOCKYARD_NONCE% and %BLOCKYARD_BUILD% -- so it could never fire and had been passing
   // vacuously. The positive control below is what stops that happening again silently.
   const UNFILLED = /%BLOCKYARD_[A-Z_]+%/;

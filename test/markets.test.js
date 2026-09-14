@@ -73,7 +73,7 @@ test('the feed: every exchange polled, figures derived, one failure reported wit
   await feed.pollTickers();
   await feed.pollCandles();
   assert.equal(calls.length, 10);
-  assert.match(calls[0].init.headers['user-agent'], /Blockyard/);
+  assert.match(calls[0].init.headers['user-agent'], /BlockYard/);
   assert.ok(calls[0].init.signal, 'every request has a timeout');
   const v = feed.view();
   const cb = v.exchanges.find((e) => e.id === 'coinbase');

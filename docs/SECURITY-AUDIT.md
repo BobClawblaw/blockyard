@@ -1,4 +1,4 @@
-# Blockyard Security Audit
+# BlockYard Security Audit
 
 > **STATUS: REMEDIATED — 2026-09-13, the same day.** Finding 1 (HIGH) is fixed: the node-connection
 > probe now sends credentials only to the endpoint the monitor is already configured for, and open
@@ -11,10 +11,11 @@
 > The proof of concept is kept deliberately: it is the blueprint for the regression test and the
 > record of how the finding was verified. It is not a live weapon against a current build.
 >
-> One correction to the report's own metadata: the address it gave for the model host has been
-> replaced with an RFC 5737 documentation address, per this project's privacy rule.
+> Two corrections to the report's own metadata: the address it gave for the model host has been
+> replaced with an RFC 5737 documentation address, per this project's privacy rule, and the
+> project line names the product and the node as they are now (BlockYard, Bitcoin Core).
 
-- **Project:** blockyard — a multi-user web monitor for a Bitcoin Machine Code node (`/storage/blockyard`)
+- **Project:** BlockYard — a multi-user web monitor for a Bitcoin Core node (`/storage/blockyard`)
 - **Audit date:** 2026-09-13 (single session)
 - **Scope:** full code + security audit of `server/`, `public/`, `scripts/`, `test/` (~44,100 lines across 154 files), the deployment posture (systemd unit, port guard, config defaults), and the `SECURITY.md` / `docs/SECURITY.md` claims vs. code
 - **Repo state at audit:** branch `main` @ `4c3e952`; working tree carries only screenshot re-shoots plus untracked `scripts/shots.mjs` (a zero-dependency CDP screenshot driver; reviewed, no security findings)

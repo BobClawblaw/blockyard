@@ -5,12 +5,12 @@
 //
 // Every switch here maps to an option the renderer already honours, or to one added for it
 // (`shadows`, `starDensity`, `starBrightness`). Nothing in this file draws: it holds the values,
-// clamps them, persists them per browser, and hands the renderers their options. A setting that
+// clamps them, persists them on the server, and hands the renderers their options. A setting that
 // did not change what is drawn would be a lie told in a checkbox.
 //
-// Stored per browser under `blockyard.settings` (like `blockyard.viewerMode`), because these are view
-// preferences, not node state: a kiosk screen and a laptop looking at the same monitor want
-// different answers, and neither should need an account to have one.
+// Stored on the server in config/blockyard.json (GET/POST /api/settings), so a phone and a desktop
+// pointed at the same monitor agree; the browser keeps a copy under `blockyard.settings` so a board
+// still draws when the server cannot be reached. (They were per browser until 2026-09-13.)
 //
 // THE STORE IS VERSIONED (operator, 2026-09-12: "Scope an improved durable settings menu", and
 // the choice to build the foundation first). Regrouping a key used to be unaffordable: normalise
@@ -399,7 +399,7 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'effects',
     title: 'Effects',
-    note: 'What the board may play while it rests. One is chosen at random every seven to thirteen seconds, never the same one twice running \u2014 so the more you leave on, the less often you see any one of them. The price board only ever plays the two that follow the line.',
+    note: 'What the board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The price board only ever plays the three that follow the line, and the pulse and the bulge are rare on top of that.',
     rows: Object.freeze([
       Object.freeze({ key: 'ripple', label: 'Ripple', kind: 'toggle', hint: 'A ring spreading from a point on the board' }),
       Object.freeze({ key: 'outline', label: 'Outline sweep', kind: 'toggle', hint: 'A front that traces each block\u2019s edges as it passes' }),

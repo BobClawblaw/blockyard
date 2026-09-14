@@ -4,8 +4,10 @@
 *"Give me at least 25-50 new video game inspired effects. Examine all video games, and explain
 your choices"*, then *"we can even add flying ships or other pixel-graphic inspired art"*.)
 
-This is a design document. Six of the fifty are built (see **Built so far** below); the rest
-are proposals, and the numbering here is what the commits refer to.
+This is a design document. Thirty-two of the fifty were built on 2026-09-13 (see **Built so far**
+below, kept as the record of that day) and most were then removed by the operator after seeing
+them on the board; the seven agents present today are the table in the next section. The
+numbering here is what the commits refer to.
 
 ---
 
@@ -45,16 +47,20 @@ keys it does not know, so a `config/blockyard.json` naming a removed effect simp
 
 ## What separates an agent effect from what we already have
 
-The board has twenty-six idle effects. Seventeen of them are **fields**: pure functions of a
-tile's position and the effect's clock, `fxAt(tile, fx) -> {glow, outline, lift, color}`. A field
-effect has no location of its own — it is a pattern evaluated everywhere at once. Plasma, aurora,
-checker, ripple, quake: every one is a formula over `(cx, cy, u)`.
+The board has thirty idle effects (when this was written, twenty-six). Twenty-three of them are
+**fields**: pure functions of a tile's position and the effect's clock,
+`fxAt(tile, fx) -> {glow, outline, lift, color}`. A field effect has no location of its own — it
+is a pattern evaluated everywhere at once. Plasma, aurora, checker, ripple, quake: every one is a
+formula over `(cx, cy, u)`. (Two of them, `pulse` and `bulge`, play on the Markets price line
+rather than on cubes.)
 
-Three are **agents**: `lightcycle`, `ball`, and the unused `packets`. An agent has a *position*,
-a *route it has already travelled*, and a *future*. It is drawn as its own geometry over the
-cubes (`drawCycles`, `drawBall`) and it lights the board through `fx.heads` — the cubes it is
-near flash in its colour. That is the difference the operator is pointing at: a field is
-wallpaper, an agent is **something happening**, and you can watch it and wonder what it will do.
+Seven are **agents** — the table above; when this was written there were two, `lightcycle` and
+`ball`, plus a `packetPaths` primitive no effect uses. An agent has a *position*, a *route it has
+already travelled*, and a *future*. It is drawn as its own geometry over the cubes (`drawCycles`,
+`drawBall`, or the kind's own `draw` in `agents.js`) and it lights the board through `fx.heads` —
+the cubes it is near flash in its colour. That is the difference the operator is pointing at: a
+field is wallpaper, an agent is **something happening**, and you can watch it and wonder what it
+will do.
 
 The existing machinery for agents:
 
@@ -74,7 +80,7 @@ The existing machinery for agents:
 **Two hard rules any new effect must satisfy**, both enforced by tests:
 
 1. `effects.test.js` plays every `FX_KINDS` entry through `fxAt` and demands it lights something
-   (`worst > 0.3`). Only `pulse` is exempt, because it draws on the price line. **So every new
+   (`worst > 0.3`). Only `pulse` and `bulge` are exempt, because they draw on the price line. **So every new
    agent must publish `fx.heads`** and join the heads branch — which is also what makes it feel
    connected to the board rather than painted over it.
 2. `viewer-canvas-rules.test.js`: no `ctx.clip()`, no `globalAlpha`, no composite modes, no
@@ -288,6 +294,10 @@ the whole board is quoting, and it costs nothing until someone finds it.
 
 ## Built so far
 
+*(The record of 2026-09-13, as written that day. The removals described at the top of this
+document happened afterwards; of the agents named below, only `centipede`, `tractor`, `missile`
+and `boulderdash` remain, alongside `lightcycle`, `ball` and the later `stormball`.)*
+
 Batch one landed 2026-09-13: **recognizer (1), disc (2), snake (3), qbert (10), invaders (13),
 bomberman (24)** -- five different motion vocabularies, two of them data-aware.
 
@@ -387,8 +397,8 @@ Pac-Man was written up as "did not appear at all" on the strength of one frame; 
 and four ghosts in the corners, eyes tracking him. The effect was fine and the *photograph* was
 mistimed, which is the same mistake twice now (bomberman spends its first 35% walking). Capture
 across the whole run, or do not draw a conclusion. They live in
-`public/js/agents.js` behind the registry described below; `test/agents.test.js` drives the real
-build/frame/draw path for every registered kind.
+`public/js/agents.js` behind the `AGENTS` registry described above; `test/agents.test.js` drives the
+real build/frame/draw path for every registered kind.
 
 Two things learned building them, which apply to all the rest:
 
@@ -404,6 +414,9 @@ Two things learned building them, which apply to all the rest:
 
 ## What I would build first, and why
 
+*(The proposal as made before any were built. All six were built; of them only Missile Command
+survived the operator's cull.)*
+
 If the point is to blow people away rather than to add length to a list:
 
 1. **Space Invaders descent (13)** — the formation is the thing our board has never done, and it
@@ -417,8 +430,8 @@ If the point is to blow people away rather than to add length to a list:
 6. **Missile Command (20)** — two interacting populations; the most "alive" of the lot.
 
 That is six effects covering all five families, each with a different motion vocabulary. Beyond
-that the list has more ideas than the board has seconds to show them: at one effect every 7-13 s,
-twenty-six kinds already means any given one appears about twice an hour.
+that the list has more ideas than the board has seconds to show them: at one effect every 5-9 s
+plus its own run time, thirty kinds means any given one appears a few times an hour.
 
 ## Costs and constraints to respect when building these
 

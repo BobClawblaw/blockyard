@@ -1,6 +1,6 @@
 # Architecture
 
-This guide is for contributors. It explains how blockyard is put together, where
+This guide is for contributors. It explains how BlockYard is put together, where
 state lives, how data moves from the node to the screen, and which rules the code
 depends on. It covers the reasoning as well as the structure, because most of the
 unusual choices here are responses to measured behaviour of the node being
@@ -17,12 +17,15 @@ Companion documents:
 
 ## 1. The big picture
 
-blockyard is a single Node.js process (Node 22 or later) with **no dependencies**.
+BlockYard is a single Node.js process (Node 22 or later) with **no dependencies**.
 It sits between one or more Bitcoin Core nodes and any number of
 browsers:
 
 - **Upstream**, it reads each node's JSON-RPC interface. If configured, it also
-  follows the node's log file.
+  follows the node's log file (experimental-node builds only; Bitcoin Core's
+  `debug.log` is not parsed, and the log source is off by default). Where an
+  address index has been built from a node's block files, it reads that too
+  (section 2.8).
 - **Downstream**, it serves a static single-page app (vanilla ES modules, all
   drawing done by hand on `<canvas>`), a JSON API, and a Server-Sent Events stream.
 
@@ -33,7 +36,7 @@ flowchart LR
     LOG["log file<br/>(optional)"]
   end
 
-  subgraph server["blockyard server (Node, no deps)"]
+  subgraph server["BlockYard server (Node, no deps)"]
     LANE["RPC lane<br/>server/rpc/client.js"]
     MON["NodeMonitor<br/>server/collect/monitor.js"]
     TAIL["LogTail + logparse"]
@@ -72,6 +75,8 @@ flowchart LR
 | Market tickers, candles, depth snapshots | `MarketFeed` | memory; about an hour of depth history |
 | Users, sessions | `data/users.json`, `data/sessions.json` | disk (atomic writes; session tokens are stored hashed) |
 | Audit trail | `data/audit.jsonl` plus rotated `audit.N.jsonl` | disk, rotated by size |
+| Display settings (effects, finish, the games' options) | `config/blockyard.json`, via `GET`/`POST /api/settings` | disk; the browser keeps a `localStorage` copy so boards still draw when the server is unreachable |
+| Address index (rows per address and transaction) | the directory named by a node's `addressIndex` (section 2.8) | disk, built once by `scripts/index-build.js`, then followed block by block |
 | Browser cache | `state.byNode` in `app.js` | the tab's lifetime |
 
 ### What is persisted
@@ -151,7 +156,15 @@ server/
   http/api.js        the route table
   http/sse.js        the SSE hub
   http/static.js     static files, CSP, nonce + build-id rewriting
-  http/explorer.js   block / transaction / address pages over RPC
+  http/explorer.js   block / transaction pages over RPC; address pages from the local index
+  chain/blockfile.js Core's blk/rev files read directly: XOR key, record framing, undo decoding (pure, read-only)
+  chain/tx.js        raw transaction / block decoder in Core's verbose field names (pure)
+  chain/index/rows.js   the 21-byte index row, built lean from block and undo bytes (pure)
+  chain/index/build.js  the full build: heights, scan on a worker pool, check, sort, manifest
+  chain/index/worker.js the build worker: scan one file pair, or sort one bucket
+  chain/index/heights.js block hash -> height table in a SharedArrayBuffer, shared by the workers
+  chain/index/store.js  IndexStore: base segments + layers + live tail, binary-searched lookups
+  chain/index/live.js   LiveIndex: follows the chain over RPC, logs, rolls back, folds, merges
 ```
 
 ### 2.1 Boot (`server/main.js`)
@@ -183,6 +196,11 @@ it directly; running the file as a script calls it and prints the banner.
    An address missing at boot is skipped with a warning. Boot is fatal only when
    none of the configured addresses exist.
 10. Housekeeping timers start: self-telemetry, session sweeps, the 20 s series push.
+11. For every distinct `addressIndex` directory in the node list, one `LiveIndex`
+    follower is started (fed by a node with a local `datadir` where there is one)
+    and registered with the explorer; it polls the node's tip every 30 s. A
+    follower that cannot open its index logs why, and the address page says the
+    same; nothing else waits on it (section 2.8).
     `app.shutdown()` stops timers, closes streams, stops monitors, saves history
     and sessions, and closes the listeners.
 
@@ -431,8 +449,8 @@ flowchart LR
   handler }`. `auth` is `none`, `any` or `admin`. Handlers are thin: most call
   `pickNode(ctx, app)` (from `?node=`, falling back to the primary node) and
   return part of that monitor's read model. The main groups:
-  - health, build, session: `/api/health`, `/api/build`, `/api/me`, `/api/login`,
-    `/api/logout`
+  - health, build, session: `/api/health`, `/api/build`, `/api/about`, `/api/me`,
+    `/api/login`, `/api/logout`, `/api/logout-all`
   - the read model: `/api/state`, `/api/sync`, `/api/mempool`,
     `/api/mempool/dense`, `/api/peers`, `/api/net`, `/api/mining`,
     `/api/nextblock`, `/api/blocks`, `/api/series`, `/api/events`, `/api/nodes`,
@@ -441,6 +459,11 @@ flowchart LR
   - explorer: `/api/x/search`, `/api/x/block`, `/api/x/tx`, `/api/x/address`
   - markets: `/api/markets`, `/api/markets/depth`
   - console and actions: `/api/rpc`, `/api/actions`, `/api/action`
+  - configuration written by the app: `/api/config/node/test` and
+    `/api/config/node` (the node-connection form; credentials go only to the
+    endpoint already configured), `/api/settings` (display settings, stored in
+    `config/blockyard.json`). State-changing routes in open mode refuse
+    cross-site requests by `Origin` / `Sec-Fetch-Site`.
   - admin: `/api/users*`, `/api/password`, `/api/audit`
 - **`sse.js`** (`StreamHub`): each client has at most one pending snapshot and one
   pending series frame, and the newest replaces the older one. Event rows are
@@ -459,14 +482,22 @@ flowchart LR
     the user when the tab is out of date.
   - Every response carries the same security headers. HSTS is added only on TLS
     listeners.
-- **`explorer.js`**: block, transaction and address pages built from this node's
-  own RPC.
+- **`explorer.js`**: block and transaction pages built from this node's own RPC;
+  address pages from the local address index.
   - **Batched.** Each page is one or two batched lane requests at priority 3.
     Fetching 25 transactions one call at a time would take several seconds at
     250 ms spacing.
   - **Cached.** Confirmed transaction summaries are kept in an LRU of 3,000.
   - **Cheap reads only.** `getblock` verbosity 2 is never used (it is megabytes
     per block on this node).
+  - **Addresses.** Core has no address index at any setting, so `xAddress` reads
+    the index a node names in `addressIndex` (section 2.8): count, balance,
+    received and sent, and the transactions newest first with the net change
+    each made, 25 a page. The reply carries `index.tip`, `index.behind`,
+    `index.following` and `index.stale`. Without an index the reply says
+    `indexed: false` with a **null** count, never a fabricated zero, and the two
+    insight-style RPCs Core refuses are remembered as refused for ten minutes
+    rather than re-sent on every view.
   - **Errors are sentences.** Handlers return `{ ok: false, error, hint }` rather
     than throwing.
 
@@ -489,6 +520,71 @@ flowchart LR
 
 `node scripts/manage-users.js` administers users from the command line.
 
+### 2.8 The address index (`server/chain/*`)
+
+Bitcoin Core cannot answer "which transactions touched this address": the
+insight-style `getaddresstxids` and `getaddressbalance` are refused at every
+setting, and `scantxoutset` reads the whole UTXO set for a balance only
+(measured: 26.5 s for 40 addresses, holding the node's one RPC thread). So
+BlockYard builds the index itself, the way `electrs` does, from the node's own
+files. The numbers are in `docs/MEASUREMENTS.md` §28-30 and the history in
+`docs/DEFECTS.md`.
+
+- **Reading the files** (`chain/blockfile.js`). `blocks/blkNNNNN.dat` holds the
+  blocks as received; `revNNNNN.dat` holds the undo data written when each block
+  was connected, which names every spent output's value and script. Both are
+  XOR-obfuscated at rest since Core v28 (`blocks/xor.dat`). Undo records are
+  paired with blocks in connection order and checksum-verified. The files are
+  opened for reading and nothing else, and the reader copes with the newest file
+  still being appended to. `chain/tx.js` decodes raw transactions and blocks into
+  Core's verbose field names, checked field-for-field against `getblock <hash> 3`
+  (`scripts/decode-check.js`).
+- **The row** (`chain/index/rows.js`): 21 bytes per (script, transaction that
+  touched it) -- 8 bytes of `sha256(scriptPubKey)`, a 3-byte height, a 2-byte
+  position in the block, and the signed net satoshis the transaction moved for
+  that script -- big-endian, so byte order is sort order. A script paid and spent
+  in one transaction is one row. Spends come from the undo record, so no UTXO
+  replay. The rows are built lean, straight from the bytes, and checked
+  row-for-row against rows from the full decoder.
+- **The build** (`chain/index/build.js`, `node scripts/index-build.js --out <dir>`):
+  block hashes for every height in batches of `getblockhash` (`heights.js`, a
+  `SharedArrayBuffer` table every worker reads); every blk/rev pair scanned on a
+  worker pool (`worker.js`), rows partitioned by the key's first byte into 256
+  bucket files; a check that every height is indexed exactly once, or the build
+  stops rather than publish a hole; each bucket sorted into `seg-XX.rows` plus a
+  sparse `seg-XX.idx` (one key per 4,096 rows); and a manifest written last, so an
+  index without one is unfinished. Measured on the whole chain: 29 min 45 s on 16
+  workers, 5.89 billion rows, 123.7 GB (§30). The build reads ~880 GB and writes
+  ~120 GB, so `--out` should be a different device from the block files.
+- **Lookups** (`chain/index/store.js`, `IndexStore`). The sparse keys of the 256
+  base segments and of every layer are held in memory; a lookup binary-searches
+  them and reads only the row blocks that can hold its key, then merges the base,
+  the layers and the live tail in height order. Measured: 0.25 ms median first
+  touch, 0.03 ms warm; a 2.3 M-transaction address summed in 83 ms.
+- **Following the chain** (`chain/index/live.js`, `LiveIndex`). The base is
+  immutable and covers the chain to the block it was built at. The follower polls
+  the node's tip, rolls the tail back to the fork if a block it holds is no longer
+  on the node's chain, and fetches each new block with `getblock <hash> 3` over
+  RPC (so it works for a node whose files are elsewhere), turning it into the same
+  rows (`verboseBlockRows`, checked against the file builder). Every block and
+  every rollback is appended to `<index>/live.log` -- CRC-framed, replayed on
+  restart, truncated at the first torn record -- **before** it is served. Blocks
+  100 deep are folded, 144 at a time, into immutable `layers/L<from>-<to>` and the
+  log is rewritten without them; past 32 layers they are merged. A reorganisation
+  deeper than the tail is not repaired: the index reports itself stale and the
+  page says to rebuild.
+- **Configuration.** `addressIndex: "<dir>"` on a node entry. One index serves
+  every node on the same chain (the store refuses a manifest for another chain);
+  the directory must be writable by the service, because the follower writes
+  `live.log` and `layers/` inside it. The explorer opens a store once and reopens
+  it when a rebuild replaces the manifest.
+- **Scripts.** `scripts/blockfile-measure.js` (what a full read costs, `--verify`
+  against the node), `scripts/index-bench.js` (SQLite against sorted flat files,
+  §29), `scripts/index-build.js` (the build), `scripts/index-benchmark.js`
+  (lookup latency and `--verify` balances against `scantxoutset`, §30).
+- **Tests**: `test/chain-blockfile.test.js`, `test/chain-tx.test.js`,
+  `test/chain-index.test.js`, `test/chain-index-live.test.js`.
+
 ---
 
 ## 3. The browser
@@ -507,7 +603,10 @@ loaded from the same origin. There is no build step and no framework.
 | `markets.js`, `pricechart.js`, `depthchart.js` | Markets page: flat price chart with axes and crosshair, the same candles on the 3D board, the depth chart |
 | `kiosk.js` | the 3D Markets board and the Block space board side by side, with a full-screen button |
 | `goggles.js` | the 2D treemap maps (squarified) |
-| `blockpack.js`, `feepalette.js`, `blockscene3d.js`, `details3d.js` | the 3D engine (section 4) |
+| `blockpack.js`, `feepalette.js`, `blockscene3d.js`, `details3d.js`, `agents.js` | the 3D engine (section 4) |
+| `settings.js` | display settings: `DEFAULTS`, the `PANEL` rows of the settings dialog, `normalise()`, and the option builders (`spaceOptions`, `enabledEffects`, ...) the boards read; stored on the server (`/api/settings`) with a `localStorage` copy |
+| `about.js` | the About page (version, system and node info) |
+| `tetris.js` / `tetrust.js`, `breakout.js` / `blockout.js`, `arkanoid.js` / `blockanoid.js`, `tetsound.js` | the Diversions: pure game rules in the first file of each pair, the tab drawn on the 3D engine in the second, and Tetrust's sound |
 | `fmt.js` | formatters: decimal units (as the node prints them), `–` for anything absent |
 | `login.js` | the login page (a separate file because of the CSP) |
 
@@ -643,7 +742,7 @@ What this means for front-end code:
 
 The 3D viewer turns a set of transactions, or any caller-supplied tiles, into
 square tiles on a grid. It animates them between layouts without collisions and
-draws them with hand-written canvas polygons. It is split into three files by
+draws them with hand-written canvas polygons. It is split into files by
 responsibility:
 
 | File | Responsibility | Canvas? |
@@ -652,6 +751,7 @@ responsibility:
 | `feepalette.js` | the 128 feerate bands (a geometric series from 0.1 to 2,000 sat/vB; sky blue to purple, neighbours stepped in tone) and their colour ramp (`feeColor`, `feeShade`) | no, pure |
 | `blockscene3d.js` | projection, the sphere, transition planning, sampling, scene building (faces, paint order, shadows, idle-effect lighting) | no, pure |
 | `details3d.js` | the renderer: canvas sizing, the fit, ground and grid, axes, stars, the rAF loop, idle-effect scheduling, hover, public entry points | yes |
+| `agents.js` | the `AGENTS` registry: the idle effects that are something moving rather than a pattern (`{ build, frame, draw }` per kind; see `docs/EFFECTS-AGENTS.md`) | draw only |
 
 Keeping geometry and choreography pure is what makes the collision-free and
 constant-view invariants testable without a browser.
@@ -847,7 +947,13 @@ transform, so a tile's level of detail cannot change mid-flight.
 
 **Idle effects** (`fxAt`). While the board is at rest, one effect plays at a time.
 They light **resting** tiles only (`z <= 0.02`), returning
-`{ glow, outline, lift, color }`:
+`{ glow, outline, lift, color }` (plus `hide` and `scale`, which the agents use).
+There are thirty kinds (`FX_KINDS` in `details3d.js`, one switch each in
+`settings.js`): twenty-three **fields**, pure functions of a tile's position and
+the effect's clock, and seven **agents** (`lightcycle`, `ball`, `centipede`,
+`tractor`, `missile`, `boulderdash`, `stormball`), which have a position and a
+route and light the cubes they pass through `fx.heads`. The full catalogue,
+with what was removed, is `docs/EFFECTS-AGENTS.md`. The original eight:
 
 | effect | what it does |
 |---|---|
@@ -878,7 +984,7 @@ flowchart TD
   F --> G["axes: price levels and hour ticks (if opts.axes)"]
   G --> H["cube faces in paint order: fill, then stroke if edges"]
   H --> I["price line (axes.line), axis labels"]
-  I --> J["light cycles, lightning ball (over the cubes)"]
+  I --> J["the agent effects (light cycles, lightning ball, ...) over the cubes"]
 ```
 
 `obliqueFit(pw, ph, gridW, gridH, opts)` returns `{ k, tx, ty, rect }`. It centres
@@ -912,7 +1018,7 @@ Options are merged over `DEFAULTS` in `details3d.js`.
 | `neonSource`, `neonColour`, `neonBrightness` | `'temperature'`, `'#3d8bff'`, 1 | the tubes take the block's own colour or one chosen hex; brightness (0.2–2) scales both their alpha and their width |
 | `sheen` | off | a specular highlight on the lit edge of each top face and a dark roll-off on the far one, plus a highlight up the lit side. Works at every level of detail. |
 | `stars`, `galaxy`, `galaxyAt` | off, off, `'bottom-left'` | the star field, whether it is laid on turning spiral arms, and where the nucleus sits (`'center'` or a corner). `starDensity`, `starBrightness`, `nebulae`, `galaxies`, `dust`, `clusters`, `starColours`, `starGlints` tune it. `stars` defaults to `space` when unset. |
-| `fxKinds` | all | which idle effects may play, as a list of `FX_KINDS`. An empty list schedules none. `settings.js` builds it from the 26 per-effect switches. |
+| `fxKinds` | all | which idle effects may play, as a list of `FX_KINDS`. An empty list schedules none. `settings.js` builds it from the 30 per-effect switches (`enabledEffects`); `noRepeat` (default 12) keeps an effect from playing again until that many others have. |
 | `still` | off | draw the tiles where they are, with no choreography at all — not even the planner's per-tile stagger. It governs the **tiles**; a board with a sky keeps its loop regardless (see 4.7). |
 | `maxDpr` | none | cap the device-pixel ratio for this canvas. The star count follows the pixel count, so a panel-sized galaxy at 1x is a quarter of the work of one at 2x. |
 | `orderMemo` | none | a `Map` the caller keeps per canvas; `obliqueOrder` uses it to hold a tangle's relative order steady between frames (see 4.7). `render3d` supplies its own. |
@@ -980,10 +1086,12 @@ Each of these has a test that fails if it is violated.
 - **Idle effects only at rest.** A transition cancels the current effect. `fxAt`
   never touches airborne tiles. Effects are scheduled only with a real DOM, never
   under `prefers-reduced-motion`, and never while the canvas is hidden or moving.
-  There are 26 (`FX_KINDS`), each a pure function of the tile and the effect's
+  There are 30 (`FX_KINDS`), each a pure function of the tile and the effect's
   clock — board-level choices are hashed from the effect's seed, never from
   `Math.random`, so an effect replays identically and is asserted rather than
-  watched. Every one has a switch in `settings.js`, and a test holds the effect
+  watched. An agent never mutates a tile: `hide` and `scale` are applied per
+  frame to a copy, so the board is correct again the moment the effect stops.
+  Every one has a switch in `settings.js`, and a test holds the effect
   list, the defaults and the panel rows to the same list in the same order.
 - **The loop parks when — and only when — nothing is moving.** When a frame is
   settled, nothing is dirty and no effect is running, the rAF loop stops:
@@ -1094,6 +1202,8 @@ test is written with `node:test` and `node:assert`, with nothing to install.
 | `rpc-lane.test.js` | priority, coalescing, stale drop, breaker semantics, the unkeyed-job recursion bug, cadence stretching and its floor |
 | `open-access.test.js`, `http-app.test.js`, `tls.test.js`, `cidr.test.js`, `audit-and-kdf.test.js` | the viewer ceiling, admin 403 in open mode, refused writes, sessions and CSRF, TLS, CIDR gate failure direction, audit rotation, scrypt |
 | `logparse.test.js`, `bench-log.test.js`, `shape-liveness.test.js`, `log-core-unsupported.test.js` | parsers against real experimental-node lines, coverage thresholds, per-shape liveness flags, and the standing proof that Core's format is NOT parsed |
+| `chain-blockfile.test.js`, `chain-tx.test.js`, `chain-index.test.js`, `chain-index-live.test.js` | block/undo file framing and XOR, the decoder against Core's verbose output (`test/fixtures/chain-tx.json`), lean rows against full-decoder rows, the store's lookups, and the follower's log replay, rollback and folding |
+| `agents.test.js`, `effects.test.js` | every registered agent builds, frames, draws, publishes heads, replays from a seed, leaves tiles untouched and keeps working on a flat board; every effect lights something, every kind is reachable and none takes more than twice an even share |
 
 A green `npm test` is necessary but not sufficient (RULES 5). Before calling a
 change done, run `npm run dev` and look at the page, or run `npm run smoke`.

@@ -134,12 +134,12 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 }
 
 // THE BOARD AT REST: every 7-13 s while nothing is moving, one idle effect
-// plays (see fxAt in blockscene3d.js), chosen at random and never the same one
-// twice in a row. The loop wakes for the effect and parks again, so a still
+// plays (see fxAt in blockscene3d.js), chosen at random and never one played
+// within the no-repeat window (chooseIdleFx). The loop wakes for the effect and parks again, so a still
 // board costs nothing between them. Only with a real DOM (the unit harness and
 // the DOM stub never get one), never under prefers-reduced-motion, never while
 // a transition runs, and it retries later while the board is not on screen.
-// THE TWENTY-SIX (operator, 2026-09-12: "Think of many more other video-game inspired effects ...
+// THE THIRTY -- twenty-six at the time (operator, 2026-09-12: "Think of many more other video-game inspired effects ...
 // at least 25 total different effects, all toggleable"). Nine were here; seventeen more live in
 // fxAt (blockscene3d) as pure per-tile functions. Each is one entry here -- how long it runs --
 // and one toggle in settings.js (the `effects` group), and the two are checked against each other

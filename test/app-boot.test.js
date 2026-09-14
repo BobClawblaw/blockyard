@@ -190,8 +190,8 @@ test('rememberedNode survives a store that is missing, empty or hostile', () => 
     assert.equal(app.rememberedNode(), null, 'a store that throws');
     globalThis.localStorage = { getItem: () => '' };
     assert.equal(app.rememberedNode(), null, 'an empty value is not a node id');
-    globalThis.localStorage = { getItem: () => 'bmc-main' };
-    assert.equal(app.rememberedNode(), 'bmc-main', 'and a real one comes back');
+    globalThis.localStorage = { getItem: () => 'core-main' };
+    assert.equal(app.rememberedNode(), 'core-main', 'and a real one comes back');
   } finally { globalThis.localStorage = real; }
 });
 

@@ -1,4 +1,4 @@
-# Installing blockyard
+# Installing BlockYard
 
 This guide takes you from nothing to a monitor running as a service, reachable from the
 machines you choose. Every setting mentioned here is described in full in
@@ -23,7 +23,7 @@ machines you choose. Every setting mentioned here is described in full in
 | need | notes |
 |---|---|
 | **Node.js 22 or newer** | `node -v` must print `v22` or later. Older runtimes fail on syntax at start-up, which looks like a bug in the app. Install from [nodejs.org](https://nodejs.org), your distribution's backports, or a version manager such as `nvm`. |
-| **A running Bitcoin node** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with its JSON-RPC server enabled -- your own build, a distribution package, or a node appliance such as [Umbrel](https://umbrel.com), [Start9](https://start9.com) or myNode. The monitor reads it; it does not manage it. |
+| **A running Bitcoin node** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with its JSON-RPC server enabled **on the same machine** as BlockYard, which reads the node's block files for the explorer's address index. |
 | **RPC credentials** | Either read access to the node's cookie file (`<datadir>/<chain>/.cookie`, the usual case on the same machine) or an RPC user and password. |
 | **macOS, Linux or Windows** | Any OS with Node 22 runs it: there is nothing to compile, and the server calls no platform-specific API (no `child_process`, no `/proc`, no `systemctl`). Developed and tested on Linux. Only the *service* instructions in section 6 are Linux-specific (they use systemd); on macOS run it in a terminal, or write a `launchd` plist. |
 | **Disk** | A few hundred MB at most for history, sessions and the audit trail (`./data` by default). |
@@ -45,27 +45,27 @@ while and is unavoidable; the node reports progress, and `getindexinfo` tells yo
 `synced`. Everything else in the monitor — the dashboard, block space, mempool, fees, peers,
 mining, the block pages — works without it.
 
-Two further indexes affect the explorer:
+Two further points affect the explorer:
 
 - an **address index** — address pages (balance, received, sent, transaction history). **Bitcoin
   Core does not have one, at any setting**, so there is no flag here to turn on: `getaddressbalance`
   and `getaddresstxids` are insight-style extensions carried by forks such as Bitcore, and stock
-  Core answers `Method not found` (measured 2026-09-13 against both an Umbrel node and a local
-  Core). **blockyard builds its own** from the node's block files — see
+  Core answers `Method not found` (measured 2026-09-13 against two Core nodes). **BlockYard builds its own** from the node's block files — see
   [Building the address index](#building-the-address-index) below. Without one, the address page
   still confirms an address and its type (`validateaddress` needs no index) and marks balance and
   history as *not indexed*. Searching by transaction id or block is unaffected: that uses
   `txindex` above.
-- a **spent-output index** — "spent by" links on every output. Core does support this one.
+- **"spent by" links** come from `gettxspendingprevout`, which Core (24.0 and later) answers from
+  its **mempool** only: an output spent by an unconfirmed transaction is linked, one spent in a
+  block is not, and there is no index to turn on for that.
 
 Pages that need an index the node does not have say so, rather than showing empty data.
 
 ### Building the address index
 
 The index is built once from the node's own `blocks/blk*.dat` and `rev*.dat` files, so the
-build needs to run **on a machine that can read the node's data directory** (a local node, or
-the appliance's disk mounted read-only). After that the server keeps it current over RPC alone,
-so it serves a node on another machine just as well.
+build needs to run **on a machine that can read the node's data directory** -- the node's own
+machine, which is where BlockYard runs. After that the server keeps it current over RPC.
 
 What it costs, measured on the full chain at height 966,930 (`docs/MEASUREMENTS.md` §30):
 **29 min 45 s** with 16 workers (7.8 CPU-hours; peak 30 GB of memory — use fewer workers on a
@@ -171,122 +171,47 @@ Use the RPC port your node is configured with (`rpcport` in its configuration fi
 mainnet default is 8332). Any value you set in `config/local.json` or in the environment
 overrides the built-in defaults.
 
-#### A node appliance (Umbrel, Start9, myNode)
+#### It runs on the node's machine
 
-An appliance runs the node on another machine, so there is **no cookie file this process can
-read** -- use `rpcUser` / `rpcPassword`, and give no `datadir` at all:
+BlockYard is installed **on the machine that runs Bitcoin Core**. The monitor half can read a
+node elsewhere over JSON-RPC alone, and on 2026-09-13 that was tried against a node appliance on
+the LAN: chain, mempool, peers and blocks filled in, but the **explorer could not be made to work
+in real time over RPC**, and there was no configuration that would make it. Core has no address
+index and refuses the RPCs an explorer would ask; `scantxoutset`, the one call that can answer a
+balance, holds the node's single RPC thread for tens of seconds per query and knows no history;
+and a node answering over the network in seconds left an address page waiting minutes. That
+was a failed idea, and it is not supported. The address data is **rebuilt from the block files
+and stored locally** instead, the way mempool.space's `electrs` does it
+([Building the address index](#building-the-address-index)), and the build reads the node's
+`blocks/` directory -- so BlockYard lives next to the node.
 
-```json
-{
-  "nodes": [
-    {
-      "id": "umbrel",
-      "label": "Umbrel",
-      "rpcUrl": "http://umbrel.local:8332",
-      "rpcUser": "umbrel",
-      "rpcPassword": "the RPC password from the appliance",
-      "chainHint": "main"
-    }
-  ]
-}
-```
+`rpcUser` / `rpcPassword` are still accepted, for a node that authenticates with `rpcauth` rather
+than the cookie file (see [Configuration](CONFIGURATION.md#nodes)). The web UI's node-connection
+form takes no password on purpose -- taking one over an endpoint that is open by default is not
+something to add quietly -- so credentials go in `config/local.json`.
 
-On Umbrel the username, password, host and port are in the **Bitcoin Node** app's connection
-details. If `umbrel.local` does not resolve from your machine, use the appliance's IP address.
-
-> **Raise `dbcache` on an Umbrel node.** Umbrel ships Bitcoin Core with `dbcache=450` (MB). Set it
-> to **4096** in the Bitcoin app's advanced settings and restart the app -- `dbcache` is read at
-> start-up, so nothing changes until bitcoind restarts.
->
-> What this fixes, measured on one Umbrel over the evening of 2026-09-13. At the shipped 450 MB
-> the monitor's pages did not fill in properly and the node was slow at the expensive calls:
-> `getblocktemplate` took **4.0-4.5 s**, five times consecutively with no warming, while
-> `getblockchaininfo` answered in ~100 ms. Raising `dbcache` alone did not move those numbers.
->
-> Raising it **together with the RPC settings below** did: the same call came back at
-> **488-565 ms** (roughly eight times faster), `getblockchaininfo` at 36 ms, and the monitor's
-> own lane went from 7.0 s average latency with repeated timeouts to **no timeouts at all**, and
-> latency that samples between ~180 ms and a few seconds depending on what the node is doing.
-> (Measured while `coinstatsindex` was still rebuilding, which competes for the same disk -- the
-> poll cadence still stretches at times, it just no longer times out.) Which single line deserves
-> the credit was not isolated -- they were applied together -- so they are recommended together.
-
-##### Recommended `bitcoin.conf` overrides on an appliance
-
-Umbrel's Bitcoin app takes extra `bitcoin.conf` lines in its advanced settings. This set is what
-an operator settled on for this monitor on 2026-09-13; each line is annotated with what it
-actually buys, because not all of them are for us:
+##### `bitcoin.conf` settings worth having
 
 ```conf
-# --- RPC concurrency ---
-rpcthreads=16
-rpcworkqueue=64
-rpcservertimeout=120
-
-# --- Indexes ---
-txindex=1
-coinstatsindex=1
-
-# --- Binary REST endpoints for bulk block/tx fetches (LAN only) ---
-rest=1
+txindex=1              # required for the explorer's transaction pages
+coinstatsindex=1       # the Chain page's UTXO figures; rebuilds from genesis, which takes hours
+dbcache=4096           # or what the machine can spare: the expensive reads are disk-bound
+rpcservertimeout=120   # keeps the node from closing a connection under a slow call
 ```
 
 | line | what it does for this monitor |
 |---|---|
 | `txindex=1` | **Required** for the explorer's transaction pages. Without it a confirmed transaction cannot be looked up by id. |
-| `coinstatsindex=1` | **Real gain.** The Chain page's UTXO figures come from `gettxoutsetinfo muhash`; unindexed, that call is minutes of work, and the monitor flags `utxo-unindexed` instead. Note it **rebuilds from genesis** and takes hours -- until it finishes those figures stay unavailable. |
-| `rpcthreads=16`, `rpcworkqueue=64` | **Not for us directly:** this monitor issues one RPC at a time, so extra node threads do not speed it up. They matter on an appliance because other apps (Electrs, LND, mempool) share that bitcoind, and a full work queue is returned as an error rather than queued. Harmless and sensible; just not the thing that makes the monitor faster. |
-| `rpcservertimeout=120` | Keeps the node from closing a connection under a slow call. The monitor's own ceilings are 90 s ordinary / 300 s heavy, so this only matters on a heavily loaded appliance. |
-| `rest=1` | **Nothing today.** This monitor makes no REST calls -- it is JSON-RPC only. Enable it for other tools if you want; it is not a requirement here. |
+| `coinstatsindex=1` | **Real gain.** The Chain page's UTXO figures come from `gettxoutsetinfo muhash`; unindexed, that call is minutes of work, and the monitor flags `utxo-unindexed` instead. It **rebuilds from genesis** and takes hours -- until it finishes those figures stay unavailable and the rebuild competes with everything else for the disk. |
+| `dbcache=4096` | Measured 2026-09-13 on one Core 31.1.0 node that shipped with 450 MB: raised to 4096 together with the RPC settings here, the slowest call went from 4.0-4.5 s to 488-565 ms and the monitor's lane stopped timing out. Which line deserved the credit was not isolated, so they are recommended together. |
+| `rpcservertimeout=120` | The monitor's own ceilings are 90 s ordinary / 300 s heavy, so this only matters on a heavily loaded node. |
+| `rpcthreads`, `rpcworkqueue` | **Not for us:** this monitor issues one RPC at a time, so extra node threads do not speed it up. They matter where other software (Electrs, LND) shares the same bitcoind. |
+| `rest=1` | **Nothing.** This monitor makes no REST calls; it is JSON-RPC only. |
 
-Restart the Bitcoin app after changing these: `bitcoin.conf` is read at start-up.
-
-##### What is verified, and what is not
-
-Compatibility claims here are separated by how they were established, because "should work" and
-"was measured" are different statements.
-
-**Verified** -- an Umbrel running Bitcoin Core 31.1.0, reached at `umbrel.local:8332` with
-`rpcUser`/`rpcPassword` and no `datadir`, on 2026-09-13:
-
-| area | result |
-|---|---|
-| Chain & Sync, Overview | synced, tip and headers agree, 0 behind |
-| Mempool | ~32,000 transactions, fee histogram, distributions |
-| Peers, Network | 11 peers with per-peer byte counts over RPC |
-| Blocks, Block flow | recent blocks with sizes, weights and fees |
-| Explorer | working -- `txindex` was synced on that node |
-| Block space (3D) | both viewer modes |
-| Block being built | assembled here from the mempool since 2026-09-13 — no call to the node at all (before: `getblocktemplate`, ~0.5 s after tuning, 4.0-4.5 s before) |
-| Mining / pool attribution | 34 blocks attributed across 9 pools |
-| Markets, Kiosk | unaffected by the node; they read exchange APIs |
-
-**Expected but not measured** -- Start9 and myNode use the same shape (a node on another machine,
-username and password, no readable cookie), so they should work identically, but neither was
-tested. macOS likewise: the server calls no platform-specific API and was developed and tested on
-Linux.
-
-**Known pending on a freshly tuned appliance:**
-
-- `coinstatsindex` **rebuilds from genesis** and takes hours. Until it finishes, the Chain page's
-  UTXO figures are unavailable and the monitor flags `utxo-unindexed`; `gettxoutsetinfo` answers
-  `Unable to read UTXO set` (-32603), which is the node being honest, not a fault.
-- While any index is rebuilding it competes for the same disk, so RPC latency stays higher and the
-  Node & RPC page may show a stretched poll cadence. That settles when the rebuild lands.
-- `peerinfo-partial` is normal on Core: bytes from peers that have since disconnected remain in
-  `getnettotals` but leave no per-peer row, so the two do not sum.
-- **Log parsing does not support Core** (see below). Leave the log source off; nothing in the UI
-  depends on it.
-
-Verified 2026-09-13 against an Umbrel running Bitcoin Core 31.1.0 (from Linux; the configuration is identical on macOS): the
-monitor reads the chain, the mempool and the peer table over RPC alone. `txindex` was already
-on there, so the explorer's transaction pages work; `getnettotals` and per-peer byte counts are
-served over RPC, which is why the log source (see below) is not needed for Core.
-
-> **The web UI's node-connection form cannot set credentials.** It takes an RPC URL, a data
-> directory and a label, and deliberately accepts no password -- taking one over an endpoint that
-> is open by default is not something to add quietly. So an appliance is configured here, in
-> `config/local.json`, not through the form.
+Restart the node after changing these: `bitcoin.conf` is read at start-up. `peerinfo-partial` is
+normal on Core -- bytes from peers that have since disconnected remain in `getnettotals` but
+leave no per-peer row, so the two do not sum. **Log parsing does not support Core** (see below);
+leave the log source off, nothing in the UI depends on it.
 
 **Several nodes** — add more entries to `nodes`; a node picker appears in the header and
 every chart, table and stream is per node.
@@ -295,8 +220,9 @@ every chart, table and stream is per node.
 **Log parsing does not currently support Bitcoin Core**: the parsers were written against an
 experimental node with a different log grammar, and fed real Core `debug.log` lines they
 extract no figures and misdate the entries (measured 2026-09-13). Leave `log.enabled` off --
-it is off by default -- and ignore `logFile`. The Node & RPC page lists exactly which figures
-each source provides.
+it is off by default -- and ignore `logFile`. Nothing is lost on Core: `getnettotals` and per-peer
+byte counts are served over RPC (verified 2026-09-13). The Node & RPC page
+lists exactly which figures each source provides.
 
 ## 5. First run
 
