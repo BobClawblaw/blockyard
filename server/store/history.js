@@ -151,7 +151,7 @@ export class History {
         eventsSeq: this.eventsSeq,
       };
       const tmp = `${this.file}.tmp`;
-      const fh = await fsp.open(tmp, 'w');
+      const fh = await fsp.open(tmp, 'w', 0o600);   // node-derived detail: owner-only, like users and sessions
       await fh.writeFile(JSON.stringify(payload));
       await fh.sync();
       await fh.close();
@@ -216,5 +216,5 @@ export class History {
 // Atomic append-only text sink, used by the audit log.
 export async function appendJsonl(file, row) {
   await fsp.mkdir(path.dirname(file), { recursive: true });
-  await fsp.appendFile(file, JSON.stringify(row) + '\n', 'utf8');
+  await fsp.appendFile(file, JSON.stringify(row) + '\n', { encoding: 'utf8', mode: 0o600 });   // who did what: owner-only (audit 2026-09-14, L4)
 }

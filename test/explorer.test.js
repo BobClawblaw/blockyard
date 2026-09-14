@@ -292,8 +292,8 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
   const asked = [];
   const store = {
     manifest: { chain: 'main', tip: { height: 99 }, builtAt: '2026-09-14T06:00:00Z' },
-    summaryForKey(k, { limit, skip }) {
-      asked.push({ k, limit, skip });
+    summaryForKey(k, { limit, skip, maxHeight }) {
+      asked.push({ k, limit, skip, maxHeight });
       return { txCount: rows.length, balance: 120_000, received: 150_000, sent: 30_000, recent: k === key ? rows.slice(skip, skip + limit) : [] };
     },
   };
@@ -317,7 +317,8 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
   assert.equal(d.txCount, 2);
   assert.deepEqual(d.balance, { balance: 120_000, received: 150_000, utxos: null });
   assert.deepEqual(d.txs.map((t) => [t.txid, t.height, t.delta]), [[TXA, 99, -30_000], [TXB, 98, 150_000]], 'each position becomes its txid, with the index\'s own amount');
-  assert.deepEqual(d.index, { tip: 99, behind: 5, builtAt: '2026-09-14T06:00:00Z', following: false, stale: null }, 'and the page knows how far the index reaches');
+  assert.deepEqual(d.index, { tip: 99, behind: 5, builtAt: '2026-09-14T06:00:00Z', following: false, stale: null, postTip: 0 }, 'and the page knows how far the index reaches');
+  assert.equal(asked[0].maxHeight, 104, 'and rows above the node\'s tip are asked to be left out (audit 2026-09-14, M2)');
   const html = addressHtml(d, fmt);
   assert.match(html, /complete through block/, 'the page says what the index covers');
   assert.match(html, /5 newer blocks not yet included/, 'and that it is behind the node, by how much');

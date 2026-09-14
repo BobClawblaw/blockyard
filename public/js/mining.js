@@ -1121,7 +1121,7 @@ export function poolTable(el, a, fmt) {
   const w = a.windowHeights;
   el.innerHTML = `<table class="t"><thead><tr><th>pool</th><th class="r">blocks</th><th class="r">share</th><th class="r">median sat/vB</th><th class="r">avg weight</th><th>coinbase tags seen</th></tr></thead><tbody>`
     + rows.map((p) => `<tr>
-        <td><span class="bdot" data-pool-key="${p.poolKey ?? p.poolLabel ?? ''}"></span>
+        <td><span class="bdot" data-pool-key="${fmt.esc(p.poolKey ?? p.poolLabel ?? '')}"></span>
             ${p.labelled || p.label ? fmt.esc(p.label ?? p.name) : `<span class="muted">${fmt.esc(p.poolKey)}</span> <span class="warn">unlabelled</span>`}</td>
         <td class="r">${p.blocks}</td>
         <td class="r">${p.sharePct != null ? `${p.sharePct}%` : '–'}</td>

@@ -14,6 +14,7 @@ import { ROW, scriptKey, readRow } from './rows.js';
 import { FORMAT } from './build.js';
 
 const LAYER = /^L(\d+)-(\d+)\.rows$/;
+const RING_MAX_BLIND = 4096;   // rows (86 KB) a page may keep without first counting the history
 
 function openSorted(rowsFile, idxFile) {
   const raw = readFileSync(idxFile);
@@ -117,13 +118,26 @@ export class IndexStore {
    * are sums of those nets by sign, so a transaction that both paid and spent a script counts once,
    * by its net -- not the gross figures an explorer that stores every output separately would show.
    */
-  summaryForKey(key, { limit = 25, skip = 0 } = {}) {
-    let txCount = 0, balance = 0, received = 0, sent = 0;
+  summaryForKey(key, { limit = 25, skip = 0, maxHeight = null } = {}) {
+    let txCount = 0, balance = 0, received = 0, sent = 0, postTip = 0;
+    // ROWS ABOVE maxHeight ARE NOT HISTORY (audit 2026-09-14, M2): after a reorganisation the tail
+    // can hold blocks the node no longer has until the follower's next poll; the caller passes the
+    // node's tip and those rows are counted in `postTip`, never in the balance or the page
+    const above = (buf, at) => maxHeight != null && buf.readUIntBE(at + 8, 3) > maxHeight;
     // the newest skip+limit rows in a ring of raw bytes: no object per row, whatever the address's
-    // size; a page deep into a huge history keeps skip+limit rows, never the whole history
-    const keep = Math.max(0, skip) + Math.max(0, limit);
+    // size; a page deep into a huge history keeps skip+limit rows, never the whole history.
+    // THE RING IS NEVER LARGER THAN THE HISTORY (audit 2026-09-14, M1: a page number is a request
+    // parameter, and `page=999999` sized a 525 MB ring for an address with two rows). A deep page
+    // counts the rows first, which is the same walk again, and sizes the ring to what exists.
+    let keep = Math.max(0, skip) + Math.max(0, limit);
+    if (keep > RING_MAX_BLIND) {
+      let n = 0;
+      this.forEachRow(key, (buf, at) => { if (!above(buf, at)) n++; });
+      keep = Math.min(keep, n);
+    }
     const ring = Buffer.allocUnsafe(Math.max(1, keep) * ROW);
     this.forEachRow(key, (buf, at) => {
+      if (above(buf, at)) { postTip++; return; }
       const hi = buf.readInt32BE(at + 13), lo = buf.readUInt32BE(at + 17);
       const v = hi * 4294967296 + lo;
       txCount++; balance += v; if (v > 0) received += v; else sent -= v;
@@ -131,7 +145,7 @@ export class IndexStore {
     });
     const recent = [];
     for (let k = skip; k < Math.min(keep, txCount); k++) recent.push(readRow(ring, ((((txCount - 1 - k) % keep) + keep) % keep) * ROW));
-    return { txCount, balance, received, sent, recent };
+    return { txCount, balance, received, sent, recent, postTip };
   }
 
   summary(script, opts) { return this.summaryForKey(scriptKey(script), opts); }

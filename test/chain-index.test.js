@@ -136,6 +136,21 @@ test('BUILD AND LOOK UP: workers, 256 buckets, sort, manifest, and every script 
       assert.deepEqual(s.recent.map((r) => [r.height, r.pos]), want.slice(-2).reverse().map((r) => [r.height, r.pos]), 'the newest rows, newest first');
     }
     assert.deepEqual(store.rowsForKey(scriptKey(hex('51'))), [], 'a script nobody paid has no rows');
+    // A PAGE NUMBER IS A REQUEST PARAMETER (audit 2026-09-14, M1): a page far past the history must
+    // not size a ring by the page -- page 1,000,000 was a 525 MB allocation for a two-row address
+    const [anyKey, anyWant] = [...byScript][0];
+    const before = process.memoryUsage().arrayBuffers;
+    const deep = store.summaryForKey(BigInt(anyKey), { limit: 25, skip: 25_000_000 });
+    assert.equal(deep.txCount, anyWant.length, 'the count and balance are still the whole history');
+    assert.deepEqual(deep.recent, [], 'and a page past the end is empty');
+    assert.ok(process.memoryUsage().arrayBuffers - before < 8e6, `without allocating for the page number (${((process.memoryUsage().arrayBuffers - before) / 1e6).toFixed(1)} MB)`);
+    // and rows above a height are not history (audit 2026-09-14, M2): counted apart, in nothing else
+    const cut = store.summaryForKey(BigInt(anyKey), { limit: 25, maxHeight: 1 });
+    const within = anyWant.filter((r) => r.height <= 1);
+    assert.equal(cut.txCount, within.length, 'the count stops at the height');
+    assert.equal(cut.postTip, anyWant.length - within.length, 'the rest are reported as beyond it');
+    assert.equal(cut.balance, within.reduce((a, r) => a + r.value, 0), 'and the balance is theirs alone');
+    assert.ok(cut.recent.every((r) => r.height <= 1), 'the page too');
     store.close();
   } finally {
     rmSync(root, { recursive: true, force: true });

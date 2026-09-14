@@ -31,8 +31,13 @@ const OPTS = (key) => ({ key, priority: 3, maxWaitMs: 45_000 });
 
 const txCache = new Map();          // txid -> summary; confirmed transactions only, LRU
 const CACHE_MAX = 3000;
+// a summary carries an object per input and output; a 20,000-output transaction is megabytes, and
+// three thousand of those is not the cache this was meant to be (audit 2026-09-14, L2): the giants
+// are decoded on demand and never kept
+const CACHE_MAX_IO = 2000;
 function remember(txid, summary) {
   if (!summary || !(summary.confirmations > 0)) return;
+  if ((summary.vin?.length ?? 0) + (summary.vout?.length ?? 0) > CACHE_MAX_IO) return;
   txCache.delete(txid);
   txCache.set(txid, summary);
   if (txCache.size > CACHE_MAX) txCache.delete(txCache.keys().next().value);
@@ -276,7 +281,10 @@ async function addressFromIndex(m0, addr, page, store, live = null) {
   const [va] = await batch(m, [{ method: 'validateaddress', params: [addr] }], `${m.id}:x:addr:${addr}`);
   if (!script || (va.ok && va.result?.isvalid === false)) return bad(`"${addr}" is not a valid ${chain === 'main' ? 'mainnet ' : ''}address`);
   if (store.manifest.chain && store.manifest.chain !== chain) return bad(`the address index on this node is for ${store.manifest.chain}, and this node is on ${chain}`);
-  const sum = store.summaryForKey(scriptKey(script), { limit: PAGE, skip: page * PAGE });
+  const nodeTip = m0.state?.chainInfo?.blocks ?? null;
+  // rows above the node's tip are a reorganised-away tail the follower has not yet rolled back:
+  // counted in index.postTip, shown nowhere as history (audit 2026-09-14, M2)
+  const sum = store.summaryForKey(scriptKey(script), { limit: PAGE, skip: page * PAGE, maxHeight: nodeTip });
   // positions -> txids: the page's blocks, their hashes in one batch and their txid lists in another
   const need = [...new Set(sum.recent.map((r) => r.height))].filter((h) => !blockTxids.has(h));
   if (need.length) {
@@ -298,7 +306,6 @@ async function addressFromIndex(m0, addr, page, store, live = null) {
     if (!s || s.missing) return { txid: txids[i], missing: true, height: r.height, delta: r.value };
     return { ...brief(s), height: r.height, delta: r.value };
   });
-  const nodeTip = m0.state?.chainInfo?.blocks ?? null;
   return {
     ok: true, node: m0.id, dataNode: m.id, address: addr,
     type: va.ok ? (va.result?.iswitness ? `witness v${va.result.witness_version ?? '?'}` : va.result?.isscript ? 'script' : 'legacy') : null,
@@ -310,7 +317,7 @@ async function addressFromIndex(m0, addr, page, store, live = null) {
     // `tip` is how far the index reaches: the base, its layers and a follower's live tail together
     index: {
       tip: store.tip ?? store.manifest.tip.height, behind: nodeTip != null ? Math.max(0, nodeTip - (store.tip ?? store.manifest.tip.height)) : null,
-      builtAt: store.manifest.builtAt, following: !!live, stale: live?.stale ?? null,
+      builtAt: store.manifest.builtAt, following: !!live, stale: live?.stale ?? null, postTip: sum.postTip ?? 0,
     },
     page, pages: Math.max(1, Math.ceil(sum.txCount / PAGE)), txs, tip: nodeTip,
   };
