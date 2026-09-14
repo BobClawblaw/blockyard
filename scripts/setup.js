@@ -25,7 +25,7 @@ import { stdin, stdout } from 'node:process';
 import { ROOT, loadConfig, resolveCookie } from '../server/config.js';
 import { runChecks, clientFor } from './check.js';
 import { buildIndex, defaultWorkers } from '../server/chain/index/build.js';
-import { c, banner, step, checkLine, box, spinner, progress, progressLine, fmt, strip } from './ui.js';
+import { c, banner, step, checkLine, box, spinner, progress, progressLine, fmt, strip, wrapText, cols } from './ui.js';
 import { fileURLToPath } from 'node:url';
 
 const argv = process.argv.slice(2);
@@ -192,7 +192,8 @@ async function main() {
   if (!YES && !stdin.isTTY) { console.error('no terminal to ask on: pass --yes with the --rpc-url/--datadir flags (see the header of scripts/setup.js)'); process.exit(2); }
   const rl = YES ? null : readline.createInterface({ input: stdin, output: stdout });
   const out = (s = '') => stdout.write(`${s}\n`);
-  const say = (s) => out(`    ${s}`);
+  // every line the installer says fits the terminal (operator: 80 columns, "Standard CRT")
+  const say = (s) => out(`    ${wrapText(s, cols() - 4, 4)}`);
   const q = c.accent('?');
 
   /** Ask until the answer validates; --yes takes the default (validated the same way). */
@@ -381,10 +382,11 @@ async function main() {
   const url = `http://${a.host === '0.0.0.0' ? '127.0.0.1' : a.host}:${a.port}`;
   out();
   out(box([
-    `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('   (or answer yes below)') : ''}${how === 'background' ? c.dim('   -- the index build starts with it') : ''}`,
+    `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('       (or answer yes below)') : ''}`,
+    ...(how === 'background' ? [`             ${c.dim('the index build starts with it')}`] : []),
     `${c.bold('open it')}      ${c.cyan(url)}`,
     `${c.bold('check it')}     ${c.accent('npm run check')}${c.dim('   the same checks, any time')}`,
-    `${c.bold('keep it up')}   ${c.dim('docs/GETTING-STARTED.md §6 (systemd, launchd)')}`,
+    `${c.bold('keep it up')}   ${c.dim('docs/GETTING-STARTED.md §6')}`,
   ], { title: c.bold('BlockYard is set up') }).split('\n').map((l) => `    ${l}`).join('\n'));
   out();
   const start = flag('start') || (!YES && await yes('start BlockYard now, in this terminal? (Ctrl-C stops it)', true));

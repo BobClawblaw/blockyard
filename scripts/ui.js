@@ -70,7 +70,7 @@ export function banner(version, what = 'setup', width = cols()) {
   const head = `${c.bold('Block')}${c.accent(c.bold('Yard'))}  ${c.dim(version)}   ${c.dim('·')}   ${c.bold(what)}`;
   // every line fits beside the tile in 80 columns (operator: "It needs to fit in 80 character space. Standard CRT")
   const about = ['Live monitor, block explorer, markets and 3D', 'block-space viewer for Bitcoin Core.', '', 'Zero dependencies, self-hosted, read-only.', 'Apache-2.0.'].map((l) => c.dim(l));
-  if (!COLOUR) return `\n${art.map((r, i) => `${r} ${i === 0 ? head : i === 1 ? about[0] + ' ' + strip(about[1]) : ''}`).join('\n')}\n`;
+  if (!COLOUR) return `\n${art.map((r, i) => `${r} ${i === 0 ? head : i === 1 ? about[0] : i === 2 ? about[1] : ''}`).join('\n')}\n`;
   const artW = strip(art[0]).length;
   const beside = width >= artW + 3 + 49 + 2;   // 26 + 3 + 49 + 2 = 80
   if (!beside) return '\n' + art.map((r) => `  ${r}`).join('\n') + `\n\n  ${head}\n  ${about.join('\n  ')}\n`;
@@ -98,15 +98,23 @@ export function wrapText(text, width, indent) {
   const words = String(text).split(' ');
   const lines = [];
   let line = '';
+  // widths are measured on what is seen, not on the colour codes around it
   for (const w of words) {
-    if (line && line.length + 1 + w.length > width) { lines.push(line); line = w; } else line = line ? `${line} ${w}` : w;
+    if (line && strip(line).length + 1 + strip(w).length > width) { lines.push(line); line = w; } else line = line ? `${line} ${w}` : w;
   }
   if (line) lines.push(line);
   return lines.join('\n' + ' '.repeat(indent));
 }
 
 /** Text in a rounded box. */
-export function box(lines, { title = null, pad = 1, width = null } = {}) {
+export function box(lines, { title = null, pad = 1, width = null, max = cols() - 6 } = {}) {
+  // NOTHING WIDER THAN THE TERMINAL (operator, 2026-09-14, of a box whose one long line broke its
+  // frame on an 80-column Mac): a line past the room is cut with an ellipsis -- a body line keeps
+  // its start, a title (a path) keeps its end
+  const room = Math.max(20, max - pad * 2);
+  const cut = (l, keepEnd) => { const r = strip(l); if (r.length <= room) return l; return keepEnd ? `…${r.slice(r.length - room + 1)}` : `${r.slice(0, room - 1)}…`; };
+  lines = lines.map((l) => cut(l, false));
+  if (title != null) title = cut(title, true);
   const raw = lines.map((l) => strip(l));
   const inner = width ?? Math.max(...raw.map((l) => l.length), title ? strip(title).length + 2 : 0) + pad * 2;
   const top = title ? `╭─ ${title} ${'─'.repeat(Math.max(0, inner - strip(title).length - 3))}╮` : `╭${'─'.repeat(inner)}╮`;
