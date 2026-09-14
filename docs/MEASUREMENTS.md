@@ -1224,3 +1224,31 @@ Heavy addresses, whole history summed for the balance: 2,326,967 transactions in
 
 The published figures are the projects' own READMEs, on other hardware; they are context, not a
 race run on this box.
+
+## 31. The first fresh install, and a sync false alarm (2026-09-14)
+
+Figures from the first install on a machine that is not this one -- a Mac, Core 29.1, block files on
+a platter array -- as recorded in the day's commits; not re-run here, since the machine is the
+operator's. The descriptor figures were taken on this box.
+
+**A node without `coinstatsindex`, sent `gettxoutsetinfo` every minute** (`6bf0ea5`): RPC answers of
+18 s on the monitor's lane, 90 s timeouts, the verbose mempool read dropped, the block-space board
+empty; `getindexinfo` reported no coinstats index and the UTXO set held 165 M outputs. The same node
+measured alone by `npm run check` (`ab2c5dc`): `getblockchaininfo` 10 ms, `getblock <tip> 3` 921 ms,
+`getrawmempool true` 1.0 s. The index build running beside it was throttled four ways first
+(`4a2bb49`, `89c738e`, `02b35e5`, `26a9433`) and was not the cause; the pacer's first threshold of
+1 s then ran a healthy build at about a sixth of its speed (`0b87d2e`), so it holds at
+`rpc.slowLatencyMs` (5 s) and eases above 40% of that now (RULES 27).
+
+**Descriptors** (`a05f1c6`): the index store held a descriptor per segment and layer (256 and more)
+and the build all 256 bucket files, on a platform whose soft limit is 256. After opening per read, on
+the full index on this box: 0.02 ms median warm lookup, 0.28 ms p90, 21 descriptors held by the
+process; the build keeps at most 64 buckets open.
+
+**The installer at 80 columns** (`ce54ae8`): the whole run piped at 80 columns, widest line 79.
+
+**Sync** (`72908f0`): two independent nodes at the same height, no block for 42 minutes, both
+showing STALLED. Block intervals are close to exponential with a 10-minute mean, so a gap of 40
+minutes or more has probability e^-4, about 1.8% -- once in fifty blocks, a few times a day. Stalled
+now means a connected peer reports a higher tip (`getpeerinfo` `synced_headers`); peers agreeing on
+the tip is a long gap and synced; no peer height at all waits two hours.

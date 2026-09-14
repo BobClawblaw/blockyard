@@ -8,7 +8,7 @@ the explorer's address index is built from the node's block files, so the monito
 to the node. Two things this register was written against are therefore no longer supported and
 no longer defects here: the **experimental node** whose RPC surface, log grammar and counters
 several entries below were measured on (its measurements are kept, as records), and **reading a
-node elsewhere over RPC alone** -- the Umbrel-on-the-LAN path, tried on 2026-09-13 and dropped,
+node elsewhere over RPC alone** -- a node appliance on the LAN, tried on 2026-09-13 and dropped,
 because real-time explorer data over RPC was a failed idea (INSTALL, "It runs on the node's
 machine"). Entries whose only subject was one of those are closed below with that reason, and
 the record says which.
@@ -305,6 +305,21 @@ Kept as checked rather than deleted, so nobody re-derives them.
   The build throttling stays: it is right on a shared disk, it just was not the fault.
   **The lesson, for the next slow node:** measure it alone first. `npm run check` now times every
   call it makes, which is three lines that would have saved an hour.
+- [x] **The index held 256 and more file descriptors open for the life of the process, and macOS
+  allows a process 256.** Found 2026-09-14 preparing the first macOS install: the store kept a
+  descriptor per segment and layer, and the build kept all 256 bucket files open through the scan --
+  on a stock macOS that is the whole soft limit (`ulimit -n`) before a socket is opened. Fixed the
+  same day: a lookup opens the one file it reads and closes it (`server/chain/index/store.js`;
+  measured on the full index afterwards, 0.02 ms median warm, 0.28 ms p90, 21 descriptors held by
+  the process), and the build keeps at most 64 buckets open, least recently written closed first
+  (`MAX_OPEN` in `build.js`).
+- [x] **A 42-minute gap between blocks showed STALLED on two independent, healthy nodes.** Found
+  2026-09-14 (operator: "Production is fucked now"). The state came from the tip's age alone, and the
+  network finds no block for 40 minutes about once in fifty. Fixed the same day in
+  `server/collect/sync.js`: stalled only when a connected peer reports a tip above this node's
+  (`getpeerinfo` `synced_headers`, `startingheight` as the fallback); peers agreeing on the tip is a
+  long gap and synced, with a caveat saying so; no peer height at all waits two hours
+  (`STALL_ALONE_SEC`). The caveat names which of the three applies.
 
 ## Functional gaps
 
@@ -729,6 +744,13 @@ Kept as checked rather than deleted, so nobody re-derives them.
   budget has no room for a fourth figure and rules 4/9 forbid merging them. They now
   appear as three separately-labelled rows behind `detail`, where "not printed by this
   build" is a possible answer and the absence is visible.
+- [ ] **An interrupted index build starts over.** Noted 2026-09-14. `buildIndex` empties its output
+  directory before it begins (`server/chain/index/build.js`), and the server treats an index as
+  built only when `manifest.json` exists (`server/main.js`), so a build stopped by Ctrl-C, a crash
+  or a reboot keeps nothing of its scan: the installer says so when it is stopped, and the server's
+  background build begins again from the first file on the next start. A resumable build would
+  need the per-file bucket output kept and a manifest of which files are done. A nicety on NVMe
+  (30 minutes on 16 workers), a real cost on the spinning disks the installer allows one worker for.
 
 ## Deliberate non-gaps (do not "fix")
 

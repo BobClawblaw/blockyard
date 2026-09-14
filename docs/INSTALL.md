@@ -23,10 +23,11 @@ machines you choose. Every setting mentioned here is described in full in
 | need | notes |
 |---|---|
 | **Node.js 22 or newer** | `node -v` must print `v22` or later. Older runtimes fail on syntax at start-up, which looks like a bug in the app. Install from [nodejs.org](https://nodejs.org), your distribution's backports, or a version manager such as `nvm`. |
-| **A running Bitcoin node** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with its JSON-RPC server enabled **on the same machine** as BlockYard, which reads the node's block files for the explorer's address index. |
+| **Bitcoin Core 25.0 or later** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with `server=1` and `txindex=1`, **on the same machine** as BlockYard, which reads the node's block files for the explorer's address index. A node on another machine is not supported. 25.0 is where `getblock` verbosity 3, which the index follower uses, arrived; 29.1 is what the macOS install was done against. `coinstatsindex=1` is optional (without it the UTXO figures are blank and the node is not asked for them). Not a pruned node: the index needs every block file. |
 | **RPC credentials** | Either read access to the node's cookie file (`<datadir>/<chain>/.cookie`, the usual case on the same machine) or an RPC user and password. |
-| **macOS, Linux or Windows** | Any OS with Node 22 runs it: there is nothing to compile, and the server calls no platform-specific API (no `child_process`, no `/proc`, no `systemctl`). Developed and tested on Linux. Only the *service* instructions in section 6 are Linux-specific (they use systemd); on macOS run it in a terminal, or write a `launchd` plist. |
-| **Disk** | A few hundred MB at most for history, sessions and the audit trail (`./data` by default). |
+| **macOS or Linux** | There is nothing to compile, and the server calls no platform-specific API (no `child_process`, no `/proc`, no `systemctl`). Developed on Linux; a real install has been done on macOS (Core 29.1). The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24), but on Windows nothing more than the suite has been tried. Only the *service* instructions in section 6 are Linux-specific (they use systemd); on macOS run it in a terminal, or write a `launchd` plist. The index store opens its files per lookup, so macOS's default limit of 256 open files is enough. |
+| **Disk** | About **125 GB** for the address index (124 GB measured at height 966,930, growing ~55 MB a day), on top of the node's own ~875 GB of block files, which the build reads once. A different disk from the node's is best. A few hundred MB besides for history, sessions and the audit trail (`./data` by default). |
+| **Memory** | About 2.5 GB per index-build worker while the build runs (four by default); little after. |
 | **A modern browser** | Any current Chrome, Edge, Firefox or Safari. The 3D views use a 2D canvas and run without WebGL; a GPU helps with the dense viewer mode. |
 
 ### Node indexes
@@ -64,24 +65,47 @@ Pages that need an index the node does not have say so, rather than showing empt
 ### Building the address index
 
 **By default BlockYard builds it itself**, in the background, the first time it starts with an
-`addressIndex` directory that holds no index: the Overview shows the progress, the address page
-says it is being built, and an event (and a notification in the browser) says when it is done,
-after which address pages work without a restart. Stopping BlockYard stops the build; the next
-start begins it again. Set `"addressIndexBuild": "manual"` on the node to keep the server from
-building, and run the command below yourself.
+`addressIndex` directory that holds no index. The build runs on worker threads inside the server
+while every page keeps working: the Overview's "What this panel cannot tell you" box shows the
+progress (phase, files done, rows so far, an ETA that settles after the first few files), the
+address page says the same in place of a history, and an event — which the browser shows as a
+notification — marks the start, the finish and a failure. When it finishes the follower starts
+on the spot, so address pages work without a restart. Stopping BlockYard stops the build; there
+is no resume, so the next start begins it again. Three keys on the node entry control it:
+
+| key | meaning |
+|---|---|
+| `addressIndex` | the index directory (the installer's default is `data/index` inside the checkout) |
+| `addressIndexWorkers` | how many worker threads the build uses; the installer writes the number you gave it (default 4, never more than 4 by default). Without the key the server uses half of what a dedicated build would, at most four |
+| `addressIndexBuild: "manual"` | do not build automatically; the installer's **(l)ater** writes this. Run the command below yourself and restart |
+
+**The build is paced by the node.** Its workers read the block files the node is also reading,
+so before each file it looks at the monitor's own RPC telemetry: while the node's RPC is failing
+or averaging above the monitor's slow threshold (`rpc.slowLatencyMs`, 5 s by default) it holds,
+checking every 10 s; while merely slow it eases off. The progress line and the log say when it is
+paused and when it resumed. The build's own RPC calls (cheap: block hashes for the height table)
+go over a second connection so they are not queued behind the monitor's mempool and block reads.
+On **spinning disks** use one worker (`addressIndexWorkers: 1`, or answer 1 to the installer):
+parallel readers only seek against each other and against the node, and the build takes hours
+there whatever the number.
 
 The index is built once from the node's own `blocks/blk*.dat` and `rev*.dat` files, so the
 build needs to run **on a machine that can read the node's data directory** -- the node's own
 machine, which is where BlockYard runs. After that the server keeps it current over RPC.
 
 What it costs, measured on the full chain at height 966,930 (`docs/MEASUREMENTS.md` §30):
-**29 min 45 s** with 16 workers (7.8 CPU-hours; peak 30 GB of memory — use fewer workers on a
-smaller box), and **124 GB** of disk for 5.89 billion rows, one per (address, transaction) with
-the net amount, so a balance is a sum and never a node call. Put it on a different disk from the
-block files if you can; the build reads ~880 GB.
+**29 min 45 s** with 16 workers on NVMe (7.8 CPU-hours; peak 30 GB of memory, so about 2.5 GB
+per worker), and **124 GB** of disk for 5.89 billion 21-byte rows, one per (address, transaction)
+with the net amount, so a balance is a sum and never a node call; it grows about 55 MB a day. It
+stores no transactions — `txindex` does that — which is why it is a tenth the size of
+mempool.space's `electrs` (1.3 TB, hours to build). Put it on a different disk from the block
+files if you can; the build reads ~880 GB once.
+
+To build by hand (the installer's **(h)ere** runs the same build in the terminal, with the same
+pacing):
 
 ```bash
-node scripts/index-build.js --out data/index --workers 16
+node scripts/index-build.js --out data/index --workers 4
 ```
 
 Progress goes to stderr once a second; the manifest, with every phase's timings, to stdout at
@@ -94,20 +118,27 @@ takes roughly four times as long. The block files are found through the node's `
 ```json
 {
   "nodes": [
-    { "id": "main", "...": "...", "addressIndex": "/opt/blockyard/data/index" }
+    { "id": "main", "...": "...", "addressIndex": "/opt/blockyard/data/index", "addressIndexWorkers": 4 }
   ]
 }
 ```
 
 One index serves every node on the same chain. The server starts a follower per directory,
-which polls every 30 s, fetches each new block with `getblock <hash> 3`, and writes `live.log`
-and `layers/` **inside the index directory — so it must be writable by the service user**. A
-restart replays the log; a reorganisation rolls the tail back; blocks 100 deep are folded into
-sorted layers. The address page says when the index is behind the node or has stopped
-following. A reorganisation deeper than the tail it holds (100 blocks) cannot be repaired in
-place: the page says to rebuild: stop the server, run the same command again, start it. **The build
-empties `--out` first**, the follower's log and layers included, so nothing of the old index
-survives it (tested in `test/chain-index-live.test.js`).
+which polls every 30 s, fetches each new block with `getblock <hash> 3` (up to 50 blocks a poll
+when catching up), and writes `live.log` and `layers/` **inside the index directory — so it must
+be writable by the service user**. A restart replays the log; a reorganisation rolls the tail
+back; blocks 100 deep are folded into sorted layers. The address page says when the index is
+behind the node or has stopped following, and rows above the node's current tip are never shown
+as history. A reorganisation deeper than the tail it holds (100 blocks) cannot be repaired in
+place: the page says to rebuild: stop the server, run the same command again (or delete the
+directory and let the server build it), start it. **The build empties `--out` first**, the
+follower's log and layers included, so nothing of the old index survives it (tested in
+`test/chain-index-live.test.js`).
+
+What the address page shows from it: the history, the balance, received and sent (each
+transaction's net for the address), and — for an address with up to 100 transactions — its
+unspent outputs, checked one by one against the node's `gettxout`; a longer history gets a note
+instead. Not yet: an address's mempool transactions.
 
 Balances are checked against the node: 40 of 40 sampled addresses equal `scantxoutset` to the
 satoshi (`node scripts/index-benchmark.js` runs that check and the lookup timings against your
@@ -143,10 +174,15 @@ every page, and it is what the test suite uses. Stop it with `Ctrl-C`.
 
 ## 4. Point it at your node
 
-**The short way:** `npm run setup` asks for the RPC URL and data directory, checks them against
-the node (RPC, credentials, chain, `txindex`, the block files, the log), writes `config/local.json`
-and offers to build the address index -- [GETTING-STARTED.md](GETTING-STARTED.md). What follows
-is the same configuration by hand, and what each key means.
+**The short way:** `npm run setup` asks for the node's data directory first and reads its
+`bitcoin.conf` (chain, `rpcport`, `rpcconnect`, `rpcuser`/`rpcpassword`, `rpcauth` users, a cookie
+file elsewhere, `server=`, `txindex=`, `prune=`, chain sections, `includeconf=`), so the RPC URL
+and credentials arrive as defaults; checks them against the node (RPC, credentials, chain,
+`txindex`, `getblock 3`, a verbose mempool read, the block files, the log -- every call timed);
+asks bind address, port, index directory and workers; writes `config/local.json`; and lets
+BlockYard build the address index in the background when it starts --
+[GETTING-STARTED.md](GETTING-STARTED.md). What follows is the same configuration by hand, and
+what each key means.
 
 Create `config/local.json` (it is git-ignored, so your settings never end up in a commit).
 
@@ -161,7 +197,9 @@ at `<datadir>/<chainHint>/.cookie`:
       "label": "My node",
       "rpcUrl": "http://127.0.0.1:8332",
       "datadir": "/home/you/.bitcoin",
-      "chainHint": "main"
+      "chainHint": "main",
+      "addressIndex": "/home/you/blockyard/data/index",
+      "addressIndexWorkers": 4
     }
   ]
 }
@@ -215,7 +253,7 @@ rpcservertimeout=120   # keeps the node from closing a connection under a slow c
 | line | what it does for this monitor |
 |---|---|
 | `txindex=1` | **Required** for the explorer's transaction pages. Without it a confirmed transaction cannot be looked up by id. |
-| `coinstatsindex=1` | **Real gain.** The Chain page's UTXO figures come from `gettxoutsetinfo muhash`; unindexed, that call is minutes of work, and the monitor flags `utxo-unindexed` instead. It **rebuilds from genesis** and takes hours -- until it finishes those figures stay unavailable and the rebuild competes with everything else for the disk. |
+| `coinstatsindex=1` | **Optional.** The Chain page's UTXO figures come from `gettxoutsetinfo muhash`; unindexed, that call walks the whole UTXO set (41 s measured), so on a node that reports no synced `coinstatsindex` the monitor does not ask for them at all, leaves the figures blank and flags `utxo-unindexed`. The index **rebuilds from genesis** and takes hours -- until it finishes those figures stay unavailable and the rebuild competes with everything else for the disk. |
 | `dbcache=4096` | Measured 2026-09-13 on one Core 31.1.0 node that shipped with 450 MB: raised to 4096 together with the RPC settings here, the slowest call went from 4.0-4.5 s to 488-565 ms and the monitor's lane stopped timing out. Which line deserved the credit was not isolated, so they are recommended together. |
 | `rpcservertimeout=120` | The monitor's own ceilings are 90 s ordinary / 300 s heavy, so this only matters on a heavily loaded node. |
 | `rpcthreads`, `rpcworkqueue` | **Not for us:** this monitor issues one RPC at a time, so extra node threads do not speed it up. They matter where other software (Electrs, LND) shares the same bitcoind. |
@@ -240,13 +278,16 @@ lists exactly which figures each source provides.
 ## 5. First run
 
 ```bash
-npm run check       # every configured node: RPC, credentials, txindex, block files, index
+npm run check       # every configured node: RPC, credentials, txindex, getblock 3, mempool, block files, index -- every call timed
 npm start
 ```
 
 Watch the start-up lines. You should see the addresses it listens on, a line per node,
-and — because accounts are off by default — a warning that names who can read the monitor.
-Then open <http://127.0.0.1:21000>.
+and — because accounts are off by default — a warning that names who can read the monitor. If
+the node entry names an `addressIndex` directory with no index in it, `address index: building
+… with N workers -- the Overview shows the progress` follows, and the build runs on in the
+background (see [Building the address index](#building-the-address-index)). Then open
+<http://127.0.0.1:21000>.
 
 Check it from the shell:
 
@@ -262,8 +303,9 @@ If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-s
 > terminal, or wrap it in a `launchd` plist -- there is no other platform-specific step, and the
 > configuration in section 4 is identical.
 
-1. **Create an account for it** that can read the node's cookie (and log, if you use it).
-   Usually that means adding it to the node's group:
+1. **Create an account for it** that can read the node's cookie and its `blocks/` directory
+   (the index is built from the block files), and that can write the index directory. Usually
+   that means adding it to the node's group:
 
    ```bash
    sudo useradd --system --home /opt/blockyard --shell /usr/sbin/nologin blockyard
@@ -437,6 +479,8 @@ sudo userdel blockyard
 
 - [ ] `node -v` prints v22 or later for the account the service runs as
 - [ ] `config/local.json` names your node's RPC URL and a readable cookie (or user/password)
+- [ ] `npm run check` passes: Core 25.0+, `txindex` synced, the block files readable, no pruning
+- [ ] the index directory has ~125 GB free and is writable by the service account
 - [ ] the start-up log shows the addresses you intended, and no node offline
 - [ ] you have decided who can reach the port (bind, firewall, `allowCidrs`)
 - [ ] accounts on if the port is reachable by people who should not see your node

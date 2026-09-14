@@ -645,3 +645,37 @@ bounded growth using the lane stack actually built. A constant must assume a
 worst case, so restate the bound rather than deleting it: it holds while the
 stack fits under the compression ceiling, and past that blocks fly beyond the
 panel edge. Say which, in the code, at the line that made the choice.
+
+## 27. Measure a slow node alone before blaming what runs beside it
+
+**When a node turns slow the moment something new starts running next to it,
+stop the new thing and measure the node bare before tuning anything.** A
+coincidence in time is a lead, not a cause.
+
+The first fresh install (2026-09-14: a Mac, Core 29.1, block files on a platter
+array). The address index build started, and within minutes the monitor showed
+18 s RPC answers, 90 s timeouts, the mempool read dropped and an empty
+block-space board. The build was the obvious suspect and was throttled four ways
+over an hour — its own RPC connection, a pacer on the node's latency, half the
+workers, smaller batches — each change followed by "still slow". Nobody had
+measured the node with nothing running. When `npm run check` finally did, it
+answered in **10 ms / 921 ms / 1.0 s** for chain info, a full block and the
+verbose mempool. The cause was `utxoStatsWanted` reading a missing
+`coinstatsindex` key as "not assumed unindexed" and sending `gettxoutsetinfo` —
+a walk of 165 M outputs without the index — on the slow tier every 60 s, past the
+timeout, with Core still walking and holding its chain lock. It had been there
+since the first boot, before any build existed (`docs/DEFECTS.md`, Security /
+correctness, 2026-09-14).
+
+The tuning done under the wrong diagnosis was itself wrong: the pacer was set to
+hold at one second of latency, and a healthy build on a node whose heavy reads
+take a second when perfectly well ran at a sixth of its speed until the threshold
+was moved to the monitor's own notion of slow (`rpc.slowLatencyMs`, 5 s). A fix
+aimed at the wrong cause does not merely miss; it adds a second defect with a
+plausible story attached.
+
+**In practice:** `npm run check` times every call it makes — three lines that
+would have saved the hour — and is the first thing to run against a slow node,
+with everything else stopped. The throttling stays, because it is right on a
+shared disk; it was simply not the fault. Rule 1 says measure before choosing a
+number; this is its sibling: measure before choosing a culprit.

@@ -59,6 +59,10 @@ npm run counts:fix   # after adding or removing tests: update the documented tes
 - For a bug fix, write the test first and watch it fail.
 - The documented test count in `README.md` and `AGENTS.md` is generated —
   `npm run counts:check` fails if it drifts.
+- CI runs the suite on Ubuntu, macOS and Windows, on Node 22 and 24. BlockYard runs on the
+  node's machine and a Mac is one of them, so a test must not assume Linux paths, a case-sensitive
+  file system, or more than macOS's default 256 open files (the index store opens per lookup for
+  that reason).
 
 ## Making a change
 

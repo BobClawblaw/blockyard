@@ -94,6 +94,11 @@ figures and a thin progress bar.
   **`N notes · show`** does the same.
 - **`also syncing`** buttons appear when another configured node is syncing. Click
   one to switch to it.
+- **Stalled** is claimed only when the connected peers report a tip above the node's
+  (`getpeerinfo`). A long gap with the peers agreeing on this tip stays **Synced**, with a
+  caveat saying it is a gap on the network rather than a fault of this node. With no peer
+  heights at all, the strip says Stalled only after two hours without a block, and the caveat
+  says a long gap and a node cut off from its peers cannot be told apart yet.
 
 ---
 
@@ -111,7 +116,7 @@ columns.
 | **Last blocks** | Height (links to the explorer), age, the gap since the previous block (amber over 20 minutes, red over an hour), transaction count, size, vsize, fees, minimum fee rate, and the peer that served the block when that is known. |
 | **Monitor events** | The newest events this monitor observed. These are the monitor's own observations, not node log lines. The full feed is on [Events](#events). |
 | **Mined by** | Blocks in the recent window grouped by pool, from coinbase text and a curated label map. See [Mining](#mining). |
-| **What this panel cannot tell you** | Every known data gap for this node, stated. If there are none, it says so. |
+| **What this panel cannot tell you** | Every known data gap for this node, stated. If there are none, it says so. While the server is building the address index, one line here is its progress: the phase, blocks or files done of the total, rows so far, the time left, and `paused while the node's RPC is slow` when the build is holding back for the node. If a build fails, the line says so and gives the command to run by hand. |
 
 ### Reading Block flow
 
@@ -228,13 +233,13 @@ switch under **Display settings → Effects**:
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
 | **Centipede**, **Interception**, **Collapse** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
 | **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
-| **Ball lightning** | drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike |
+| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike; on Markets it crosses the candles and charges the price line where it passes, rarely, like the pulse |
 | **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head; rare — 2.5 to 6 minutes between plays |
 | **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up; as rare as the pulse |
 
 They are decoration only: they carry no data, they never play during a refresh, and they
 are switched off entirely under `prefers-reduced-motion`. The price board only ever plays
-the three that have a line to follow (**Energy pulse**, **Pipe bulge** and **Twinkle**).
+the ones that follow its line or ride its candle grid: **Energy pulse**, **Pipe bulge** and **Ball lightning** (each rare there, 2.5 to 6 minutes apart), **Light cycles**, **Lightning ball** and **Twinkle**.
 
 The more you leave switched on, the less often you see any particular one — there is still
 only one effect every seven to thirteen seconds. The **all off** button on that tab leaves
@@ -266,7 +271,7 @@ cards three to a row.
 | **Transaction rate** | `getchaintxstats` tx/s, with the window size, transactions in the window and the all-time count. |
 | **Tip progression** | Blocks applied against announced headers. Once the node is synced this is a flat line. |
 | **Chain state** | Chain, height, headers, best hash, tip time and age, progress, size on disk, pruned, chain work, IBD flag. |
-| **UTXO set** | Coins, height, total amount and muhash, with a history chart. |
+| **UTXO set** | Coins, height, total amount and muhash, with a history chart. These are read only from a node whose `getindexinfo` reports a synced `coinstatsindex`; on any other node `gettxoutsetinfo` would walk the whole UTXO set every minute, so the card says the figures are unindexed instead. |
 | **Difficulty & work** | Difficulty, estimated network hash rate, average interval and reorgs seen. During initial block download the hash rate is withheld and the card gives the reason. |
 | **Block drill-down** | Type a height or block hash, or leave the box blank for the tip, and press **inspect** or Enter. It shows the header and statistics plus the block's txids as buttons. Click one to decode that transaction. Both views link into the explorer. |
 | **Indexes** | Each index the node keeps, its height, and whether it is synced. |
@@ -363,11 +368,13 @@ height and amount, because those are the index's own.
 
 **Where this comes from.** Bitcoin Core has **no address index at any setting** — the RPCs an
 explorer would ask (`getaddressbalance`, `getaddresstxids`) belong to insight-style forks, and
-Core answers `Method not found`. So BlockYard builds its own: `scripts/index-build.js` reads
-the node's block and undo files and writes one row per (address, transaction) with the net
-amount — about 30 minutes on 16 cores and 124 GB for the whole chain — and the server keeps it
-current as blocks arrive. Balances are checked against the node's `scantxoutset` to the
-satoshi. See [Building the address index](INSTALL.md#building-the-address-index).
+Core answers `Method not found`. So BlockYard builds its own from the node's block and undo
+files, one row per (address, transaction) with the net amount — about 30 minutes on 16 workers
+and 124 GB for the whole chain — and the server keeps it current as blocks arrive. The server
+builds a missing index itself, in the background, the first time it starts with an index
+directory configured (`scripts/index-build.js` does the same by hand). Balances are checked
+against the node's `scantxoutset` to the satoshi. See
+[Building the address index](INSTALL.md#building-the-address-index).
 
 **Received** and **sent** are sums of each transaction's *net* for the address, so a
 transaction that both paid and spent it counts once, by its net — not the gross figures an
@@ -378,9 +385,12 @@ has **stopped following** — which happens after a reorganisation deeper than t
 still holds in its tail, and means a rebuild.
 
 **While the index is being built** (BlockYard builds a missing one itself when it starts), the
-page says so with the phase, the progress and the time left, the Overview's "what this panel
-cannot tell you" box shows the same line, and a notification appears when the build finishes;
-the page fills in from then on.
+page reads **not indexed** and says so in a note with the phase, the progress, the rows so far
+and the time left; the Overview's "what this panel cannot tell you" box shows the same line, and
+adds `paused while the node's RPC is slow` whenever the build is holding back so the node keeps
+answering. A notification appears in every open tab when the build starts, when it finishes and
+if it fails; on finish the page fills in with no restart. The build does not resume after the
+server is stopped: the next start begins it again.
 
 **Without an index configured**, the address and its type are still confirmed
 (`validateaddress` needs none), and balance, totals and history read **not indexed**. It does
@@ -388,8 +398,9 @@ not show zero, and it does not print the node's error where a figure belongs: no
 so nothing is claimed.
 
 Below the transactions, the address's **unspent outputs** — each output that paid it and is still
-in the node's UTXO set (less what the mempool already spends), with its block and value. The list
-is made for an address with up to 100 transactions; a longer history says so instead.
+in the node's UTXO set (less what the mempool already spends), with its block and value; the
+**Unspent outputs** figure in the summary is their count. The list is made for an address with
+up to 100 transactions; a longer history says `not listed` instead, and shows no count.
 
 **Not yet:** the address's transactions still in the mempool.
 
@@ -730,7 +741,9 @@ answering it takes the node over a second of its single RPC thread.
 ## Events
 
 The monitor's own event stream: what it observed and decided, such as blocks stored,
-reorgs, stalls and nodes becoming unreachable. Node log lines are not shown here.
+reorgs, stalls and nodes becoming unreachable. Node log lines are not shown here. Events of
+kind `index` mark the start, finish or failure of an address index build; those three are also
+shown as a notification in every open tab, because a build takes half an hour.
 
 - **Filter text** matches the event text, tag, kind and address.
 - **Severity** (`info`, `warn`, `error`) and **kind** drop-downs narrow the list.
@@ -747,7 +760,7 @@ How the monitor treats your node, and where every number comes from.
 |---|---|
 | **RPC etiquette** | The endpoint, calls per second, totals, batches, latency (last, average, slowest), how busy the RPC lane is, errors and timeouts, polls dropped as stale, circuit-breaker trips, and the queue. The monitor keeps one request in flight at a time, because the node's RPC server handles one connection at a time. |
 | **Poll cadence** | Each polling tier's configured interval against its actual interval. If the node is slow, tiers deliberately poll less often and the page says **Cadence is stretched**. |
-| **Data quality** | Every known gap, with when it was flagged. |
+| **Data quality** | Every known gap, with when it was flagged. The `rpc-slow` and `rpc-timeouts` flags describe what was measured and do not assert a cause; when an address index build is running on this machine they say so, because it shares the node's disk and pauses while the node is slow. |
 | **Monitor self-telemetry** | The monitor's own memory, CPU and client counts. |
 | **Log tail** | Whether the node's log is being followed, how far it has been read, the lag, and the share of lines matched. It also shows when new bytes last arrived, which distinguishes a quiet node from the monitor following the wrong file. **Log parsing does not currently support Bitcoin Core** -- the parsers target an experimental node's log grammar, so against Core this panel stays empty by design rather than by fault. The log source is off by default. |
 | **Panel sources** | The provenance table: each panel, the RPC method or log source behind it, and why that source was chosen. |

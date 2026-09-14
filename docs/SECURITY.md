@@ -85,7 +85,13 @@ The last enabled admin cannot be demoted, disabled or deleted.
   `getrawchangeaddress`, which start with "get" but create keys. Unknown methods are refused.
 - **One request at a time.** The node's RPC server is single-threaded, so the monitor runs a
   single serialized request lane with a minimum spacing, batching, priorities and a stale-drop
-  rule. It cannot be used to flood your node.
+  rule. It cannot be used to flood your node. The one exception is the address index build,
+  which makes its few cheap calls (block hashes) over a second connection so that the pages are
+  not queued behind it — and which pauses itself whenever the first lane sees the node failing
+  or answering slowly.
+- **The block files are read directly** (`<datadir>/blocks`), once, to build the address
+  index; the node is not asked for them. The index directory is written by the build and by the
+  follower, and nothing else in the node's data directory is ever written.
 - **Credentials** are read from the cookie file on demand (it changes on every node restart)
   or from the configured user and password. They are never sent to the browser.
 
@@ -165,17 +171,21 @@ Everything the monitor writes lives in its data directory (`./data` by default,
 | `sessions.json` | hashed session tokens | **secret** |
 | `audit.jsonl` (+ rotations) | who called what and when; rotated by size (8 MiB, 5 kept) | private |
 | history snapshots | chart time series for the retention window (72 h by default) | private |
-| `pool-aliases.json`, `pool-map.json` | optional, human-edited mining-pool labels | not secret |
+| `pool-aliases.json`, `pool-map.json` | optional mining-pool labels: `pool-aliases.json` is human-edited; `data/pool-map.json` is what `node scripts/pool-map.js` fetches, and it overrides the curated `config/pool-map.json` that ships with the code (mempool.space/mining-pools, MIT, 151 pools) | not secret |
+| the address index (`addressIndex`, `data/index` by default) | the explorer's address index: ~124 GB of sorted rows built from the node's block files, plus the follower's `live.log` and `layers/` | public chain data, not secret |
 
 `config/local.json` may hold an RPC password; keep it readable only by the service account.
-Both it and `data/` are git-ignored.
+Both it and `data/` are git-ignored. Display settings (the gear) are stored in
+`config/blockyard.json`, so every browser sees the same board; they change how things are drawn,
+never what is measured.
 
 Logs go to standard output (the systemd journal). They record requests, node state changes
 and errors; they never contain passwords, session tokens or RPC credentials.
 
 ## Hardening checklist
 
-- Run as a dedicated, unprivileged account that can read only the node's cookie (and log).
+- Run as a dedicated, unprivileged account that can read only the node's cookie and its
+  `blocks/` directory (and log), and write only its own `data/` and the index directory.
 - Bind the narrowest set of addresses that serves your users; add a firewall rule if needed.
 - Turn accounts on if anyone who can reach the port should not see your node.
 - Use HTTPS, a reverse proxy, or an SSH tunnel on untrusted networks.

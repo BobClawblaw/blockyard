@@ -36,33 +36,36 @@ board without a reload.
 
 ## Quick start
 
-You need **Node.js 22 or newer** and a running Bitcoin Core node with JSON-RPC enabled, **on the
-same machine** — BlockYard reads the node's block files to build the explorer's address index.
-Set **`txindex=1`** on the node if you want the explorer to look up transactions by id — everything
-else works without it (see [Requirements](docs/INSTALL.md#1-requirements)). Address history needs an
-index Core does not have; BlockYard can build one from the node's block files — see
-[Building the address index](docs/INSTALL.md#building-the-address-index).
+You need **Node.js 22 or newer** and a running **Bitcoin Core 25.0 or later** with `server=1`
+and `txindex=1`, **on the same machine** — BlockYard reads the node's block files to build the
+explorer's address index, and a node on another machine is not supported. Without `txindex` the
+explorer cannot look a confirmed transaction up by id; everything else works without it (see
+[Requirements](docs/INSTALL.md#1-requirements)). Plan for disk: the index is about **125 GB**, on
+top of the node's own ~875 GB of block files.
 
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
 npm test            # optional: 858 unit tests, all built in
-npm run setup       # asks where the node is, checks it, writes config/local.json, builds the index
-npm start           # then open http://127.0.0.1:21000
+npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
+npm start           # builds the address index in the background; open http://127.0.0.1:21000
 ```
 
-`npm run setup` connects to the node, proves the credentials, the chain, `txindex`, the block
-files and the log, writes `config/local.json`, and offers to start building the address index
-on the spot. Step by step for macOS and Linux: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**.
+`npm run setup` asks for the node's data directory, reads its `bitcoin.conf` for the rest,
+proves the credentials, the chain, `txindex`, the block files and how fast the node answers,
+writes `config/local.json`, and offers to start BlockYard there and then. The address index is
+built **by BlockYard itself, in the background**, the first time it starts: about 30 minutes on
+16 workers, longer on the default four, with progress on the Overview and a notification when it
+is done. Step by step for macOS and Linux: **[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md)**.
 To try it first without a node: `npm run dev` runs against a built-in fake one on port 18088.
 To check a setup again later: `npm run check`.
 
 **Why the same machine?** Running BlockYard elsewhere and reading a node over RPC alone was
-tried (against a node appliance, 2026-09-13) and abandoned: the charts filled in, but the explorer
-could not be made to work in real time over RPC — Core has no address index, and the one RPC
-that can answer a balance holds the node's RPC thread for tens of seconds per query. The address
-data has to be rebuilt from the block files and stored locally, the way mempool.space's `electrs`
-does it, so BlockYard lives next to the node. See
+tried (2026-09-13) and abandoned: the charts filled in, but the explorer could not be made to
+work in real time over RPC — Core has no address index, and the one RPC that can answer a
+balance holds the node's RPC thread for tens of seconds per query. The address data has to be
+rebuilt from the block files and stored locally, the way mempool.space's `electrs` does it, so
+BlockYard lives next to the node. See
 [It runs on the node's machine](docs/INSTALL.md#it-runs-on-the-nodes-machine).
 
 The full walkthrough — service install, network exposure, accounts, TLS, a reverse proxy —
@@ -72,7 +75,7 @@ is in **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 | document | what it covers |
 |---|---|
-| [Getting started](docs/GETTING-STARTED.md) | macOS or Linux, from a command prompt: Core settings, Node 22, `npm run setup`, the index build, running it |
+| [Getting started](docs/GETTING-STARTED.md) | macOS or Linux, from a command prompt: Core settings, Node 22, `npm run setup`, the background index build, running it |
 | [Install](docs/INSTALL.md) | requirements, first run, systemd service, exposure, accounts, TLS, reverse proxy, updating |
 | [Configuration](docs/CONFIGURATION.md) | every config key and environment variable, with examples |
 | [User guide](docs/USER-GUIDE.md) | a tour of every tab and panel, and how to read them |
@@ -120,8 +123,8 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 
 ```bash
 npm run dev          # fake node doing a simulated sync, port 18088
-npm run setup        # interactive install: check the node, write config/local.json, build the index
-npm run check        # the same checks against every configured node; exits 1 on a FAIL
+npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
+npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
 npm test             # 858 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
@@ -137,13 +140,17 @@ comprehensive (858 tests, plus a live smoke run), the monitoring side is solid, 
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node
-(every balance equal to `scantxoutset`, to the satoshi) and costs ~30 minutes on 16 cores and
-124 GB of disk; without one, the address page says so rather than showing a zero. An address's
-unspent outputs are listed too (for a history of up to 100 transactions). What it does not yet
-have: an address's mempool transactions.
+(every balance equal to `scantxoutset`, to the satoshi) and costs ~30 minutes on 16 workers and
+124 GB of disk, built in the background the first time BlockYard starts and paced so the node's
+RPC stays responsive; without one, the address page says *not indexed* rather than showing a
+zero. An address's unspent outputs are listed too (for a history of up to 100 transactions).
+What it does not yet have: an address's mempool transactions.
 
 Everything here was written by an AI directed by a human, and audited by AI:
-[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) is the audit, findings and remediation included.
+[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) and
+[docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md) are the audits, findings
+and remediation included. The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24);
+a real install has been done on macOS (Core 29.1) and Linux, and Windows has only the test suite.
 [docs/DEFECTS.md](docs/DEFECTS.md) lists five open items, honestly stated, with the
 measurements behind each. Read it before deploying: several are node-capability limits
 rather than bugs, and knowing which is which matters.
@@ -153,7 +160,9 @@ rather than bugs, and knowing which is which matters.
 The block-space view and the explorer are inspired by the look of
 [mempool.space](https://mempool.space); the markets tab by
 [bitcoinity.org](https://data.bitcoinity.org). Market data comes from the public APIs of
-Coinbase, Kraken, Bitstamp, Bitfinex and OKX.
+Coinbase, Kraken, Bitstamp, Bitfinex and OKX. The mining-pool labels shipped in
+`config/pool-map.json` are mempool.space's curated
+[mining-pools](https://github.com/mempool/mining-pools) list (MIT, 151 pools).
 
 ## License
 

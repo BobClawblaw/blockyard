@@ -126,9 +126,9 @@ node gets its own charts and event stream.
 | `rpcPassword` | `null` | RPC password for `rpcUser`. It is a secret, so protect the config file. |
 | `logFile` | none | The node's log file, tailed only when `log.enabled` is `true`. With the log source off (the default) this field is ignored, and a line in the startup log says so. |
 | `logStaleMs` | *(uses `log.staleMs`)* | Per-node override for how long the log may go without new bytes before the monitor reports it as silent. Use a smaller value for a node that is known to log often. |
-| `addressIndexWorkers` | half the machine's, at most 4 | Worker threads for the background build. **1 on spinning disks**: parallel readers seek against each other and against the node. The installer writes the number you give it. |
-| `addressIndexBuild` | `auto` | `"manual"` keeps the server from building a missing address index on start (it builds one in the background by default, showing progress on the Overview and posting an event when done). |
-| `addressIndex` | none | Directory of an address index built by `node scripts/index-build.js --out <dir>` from a node's own block files. With it, the explorer's address page shows history, balance and per-transaction amounts; without it, Core cannot answer those and the page says so. One index serves every node on the same chain. The server keeps it current as blocks arrive (a follower per directory writes `live.log` and `layers/` inside it, so the directory must be writable by the service); the page says if it is behind or has stopped following. See `docs/MEASUREMENTS.md` §30. |
+| `addressIndex` | none | Directory of the address index, built from this node's own block files (`<datadir>/blocks`). With it, the explorer's address page shows history, balance, unspent outputs and per-transaction amounts; without it, Core cannot answer those and the page says so. If the directory holds no finished index (no `manifest.json`) when the server starts, **the server builds one in the background** (see the next two keys). One index serves every node on the same chain. The server keeps it current as blocks arrive (a follower per directory writes `live.log` and `layers/` inside it, so the directory must be writable by the service); the page says if it is behind or has stopped following. See `docs/MEASUREMENTS.md` §30. |
+| `addressIndexBuild` | *(unset)* | `"manual"` keeps the server from building a missing address index on start. Otherwise a missing index is built inside the server on worker threads while every page keeps serving: the progress is the `address-index-building` quality flag on the Overview (phase, done of total, rows, time left, and whether it is paused), an event of kind `index` marks the start, the finish and a failure (the browser shows each as a notification), the follower starts the moment the build finishes so address pages go live with no restart, and a failure raises `address-index-build-failed` with the command to run by hand. The build is paced by the node's own RPC: it holds while the node is failing, its breaker is open or its average latency is above `rpc.slowLatencyMs`, and eases off above 40% of it. A build interrupted by a stop does not resume; the next start begins it again. `npm run setup --build-later` writes this key. |
+| `addressIndexWorkers` | half of a dedicated build's count, at most 4 | Worker threads for the background build. A dedicated build (`scripts/index-build.js`) uses `cpus − 4`, one per ~2.5 GB of memory, at most 16; the server takes half of that, at most 4, because the node shares the disk. **Use 1 on a spinning disk**: parallel readers seek against each other and against the node. The installer writes the number you give it. |
 | `optional` | `false` | Marks a node whose absence is expected, such as a test or benchmark node. Its failures are logged at a lower severity, a missing datadir is reported at `info` instead of `warn`, and it does not count as a required node in `/api/health`. |
 | `color` | `"#f7931a"` | Accent colour for this node in the UI. |
 | `systemdUnit` | *(see defaults)* | Name of the node's systemd unit. It is informational and not currently used by the server. |
@@ -204,7 +204,7 @@ limits protect the node from the monitor. They apply to each node separately.
 | `rpc.timeoutMs` | `90000` | Timeout for ordinary calls. It is deliberately generous, because a busy but healthy node can take tens of seconds to answer. |
 | `rpc.heavyTimeoutMs` | `300000` | Timeout for calls that are known to be expensive (UTXO-set statistics and similar). |
 | `rpc.staleDropMs` | `12000` | A poll answer that arrives later than this after it was requested is thrown away, not shown as current state. |
-| `rpc.slowLatencyMs` | `5000` | Above this average latency, the UI says the node is slow instead of implying the monitor is broken. |
+| `rpc.slowLatencyMs` | `5000` | Above this average latency, the UI says the node is slow instead of implying the monitor is broken. The background address index build holds above it and eases off above 40% of it (see `addressIndexBuild` under [nodes](#nodes)). |
 | `rpc.breakerThreshold` | `3` | Consecutive failures before the circuit breaker opens and the monitor stops sending requests for a while. |
 | `rpc.breakerCooldownMs` | `30000` | How long the breaker stays open before the next attempt. |
 
@@ -227,7 +227,7 @@ heavy tiers are thinned while the node is slow.
 
 | key | default | meaning |
 |---|---|---|
-| `store.dir` | `<repo>/data` | Data directory for history snapshots, the audit log and the mining label files. It is created if missing. See [The data directory](#the-data-directory). |
+| `store.dir` | `<repo>/data` | Data directory for history snapshots, the audit log and the mining label files (`pool-aliases.json`, and a `pool-map.json` that overrides the shipped `config/pool-map.json`). It is created if missing. See [The data directory](#the-data-directory). |
 | `store.retentionHours` | `72` | How long chart history is kept. |
 | `store.ringCapacity` | `20000` | Maximum points kept per chart series. |
 | `store.maxEventLog` | `5000` | Maximum entries kept in the event feed. |
@@ -408,7 +408,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_MINING` | *(none)* | `0` or anything | on | `0` turns off miner attribution, which decodes each block's coinbase to show the pool tag. Block sizes, fees and weights are unaffected. Only the literal `0` disables it. |
 | `BLOCKYARD_MINING_BACKFILL` | *(none)* | number | `36` | How many recent blocks are attributed to miners at startup. |
 | `BLOCKYARD_MINING_TEMPLATE` | *(none)* | `0` or anything | on | `0` turns off the "block being built" card. Since 2026-09-13 the template is **assembled from the mempool this monitor already reads**, so leaving it on costs your node no RPC call at all — it costs this process ~50-70 ms of CPU per assembly. Before that it was a `getblocktemplate` worth over a second of the node's single RPC thread, which is why the switch exists. Only the literal `0` disables it. |
-| `BLOCKYARD_POOL_MAP` | *(none)* | path | `<store.dir>/pool-map.json` | Pool label map to load (see [The data directory](#the-data-directory)). |
+| `BLOCKYARD_POOL_MAP` | *(none)* | path | `<store.dir>/pool-map.json` if it exists, else `<repo>/config/pool-map.json` | Pool label map to load. It overrides both the shipped map and the one in the data directory (see [The data directory](#the-data-directory)). |
 | `BLOCKYARD_FAKE_NODE` | *(none)* | boolean | `false` | Development mode: start a built-in simulated node and monitor **only** that. Every configured node is replaced. Never set this in production. |
 | `FAKE_PORT` | *(none)* | number | `18331` | Port of the simulated node, with `BLOCKYARD_FAKE_NODE`. It is also used by `npm run fake-node`. |
 | `FAKE_IBD` | *(none)* | `0` or anything | on | `0` starts the simulated node already synced instead of in initial block download. |
@@ -439,6 +439,8 @@ These are read only by scripts under `scripts/`, never by the server.
 | `npm run dev` | The server with `BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_PORT=18088 BLOCKYARD_FAKE_NODE=1`: a self-contained development run on `http://127.0.0.1:18088` against a simulated node |
 | `npm run fake-node` | The simulated node on its own |
 | `npm run user -- <command>` | Account administration (see [auth](#auth)) |
+| `npm run setup` | The installer (`scripts/setup.js`): reads the node's `bitcoin.conf` for the chain, RPC port and credentials, checks the node, writes `config/local.json`, and either builds the address index or leaves it to the server's first start (`--build-later` writes `addressIndexBuild: "manual"`; `--workers N` is written as `addressIndexWorkers`) |
+| `npm run check` | The same checks against every configured node (`scripts/check.js`), each RPC call timed; exit 1 on a failure |
 | `npm test` | The test suite |
 
 ---
@@ -501,6 +503,31 @@ file:
 Keep `datadir`: the explorer's address index is built from the block files under it, and the
 credential lookup only falls through to `rpcUser`/`rpcPassword` when no cookie is readable there.
 The RPC connection stays on this machine (`127.0.0.1`), so the password never crosses a network.
+
+### The address index
+
+What `npm run setup` writes for a node whose address index the server should build on its first
+start, with two worker threads (a spinning disk would want one):
+
+```json
+{
+  "nodes": [
+    {
+      "id": "main",
+      "label": "mainnet",
+      "rpcUrl": "http://127.0.0.1:8332",
+      "datadir": "/var/lib/bitcoind",
+      "chainHint": "main",
+      "addressIndex": "/var/lib/blockyard/index",
+      "addressIndexWorkers": 2
+    }
+  ]
+}
+```
+
+Add `"addressIndexBuild": "manual"` to build it yourself instead:
+`node scripts/index-build.js --out /var/lib/blockyard/index --workers 16`, then restart. The
+directory must be writable by the service account either way, because the follower writes into it.
 
 ### Two nodes
 
@@ -711,7 +738,7 @@ accounts and chart history, and never commit or publish it.
 | `audit.1.jsonl` … `audit.N.jsonl` | the server | sensitive | Rotated audit files, newest first. There are at most `store.auditKeep` of them, and rotation happens at `store.auditMaxBytes`. |
 | `history.json` | the server | no, but reveals node details | Snapshot of chart series, events and recent blocks, restored on startup and pruned to `store.retentionHours`. Can be tens of MB. |
 | `pool-aliases.json` | **you**, optionally | no | Hand-written display names for mining pools: a JSON object from pool key to label, for example `{"examplepool": "Example Pool"}`. The pool key is the lowercased coinbase tag the Mining page shows, or `unknown:<hex>` for blocks without a readable tag. Absent by default, in which case the coinbase text is shown as written. |
-| `pool-map.json` | `node scripts/pool-map.js` | no | Coinbase-tag-to-pool-name map built from the public mempool/mining-pools data set, with source URL and content hash. Absent until you run the script, which needs network access. The server reads it from `BLOCKYARD_POOL_MAP` if set, otherwise from `<store.dir>/pool-map.json`. The script always writes `<repo>/data/pool-map.json`, so move it, or set `BLOCKYARD_POOL_MAP`, if you use a different `store.dir`. `--file <pools-v2.json>` builds it offline. |
+| `pool-map.json` | `node scripts/pool-map.js` | no | Coinbase-tag-to-pool-name map built from the public mempool/mining-pools data set (MIT), with source URL and content hash. **A copy ships in `config/pool-map.json`** (151 pools), so pools are labelled from the first start; one here, written by the script (which needs network access), **overrides** the shipped copy. The server reads `BLOCKYARD_POOL_MAP` if set, else `<store.dir>/pool-map.json` if it exists, else the shipped file. The script always writes `<repo>/data/pool-map.json`, so move it, or set `BLOCKYARD_POOL_MAP`, if you use a different `store.dir`. `--file <pools-v2.json>` builds it offline. |
 | `fake-node.log` | development mode only | no | Log of the simulated node when `BLOCKYARD_FAKE_NODE=1`. |
 | `*.tmp` | the server | as the target file | Short-lived files from atomic writes (write, fsync, rename). A leftover one after a crash is safe to delete. |
 

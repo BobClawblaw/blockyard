@@ -7,7 +7,10 @@ RPC** page usually name the problem. This page collects the cases people actuall
 - [A node shows offline](#a-node-shows-offline)
 - [The page does not load from another machine](#the-page-does-not-load-from-another-machine)
 - [The header says "stale" or "reconnecting"](#the-header-says-stale-or-reconnecting)
+- [The header says STALLED](#the-header-says-stalled)
 - [The node's RPC is slow](#the-nodes-rpc-is-slow)
+- [The block-space board is empty, or "no block template yet"](#the-block-space-board-is-empty-or-no-block-template-yet)
+- [The address index build is paused, or slow](#the-address-index-build-is-paused-or-slow)
 - [Markets or Kiosk show no prices](#markets-or-kiosk-show-no-prices)
 - [An exchange shows an error](#an-exchange-shows-an-error)
 - [Explorer: a transaction id is not found](#explorer-a-transaction-id-is-not-found)
@@ -67,16 +70,41 @@ The Node & RPC page shows the last error. Common causes:
 - **stale** — no fresh data has arrived for a while. Charts keep the last picture with a
   "stale" label rather than going blank; the Node & RPC page shows which poll is failing.
 
+## The header says STALLED
+
+A long gap between blocks is not a stall: the network finds no block for 40 minutes about once
+in fifty, and two healthy nodes at the same height once sat through 42 minutes of it with the
+header red. Since 2026-09-14 the sync state is **stalled** only when the node's **connected
+peers report a higher tip than the node holds** (`getpeerinfo` `synced_headers`) — it is behind
+the network, not waiting for it. When the peers agree on the node's tip, a long gap is shown as
+*synced* with a caveat naming the gap. When no peer height is known at all (no peers, or none
+that report one), the node is called stalled only after **two hours** without a block, because a
+long gap and a node cut off from its peers cannot be told apart sooner. The sync panel's caveats
+say which of the three cases it is.
+
+If it really is stalled: check the node's peer count and its own log; a node behind a firewall
+that has lost its connections looks exactly like this.
+
 ## The node's RPC is slow
 
 The Node & RPC page shows RPC latency and the queue. When the node is slow the monitor
 stretches its polling automatically and skips heavy reads, so a busy node (for example during
-initial sync) shows fewer updates rather than being slowed further.
+initial sync) shows fewer updates rather than being slowed further. Slow means an average above
+`rpc.slowLatencyMs` (5 s by default): the `rpc-slow` flag appears on the Overview, and a running
+address index build pauses until the node recovers (see
+[below](#the-address-index-build-is-paused-or-slow)).
+
+To time the node **alone**, with no monitor in the way: `npm run check` runs the install-time
+checks against every configured node and prints how long each call took — `getblockchaininfo`,
+`getblock <tip> 3` and a verbose `getrawmempool` among them. A `getblock 3` over 5 s or a mempool
+read over 10 s is marked slow there, with what it will mean for the pages.
 
 The monitor runs **one** request at a time, always. `rpc.maxInFlight` exists in the config and
 is reported by `/api/config`, but the lane is serialised by construction and does not read it --
 measured 2026-09-13 at 1, 4 and 8: four 200 ms jobs took ~807 ms with peak concurrency 1 in every
-case. Treat it as documentation of intent, not a tuning knob.
+case. Treat it as documentation of intent, not a tuning knob. (The address index build has a
+second connection of its own for its few cheap calls; it is paced by the first lane's telemetry
+and adds nothing while the node is slow.)
 
 What costs time on a mainnet node is the expensive reads, and how much depends on how the node is
 configured. The sharpest example used to be the block template -- since 2026-09-13 the monitor
@@ -94,6 +122,54 @@ with average latency sampling between ~180 ms and a few seconds. If your node sh
 `rpc-slow`, check those settings before concluding the node is simply slow -- and note that a
 rebuilding index (`coinstatsindex` takes hours from genesis) competes for the same disk and will
 keep latency up until it finishes.
+
+## The block-space board is empty, or "no block template yet"
+
+The board and the block being built are **assembled from the node's verbose mempool**
+(`getrawmempool true`), which the monitor reads every 20 s; the monitor never calls
+`getblocktemplate`. The board is empty when that read has not succeeded yet:
+
+- **Right after start-up** — the first verbose read comes a few seconds in; the board lands a
+  little after the Overview fills.
+- **The node's RPC is slow** — a verbose mempool read on a large mempool is the monitor's
+  heaviest regular call, and on a slow node it is the one that takes tens of seconds. While the
+  lane's average latency is over the slow threshold the heavy tiers are skipped
+  (`heavy-tiers-skipped` on the Overview), and a read that is superseded before it finishes is
+  **dropped as stale** rather than queued (`getrawmempool verbose failed` in the events feed) — so
+  the board stays as it was, or empty. `npm run check` times that same read against the node with
+  nothing else in the way; if it is slow there too, the node is the bottleneck: see
+  [above](#the-nodes-rpc-is-slow) and the `dbcache` / `rpcservertimeout` lines in
+  [INSTALL](INSTALL.md#bitcoinconf-settings-worth-having). An address index build on the same disk
+  pauses itself while this lasts.
+- **Initial block download** — the card says so; there is no chain to build a block on yet.
+- **`BLOCKYARD_MINING_TEMPLATE=0`** — the block being built is disabled by configuration.
+
+## The address index build is paused, or slow
+
+The Overview's "What this panel cannot tell you" box shows the build's phase, files done, rows
+so far and an ETA; the address page repeats it. Things it says, and what they mean:
+
+- **paused while the node's RPC is slow** — by design. The build's workers read the block files
+  the node is also reading, so before each file the build checks the monitor's RPC telemetry:
+  while the node is failing or answering slower on average than `rpc.slowLatencyMs` (5 s by
+  default) it **holds**, rechecking every 10 s; while merely slow it eases off between files. The
+  log says `address index build: paused while the node's RPC is answering in N s` and `resumed`.
+  A build that is paused most of the time means the node cannot keep up with the monitor and the
+  build together on that disk: fewer workers, or a node tuned as in
+  [INSTALL](INSTALL.md#bitcoinconf-settings-worth-having), or let it run overnight.
+- **The ETA is wrong at first** — it is computed from the files done so far in the current phase
+  and settles after the first few; files are not all the same size.
+- **Hours, not minutes** — 29 min 45 s is 16 workers on NVMe. Four workers (the installer's
+  default) are roughly four times slower; **spinning disks** are slower still whatever the
+  number, and there one worker is the fast setting, because parallel readers only seek against
+  each other and against the node. Set `addressIndexWorkers` on the node entry in
+  `config/local.json` (the installer writes the number you gave it) and restart: there is no
+  resume, so the build starts over from the first file.
+- **It started over** — stopping BlockYard stops the build, and the next start begins it again
+  from scratch. Leave it running until the notification says it is done.
+- **the address index build failed** — the reason is in the events feed and the log; fix it and
+  restart (the server builds again), or run `node scripts/index-build.js --out <dir>` by hand.
+  A pruned node, unreadable block files and a full disk are the usual causes.
 
 ## Markets or Kiosk show no prices
 
@@ -138,9 +214,20 @@ misconfigured.** `getaddressbalance` and `getaddresstxids` are insight-style ext
 forks carry; stock Core answers `Method not found` (measured 2026-09-13 on two Core nodes). There is no node option to enable.
 
 BlockYard builds its own index from the node's block files instead — about 30 minutes on 16
-cores and 124 GB of disk for the whole chain — and the server keeps it current as blocks arrive.
-Build it and name the directory as `addressIndex` in the node's config:
-[Building the address index](INSTALL.md#building-the-address-index).
+workers and 124 GB of disk for the whole chain — and the server keeps it current as blocks
+arrive. It builds it **by itself, in the background**, when it starts with an `addressIndex`
+directory that holds no index (the installer's default); while that runs the address page says
+*the address index is being built* with the progress, and fills in when it is done. So *not
+indexed* with no build in progress means one of:
+
+- no `addressIndex` directory on the node entry in `config/local.json` — `npm run setup` writes
+  one (`data/index` by default), or add it by hand and restart;
+- `addressIndexBuild: "manual"` on the node entry (the installer's **(l)ater** answer) — run
+  `node scripts/index-build.js --out <dir>` and restart, or remove the key and restart;
+- the build failed — the reason is in the events feed and the log (see
+  [above](#the-address-index-build-is-paused-or-slow)).
+
+[Building the address index](INSTALL.md#building-the-address-index) has the details.
 
 Until then the address page confirms the address and its type (`validateaddress` needs no
 index) and marks balance, totals and history as **not indexed**. It does not report a
@@ -150,15 +237,19 @@ figure belongs.
 ## Explorer: the address page says the index is behind, or has stopped following
 
 **Behind** by a block or two is normal: the follower polls every 30 s and fetches each new block
-with `getblock <hash> 3`; it was measured reaching a new block 16 s after the node. Behind by
-many blocks means the follower is failing: usually because `live.log` and `layers/` live **inside
-the index directory**, which must be writable by the service user. A follower that cannot open
-its index is reported in the server log at boot (`address index <dir>: ...`); one whose poll fails
-keeps retrying every 30 s.
+with `getblock <hash> 3`; it was measured reaching a new block 16 s after the node. An index
+built a while ago catches up 50 blocks a poll. Behind by many blocks and not closing the gap means
+the follower is failing: usually because `live.log` and `layers/` live **inside the index
+directory**, which must be writable by the service user. A follower that cannot open its index
+is reported in the server log at boot (`address index <dir>: ...`); one whose poll fails keeps
+retrying every 30 s. `npm run check` reports how far behind the index is and whether the
+directory is writable.
 
 **Stopped following** means a reorganisation deeper than the blocks the follower still holds in
-its tail (100), which cannot be repaired in place. Stop the server, run the same `index-build.js` command into the same directory — the build
-empties it first, the old log and layers included — and start the server again.
+its tail (100), which cannot be repaired in place. Stop the server and either delete the index
+directory (the server builds it again on the next start) or run the same `index-build.js`
+command into the same directory — the build empties it first, the old log and layers included —
+and start the server again.
 
 ## Explorer: "spent by" links are missing
 

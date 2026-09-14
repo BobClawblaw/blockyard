@@ -11,7 +11,11 @@ Nothing yet.
 ## [0.0.9] — 2026-09-14
 
 The initial release. Everything in it, like everything before it, was written by an AI directed by a human
-operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-release software.
+operator, and audited by AI (`docs/SECURITY-AUDIT.md`, `docs/SECURITY-AUDIT-2026-09-14.md`). It is
+experimental pre-release software. BlockYard runs **on the machine that runs Bitcoin Core** (25.0 or
+later), because the explorer's address index is built from the node's own block files; a node on
+another machine, and the experimental node that earlier measurements were taken on, are not supported.
+858 unit tests, no dependencies. Tagged `v0.0.9`.
 
 ### The explorer's address history, from an index of our own
 
@@ -75,6 +79,10 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   count, the page says the index is absent, and the dead RPCs are not re-sent on every view: a
   "method not found" is remembered per node for ten minutes, then asked again, because the daemon
   behind a node id can change.
+- **A rebuild in place is safe.** `buildIndex` empties its output directory first, so a follower's
+  `live.log` and layers -- holding the reorganised-away blocks -- cannot survive into a new index and
+  a fresh follower catches up on the chain as it is (`test/chain-index-live.test.js`). Stop the
+  server, run the same command, start it; the advice to build into a fresh directory is withdrawn.
 - **A missing address index is built by BlockYard itself, in the background** (operator: "Is it
   possible to run step 6 in the background, and have a status notification in blockyard when the
   index process is finished?"). On start, an `addressIndex` directory with no index in it is built
@@ -83,12 +91,36 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   start, the finish and a failure, and the browser toasts it; when it finishes the follower starts
   and address pages work with no restart. `addressIndexBuild: "manual"` keeps it from happening.
   The installer's step 6 offers background (the default), here, or later.
+- **The build shares the machine with the node, and behaves like it.** Every build -- the server's
+  background one, the installer's build-here and `scripts/index-build.js` -- goes through one pacer
+  (`rpcPacer`) that reads the monitor's own RPC telemetry: before each file it holds, ten seconds at
+  a time, while the node's RPC is failing, its breaker is open or its answers average more than
+  `rpc.slowLatencyMs` (5 s), and eases to one file at a time with a pause between above 40% of that.
+  It first held at one second, which ran a healthy build on a node whose heavy reads take a second
+  at a sixth of its speed; the threshold is the monitor's own notion of slow now. The height batches
+  are paced the same way, 1,000 at a time at the lowest priority. The server's build opens its own
+  RPC connection, as `scripts/index-build.js` always did, so it and the monitor stop starving each
+  other: on the first Mac its `getblockhash` batches queued behind multi-second mempool and block
+  reads on the monitor's one lane, and both sides starved ("heights 1,000 of 967,015" for a quarter
+  of an hour). Workers: `addressIndexWorkers` in the node's config, written by the installer; unset,
+  the server takes half of what a dedicated build would and at most four. The `rpc-slow` and
+  `rpc-timeouts` quality flags name the build when one is running and no longer assert a cause from
+  another node's era. **An interrupted build starts over**: there is no resume after Ctrl-C, and the
+  installer says so when it happens.
 - **An address's unspent outputs are listed** (operator, the same day: "Why don't we do this"): the
   index names every transaction that touched the address, each one's outputs paying it are asked of
   `gettxout` (the UTXO set, less what the mempool already spends), and the page lists them with the
   index's own height and their count on the card. The walk is the whole history, so it is made for
   an address with at most 100 transactions and declined in words for a longer one.
 - **Not yet:** an address's transactions still in the mempool.
+- **An unconfirmed transaction shows its inputs and fee** (operator: "Unknown script?!", of a
+  mempool transaction whose 858 inputs all read *unknown script*). Core carries no `prevout` on a
+  mempool transaction's inputs, so `fillPrevouts` fetches the parents in one batch and fills each
+  input's script and amount; checked on that transaction, 858 of 858 inputs, and a fee of 77,958
+  sat equal to `getmempoolentry`.
+
+### The installer: `npm run setup`, `npm run check`, and the `blockyard` command
+
 - **An installer: `npm run setup`** (operator: "build a test into the installer so we can verify it
   properly connects to an RPC server and finds the bitcoin logs ... something that writes out a
   config/local.json at the end ... that we can up and run immediately to start building the
@@ -111,13 +143,79 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   .conf and find the rpc values?"): chain, `rpcport`, `rpcconnect`, `rpcuser`/`rpcpassword`,
   `rpcauth` users, a cookie file named elsewhere, `server=`, `txindex=`, `prune=`, sections and
   `includeconf=`, so the RPC URL and the credentials arrive as defaults rather than questions.
-- **An unconfirmed transaction shows its inputs and fee** (operator: "Unknown script?!", of a
-  mempool transaction whose 858 inputs all read *unknown script*). Core carries no `prevout` on a
-  mempool transaction's inputs, so `fillPrevouts` fetches the parents in one batch and fills each
-  input's script and amount; checked on that transaction, 858 of 858 inputs, and a fee of 77,958
-  sat equal to `getmempoolentry`.
+- **Every check is timed**, because how fast the node answers is half of what an install needs to
+  know, and the verbose mempool read -- the monitor's heaviest regular call, every 20 s -- is one of
+  the checks, with a warning when it is slow enough to lag the board. An unbuilt index is reported
+  as information, not a fault.
+- **Defaults**: the index in the checkout's `data/index`, like everything else the install writes;
+  at most **four** build workers (the shared-machine number; one on spinning disks, each needing
+  ~2.5 GB of memory); the build in the background once BlockYard starts.
+- **The banner** (operator: "I want the installer to have amazing ANSI Art here for the BY logo",
+  then "It needs to fit in 80 character space. Standard CRT"): the BY monogram -- the same tile the
+  favicon is -- in 26x12 solid cells, one cell per pixel painted as a background colour so it fills
+  the cell in every font, the About text beside it, and the whole run inside 80 columns (piped at
+  80: widest line 79). Every line wraps to the terminal with its indent kept, a box cuts a line past
+  its room with an ellipsis, widths are measured on what is seen rather than on colour codes, and
+  colour steps aside without a TTY or under `NO_COLOR` (`FORCE_COLOR` turns it on).
+- **An npm package and a `blockyard` command** (operator: "push to npm"). `package.json` loses
+  `private` and gains `bin` and `files` (bin, server, public, scripts, the pool map, systemd, the
+  docs, the licence and notice; no tests, no images: 924 kB packed). `blockyard setup | start |
+  check | index-build | users` keeps the config and data under `~/.blockyard` (`BLOCKYARD_HOME`),
+  since a global install's own directory is nowhere to keep a config or 124 GB of index; a checkout
+  run with `npm run …` is unchanged.
 
-### Block space and Markets since the 2026-09-11 milestone
+### Fixes from the first fresh install (a Mac, Core 29.1)
+
+- **A node without `coinstatsindex` was sent a full UTXO-set walk every minute.** Found on the
+  first Mac install: `getindexinfo` said there was no coinstats index, and the rule read that as
+  "not assumed unindexed" and asked `gettxoutsetinfo` anyway, on the slow tier, every 60 s -- a
+  walk of 165 M outputs that Core kept computing after the 90 s timeout, holding its chain lock,
+  so every other call answered in 18 s, the mempool read was dropped and the block-space board
+  stayed empty. Everything was blamed on the index build, which had nothing to do with it. The
+  UTXO figures are now asked only of a node that has said it keeps the index; the indexes are
+  asked first, alone, before anything expensive.
+- **A fresh install attributed no blocks** and showed raw coinbase tags: the curated pool map
+  lived only in `data/`, written by a script nobody had run. The map (mempool.space's
+  mining-pools list, MIT, 151 pools) ships in `config/` and is used until `scripts/pool-map.js`
+  writes a newer one into `data/`.
+- **Nothing holds hundreds of files open any more.** The index store kept one descriptor per
+  segment and layer -- 256 and more -- for the life of the process, and the build kept all 256
+  bucket files open through the scan; a stock macOS allows a process 256 (`ulimit -n`) before it
+  has opened a socket. A lookup opens the one file it reads and closes it (measured on the full
+  index afterwards: 0.02 ms median warm, 21 descriptors held by the whole process), and the build
+  keeps at most 64 bucket files open, least recently written closed first. Found while preparing
+  the first macOS install.
+- **The installer wrote 16 workers when Enter was pressed.** The suggestion was the machine's core
+  count; it is the shared-machine number now, at most four. And it asked for what the node's own
+  `bitcoin.conf` already answered -- read first now, above.
+- **The banner's half-block art seamed on the Mac's Terminal** (operator: "What is this garbage?!"):
+  a font decides where a half-block glyph sits in its cell. One character cell per pixel, painted as
+  a background colour, which every font fills.
+- **Lines wider than 80 columns.** The summary box's one long line broke its frame on an 80-column
+  terminal; every line the installer says now wraps to the terminal width.
+- **Block cards clipped and wrapped numbers on a wider font**: a value could wrap mid-number ("604"
+  drawn as "60" over "4"), and the stats columns clipped. Values keep their line, the columns size
+  to their content, and the card is ten pixels wider.
+- **Windows.** The run-as-main check compared a file URL (`/C:/x`) with a realpath (`C:\x`) as
+  strings, so no script's `main()` ran; they are compared as paths (`fileURLToPath`). LF on every
+  checkout (`.gitattributes`): several tests match line-anchored patterns in source files, and a
+  CRLF checkout turned every one into a miss. The temp directory is the platform's, not `/tmp`;
+  defaults and paths are spelled per platform; a file-mode assertion knows Windows has none; the
+  scanner is keyed with `/`. **CI runs on Ubuntu, macOS and Windows**, Node 22 and 24, and the suite
+  passed on all six at `2010b24`.
+
+### Sync: a long gap is not a stall
+
+- **Stalled only when the peers know a higher tip.** Two independent nodes at the same height, no
+  block for 42 minutes, and the header said STALLED in red. The network finds no block for 40
+  minutes about once in fifty. The state is stalled only when a connected peer reports a tip above
+  this node's (`getpeerinfo` `synced_headers`, `startingheight` as the fallback); when the peers
+  agree on the tip the node is synced and the caveat names the gap as the network's; with no peer
+  height to check, the word waits for two hours. The caveats say which of the three it is.
+- The sync detail's three log-derived rows exist only where the figure does; Bitcoin Core prints
+  none of them.
+
+### Block space and Markets
 
 - **Agent effects.** The board's idle repertoire is **30 effects**, each with a switch: to the
   fields (ripples, plasma, code rain, fireworks and the rest) the operator asked for things that
@@ -145,28 +243,13 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   measurement (flights clear their neighbours before fanning, leave the frame rather than popping
   at its edge, and take a lane per leg); a recoloured cube blends to its new colour instead of
   popping; and where a flyer is clearly above a resting cube it paints over it.
+- **The block-flow cards are linked as a chain that reads as one** (operator: "looks bad on a black
+  background. Re-do it to be much more stylized and visible"): two pale outlined pills that vanished
+  on the dark panel are two interlocked links now, accent-coloured tubes with a highlight and a
+  glow, the left link's top strand painted again over the right so the pair weaves.
 
-### Fixed since the 2026-09-11 milestone
+### Security
 
-- **A node without `coinstatsindex` was sent a full UTXO-set walk every minute.** Found on the
-  first Mac install: `getindexinfo` said there was no coinstats index, and the rule read that as
-  "not assumed unindexed" and asked `gettxoutsetinfo` anyway, on the slow tier, every 60 s -- a
-  walk of 165 M outputs that Core kept computing after the 90 s timeout, holding its chain lock,
-  so every other call answered in 18 s, the mempool read was dropped and the block-space board
-  stayed empty. Everything was blamed on the index build, which had nothing to do with it. The
-  UTXO figures are now asked only of a node that has said it keeps the index; the indexes are
-  asked first, alone, before anything expensive.
-- **A fresh install attributed no blocks** and showed raw coinbase tags: the curated pool map
-  lived only in `data/`, written by a script nobody had run. The map (mempool.space's
-  mining-pools list, MIT, 151 pools) ships in `config/` and is used until `scripts/pool-map.js`
-  writes a newer one into `data/`.
-- **Nothing holds hundreds of files open any more.** The index store kept one descriptor per
-  segment and layer -- 256 and more -- for the life of the process, and the build kept all 256
-  bucket files open through the scan; a stock macOS allows a process 256 (`ulimit -n`) before it
-  has opened a socket. A lookup opens the one file it reads and closes it (measured on the full
-  index afterwards: 0.02 ms median warm, 21 descriptors held by the whole process), and the build
-  keeps at most 64 bucket files open, least recently written closed first. Found while preparing
-  the first macOS install.
 - **The second AI security audit's findings, the same day** (`docs/SECURITY-AUDIT-2026-09-14.md`,
   which re-verified the 09-13 fixes live and covered the address index and explorer). Its one
   medium: `/api/x/address` sized an allocation by the request's page number, 525 MB for
@@ -176,41 +259,25 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   caveat on the page; a pool key is escaped like everything around it; a transaction summary with
   more than 2,000 inputs and outputs is never cached; a test fixture no longer lives at a fixed
   name in `/tmp`; `audit.jsonl` and `history.json` are created owner-only.
+- **The first AI security audit** (`docs/SECURITY-AUDIT.md`, 2026-09-13) found one HIGH and four
+  more, all fixed the same day; they are the next four items.
+- **The node-connection probe leaked the node's RPC credential** (HIGH, found by audit and
+  reproduced with a working exploit). `POST /api/config/node/test` built its throwaway client from
+  the live node's config, so `resolveCookie` read the real `.cookie` and sent it as an
+  `Authorization` header **to whatever URL the request named** -- on a request needing no session
+  and no CSRF token, reachable by a plain cross-site form. Credentials now go only to the endpoint
+  the monitor is already configured for; anywhere else is probed unauthenticated and says so. Open
+  mode additionally refuses any state-changing request whose `Origin` is not this server or whose
+  `Sec-Fetch-Site` says cross-site.
+- **Session TTLs were inverted**: an 8-hour absolute lifetime with a 72-hour idle ceiling meant the
+  idle check could never fire. Now 72 h absolute, 8 h idle, with a test on the invariant.
+- **`randomPassword()` drew with modulo bias**, over-representing the first 58 characters of its
+  66-character alphabet. It uses `crypto.randomInt` now.
+- **The audit trail redacts by key shape**, not by two hardcoded field names, so an action echoing a
+  key-shaped argument cannot write a secret into the one file designed to be kept.
+- A re-audit is planned after the first install (`AGENTS.md`).
 
-- **Display-settings sliders jumped as their value changed**: the readout's width changed with its
-  digits and pushed the slider about. The value is printed to the step's decimals in a fixed-width
-  box.
-- **The header's uptime blanked every second** and **the node you pick stays picked**.
-- **The travelling cube's perspective froze in flight** (a regression of our own, recorded).
-- **The pulse-gap simulation was flaky**: seeded now, its bound the real worst case.
-- The block-being-built card named a call it does not make; lightning stopped whiskering; the
-  paint-order comments described a camera the viewer no longer has.
-
-
-### Changed
-
-- **The block being built is assembled here now, and costs your node nothing.** It used to be a
-  `getblocktemplate` call worth 1.3-1.5 s of the node's single RPC thread and 1.79 MB per reply,
-  fetched on demand so a page nobody had open did not pay it every minute. Bitcoin Core publishes
-  everything the selection needs in the `getrawmempool(true)` reply this monitor **already reads
-  every 20 s** for the mempool view: `depends`, the ancestor sizes and fees, and
-  `fees.chunk`/`chunkweight` -- Core's own cluster-mempool linearization, which is the order its
-  miner sorts by. `server/collect/gbt.js` selects greedily over that, taking each transaction with
-  its unselected ancestors, and returns the result in the shape a `getblocktemplate` reply has, so
-  the summary, the histogram, the package analysis and the block economy read it unchanged.
-
-  Measured against the node's own template on a back-to-back pair at height 966821, so the two
-  describe the same pool: **6,546 transactions / 3,995,859 weight / 643,076 sat** against the
-  node's **6,535 / 3,991,951 / 642,860** -- 0.03% apart on fees, with the set difference confined
-  to the 0.30 sat/vB margin where ties are arbitrary. Assembly takes ~50-70 ms of this process's
-  CPU. It is a reconstruction of what a miner would choose, not the node's answer: sigop limits
-  and policy the mempool does not publish are not modelled, and the card says so.
-
-  The old measurement in `docs/MEASUREMENTS.md` -- that `getrawmempool` verbose carries no
-  `depends` -- was true of the experimental node it was taken on, and is kept there with the
-  correction appended rather than rewritten.
-
-### Added
+### Scope, documentation and the name
 
 - **A node on another machine, over RPC alone: tried, and dropped.** On 2026-09-13 the monitor was
   pointed at a node appliance on the LAN with `rpcUser` / `rpcPassword` and no `datadir` -- a
@@ -225,22 +292,41 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   node that uses `rpcauth` instead of the cookie file, and the `bitcoin.conf` lines that measured
   as worth having (`txindex`, `coinstatsindex`, `dbcache`) are kept, each annotated with what it
   does for this monitor.
-
-### Changed
-
 - **This is a Bitcoin Core-centric release.** The README, install, configuration, API and
   architecture documents describe Core; the shipped defaults are Core's own (`id: main`,
   `127.0.0.1:8332`, `~/.bitcoin`, `bitcoind.service`). Measurement records taken against a
   non-Core build are anonymised rather than relabelled -- they describe what was measured, and
   claiming otherwise would invent measurements that never happened.
-- **The default web port is 21000** (was 8088).
-- **Display settings are stored on the server** in `config/blockyard.json`, so a phone and a
-  desktop pointed at the same monitor agree. The browser keeps a cache so boards still draw when
-  the server cannot be reached.
 - **Log parsing is documented as unavailable for Bitcoin Core.** The parsers target an experimental
   node's log grammar; fed Core's `debug.log` they extract no figures and timestamp entries at read
   time. The log source is off by default and should stay off against Core --
   `test/log-core-unsupported.test.js` pins that so it cannot be assumed away.
+- **The old name is gone from the tree** (operator: "WHY THE FUCK DO I STILL SEE THE OLD NAME
+  REFERENCES IN OUR TREE DOCS"): a `git grep` for the old prefix finds nothing but bytes in a JPEG.
+  The allowlist's vendor-prefixed read verbs -- an earlier node's, and that node is not supported --
+  are gone with their test, and a vendor-shaped method is denied by default; two scripts that
+  defaulted a CA path to a directory named after the old project take it from the environment or
+  nothing; `NOTICE` and `LICENSE` name BlockYard and its copyright holder.
+- **Every document read against the code**: sessions are 72 h absolute / 8 h idle (two documents had
+  it inverted); display settings live on the server; the effects list is the thirty that exist; four
+  API routes that were undocumented are documented from their handlers; ARCHITECTURE gains the
+  address-index subsystem; three stale code comments and the mempool feed's stated cadence
+  (60 -> 20 s) corrected; screenshots re-shot against the local Core node. `docs/GETTING-STARTED.md`
+  walks a macOS or Linux command prompt through the install (brew's plain node formula, where
+  `bitcoin-cli` lives inside the macOS app bundle, one worker on spinning disks, the build's memory
+  per worker). `docs/DEFECTS.md` states the scope and closes the entries whose only subject was the
+  experimental node or a remote one. Eight one-off pixel probes whose questions are answered in
+  MEASUREMENTS and DEFECTS are removed; the checks still used stay.
+- **Donations are in two places only**: the foot of the README, in small type, and the About page,
+  where the address is a pill that copies on a click (verified in a headless browser by reading the
+  clipboard back) beside a QR of it (`scripts/donate-qr.py` generates the inline SVG and checks it
+  decodes; the rendered page's screenshot decodes to the address too). They are out of the installer.
+- **0.0.9 is the initial release number**, the operator's. The two earlier CHANGELOG sections that
+  carried version numbers were never tagged or released and are kept as dated milestones;
+  `server/main.js` reads the version from `package.json`, and `test/version.test.js` ties the
+  CHANGELOG's newest release and the README to it.
+
+### Since the 2026-09-11 milestone: added
 
 - **A node connection form**, on **Node & RPC** (operator: "Still left to do is a config connection
   in the web settings. We have no way for users to configure a connection to their rpc backend").
@@ -259,60 +345,6 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   monitor running without a log tail they say so rather than showing a column of dashes. The page
   also lost four dead grid columns, and Pool usage gained the pool's total vsize, average vsize and
   total fees, all of which were computed on every sample and never drawn.
-
-- **Block space ships with simple cubes and shadows off.** Shadows are the costliest single thing
-  the board draws, and the board is the first thing most people open; both remain one click away in
-  Display settings.
-- The two games sit at the end of the nav under a **Diversions** pop-down, rather than among the
-  working tabs.
-- The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
-  tail that fades back to yellow behind a bright head, with a nebula of blue smoke emitted along
-  the whole charged span and a shimmer over it. The lightning ball trails the same charge across
-  the block-space board; the light cycles do not.
-- The pulse's nebula is emitted over the whole charged span rather than per segment — emitting per
-  segment gave neighbouring puffs the same age, so they shared a radius and lined up into the
-  concentric rings they were meant to replace. (Its motes and crackle branches were removed at the
-  same time and restored afterwards; they are present.)
-- The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
-  the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
-- Pool attribution moved out of the block card's body into a readable pill beneath it.
-
-### Fixed
-
-- **The node-connection probe leaked the node's RPC credential** (HIGH, found by audit and
-  reproduced with a working exploit). `POST /api/config/node/test` built its throwaway client from
-  the live node's config, so `resolveCookie` read the real `.cookie` and sent it as an
-  `Authorization` header **to whatever URL the request named** -- on a request needing no session
-  and no CSRF token, reachable by a plain cross-site form. Credentials now go only to the endpoint
-  the monitor is already configured for; anywhere else is probed unauthenticated and says so. Open
-  mode additionally refuses any state-changing request whose `Origin` is not this server or whose
-  `Sec-Fetch-Site` says cross-site.
-- **Coinbase attribution stopped permanently after one failed block.** `pumpMining` cleared the
-  whole queue on a single failure and nothing ever re-queued it, so one slow moment discarded the
-  entire 36-block boot window and the Mining page sat empty. The failed height is put back, the
-  rest of the queue survives, and a backoff decides when to retry.
-- **The block template no longer monopolises the RPC lane.** `getblocktemplate` went through as an
-  ordinary call with a 12-second freshness budget; on a node where it takes seconds, everything
-  queued behind it was stale-dropped and `/api/nextblock` took 75 s. It is now heavy, keyed and
-  given a realistic budget -- measured 52.8 s to 4.2 s on the same node.
-- **Session TTLs were inverted**: an 8-hour absolute lifetime with a 72-hour idle ceiling meant the
-  idle check could never fire. Now 72 h absolute, 8 h idle, with a test on the invariant.
-- **`randomPassword()` drew with modulo bias**, over-representing the first 58 characters of its
-  66-character alphabet. It uses `crypto.randomInt` now.
-- **The audit trail redacts by key shape**, not by two hardcoded field names, so an action echoing a
-  key-shaped argument cannot write a secret into the one file designed to be kept.
-
-- **The display-settings sliders no longer jitter while dragging** (operator: "the grid intensity
-  slider jitters when I move it"). Every `input` event ran a full synchronous re-render; a drag
-  across the grid intensity control queued forty of them, each repainting a board. The value and
-  the readout still update on every event — only the repaint is coalesced, to one per animation
-  frame. All twelve range controls were affected; the new one merely made it visible.
-- **The Diversions menu renders correctly in Safari** (operator: "rendering on safari is still
-  broken. It's only showing half the drop-down contents"). The panel was inside `header.top`, which
-  is `overflow: hidden` and 46px tall, and WebKit clipped the fixed panel to it. It is a top-level
-  element now, like the settings dialog, which is the fixed overlay that always rendered correctly.
-  Its position is measured and set rather than pulled back by a transform.
-
 - **The grid is yours, per board** (operator: "we need to break out the green grid settings per
   game. We should also add a grid color picker, and a transparency slider ... I really want to turn
   down the intensity on blockanoid", and "add a color selector and brightness setting for the grid
@@ -401,7 +433,7 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   brick and the level, never `Math.random`**, so a wall always drops the same letters and the
   whole thing is assertable under `node:test`. Capsules and minions each have a switch, and
   because they change the rules rather than the look, flipping one reaches the game in play.
-- **Seventeen new idle effects**, bringing the total to **26**, each with its own switch:
+- **Seventeen new idle effects**, bringing the total then to **26** (30 at release; above), each with its own switch:
   shockwave, nova, fireworks, solar flare, wave, quake, code rain, sparkle, checkerboard, radar,
   vortex, laser, power-up, combo chain, aurora, plasma and glitch. All are pure functions of the
   tile and the effect's clock, so each replays identically and is covered by tests rather than
@@ -425,10 +457,81 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   applied to it and it stayed the shipped blue whatever else was changed; it has its own colour
   now, and `tiles()` takes it as an argument so the rules file still knows nothing of the store.
 - **A tabbed Display settings panel**, with all-on / all-off on the Effects tab, whose
-  twenty-six switches are a lot of clicking otherwise.
+  twenty-six switches -- thirty now -- are a lot of clicking otherwise.
 - **Markets remembers its toolbar**: the exchange and the range are settings now, so the page
   opens where you left it.
 
+### Since the 2026-09-11 milestone: changed
+
+- **The block being built is assembled here now, and costs your node nothing.** It used to be a
+  `getblocktemplate` call worth 1.3-1.5 s of the node's single RPC thread and 1.79 MB per reply,
+  fetched on demand so a page nobody had open did not pay it every minute. Bitcoin Core publishes
+  everything the selection needs in the `getrawmempool(true)` reply this monitor **already reads
+  every 20 s** for the mempool view: `depends`, the ancestor sizes and fees, and
+  `fees.chunk`/`chunkweight` -- Core's own cluster-mempool linearization, which is the order its
+  miner sorts by. `server/collect/gbt.js` selects greedily over that, taking each transaction with
+  its unselected ancestors, and returns the result in the shape a `getblocktemplate` reply has, so
+  the summary, the histogram, the package analysis and the block economy read it unchanged.
+
+  Measured against the node's own template on a back-to-back pair at height 966821, so the two
+  describe the same pool: **6,546 transactions / 3,995,859 weight / 643,076 sat** against the
+  node's **6,535 / 3,991,951 / 642,860** -- 0.03% apart on fees, with the set difference confined
+  to the 0.30 sat/vB margin where ties are arbitrary. Assembly takes ~50-70 ms of this process's
+  CPU. It is a reconstruction of what a miner would choose, not the node's answer: sigop limits
+  and policy the mempool does not publish are not modelled, and the card says so.
+
+  The old measurement in `docs/MEASUREMENTS.md` -- that `getrawmempool` verbose carries no
+  `depends` -- was true of the experimental node it was taken on, and is kept there with the
+  correction appended rather than rewritten.
+- **The default web port is 21000** (was 8088).
+- **Display settings are stored on the server** in `config/blockyard.json`, so a phone and a
+  desktop pointed at the same monitor agree. The browser keeps a cache so boards still draw when
+  the server cannot be reached.
+- **Block space ships with simple cubes and shadows off.** Shadows are the costliest single thing
+  the board draws, and the board is the first thing most people open; both remain one click away in
+  Display settings.
+- The two games sit at the end of the nav under a **Diversions** pop-down, rather than among the
+  working tabs.
+- The Markets energy pulse now runs along the neon price line itself, leaving an electric-blue
+  tail that fades back to yellow behind a bright head, with a nebula of blue smoke emitted along
+  the whole charged span and a shimmer over it. The lightning ball trails the same charge across
+  the block-space board; the light cycles do not.
+- The pulse's nebula is emitted over the whole charged span rather than per segment — emitting per
+  segment gave neighbouring puffs the same age, so they shared a radius and lined up into the
+  concentric rings they were meant to replace. (Its motes and crackle branches were removed at the
+  same time and restored afterwards; they are present.)
+- The Simple viewer packs the block exactly: the block's own area is solved so the tiles fill
+  the grid flush, and the remainder is tiled to the edge instead of leaving a partial top row.
+- Pool attribution moved out of the block card's body into a readable pill beneath it.
+
+### Since the 2026-09-11 milestone: fixed
+
+- **Coinbase attribution stopped permanently after one failed block.** `pumpMining` cleared the
+  whole queue on a single failure and nothing ever re-queued it, so one slow moment discarded the
+  entire 36-block boot window and the Mining page sat empty. The failed height is put back, the
+  rest of the queue survives, and a backoff decides when to retry.
+- **The block template no longer monopolises the RPC lane.** `getblocktemplate` went through as an
+  ordinary call with a 12-second freshness budget; on a node where it takes seconds, everything
+  queued behind it was stale-dropped and `/api/nextblock` took 75 s. It is now heavy, keyed and
+  given a realistic budget -- measured 52.8 s to 4.2 s on the same node.
+- **The display-settings sliders no longer jitter while dragging** (operator: "the grid intensity
+  slider jitters when I move it"). Every `input` event ran a full synchronous re-render; a drag
+  across the grid intensity control queued forty of them, each repainting a board. The value and
+  the readout still update on every event — only the repaint is coalesced, to one per animation
+  frame. All twelve range controls were affected; the new one merely made it visible.
+- **The Diversions menu renders correctly in Safari** (operator: "rendering on safari is still
+  broken. It's only showing half the drop-down contents"). The panel was inside `header.top`, which
+  is `overflow: hidden` and 46px tall, and WebKit clipped the fixed panel to it. It is a top-level
+  element now, like the settings dialog, which is the fixed overlay that always rendered correctly.
+  Its position is measured and set rather than pulled back by a transform.
+- **Display-settings sliders jumped as their value changed**: the readout's width changed with its
+  digits and pushed the slider about. The value is printed to the step's decimals in a fixed-width
+  box.
+- **The header's uptime blanked every second** and **the node you pick stays picked**.
+- **The travelling cube's perspective froze in flight** (a regression of our own, recorded).
+- **The pulse-gap simulation was flaky**: seeded now, its bound the real worst case.
+- The block-being-built card named a call it does not make; lightning stopped whiskering; the
+  paint-order comments described a camera the viewer no longer has.
 - **The star field never animated on a board that asked for no tile choreography.** `still` is
   about the tiles; it was also returning before the animation loop started, so Tetrust's galaxy
   repainted only when the page happened to redraw — measured at zero repaints in three seconds.

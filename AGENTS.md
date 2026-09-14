@@ -21,7 +21,7 @@ node scripts/manage-users.js  # CLI user admin (list/create/passwd/role)
 npm run setup                 # a fresh machine: check the node, write config/local.json, build the index (scripts/setup.js)
 npm run check                 # the same checks against every configured node (scripts/check.js); exit 1 on a FAIL
 node scripts/pool-map.js   # refresh coinbase-tag -> pool-name labels (manual by design; see MEASUREMENTS 25)
-node scripts/index-build.js --out <dir> --workers 16   # the address index, from the node's blk/rev files (30 min, 124 GB; MEASUREMENTS 28-30); name it as addressIndex in the node's config
+node scripts/index-build.js --out <dir> --workers 16   # the address index by hand, from the node's blk/rev files (30 min, 124 GB; MEASUREMENTS 28-30); name it as addressIndex in the node's config. Since 2026-09-14 the SERVER builds a missing one itself on start, in the background, unless addressIndexBuild: "manual"
 node scripts/index-benchmark.js   # check a built index against the node (scantxoutset) and time lookups
 bash scripts/smoke.sh         # boots on a spare port and asserts the API contract
 ```
@@ -264,7 +264,7 @@ silently ate another test's result line — rule 22.
 ## Current state (2026-09-14)
 
 Release day: **0.0.9, the initial release**, tagged `v0.0.9` (the operator names the number; do
-not bump it). Everything below is committed, tested (855) and live on this box.
+not bump it). Everything below is committed, tested (858) and live on this box.
 
 **Scope, settled.** BlockYard supports **Bitcoin Core on the machine that runs it**. The
 experimental node this repo was first written against is not supported (its measurements are
@@ -289,12 +289,18 @@ every answer validated, the node proven by `scripts/check.js` (RPC, credentials,
 key, `debug.log`, a configured index), `config/local.json` written 0600, the index built with a
 progress bar, the monitor started in the same terminal. `npm run check` re-runs the checks;
 `--yes` with flags is the scripted form; `BLOCKYARD_CONFIG` names another file. Untested on
-macOS as of this writing -- the operator's Mac (Core v29) is the first fresh deploy.
+macOS as of this writing -- the operator's Mac (Core v29) is the first fresh deploy. (Later the
+same day it was run there; what it found is below. Since then the installer **reads the node's own
+`bitcoin.conf`** -- chain, `rpcport`, `rpcuser`/`rpcpassword`, `rpcauth` users, a cookie file the
+node was told to write elsewhere, `server=1`, `txindex=1` -- so the questions it still asks are the
+ones the file cannot answer; it offers to leave the index build to the server's first start, the
+default; and `--workers N` is written into the config as `addressIndexWorkers`, defaulting to at
+most 4, not the 16 a dedicated build takes.)
 
 **Two AI security audits**, both remediated the same day: `docs/SECURITY-AUDIT.md` (09-13, one
 HIGH: the node-probe credential leak) and `docs/SECURITY-AUDIT-2026-09-14.md` (1 medium: an
-allocation sized by the `page` parameter; 4 low). A re-audit is due after the installer lands on
-the Mac. I1 (open mode lets a LAN client save a node URL the cookie will follow) is the
+allocation sized by the `page` parameter; 4 low). A re-audit is due now that the installer has landed on the Mac
+(done 2026-09-14 evening). I1 (open mode lets a LAN client save a node URL the cookie will follow) is the
 operator's decision and stays.
 
 **Docs.** Every document was read against the code on 09-14 (three review passes); the product
@@ -316,8 +322,46 @@ beside it: `npm run check` times every call. Also found there: 16 workers writte
 by pressing Enter, a pool map that lived only in `data/`, a bitcoin.conf nobody read, three
 half-block art seams, and 256 open file descriptors on a platform that allows 256.
 
-**What to do next, in order:** the Mac install (`git clone`, `npm run setup`); the re-audit;
-then move `v0.0.9` to the release commit when the operator says so.
+**Later on 2026-09-14, every one of those is fixed and landed:**
+
+- **The UTXO walk.** The slow tier asks `getindexinfo` first, alone, and sends `gettxoutsetinfo`
+  ONLY to a node whose `coinstatsindex` reports synced (`utxoStatsWanted()` in `monitor.js`); the
+  bug was both in the same batch, so the answer that would have said no arrived with the 41 s walk
+  it should have prevented, every minute. Without the index the UTXO figures are `null` and flagged
+  `utxo-unindexed`. The `rpc-slow` / `rpc-timeouts` flags no longer assert a cause; they name the
+  index build when one is running and otherwise say what was measured. Core 25+, `server=1`,
+  `txindex=1` are required; `coinstatsindex` is optional.
+- **The stall fix.** `computeSync` takes `peerBestHeight` (the monitor passes the max of
+  `getpeerinfo` `synced_headers`, `startingheight` as the fallback): `stalled` only when peers
+  report a tip above the node's; a long gap with the peers agreeing is synced plus a caveat; with no
+  peer heights, stalled after 7200 s. A 40-minute gap happens about once in fifty on the network,
+  and the old rule called every one a stall. The three log-derived sync-detail rows are drawn only
+  when their figure exists, so they never appear on Core.
+- **The background build and the pacer.** `main.js` builds a missing index inside the server on
+  worker threads: its own `RpcClient` on a second lane (its `getblockhash` batches starved behind
+  the monitor's multi-second reads: "heights 1,000 of 967,015" for a quarter of an hour); `rpcPacer`
+  reads the monitor lane's telemetry before each file and holds while the node is failing, the
+  breaker is open or average latency is above `rpc.slowLatencyMs` (5 s), easing above 40% of it (a
+  1 s threshold held a healthy Mac at a sixth of its speed). Progress is the `address-index-building`
+  flag (phase, done/total, rows, ETA, "paused while the node's RPC is slow"); events of kind `index`
+  at start, finish and failure, which `app.js` toasts; on finish the follower starts and address
+  pages go live with no restart; failure raises `address-index-build-failed`. Ctrl-C does not resume
+  a build; the next start begins it again. Config keys per node: `addressIndex`,
+  `addressIndexBuild: "manual"`, `addressIndexWorkers` (default at most 4, half a dedicated build's;
+  1 on spinning disks).
+- **`/api/x/address`** now carries `utxos` (up to 100-transaction histories, else `null` with a
+  `utxoNote`; each output checked with `gettxout`), `index.postTip`, `indexBuilding` while the server
+  builds, and `localIndexError` so a broken index cannot pass for an unconfigured one.
+- **The pool map ships**: `config/pool-map.json` (mempool.space/mining-pools, MIT, 151 pools);
+  `data/pool-map.json` overrides it, `BLOCKYARD_POOL_MAP` overrides both.
+- **The descriptor limit.** `IndexStore` holds no file open (it kept 256+ for the life of the
+  process; macOS `ulimit -n` is 256); a lookup opens and closes the one file it reads.
+- **CI** runs the suite on Ubuntu, macOS and Windows, on Node 22 and 24. Display settings are
+  stored on the server (`config/blockyard.json`). The block-flow cards' stat columns size to content.
+
+**What to do next, in order:** the Mac install again from clean (`git clone`, `npm run setup`,
+this time with the server building the index); the re-audit; then move `v0.0.9` to the release
+commit when the operator says so.
 
 ## Current state (2026-09-12)
 

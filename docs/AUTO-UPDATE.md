@@ -69,7 +69,7 @@ tag     v0.0.9, v0.1.0, ...
 ```
 
 The updater does a **shallow tag fetch** (`git fetch --tags --depth=1 origin`) — the repository is
-12 MB today, but a user's machine should not pay for history it will never read.
+14 MB today, but a user's machine should not pay for history it will never read.
 
 > **Blocker for public use:** the repository is **private**. `git fetch` from a user's deployment
 > needs credentials that do not exist. On this box it works only because `gh` puts a `GH_TOKEN` in
@@ -237,15 +237,23 @@ an unsigned tag must fail closed.
 ## 10. Prerequisites before implementation
 
 1. **Make the repository public**, or document that auto-update requires a token. Today it is
-   private and the feature cannot work for anyone else.
-2. ~~**Fix the version scheme.**~~ **Done 2026-09-13.** `package.json` and `server/main.js` said
-   **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is this newer?" comparison
-   would have been wrong, and that field is what the whole feature compares. 0.0.9 is current, and
-   every source now says so. The version is no longer written down twice: `server/main.js` reads
-   it from `package.json`.
+   private (still so on 2026-09-14) and the feature cannot work for anyone else.
+2. ~~**Fix the version scheme.**~~ **Done 2026-09-13, renumbered 2026-09-14.** `package.json` and
+   `server/main.js` said **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is
+   this newer?" comparison would have been wrong, and that field is what the whole feature
+   compares. The operator settled the initial release number as 0.0.9 on 2026-09-14, and every
+   source says so. The version is no longer written down twice: `server/main.js` reads it from
+   `package.json`, and `test/version.test.js` pins the CHANGELOG's newest release and the README
+   to it.
 3. ~~**Create the first tag.**~~ **Done 2026-09-14:** `v0.0.9`, the initial release, is
    tagged, so the release channel in §3 exists.
 4. **Decide the open-mode question** in §6 knowingly.
+5. **Decide the npm path.** Since 2026-09-14 BlockYard is also an npm package with a `blockyard`
+   command (`bin/blockyard.js`), keeping its config and data under `~/.blockyard`. A global npm
+   install has no git checkout to fetch into, so nothing in §4 applies to it; for that install
+   the update is `npm install -g blockyard@<version>`, and the dirty-tree, fast-forward and
+   rollback guarantees would have to be restated in npm's terms or the feature limited to
+   checkouts. This design covers the checkout only until that is decided.
 
 ## 11. Tests
 

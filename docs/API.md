@@ -340,7 +340,9 @@ Trimmed example:
 
 Notes:
 
-- `sync` always carries the node's own identity (`node`, `nodeLabel`, `endpoint`), and `strip` is the ordered list of facts the sync bar draws. `sync.state` is one of `synced`, `unknown`, or a syncing state (see `server/collect/sync.js`).
+- `sync` always carries the node's own identity (`node`, `nodeLabel`, `endpoint`), and `strip` is the ordered list of facts the sync bar draws. `sync.state` is one of `unknown`, `ibd`, `catching_up`, `synced`, `stalled` or `reorg` (see `server/collect/sync.js`). `stalled` is claimed only when the connected peers report a tip above the node's (`computeSync` takes `peerBestHeight`, the highest `synced_headers` — `startingheight` as a fallback — over `getpeerinfo`); a long gap with the peers agreeing is `synced` with a caveat, and with no peer heights at all the state becomes `stalled` after 7200 s without a block.
+- `utxo` is filled only from a node whose `getindexinfo` reports a synced `coinstatsindex`; the slow tier asks `getindexinfo` first, on its own, and sends `gettxoutsetinfo` only to such a node. Otherwise `utxo` is `null` and `health.quality` carries `utxo-unindexed`.
+- `health.quality` is the list of named gaps the Overview shows. While the server is building the address index it holds `address-index-building` (phase, done of total, rows, time left, `paused while the node's RPC is slow`); a failed build leaves `address-index-build-failed`. `rpc-slow` and `rpc-timeouts` describe the measurement and name the index build when one is running rather than asserting a cause.
 - `hashrateEstEh` is the network hash rate in EH/s, estimated as difficulty x 2^32 divided by the observed mean block gap -- a difficulty-1 target expects 2^32 hashes, so leaving that factor out understates the rate by 4.29 billion (it did until 2026-09-12, and the figure reached the page as `0.0 EH/s`). The estimate agrees with the node's own `getnetworkhashps` to about one per cent. During IBD, or more than 6 blocks behind headers, it is `null` and `hashrateNote` says why.
 - `mempool.dist` omits the scatter points (`scatterPoints` is their count). Fetch them from `/api/mempool`.
 - `blocks.recent` holds the newest 40 blocks, newest first.
@@ -792,7 +794,7 @@ from **BlockYard's own index**, built from the node's block files and kept curre
   "utxos": [ { "txid": "9891f72b...", "n": 0, "value": 221760, "height": 966000 } ],
   "utxoNote": null,
   "txCount": 1,
-  "index": { "tip": 966963, "behind": 0, "builtAt": "2026-09-14T06:54:06.609Z", "following": true, "stale": null },
+  "index": { "tip": 966963, "behind": 0, "builtAt": "2026-09-14T06:54:06.609Z", "following": true, "stale": null, "postTip": 0 },
   "page": 0,
   "pages": 1,
   "txs": [ { "txid": "9891f72b...", "fee": 16920, "feerate": 120, "vsize": 141, "outSat": 12116383,
@@ -809,6 +811,28 @@ node keeps no address index. A count nobody can answer is not zero. `validateadd
 everywhere (script parsing, no index), so the address is still confirmed and typed. Transaction and
 block lookups are unaffected — those use `txindex`.
 
+**While the server is building the index** (a configured `addressIndex` directory with no finished
+index in it), the answer is the same `indexed: false` shape plus `indexBuilding`, so the page can say
+how far the build has got:
+
+```json
+{
+  "ok": true, "node": "main", "address": "bc1qqe2mj05z2q4zrqly789r59q5k53rhtgn8hznl0", "type": "witness v0",
+  "indexed": false, "txCount": null, "balance": null, "txs": [], "page": 0, "pages": 1,
+  "indexError": "Method not found", "balanceError": "Method not found", "localIndexError": null,
+  "indexBuilding": { "dir": "/var/lib/blockyard/index", "node": "main", "phase": "scan",
+                     "done": 1812, "total": 4870, "rows": 2190345120, "eta": "19 min",
+                     "startedAt": 1789154285000, "error": null, "paused": false },
+  "tip": 966546, "usd": 77280.04
+}
+```
+
+`indexBuilding` is `null` whenever no build is running. `phase` is `heights` (block hashes over
+RPC; `done`/`total` are heights), `scan` (block files on the worker pool; `done`/`total` are files)
+or `sort` (buckets); `rows` is the count so far, `eta` a short duration string or `null`, and
+`paused` is `true` while the build is held because the node's RPC is failing or slow. On finish the
+follower starts and the next request answers `indexed: true`.
+
 - `type` is `witness v<N>`, `script` or `legacy`.
 - `indexed` says whether this node can answer address history at all. When `false`, `txCount` is
   `null`, `balance` is `null`, and nothing on the page is derived from the refusal; `indexError` and
@@ -824,9 +848,10 @@ block lookups are unaffected — those use `txindex`.
   — and `balance.utxos` is their count. The walk is the whole history, so it is made for an address
   with at most 100 transactions; a longer one gets `utxos: null` and a `utxoNote` saying so.
 - `index.tip` is the highest block the index covers (base, folded layers and the follower's live
-  tail together); `behind` is how many blocks the node is ahead of it; `following` says a follower is
-  running; `stale` is a message when it has stopped (a reorganisation deeper than its tail, asking
-  for a rebuild).
+  tail together); `behind` is how many blocks the node is ahead of it; `builtAt` is the manifest's
+  build time; `following` says a follower is running; `stale` is a message when it has stopped (a
+  reorganisation deeper than its tail, asking for a rebuild); `postTip` counts rows above the node's
+  own tip, which are excluded from the balance and the history rather than shown.
 - `delta` is the net change to this address in satoshis: outputs to it minus inputs from it. A
   transaction the node could not return is `{ "txid": ..., "missing": true, "height": ..., "delta": ... }`
   — the height and amount are the index's own.
@@ -972,7 +997,7 @@ Bandwidth and disk, with every absent figure listed in words.
 
 ### `GET /api/events`
 
-The monitor's own event feed: collector errors, quality flags, new tips, reorgs and so on. It is newest first and shared by all nodes; each row names its `node`.
+The monitor's own event feed: collector errors, quality flags, new tips, reorgs and so on. It is newest first and shared by all nodes; each row names its `node`. Rows of kind `index` mark the start, the finish and a failure of an address index build the server runs; the browser shows those three as notifications.
 
 | Query | Type | Default | Meaning |
 |---|---|---|---|
