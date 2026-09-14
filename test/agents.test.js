@@ -407,7 +407,7 @@ test('BALL LIGHTNING crosses the whole view off-screen to off-screen, and its ar
       assert.equal(arc.chain, true, 'marked as a chain, so it draws in its own colour');
       const t = tiles.find((b) => arc.to.x > b.x && arc.to.x < b.x + b.s && arc.to.y > b.y && arc.to.y < b.y + b.s);
       assert.ok(t, `a chained arc lands on a block too (${arc.to.x}, ${arc.to.y})`);
-      assert.ok(arc.strength > 0 && arc.strength <= 0.9, 'a little weaker than the arc it came from');
+      assert.ok(arc.strength > 0 && arc.strength <= 1 && arc.age >= 0 && arc.age <= 1, 'a strength and an age of its own');
     }
   }
   assert.ok(chainsSeen > 5, `chains are seen in flight (${chainsSeen} frames)`);

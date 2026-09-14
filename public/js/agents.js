@@ -802,13 +802,17 @@ defineAgent('stormball', {
       // end while it still lived, and read as one longer arc). It leaps half a beat after the
       // first lands and outlives it, in violet against the first's blue, and never to the block it
       // left or one beside it -- a chain a unit long is a chain nobody sees.
+      // Violet was the first colour, and it vanished: the nebula the ball drags is violet and
+      // magenta. Electric green is on nothing else here -- not the blue arcs, not the nebula, not
+      // the price line's yellow -- and a chain lives 1.2 arc-lives, so it is on screen longer
+      // than the arc that threw it.
       if (arc.chain && age >= 0.5) {
-        const c2 = arc.chain, age2 = age - 0.5;
+        const c2 = arc.chain, age2 = (age - 0.5) / 1.2;
         const hit2 = strike(hit.x + Math.cos(c2.ang) * c2.reach, hit.y + Math.sin(c2.ang) * c2.reach, hit);
         if (hit2) {
-          if (age2 <= 1) live.push({ from: hit, to: hit2, seed: c2.seed, strength: 0.9 * (1 - age2 * 0.5), chain: true });
+          if (age2 <= 1) live.push({ from: hit, to: hit2, seed: c2.seed, strength: Math.min(1, 1.2 * (1 - age2 * 0.5)), chain: true, age: age2 });
           const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + c2.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
-          heads.push({ x: hit2.x, y: hit2.y, color: [170, 120, 255], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
+          heads.push({ x: hit2.x, y: hit2.y, color: [120, 255, 170], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
         }
       }
     }
@@ -838,13 +842,19 @@ defineAgent('stormball', {
       // a chained arc leaves the block the first one struck, not the ball
       const from = arc.from ? project(arc.from.x, arc.from.y, arc.from.z, view) : c;
       const main = bolt(from, end, Math.hypot(end.x - from.x, end.y - from.y) * 0.18, 9);
-      // a chain is violet and a size down, so it reads as the block discharging, not the ball
-      const [halo, body, edge] = arc.chain ? ['120,60,255', '170,110,255', '220,190,255'] : ['30,120,255', '60,170,255', '140,220,255'];
-      const sz = arc.chain ? 0.7 : 1;
+      // a chain is electric green, so it reads as the block discharging, not the ball
+      const [halo, body, edge] = arc.chain ? ['20,200,110', '110,255,170', '215,255,235'] : ['30,120,255', '60,170,255', '140,220,255'];
+      const sz = arc.chain ? 0.85 : 1;
       line(ctx, main, `rgba(${halo},${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1) * sz);
       line(ctx, main, `rgba(${body},${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw * 4, U * 0.45) * sz);
       line(ctx, main, `rgba(${edge},${(0.95 * arc.strength).toFixed(3)})`, Math.max(lw * 2, U * 0.2) * sz);
       line(ctx, main, `rgba(245,252,255,${arc.strength.toFixed(3)})`, Math.max(lw, U * 0.08) * sz);
+      // ...and a ring bursting from the block it lands on, the moment it lands
+      if (arc.chain && arc.age < 0.6) {
+        const f = arc.age / 0.6;
+        ring(ctx, end.x, end.y, U * (0.4 + 2.2 * f), `rgba(150,255,190,${(0.9 * (1 - f)).toFixed(3)})`, Math.max(lw * 2, U * 0.12) * (1 - 0.5 * f));
+        ring(ctx, end.x, end.y, U * (0.2 + 1.4 * f), `rgba(235,255,245,${(0.8 * (1 - f)).toFixed(3)})`, Math.max(lw, U * 0.06));
+      }
       // a fork off the main channel, and a spark where it lands
       const k = 3 + Math.floor(Math.random() * 4);
       const fork = main[k], forkEnd = { x: fork.x + (Math.random() - 0.5) * U * 3, y: fork.y + (Math.random() - 0.5) * U * 3 };
