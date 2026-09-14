@@ -660,7 +660,8 @@ canvas#ovGnTreemap { display: block }
 .delt { font-style: normal; color: var(--fg-faint); font-size: 10px }
 .bwhen { font-size: 10.5px; color: var(--fg-dim); margin: 3px 0 5px; font-variant-numeric: tabular-nums }
 .bwhen.longgap { color: var(--warn) }
-.bgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 6px }
+/* columns sized by their content, so a wider font makes the cell wider rather than clipping the number */
+.bgrid { display: grid; grid-template-columns: auto auto; justify-content: space-between; gap: 1px 6px }
 .bgrid > div { display: flex; justify-content: space-between; gap: 4px; font-size: 10.5px }
 .bgrid i { font-style: normal; color: var(--fg-faint) }
 .bgrid span { font-family: var(--mono); font-variant-numeric: tabular-nums }
