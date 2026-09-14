@@ -422,8 +422,20 @@ export function visualBase(tile, o = {}) {
       // small one LOWER than it, and the pair flickered (see obliqueOrder). The
       // cube's own room then only clips the biggest at the ceiling, so none
       // leaves the frame.
-      const H = Math.max(0, Math.min(o.oblique.flight ?? 120, flightRoom({ x: tile.x + tile.s / 2, y: tile.y + tile.s / 2, s: 0 }, o)));
-      const view = (zz) => (H > 0 ? Math.min(Math.max(0, flightRoom(tile, o)), H * (1 - Math.exp(-zz / H))) : 0);
+      //
+      // ...AND THAT IS NOW REVERSED: FLIGHTS LEAVE THE FRAME (operator, 2026-09-14: "the blocks are
+      // wrapping at the viewport extents. They need to move off-screen instead of bunching up at the
+      // extents"). The room was the panel's, so it shrank with the panel: on the square Overview
+      // board a rim cube climbed only until it touched the edge and then slid along it, following
+      // the board's curve, while every lane above it was drawn at the same place -- the pile along
+      // the edges. Departures and arrivals then burst out of that pile in their last frames, which
+      // is the popping "worse the narrower the display". Height is now one curve for every spot
+      // and every panel -- oblique.flight's soft ceiling, nothing measured from the canvas -- so a
+      // flight near an edge simply carries on past it and comes back when it lands. Being the same
+      // everywhere it also cannot draw a higher cube lower than a neighbour, which is what the
+      // per-spot room had to be careful about.
+      const F = Math.max(1, o.oblique.flight ?? 120);
+      const view = (zz) => F * (1 - Math.exp(-zz / F));
       // A LANDING RUNS IN DRAWN SPACE (operator, 2026-09-11: "The items slowly start
       // dropping. They need to drop like they were just let go, immediately succumb
       // to gravity, and bounce to a stop, following real physics"). Mapped point by
@@ -456,6 +468,17 @@ export function visualBase(tile, o = {}) {
 // o.viewRect is the panel's extent in grid units, from the renderer's
 // constant fit; without it (tests, no panel) the board plus the reserved
 // margin on every side stands in.
+//
+// THE ESTIMATE IS ONLY WHERE THE SEARCH STARTS (operator, 2026-09-14: "blocks still disappear in
+// mid-air instead of flying off the screen"). The straight-line figure below models the flight
+// with a worst-case lean and a flat step per unit of height, and the real projector does not move
+// a cube that way. Measured on a 500x900 panel: 9 of 90 departures were still on screen on their
+// last frame -- at entry 0.995, i.e. at this height -- and were then deleted there, which is the
+// mid-air vanish; the same shortfall had 1x1 arrivals appearing 49px inside the panel. So the
+// height is now checked against the projector itself, the one that draws the cube, and raised
+// until every corner is past one edge of the panel. Whatever the estimate gets wrong, the answer
+// is measured on the picture.
+const liftMemo = new Map();
 export function offscreenLift(tile, o = {}) {
   const { v, dX, dY, x0, x1, up0, up1 } = flightFrame(tile, o);
   let h = Infinity;
@@ -463,7 +486,34 @@ export function offscreenLift(tile, o = {}) {
   if (dX < -1e-6) h = Math.min(h, (x1 - (v.x0 - 1)) / -dX);
   if (dY > 1e-6) h = Math.min(h, (v.y1 + 1 - up0) / dY);
   if (dY < -1e-6) h = Math.min(h, (up1 - (v.y0 - 1)) / -dY);
-  return Number.isFinite(h) ? Math.max(0, h) : 0;
+  h = Number.isFinite(h) ? Math.max(0, h) : 0;
+  if (!o.oblique) return h;
+  // per frame this runs for every cube entering or leaving, several times each; the answer depends
+  // only on the cube's footprint and the camera, so it is kept
+  const ob = o.oblique;
+  const key = [tile.x, tile.y, tile.s, tile.tall, tile.floor, tile.fxz, v.x0, v.x1, v.y0, v.y1,
+    ob.ox, ob.oy, ob.dy, ob.rise, ob.headroom, o.dome, o.gridW, o.gridH, o.flipY, o.departures].join();
+  const hit = liftMemo.get(key);
+  if (hit !== undefined) return hit;
+  const out = (zv) => {
+    const P = obliqueProjector(tile, zv, o);
+    const base = (tile.z ?? 0) + (tile.floor ?? 0) + (tile.fxz ?? 0), top = base + cubeHeight(tile);
+    const unit = o.unit ?? 1, flip = o.flipY === false ? -1 : 1;
+    let left = true, right = true, above = true, below = true;
+    for (const gz of [base, top]) for (const [gx, gy] of [[tile.x, tile.y], [tile.x + tile.s, tile.y], [tile.x, tile.y + tile.s], [tile.x + tile.s, tile.y + tile.s]]) {
+      const p = P(gx, gy, gz);
+      const cx = p.x / unit, row = -flip * p.y / unit;           // back into the panel's grid units
+      if (cx > v.x0 - 1) left = false;
+      if (cx < v.x1 + 1) right = false;
+      if (row < v.y1 + 1) above = false;
+      if (row > v.y0 - 1) below = false;
+    }
+    return left || right || above || below;
+  };
+  for (let i = 0; i < 80 && !out(h); i++) h += Math.max(1, h * 0.1);
+  if (liftMemo.size > 20000) liftMemo.clear();
+  liftMemo.set(key, h);
+  return h;
 }
 
 // A cube's drawn extent at rest, the panel, and how far the cube moves across
@@ -508,29 +558,36 @@ export function liftProjector(tile, o = {}) {
   // it stays rigid however wide it is, and take it where the cube IS -- a block in flight has
   // moved along the sphere's normal, and a lean from the slot it left is the wrong lean (see
   // obliqueLean)
-  if (o.oblique) {
-    const zv = z > 0 ? visualBase(tile, o) : 0;
-    const g = flightGeom(tile, zv, o);
-    // draw with the SHAPE lean (re-settled each frame), then put the cube's centre back on the
-    // departure mode's PATH. The lean enters project()'s x term only, so a single x offset moves
-    // the whole cube rigidly -- its faces keep the shape the camera gives them at this height.
-    // At rest the two leans are equal and this is exactly the shipped resting projection.
-    o = { ...o, leanFixed: g.lean };
-    if (g.leanPath !== g.lean) {
-      const cx = tile.x + tile.s / 2, cy = tile.y + tile.s / 2;
-      const inner = liftProjectorAt(tile, o, z);
-      const onPath = liftProjectorAt(tile, { ...o, leanFixed: g.leanPath }, z);
-      const dx = onPath(cx, cy, z).x - inner(cx, cy, z).x;
-      if (dx) return (gx, gy, gz) => { const p = inner(gx, gy, gz); return { x: p.x + dx, y: p.y }; };
-      return inner;
-    }
-  }
+  if (o.oblique) return obliqueProjector(tile, z > 0 ? visualBase(tile, o) : 0, o);
   return liftProjectorAt(tile, o, z);
 }
 
+// The oblique projector for a cube whose base is DRAWN at `zv` -- split out of liftProjector so
+// offscreenLift can ask where a cube would be drawn at a trial height without going back through
+// visualBase, which is what calls it.
+function obliqueProjector(tile, zv, o) {
+  const z = tile.z ?? 0;
+  const g = flightGeom(tile, zv, o);
+  // draw with the SHAPE lean (re-settled each frame), then put the cube's centre back on the
+  // departure mode's PATH. The lean enters project()'s x term only, so a single x offset moves
+  // the whole cube rigidly -- its faces keep the shape the camera gives them at this height.
+  // At rest the two leans are equal and this is exactly the shipped resting projection.
+  o = { ...o, leanFixed: g.lean };
+  if (g.leanPath !== g.lean) {
+    const cx = tile.x + tile.s / 2, cy = tile.y + tile.s / 2;
+    const inner = liftProjectorAt(tile, o, z, zv);
+    const onPath = liftProjectorAt(tile, { ...o, leanFixed: g.leanPath }, z, zv);
+    const dx = onPath(cx, cy, z).x - inner(cx, cy, z).x;
+    if (dx) return (gx, gy, gz) => { const p = inner(gx, gy, gz); return { x: p.x + dx, y: p.y }; };
+    return inner;
+  }
+  return liftProjectorAt(tile, o, z, zv);
+}
+
 // the projection with the lean already settled onto `o` -- split out so liftProjector can evaluate
-// it twice, once for the cube's shape and once for the path its centre must follow
-function liftProjectorAt(tile, o, z) {
+// it twice, once for the cube's shape and once for the path its centre must follow. `zv` is the
+// drawn base height when the caller already has it (obliqueProjector); otherwise visualBase.
+function liftProjectorAt(tile, o, z, zvGiven) {
   if (!(z > 0)) return (gx, gy, gz) => project(gx, gy, gz, o);
   if (o.oblique) {
     // flight goes along the sphere's normal at the block's centre, so the
@@ -538,7 +595,7 @@ function liftProjectorAt(tile, o, z) {
     // itself stays upright. project() adds the sphere's height where a point
     // is DRAWN, so the difference to where it stands is put back: the flight
     // is measured from the block's own spot on the sphere.
-    const zv = visualBase(tile, o);
+    const zv = zvGiven ?? visualBase(tile, o);
     const n = flightDir(tile.x + tile.s / 2, tile.y + tile.s / 2, o);
     const sx = zv * n.x, sy = zv * n.y, sz = zv * n.z;
     if (!sx && !sy) return (gx, gy, gz) => project(gx, gy, sz + (gz - z), o);
@@ -1533,7 +1590,11 @@ export function obliqueOrder(tiles, o = {}) {
   const rank = new Array(n);
   info.slice().sort((p, q) => (q.diag - p.diag) || (p.key < q.key ? -1 : p.key > q.key ? 1 : 0))
     .forEach((e, k) => { rank[e.i] = k; });
-  const EPS = 1e-6;
+  // 1e-3, not 1e-6: an eased flight lands its footprint on a whole cell only to ~1e-5 (measured: x
+  // 23.9999929 against a neighbour at 25.9999858), so two abutting cubes kept crossing a 1e-6
+  // tolerance on rounding noise and swapped between the column rule and the height rule -- 60px of
+  // faces changing hands in one frame at the travel/drop boundary. No real overlap is that thin.
+  const EPS = 1e-3;
   // IN REAL SPACE, footprint first, height only when the footprints overlap: in
   // real space the planner guarantees no two cubes intersect, so some axis always
   // separates a pair, and a bouncing cube (which keeps crossing its neighbour's
@@ -1541,8 +1602,17 @@ export function obliqueOrder(tiles, o = {}) {
   const nearer = (a, b) => {
     if (a.fy1 <= b.fy0 + EPS) return flipped ? 1 : -1;
     if (b.fy1 <= a.fy0 + EPS) return flipped ? -1 : 1;
-    if (a.fx1 <= b.fx0 + EPS) return 1;
-    if (b.fx1 <= a.fx0 + EPS) return -1;
+    // ACROSS COLUMNS THE LEAN DECIDES, not "left after right" (operator, 2026-09-14: "shit popping
+    // over other shit at end of movements"). Height pushes a cube's top sideways by the lean, which
+    // is radial: rightward on the right half, LEFTWARD on the left. A cube covers the neighbour its
+    // top leans over, so on the left half the RIGHT cube paints after. The column rule was right
+    // only on the right half, and leanEdge below corrected the left half on a settled board only --
+    // so the order was wrong the whole time anything flew and flipped the frame the last cube
+    // landed. Measured on a 90-cube transition: 18px of faces changing owner on that frame. The
+    // lean is taken at the boundary between the two footprints, a function of the slots alone, so
+    // it cannot change from frame to frame.
+    if (a.fx1 <= b.fx0 + EPS) return obliqueLean((a.fx1 + b.fx0) / 2, o) < 0 ? -1 : 1;
+    if (b.fx1 <= a.fx0 + EPS) return obliqueLean((b.fx1 + a.fx0) / 2, o) < 0 ? 1 : -1;
     if (a.zv0 >= b.zv1 - EPS) return 1;
     if (b.zv0 >= a.zv1 - EPS) return -1;
     // overlapping even in real space (not in a planned flight): the axis of least overlap
@@ -1558,8 +1628,13 @@ export function obliqueOrder(tiles, o = {}) {
   // outlines do not actually overlap those constraints are free to contradict
   // one another, and the cycles they formed were cut arbitrarily -- replayed, the
   // final order contradicted a pairwise decision in 1267 of 1452 frames while no
-  // decision itself ever changed. Now: outlines overlapping by over half a unit.
-  const TOL = 0.5;
+  // decision itself ever changed. Now: outlines overlapping at all.
+  // 0, not 0.5 (2026-09-14): with the lean deciding columns (nearer) the pair rules agree, so a
+  // touching pair no longer needs to be kept out -- and keeping it out is what made it pop. A cube
+  // bouncing beside a neighbour crossed the half-pixel threshold on every hop, the edge came and
+  // went, and without it the pair fell back to the diagonal rank and swapped: measured, 212px of
+  // faces changing hands during the landings of a 90-cube transition at 0.5, 127px at 0.
+  const TOL = 0;
   const after = Array.from({ length: n }, () => []);
   const indeg = new Array(n).fill(0);
   // A LEANING FACE OVER A SHORTER NEIGHBOUR (operator, 2026-09-12: "Height sorting issue on bottom
@@ -2025,15 +2100,25 @@ export function planTransition(prev, next, opts = {}) {
   // the endpoints only left that corner outside the box, two blocks were
   // given the same lane on the strength of it, and the pairwise collision
   // test failed on the next run.
+  // ONE BOX PER LEG, AND LEGS ONLY MEET THEIR OWN HALF (operator, 2026-09-14: "a lot of popping at
+  // the edges"). sampleTween runs every first leg in the first half of travel and every second leg
+  // in the second, each ending exactly at the half, so a first leg can only ever be where another
+  // mover's FIRST leg is, never its second. One box round the whole L claimed the whole rectangle
+  // between the two corners -- replayed on the live pool, 201 movers stacked 110 units up, and the
+  // squeeze into the panel's room drew neighbouring lanes on top of each other, which is where the
+  // rim pops were. Still conservative: each leg's box is the largest the cube can be on it.
+  const box = (x0, y0, x1, y1, s) => ({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1) + s, y1: Math.max(y0, y1) + s });
   const swept = (m) => {
     const s = Math.max(m.from.s, m.to.s);
-    const xs = [m.from.x, m.to.x], ys = [m.from.y, m.to.y];
-    return {
-      x0: Math.min(...xs), y0: Math.min(...ys),
-      x1: Math.max(...xs) + s, y1: Math.max(...ys) + s,
-    };
+    const xFirst = jitterOf(m.to.txid) < 0.5;              // the same draw sampleTween reads
+    const cx = xFirst ? m.to.x : m.from.x, cy = xFirst ? m.from.y : m.to.y;   // the corner
+    const legs = [box(m.from.x, m.from.y, cx, cy, s), box(cx, cy, m.to.x, m.to.y, s)];
+    return { legs, ...box(m.from.x, m.from.y, m.to.x, m.to.y, s) };
   };
-  const hits = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  const rectHit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  const hits = (a, b) => (a.legs && b.legs
+    ? rectHit(a.legs[0], b.legs[0]) || rectHit(a.legs[1], b.legs[1])
+    : (a.legs ?? [a]).some((p) => (b.legs ?? [b]).some((q) => rectHit(p, q))));
   // CUBES STACK BY THEIR OWN HEIGHT. A mover at base altitude L occupies
   // [L, L + s], not a slab, so an altitude is an INTERVAL: movers whose swept
   // footprints overlap get disjoint intervals, first fit, biggest first; and
@@ -2207,7 +2292,12 @@ export function sampleTween(tw, now, plan) {
     const go = p.t0 + 0.55 * R * jitterOf(tw.txid, 'xgo') * (1 - 0.4 * heavy);
     if (now <= go) return { ...tw.from, z: 0, entry: 0, alpha: 1, lock: 0 };
     const t = Math.min(1, (now - go) / Math.max(1, p.rise - go));
-    const e = easeOutCubic(t);
+    // FROM REST (operator, 2026-09-14: "still seeing a lot of popping at the edges"). This was
+    // easeOutCubic, which starts at its FULL speed: replayed on the live pool, where exits park
+    // 100+ units up, a departing cube went from standing to ~6px a frame on its first frame -- 36
+    // such jumps in one refresh, 30 of them on the rim where the flight tips sideways. Ease in and
+    // out instead: it leaves the ground at rest and still arrives by the end of the rise.
+    const e = easeInOutCubic(t);
     const acc = 1.3 + 1.3 * jitterOf(tw.txid, 'xacc');
     // UP AND OFF THE SCREEN (operator, 2026-09-11: "I want to see old blocks
     // flying up and off the screen instead of disappearing"). Whole and solid
@@ -2224,7 +2314,8 @@ export function sampleTween(tw, now, plan) {
   const liftAt = p.t0 + (1 - j) * (plan.cfg.riseStagger || 0);
   if (now <= liftAt) return { ...tw.from, z: 0, alpha: 1, lock: 0 };
   if (now < p.rise) {
-    const e = easeOutCubic((now - liftAt) / Math.max(1, p.rise - liftAt));
+    // from rest, for the same reason as a departure above: a lane is 100 units up on a busy board
+    const e = easeInOutCubic((now - liftAt) / Math.max(1, p.rise - liftAt));
     return { ...tw.from, z: tw.lane * e, alpha: 1, lock: 0 };
   }
   if (now < p.travel) {

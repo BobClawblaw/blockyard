@@ -303,33 +303,49 @@ test('under the oblique camera a resting cube casts a short shadow down and to t
 test('an arrival starts wholly outside the canvas and comes down as its entry runs out', () => {
   // (operator, 2026-09-11: "I can see the new blocks spawning on screen. Have
   // the spawning happen off-screen for new blocks being dropped in")
-  const v = { unit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5, gridW: 40, gridH: 40, viewRect: { x0: -8, x1: 48, y0: -4.8, y1: 44.8 } };
-  for (const [x, y] of [[0, 0], [38, 0], [0, 38], [38, 38], [20, 20]]) {
-    const t = { txid: 'n', x, y, s: 2, z: 10, entry: 1, color: feeColor(5) };
+  // THE RECT MUST BE A REAL ONE, AND EVERY SIZE MUST CLEAR IT. This guard passed for a year while
+  // small blocks visibly materialised in view (operator, 2026-09-14), for two reasons: its viewRect
+  // was invented with y1 = 44.8 where obliqueFit really returns 32.8 -- a panel far taller than any
+  // that exists, so cubes cleared an edge that was not there -- and it only ever tried s = 2. The
+  // lift is size-dependent, and 1x1 is the size that failed: measured 49px INSIDE the panel, against
+  // 20px for a 2x2 and clear for a 6x6. A fixture more generous than the product tests nothing.
+  const v = { unit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10 }, dome: 5, gridW: 28, gridH: 28, viewRect: { x0: -14.2, x1: 42.2, y0: -4.8, y1: 32.8 } };
+  for (const [x, y, s] of [[0, 0, 1], [26, 0, 1], [0, 26, 1], [26, 26, 1], [14, 14, 1],
+                           [0, 0, 2], [26, 26, 2], [14, 14, 3], [10, 10, 6]]) {
+    const t = { txid: 'n', x, y, s, z: 10, entry: 1, color: feeColor(5) };
     const pts = (tile) => { const f = tileFaces(tile, v); return [...f.top, ...f.sides.flatMap((q) => q.points)]; };
     // the panel: x x0..x1 across, rows y0..y1 up (flipped: screen y is -row)
     const r = v.viewRect;
     const inside = pts(t).some((p) => p.x >= r.x0 * v.unit && p.x <= r.x1 * v.unit && p.y >= -r.y1 * v.unit && p.y <= -r.y0 * v.unit);
-    assert.ok(!inside, `a cube over (${x}, ${y}) starts off screen`);
-    const yOf = (entry) => tileFaces({ ...t, entry }, v).top[0].y;
-    assert.ok(yOf(1) < yOf(0.5) && yOf(0.5) < yOf(0), 'and comes down as the entry runs out');
+    assert.ok(!inside, `a ${s}x${s} cube over (${x}, ${y}) starts off screen`);
+    // "comes IN", not "comes down": flight follows the sphere's normal, so a front-corner cube leaves
+    // through the side and slightly DOWN the screen (measured: (0,0) goes x -39 -> -217, y 0 -> 16).
+    // Screen y alone was only ever true of the fixture's old centre-ish cubes.
+    const at = (entry) => tileFaces({ ...t, entry }, v).top[0];
+    const away = (entry) => Math.hypot(at(entry).x - at(0).x, at(entry).y - at(0).y);
+    assert.ok(away(1) > away(0.5) && away(0.5) > 0, `and a ${s}x${s} cube over (${x}, ${y}) comes in as the entry runs out`);
   }
 });
 
-test('in a panel, a flight climbs as high as its spot allows, and never leaves the frame', () => {
-  // (operator, 2026-09-11: "the blocks can rise higher than they do during
-  // reshuffling it it will help sell the depth and shadows more")
-  const v = { unit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10, flight: 30 }, dome: 5, gridW: 44, gridH: 44, viewRect: { x0: -2, x1: 46, y0: -4.8, y1: 48.8 } };
+test('in a panel, a flight climbs the same at every spot and carries on past the edge', () => {
+  // (operator, 2026-09-11: "the blocks can rise higher than they do during reshuffling") -- and then
+  // (2026-09-14: "the blocks are wrapping at the viewport extents. They need to move off-screen
+  // instead of bunching up at the extents"). Height used to stop at the panel's edge, so on a
+  // narrow panel the rim cubes piled up along it. Now nothing in a flight's height comes from the
+  // canvas: a cube over the back row flies exactly as high as one at the front, and one near an
+  // edge at a travel lane's height is drawn past that edge.
+  const v = { unit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10, flight: 120 }, dome: 5, gridW: 44, gridH: 44, viewRect: { x0: -4.8, x1: 48.8, y0: -4.8, y1: 48.8 } };
   const front = { txid: 'f', x: 20, y: 2, s: 2, z: 40 }, back = { txid: 'b', x: 20, y: 40, s: 2, z: 40 };
-  assert.ok(visualBase(front, v) > 12, `a cube at the front flies well above the old 10-unit band (${visualBase(front, v).toFixed(1)})`);
-  assert.ok(visualBase(front, v) > visualBase(back, v), 'higher at the front, where the panel has room, than at the back');
-  assert.ok(flightRoom(back, v) < flightRoom(front, v));
+  assert.ok(visualBase(front, v) > 30, `a flight climbs high (${visualBase(front, v).toFixed(1)})`);
+  assert.equal(visualBase(front, v), visualBase(back, v), 'and the same over the back row as the front: the panel does not cap it');
+  const narrow = { ...v, viewRect: { x0: -2, x1: 46, y0: -4.8, y1: 48.8 } };
+  assert.equal(visualBase(front, narrow), visualBase(front, v), 'nor does a narrower panel');
   const r = v.viewRect;
-  for (const t of [front, back, { txid: 'c', x: 0, y: 0, s: 12 }, { txid: 'd', x: 32, y: 32, s: 12 }, { txid: 'e', x: 43, y: 20, s: 1 }]) {
-    const f = tileFaces({ ...t, z: 1000 }, v);
-    for (const p of [...f.top, ...f.sides.flatMap((q) => q.points)]) {
-      assert.ok(p.x >= r.x0 * 10 - 1e-6 && p.x <= r.x1 * 10 + 1e-6 && p.y >= -r.y1 * 10 - 1e-6 && p.y <= -r.y0 * 10 + 1e-6, `${t.txid}: inside the panel however high it flies`);
-    }
+  for (const t of [{ txid: 'rim-left', x: 0, y: 20, s: 1 }, { txid: 'rim-right', x: 43, y: 20, s: 1 }, { txid: 'back', x: 20, y: 43, s: 1 }]) {
+    const f = tileFaces({ ...t, z: 58 }, v);
+    const pts = [...f.top, ...f.sides.flatMap((q) => q.points)];
+    const inside = pts.some((p) => p.x >= r.x0 * 10 && p.x <= r.x1 * 10 && p.y >= -r.y1 * 10 && p.y <= -r.y0 * 10);
+    assert.ok(!inside, `${t.txid}: at a high lane it is off the panel, not parked on its edge`);
   }
 });
 
@@ -515,14 +531,26 @@ test('landings are staggered and bounce to different heights', () => {
 });
 
 test('movers whose paths overlap fly in disjoint altitude intervals, each as tall as the cube', () => {
+  // PER LEG (2026-09-14). Travel is two legs, every first leg in the first half of the phase and every
+  // second leg in the second, so a first leg can only meet another mover's first leg. The rule used to
+  // be one box round the whole L, which on the live pool stacked 201 movers 110 units up; per leg it
+  // is 58. The geometric proof is the test above -- no two slabs intersect at any sampled moment --
+  // and this pins the bookkeeping that makes it true.
   const plan = planTransition(layout(5), layout(9), { now: 0 });
   const movers = plan.tweens.filter((t) => t.kind === 'move');
   assert.ok(movers.length > 3, 'the fixture actually moves things');
-  const sweep = (m) => { const s2 = Math.max(m.from.s, m.to.s); return { x0: Math.min(m.from.x, m.to.x), y0: Math.min(m.from.y, m.to.y), x1: Math.max(m.from.x, m.to.x) + s2, y1: Math.max(m.from.y, m.to.y) + s2, lo: m.lane, hi: m.lane + s2 }; };
+  const box = (x0, y0, x1, y1, s2) => ({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1) + s2, y1: Math.max(y0, y1) + s2 });
+  const legs = (m) => {
+    const s2 = Math.max(m.from.s, m.to.s);
+    const xFirst = (m.jitter ?? 0) < 0.5;              // sampleTween's own choice of which axis leads
+    const cx = xFirst ? m.to.x : m.from.x, cy = xFirst ? m.from.y : m.to.y;
+    return { legs: [box(m.from.x, m.from.y, cx, cy, s2), box(cx, cy, m.to.x, m.to.y, s2)], lo: m.lane, hi: m.lane + s2 };
+  };
+  const hit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
   let pairs = 0;
   for (let i = 0; i < movers.length; i++) for (let j = i + 1; j < movers.length; j++) {
-    const a = sweep(movers[i]), b = sweep(movers[j]);
-    if (!(a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1)) continue;
+    const a = legs(movers[i]), b = legs(movers[j]);
+    if (!hit(a.legs[0], b.legs[0]) && !hit(a.legs[1], b.legs[1])) continue;
     pairs++;
     assert.ok(a.hi <= b.lo + 1e-9 || b.hi <= a.lo + 1e-9, `${movers[i].txid} [${a.lo.toFixed(2)}, ${a.hi.toFixed(2)}] and ${movers[j].txid} [${b.lo.toFixed(2)}, ${b.hi.toFixed(2)}] share altitude`);
   }
@@ -1089,6 +1117,64 @@ test('the paint order does not flicker: no overlapping pair swaps back and forth
   // nearness crosses while one of them bounces. Held under 2% of overlapping pairs.
   const pairs = new Set(who).size;
   assert.ok(pairs <= Math.ceil(seq.size * 0.02), `${pairs} of ${seq.size} overlapping pairs flicker (${[...new Set(who)].slice(0, 5).join(', ')})`);
+});
+
+test('NOTHING POPS OVER ANYTHING WHILE THE BOARD LANDS: an overlapping pair keeps its order', () => {
+  // (operator, 2026-09-14: "shit popping over other shit at end of movements"). The flicker test
+  // above only counts a swap that swaps BACK, so a pair that flips once -- on the frame the last
+  // cube lands, or as a bouncing cube's outline touches a neighbour -- passed it every time.
+  // Measured before the fix, from the drop to settle, on these three boards: 42, 66 and 67 swaps
+  // between cubes whose pictures overlapped on both frames, among them the whole left half's
+  // leaning faces changing hands on the settle frame. Two causes: across columns the order was
+  // "left after right" whatever the lean (right only on the right half; leanEdge put the left half
+  // right on a SETTLED board, hence the jump on landing), and an overlap tolerance that a bouncing
+  // cube's outline crossed on every hop. Swaps are counted only between pictures that overlapped
+  // on the previous frame too, so a cube arriving beside another is not a pop -- it is a new pair.
+  // BOTH DEPARTURE PATHS. settings.js ships 'normal' (along the board's curve); a test that only ran
+  // the module default would pass while the board people look at popped. Under 'normal' one swap
+  // remains across the three boards (layout 5 -> 9, at the start of the drop, not at touchdown): a
+  // three-cube tangle at the rim dissolving, where the group's remembered order and the pair's own
+  // edge disagree for one frame. Held at exactly that, so a regression cannot hide inside it.
+  for (const departures of ['normal', 'arcing']) {
+  const allowed = departures === 'normal' ? 1 : 0;
+  let total = 0;
+  const seen = [];
+  for (const [a, b, n] of [[5, 9, 90], [3, 4, 120], [11, 12, 100]]) {
+    const v = { unit: 10, oblique: { ox: 0.13, oy: 0.32, headroom: 10, flight: 120 }, dome: 5, gridW: 28, gridH: 28,
+      viewRect: { x0: -10.17, x1: 38.17, y0: -4.8, y1: 32.8 }, orderMemo: new Map(), departures };
+    const plan = planTransition(layout(a, n), layout(b, n), { now: 0, gridN: 28 });
+    let prev = null;
+    const swaps = [];
+    for (let t = plan.phases.travel; t <= plan.settleAt + 32; t += 16) {
+      const f = frameAt(plan, t, v);
+      const pos = new Map(), pts = new Map();
+      for (const op of f.ops) {
+        if (op.face !== 'top' && op.face !== 'side') continue;
+        if (!pos.has(op.txid)) pos.set(op.txid, pos.size);
+        (pts.get(op.txid) ?? pts.set(op.txid, []).get(op.txid)).push(...op.points);
+      }
+      // sorted, so a pair has the same key whichever of them is painted first
+      const ids = [...pts.keys()].sort();
+      const hull = new Map(ids.map((id) => [id, outline(pts.get(id))]));
+      const box = new Map(ids.map((id) => { const h = hull.get(id); return [id, [Math.min(...h.map((p) => p.x)), Math.min(...h.map((p) => p.y)), Math.max(...h.map((p) => p.x)), Math.max(...h.map((p) => p.y))]]; }));
+      const over = new Set();
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const A = box.get(ids[i]), B = box.get(ids[j]);
+        if (A[2] < B[0] || B[2] < A[0] || A[3] < B[1] || B[3] < A[1]) continue;
+        if (outlinesOverlap(hull.get(ids[i]), hull.get(ids[j]), 0)) over.add(ids[i] + '|' + ids[j]);
+      }
+      if (prev) for (const k of over) {
+        if (!prev.over.has(k)) continue;
+        const [p, q] = k.split('|');
+        if ((pos.get(p) < pos.get(q)) !== (prev.pos.get(p) < prev.pos.get(q))) swaps.push(`${k}@${t}`);
+      }
+      prev = { over, pos };
+    }
+    total += swaps.length;
+    seen.push(...swaps.map((sw) => `${a}->${b} ${sw}`));
+  }
+  assert.ok(total <= allowed, `${departures}: ${total} pops while landing, ${allowed} allowed (${seen.slice(0, 5).join(', ')})`);
+  }
 });
 
 test('a landing falls under gravity AS DRAWN: no hover at the top, no lurch at the bottom', () => {
