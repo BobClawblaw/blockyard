@@ -197,9 +197,10 @@ export const DEFAULTS = Object.freeze({
     bulge: true,          // a sphere rolls through the pipe and it swells round it
     firework: true, flare: true, wave: true, stormball: true,
     noRepeat: 12,
+    // no firstAfter here: the candle board does not land (operator, 2026-09-14: "there is no
+    // 'landing' for the markets display"); after a refresh its first effect keeps the cadence below
     pauseMin: 5,
     pauseMax: 9,
-    firstAfter: 1.2,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -331,14 +332,18 @@ const noRepeatRow = (max) => Object.freeze({ key: 'noRepeat', label: 'No repeats
 const CADENCE_ROWS = Object.freeze([
   Object.freeze({ key: 'pauseMin', label: 'Between effects, at least', kind: 'range', min: 1, max: 600, step: 1, hint: 'Seconds the board rests after one effect before the next may start. The wait is a random span between this and the ceiling below; if this is set above the ceiling, the two swap' }),
   Object.freeze({ key: 'pauseMax', label: 'Between effects, at most', kind: 'range', min: 1, max: 600, step: 1, hint: 'The ceiling on that wait, in seconds. Set both high for an effect only now and then; set both low for a busy board' }),
-  Object.freeze({ key: 'firstAfter', label: 'First effect after landing', kind: 'range', min: 0, max: 120, step: 0.1, hint: 'Seconds after the board comes to rest before its first effect, give or take a third. The block board re-lays on every refresh, so this is also how soon one follows each refresh' }),
 ]);
-const fxRows = (keys, hintFor = {}) => Object.freeze([noRepeatRow(keys.length), ...CADENCE_ROWS, ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
+// only the block board lands (the flight when the pool changes); the candle board has no landing
+// to time from, so it gets the two sliders and its first effect after a refresh keeps the cadence
+const LANDING_ROW = Object.freeze({ key: 'firstAfter', label: 'First effect after landing', kind: 'range', min: 0, max: 120, step: 0.1, hint: 'Seconds after the blocks land before the first effect, give or take a third. The board re-lays on every refresh, so this is also how soon one follows each refresh' });
+const fxRows = (keys, hintFor = {}, { landing = true } = {}) => Object.freeze([noRepeatRow(keys.length), ...CADENCE_ROWS, ...(landing ? [LANDING_ROW] : []), ...keys.map((key) => Object.freeze({ key, label: FX_ROW[key].label, kind: 'toggle', hint: hintFor[key] ?? FX_ROW[key].hint }))]);
 
-/** The scheduler's timers from a group's sliders, in ms: [floor, ceiling] between effects, and the first after landing. */
+/** The scheduler's timers from a group's sliders, in ms: [floor, ceiling] between effects, and the first after landing (the same span where the board has no landing). */
 export function fxCadence(g) {
   const lo = Math.min(g.pauseMin, g.pauseMax), hi = Math.max(g.pauseMin, g.pauseMax);
-  return { idleEvery: [lo * 1000, hi * 1000], idleFirst: [Math.round(g.firstAfter * 1000 * (2 / 3)), Math.round(g.firstAfter * 1000 * (4 / 3))] };
+  const idleEvery = [lo * 1000, hi * 1000];
+  const idleFirst = Number.isFinite(g.firstAfter) ? [Math.round(g.firstAfter * 1000 * (2 / 3)), Math.round(g.firstAfter * 1000 * (4 / 3))] : idleEvery;
+  return { idleEvery, idleFirst };
 }
 
 export const PANEL = Object.freeze([
@@ -507,7 +512,7 @@ export const PANEL = Object.freeze([
     bulk: true,
     rows: fxRows([
       'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball',
-    ], MARKET_HINT),
+    ], MARKET_HINT, { landing: false }),
   }),
   Object.freeze({
     group: 'tetrust',

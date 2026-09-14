@@ -239,17 +239,22 @@ test('the cadence sliders: each effects tab sets how long its board rests betwee
   // delay effects being triggered even longer than they are now"
   for (const group of ['effects', 'marketEffects']) {
     const rows = PANEL.find((g) => g.group === group).rows;
-    for (const key of ['pauseMin', 'pauseMax', 'firstAfter']) assert.equal(rows.find((r) => r.key === key)?.kind, 'range', `${group}: a ${key} slider`);
+    for (const key of ['pauseMin', 'pauseMax']) assert.equal(rows.find((r) => r.key === key)?.kind, 'range', `${group}: a ${key} slider`);
     assert.equal(rows.find((r) => r.key === 'pauseMax').max, 600, `${group}: up to ten minutes between effects`);
-    // the defaults ARE the scheduler's own numbers: 5-9 s between, 0.8-1.6 s for the first
-    assert.deepEqual(fxCadence(DEFAULTS[group]), { idleEvery: [5000, 9000], idleFirst: [800, 1600] }, `${group}: the defaults reproduce the cadence there was`);
+    assert.deepEqual(fxCadence(DEFAULTS[group]).idleEvery, [5000, 9000], `${group}: the defaults reproduce the cadence there was`);
   }
+  // ONLY THE BLOCK BOARD LANDS (operator: "there is no 'landing' for the markets display"): its tab
+  // has the first-after-landing slider and the defaults reproduce 0.8-1.6 s; the Markets tab has
+  // no such slider, and the candle board's first effect after a refresh keeps the cadence
+  assert.equal(PANEL.find((g) => g.group === 'effects').rows.find((r) => r.key === 'firstAfter')?.kind, 'range');
+  assert.equal(PANEL.find((g) => g.group === 'marketEffects').rows.find((r) => r.key === 'firstAfter'), undefined, 'no landing slider on the Markets tab');
+  assert.equal(DEFAULTS.marketEffects.firstAfter, undefined);
   assert.deepEqual(spaceOptions({}).idleEvery, [5000, 9000]); assert.deepEqual(spaceOptions({}).idleFirst, [800, 1600]);
-  assert.deepEqual(marketsOptions({}).idleEvery, [5000, 9000]); assert.deepEqual(marketsOptions({}).idleFirst, [800, 1600]);
+  assert.deepEqual(marketsOptions({}).idleEvery, [5000, 9000]); assert.deepEqual(marketsOptions({}).idleFirst, [5000, 9000]);
   // longer than now, per board, independently; a floor above its ceiling swaps rather than jams
-  const slow = { effects: { pauseMin: 120, pauseMax: 600, firstAfter: 30 }, marketEffects: { pauseMin: 45, pauseMax: 20, firstAfter: 0 } };
+  const slow = { effects: { pauseMin: 120, pauseMax: 600, firstAfter: 30 }, marketEffects: { pauseMin: 45, pauseMax: 20 } };
   assert.deepEqual(spaceOptions(slow).idleEvery, [120000, 600000]); assert.deepEqual(spaceOptions(slow).idleFirst, [20000, 40000]);
-  assert.deepEqual(marketsOptions(slow).idleEvery, [20000, 45000]); assert.deepEqual(marketsOptions(slow).idleFirst, [0, 0]);
+  assert.deepEqual(marketsOptions(slow).idleEvery, [20000, 45000]); assert.deepEqual(marketsOptions(slow).idleFirst, [20000, 45000]);
   // clamped to the sliders' own ranges
   assert.deepEqual(spaceOptions({ effects: { pauseMin: 9999, pauseMax: -4, firstAfter: 500 } }).idleEvery, [1000, 600000]);
 });
