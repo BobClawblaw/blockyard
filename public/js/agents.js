@@ -44,7 +44,7 @@ import {
   // the board's OWN gravity, for the tractor beam's release. A dropped cube must fall the way every
   // other cube on this board falls -- a second hand-rolled parabola beside the real one would land
   // differently from the transition happening next to it.
-  bounceDrop,
+  bounceDrop, bouncesUntil, landingMs, fallShare,
 } from './blockscene3d.js';
 // The tetris drop points the real rules at the board instead of a well: pure, and already
 // tested in its own right, so the piece shapes and their rotations are not reinvented here.
@@ -384,70 +384,76 @@ defineAgent('tractor', {
   // screen"). Before this the beam simply stopped: the cube was still four and a half units in the
   // air, the saucer still parked over it, and the whole thing blinked out mid-abduction.
   //
-  // Four phases now, and the last two are the ask:
-  //   IN    0.00-0.30  the saucer flies in from one side
-  //   HOLD  0.30-0.62  the beam comes on and the cube rises
-  //   DROP  0.62-0.80  the beam CUTS and the cube falls, bouncing as it lands
-  //   AWAY  0.80-1.00  the saucer climbs and accelerates off in a direction of its own
+  // HIGHER STILL, AND A REAL FALL (operator, 2026-09-14: "have it flying even higher off the board.
+  // and lift the blocks higher. When it lets go of the blocks, allow gravity to make them fall, and
+  // bounce before coming to rest"). The drop used to be squeezed into a fixed share of the effect,
+  // so its speed came from the effect's length, not from gravity. It is now timed by the board's
+  // own GRAVITY -- the constant every refresh landing falls under -- so a 24-unit fall takes
+  // fallMs(24) = 849 ms whatever the effect's duration, and the cube bounces with a coefficient of
+  // restitution of 0.5: hops of 6, 1.5 and 0.4 units, each shorter by sqrt(0.25), before it rests.
+  // Livelier than a refresh landing (e 0.15-0.36, hops of a few percent) on purpose: those barely
+  // leave the floor, and the ask was for a bounce you can see.
   //
-  // The fall is the board's own bounceDrop, not a parabola written here: a cube dropped by the
-  // saucer lands exactly as a cube dropped by a refresh does, which is the only way the two read as
-  // the same world. It is called with a small bounce and few hops, because the ask was "slightly".
+  //   IN       0.00-0.22  the saucer flies in from one side
+  //   HOLD     0.22-0.50  the beam comes on and draws the cube up, easing to a stop at the top
+  //   RELEASE  0.50       the beam cuts; the cube falls from rest under gravity and bounces
+  //   AWAY     first impact -> 1.00  the saucer climbs off along its own heading while it bounces
   //
-  // The cube is back at lift 0 by the end of DROP, with the whole of AWAY to spare. That matters:
-  // `lift` is a per-frame OVERRIDE applied to a copy of the tile, so when the effect ends the
-  // override simply stops being computed -- a cube still in the air at that moment would snap to
-  // the ground rather than land on it.
-  frame(a, u) {
-    const IN = 0.3, HOLD = 0.62, DROP = 0.8;
-    // HIGHER, AND IT LIFTS HIGHER (operator, 2026-09-14: "I want the ufo effect flying at least 2 x
-    // higher than it current is, and lift the blocks up much higher"). The saucer flew 5 over the
-    // cube's top and drew it up 4.5; now twice that altitude and a 12-unit lift -- and never lower
-    // than 4 units above the lifted cube's top, so a short cube is not pulled up through the ship.
-    const LIFT = 12;
-    const alt = Math.max(2 * (a.target.h + 5), a.target.h + LIFT + 4);
-    if (u < IN) {
-      const v = u / IN;
-      const x = a.from.x + (a.target.x - a.from.x) * v;
-      return { tractor: { ship: { x, y: a.target.y, z: alt }, beam: 0, lift: 0 },
-        heads: [{ x, y: a.target.y, color: [180, 220, 255], alpha: 0.9, r: 1.6 }] };
-    }
-    if (u < HOLD) {
-      const v = (u - IN) / (HOLD - IN);
-      const beam = Math.sin(Math.min(1, v * 1.2) * Math.PI);
-      const lift = v * LIFT;
-      return {
-        tractor: { ship: { x: a.target.x, y: a.target.y, z: alt }, beam, lift, target: a.target },
-        // the beam lights the cube it is pulling, and lifts it
-        heads: [
-          { x: a.target.x, y: a.target.y, color: [190, 235, 255], alpha: 1, r: 2.4, lift },
-          { x: a.target.x, y: a.target.y, color: [140, 200, 255], alpha: 0.5 * beam, r: 4 },
-        ],
-      };
-    }
-    if (u < DROP) {
-      // RELEASED. The beam is off the instant it lets go -- a beam still drawn over a falling cube
-      // reads as the ship dropping something it is still holding.
-      const v = (u - HOLD) / (DROP - HOLD);
-      const lift = LIFT * bounceDrop(v, 0.10, 2, 0.5);
-      return {
-        tractor: { ship: { x: a.target.x, y: a.target.y, z: alt }, beam: 0, lift, target: a.target, dropped: true },
-        heads: [
-          { x: a.target.x, y: a.target.y, color: [200, 240, 255], alpha: 1, r: 2.2, lift },
-          // a flash of dust at the moment of impact, and only then
-          { x: a.target.x, y: a.target.y, color: [255, 240, 200], alpha: lift < 0.05 ? 0.7 : 0, r: 3 },
-        ],
-      };
-    }
-    // AWAY: up and off along its own heading, t^2 so it pulls away rather than drifting. Far enough
-    // to clear the board from wherever it was working, whichever way it points.
-    const v = (u - DROP) / (1 - DROP);
+  // Still grounded well before the end: `lift` is a per-frame OVERRIDE on a copy of the tile, so a
+  // cube still in the air when the effect stops would snap to the floor instead of landing on it.
+  // If the effect is ever made too short to hold the whole landing, the landing is compressed to
+  // fit rather than cut -- an honest fall that ends in a snap is worse than a quicker one.
+  frame(a, u, ctx = {}) {
+    const ms = ctx.ms ?? 8000;
+    const IN = 0.22, HOLD = 0.5;
+    const LIFT = 24;
+    // three times the old 5-over-the-top altitude, and never less than 6 over the lifted cube
+    const alt = Math.max(3 * (a.target.h + 5), a.target.h + LIFT + 6);
+    const E2 = 0.25;                                   // restitution 0.5, squared: each hop's share of the last
+    const hops = bouncesUntil(E2, E2);
+    const landU = Math.min(0.9 - HOLD, landingMs(LIFT, E2, hops, E2) / ms);
+    const impactU = HOLD + landU * fallShare(E2, hops, E2);
     const dir = a.away ?? { dx: a.from.x < a.target.x ? -1 : 1, dy: 0 };
     const reach = Math.max(a.W, a.H) + 8;
-    const x = a.target.x + dir.dx * reach * v * v, y = a.target.y + dir.dy * reach * v * v;
+
+    // the saucer: in, parked over the cube, then away from the moment the cube first hits the floor
+    let ship, leaving = false, shipAlpha = 0.9;
+    if (u < IN) {
+      const v = u / IN;
+      ship = { x: a.from.x + (a.target.x - a.from.x) * v, y: a.target.y, z: alt };
+    } else if (u < impactU) {
+      ship = { x: a.target.x, y: a.target.y, z: alt };
+    } else {
+      // up and off along its own heading, t^2 so it pulls away rather than drifting
+      const v = Math.min(1, (u - impactU) / Math.max(1e-6, 1 - impactU));
+      ship = { x: a.target.x + dir.dx * reach * v * v, y: a.target.y + dir.dy * reach * v * v, z: alt + 30 * v * v };
+      leaving = true;
+      shipAlpha = Math.max(0, 1 - v);
+    }
+
+    // the cube
+    let lift = 0, beam = 0, dropped = false;
+    if (u >= IN && u < HOLD) {
+      const v = (u - IN) / (HOLD - IN);
+      beam = Math.sin(Math.min(1, v * 1.2) * Math.PI) * 0.6 + 0.4;
+      lift = LIFT * (1 - Math.cos(Math.PI * v)) / 2;    // eases to a stop at the top, so the fall starts from rest
+    } else if (u >= HOLD && u < HOLD + landU) {
+      // RELEASED. The beam is off the instant it lets go -- a beam still drawn over a falling cube
+      // reads as the ship dropping something it is still holding.
+      lift = LIFT * bounceDrop((u - HOLD) / landU, E2, hops, E2);
+      dropped = true;
+    }
+
+    const heads = [{ x: ship.x, y: ship.y, color: [180, 220, 255], alpha: shipAlpha, r: 1.6 }];
+    if (u >= IN && u < HOLD + landU) {
+      heads.push({ x: a.target.x, y: a.target.y, color: [190, 235, 255], alpha: 1, r: 2.4, lift });
+      if (beam > 0) heads.push({ x: a.target.x, y: a.target.y, color: [140, 200, 255], alpha: 0.5 * beam, r: 4 });
+      // a flash of dust on each impact, and only then
+      if (dropped && lift < 0.05) heads.push({ x: a.target.x, y: a.target.y, color: [255, 240, 200], alpha: 0.7, r: 3 });
+    }
     return {
-      tractor: { ship: { x, y, z: alt + 24 * v * v }, beam: 0, lift: 0, leaving: true },
-      heads: [{ x, y, color: [180, 220, 255], alpha: Math.max(0, 1 - v), r: 1.6 }],
+      tractor: { ship, beam, lift, ...(u >= IN && !leaving ? { target: a.target } : {}), ...(dropped ? { dropped: true } : {}), ...(leaving ? { leaving: true } : {}) },
+      heads,
     };
   },
   draw(ctx, view, lw) {

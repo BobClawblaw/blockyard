@@ -146,7 +146,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // by a test, so an effect cannot ship without a switch or a switch without an effect.
 const FX_MS = {
   ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
-  lightcycle: 6500, ball: 5600, pulse: 7000,
+  lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
@@ -156,7 +156,8 @@ const FX_MS = {
   // that stayed are the ones worth the second animation loop: two riders (lightcycle, ball), a
   // splitter, a thief, an interception, a collapse and a gateway. The count is deliberately not
   // written as a number here -- it went stale twice as effects were culled.
-  centipede: 7400, tractor: 6800, missile: 7400,
+  // tractor 6800 -> 8000 (2026-09-14): the drop is timed by real gravity now and needs the room
+  centipede: 7400, tractor: 8000, missile: 7400,
   boulderdash: 6400, portal: 7200,};
 export const FX_KINDS = Object.keys(FX_MS);
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
@@ -247,6 +248,47 @@ function fxNow(st, t) {
   return out;
 }
 
+// WHICH EFFECT PLAYS NEXT. Pure apart from `st` (lastFx, pulseReadyAt) and `rnd`, so the tests
+// drive the real rule instead of a copy of it.
+//
+// THE PULSE WAITS ITS TURN (operator, 2026-09-14: "I'm seeing the energy pulse riding the yellow
+// price line on 3d view much too often ... Have it wait at least 30-120 seconds before firing").
+// It was rationed by a dice roll -- skipped half the time it came up -- and on a board whose only
+// other effect is twinkle that still meant a surge every few picks, roughly every 15-25 s. A roll
+// cannot promise a gap; a clock can. Each pulse now sets the earliest moment the next may start, a
+// fresh 30-120 s ahead, and a board that has just opened waits the same way before its first.
+// Until then the pulse is simply not in the running; once its wait is over it plays on the next
+// pick. With every other effect switched off nothing plays in between -- the board rests.
+export const PULSE_WAIT_MS = [30000, 120000];
+export function chooseIdleFx(kinds, st, now, rnd = Math.random) {
+  if (!kinds.length) return null;
+  let pool = kinds.filter((k) => k !== st.lastFx);
+  if (kinds.includes('pulse')) {
+    st.pulseReadyAt ??= now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
+    if (now < st.pulseReadyAt) {
+      const others = kinds.filter((k) => k !== 'pulse');
+      if (!others.length) return null;
+      pool = pool.filter((k) => k !== 'pulse');
+      if (!pool.length) pool = others;
+    } else {
+      pool = ['pulse'];
+    }
+  }
+  // NO FAVOURITES (operator, 2026-09-13: "the tron lightcycles effect happens way too often").
+  // There used to be a rule here: the first effect after the board came to rest was a light-cycle
+  // race HALF THE TIME. That was written when there were nine effects and it read as a flourish.
+  // Measured with fifty-six: 33.2% of every first-after-landing pick was the light cycles,
+  // against 1.8% for an even split -- an eighteenfold bias. And the block-space board re-lays on
+  // every pool refresh, so `soon` fires constantly, which is why it felt relentless.
+  //
+  // A hardcoded favourite also contradicts the scheduling the operator actually chose (flat and
+  // rare, so any one effect is a genuine surprise), so it is gone rather than merely reduced.
+  const from = pool.length ? pool : kinds;
+  const kind = from[(rnd() * from.length) | 0];
+  if (kind === 'pulse') st.pulseReadyAt = now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
+  return kind;
+}
+
 // SOONER (operator, 2026-09-11: "trigger any effects sooner when the board comes to rest,
 // rather than later"): the first effect after a transition lands -- or on a board already
 // still when first drawn -- comes within opts.idleFirst (about a second), and replaces any
@@ -268,47 +310,8 @@ function scheduleFx(canvas, st, opts, soon = false) {
     const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
     const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => k !== 'pulse')).filter((k) => !allowed || allowed.has(k));
     if (!kinds.length) return;
-    let pool = kinds.filter((k) => k !== st.lastFx);
-    // THE PULSE COMES ROUND LESS OFTEN (operator, 2026-09-13: "cut down the occurance of the
-    // energy pulse on the 3D yellow bar"). The price board has only two effects that follow the
-    // line, so a straight random pick ran the surge every other time -- roughly every 14 s, which
-    // on a board someone is reading prices off is too much. Three times in four it is dropped from
-    // the running when there is anything else to play, so twinkle carries the quiet stretches and
-    // the pulse stays an event. Never dropped to nothing: if it is the only effect left switched
-    // on, it still plays.
-    // ...AND THE GUARD WAS DEAD ON THE ONLY BOARD IT WAS FOR (operator, 2026-09-13: the energy
-    // ball must ride the line "MUCH LESS OFTEN"). The price board's whole list is LINE_FX --
-    // pulse and twinkle -- so `pool` after dropping lastFx is ALWAYS length 1, and the
-    // `pool.length > 1` test could never pass there. Measured: a strict alternation,
-    // twinkle pulse twinkle pulse, 50% pulse for ever. The rule only ever fired on the grid
-    // boards, which do not play the pulse at all.
-    //
-    // So the skip no longer depends on there being something else in the pool: when the pulse
-    // comes up and the roll says skip, the board plays whatever else is switched on -- repeating
-    // twinkle if that is all there is, which is a quiet board rather than a surge every 14 s.
-    // It still plays if the operator has turned everything else off.
-    // ...AND THEN IT WAS TOO RARE (operator, 2026-09-13: "I'm not seeing the energy pulse riding
-    // the yellow tube on the 3D Chart any more"). 82% skip left it 9% of picks, and that is only
-    // half the story: the live hour's candle tracks the ticker, so its close moves on EVERY 15 s
-    // poll, the layout signature changes, the board re-lays and `st.fx = null` -- a 7 s pulse is
-    // interrupted nearly every time it is chosen. Selection and attrition multiplied to something
-    // the operator simply never saw finish. 50% puts selection back to a quarter of picks, which
-    // against the same attrition is a completed surge around once a minute.
-    if (pool.includes('pulse') && pool.length + kinds.length > 2 && Math.random() < 0.5) {
-      const without = pool.filter((k) => k !== 'pulse');
-      const fallback = without.length ? without : kinds.filter((k) => k !== 'pulse');
-      if (fallback.length) pool = fallback;
-    }
-    // NO FAVOURITES (operator, 2026-09-13: "the tron lightcycles effect happens way too often").
-    // There used to be a rule here: the first effect after the board came to rest was a light-cycle
-    // race HALF THE TIME. That was written when there were nine effects and it read as a flourish.
-    // Measured with fifty-six: 33.2% of every first-after-landing pick was the light cycles,
-    // against 1.8% for an even split -- an eighteenfold bias. And the block-space board re-lays on
-    // every pool refresh, so `soon` fires constantly, which is why it felt relentless.
-    //
-    // A hardcoded favourite also contradicts the scheduling the operator actually chose (flat and
-    // rare, so any one effect is a genuine surprise), so it is gone rather than merely reduced.
-    const kind = (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
+    const kind = chooseIdleFx(kinds, st, now);
+    if (!kind) { scheduleFx(canvas, st, opts); return; }   // only the pulse is on, and it is still waiting
     startFx(st, kind, now);
     st.wake?.();
   }, a + Math.random() * (b - a));
@@ -1161,7 +1164,11 @@ function priceLine(ctx, view, axes) {
   // (operator, 2026-09-13: "the nebula emissions are not substantial enough") -- more puffs, wider,
   // and at more than double the alpha, with a lighter core on every other one so the cloud reads as
   // having depth. Layering is what makes it substantial; a single fat translucent disc is a bubble.
-  const PUFFS = 210;
+  // SMALLER AND FAINTER (operator, 2026-09-14: "tune the nebula tails down a bit. They are too
+  // large"). Puffs spread about half as far from the line (4 + 78 * age line-widths -> 3 + 38), are
+  // a bit over half the radius and grow less with age, and sit at three-quarters of the alpha, so the
+  // cloud hugs the wire instead of billowing over the chart. Fewer of them, since each covers less.
+  const PUFFS = 160;
   for (let k = 0; k < PUFFS; k++) {
     const u = hash01(k * 7 + 13);                         // how far back down the tail it sits
     const at = headAt - u * PULSE_TAIL;
@@ -1180,9 +1187,9 @@ function priceLine(ctx, view, axes) {
     if (!hp) continue;
     const mx = hp.x, my = hp.y;
     const a1 = hash01(k * 31 + 101) * Math.PI * 2;
-    const spread = lw * (4 + 78 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
-    const rad = lw * (9 + 34 * hash01(k * 13 + 67)) * (1 + 1.3 * age);
-    const al = 0.17 * tint * (1 - 0.5 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
+    const spread = lw * (3 + 38 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
+    const rad = lw * (5 + 19 * hash01(k * 13 + 67)) * (1 + 0.7 * age);
+    const al = 0.13 * tint * (1 - 0.5 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
     const px = mx + Math.cos(a1) * spread, py = my + Math.sin(a1) * spread;
     ctx.fillStyle = `rgba(48,110,255,${al.toFixed(3)})`;
     ctx.beginPath();

@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { board3d, triggerIdle, FX_KINDS } from '../public/js/details3d.js';
 import { AGENTS, isAgent, alongPath, tallestTile, richestTile, rng, floodFrom } from '../public/js/agents.js';
 import { DEFAULTS, PANEL } from '../public/js/settings.js';
-import { fxAt, FX_NONE } from '../public/js/blockscene3d.js';
+import { fxAt, FX_NONE, fallMs } from '../public/js/blockscene3d.js';
 
 function harness() {
   let raf = null;
@@ -231,17 +231,29 @@ test('THE TRACTOR PUTS THE BLOCK DOWN AND LEAVES, rather than stopping mid-abduc
     tiles.push({ txid: `t${x}_${y}`, x, y, s: 2, tall: x === 20 && y === 14 ? 6 : 1.2, color: '#33cc99', rate: 5 });
   }
   const a = AGENTS.tractor.build({ st: {}, seed: 3, W, H, tiles, tops: null, rnd: rng(3) });
-  const at = (u) => AGENTS.tractor.frame(a, u, { ms: 6800, derezMs: 800, seed: 3 }).tractor;
+  const MS = 8000;
+  const at = (u) => AGENTS.tractor.frame(a, u, { ms: MS, derezMs: 800, seed: 3 }).tractor;
   const rows = [];
-  for (let u = 0; u <= 1.0001; u += 0.02) rows.push({ u: +u.toFixed(2), ...at(Math.min(1, u)) });
+  for (let k = 0; k <= 1000; k++) { const u = k / 1000; rows.push({ u, ...at(u) }); }
   const lift = (r) => r.lift ?? 0;
 
   const peak = Math.max(...rows.map(lift));
-  assert.ok(peak >= 12, `the beam lifts the cube well clear of the board (${peak})`);
-  // (operator, 2026-09-14: "flying at least 2 x higher than it current is") -- it was 5 over the top
+  assert.ok(peak >= 24, `the beam lifts the cube far clear of the board (${peak})`);
+  // (operator, 2026-09-14: "at least 2 x higher", then "even higher off the board") -- it was 5 over the top
   const tallest = 6;
   const cruise = rows.find((r) => r.u === 0.4).ship.z;
-  assert.ok(cruise >= 2 * (tallest + 5), `the saucer works from at least twice its old altitude (${cruise})`);
+  assert.ok(cruise >= 3 * (tallest + 5), `the saucer works from three times its old altitude (${cruise})`);
+
+  // GRAVITY, NOT THE CLOCK (operator, 2026-09-14: "allow gravity to make them fall, and bounce before
+  // coming to rest"). From release to the first impact is a free fall from the peak under the board's
+  // own GRAVITY -- the same constant a refresh landing uses -- whatever the effect's length.
+  const release = rows.find((r) => r.dropped);
+  const impact = rows.find((r) => r.dropped && r.lift < 0.05);
+  const fallTook = (impact.u - release.u) * MS;
+  assert.ok(Math.abs(fallTook - fallMs(peak)) < 0.05 * fallMs(peak) + MS / 1000, `falls ${peak} units in ${fallTook.toFixed(0)} ms, gravity says ${fallMs(peak).toFixed(0)}`);
+  // and it bounces visibly: the first rebound climbs a real distance, not a percent of the drop
+  const firstHop = Math.max(...rows.filter((r) => r.dropped && r.u > impact.u && r.u < impact.u + 0.1).map(lift));
+  assert.ok(firstHop > 3, `the first bounce is a visible hop (${firstHop.toFixed(2)} units)`);
   assert.ok(cruise > tallest + peak, 'and above the cube it is lifting');
 
   // IT BOUNCES. Not merely "comes down" -- a bounce is a rebound, so after the peak the height must
@@ -277,7 +289,7 @@ test('THE TRACTOR PUTS THE BLOCK DOWN AND LEAVES, rather than stopping mid-abduc
   // RANDOM: the heading comes from the seed, so different runs leave different ways
   const heading = (seed) => {
     const b = AGENTS.tractor.build({ st: {}, seed, W, H, tiles, tops: null, rnd: rng(seed) });
-    const s = AGENTS.tractor.frame(b, 1, { ms: 6800, derezMs: 800, seed }).tractor.ship;
+    const s = AGENTS.tractor.frame(b, 1, { ms: 8000, derezMs: 800, seed }).tractor.ship;
     return Math.atan2(s.y - b.target.y, s.x - b.target.x);
   };
   const hs = [1, 2, 3, 4, 5, 6, 7, 8].map(heading);

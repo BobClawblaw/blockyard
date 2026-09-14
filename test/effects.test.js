@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
-import { FX_KINDS, board3d, triggerIdle } from '../public/js/details3d.js';
+import { FX_KINDS, board3d, triggerIdle, chooseIdleFx, PULSE_WAIT_MS } from '../public/js/details3d.js';
 import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
@@ -108,37 +108,29 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   const never = FX_KINDS.filter((k) => k !== 'pulse' && !count[k]);
   assert.deepEqual(never, [], `these kinds were never chosen in ${n} draws`);
 
-  // THE PRICE BOARD HAS ITS OWN LIST, AND ITS OWN BUG. This test declared LINE_FX and then threw
-  // it away with `void`, so nothing covered the board the pulse actually plays on -- which is
-  // exactly how the skip survived: it was gated on `pool.length > 1`, and on a TWO-effect list
-  // `pool` after dropping lastFx is always length 1, so it could never fire. Measured before the
-  // fix: a strict alternation, twinkle pulse twinkle pulse, 50% pulse for ever (operator: the
-  // energy ball must ride the line "MUCH LESS OFTEN").
-  const linePick = (last) => {
-    const kinds = LINE_FX;
-    let pool = kinds.filter((k) => k !== last);
-    if (pool.includes('pulse') && pool.length + kinds.length > 2 && Math.random() < 0.82) {
-      const without = pool.filter((k) => k !== 'pulse');
-      const fallback = without.length ? without : kinds.filter((k) => k !== 'pulse');
-      if (fallback.length) pool = fallback;
-    }
-    return (pool.length ? pool : kinds)[(Math.random() * (pool.length ? pool.length : kinds.length)) | 0];
-  };
-  const lineCount = {};
-  let lineLast = null;
-  for (let i = 0; i < n; i++) { const k = linePick(lineLast); lineCount[k] = (lineCount[k] ?? 0) + 1; lineLast = k; }
-  const pulseShare = (lineCount.pulse ?? 0) / n;
-  assert.ok(pulseShare < 0.25,
-    `the pulse takes ${(100 * pulseShare).toFixed(1)}% of the price board's effects; it alternated at 50% `
-    + 'before the guard was fixed, and the operator asked for much less often');
-  assert.ok(pulseShare > 0.02, `but it must still play sometimes (${(100 * pulseShare).toFixed(1)}%)`);
-  // with everything else switched off it is all that is left, and must still run
-  const onlyPulse = (() => {
-    const kinds = ['pulse'];
-    let pool = kinds.filter((k) => k !== 'pulse');
-    return (pool.length ? pool : kinds)[0];
-  })();
-  assert.equal(onlyPulse, 'pulse', 'the last effect standing still plays, however it is weighted');
+  // THE PRICE BOARD HAS ITS OWN LIST, AND ITS OWN RULE. The pulse used to be rationed by a dice
+  // roll, and a roll cannot promise a gap: on a board whose only other effect is twinkle it still
+  // surged every few picks (operator, 2026-09-14: "much too often ... Have it wait at least 30-120
+  // seconds before firing"). This drives the REAL chooser -- no copy of it -- through two simulated
+  // hours at the scheduler's own cadence, and measures the gaps.
+  const st = {};
+  let t = 0, first = null, prev = null;
+  const gaps = [];
+  while (t < 2 * 3600e3) {
+    const k = chooseIdleFx(LINE_FX, st, t);
+    if (k) st.lastFx = k;
+    if (k === 'pulse') { if (prev === null) first = t; else gaps.push(t - prev); prev = t; }
+    t += 5000 + Math.random() * 4000 + (k === 'pulse' ? 9000 : k ? 3000 : 0);   // idleEvery, plus the effect itself
+  }
+  assert.ok(first >= PULSE_WAIT_MS[0], `a board that has just opened waits before its first pulse (${(first / 1000).toFixed(0)} s)`);
+  assert.ok(gaps.length > 20, `and it does keep coming round (${gaps.length} pulses in two hours)`);
+  const minGap = Math.min(...gaps), maxGap = Math.max(...gaps);
+  assert.ok(minGap >= PULSE_WAIT_MS[0], `never sooner than 30 s after the last (shortest gap ${(minGap / 1000).toFixed(1)} s)`);
+  assert.ok(maxGap <= PULSE_WAIT_MS[1] + 10000, `and not left waiting far past 120 s (longest gap ${(maxGap / 1000).toFixed(1)} s)`);
+  // with everything else switched off the pulse still plays -- after its wait, and nothing in between
+  const lone = {};
+  assert.equal(chooseIdleFx(['pulse'], lone, 0), null, 'a lone pulse still waits its turn');
+  assert.equal(chooseIdleFx(['pulse'], lone, lone.pulseReadyAt), 'pulse', 'and then it plays');
 });
 
 test('with every effect switched off the board never schedules one, and it still draws', () => {

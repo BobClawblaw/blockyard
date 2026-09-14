@@ -35,7 +35,7 @@ test('the ball replaced the data packets among the idle effects', () => {
   // markets board), so the literal's tail moved -- this pins that the ball is still in the set,
   // not that it is last. Later the same day FX_MS became a 26-entry table, one effect a line
   // (the arcade), so the closing brace no longer follows the ball on its line either.
-  assert.match(src, /lightcycle: 6500, ball: 5600, pulse: 7000,/);
+  assert.match(src, /lightcycle: 6500, ball: 5600, pulse: 9000,/);   // pulse 7000 -> 9000 (2026-09-14: slower)
   assert.doesNotMatch(src, /packets: 5200/);
   assert.match(src, /function drawBall\(ctx, view, lw\)/);
 });
