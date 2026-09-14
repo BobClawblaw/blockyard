@@ -126,6 +126,16 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
 
 ### Fixed since the 2026-09-11 milestone
 
+- **The second AI security audit's findings, the same day** (`docs/SECURITY-AUDIT-2026-09-14.md`,
+  which re-verified the 09-13 fixes live and covered the address index and explorer). Its one
+  medium: `/api/x/address` sized an allocation by the request's page number, 525 MB for
+  `page=999999` on a two-row address -- a deep page now counts the history first and keeps at most
+  what exists. The rest: rows above the node's tip (a reorganised tail the follower has not yet
+  rolled back) are left out of the count, balance and page and reported as `index.postTip` with a
+  caveat on the page; a pool key is escaped like everything around it; a transaction summary with
+  more than 2,000 inputs and outputs is never cached; a test fixture no longer lives at a fixed
+  name in `/tmp`; `audit.jsonl` and `history.json` are created owner-only.
+
 - **Display-settings sliders jumped as their value changed**: the readout's width changed with its
   digits and pushed the slider about. The value is printed to the step's decimals in a fixed-width
   box.

@@ -1,5 +1,16 @@
 # BlockYard Security Audit — 2026-09-14
 
+> **STATUS: REMEDIATED — 2026-09-14, the same day.** M1: `summaryForKey` never sizes its ring by the
+> page number -- a page past 4,096 rows counts the history first and keeps at most what exists
+> (`test/chain-index.test.js` asserts a `page=1,000,000` request allocates nothing for it). M2: rows
+> above the node's tip are excluded from the count, the balance and the page and reported as
+> `index.postTip`, which the page shows as a caveat. L1: the pool key is escaped like its
+> neighbours. L2: a summary with more than 2,000 inputs and outputs is never cached. L3: the
+> shape-liveness fixture lives in a `mkdtemp` directory. L4: `audit.jsonl` and `history.json` are
+> created 0600 (`pool-map.json` is a public curated map and stays as it is). I1 is an open
+> decision, unchanged. The report below is kept as written.
+
+
 - **Project:** BlockYard — a multi-user web monitor for a Bitcoin Core node (`/storage/blockyard`)
 - **Audit date:** 2026-09-14 (single session, sequential)
 - **Scope:** full code + security re-audit of `server/` (http, auth, rpc, collect, store, chain, netinfo, config, main), `public/` browser code, `scripts/`, `systemd/`, `test/` infrastructure, plus deployment posture and secret hygiene on this box
