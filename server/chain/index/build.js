@@ -21,13 +21,14 @@ import { ROW } from './rows.js';
 export const FORMAT = 1;
 export const BLOCK_ROWS = 4096;
 
-async function chainHashes(rpc, tip, onProgress) {
+async function chainHashes(rpc, tip, onProgress, pace = null) {
   const table = new HeightTable(1 << 21);
   const hashes = new Array(tip + 1);
   // small batches at the lowest priority: the monitor's own polls interleave between them, and
   // on a machine shared with the node a 5,000-call batch held the lane for seconds (2026-09-14)
   const BATCH = 1000;
   for (let from = 0; from <= tip; from += BATCH) {
+    if (pace) await pace();   // the batches load the node too: hold while it is slow (2026-09-14)
     const calls = [];
     for (let h = from; h <= Math.min(tip, from + BATCH - 1); h++) calls.push({ method: 'getblockhash', params: [h] });
     const got = await rpc.batch(calls, { key: `index:hashes:${from}`, timeoutMs: 120_000, maxWaitMs: 600_000, priority: 9 });
@@ -110,7 +111,7 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
   if (chain !== 'main') throw new Error(`only mainnet block files are framed here so far (the node is on ${chain})`);
 
   let t = performance.now();
-  const { table, hashes } = await chainHashes(rpc, tip, onProgress);
+  const { table, hashes } = await chainHashes(rpc, tip, onProgress, pace);
   stats.phases.heightsSec = (performance.now() - t) / 1000;
 
   rmSync(out, { recursive: true, force: true });
