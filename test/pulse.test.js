@@ -231,3 +231,58 @@ test('the tail lasts at least two seconds anywhere on the line, and clears the f
   assert.ok(tail * crossMs >= 2000, `the tail is ${(tail * crossMs).toFixed(0)} ms long`);
   assert.ok(1 / travel > 1 + tail, 'the head runs on far enough past the end for the whole tail to leave the line');
 });
+
+test('THE PIPE BULGE rolls in and out with no pop, stays inside the line, and swells the pipe as it passes', async () => {
+  // (operator, 2026-09-14: "a sphere is moving through the pipe, and the pipe bulges outward as the
+  // sphere moves through the pipe ... cleanly roll in and roll out with no pops, and limit it to within
+  // the limits of the yellow price line")
+  const { bulgeAt } = await import('../public/js/details3d.js');
+  assert.equal(bulgeAt(0).amp, 0, 'nothing at the start');
+  assert.equal(bulgeAt(1).amp, 0, 'nothing at the end');
+  let worstStep = 0, prev = bulgeAt(0), peak = 0;
+  for (let k = 1; k <= 2000; k++) {
+    const b = bulgeAt(k / 2000);
+    worstStep = Math.max(worstStep, Math.abs(b.amp - prev.amp), Math.abs(b.s - prev.s) * 4);
+    assert.ok(b.s > 0.05 && b.s < 0.95, `the sphere stays inside the line (s=${b.s.toFixed(3)} at u=${k / 2000})`);
+    assert.ok(b.s >= prev.s, 'and only ever moves left to right');
+    peak = Math.max(peak, b.amp);
+    prev = b;
+  }
+  assert.ok(worstStep < 0.01, `no step between neighbouring frames is a pop (largest ${worstStep.toFixed(4)})`);
+  assert.equal(peak, 1, 'and it reaches full size in the middle');
+
+  // on the real board: the swell is drawn as extra fills around the pipe, only while it runs
+  const h = harness();
+  board3d(h.canvas, TILES, { axes: AXES, gridW: 8, gridH: 8, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } });
+  for (let i = 1; i <= 6; i++) h.step(i * 16);
+  harness.t = 1000;
+  const fills = (ops) => ops.filter((o) => o === 'fill').length;
+  const rest = (() => { const b = h.ops.length; h.step(1016); return h.ops.slice(b); })();
+  assert.equal(triggerIdle(h.canvas, 'bulge'), true, 'bulge is a kind the renderer knows');
+  const mid = (() => { const b = h.ops.length; h.step(1000 + 4000); return h.ops.slice(b); })();
+  assert.ok(fills(mid) > fills(rest) + 8, `the swell and the sphere add fills mid-run (${fills(rest)} -> ${fills(mid)})`);
+  assert.ok(mid.some((o) => o.startsWith('set:fillStyle=rgba(255,250,210')), 'including the sphere\'s hot centre');
+});
+
+test('NO EFFECT REPEATS within the configured window, picks stay random, and a short list takes turns', async () => {
+  // (operator, 2026-09-14: "add a config field that defaults to 12. Make sure to pick a random effect
+  // to play, but never pick one that has been played in the last 12 sequences")
+  const { chooseIdleFx, FX_KINDS } = await import('../public/js/details3d.js');
+  let seed = 314159;
+  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+  const kinds = FX_KINDS.filter((k) => k !== 'pulse' && k !== 'bulge');
+  const st = {};
+  const seq = [];
+  for (let i = 0; i < 3000; i++) seq.push(chooseIdleFx(kinds, st, i * 10_000, rnd, 12));
+  for (let i = 0; i < seq.length; i++) {
+    const last12 = seq.slice(Math.max(0, i - 12), i);
+    assert.ok(!last12.includes(seq[i]), `${seq[i]} at pick ${i} was played within the last 12`);
+  }
+  assert.deepEqual(new Set(seq).size, kinds.length, 'every effect still gets played');
+  const cycle = seq.slice(0, kinds.length).join();
+  assert.notEqual(seq.slice(kinds.length, 2 * kinds.length).join(), cycle, 'and not as a fixed rotation: the order stays random');
+  // the window is a setting: 0 allows repeats, and a window wider than the list degrades to turns
+  const three = ['twinkle', 'x', 'y'], st3 = {};
+  const turns = Array.from({ length: 60 }, (_, i) => chooseIdleFx(three, st3, i, rnd, 12));
+  for (let i = 2; i < turns.length; i++) assert.ok(turns[i] !== turns[i - 1] && turns[i] !== turns[i - 2], 'three effects, window 12: each waits for the other two');
+});

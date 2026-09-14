@@ -147,6 +147,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 const FX_MS = {
   ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
+  bulge: 8000,                                 // a sphere rolling through the price line (2026-09-14)
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
@@ -190,7 +191,9 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // scan, tide), the light cycles and the lightning ball all travel the FLOOR, which on the candle
 // board is empty space -- which is what "through space on an invisible grid" describes. Where a
 // line exists, the effects that run are the ones with something to run along.
-const LINE_FX = ['pulse', 'twinkle'];
+const LINE_FX = ['pulse', 'twinkle', 'bulge'];
+// effects that are drawn on the price line and nowhere else: never offered to a board of blocks
+const LINE_ONLY = new Set(['pulse', 'bulge']);
 const DEREZ_MS = 800;   // how long a crashed light cycle takes to shatter and fade
 
 function startFx(st, kind, now) {
@@ -260,10 +263,28 @@ function fxNow(st, t) {
 // fresh 30-120 s ahead, and a board that has just opened waits the same way before its first.
 // Until then the pulse is simply not in the running; once its wait is over it plays on the next
 // pick. With every other effect switched off nothing plays in between -- the board rests.
-export const PULSE_WAIT_MS = [30000, 120000];
-export function chooseIdleFx(kinds, st, now, rnd = Math.random) {
+// ...RARER STILL (operator, 2026-09-14, later: "still happens too often. Need to make it rarer
+// still"): 2.5-6 minutes between surges, from 30-120 s.
+//
+// NO EFFECT REPEATS WITHIN THE LAST `noRepeat` PLAYED (operator, 2026-09-14: "add a config field that
+// defaults to 12 ... never pick one that has been played in the last 12 sequences"). This replaces
+// "not the same one twice running", which was the same rule with a window of one. `st.recentFx` keeps
+// the kinds played, newest last. Where fewer kinds are switched on than the window -- the price line
+// has three -- no kind can be twelve plays clear, so the pick is among those that have waited
+// longest: the rule degrades to taking turns, never to a repeat while something else is waiting.
+export const PULSE_WAIT_MS = [150000, 360000];
+export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
   if (!kinds.length) return null;
-  let pool = kinds.filter((k) => k !== st.lastFx);
+  const recent = st.recentFx ?? (st.recentFx = []);
+  const window = Math.max(0, Math.min(Math.floor(noRepeat), kinds.length - 1));
+  const blocked = new Set(recent.slice(recent.length - window));
+  let pool = kinds.filter((k) => !blocked.has(k));
+  if (!pool.length) {
+    // every kind is inside the window: the ones played least recently
+    const lastSeen = (k) => recent.lastIndexOf(k);
+    const oldest = Math.min(...kinds.map(lastSeen));
+    pool = kinds.filter((k) => lastSeen(k) === oldest);
+  }
   if (kinds.includes('pulse')) {
     st.pulseReadyAt ??= now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
     if (now < st.pulseReadyAt) {
@@ -287,6 +308,8 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random) {
   const from = pool.length ? pool : kinds;
   const kind = from[(rnd() * from.length) | 0];
   if (kind === 'pulse') st.pulseReadyAt = now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
+  recent.push(kind);
+  if (recent.length > 64) recent.splice(0, recent.length - 64);
   return kind;
 }
 
@@ -309,9 +332,9 @@ function scheduleFx(canvas, st, opts, soon = false) {
     // every effect is switchable (settings.js `effects`): opts.fxKinds is the operator's list, and
     // an empty one means the board rests in peace -- idleFx off is not the only way to say so
     const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
-    const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => k !== 'pulse')).filter((k) => !allowed || allowed.has(k));
+    const kinds = (onALine ? LINE_FX : FX_KINDS.filter((k) => !LINE_ONLY.has(k))).filter((k) => !allowed || allowed.has(k));
     if (!kinds.length) return;
-    const kind = chooseIdleFx(kinds, st, now);
+    const kind = chooseIdleFx(kinds, st, now, Math.random, opts.fxNoRepeat ?? 12);
     if (!kind) { scheduleFx(canvas, st, opts); return; }   // only the pulse is on, and it is still waiting
     startFx(st, kind, now);
     st.wake?.();
@@ -1094,6 +1117,109 @@ function headPoint(pts, at, overrun) {
   return { x: b.x + (vx / len) * travel, y: b.y + (vy / len) * travel, fade: 1 - past / overrun };
 }
 
+// THE PIPE BULGE (operator, 2026-09-14: "Add a new effect on the markets yellow line. Moves along the
+// yellow bar from left to right. I want it to look like a sphere is moving through the pipe, and the
+// pipe bulges outward as the sphere moves through the pipe, and contracts back into shape when it
+// moves onward. Have it cleanly roll in and roll out with no pops, and limit it to within the limits
+// of the yellow price line").
+//
+// Where along the line, and how big, at effect progress u -- pure, so the no-pop promise is tested:
+//   s     0..1 along the line, eased at both ends, and kept inside it by the swell's own half-width
+//   amp   0 at u=0 and u=1 and smooth in between (smoothstep in over the first 18%, out over the
+//         last 18%), so the sphere and the swell grow from nothing and shrink to nothing
+export function bulgeAt(u) {
+  const c = Math.max(0, Math.min(1, u));
+  const ease = c * c * (3 - 2 * c);
+  const ss = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  return { s: BULGE_MARGIN + (1 - 2 * BULGE_MARGIN) * ease, amp: ss(0, 0.18, c) * ss(1, 0.82, c) };
+}
+const BULGE_MARGIN = 0.06;       // the sphere's centre never nearer an end than this share of the line
+const BULGE_SIGMA = 0.035;       // the swell's width, as a share of the line (a Gaussian)
+// how much wider the crest is, per layer: the tube itself stretches hard round the sphere, the glow
+// barely -- a first cut swelled every layer alike, and the wide translucent glow bands ballooned into
+// stepped plateaus with visible edges; the sphere's own light replaces what they were doing
+const BULGE_GAIN_CORE = 2.3;
+const BULGE_GAIN_GLOW = 0.35;
+const bulgeGain = (kind) => (kind === 'core' ? BULGE_GAIN_CORE : BULGE_GAIN_GLOW);
+
+// A point on the drawn curve, and its unit normal: the same Catmull-Rom Beziers traceCurve strokes, so
+// the swell is laid on exactly the line the eye sees and never separates from it at a candle.
+function curveAt(pts, s) {
+  const n = pts.length - 1;
+  const d = Math.max(0, Math.min(n, s * n));
+  const i = Math.min(n - 1, Math.floor(d)), t = d - i;
+  const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+  const c1 = { x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 };
+  const c2 = { x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 };
+  const mt = 1 - t;
+  const x = mt * mt * mt * p1.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p2.x;
+  const y = mt * mt * mt * p1.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p2.y;
+  const dx = 3 * mt * mt * (c1.x - p1.x) + 6 * mt * t * (c2.x - c1.x) + 3 * t * t * (p2.x - c2.x);
+  const dy = 3 * mt * mt * (c1.y - p1.y) + 6 * mt * t * (c2.y - c1.y) + 3 * t * t * (p2.y - c2.y);
+  const len = Math.hypot(dx, dy) || 1;
+  return { x, y, nx: -dy / len, ny: dx / len };
+}
+
+function drawBulge(ctx, pts, lw, u, layers) {
+  const { s, amp } = bulgeAt(u);
+  if (amp < 0.002) return;
+  // the swell: for each layer, only the EXTRA width beyond the pipe already stroked -- a band on each
+  // side from the pipe's edge out to the swollen edge -- so translucent layers never double up and
+  // brighten where the pipe is. Where the Gaussian has fallen away the band is zero thick, so the
+  // swell meets the pipe with no edge.
+  const STEPS = 48;
+  const span = BULGE_SIGMA * 3;
+  const samples = [];
+  for (let k = 0; k <= STEPS; k++) {
+    const ss = Math.max(0, Math.min(1, s - span + (2 * span * k) / STEPS));
+    const g = Math.exp(-(((ss - s) / BULGE_SIGMA) ** 2));
+    samples.push({ ...curveAt(pts, ss), g });
+  }
+  for (const [w, c, a, kind] of layers) {
+    const r0 = (lw * w) / 2, gain = bulgeGain(kind);
+    for (const side of [1, -1]) {
+      const outer = samples.map((q) => ({ x: q.x + q.nx * side * r0 * (1 + gain * amp * q.g), y: q.y + q.ny * side * r0 * (1 + gain * amp * q.g) }));
+      const inner = samples.map((q) => ({ x: q.x + q.nx * side * r0, y: q.y + q.ny * side * r0 })).reverse();
+      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+      ctx.beginPath();
+      ctx.moveTo(outer[0].x, outer[0].y);
+      for (const q of outer) ctx.lineTo(q.x, q.y);
+      for (const q of inner) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  // the sphere inside: sized to the swollen core, a warm body with a hot centre and a highlight
+  // toward the light, growing and shrinking with the same amplitude as the swell
+  const c = curveAt(pts, s);
+  // inside the stretched wall, not filling it, so the pipe reads as a skin round a ball
+  const R = (lw * 5.5 / 2) * (1 + BULGE_GAIN_CORE * amp) * 0.72;
+  // its own soft light, which is what the ballooning glow layers were standing in for
+  for (const [k, al] of [[3.2, 0.07], [2.3, 0.1], [1.6, 0.16]]) {
+    ctx.fillStyle = `rgba(255,220,90,${(al * amp).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(c.x, c.y, R * k, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const [k, col] of [[1, `rgba(255,214,60,${(0.55 * amp).toFixed(3)})`], [0.78, `rgba(255,236,120,${(0.8 * amp).toFixed(3)})`], [0.5, `rgba(255,250,210,${(0.95 * amp).toFixed(3)})`]]) {
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(c.x, c.y, R * k, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = `rgba(255,255,255,${(0.9 * amp).toFixed(3)})`;
+  ctx.beginPath(); ctx.arc(c.x - R * 0.3, c.y - R * 0.34, R * 0.22, 0, Math.PI * 2); ctx.fill();
+  // the pipe's skin catching the light over the swell: a thin bright rim that fades with the Gaussian
+  for (const side of [1, -1]) {
+    const r0 = (lw * 5.5) / 2;
+    ctx.strokeStyle = `rgba(255,248,200,${(0.55 * amp).toFixed(3)})`;
+    ctx.lineWidth = Math.max(0.5, lw * 0.6);
+    ctx.beginPath();
+    samples.forEach((q, k) => {
+      const r = r0 * (1 + BULGE_GAIN_CORE * amp * q.g);
+      const x = q.x + q.nx * side * r, y = q.y + q.ny * side * r;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+}
+
 function priceLine(ctx, view, axes) {
   const pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
@@ -1133,6 +1259,12 @@ function priceLine(ctx, view, axes) {
   const CORE = [[5.5, [255, 236, 70], 0.78, 'core'], [3, [255, 246, 150], 1, 'core'], [1.3, [255, 255, 240], 1, 'core']];
   const fx = view.fx && view.fx.kind === 'pulse' ? view.fx : null;
   const done = () => { ctx.lineWidth = lw; ctx.lineJoin = join; ctx.lineCap = cap; };
+  if (view.fx?.kind === 'bulge') {
+    for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    drawBulge(ctx, pts, lw, view.fx.u, [...GLOW, ...CORE]);
+    done();
+    return;
+  }
   if (!fx) {
     for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
     done();

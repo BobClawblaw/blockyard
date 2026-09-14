@@ -76,7 +76,10 @@ export const DEFAULTS = Object.freeze({
     // that"). Measured on the paint order across a refresh, pops rise with depth -- 6 at 0.01, 24 at
     // 0.03, 44 at 0.08 -- and past 0.03 a rising cube swells over its neighbours enough to be seen.
     // A stored value above the cap is clamped to it on load; the default stays 0.
-    perspective: 0,       // 0 = the parallel camera; 0.004 gentle, 0.01 pronounced, 0.03 the most allowed
+    // ...AND THEN 0.001 (operator, 2026-09-14: "The board depth slider should be a limit between 0 and
+    // 0.001. It starts looking bad any higher than 0.001"), in steps of 0.0001 so the range still has
+    // ten stops. A stored value above it clamps on load.
+    perspective: 0,       // 0 = the parallel camera; 0.001 the most allowed
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
@@ -162,9 +165,14 @@ export const DEFAULTS = Object.freeze({
   effects: Object.freeze({
     ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
     lightcycle: true, ball: true, pulse: true,
+    bulge: true,          // the price line on Markets: a sphere rolls through the pipe and it swells round it
     shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true, // the agents: something happening on the board, rather than a pattern over it
     centipede: true, tractor: true, missile: true, boulderdash: true, stormball: true,
+    // NO REPEATS (operator, 2026-09-14: "add a config field that defaults to 12. Make sure to pick a
+    // random effect to play, but never pick one that has been played in the last 12 sequences"). A
+    // number, not a switch: enabledEffects reads only the switches.
+    noRepeat: 12,
   }),
   // BLOCKOUT (operator, 2026-09-12: "take the classic Atari Breakout game, and make a clone of it,
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
@@ -282,7 +290,7 @@ export const PANEL = Object.freeze([
         options: Object.freeze([['normal', 'Along the board’s curve'], ['arcing', 'Arcing (original)']]),
       }),
       Object.freeze({ key: 'dome', label: 'Board curve', kind: 'range', min: 0, max: 12, step: 1, hint: 'How far the board bows toward you; 0 is flat' }),
-      Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.03, step: 0.001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows wider than its base and a flying block swells as it comes toward you. Blocks in flight swell as they rise; near the top of the range a landing block can briefly swap with a neighbour' }),
+      Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.001, step: 0.0001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows a little wider than its base and a flying block swells slightly as it rises' }),
       Object.freeze({
         key: 'light', label: 'Light', kind: 'choice', hint: 'Where the lamp hangs. Straight above lights the whole board evenly; a corner shades the far slope of the curve and the sides turned away',
         options: Object.freeze([['overhead', 'Straight above'], ['upper-left', 'Upper left'], ['upper-right', 'Upper right'], ['front', 'From the viewer']]),
@@ -401,7 +409,9 @@ export const PANEL = Object.freeze([
       Object.freeze({ key: 'scan', label: 'Scan line', kind: 'toggle', hint: 'A tight line crossing the board, edge to edge' }),
       Object.freeze({ key: 'lightcycle', label: 'Light cycles', kind: 'toggle', hint: 'Two riders from opposite edges, leaving light walls, until one crashes' }),
       Object.freeze({ key: 'ball', label: 'Lightning ball', kind: 'toggle', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
+      Object.freeze({ key: 'noRepeat', label: 'No repeats within', kind: 'range', min: 0, max: 30, step: 1, hint: 'An effect is never played again until this many other effects have played since. Where fewer effects are switched on, the one that has waited longest plays next' }),
       Object.freeze({ key: 'pulse', label: 'Energy pulse', kind: 'toggle', hint: 'The surge that runs the price line on Markets, blue behind the head' }),
+      Object.freeze({ key: 'bulge', label: 'Pipe bulge', kind: 'toggle', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
       Object.freeze({ key: 'shockwave', label: 'Shockwave', kind: 'toggle', hint: 'A hard ring that throws the blocks it passes into the air' }),
       Object.freeze({ key: 'nova', label: 'Nova', kind: 'toggle', hint: 'An implosion to the middle, then a brighter blast back out' }),
       Object.freeze({ key: 'firework', label: 'Fireworks', kind: 'toggle', hint: 'Three bursts, each at its own moment and place' }),
@@ -794,6 +804,7 @@ export function spaceOptions(s) {
   // has always been, so the switch costs nothing until someone moves it
   out.obliqueRise = sp.perspective;
   out.fxKinds = enabledEffects(n);
+  out.fxNoRepeat = n.effects.noRepeat;
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;
   // THE GRID'S OWN COLOUR. Until now these were never set here at all, so the board fell through to
   // the hand-tuned greens in details3d.js and there was no way to change them. The shipped values
@@ -809,7 +820,7 @@ export function spaceOptions(s) {
  */
 export function enabledEffects(s) {
   const n = normalise(s);
-  return Object.keys(n.effects).filter((k) => n.effects[k]);
+  return Object.keys(n.effects).filter((k) => n.effects[k] === true);
 }
 
 /** Blockout's switches, with the sky's make-up from the Sky group (as tetrustOptions does). */
@@ -893,5 +904,6 @@ export function marketsOptions(s) {
     // the per-effect switches govern this board too: the price line's own two (pulse, twinkle)
     // are in the same list as the grid's
     fxKinds: enabledEffects(n),
+    fxNoRepeat: n.effects.noRepeat,
   };
 }

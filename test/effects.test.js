@@ -14,9 +14,11 @@ import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions } from '.
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
   assert.ok(FX_KINDS.length >= 25, `${FX_KINDS.length} effects`);
-  assert.deepEqual(Object.keys(DEFAULTS.effects), FX_KINDS, 'the switches are exactly the effects, in order');
-  const rows = PANEL.find((g) => g.group === 'effects')?.rows.map((r) => r.key);
+  // the group also holds one number, noRepeat (2026-09-14); the SWITCHES are exactly the effects
+  assert.deepEqual(Object.keys(DEFAULTS.effects).filter((k) => typeof DEFAULTS.effects[k] === 'boolean'), FX_KINDS, 'the switches are exactly the effects, in order');
+  const rows = PANEL.find((g) => g.group === 'effects')?.rows.filter((r) => r.kind === 'toggle').map((r) => r.key);
   assert.deepEqual(rows, FX_KINDS, 'and the panel lists exactly the effects, in order');
+  assert.equal(DEFAULTS.effects.noRepeat, 12, 'and the no-repeat window defaults to 12');
   assert.ok(FX_KINDS.every((k) => DEFAULTS.effects[k] === true), 'all on: they were asked for');
 });
 
@@ -34,7 +36,7 @@ test('every effect lights something at some point in its run, and nothing before
     heads: [{ x: 20 * u, y: 10, color: [80, 220, 255], alpha: 1 }],
   });
   for (const kind of FX_KINDS) {
-    if (kind === 'pulse') continue;            // the pulse is drawn on the price line, not on cubes
+    if (kind === 'pulse' || kind === 'bulge') continue;   // drawn on the price line, not on cubes
     let lit = 0, worst = 0;
     for (let u = 0.02; u < 1; u += 0.02) {
       const fx = fxFor(kind, u);
