@@ -1829,6 +1829,8 @@ export class NodeMonitor extends EventEmitter {
         reorgEvents: this.reorgEvents,
         reorgAt: this.reorgAt,
         peers: s.peers.connections ?? null,
+        // the highest tip any peer reports: what tells a long gap from a stalled node
+        peerBestHeight: (() => { const hs = (s.peers.list ?? []).map((p) => (Number.isFinite(p.synced_headers) && p.synced_headers >= 0 ? p.synced_headers : Number.isFinite(p.startingheight) ? p.startingheight : -1)).filter((h) => h >= 0); return hs.length ? Math.max(...hs) : null; })(),
         txouts: s.utxo?.txouts ?? s.logState.heartbeat?.txouts ?? null,
         difficulty: diff,
         reason: s.methodErrors?.getblockchaininfo

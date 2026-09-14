@@ -78,12 +78,25 @@ test('catching up after a restart is its own state, not "synced"', () => {
   assert.equal(s.etaSec, 60);
 });
 
-test('a node holding an old tip with no gap is stalled, not synced', () => {
-  const s = computeSync({
-    now: NOW, blocks: 965993, headers: 965993, ibd: false, verificationProgress: 1, tipTime: sec(7200),
-  });
+test('A LONG GAP IS NOT A STALL: stalled only when the peers know a higher tip', () => {
+  // (2026-09-14: two independent nodes at the same height, no block for 42 minutes, "STALLED" in red)
+  const base = { now: NOW, blocks: 965993, headers: 965993, ibd: false, verificationProgress: 1 };
+  // 42 minutes old, peers agree on the tip: synced, with the gap named as the network's
+  let s = computeSync({ ...base, tipTime: sec(2520), peerBestHeight: 965993 });
+  assert.equal(s.state, STATE.SYNCED);
+  assert.ok(s.caveats.some((c) => /42 minutes.*peers agree/i.test(c)), s.caveats.join(' | '));
+  // 42 minutes old, a peer reports a higher tip: this node is behind the network -- stalled
+  s = computeSync({ ...base, tipTime: sec(2520), peerBestHeight: 965995 });
   assert.equal(s.state, STATE.STALLED);
-  assert.ok(s.caveats.some((c) => /over 40 minutes/i.test(c)));
+  assert.ok(s.caveats.some((c) => /peers know a higher tip/i.test(c)));
+  assert.ok(s.caveats.some((c) => /2 block\(s\) above/i.test(c)));
+  // no peer heights known: 42 minutes is a gap, two and a half hours is a stall
+  s = computeSync({ ...base, tipTime: sec(2520) });
+  assert.equal(s.state, STATE.SYNCED, 'without peer heights, 42 minutes is not called a stall');
+  assert.ok(s.caveats.some((c) => /cannot be told apart yet/i.test(c)));
+  s = computeSync({ ...base, tipTime: sec(9000) });
+  assert.equal(s.state, STATE.STALLED);
+  assert.ok(s.caveats.some((c) => /over two hours/i.test(c)));
 });
 
 test('a fresh reorg outranks a full bar', () => {

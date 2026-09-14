@@ -37,6 +37,12 @@ export const STATE = {
 // intervals plus slack: a node on a quiet chain legitimately waits ~20 min for
 // the next block, so anything under that must not raise a stall flag.
 const STALL_SEC = 2400;
+// A LONG GAP IS NOT A STALL (2026-09-14: two independent nodes at the same height, no block for
+// 42 minutes, and the header said STALLED in red -- "Production is fucked now"). The network finds
+// no block for 40 minutes about once in fifty; a node is stalled only when its PEERS know a higher
+// tip than it holds. With no peer heights to ask, the old age alone must be well past what a gap
+// can be before the word is used.
+const STALL_ALONE_SEC = 7200;
 // "Synced" also requires the tip to be this close to now, to avoid calling a
 // node that lost all its peers "synced".
 const FRESH_SEC = 3600;
@@ -64,6 +70,7 @@ export function computeSync({
   difficulty = null,
   reason = null,
   targetHeight = null,
+  peerBestHeight = null,   // the highest tip any connected peer reports (getpeerinfo synced_headers)
 } = {}) {
   const hasCounts = Number.isFinite(blocks);
   const headersKnown = Number.isFinite(headers) && headers > 0;
@@ -74,7 +81,7 @@ export function computeSync({
 
   const tipAgeSec = Number.isFinite(tipTime) ? Math.max(0, Math.floor(now / 1000) - tipTime) : null;
 
-  const state = decideState({ hasCounts, headersKnown, behind, ibd, tipAgeSec, reorgAt, now, reorgEvents });
+  const state = decideState({ blocks, peerBestHeight,  hasCounts, headersKnown, behind, ibd, tipAgeSec, reorgAt, now, reorgEvents });
 
   // Rate windows, and when they may be believed.
   //
@@ -202,7 +209,7 @@ export function computeSync({
     // a broken monitor; the node usually told us exactly what it is doing.
     reason: state === STATE.UNKNOWN ? (reason ?? null) : null,
     // Honest summary of what we cannot know, so the UI can say it out loud.
-    caveats: caveatsOf({
+    caveats: caveatsOf({ blocks, peerBestHeight, 
           headersKnown, hasCounts, vp, heightRatio, behind, tipAgeSec, state, rateTrend,
           etaBestSec, etaWorstSec,
           // pre-vetting values, so the wording can distinguish "never sampled"
@@ -217,20 +224,26 @@ export function computeSync({
   };
 }
 
-function decideState({ hasCounts, headersKnown, behind, ibd, tipAgeSec, reorgAt, now, reorgEvents }) {
+function decideState({ hasCounts, headersKnown, behind, ibd, tipAgeSec, reorgAt, now, reorgEvents, blocks = null, peerBestHeight = null }) {
   if (!hasCounts) return STATE.UNKNOWN;
   // A reorg in the last 3 minutes outranks everything: the bar is about to move
   // backwards, and calling that "synced" would be wrong twice over.
   if (reorgEvents > 0 && reorgAt != null && now - reorgAt < 180_000) return STATE.REORG;
   if (ibd === true) return STATE.IBD;
   if (headersKnown && behind > 0) return STATE.CATCHING_UP;
-  if (tipAgeSec != null && tipAgeSec > STALL_SEC) return STATE.STALLED;
+  if (tipAgeSec != null && tipAgeSec > STALL_SEC) {
+    const peersAhead = Number.isFinite(peerBestHeight) && Number.isFinite(blocks) && peerBestHeight > blocks;
+    const peersAgree = Number.isFinite(peerBestHeight) && Number.isFinite(blocks) && peerBestHeight <= blocks;
+    if (peersAhead) return STATE.STALLED;
+    if (!peersAgree && tipAgeSec > STALL_ALONE_SEC) return STATE.STALLED;
+    // peers agree on this tip, or nobody can say otherwise yet: a long gap, and synced
+  }
   if (tipAgeSec != null && tipAgeSec <= FRESH_SEC) return STATE.SYNCED;
   if (behind === 0 && headersKnown) return STATE.SYNCED;
   return STATE.UNKNOWN;
 }
 
-function caveatsOf({ headersKnown, hasCounts, vp, heightRatio, behind, tipAgeSec, state, rateTrend, etaBestSec, etaWorstSec, rawRates = {}, seenTooYoung = false, stalledNow = false, hasUsableRate = false, reason = null }) {
+function caveatsOf({ headersKnown, hasCounts, vp, heightRatio, behind, tipAgeSec, state, rateTrend, etaBestSec, etaWorstSec, rawRates = {}, seenTooYoung = false, stalledNow = false, hasUsableRate = false, reason = null, blocks = null, peerBestHeight = null }) {
   const out = [];
   // Whether any window saw a rate at all, before vetting turned a too-young
   // sample into null. "No rate measured" and "a sample existed but was too young
@@ -248,7 +261,9 @@ function caveatsOf({ headersKnown, hasCounts, vp, heightRatio, behind, tipAgeSec
     out.push(`height ratio ${(heightRatio * 100).toFixed(2)}% and the node's own estimate ${(vp * 100).toFixed(2)}% differ: the first is blocks we hold over announced headers, the second is difficulty-weighted work. Both are shown`);
   }
   if (behind === 0 && tipAgeSec != null && tipAgeSec > 2400) {
-    out.push('blocks and headers agree, but the tip is old: the node may be cut off from peers rather than complete, and heightRatio cannot tell the two apart');
+    if (Number.isFinite(peerBestHeight) && Number.isFinite(blocks) && peerBestHeight > blocks) out.push(`connected peers report a tip ${peerBestHeight - blocks} block(s) above this node's: it is behind the network, not waiting for it`);
+    else if (Number.isFinite(peerBestHeight)) out.push(`no block for ${Math.round(tipAgeSec / 60)} minutes, and the connected peers agree on this tip: a long gap on the network, not a fault of this node`);
+    else out.push('blocks and headers agree, but the tip is old and no peer height is known, so a long gap and a node cut off from its peers cannot be told apart yet');
   }
   if (behind != null && behind > 0 && stalledNow) {
     out.push('no blocks arrived in the last couple of minutes: either the download has stalled or this node is between bursts, so no ETA is offered');
@@ -271,7 +286,7 @@ function caveatsOf({ headersKnown, hasCounts, vp, heightRatio, behind, tipAgeSec
   if (behind != null && behind > 0 && etaBestSec != null && etaWorstSec != null) {
     out.push(`the node downloads in bursts, so a single figure would be a guess: at the observed rates this completes in between ${formatEta(etaBestSec)} and ${formatEta(etaWorstSec)}`);
   }
-  if (state === STATE.STALLED) out.push('no new block for over 40 minutes while not in initial download');
+  if (state === STATE.STALLED) out.push(Number.isFinite(peerBestHeight) && Number.isFinite(blocks) && peerBestHeight > blocks ? 'stalled: peers know a higher tip than this node holds' : 'no new block for over two hours, and no peer height to check it against');
   return out;
 }
 
