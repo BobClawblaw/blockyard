@@ -331,6 +331,14 @@ Kept as checked rather than deleted, so nobody re-derives them.
   serialization (time to first byte) versus 73 ms locally. Fetching raw and decoding
   locally would cut both the bytes and the node's CPU. The disk parser in the entry
   above is the same decoding work, so this is one piece of code, not two.
+  **The decoder exists** (2026-09-14): `server/chain/tx.js` decodes raw transactions and
+  blocks into Core's verbose field names -- txid, wtxid, size, vsize, weight, inputs,
+  witnesses, output values in integer satoshis, script type and address, with Core's
+  Solver order and names. `scripts/decode-check.js` replays whole blocks from a live node
+  and compares every field: 29 blocks from height 170 to the tip, 47,507 transactions and
+  124,129 outputs, zero disagreements. **The explorer does not use it yet**: raw bytes carry
+  no prevout values or addresses, so fees and input addresses still need the spent
+  outputs from somewhere, and choosing that source is the open part.
 
 - [ ] **The transaction cache does not survive a restart.** `server/http/explorer.js`
   keeps a 3,000-entry in-memory LRU of confirmed transactions and nothing else. Every
