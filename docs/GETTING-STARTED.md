@@ -94,8 +94,9 @@ is not one, a port outside 1-65535, a directory that is not there -- and asked a
 
 Then the web interface (bind address and port; `127.0.0.1` keeps it to this machine, `0.0.0.0`
 opens it to everyone who can reach the port, see [SECURITY.md](SECURITY.md)), the address index
-directory (`~/blockyard-index`; about 124 GB for the whole chain, best on a different disk from
-the node's), and the number of build workers (each needs about 2.5 GB of memory; the default
+directory (`data/index` inside the checkout, alongside everything else this install writes;
+about 124 GB for the whole chain -- put it on a different disk from the node's if you can, by
+giving another path), and the number of build workers (each needs about 2.5 GB of memory; the default
 fits the machine). It writes `config/local.json` (mode 0600; a backup is kept if one was there)
 and shows it.
 
@@ -105,7 +106,7 @@ was measured on; roughly four times that on four. A progress bar shows each phas
 far and how long is left. If you answer no, it prints the command to run later:
 
 ```bash
-node scripts/index-build.js --out ~/blockyard-index --workers 4
+node scripts/index-build.js --out data/index --workers 4
 ```
 
 The address page says **not indexed** until the build is done, and BlockYard needs a restart
@@ -116,7 +117,7 @@ Scripted, with no questions (a fresh machine, a Makefile):
 
 ```bash
 node scripts/setup.js --yes --rpc-url http://127.0.0.1:8332 \
-  --datadir "$HOME/Library/Application Support/Bitcoin" --index-dir ~/blockyard-index --workers 4
+  --datadir "$HOME/Library/Application Support/Bitcoin" --index-dir "$PWD/data/index" --workers 4
 ```
 
 `--no-build` writes the config and stops; `--start` boots the monitor at the end; `--force`
@@ -129,7 +130,7 @@ npm start
 ```
 
 The log says `BlockYard 0.0.9 listening on http://127.0.0.1:21000` and, once the index exists,
-`address index /Users/you/blockyard-index: following main from block N`. Open
+`address index /Users/you/blockyard/data/index: following main from block N`. Open
 <http://127.0.0.1:21000>. The Overview fills in within about thirty seconds; Block space lands a
 little after. Open Explorer, click the latest block, then any output address: with the index
 built, its balance and history appear.

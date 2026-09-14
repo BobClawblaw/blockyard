@@ -233,7 +233,9 @@ async function main() {
   say(c.dim('History and balances on the explorer come from an index built from the node\'s block files: about'));
   say(c.dim(`${gb} GB on disk, best on a different disk from the node's. It can be built now, or later with`));
   say(c.dim('node scripts/index-build.js --out <dir>.'));
-  a.indexDir = await ask('index directory', arg('index-dir', path.join(os.homedir(), 'blockyard-index')), validate.newDir);
+  // inside the checkout by default (operator, 2026-09-14, on the Mac: "It should honor the directory
+  // it's run out of"): data/ is where this install keeps everything it writes, and it is gitignored
+  a.indexDir = await ask('index directory', arg('index-dir', path.join(ROOT, 'data', 'index')), validate.newDir);
   const built = existsSync(path.join(a.indexDir, 'manifest.json'));
   if (built) say(`${c.ok('✓')} an index is already built there; the server will follow the chain from it`);
   else a.workers = await ask(`build workers ${c.dim('(each needs ~2.5 GB of memory)')}`, arg('workers', String(defaultWorkers())), validate.workers);

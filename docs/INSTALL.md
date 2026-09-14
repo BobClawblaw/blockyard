@@ -74,7 +74,7 @@ the net amount, so a balance is a sum and never a node call. Put it on a differe
 block files if you can; the build reads ~880 GB.
 
 ```bash
-node scripts/index-build.js --out /var/lib/blockyard-index --workers 16
+node scripts/index-build.js --out data/index --workers 16
 ```
 
 Progress goes to stderr once a second; the manifest, with every phase's timings, to stdout at
@@ -87,7 +87,7 @@ takes roughly four times as long. The block files are found through the node's `
 ```json
 {
   "nodes": [
-    { "id": "main", "...": "...", "addressIndex": "/var/lib/blockyard-index" }
+    { "id": "main", "...": "...", "addressIndex": "/opt/blockyard/data/index" }
   ]
 }
 ```
