@@ -157,7 +157,7 @@ export function addressHtml(d, fmt) {
   const left = [
     ['Type', fmt.esc(d.type ?? '–')],
     ['Transactions', noIndex ? unknown : fmt.num(d.txCount)],
-    ['Unspent outputs', bal.utxos != null ? fmt.num(bal.utxos) : local ? '<span class="xdim">not tracked</span>' : unknown],
+    ['Unspent outputs', bal.utxos != null ? fmt.num(bal.utxos) : local ? `<span class="xdim">${fmt.esc(d.utxoNote ?? 'not tracked')}</span>` : unknown],
   ];
   const right = [
     ['Balance', bal.balance != null ? `${btcv(fmt, bal.balance)}${usdFmt(usdOf(bal.balance, usd))}` : unknown],
@@ -178,7 +178,11 @@ export function addressHtml(d, fmt) {
     ${local ? `<div class="note tiny">From the local address index, complete through block ${blockLink(d.index.tip, fmt.num(d.index.tip))}${d.index.behind ? ` — <b>${fmt.num(d.index.behind)} newer block${d.index.behind === 1 ? '' : 's'} not yet included</b>${d.index.following ? ', catching up' : ''}` : ''}. Unconfirmed transactions are not included. Received and sent add up each transaction's net effect on this address.</div>` : ''}
     ${noIndex ? `<div class="note tiny">This node keeps <b>no address index</b>, so an address's balance and history have no source here — the address above is confirmed valid and nothing more is claimed. Bitcoin Core has never had <span class="mono">getaddressbalance</span> or <span class="mono">getaddresstxids</span>; they belong to insight-style forks. Transaction and block lookups are unaffected: those use the node's <span class="mono">txindex</span>, which is synced.</div>` : ''}
     <div class="xtablecard"><table class="xtable"><thead><tr><th>transaction</th><th>block</th><th class="r">change</th><th class="r">fee rate</th></tr></thead><tbody>${txRows || `<tr><td colspan="4" class="xdim">${noIndex ? 'no address index on this node — history cannot be listed' : 'no transactions for this address'}</td></tr>`}</tbody></table></div>
-    ${noIndex ? '' : pager(`address/${enc(d.address)}`, d.page, d.pages)}`;
+    ${noIndex ? '' : pager(`address/${enc(d.address)}`, d.page, d.pages)}
+    ${Array.isArray(d.utxos) ? `${section('Unspent outputs', `<span class="xdim">${fmt.num(d.utxos.length)} · as the node's UTXO set has them, less what the mempool already spends</span>`)}
+    <div class="xtablecard"><table class="xtable"><thead><tr><th>output</th><th>block</th><th class="r">value</th></tr></thead><tbody>${d.utxos.length
+    ? d.utxos.map((u) => `<tr><td>${txLink(fmt, u.txid)}<span class="xdim">:${u.n}</span></td><td>${u.height != null ? blockLink(u.height, fmt.num(u.height)) : '<span class="xdim">–</span>'}</td><td class="r">${fmt.btc(u.value)} <small>BTC</small></td></tr>`).join('')
+    : '<tr><td colspan="3" class="xdim">nothing unspent</td></tr>'}</tbody></table></div>` : ''}`;
 }
 
 // the fee band a block's median rate falls in, for its cube's colour (no inline styles: classes)

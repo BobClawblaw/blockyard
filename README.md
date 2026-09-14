@@ -139,8 +139,9 @@ explorer's biggest gap is closed: **address history and balances**, which Bitcoi
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node
 (every balance equal to `scantxoutset`, to the satoshi) and costs ~30 minutes on 16 cores and
-124 GB of disk; without one, the address page says so rather than showing a zero. What it does
-not yet have: an unspent-output list, or an address's mempool transactions.
+124 GB of disk; without one, the address page says so rather than showing a zero. An address's
+unspent outputs are listed too (for a history of up to 100 transactions). What it does not yet
+have: an address's mempool transactions.
 
 Everything here was written by an AI directed by a human, and audited by AI:
 [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) is the audit, findings and remediation included.

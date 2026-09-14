@@ -788,7 +788,9 @@ from **BlockYard's own index**, built from the node's block files and kept curre
   "scriptType": null,
   "indexed": true,
   "source": "local-index",
-  "balance": { "balance": 221760, "received": 221760, "utxos": null },
+  "balance": { "balance": 221760, "received": 221760, "utxos": 1 },
+  "utxos": [ { "txid": "9891f72b...", "n": 0, "value": 221760, "height": 966000 } ],
+  "utxoNote": null,
   "txCount": 1,
   "index": { "tip": 966963, "behind": 0, "builtAt": "2026-09-14T06:54:06.609Z", "following": true, "stale": null },
   "page": 0,
@@ -816,8 +818,11 @@ block lookups are unaffected — those use `txindex`.
 - `source` is `local-index` when the answer comes from BlockYard's index; `dataNode` is the node
   whose RPC the follower reads (one index serves every node on the same chain).
 - `balance.balance` and `balance.received` are sums of each transaction's **net** for the address
-  (a transaction that both paid and spent it counts once, by its net); `utxos` is `null` — the index
-  keeps no unspent-output list yet.
+  (a transaction that both paid and spent it counts once, by its net). `utxos` lists the address's
+  unspent outputs — every transaction the index says touched it, each output paying it checked with
+  `gettxout` (the UTXO set, less what the mempool already spends), `height` from the index's own row
+  — and `balance.utxos` is their count. The walk is the whole history, so it is made for an address
+  with at most 100 transactions; a longer one gets `utxos: null` and a `utxoNote` saying so.
 - `index.tip` is the highest block the index covers (base, folded layers and the follower's live
   tail together); `behind` is how many blocks the node is ahead of it; `following` says a follower is
   running; `stale` is a message when it has stopped (a reorganisation deeper than its tail, asking

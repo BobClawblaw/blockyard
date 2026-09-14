@@ -382,7 +382,11 @@ still holds in its tail, and means a rebuild.
 not show zero, and it does not print the node's error where a figure belongs: nothing counted,
 so nothing is claimed.
 
-**Not yet:** the address's unspent outputs, and its transactions still in the mempool.
+Below the transactions, the address's **unspent outputs** — each output that paid it and is still
+in the node's UTXO set (less what the mempool already spends), with its block and value. The list
+is made for an address with up to 100 transactions; a longer history says so instead.
+
+**Not yet:** the address's transactions still in the mempool.
 
 **Requirements:** transaction pages rely on the node's transaction index (`txindex=1`), which
 Core supports.

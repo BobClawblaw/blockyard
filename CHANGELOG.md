@@ -75,7 +75,12 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   count, the page says the index is absent, and the dead RPCs are not re-sent on every view: a
   "method not found" is remembered per node for ten minutes, then asked again, because the daemon
   behind a node id can change.
-- **Not yet:** an address's unspent-output list, and its transactions still in the mempool.
+- **An address's unspent outputs are listed** (operator, the same day: "Why don't we do this"): the
+  index names every transaction that touched the address, each one's outputs paying it are asked of
+  `gettxout` (the UTXO set, less what the mempool already spends), and the page lists them with the
+  index's own height and their count on the card. The walk is the whole history, so it is made for
+  an address with at most 100 transactions and declined in words for a longer one.
+- **Not yet:** an address's transactions still in the mempool.
 - **An installer: `npm run setup`** (operator: "build a test into the installer so we can verify it
   properly connects to an RPC server and finds the bitcoin logs ... something that writes out a
   config/local.json at the end ... that we can up and run immediately to start building the

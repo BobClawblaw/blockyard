@@ -268,6 +268,39 @@ export function _resetIndexes() { for (const e of indexes.values()) { try { e.st
 // block height -> its txids in order, for turning an index row (height, position) into a transaction
 const blockTxids = new Map();
 const BLOCK_TXIDS_MAX = 64;
+// THE UNSPENT OUTPUTS of an address (operator, 2026-09-14: "Why don't we do this"): the index says
+// which transactions touched it; each one's outputs paying the address are asked of `gettxout`,
+// which answers from the UTXO set and the mempool (an output a pending transaction spends is
+// already gone). That walk is the whole history, so it is done for an address with at most this
+// many transactions and declined, in words, for a longer one.
+const UTXO_MAX_TXS = 100;
+
+// positions -> txids: the blocks' hashes in one batch and their txid lists in another, cached
+async function blocksFor(m, heights, key) {
+  const need = [...new Set(heights)].filter((h) => !blockTxids.has(h));
+  if (!need.length) return;
+  const hashes = await batch(m, need.map((h) => ({ method: 'getblockhash', params: [h] })), `${key}:hash:${need[0]}`);
+  const blocks = await batch(m, hashes.map((h) => ({ method: 'getblock', params: [h.ok ? h.result : '', 1] })), `${key}:blk:${need[0]}`);
+  blocks.forEach((b, i) => {
+    if (!b.ok || !Array.isArray(b.result?.tx)) return;
+    blockTxids.set(need[i], { hash: b.result.hash, tx: b.result.tx });
+    if (blockTxids.size > BLOCK_TXIDS_MAX) blockTxids.delete(blockTxids.keys().next().value);
+  });
+}
+
+async function unspentFor(m, store, key, addr, nodeTip) {
+  const all = store.rowsForKey(key).filter((r) => nodeTip == null || r.height <= nodeTip);
+  await blocksFor(m, all.map((r) => r.height), `${m.id}:x:utxo:${addr}`);
+  const heightOf = new Map();
+  for (const r of all) { const t = blockTxids.get(r.height)?.tx?.[r.pos]; if (t) heightOf.set(t, r.height); }
+  const sums = await fetchTxs(m, [...heightOf.keys()], null, null, `${m.id}:x:utxotx:${addr}`);
+  const cands = [];
+  // the height is the index's own row, not inferred from a confirmation count
+  for (const s of sums) if (!s.missing) for (const o of s.vout) if (o.address === addr && o.value != null) cands.push({ txid: s.txid, n: o.n, value: o.value, height: heightOf.get(s.txid) ?? s.height });
+  if (!cands.length) return [];
+  const got = await batch(m, cands.map((c) => ({ method: 'gettxout', params: [c.txid, c.n, true] })), `${m.id}:x:txout:${addr}`);
+  return cands.filter((c, i) => got[i]?.ok && got[i].result);
+}
 
 async function addressFromIndex(m0, addr, page, store, live = null) {
   // THE BLOCKS AND TRANSACTIONS A PAGE NEEDS COME FROM THE FOLLOWER'S NODE when there is one. Confirmed
@@ -285,17 +318,10 @@ async function addressFromIndex(m0, addr, page, store, live = null) {
   // rows above the node's tip are a reorganised-away tail the follower has not yet rolled back:
   // counted in index.postTip, shown nowhere as history (audit 2026-09-14, M2)
   const sum = store.summaryForKey(scriptKey(script), { limit: PAGE, skip: page * PAGE, maxHeight: nodeTip });
-  // positions -> txids: the page's blocks, their hashes in one batch and their txid lists in another
-  const need = [...new Set(sum.recent.map((r) => r.height))].filter((h) => !blockTxids.has(h));
-  if (need.length) {
-    const hashes = await batch(m, need.map((h) => ({ method: 'getblockhash', params: [h] })), `${m.id}:x:ahash:${need[0]}`);
-    const blocks = await batch(m, hashes.map((h) => ({ method: 'getblock', params: [h.ok ? h.result : '', 1] })), `${m.id}:x:ablk:${need[0]}`);
-    blocks.forEach((b, i) => {
-      if (!b.ok || !Array.isArray(b.result?.tx)) return;
-      blockTxids.set(need[i], { hash: b.result.hash, tx: b.result.tx });
-      if (blockTxids.size > BLOCK_TXIDS_MAX) blockTxids.delete(blockTxids.keys().next().value);
-    });
-  }
+  await blocksFor(m, sum.recent.map((r) => r.height), `${m.id}:x:a:${addr}`);
+  // the unspent outputs, for a history short enough to walk
+  const listable = sum.txCount <= UTXO_MAX_TXS;
+  const utxos = listable ? await unspentFor(m, store, scriptKey(script), addr, nodeTip) : null;
   const txids = sum.recent.map((r) => blockTxids.get(r.height)?.tx?.[r.pos] ?? null);
   const summaries = await fetchTxs(m, txids.filter(Boolean), null, null, `${m.id}:x:atx:${addr}:${page}`);
   const byId = new Map(summaries.map((t) => [t.txid, t]));
@@ -312,7 +338,8 @@ async function addressFromIndex(m0, addr, page, store, live = null) {
     scriptType: null,
     indexed: true, source: 'local-index',
     // received and sent are sums of each transaction's NET for this address (see IndexStore)
-    balance: { balance: sum.balance, received: sum.received, utxos: null },
+    balance: { balance: sum.balance, received: sum.received, utxos: utxos ? utxos.length : null },
+    utxos, utxoNote: listable ? null : `not listed for an address with more than ${UTXO_MAX_TXS} transactions`,
     txCount: sum.txCount,
     // `tip` is how far the index reaches: the base, its layers and a follower's live tail together
     index: {

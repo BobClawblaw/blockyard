@@ -354,13 +354,17 @@ Kept as checked rather than deleted, so nobody re-derives them.
   input's spent output, checked against `getblock <hash> 3` with zero mismatches, so the
   spending side needs no UTXO replay.
 
-- [ ] **An address page has no unspent-output list and no mempool transactions.** The index
-  (above) carries one row per confirmed transaction with its net amount, so a balance and a
-  history are sums over it; which of an address's outputs are still unspent is not in it, and
-  a transaction still in the mempool is not either. `balance.utxos` is `null` and the page says
-  unconfirmed transactions are not included. Both need a design: an unspent flag per row would
-  need every spend to update the row it spends, which the append-only layers do not do cheaply;
-  the mempool view needs the follower to watch `getrawmempool` for the address's scripts.
+- [ ] **An address page has no mempool transactions.** A transaction still in the mempool is not
+  in the index, and the page says unconfirmed transactions are not included. Needs the follower
+  to watch the mempool for the address's scripts -- the arrivals per poll, decoded, with their
+  parents' outputs for the spending side -- or a ZMQ `rawtx` client; either is a day's work done
+  honestly.
+  **The unspent-output list is done (2026-09-14):** the index names every transaction that touched
+  the address, each one's outputs paying it are asked of `gettxout` (the UTXO set, less what the
+  mempool already spends), and the page lists them with the index's own height. That walk is the
+  whole history, so it is done for an address with at most 100 transactions and declined in
+  words for a longer one (`utxoNote`); an unspent flag in the index itself would need every
+  spend to update the row it spends, which the append-only layers do not do cheaply.
 
 - [ ] **The explorer pays roughly 3–5x for verbose RPC it re-parses anyway.** Measured
   2026-09-13/14. `fetchTxs` fetches up to 25 transactions per page with

@@ -296,6 +296,7 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
       asked.push({ k, limit, skip, maxHeight });
       return { txCount: rows.length, balance: 120_000, received: 150_000, sent: 30_000, recent: k === key ? rows.slice(skip, skip + limit) : [] };
     },
+    rowsForKey(k) { return k === key ? [...rows].reverse() : []; },   // oldest first, as the store gives them
   };
   const calls = [];
   const m = fakeNode((c) => {
@@ -303,7 +304,9 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
     if (c.method === 'validateaddress') return { isvalid: true, iswitness: true, witness_version: 0 };
     if (c.method === 'getblockhash') return H(String(c.params[0] % 10));
     if (c.method === 'getblock') return { hash: c.params[0], tx: c.params[0] === H('9') ? [TXB, TXA] : [TXB] };
-    if (c.method === 'getrawtransaction') return rawTx(c.params[0]);
+    // TXB pays the address at output 0 (still unspent); TXA spends from it and pays someone else
+    if (c.method === 'getrawtransaction') return c.params[0] === TXB ? rawTx(TXB, { vout: [{ n: 0, value: 0.0015, scriptPubKey: { type: 'witness_v0_keyhash', address: addr } }] }) : rawTx(c.params[0]);
+    if (c.method === 'gettxout') return c.params[0] === TXB && c.params[1] === 0 ? { value: 0.0015, confirmations: 6 } : null;
     return new Error(c.method);
   });
   m.addressIndex = store;
@@ -315,18 +318,29 @@ test('WITH A LOCAL ADDRESS INDEX the page has history and a balance, and never a
   assert.ok(!calls.some((c) => c.startsWith('getaddress')), 'Core is never asked for the address RPCs it refuses');
   assert.equal(asked[0].k, key, 'looked up by the address\'s own script');
   assert.equal(d.txCount, 2);
-  assert.deepEqual(d.balance, { balance: 120_000, received: 150_000, utxos: null });
+  assert.deepEqual(d.balance, { balance: 120_000, received: 150_000, utxos: 1 }, 'the unspent outputs are counted');
+  assert.deepEqual(d.utxos, [{ txid: TXB, n: 0, value: 150_000, height: 98 }], 'and listed: the output that pays the address and gettxout still has');
+  assert.equal(d.utxoNote, null);
+  assert.ok(calls.filter((c) => c === 'gettxout').length >= 1, 'asked of the node\'s UTXO set');
   assert.deepEqual(d.txs.map((t) => [t.txid, t.height, t.delta]), [[TXA, 99, -30_000], [TXB, 98, 150_000]], 'each position becomes its txid, with the index\'s own amount');
   assert.deepEqual(d.index, { tip: 99, behind: 5, builtAt: '2026-09-14T06:00:00Z', following: false, stale: null, postTip: 0 }, 'and the page knows how far the index reaches');
   assert.equal(asked[0].maxHeight, 104, 'and rows above the node\'s tip are asked to be left out (audit 2026-09-14, M2)');
   const html = addressHtml(d, fmt);
   assert.match(html, /complete through block/, 'the page says what the index covers');
   assert.match(html, /5 newer blocks not yet included/, 'and that it is behind the node, by how much');
-  assert.match(html, /not tracked/, 'unspent outputs are not claimed');
+  assert.match(html, /Unspent outputs<\/h2>/, 'the page has the unspent outputs section');
+  assert.match(html, new RegExp(`${TXB}[^]*?:0[^]*?0\\.0015`), 'with the output and its value');
+  // a long history is not walked: the page says so instead
+  m.addressIndex = { ...store, summaryForKey: (k, o) => ({ ...store.summaryForKey(k, o), txCount: 101 }) };
+  const long = await xAddress(m, { addr });
+  assert.equal(long.utxos, null); assert.equal(long.balance.utxos, null);
+  assert.match(long.utxoNote, /more than 100 transactions/);
+  assert.match(addressHtml(long, fmt), /more than 100 transactions/, 'and the card says why');
+  m.addressIndex = store;
   assert.doesNotMatch(html, /no address index/, 'and it no longer says there is no index');
   // page 2 skips the first PAGE rows
   await xAddress(m, { addr, page: 1 });
-  assert.equal(asked[1].skip, PAGE);
+  assert.equal(asked.at(-1).skip, PAGE);
   // an address that does not decode is refused before any lookup
   const bad = await xAddress(m, { addr: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t5' });
   assert.equal(bad.ok, false);
