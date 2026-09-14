@@ -7,7 +7,6 @@
 
 [img width=800]https://talkimg.com/images/2026/09/14/UqTQ8g.jpg[/img]
 
-
 [size=12pt][b]What it is[/b][/size]
 
 BlockYard is a self-hosted web app you point at [b]your own Bitcoin Core node[/b]. Open a browser and you get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a full block / transaction / address explorer, exchange prices with order-book depth, and a kiosk view for a wall screen. Every number on every page comes from your node or from a public exchange API — no third party sits between you and the chain.
@@ -15,7 +14,6 @@ BlockYard is a self-hosted web app you point at [b]your own Bitcoin Core node[/b
 It is written in plain JavaScript on Node.js with [b]zero dependencies[/b]. Not "few": zero. [tt]package.json[/tt] has no [tt]dependencies[/tt] and no [tt]devDependencies[/tt]. No framework, no bundler, no CSS library, no chart library, no 3D library, no test framework beyond [tt]node:test[/tt]. There is no CDN in the browser app and no telemetry anywhere. [tt]npm install[/tt] installs nothing but BlockYard itself. The 862 unit tests run with [tt]npm test[/tt] and need nothing but Node.
 
 It is read-only toward your node by default. It never signs, never spends, never asks for a wallet.
-
 
 [size=12pt][b]What it does[/b][/size]
 
@@ -39,7 +37,6 @@ It is read-only toward your node by default. It never signs, never spends, never
 
 [b]Multi-user, with accounts.[/b] Viewer, operator and admin roles, rate limiting, a security posture documented in the repo. Display settings live on the server, so every screen sees the same board.
 
-
 [size=12pt][b]Setting it up[/b][/size]
 
 You need Bitcoin Core 25.0 or later with [tt]server=1[/tt] and [tt]txindex=1[/tt], Node.js 22 or later, and BlockYard [b]on the same machine as the node[/b] — it reads the node's block files to build the address index, so a node on another machine is not supported.
@@ -60,7 +57,6 @@ npm start[/code]
 
 Either way, [tt]setup[/tt] finds your [tt]bitcoin.conf[/tt], reads the RPC settings out of it, proves the credentials, the chain, [tt]txindex[/tt], the block files and how fast the node answers, writes its config, and starts the address index build in the background with a notification in the app when it is done. Then open [url]http://127.0.0.1:21000[/url]. The 0.0.9 release tarball is also on the GitHub release page. Full walk-through for macOS and Linux in [tt]docs/GETTING-STARTED.md[/tt]; Windows is in the CI matrix.
 
-
 [b]Uninstalling.[/b] BlockYard touches nothing outside its own directories — it never edits [tt]bitcoin.conf[/tt] and leaves the node exactly as it found it — so removing it is deleting them. From npm: stop it, then
 
 [code]npm uninstall -g blockyard
@@ -78,15 +74,16 @@ This is a love letter to Bitcoin — a node is a beautiful thing, and it deserve
 
 It is [b]experimental pre-release software[/b]. Expect bugs. The number is 0.0.9 for a reason. If you run it, tell us what broke — issues and pull requests are open — and if you read the code, tell us what you think of code that no human wrote.
 
-
 [size=12pt][b]Links[/b][/size]
 
-[list][li]Source: [url]https://github.com/BobClawblaw/blockyard[/li][/url]
-[li]Release 0.0.9: [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9[/li][/url]
-[li]Getting started: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md[/li][/url]
-[li]User guide: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/USER-GUIDE.md[/li][/url]
-[li]Security: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY.md[/li][/url]
-[li]The audits: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY-AUDIT-2026-09-14.md[/li][/url]
-[li]Defects and measurements: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/DEFECTS.md[/url] · [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/MEASUREMENTS.md[/li][/list][/url]
+[list]
+[li]Source: [url]https://github.com/BobClawblaw/blockyard[/url][/li]
+[li]Release 0.0.9: [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9[/url][/li]
+[li]Getting started: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md[/url][/li]
+[li]User guide: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/USER-GUIDE.md[/url][/li]
+[li]Security: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY.md[/url][/li]
+[li]The audits: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY-AUDIT-2026-09-14.md[/url][/li]
+[li]Defects and measurements: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/DEFECTS.md[/url] · [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/MEASUREMENTS.md[/url][/li]
+[/list]
 
 Apache-2.0. Run your own node.
