@@ -261,6 +261,56 @@ silently ate another test's result line — rule 22.
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
 
+## Current state (2026-09-14)
+
+Release day: **0.0.9, the initial release**, tagged `v0.0.9` (the operator names the number; do
+not bump it). Everything below is committed, tested (855) and live on this box.
+
+**Scope, settled.** BlockYard supports **Bitcoin Core on the machine that runs it**. The
+experimental node this repo was first written against is not supported (its measurements are
+kept as records), and neither is reading a node elsewhere over RPC alone: the Umbrel-on-the-LAN
+path was tried on 09-13 and dropped, because real-time explorer data over RPC was a failed idea.
+`docs/DEFECTS.md` opens with that decision; entries whose only subject was one of those are
+closed with it. Five open items remain.
+
+**The address index** (`server/chain/`): Core has no address index, so the explorer's address
+page reads one built from the node's own blk/rev files -- 21-byte rows, 256 sorted segments with
+a sparse key index, 29 min 45 s and 124 GB for the whole chain on 16 workers, balances equal to
+`scantxoutset` to the satoshi (MEASUREMENTS §28-30). `LiveIndex` (`index/live.js`) follows the
+chain over RPC: a CRC-framed `live.log` replayed on restart, rollback on a reorg, folding at 100
+deep, merging past 32; a reorg below what is folded marks it stale and the page says to rebuild
+(same command, same directory: the build empties it first, tested). Rows above the node's tip are
+excluded and reported as `index.postTip`. Config key `addressIndex` per node; one index serves
+every node on the same chain.
+
+**The installer.** `npm run setup` (`scripts/setup.js`, dress in `scripts/ui.js`): six steps,
+every answer validated, the node proven by `scripts/check.js` (RPC, credentials, chain, Core
+25+, txindex, `getblock <tip> 3`, not pruned, blk/rev files opening to genesis through the XOR
+key, `debug.log`, a configured index), `config/local.json` written 0600, the index built with a
+progress bar, the monitor started in the same terminal. `npm run check` re-runs the checks;
+`--yes` with flags is the scripted form; `BLOCKYARD_CONFIG` names another file. Untested on
+macOS as of this writing -- the operator's Mac (Core v29) is the first fresh deploy.
+
+**Two AI security audits**, both remediated the same day: `docs/SECURITY-AUDIT.md` (09-13, one
+HIGH: the node-probe credential leak) and `docs/SECURITY-AUDIT-2026-09-14.md` (1 medium: an
+allocation sized by the `page` parameter; 4 low). A re-audit is due after the installer lands on
+the Mac. I1 (open mode lets a LAN client save a node URL the cookie will follow) is the
+operator's decision and stays.
+
+**Docs.** Every document was read against the code on 09-14 (three review passes); the product
+is BlockYard in prose and `blockyard` only for the repo, paths, service, user and env vars.
+`docs/GETTING-STARTED.md` is the macOS/Linux walkthrough. Screenshots are shot against the local
+Core (`BLOCKYARD_NODE=main node scripts/shots.mjs`); a fresh browser profile defaults to the first
+node in the config, which on this box is the slow Umbrel -- the first pass photographed an empty
+board.
+
+**Effects.** Thirty, with a no-repeat window (12) and two rare line effects on Markets (the
+pulse and the pipe bulge, each 2.5-6 min apart). The bulge is a ball that fits the line: exactly
+the tube at both ends, an arced skin, the core magnified through it, gravity along the pipe.
+
+**What to do next, in order:** the Mac install (`git clone`, `npm run setup`); the re-audit;
+then move `v0.0.9` to the release commit when the operator says so.
+
 ## Current state (2026-09-12)
 
 A long day on the 3D engine and the browser. Everything below is committed, tested and live.

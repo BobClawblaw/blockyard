@@ -11,6 +11,7 @@ git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
 npm run dev        # the full app against a built-in fake node, http://127.0.0.1:18088
 npm test           # the unit suite
+npm run setup      # against a real Bitcoin Core on this machine: checks it, writes config/local.json
 ```
 
 There is nothing to install. Node.js 22 or later is the only requirement. The front end is
