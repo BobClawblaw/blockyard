@@ -231,9 +231,10 @@ async function main() {
   });
 
   out(banner(VERSION));
-  say(c.dim('BlockYard runs on the machine that runs Bitcoin Core: the explorer\'s address index is built from'));
-  say(c.dim('the node\'s block files. Every check below is a read; nothing on the node is changed.'));
-  say(c.dim('Enter accepts the value shown. Ctrl-C leaves everything as it was.'));
+  say(c.dim('BlockYard runs on the machine that runs Bitcoin Core: the explorer\'s'));
+  say(c.dim('address index is built from the node\'s block files. Every check below is'));
+  say(c.dim('a read; nothing on the node is changed. Enter accepts the value shown.'));
+  say(c.dim('Ctrl-C leaves everything as it was.'));
 
   // ---------------------------------------------------------------- 1. the node, until it answers
   const a = {};
@@ -295,7 +296,8 @@ async function main() {
 
   // ------------------------------------------------------------------------ 3. the web interface
   out(step(3, STEPS, 'The web interface'));
-  say(c.dim('127.0.0.1 keeps it to this machine; 0.0.0.0 opens it to everyone who can reach the port (docs/SECURITY.md).'));
+  say(c.dim('127.0.0.1 keeps it to this machine; 0.0.0.0 opens it to everyone who can'));
+  say(c.dim('reach the port (docs/SECURITY.md).'));
   a.host = await ask('bind address', arg('host', '127.0.0.1'), validate.host);
   for (;;) {
     a.port = await ask('port', arg('port', '21000'), validate.port);
@@ -308,9 +310,9 @@ async function main() {
   // -------------------------------------------------------------------------- 4. the address index
   out(step(4, STEPS, 'The address index'));
   const gb = result.facts.blockBytes ? Math.round(result.facts.blockBytes / 1e9 * 0.141) : 124;
-  say(c.dim('History and balances on the explorer come from an index built from the node\'s block files: about'));
-  say(c.dim(`${gb} GB on disk, best on a different disk from the node's. It can be built now, or later with`));
-  say(c.dim('node scripts/index-build.js --out <dir>.'));
+  say(c.dim('History and balances on the explorer come from an index built from the'));
+  say(c.dim(`node's block files: about ${gb} GB on disk, best on a different disk from`));
+  say(c.dim('the node\'s.'));
   // inside the checkout by default (operator, 2026-09-14, on the Mac: "It should honor the directory
   // it's run out of"): data/ is where this install keeps everything it writes, and it is gitignored
   a.indexDir = await ask('index directory', arg('index-dir', path.join(ROOT, 'data', 'index')), validate.newDir);
@@ -336,8 +338,9 @@ async function main() {
   // address page, and posts an event -- and a toast -- when it is done.
   let how = built ? 'none' : flag('build-here') ? 'here' : flag('build-later') ? 'later' : 'background';
   if (!built && !YES && !flag('build-here') && !flag('build-later')) {
-    say(c.dim('BlockYard can build it in the background once it starts: the Overview shows the progress, and'));
-    say(c.dim('a notification says when it is done (~30 min on 16 workers, longer on fewer). Or build it here, now.'));
+    say(c.dim('BlockYard can build it in the background once it starts: the Overview'));
+    say(c.dim('shows the progress and a notification says when it is done (~30 min on'));
+    say(c.dim('16 workers, longer on fewer). Or build it here, now.'));
     how = await ask(`build it ${c.dim('(b)')}ackground when BlockYard starts, ${c.dim('(h)')}ere now, or ${c.dim('(l)')}ater by hand`, 'b',
       (v) => ({ b: { value: 'background' }, h: { value: 'here' }, l: { value: 'later' } }[String(v).trim().toLowerCase()[0]] ?? { error: 'b, h or l' }));
   }
@@ -381,7 +384,7 @@ async function main() {
     `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('   (or answer yes below)') : ''}${how === 'background' ? c.dim('   -- the index build starts with it') : ''}`,
     `${c.bold('open it')}      ${c.cyan(url)}`,
     `${c.bold('check it')}     ${c.accent('npm run check')}${c.dim('   the same checks, any time')}`,
-    `${c.bold('keep it up')}   ${c.dim('docs/GETTING-STARTED.md §6: systemd on Linux, launchd on macOS')}`,
+    `${c.bold('keep it up')}   ${c.dim('docs/GETTING-STARTED.md §6 (systemd, launchd)')}`,
   ], { title: c.bold('BlockYard is set up') }).split('\n').map((l) => `    ${l}`).join('\n'));
   out();
   const start = flag('start') || (!YES && await yes('start BlockYard now, in this terminal? (Ctrl-C stops it)', true));

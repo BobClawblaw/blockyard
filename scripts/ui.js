@@ -18,30 +18,22 @@ export const MARK = {
 
 // THE MONOGRAM, IN PIXELS (operator, 2026-09-14: "I want the installer to have amazing ANSI Art here
 // for the BY logo"). The same tile the favicon is: a rounded orange tile shaded light to dark
-// across the diagonal, a dark B and Y, and three courses of blocks along the foot. Drawn two
-// pixels per character row with the half-block, colours from the 256-colour table, so it needs
-// nothing but a terminal; without colour it falls back to three lines of box drawing.
+// across the diagonal, a dark B and Y, and three courses of blocks along the foot. One character
+// cell per pixel, painted as a background colour, from the 256-colour table -- solid in every
+// terminal font; without colour it falls back to three lines of box drawing.
 const ART = [
-  '    ............................    ',
-  '  ................................  ',
-  ' .................................. ',
-  '.....##########....##........##.....',
-  '.....##........#...##........##.....',
-  '.....##........#....##......##......',
-  '.....##........#....##......##......',
-  '.....##########......##....##.......',
-  '.....##........#.....##....##.......',
-  '.....##........#......##..##........',
-  '.....##........#.......####.........',
-  '.....##........#........##..........',
-  '.....##........#........##..........',
-  '.....##........#........##..........',
-  '.....##########.........##..........',
-  '....................................',
-  '...oooooooooo..oooooo..oooooooooo...',
-  ' ..oooooooooo..oooooo..oooooooooo.. ',
-  '  ................................  ',
-  '    ............................    ',
+  '  ......................  ',
+  ' ........................ ',
+  '...######.....#.......#...',
+  '...#.....#.....#.....#....',
+  '...#.....#......#...#.....',
+  '...######........#.#......',
+  '...#.....#........#.......',
+  '...#.....#........#.......',
+  '...#.....#........#.......',
+  '...######.........#.......',
+  ' .ooooooo.oooooo.ooooooo. ',
+  '  ......................  ',
 ];
 const TILE = [223, 222, 215, 214, 208, 172, 166];   // light to dark, the favicon's gradient in 256 colours
 const INK = 233;
@@ -55,37 +47,33 @@ function pixel(ch, x, y) {
 }
 export function monogram() {
   if (!COLOUR) return [`${c.accent('▗▄▖')}`, `${c.accent('▐BY')}`, `${c.accent('▝▀▘')}`];
-  const rows = [];
-  for (let y = 0; y < ART.length; y += 2) {
-    let line = '';
-    for (let x = 0; x < ART[y].length; x++) {
-      const top = pixel(ART[y][x], x, y), bot = pixel(ART[y + 1]?.[x] ?? ' ', x, y + 1);
-      if (top == null && bot == null) line += ' ';
-      else if (top != null && bot != null) line += `\x1b[38;5;${top}m\x1b[48;5;${bot}m▀\x1b[49m\x1b[39m`;
-      else if (top != null) line += `\x1b[38;5;${top}m▀\x1b[39m`;
-      else line += `\x1b[38;5;${bot}m▄\x1b[39m`;
+  // ONE CELL PER PIXEL, painted as a background colour under a space. The first cut used the
+  // half-block (two pixels per row) and the Mac's Terminal drew every seam between them
+  // (operator: "What is this garbage?!"): a font decides how a half-block glyph sits in its cell,
+  // and a background colour fills the cell whatever the font.
+  return ART.map((row, y) => {
+    let line = '', open = null;
+    for (let x = 0; x < row.length; x++) {
+      const tone = pixel(row[x], x, y);
+      if (tone !== open) { line += open == null ? '' : '\x1b[49m'; line += tone == null ? '' : `\x1b[48;5;${tone}m`; open = tone; }
+      line += ' ';
     }
-    rows.push(line);
-  }
-  return rows;
+    return line + (open == null ? '' : '\x1b[49m');
+  });
 }
 
-/** The banner: the monogram beside the name, the version and what this is. */
-export function banner(version, what = 'setup') {
+/** The banner: the monogram beside the name, the version and what this is; below it when narrow. */
+export function banner(version, what = 'setup', width = cols()) {
   const art = monogram();
-  const text = COLOUR ? [
-    '', '',
-    `${c.bold('Block')}${c.accent(c.bold('Yard'))}  ${c.dim(version)}   ${c.dim('·')}   ${c.bold(what)}`,
-    c.dim('Live monitor, block explorer, markets and 3D block-space viewer for Bitcoin Core.'),
-    c.dim('Zero dependencies, self-hosted, read-only. Apache-2.0.'),
-    '', '', '', '', '',
-  ] : [
-    `${c.bold('Block')}${c.accent(c.bold('Yard'))} ${c.dim(version)}  ${c.dim('·')}  ${what}`,
-    c.dim('Live monitor, block explorer, markets and 3D block-space viewer for Bitcoin Core. Zero dependencies, self-hosted, read-only. Apache-2.0.'),
-    '',
-  ];
-  const width = strip(art[0]).length;
-  return '\n' + art.map((row, i) => `  ${row}${' '.repeat(Math.max(0, width - strip(row).length))}   ${text[i] ?? ''}`).join('\n') + '\n';
+  const head = `${c.bold('Block')}${c.accent(c.bold('Yard'))}  ${c.dim(version)}   ${c.dim('·')}   ${c.bold(what)}`;
+  // every line fits beside the tile in 80 columns (operator: "It needs to fit in 80 character space. Standard CRT")
+  const about = ['Live monitor, block explorer, markets and 3D', 'block-space viewer for Bitcoin Core.', '', 'Zero dependencies, self-hosted, read-only.', 'Apache-2.0.'].map((l) => c.dim(l));
+  if (!COLOUR) return `\n${art.map((r, i) => `${r} ${i === 0 ? head : i === 1 ? about[0] + ' ' + strip(about[1]) : ''}`).join('\n')}\n`;
+  const artW = strip(art[0]).length;
+  const beside = width >= artW + 3 + 49 + 2;   // 26 + 3 + 49 + 2 = 80
+  if (!beside) return '\n' + art.map((r) => `  ${r}`).join('\n') + `\n\n  ${head}\n  ${about.join('\n  ')}\n`;
+  const text = ['', '', head, ...about];
+  return '\n' + art.map((row, i) => `  ${row}   ${text[i] ?? ''}`).join('\n') + '\n';
 }
 
 /** A numbered step heading with a rule out to the right. */
