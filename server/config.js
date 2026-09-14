@@ -580,8 +580,8 @@ function validate(cfg, ifaces = null, now = Date.now()) {
     // has no cookie to read, and rpcUser/rpcPassword is the way in. resolveCookie() has always
     // supported that (it falls through to the configured user/password); this validator did not,
     // so a user/password node was refused at boot with "need datadir or cookieFile". Found
-    // 2026-09-13 by pointing the monitor at a node on another machine (a path since dropped:
-    // the explorer needs the node's block files, so BlockYard runs on the node's machine).
+    // 2026-09-13. BlockYard runs on the node's machine (the explorer needs its block files), so
+    // this is for a node that uses rpcauth, not a node elsewhere.
     const hasCookiePath = !!(n.datadir || n.cookieFile);
     const hasUserPass = !!(n.rpcUser && n.rpcPassword);
     if (!hasCookiePath && !hasUserPass) {

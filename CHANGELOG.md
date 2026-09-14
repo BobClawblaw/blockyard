@@ -54,7 +54,7 @@ operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-r
   holding the node's RPC thread, and answers only the current balance, never a history.
 - **It follows the chain.** `server/chain/index/live.js`, started by the server for each configured
   index directory, polls every 30 s, fetches each new block with `getblock <hash> 3` over RPC (so
-  it works for a node on another machine), and **logs the rows before serving them** in a
+  the files are read once, at the build), and **logs the rows before serving them** in a
   CRC-framed `live.log` that is replayed on restart and drops a record torn by a crash. A
   reorganisation rolls the tail back to the fork; blocks 100 deep are **folded** into immutable
   sorted layers and layers past 32 are merged; a reorganisation below what is folded stops the

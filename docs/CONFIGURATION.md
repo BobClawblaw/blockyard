@@ -134,8 +134,8 @@ node gets its own charts and event stream.
 **Credentials.** A node needs **either** a cookie path (`datadir`, optionally with `chainHint`,
 or an explicit `cookieFile`) **or** `rpcUser` + `rpcPassword`. Cookie auth is the usual case on the
 same machine; user/password is for a node that authenticates with `rpcauth` rather than the cookie
-file. (BlockYard runs on the node's machine: reading a node elsewhere over RPC alone was tried and
-dropped -- see INSTALL, "It runs on the node's machine".) A node with neither is
+file. (BlockYard runs on the node's machine; see INSTALL, "It runs on the node's machine".) A
+node with neither is
 refused at boot, and `rpcUser` without `rpcPassword` is refused too, rather than sending
 `Basic dXNlcjo=` and failing with a confusing 401.
 Before every connection that lacks a credential, and again after any HTTP 401, the
@@ -476,18 +476,19 @@ Without `chainHint`, the monitor tries `<datadir>/.cookie` and then every
 subdirectory, so the cookie is usually found anyway. Setting `chainHint` makes the
 choice explicit when several chains share one data directory.
 
-### A remote node with a username and password
+### A node with a username and password (`rpcauth`)
 
-For a node on another machine, configure `rpcuser`/`rpcpassword` (or `rpcauth`)
-and an `rpcallowip` that admits this host in the node's own configuration, then:
+For a node that authenticates with `rpcuser`/`rpcpassword` or `rpcauth` instead of the cookie
+file:
 
 ```json
 {
   "nodes": [
     {
-      "id": "remote",
-      "label": "node on 198.51.100.20",
-      "rpcUrl": "http://198.51.100.20:8332",
+      "id": "main",
+      "label": "My node",
+      "rpcUrl": "http://127.0.0.1:8332",
+      "datadir": "/home/you/.bitcoin",
       "rpcUser": "monitor",
       "rpcPassword": "a-long-random-secret"
     }
@@ -495,14 +496,9 @@ and an `rpcallowip` that admits this host in the node's own configuration, then:
 }
 ```
 
-No `datadir` and no `cookieFile`: a node on another machine has no cookie this process can read,
-and the credential lookup falls through to `rpcUser`/`rpcPassword`. Do **not** add `datadir`
-here -- a `datadir` that does not exist on *this* machine makes the node get skipped at startup.
-
-Plain HTTP JSON-RPC sends the password and every reply in clear text. Across an
-untrusted network, reach the node through an SSH tunnel or VPN. For example,
-`ssh -N -L 18332:127.0.0.1:8332 user@node-host` with `"rpcUrl": "http://127.0.0.1:18332"`.
-Keep the file private with `chmod 600 config/local.json`.
+Keep `datadir`: the explorer's address index is built from the block files under it, and the
+credential lookup only falls through to `rpcUser`/`rpcPassword` when no cookie is readable there.
+The RPC connection stays on this machine (`127.0.0.1`), so the password never crosses a network.
 
 ### Two nodes
 

@@ -1,9 +1,8 @@
 # Getting started: macOS or Linux, from a command prompt
 
 Everything here is typed into a terminal on **the machine that runs Bitcoin Core**. BlockYard
-reads the node's block files to build the explorer's address index, so it lives next to the
-node; see [INSTALL.md](INSTALL.md#it-runs-on-the-nodes-machine) for why a node elsewhere over
-RPC was tried and dropped. Ten minutes of typing, then the index build runs on its own.
+reads the node's block files to build the explorer's address index, so it runs on the node's
+machine and nowhere else. Ten minutes of typing, then the index build runs on its own.
 
 ## 1. Bitcoin Core
 

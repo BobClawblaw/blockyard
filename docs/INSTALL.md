@@ -160,7 +160,8 @@ at `<datadir>/<chainHint>/.cookie`:
 }
 ```
 
-**Another machine, or user/password authentication:**
+**User/password authentication** -- a node that uses `rpcauth` instead of the cookie file. Keep
+`datadir`: the block files are still read from it.
 
 ```json
 {
@@ -168,7 +169,8 @@ at `<datadir>/<chainHint>/.cookie`:
     {
       "id": "main",
       "label": "My node",
-      "rpcUrl": "http://192.0.2.20:8332",
+      "rpcUrl": "http://127.0.0.1:8332",
+      "datadir": "/home/you/.bitcoin",
       "rpcUser": "monitor",
       "rpcPassword": "a long random password"
     }
@@ -182,17 +184,12 @@ overrides the built-in defaults.
 
 #### It runs on the node's machine
 
-BlockYard is installed **on the machine that runs Bitcoin Core**. The monitor half can read a
-node elsewhere over JSON-RPC alone, and on 2026-09-13 that was tried against a node appliance on
-the LAN: chain, mempool, peers and blocks filled in, but the **explorer could not be made to work
-in real time over RPC**, and there was no configuration that would make it. Core has no address
-index and refuses the RPCs an explorer would ask; `scantxoutset`, the one call that can answer a
-balance, holds the node's single RPC thread for tens of seconds per query and knows no history;
-and a node answering over the network in seconds left an address page waiting minutes. That
-was a failed idea, and it is not supported. The address data is **rebuilt from the block files
-and stored locally** instead, the way mempool.space's `electrs` does it
-([Building the address index](#building-the-address-index)), and the build reads the node's
-`blocks/` directory -- so BlockYard lives next to the node.
+BlockYard is installed **on the machine that runs Bitcoin Core**, and nowhere else. The explorer's
+address index is built from the node's own block files (`<datadir>/blocks`), the way
+mempool.space's `electrs` does it ([Building the address index](#building-the-address-index)),
+because Core cannot answer an address's history over RPC at any setting. A node on another
+machine is **not supported**: reading one over RPC alone was tried (2026-09-13) and dropped --
+real-time explorer data over RPC was a failed idea.
 
 `rpcUser` / `rpcPassword` are still accepted, for a node that authenticates with `rpcauth` rather
 than the cookie file (see [Configuration](CONFIGURATION.md#nodes)). The web UI's node-connection

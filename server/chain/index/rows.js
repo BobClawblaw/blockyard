@@ -116,8 +116,8 @@ export function readRow(buf, at = 0) {
 
 /**
  * The same rows from the node's own decoding: `getblock <hash> 3`, which carries every input's prevout.
- * This is how the live index follows the chain -- through RPC, so it works for a node whose block
- * files are on another machine -- and it must agree with blockRows row for row, which is checked on
+ * This is how the live index follows the chain -- through RPC, one block at a time as they arrive,
+ * rather than re-reading the files -- and it must agree with blockRows row for row, which is checked on
  * real blocks (test/chain-index-live.test.js and scripts/index-live-check.js). Amounts arrive as BTC
  * floats and are rounded to satoshis, which is exact for every amount Core can express.
  */
