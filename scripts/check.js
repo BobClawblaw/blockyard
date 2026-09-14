@@ -42,9 +42,12 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   else add('credentials', 'ok', cred.source === 'config' ? `rpcUser "${cred.user}" from the config` : `cookie ${cred.source}`);
 
   // the RPC server
-  const one = async (method, params = []) => {
-    try { const [r] = await rpc.batch([{ method, params }], { timeoutMs: 20000 }); return r; }
-    catch (err) { return { ok: false, error: { message: err.message, kind: err.kind } }; }
+  // every call is timed: how fast the node answers is half of what an install needs to know
+  const ms = (t0) => `${Date.now() - t0 >= 1000 ? `${((Date.now() - t0) / 1000).toFixed(1)} s` : `${Date.now() - t0} ms`}`;
+  const one = async (method, params = [], timeoutMs = 20000) => {
+    const t0 = Date.now();
+    try { const [r] = await rpc.batch([{ method, params }], { timeoutMs }); r.ms = ms(t0); return r; }
+    catch (err) { return { ok: false, ms: ms(t0), error: { message: err.message, kind: err.kind } }; }
   };
   const info = await one('getblockchaininfo');
   if (!info.ok) {
@@ -53,7 +56,7 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   }
   const chain = info.result.chain;
   facts.chain = chain; facts.blocks = info.result.blocks; facts.headers = info.result.headers;
-  add('rpc', 'ok', `${node.rpcUrl} answers: chain ${chain}, block ${info.result.blocks.toLocaleString()} of ${info.result.headers.toLocaleString()} headers${info.result.initialblockdownload ? ', still in initial block download' : ''}${info.result.pruned ? ', PRUNED' : ''}`);
+  add('rpc', 'ok', `${node.rpcUrl} answers in ${info.ms}: chain ${chain}, block ${info.result.blocks.toLocaleString()} of ${info.result.headers.toLocaleString()} headers${info.result.initialblockdownload ? ', still in initial block download' : ''}${info.result.pruned ? ', PRUNED' : ''}`);
   if (node.chainHint && node.chainHint !== chain) add('chain', 'fail', `config says chainHint "${node.chainHint}" but the node is on "${chain}"`);
   if (info.result.pruned) add('pruned', 'fail', 'a pruned node has discarded old block files; the address index needs every one of them');
 
@@ -76,12 +79,21 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   // the explorer's one heavy need from the node: a block with every input's prevout
   const best = await one('getbestblockhash');
   if (best.ok) {
-    const blk = await one('getblock', [best.result, 3]);
+    const blk = await one('getblock', [best.result, 3], 120_000);
     if (blk.ok) {
       const withPrevout = blk.result.tx.slice(1, 4).every((t) => t.vin.every((v) => v.prevout));
-      add('getblock 3', withPrevout ? 'ok' : 'fail', withPrevout ? `the tip block decodes with prevouts (${blk.result.tx.length.toLocaleString()} transactions)` : 'the node answered verbosity 3 without prevouts');
+      const slow = blk.ms.endsWith(' s') && parseFloat(blk.ms) >= 5;
+      add('getblock 3', withPrevout ? (slow ? 'warn' : 'ok') : 'fail', withPrevout ? `the tip block decodes with prevouts (${blk.result.tx.length.toLocaleString()} transactions) in ${blk.ms}${slow ? ' -- slow: the block files are on a slow disk, or the node is busy' : ''}` : 'the node answered verbosity 3 without prevouts');
     } else add('getblock 3', 'fail', `getblock <tip> 3: ${blk.error.message} -- the address index follower cannot run`);
   }
+  // the mempool, verbose: the monitor's heaviest regular read, every 20 s; how long the node takes
+  // over it is what decides whether the block-space board fills
+  const mp = await one('getrawmempool', [true], 120_000);
+  if (mp.ok) {
+    const n = Object.keys(mp.result).length;
+    const slow = mp.ms.endsWith(' s') && parseFloat(mp.ms) >= 10;
+    add('mempool', slow ? 'warn' : 'ok', `${n.toLocaleString()} transactions, verbose, in ${mp.ms}${slow ? ' -- slow: the board and the block being built will lag behind this' : ''}`);
+  } else add('mempool', 'warn', `getrawmempool verbose: ${mp.error.message} after ${mp.ms}`);
   const addr = await one('getaddresstxids', [{ addresses: [] }]);
   add('address index rpc', 'info', addr.ok ? 'the node has insight-style address RPCs (unused: BlockYard keeps its own index)' : 'the node has no address index, as expected of Bitcoin Core; BlockYard builds its own');
 
