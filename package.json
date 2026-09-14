@@ -1,7 +1,6 @@
 {
   "name": "blockyard",
   "version": "0.0.9",
-  "private": true,
   "description": "Live web monitor, 3D block-space viewer, block explorer and markets view for a Bitcoin Core node",
   "license": "Apache-2.0",
   "keywords": [
@@ -25,6 +24,21 @@
     "node": ">=22.0.0"
   },
   "main": "server/main.js",
+  "bin": {
+    "blockyard": "bin/blockyard.js"
+  },
+  "files": [
+    "bin/",
+    "server/",
+    "public/",
+    "scripts/",
+    "config/pool-map.json",
+    "systemd/",
+    "docs/*.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "NOTICE"
+  ],
   "scripts": {
     "start": "node server/main.js",
     "setup": "node scripts/setup.js",

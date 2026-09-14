@@ -318,7 +318,7 @@ async function main() {
   say(c.dim('parallel readers seek against each other and against the node.'));
   // inside the checkout by default (operator, 2026-09-14, on the Mac: "It should honor the directory
   // it's run out of"): data/ is where this install keeps everything it writes, and it is gitignored
-  a.indexDir = await ask('index directory', arg('index-dir', path.join(ROOT, 'data', 'index')), validate.newDir);
+  a.indexDir = await ask('index directory', arg('index-dir', path.join(defaults.store.dir, 'index')), validate.newDir);   // data/ of the checkout, or ~/.blockyard/data from the npm command
   const built = existsSync(path.join(a.indexDir, 'manifest.json'));
   if (built) say(`${c.ok('✓')} an index is already built there; the server will follow the chain from it`);
   // the suggestion is the shared-machine number (at most four, half the cores), not a dedicated
@@ -328,7 +328,7 @@ async function main() {
   else a.workers = await ask(`build workers ${c.dim('(1 on spinning disks; each needs ~2.5 GB of memory)')}`, arg('workers', String(Math.max(1, Math.min(4, defaultWorkers())))), validate.workers);
 
   // ------------------------------------------------------------------------------- 5. written
-  out(step(5, STEPS, 'config/local.json'));
+  out(step(5, STEPS, shortPath(file)));
   const cfg = localConfig(a);
   out(box(JSON.stringify(cfg, (k, v) => (k === 'rpcPassword' ? '••••••••' : v), 2).split('\n').map((l) => c.dim(l)), { title: shortPath(file) }).split('\n').map((l) => `    ${l}`).join('\n'));
   let force = flag('force');
