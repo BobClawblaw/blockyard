@@ -5,7 +5,7 @@
 [b]npm:[/b] [tt]npm install -g blockyard[/tt]
 [b]Licence:[/b] Apache-2.0
 
-[img width=800]IMAGE-URL-FOR:overview.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/14/UqTQ8g.jpg[/img]
 
 
 [size=12pt][b]What it is[/b][/size]
@@ -23,15 +23,15 @@ It is read-only toward your node by default. It never signs, never spends, never
 
 [b]Block space, in 3D.[/b] The next block's worth of the mempool as a board of glowing stones: area is vbytes, colour is feerate. When the pool changes, the blocks lift, travel in collision-free lanes and land under gravity. At rest the board comes alive with thirty idle effects — ripples, light cycles, a lightning ball, ball lightning that arcs from stone to stone, a UFO's tractor beam, Missile Command, a centipede, fireworks, a code rain, a spiral galaxy turning behind it — every one of them a switch, with sliders for how often they play. Neon tubes, metallic and chrome finishes, a movable lamp, perspective, a star field. It is the part of the project we spent the most time on because it is the part that makes people stop and look.
 
-[img width=800]IMAGE-URL-FOR:block-space-neon.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/14/UqTCfH.jpg[/img]
 
 [b]An explorer that looks the part.[/b] Search a height, a block hash, a txid or an address. Block pages with the full transaction list, fee distribution and miner attribution (151 pools). Transaction pages with fee, fee rate and dollar value, feature badges (SegWit, Taproot, RBF, consolidation, OP_RETURN, coinbase), a flow diagram from inputs to outputs, and links to where every coin came from and where it went. [b]Address pages with full history, balance and unspent outputs.[/b] Bitcoin Core has no address index at any setting — [tt]getaddressbalance[/tt] and friends belong to forks, and stock Core answers [i]Method not found[/i] — so BlockYard builds its own from the node's block and undo files: one row per (address, transaction) with the net amount, kept current as blocks arrive, balances checked against [tt]scantxoutset[/tt] to the satoshi. It builds in the background the first time you start (expect a few hours, and ~125 GB of disk) while every other page keeps working.
 
-[img width=800]IMAGE-URL-FOR:explorer-tx.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/14/UqTnQv.jpg[/img]
 
 [b]Markets.[/b] Public prices from Coinbase, Kraken, Bitstamp, Bitfinex and OKX: a 3D candle board on the same engine as the block space, with a neon price line and its own set of effects; a precise flat candlestick chart; an exchange table; and a bitcoinity-style order-book depth chart. Fetched by the server only while someone is looking at the page.
 
-[img width=800]IMAGE-URL-FOR:markets.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/14/UqTMAI.jpg[/img]
 
 [b]Kiosk.[/b] The 3D markets board, a price panel and the block-space board side by side, full screen in one click. Put it on the wall.
 
