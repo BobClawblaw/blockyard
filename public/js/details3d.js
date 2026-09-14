@@ -290,35 +290,24 @@ function fxNow(st, t) {
   return out;
 }
 
-// WHICH EFFECT PLAYS NEXT. Pure apart from `st` (lastFx, pulseReadyAt) and `rnd`, so the tests
+// WHICH EFFECT PLAYS NEXT. Pure apart from `st` (recentFx) and `rnd`, so the tests
 // drive the real rule instead of a copy of it.
 //
-// THE PULSE WAITS ITS TURN (operator, 2026-09-14: "I'm seeing the energy pulse riding the yellow
-// price line on 3d view much too often ... Have it wait at least 30-120 seconds before firing").
-// It was rationed by a dice roll -- skipped half the time it came up -- and on a board whose only
-// other effect is twinkle that still meant a surge every few picks, roughly every 15-25 s. A roll
-// cannot promise a gap; a clock can. Each pulse now sets the earliest moment the next may start, a
-// fresh 30-120 s ahead, and a board that has just opened waits the same way before its first.
-// Until then the pulse is simply not in the running; once its wait is over it plays on the next
-// pick. With every other effect switched off nothing plays in between -- the board rests.
-// ...RARER STILL (operator, 2026-09-14, later: "still happens too often. Need to make it rarer
-// still"): 2.5-6 minutes between surges, from 30-120 s.
+// NO EFFECT WAITS ITS TURN. There was a rare set here -- the pulse, the bulge and ball lightning
+// on the price board each held to a clock of 2.5-6 minutes between plays (operator, 2026-09-14:
+// "much too often", then "should be rare") -- and it is gone (operator, later that day: "Make the
+// pipe 'special rare' effects no longer special, and bake them into the regular round of choosing
+// effects for the market"). The price board has its own list now, and the operator trims it;
+// rarity is the no-repeat window and the length of the list, the same as on the block board.
 //
 // NO EFFECT REPEATS WITHIN THE LAST `noRepeat` PLAYED (operator, 2026-09-14: "add a config field that
 // defaults to 12 ... never pick one that has been played in the last 12 sequences"). This replaces
 // "not the same one twice running", which was the same rule with a window of one. `st.recentFx` keeps
-// the kinds played, newest last. Where fewer kinds are switched on than the window -- the price line
-// has three -- no kind can be twelve plays clear, so the pick is among those that have waited
-// longest: the rule degrades to taking turns, never to a repeat while something else is waiting.
-export const PULSE_WAIT_MS = [150000, 360000];
-// RARE (operator, 2026-09-14: "drastically increase the delay on the bulge effect, just like the
-// energy pulse effects. These should be rare"): each of these waits its own PULSE_WAIT_MS between
-// plays, counted from the last time it played, and plays as soon as it is due.
-export const RARE_FX = ['pulse', 'bulge', 'stormball'];   // rare on a price board; on the block board only the first two apply, and they never play there
-export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12, rare = null) {
-  // which kinds wait their turn: on a price board (told by the caller, or by pulse/bulge being in
-  // the list) all of RARE_FX; on the block board none -- ball lightning there is an ordinary pick
-  rare ??= kinds.some((k) => LINE_ONLY.has(k)) ? RARE_FX : [];
+// the kinds played, newest last. Where fewer kinds are switched on than the window, no kind can be
+// twelve plays clear, so the pick is among those that have waited longest: the rule degrades to
+// taking turns, never to a repeat while something else is waiting.
+export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
+  void now;   // the clock was the rare set's; kept in the signature so the callers and tests read the same
   if (!kinds.length) return null;
   const recent = st.recentFx ?? (st.recentFx = []);
   const window = Math.max(0, Math.min(Math.floor(noRepeat), kinds.length - 1));
@@ -330,20 +319,6 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12, r
     const oldest = Math.min(...kinds.map(lastSeen));
     pool = kinds.filter((k) => lastSeen(k) === oldest);
   }
-  const wait = () => now + PULSE_WAIT_MS[0] + rnd() * (PULSE_WAIT_MS[1] - PULSE_WAIT_MS[0]);
-  rare = rare.filter((k) => kinds.includes(k));
-  if (rare.length) {
-    for (const k of rare) st[`${k}ReadyAt`] ??= wait();
-    const due = rare.filter((k) => now >= st[`${k}ReadyAt`]);
-    if (due.length) {
-      pool = due;
-    } else {
-      const others = kinds.filter((k) => !rare.includes(k));
-      if (!others.length) return null;
-      pool = pool.filter((k) => !rare.includes(k));
-      if (!pool.length) pool = others;
-    }
-  }
   // NO FAVOURITES (operator, 2026-09-13: "the tron lightcycles effect happens way too often").
   // There used to be a rule here: the first effect after the board came to rest was a light-cycle
   // race HALF THE TIME. That was written when there were nine effects and it read as a flourish.
@@ -351,11 +326,10 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12, r
   // against 1.8% for an even split -- an eighteenfold bias. And the block-space board re-lays on
   // every pool refresh, so `soon` fires constantly, which is why it felt relentless.
   //
-  // A hardcoded favourite also contradicts the scheduling the operator actually chose (flat and
-  // rare, so any one effect is a genuine surprise), so it is gone rather than merely reduced.
+  // A hardcoded favourite also contradicts the scheduling the operator actually chose (flat, so
+  // any one effect is a genuine surprise), so it is gone rather than merely reduced.
   const from = pool.length ? pool : kinds;
   const kind = from[(rnd() * from.length) | 0];
-  if (rare.includes(kind)) st[`${kind}ReadyAt`] = wait();
   recent.push(kind);
   if (recent.length > 64) recent.splice(0, recent.length - 64);
   return kind;
@@ -382,7 +356,7 @@ function scheduleFx(canvas, st, opts, soon = false) {
     const allowed = Array.isArray(opts.fxKinds) ? new Set(opts.fxKinds) : null;
     const kinds = (onALine ? MARKET_FX : SPACE_FX).filter((k) => !allowed || allowed.has(k));
     if (!kinds.length) return;
-    const kind = chooseIdleFx(kinds, st, now, Math.random, opts.fxNoRepeat ?? 12, onALine ? RARE_FX : []);
+    const kind = chooseIdleFx(kinds, st, now, Math.random, opts.fxNoRepeat ?? 12);
     if (!kind) { scheduleFx(canvas, st, opts); return; }   // only the pulse is on, and it is still waiting
     startFx(st, kind, now);
     st.wake?.();

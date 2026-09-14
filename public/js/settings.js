@@ -308,9 +308,9 @@ const MARKET_HINT = Object.freeze({
   twinkle: 'Scattered candles flash white, each on its own beat',
   lightcycle: 'Two riders in from the left and the right, their light walls running the candle tops, until one crashes',
   ball: 'A plasma ball riding the price line from left to right, throwing bolts and a pale dust trail',
-  pulse: 'The surge that runs the price line, blue behind the head. Rare: 2.5 to 6 minutes between plays',
-  bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes. As rare as the pulse',
-  stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle sometimes throws a green arc on to another. As rare as the pulse',
+  pulse: 'The surge that runs the price line, blue behind the head',
+  bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes',
+  stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle sometimes throws a green arc on to another',
   cascade: 'The candles light in order, tallest first',
   flare: 'One candle goes supernova and lights its neighbourhood',
 });
@@ -479,7 +479,7 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'marketEffects',
     title: 'Market effects',
-    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from this list: everything that moves along the hours or lights the candles where they stand, plus the pulse and the bulge that only a price line can carry. Those two and ball lightning are rare here, 2.5 to 6 minutes apart. The Board effects switch on the Markets & Price tab is the master.',
+    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from this list: everything that moves along the hours or lights the candles where they stand, plus the pulse and the bulge that only a price line can carry. The Board effects switch on the Markets & Price tab is the master.',
     bulk: true,
     rows: fxRows([
       'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'lightcycle', 'ball', 'pulse', 'bulge',

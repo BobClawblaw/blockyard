@@ -310,8 +310,9 @@ Core (`BLOCKYARD_NODE=main node scripts/shots.mjs`); a fresh browser profile def
 node in the config, which on this box is the slow Umbrel -- the first pass photographed an empty
 board.
 
-**Effects.** Thirty, with a no-repeat window (12) and two rare line effects on Markets (the
-pulse and the pipe bulge, each 2.5-6 min apart). The bulge is a ball that fits the line: exactly
+**Effects.** Thirty, with a no-repeat window (12) per board; two lists (`effects` for Block
+space, `marketEffects` for Markets), nothing rare -- the pulse and the bulge are ordinary picks
+on the Markets list since 2026-09-14. The bulge is a ball that fits the line: exactly
 the tube at both ends, an arced skin, the core magnified through it, gravity along the pipe.
 
 **The first fresh install (a Mac, 2026-09-14) found the release's worst bug**, and it was not

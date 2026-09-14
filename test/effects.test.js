@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
-import { FX_KINDS, SPACE_FX, MARKET_FX, board3d, triggerIdle, chooseIdleFx, PULSE_WAIT_MS, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
+import { FX_KINDS, SPACE_FX, MARKET_FX, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
 import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
@@ -128,53 +128,25 @@ test('NO EFFECT IS THE SCHEDULER\'S FAVOURITE', () => {
   const never = FX_KINDS.filter((k) => k !== 'pulse' && !count[k]);
   assert.deepEqual(never, [], `these kinds were never chosen in ${n} draws`);
 
-  // THE PRICE BOARD HAS ITS OWN LIST, AND ITS OWN RULE. The pulse used to be rationed by a dice
-  // roll, and a roll cannot promise a gap: on a board whose only other effect is twinkle it still
-  // surged every few picks (operator, 2026-09-14: "much too often ... Have it wait at least 30-120
-  // seconds before firing"). This drives the REAL chooser -- no copy of it -- through two simulated
-  // hours at the scheduler's own cadence, and measures the gaps.
-  // SEEDED, so the gaps are the same on every run. The first cut drew from Math.random with a bound
-  // of 120 s + 10 s, and failed about one run in ten at 130.7 s -- a real gap, not a bug: the wait
-  // ends between two scheduler ticks, and a tick can be as far as 9 s of idleEvery plus a 3 s
-  // effect away. The bound below is that worst case, not a guess with slack in it.
+  // THE PRICE BOARD'S LIST IS PICKED THE SAME WAY (operator, 2026-09-14: "Make the pipe 'special
+  // rare' effects no longer special, and bake them into the regular round of choosing effects for
+  // the market"). The pulse, the bulge and ball lightning used to wait 2.5-6 minutes between plays;
+  // now they are picks like any other: no waiting on a fresh board, no clock, an even share.
   let seed = 20260914;
   const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
-  // THE BULGE IS RARE THE SAME WAY (operator, 2026-09-14: "drastically increase the delay on the
-  // bulge effect, just like the energy pulse effects. These should be rare"): both are measured here.
-  // A tick is idleEvery plus the effect that played, and the bulge is the longest at 16 s; a rare
-  // effect that comes due while the other is already due can wait one more tick behind it.
-  const LEN = { pulse: 9000, bulge: 16000, stormball: 11000 };
-  const MAX_TICK = 9000 + 16000;
   const st = {};
-  let t = 0;
-  const first = {}, prev = {}, gaps = { pulse: [], bulge: [], stormball: [] };
-  while (t < 4 * 3600e3) {
-    const k = chooseIdleFx(LINE_FX, st, t, rnd);
-    if (k) st.lastFx = k;
-    if (k in gaps) { if (prev[k] == null) first[k] = t; else gaps[k].push(t - prev[k]); prev[k] = t; }
-    t += 5000 + rnd() * 4000 + (k ? LEN[k] ?? 3000 : 0);   // idleEvery, plus the effect itself
-  }
+  const cnt = {};
+  for (let i = 0; i < 24000; i++) { const k = chooseIdleFx(LINE_FX, st, i * 8000, rnd); cnt[k] = (cnt[k] ?? 0) + 1; }
+  const evenShare = 1 / LINE_FX.length;
   for (const k of ['pulse', 'bulge', 'stormball']) {
-    assert.ok(first[k] >= PULSE_WAIT_MS[0], `a board that has just opened waits before its first ${k} (${(first[k] / 1000).toFixed(0)} s)`);
-    assert.ok(gaps[k].length > 30, `and the ${k} does keep coming round (${gaps[k].length} in four hours)`);
-    const minGap = Math.min(...gaps[k]), maxGap = Math.max(...gaps[k]);
-    assert.ok(minGap >= PULSE_WAIT_MS[0], `the ${k} never comes sooner than ${PULSE_WAIT_MS[0] / 1000} s after the last (shortest gap ${(minGap / 1000).toFixed(1)} s)`);
-    assert.ok(maxGap <= PULSE_WAIT_MS[1] + 2 * MAX_TICK, `and never later than ${PULSE_WAIT_MS[1] / 1000} s plus two scheduler ticks (longest gap ${(maxGap / 1000).toFixed(1)} s)`);
+    assert.ok(cnt[k] / 24000 > evenShare * 0.8 && cnt[k] / 24000 < evenShare * 1.2, `${k} takes an ordinary share of the price board's picks (${(100 * cnt[k] / 24000).toFixed(1)}% against ${(100 * evenShare).toFixed(1)}%)`);
   }
-  // with everything else switched off the pulse still plays -- after its wait, and nothing in between
-  const lone = {};
-  assert.equal(chooseIdleFx(['pulse'], lone, 0), null, 'a lone pulse still waits its turn');
-  assert.equal(chooseIdleFx(['pulse'], lone, lone.pulseReadyAt), 'pulse', 'and then it plays');
-  const lone2 = {};
-  assert.equal(chooseIdleFx(['bulge'], lone2, 0), null, 'a lone bulge waits its turn too');
-  assert.equal(chooseIdleFx(['bulge'], lone2, lone2.bulgeReadyAt), 'bulge', 'and then it plays');
-  // BALL LIGHTNING IS RARE ON THE PRICE BOARD ONLY (operator, 2026-09-14: "Same rarity as the other
-  // effects for the markets"): told it is a price board it waits; on the block board it is an ordinary pick
-  const lone3 = {};
-  assert.equal(chooseIdleFx(['stormball'], lone3, 0, Math.random, 12, ['pulse', 'bulge', 'stormball']), null, 'on a price board it waits its turn');
-  assert.equal(chooseIdleFx(['stormball'], lone3, lone3.stormballReadyAt, Math.random, 12, ['pulse', 'bulge', 'stormball']), 'stormball', 'and then it plays');
-  assert.equal(chooseIdleFx(['stormball', 'ripple'], {}, 0, () => 0.1, 12, []), 'stormball', 'on the block board it is picked at once');
-  assert.equal(chooseIdleFx(['stormball', 'ripple'], {}, 0, () => 0.1), 'stormball', 'and the default, with no line effect in the list, is the block board\'s rule');
+  assert.equal(chooseIdleFx(['pulse'], {}, 0), 'pulse', 'a lone pulse plays at once');
+  assert.equal(chooseIdleFx(['bulge'], {}, 0), 'bulge', 'so does a lone bulge');
+  assert.equal(chooseIdleFx(['stormball'], {}, 0), 'stormball', 'and lone ball lightning, on either board');
+  const fresh = {};
+  chooseIdleFx(LINE_FX, fresh, 0, rnd);
+  assert.deepEqual(Object.keys(fresh), ['recentFx'], 'the picker keeps only the no-repeat history');
 });
 
 test('with every effect switched off the board never schedules one, and it still draws', () => {

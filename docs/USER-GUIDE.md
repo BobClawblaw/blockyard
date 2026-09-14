@@ -235,9 +235,9 @@ trimming one board's effects leaves the other's alone.
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
 | **Centipede**, **Interception**, **Collapse** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
 | **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
-| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike — and one arc in four chains on from the struck block to another as a green discharge, a beat later; on Markets it flies through the chart, striking candles and charging the price line where it passes, rarely, like the pulse |
-| **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head; rare — 2.5 to 6 minutes between plays |
-| **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up; as rare as the pulse |
+| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, its arcs electrifying the blocks they strike — and one arc in four chains on from the struck block to another as a green discharge, a beat later; on Markets it flies through the chart, striking candles and charging the price line where it passes |
+| **Energy pulse** | the surge that runs the neon price line on Markets, electric blue behind its head |
+| **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up |
 
 They are decoration only: they carry no data, they never play during a refresh, and they
 are switched off entirely under `prefers-reduced-motion`. The Block space list is every effect
@@ -247,8 +247,9 @@ never toward you**, and lights the candles or the line: fronts run along the cha
 on the candle row, the light cycles ride in from the two ends along the candle tops, the
 lightning ball rides the price line. Its list leaves out the two that move tiles (**Collapse**,
 **Tractor beam** — a candle is a price) and the four that travel the depth or turn in place
-(**Code rain**, **Power-up**, **Radar**, **Vortex**); **Energy pulse**, **Pipe bulge** and
-**Ball lightning** are rare there, 2.5 to 6 minutes apart.
+(**Code rain**, **Power-up**, **Radar**, **Vortex**). Nothing on it waits its turn: the pulse,
+the bulge and ball lightning are picks like any other, and how often you see one is the
+length of the list you leave switched on.
 
 The more you leave switched on, the less often you see any particular one — there is still
 only one effect every seven to thirteen seconds. The **all off** button on that tab leaves

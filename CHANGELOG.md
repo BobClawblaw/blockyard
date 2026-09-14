@@ -13,6 +13,9 @@ All notable changes to this project are documented here. The format follows
   **Market effects** (the Markets board's 24). Each has its own no-repeat window and its own
   all on / all off, which the no-repeat slider had silently taken away. A saved settings store is
   migrated (schema 4): the Markets list starts as a copy of the list there was.
+- **Nothing on the Markets board waits its turn.** The pulse, the bulge and ball lightning were
+  held to a clock of 2.5-6 minutes between plays; they are ordinary picks now, and the list you
+  leave on decides how often any one of them comes round.
 - **Everything on the Markets board moves along the hours** — left or right, never toward the
   viewer — and lights the candles or the line: fronts (outline, scan, tide, wave) run along the
   chart, rings (ripple, shockwave, nova) start on the candle row, the light cycles ride in from
