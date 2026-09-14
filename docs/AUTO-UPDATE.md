@@ -65,7 +65,7 @@ branch heads: a branch tip is whatever was pushed last, including a half-finishe
 
 ```
 origin  https://github.com/BobClawblaw/blockyard.git   (pinned in code)
-tag     v0.1.0, v0.1.1, ...
+tag     v0.0.9, v0.1.0, ...
 ```
 
 The updater does a **shallow tag fetch** (`git fetch --tags --depth=1 origin`) — the repository is
@@ -118,7 +118,7 @@ return them as structured entries:
   ] }
 ```
 
-`CHANGELOG.md` already has the required shape (`## [0.1.0] — 2026-09-14`). Markdown is rendered as
+`CHANGELOG.md` already has the required shape (`## [0.0.9] — 2026-09-14`). Markdown is rendered as
 **text, not HTML** — see §7.
 
 ### 4.3 Apply
@@ -240,10 +240,10 @@ an unsigned tag must fail closed.
    private and the feature cannot work for anyone else.
 2. ~~**Fix the version scheme.**~~ **Done 2026-09-13.** `package.json` and `server/main.js` said
    **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is this newer?" comparison
-   would have been wrong, and that field is what the whole feature compares. 0.1.0 is current, and
+   would have been wrong, and that field is what the whole feature compares. 0.0.9 is current, and
    every source now says so. The version is no longer written down twice: `server/main.js` reads
    it from `package.json`.
-3. ~~**Create the first tag.**~~ **Done 2026-09-14:** `v0.1.0`, the first official release, is
+3. ~~**Create the first tag.**~~ **Done 2026-09-14:** `v0.0.9`, the initial release, is
    tagged, so the release channel in §3 exists.
 4. **Decide the open-mode question** in §6 knowingly.
 

@@ -8,9 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 Nothing yet.
 
-## [0.1.0] — 2026-09-14
+## [0.0.9] — 2026-09-14
 
-The first official release. Everything in it, like everything before it, was written by an AI directed by a human
+The initial release. Everything in it, like everything before it, was written by an AI directed by a human
 operator, and audited by AI (`docs/SECURITY-AUDIT.md`). It is experimental pre-release software.
 
 ### The explorer's address history, from an index of our own
@@ -502,4 +502,4 @@ are an original implementation (`public/js/blockpack.js`, `public/js/feepalette.
 Internal first version: multi-user monitor with charts, sync viewer, mempool view, peers and
 event feed.
 
-[0.1.0]: https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.0
+[0.0.9]: https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9

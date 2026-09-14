@@ -122,7 +122,7 @@ node scripts/setup.js --yes --rpc-url http://127.0.0.1:8332 \
 npm start
 ```
 
-The log says `BlockYard 0.1.0 listening on http://127.0.0.1:21000` and, once the index exists,
+The log says `BlockYard 0.0.9 listening on http://127.0.0.1:21000` and, once the index exists,
 `address index /Users/you/blockyard-index: following main from block N`. Open
 <http://127.0.0.1:21000>. The Overview fills in within about thirty seconds; Block space lands a
 little after. Open Explorer, click the latest block, then any output address: with the index
