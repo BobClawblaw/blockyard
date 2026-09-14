@@ -147,7 +147,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 const FX_MS = {
   ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
-  bulge: 8000,                                 // a sphere rolling through the price line (2026-09-14)
+  bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
@@ -1123,24 +1123,59 @@ function headPoint(pts, at, overrun) {
 // moves onward. Have it cleanly roll in and roll out with no pops, and limit it to within the limits
 // of the yellow price line").
 //
-// Where along the line, and how big, at effect progress u -- pure, so the no-pop promise is tested:
-//   s     0..1 along the line, eased at both ends, and kept inside it by the swell's own half-width
-//   amp   0 at u=0 and u=1 and smooth in between (smoothstep in over the first 18%, out over the
-//         last 18%), so the sphere and the swell grow from nothing and shrink to nothing
-export function bulgeAt(u) {
+// SECOND CUT (the same day: "slow it down to half the current speed. The bulge does not look like
+// it's passing a large sphere being forced through the tube, deforming a spherical bulge as it moves.
+// Also, make the spawn in and fade out bulge up much sooner on the line, and last longer before it
+// shrinks. the bulge and shrink effects should take 1 second each at the extents"). The first cut
+// was a Gaussian swell -- a soft hump, not a ball -- that eased in and out over 18% of the run at each
+// end. Now:
+//   * the tube's wall is the SHAPE A BALL MAKES in a hose: round over the ball (a circle of radius
+//     R), then straight flanks tangent to it running down to the tube's own radius, with a short
+//     rounded shoulder where the flank meets the tube (bulgeProfile)
+//   * it travels at constant speed from as near the start as the ball's own length allows to as near
+//     the end, so it bulges up where the line begins and shrinks where the line ends
+//   * it grows to full size in exactly one second and shrinks in exactly one second (BULGE_RAMP_MS),
+//     full size for everything between
+// 1000, then 3000 (operator, the same day: "It's fading in/out too quickly. I want to time it so the ball
+// shrinks to normal tube size at the last movement frame"): three seconds of growing from the first
+// movement frame and three of shrinking that end, at normal tube size, exactly on the last one
+export const BULGE_RAMP_MS = 3000;
+const BULGE_TAPER = Math.tan((24 * Math.PI) / 180);   // the flank's slope: a 24-degree cone off the ball
+const BULGE_BALL = 4.2;                                  // the ball's radius, in tube radii (of the core)
+
+// At effect progress u of an `ms`-long run: travel 0..1 along the usable line, and the size 0..1.
+export function bulgeAt(u, ms = FX_MS.bulge) {
   const c = Math.max(0, Math.min(1, u));
-  const ease = c * c * (3 - 2 * c);
-  const ss = (e0, e1, x) => { const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
-  return { s: BULGE_MARGIN + (1 - 2 * BULGE_MARGIN) * ease, amp: ss(0, 0.18, c) * ss(1, 0.82, c) };
+  const ramp = Math.min(0.5, BULGE_RAMP_MS / Math.max(1, ms));
+  const ss = (x) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
+  return { t: c, amp: ss(c / ramp) * ss((1 - c) / ramp) };
 }
-const BULGE_MARGIN = 0.06;       // the sphere's centre never nearer an end than this share of the line
-const BULGE_SIGMA = 0.035;       // the swell's width, as a share of the line (a Gaussian)
-// how much wider the crest is, per layer: the tube itself stretches hard round the sphere, the glow
-// barely -- a first cut swelled every layer alike, and the wide translucent glow bands ballooned into
-// stepped plateaus with visible edges; the sphere's own light replaces what they were doing
-const BULGE_GAIN_CORE = 2.3;
-const BULGE_GAIN_GLOW = 0.35;
-const bulgeGain = (kind) => (kind === 'core' ? BULGE_GAIN_CORE : BULGE_GAIN_GLOW);
+
+// The wall's distance from the axis at d pixels from the ball's centre, for a ball of radius R in a
+// tube of radius r0. Continuous, with a continuous slope everywhere except nowhere a pixel could
+// show: round over the ball, a straight flank tangent to it, a quadratic shoulder into the tube.
+export function bulgeProfile(d, R, r0) {
+  const x = Math.abs(d);
+  if (R <= r0) return r0;
+  const sin = BULGE_TAPER / Math.hypot(1, BULGE_TAPER), cos = 1 / Math.hypot(1, BULGE_TAPER);
+  const xt = R * sin, yt = R * cos;                       // where the flank leaves the ball
+  if (x <= xt) return Math.sqrt(R * R - x * x);
+  const xFlankEnd = xt + (yt - r0) / BULGE_TAPER;         // where a straight flank would reach the tube
+  const shoulder = Math.min((yt - r0) / BULGE_TAPER, R * 0.9);  // rounded over this length, centred there
+  const s0 = xFlankEnd - shoulder / 2, s1 = xFlankEnd + shoulder / 2;
+  if (x <= s0) return yt - (x - xt) * BULGE_TAPER;
+  if (x >= s1) return r0;
+  // a quadratic that leaves the flank with its slope and arrives at the tube flat
+  const k = (x - s0) / shoulder;
+  const y0 = yt - (s0 - xt) * BULGE_TAPER;
+  return y0 - BULGE_TAPER * shoulder * (k - k * k / 2);
+}
+// how far from the ball's centre the bulge reaches, in pixels
+export const bulgeReach = (R, r0) => {
+  if (R <= r0) return 0;
+  const sin = BULGE_TAPER / Math.hypot(1, BULGE_TAPER), cos = 1 / Math.hypot(1, BULGE_TAPER);
+  return R * sin + (R * cos - r0) / BULGE_TAPER + Math.min((R * cos - r0) / BULGE_TAPER, R * 0.9) / 2;
+};
 
 // A point on the drawn curve, and its unit normal: the same Catmull-Rom Beziers traceCurve strokes, so
 // the swell is laid on exactly the line the eye sees and never separates from it at a candle.
@@ -1160,64 +1195,84 @@ function curveAt(pts, s) {
   return { x, y, nx: -dy / len, ny: dx / len };
 }
 
-function drawBulge(ctx, pts, lw, u, layers) {
-  const { s, amp } = bulgeAt(u);
+// The curve by arc length, sampled once per draw: `at(px)` is the point that far along the line.
+function curveByLength(pts, samples = 400) {
+  const table = [{ s: 0, len: 0, ...curveAt(pts, 0) }];
+  for (let k = 1; k <= samples; k++) {
+    const p = curveAt(pts, k / samples), q = table[k - 1];
+    table.push({ s: k / samples, len: q.len + Math.hypot(p.x - q.x, p.y - q.y), ...p });
+  }
+  const total = table[samples].len;
+  const at = (px) => {
+    const L = Math.max(0, Math.min(total, px));
+    let lo = 0, hi = samples;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (table[mid].len < L) lo = mid; else hi = mid; }
+    const a = table[lo], b = table[hi], f = b.len > a.len ? (L - a.len) / (b.len - a.len) : 0;
+    return curveAt(pts, a.s + (b.s - a.s) * f);
+  };
+  return { total, at };
+}
+
+function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
+  const lw = Number.isFinite(lw0) && lw0 > 0 ? lw0 : 1;         // a canvas that will not say: one pixel
+  const { t, amp } = bulgeAt(u, ms);
   if (amp < 0.002) return;
-  // the swell: for each layer, only the EXTRA width beyond the pipe already stroked -- a band on each
-  // side from the pipe's edge out to the swollen edge -- so translucent layers never double up and
-  // brighten where the pipe is. Where the Gaussian has fallen away the band is zero thick, so the
-  // swell meets the pipe with no edge.
-  const STEPS = 48;
-  const span = BULGE_SIGMA * 3;
+  const coreR = (lw * 5.5) / 2;
+  const R = coreR + (coreR * BULGE_BALL - coreR) * amp;       // the ball grows with the envelope
+  const Rfull = coreR * BULGE_BALL;
+  const curve = curveByLength(pts);
+  // the ball's centre travels between the two points where its FULL bulge just fits on the line
+  const reach = bulgeReach(Rfull, coreR);
+  const usable = Math.max(0, curve.total - 2 * reach);
+  const centre = reach + usable * t;
+  const span = bulgeReach(R, coreR);
+  const STEPS = 72;
   const samples = [];
   for (let k = 0; k <= STEPS; k++) {
-    const ss = Math.max(0, Math.min(1, s - span + (2 * span * k) / STEPS));
-    const g = Math.exp(-(((ss - s) / BULGE_SIGMA) ** 2));
-    samples.push({ ...curveAt(pts, ss), g });
+    const d = -span + (2 * span * k) / STEPS;
+    samples.push({ ...curve.at(centre + d), r: bulgeProfile(d, R, coreR) });
   }
-  for (const [w, c, a, kind] of layers) {
-    const r0 = (lw * w) / 2, gain = bulgeGain(kind);
-    for (const side of [1, -1]) {
-      const outer = samples.map((q) => ({ x: q.x + q.nx * side * r0 * (1 + gain * amp * q.g), y: q.y + q.ny * side * r0 * (1 + gain * amp * q.g) }));
-      const inner = samples.map((q) => ({ x: q.x + q.nx * side * r0, y: q.y + q.ny * side * r0 })).reverse();
-      ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-      ctx.beginPath();
-      ctx.moveTo(outer[0].x, outer[0].y);
-      for (const q of outer) ctx.lineTo(q.x, q.y);
-      for (const q of inner) ctx.lineTo(q.x, q.y);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-  // the sphere inside: sized to the swollen core, a warm body with a hot centre and a highlight
-  // toward the light, growing and shrinking with the same amplitude as the swell
-  const c = curveAt(pts, s);
-  // inside the stretched wall, not filling it, so the pipe reads as a skin round a ball
-  const R = (lw * 5.5 / 2) * (1 + BULGE_GAIN_CORE * amp) * 0.72;
-  // its own soft light, which is what the ballooning glow layers were standing in for
-  for (const [k, al] of [[3.2, 0.07], [2.3, 0.1], [1.6, 0.16]]) {
-    ctx.fillStyle = `rgba(255,220,90,${(al * amp).toFixed(3)})`;
-    ctx.beginPath(); ctx.arc(c.x, c.y, R * k, 0, Math.PI * 2); ctx.fill();
-  }
-  for (const [k, col] of [[1, `rgba(255,214,60,${(0.55 * amp).toFixed(3)})`], [0.78, `rgba(255,236,120,${(0.8 * amp).toFixed(3)})`], [0.5, `rgba(255,250,210,${(0.95 * amp).toFixed(3)})`]]) {
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(c.x, c.y, R * k, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.fillStyle = `rgba(255,255,255,${(0.9 * amp).toFixed(3)})`;
-  ctx.beginPath(); ctx.arc(c.x - R * 0.3, c.y - R * 0.34, R * 0.22, 0, Math.PI * 2); ctx.fill();
-  // the pipe's skin catching the light over the swell: a thin bright rim that fades with the Gaussian
-  for (const side of [1, -1]) {
-    const r0 = (lw * 5.5) / 2;
-    ctx.strokeStyle = `rgba(255,248,200,${(0.55 * amp).toFixed(3)})`;
-    ctx.lineWidth = Math.max(0.5, lw * 0.6);
+  // NO SPHERE, ONLY THE TUBE (operator, 2026-09-14: "I don't want to see the sphere. I want to see the
+  // obvious deformation of the tube"). What sells a hose being forced wide is the hose: its skin
+  // stretches into the round profile and thins, its hot core keeps running straight through the
+  // middle, and light catches the stretched outline.
+  //   glow layers    follow the swollen wall at their own constant offset (the skin keeps its halo)
+  //   the outer core the WALL: filled out to the profile, but as thinner, more translucent skin
+  //   inner cores    do not swell at all, so the bright thread visibly runs through a swollen chamber
+  // Only the part beyond the tube already stroked is filled, so translucent layers never double up.
+  const band = (rOf, fill, side) => {
+    ctx.fillStyle = fill;
     ctx.beginPath();
-    samples.forEach((q, k) => {
-      const r = r0 * (1 + BULGE_GAIN_CORE * amp * q.g);
-      const x = q.x + q.nx * side * r, y = q.y + q.ny * side * r;
-      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.stroke();
+    samples.forEach((q, k) => { const r = rOf(q); const x = q.x + q.nx * side * r, y = q.y + q.ny * side * r; if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    return (r0) => { for (let k = samples.length - 1; k >= 0; k--) { const q = samples[k]; ctx.lineTo(q.x + q.nx * side * r0, q.y + q.ny * side * r0); } ctx.closePath(); ctx.fill(); };
+  };
+  for (const [w, c, a, kind] of layers) {
+    const r0 = (lw * w) / 2;
+    const isWall = kind === 'core' && w === Math.max(...layers.filter((l) => l[3] === 'core').map((l) => l[0]));
+    if (kind === 'core' && !isWall) continue;                        // the hot thread keeps its width
+    const off = r0 - coreR;
+    const alpha = isWall ? a * 0.72 : a;                             // stretched skin is a little thinner
+    for (const side of [1, -1]) band((q) => q.r + off, `rgba(${c[0]},${c[1]},${c[2]},${alpha})`, side)(r0);
   }
+  // the stretched outline catching the light, brightest where it is stretched furthest, and on the
+  // upper side a highlight running along the swell, on the lower a faint shadow -- the roundness
+  const liftOf = (q) => Math.max(0, (q.r - coreR) / (R - coreR || 1));
+  const upSide = samples[samples.length >> 1].ny < 0 ? 1 : -1;       // the side whose normal points up the screen
+  const trace = (side, rOf, colOf, width) => {
+    for (let k = 0; k < samples.length - 1; k++) {
+      const q = samples[k], r = samples[k + 1], lift = liftOf(q);
+      if (lift < 0.02) continue;
+      ctx.strokeStyle = colOf(lift);
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(q.x + q.nx * side * rOf(q), q.y + q.ny * side * rOf(q));
+      ctx.lineTo(r.x + r.nx * side * rOf(r), r.y + r.ny * side * rOf(r));
+      ctx.stroke();
+    }
+  };
+  for (const side of [1, -1]) trace(side, (q) => q.r, (lift) => `rgba(255,250,215,${(0.95 * lift * amp).toFixed(3)})`, Math.max(0.8, lw * 1.4));
+  trace(upSide, (q) => coreR + (q.r - coreR) * 0.62, (lift) => `rgba(255,255,240,${(0.55 * lift * amp).toFixed(3)})`, Math.max(0.8, lw * 1.8));
+  trace(-upSide, (q) => coreR + (q.r - coreR) * 0.7, (lift) => `rgba(110,70,0,${(0.3 * lift * amp).toFixed(3)})`, Math.max(0.8, lw * 2.2));
 }
 
 function priceLine(ctx, view, axes) {
@@ -1261,7 +1316,7 @@ function priceLine(ctx, view, axes) {
   const done = () => { ctx.lineWidth = lw; ctx.lineJoin = join; ctx.lineCap = cap; };
   if (view.fx?.kind === 'bulge') {
     for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
-    drawBulge(ctx, pts, lw, view.fx.u, [...GLOW, ...CORE]);
+    drawBulge(ctx, pts, lw, view.fx.u, [...GLOW, ...CORE], view.fx.ms);
     done();
     return;
   }
