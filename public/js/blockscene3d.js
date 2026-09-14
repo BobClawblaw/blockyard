@@ -715,6 +715,19 @@ export function depthSort(tiles, o = {}) {
 }
 
 // --- shading -----------------------------------------------------------
+// Between two '#rrggbb' colours, k of the way from a to b. Anything else (a missing colour, a
+// named one) cannot be blended, so it switches at the midpoint rather than at either end.
+export function mixColor(a, b, k) {
+  if (a === b || k >= 1) return b;
+  if (k <= 0) return a;
+  const hex = /^#([0-9a-f]{6})$/i;
+  const ma = hex.exec(String(a)), mb = hex.exec(String(b));
+  if (!ma || !mb) return k < 0.5 ? a : b;
+  const pa = parseInt(ma[1], 16), pb = parseInt(mb[1], 16);
+  const ch = (sh) => Math.round(((pa >> sh) & 255) + ((((pb >> sh) & 255) - ((pa >> sh) & 255)) * k));
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
+}
+
 // Alpha rides inside rgba(), never through globalAlpha.
 export function shade(hex, k, alpha = 1) {
   const h = String(hex).replace('#', '');
@@ -2063,7 +2076,8 @@ export function planTransition(prev, next, opts = {}) {
     const from = byId.get(t.txid);
     if (!from) tweens.push({ kind: 'enter', txid: t.txid, to: t, from: t });
     else if (from.x !== t.x || from.y !== t.y || from.s !== t.s) movers.push({ from, to: t });
-    else tweens.push({ kind: 'hold', txid: t.txid, from: t, to: t });
+    // `from` is the tile as it WAS: a hold keeps its slot but not always its colour (below)
+    else tweens.push({ kind: 'hold', txid: t.txid, from, to: t });
   }
   for (const t of prev || []) if (!nextIds.has(t.txid)) tweens.push({ kind: 'exit', txid: t.txid, from: t, to: t });
   for (const tw of tweens) if (tw.kind === 'enter') {
@@ -2209,7 +2223,8 @@ export function planTransition(prev, next, opts = {}) {
     travel: t0 + cfg.rise + cfg.travel,
     end: t0 + cfg.rise + cfg.travel + cfg.drop,
   };
-  const anyMotion = tweens.some((t) => t.kind !== 'hold');
+  // a recolour is motion too: a board whose only change is colour still needs frames to blend in
+  const anyMotion = tweens.some((t) => t.kind !== 'hold' || t.from.color !== t.to.color);
   const plan = { tweens, phases, cfg, settleAt: now, duration: cfg.rise + cfg.travel + cfg.drop };
   if (anyMotion) {
     // settled when the LAST landing is done: landings are timed per block now
@@ -2236,7 +2251,18 @@ export function sampleTween(tw, now, plan) {
     const dt = now - dropT1;
     return dt >= 0 && dt < plan.cfg.lockMs ? 1 - dt / plan.cfg.lockMs : 0;
   };
-  if (tw.kind === 'hold') return { ...tw.to, z: 0, alpha: 1, lock: 0 };
+  // COLOURS BLEND, THEY DO NOT SWITCH (operator, 2026-09-14: "when blocks are ready to leave the
+  // display, they change tints before doing so ... It looks bad with colors popping in"). The
+  // pool's tail is drawn as equal pieces named by their SLOT (aggregate@x,y) and coloured by the
+  // fee bands, so a refresh that shifts the bands recolours a piece that has not moved. The hold
+  // was sampled as `to` from its first frame -- measured on the live pool, 151 pieces changed tint
+  // on frame one, while the departures around them were only starting to lift. A hold now fades
+  // from its old colour to its new one across the rise; a mover across its travel (it used to
+  // switch the instant it finished rising). Exits keep their colour and arrivals arrive in theirs.
+  if (tw.kind === 'hold') {
+    const k = tw.from.color === tw.to.color ? 1 : easeInOutCubic(Math.min(1, Math.max(0, (now - p.t0) / Math.max(1, p.rise - p.t0))));
+    return { ...tw.to, color: mixColor(tw.from.color, tw.to.color, k), z: 0, alpha: 1, lock: 0 };
+  }
 
   if (tw.kind === 'enter') {
     // A NEW block drops in from OFF SCREEN and fades up as it comes (operator,
@@ -2334,6 +2360,7 @@ export function sampleTween(tw, now, plan) {
     const ey = xFirst ? leg2 : leg1;
     return {
       ...tw.to,
+      color: mixColor(tw.from.color, tw.to.color, easeInOutCubic(raw)),
       x: tw.from.x + (tw.to.x - tw.from.x) * ex,
       y: tw.from.y + (tw.to.y - tw.from.y) * ey,
       s: tw.from.s + (tw.to.s - tw.from.s) * Math.max(ex, ey),

@@ -530,6 +530,37 @@ test('landings are staggered and bounce to different heights', () => {
   }
 });
 
+test('A RECOLOURED CUBE BLENDS TO ITS NEW COLOUR, it does not switch on the first frame', () => {
+  // (operator, 2026-09-14: "when blocks are ready to leave the display, they change tints before
+  // doing so ... It looks bad with colors popping in differently"). The pool's tail pieces are named
+  // by their slot, so a refresh that shifts the fee bands recolours a piece that stays put. It was
+  // sampled as its new self from frame one: measured on the live pool, 151 pieces changed tint the
+  // instant a refresh began, the largest step 84/255 in a single frame.
+  const rgb = (h) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+  const stay = { txid: 'aggregate@4,4', x: 4, y: 4, s: 2, color: '#25937d' };
+  const move = { txid: 'mover', x: 10, y: 2, s: 2, color: '#2672a2' };
+  const leave = { txid: 'leaving', x: 16, y: 2, s: 2, color: '#ff8800' };
+  const plan = planTransition([stay, move, leave], [{ ...stay, color: '#389b29' }, { ...move, x: 20, color: '#1f6183' }], { now: 0, gridN: 28 });
+  const tw = (id) => plan.tweens.find((q) => q.txid === id);
+  assert.ok(plan.settleAt > 0, 'a refresh that changes colours still animates');
+  const last = new Map();
+  let worst = 0;
+  for (let t = 0; t <= plan.settleAt + 16; t += 16) {
+    for (const id of ['aggregate@4,4', 'mover', 'leaving']) {
+      const q = sampleTween(tw(id), t, plan);
+      if (!q) continue;
+      if (id === 'leaving') assert.equal(q.color, '#ff8800', 'a departure keeps its colour all the way out');
+      const p = last.get(id) ?? (id === 'aggregate@4,4' ? stay.color : id === 'mover' ? move.color : leave.color);
+      worst = Math.max(worst, ...rgb(p).map((v, i) => Math.abs(v - rgb(q.color)[i])));
+      last.set(id, q.color);
+    }
+  }
+  assert.equal(sampleTween(tw('aggregate@4,4'), 0, plan).color, '#25937d', 'on the first frame the piece still shows its old colour');
+  assert.equal(last.get('aggregate@4,4'), '#389b29', 'and it ends in its new one');
+  assert.equal(last.get('mover'), '#1f6183', 'as does the mover');
+  assert.ok(worst <= 4, `no frame steps a channel by more than 4/255 (largest ${worst})`);
+});
+
 test('movers whose paths overlap fly in disjoint altitude intervals, each as tall as the cube', () => {
   // PER LEG (2026-09-14). Travel is two legs, every first leg in the first half of the phase and every
   // second leg in the second, so a first leg can only meet another mover's first leg. The rule used to
