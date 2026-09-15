@@ -1126,7 +1126,14 @@ function drawScanCurtain(ctx, view, lw) {
   const price = (view.axes?.line?.length ?? 0) > 1;
   const top = price ? (view.axes?.zTop ?? 34) : 9;
   const P = (q) => project(q.x, q.y, q.z, view);
-  const amp = fx.amp ?? 1;
+  // NO FADE WHILE IT IS IN SIGHT (operator, 2026-09-15: "it still fades in and out ... with the
+  // effects properly transitioning before being killed"). fx.amp is the shared envelope every
+  // effect dims by at its start and end -- which for a thing that TRAVELS means it materialises in
+  // the middle of the picture and dissolves there. The craft and its beam now hold full strength
+  // and let POSITION do the transition: the front enters and leaves beyond the panel's edge
+  // (fxFront's margin), so there is nothing on screen to fade.
+  const amp = 1;
+  void fx.amp;
   // IT MUST LEAVE THE VIEWPORT, NOT BLINK OUT AT THE EDGE (operator, 2026-09-15: "it disappears at
   // the edge of the screen. Have it move entirely off the viewport before you delete it").
   // curtainEnds returns null the moment the front stops crossing the board, so everything below --
@@ -4006,6 +4013,12 @@ export function render3d(canvas, cells, options = {}) {
     // uses: the textured sphere is laid over all of it (drawGrid), and an
     // arrival starts wholly outside it (offscreenLift)
     if (opts.oblique) view.viewRect = obliqueFit(geom.pw, geom.ph, st.gridW, st.gridH, opts).rect;
+    // how far the PANEL reaches beyond the board, so a sweeping front enters and leaves out of
+    // sight instead of appearing in the middle of the picture (fxFront)
+    if (view.fx && view.viewRect) {
+      const r = view.viewRect;
+      view.fx.margin = Math.max(0 - r.x0, r.x1 - st.gridW, 0 - r.y0, r.y1 - st.gridH, 4) + 3;
+    }
     const frame = frameAt(st.plan, t, view);
     paintFrame(ctx, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
     st.lastFit = frame.__fit ?? st.lastFit;

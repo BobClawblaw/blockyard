@@ -912,7 +912,13 @@ export const FX_NONE = Object.freeze({ glow: 0, outline: 0, lift: 0, color: null
 // just outside one side of the board and leaving past the other
 export function fxFront(fx) {
   const qs = [0, fx.gridW * fx.dx, fx.gridH * fx.dy, fx.gridW * fx.dx + fx.gridH * fx.dy];
-  const lo = Math.min(...qs) - 4, hi = Math.max(...qs) + 4;
+  // THE MARGIN IS THE PANEL'S, NOT A CONSTANT (operator, 2026-09-15: "It needs to cleanly travel on
+  // and off screen"). Four units clears the BOARD, and the panel reaches much further than that --
+  // measured 21.8 units beyond a 96-wide board -- so a front that started four units out began its
+  // sweep in plain view and ended it there. render3d measures the real overhang from the viewRect
+  // and puts it on `fx.margin`; four is the fallback for a caller with no panel (tests).
+  const m = fx.margin ?? 4;
+  const lo = Math.min(...qs) - m, hi = Math.max(...qs) + m;
   return lo + fx.u * (hi - lo);
 }
 
