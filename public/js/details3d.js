@@ -1901,9 +1901,9 @@ function priceLine(ctx, view, axes) {
     const fadeIn = headAt < 0 ? 0 : headAt > 1 ? Math.max(0, 1 - (headAt - 1) / 0.2) : 1;
     // PROMINENT (operator, 2026-09-15: "the bulging effect is not prominent enough ... It needs a
     // lot more vibrance, presence, and effect"): the swell is the bulge effect's own full size now
-    // ...and THREE TIMES THAT (operator, later: "make the bulge 3 times larger for the energy pulse.
-    // It's not obvious the line is being deformed as it's affected by the energy")
-    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.total * headFrac, (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + 3 * (BULGE_BALL - 1) * fadeIn), hotLayers, curve);
+    // ...then THREE TIMES THAT (operator: "make the bulge 3 times larger for the energy pulse. It's
+    // not obvious the line is being deformed"), then half of that ("reduce the bulge by half")
+    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.total * headFrac, (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + 1.5 * (BULGE_BALL - 1) * fadeIn), hotLayers, curve);
   }
   // THE HAZE (operator, 2026-09-15: "haze effects of some sort for the energy blurring and
   // interfering with the affected areas"): three ghost copies of the charged stretch, each thrown

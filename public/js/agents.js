@@ -782,8 +782,9 @@ defineAgent('stormball', {
     // often on the price board (operator, 2026-09-15: "Tone down chance of emitting lightning by
     // 50%"), where the run is also slower, so per second it is quieter still
     const arcs = [];
-    // ...and a fifth quieter again ("Reduce ball lighting electricity chance by 20%")
-    const every = line?.length > 1 ? 2.5 : 1;
+    // ...a fifth quieter again ("Reduce ball lighting electricity chance by 20%"), then 15% more
+    // ("increase the ball lightning strike chance by +15%"): 2.5 / 1.15
+    const every = line?.length > 1 ? 2.17 : 1;
     for (let u = 0.03; u < 0.97; u += (0.016 + 0.035 * rnd()) * every) {
       const n = 1 + Math.floor(rnd() * 4);
       for (let k = 0; k < n; k++) {
