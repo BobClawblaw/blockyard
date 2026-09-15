@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- Every tab packs the same way: the card padding and heading spacing that Mining, Overview and Block space got are the default now, and a short card beside a tall one keeps its own height instead of being stretched to match (Chain & Sync's drill-down card had a thousand pixels of nothing under its input; Node & RPC's poll cadence and connection cards hundreds)
 - Block space packs the same way: the card tighter and the board sized so the whole page, note included, fits the viewport without a scroll
 - The Mining tab's packages table no longer bleeds into the neighbouring card at a middling window width: a table wider than its stack scrolls inside its card, and the three stacks become two below 1400px, where each would be under 450px
 - Overview gets the same packing: the block flow card a quarter shorter, cards and headings tighter, and the Block space board capped to the viewport (it set the whole right column's height and stretched Last blocks and the events to match), so the events are on the first screen

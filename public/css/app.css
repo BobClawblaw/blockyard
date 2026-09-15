@@ -200,11 +200,13 @@ main::-webkit-scrollbar-thumb { background: var(--bg-3, #12161c); border-radius:
 
 /* ---------------------------------------------------------------- cards */
 
-.grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); align-items: start; }   /* start, not stretch: a short card beside a tall one keeps its own height (2026-09-15) */
 .card {
   grid-column: span 4;
   background: var(--bg-1); border: 1px solid var(--line-soft); border-radius: var(--radius);
-  padding: 12px 13px; box-shadow: var(--shadow); min-width: 0;
+  /* 9/11/8, not 12/13 (operator, 2026-09-15, after Mining, Overview and Block space one by one:
+     "same treatment on all the ... tabs"): every card packs tight, the heading closer to its body */
+  padding: 9px 11px 8px; box-shadow: var(--shadow); min-width: 0;
 }
 .card.w3 { grid-column: span 3; } .card.w4 { grid-column: span 4; } .card.w5 { grid-column: span 5; }
 .card.w6 { grid-column: span 6; } .card.w7 { grid-column: span 7; } .card.w8 { grid-column: span 8; }
@@ -213,7 +215,7 @@ main::-webkit-scrollbar-thumb { background: var(--bg-3, #12161c); border-radius:
 @media (max-width: 860px) { .card { grid-column: span 12 !important; } }
 
 .card > h3 {
-  margin: 0 0 9px; font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .09em;
   text-transform: uppercase; color: var(--fg-faint);
   display: flex; align-items: center; gap: 8px;
 }
@@ -1185,8 +1187,6 @@ canvas.chart.xs, .chart.xs { height: 86px }
   /* the whole card on one screen (operator, 2026-09-15: "same treatment on the block space page"):
      the header, the card's padding, its heading and the note under the board come to ~195px */
   width: min(calc(100vw - 470px), calc(100vh - 195px)); min-width: 320px; }
-.page[data-page="space"] .card { padding: 8px 11px 7px; }
-.page[data-page="space"] .card > h3 { margin-bottom: 6px; }
 .page[data-page="space"] .spacelayout { gap: 12px; }
 .treemapwrap.space canvas.treemap { position: absolute; inset: 0; width: 100%; height: 100%; }
 .spacehud { flex: 1 1 300px; min-width: 260px; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
@@ -1293,8 +1293,6 @@ canvas.chart.donut { width: 100%; height: 380px; }
 .flowtight .bcard .bwhen { margin-top: 2px; margin-bottom: 3px; }
 .flowtight .bcard .bplaque { margin-top: 4px; }
 /* the whole Mining page packs tighter, the same way -- and Overview with it ("same treatment on overview") */
-.page[data-page="mining"] .mn3 .card, .page[data-page="overview"] .card { padding: 9px 11px 8px; }
-.page[data-page="mining"] .mn3 h3, .page[data-page="overview"] .card > h3 { margin-bottom: 6px; }
 .page[data-page="overview"] .metric .v { font-size: 22px; }
 /* the Block space square set the right column's height (745px of a 773px column at 1600 wide) and
    stretched Last blocks and the events to match; capped to the viewport, the board draws wider
