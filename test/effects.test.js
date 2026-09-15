@@ -355,8 +355,14 @@ test('THE SCAN IS A CONE, NOT A STACK OF SHEETS', () => {
     // and was a needle on screen (operator: "the scanner effect is fucked now"). A spotlight reads
     // as one when the width where it lands is comparable to its height; a tall thin spike does not.
     const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - apexY;
-    assert.ok(w > 20, `it is wide at the floor (${w.toFixed(0)}px)`);
-    assert.ok(h > 40, `and tall from floor to apex (${h.toFixed(0)}px)`);
+    // THE ABSOLUTE HEIGHT IS NOT A PROPERTY ANY MORE, and that is deliberate. The craft used to fly
+    // at a fixed share of the chart's ceiling, so its cone was always tall; it now flies a set
+    // clearance above the PRICE LINE (operator, 2026-09-15: "It's flying at the top of teh screen
+    // ... set it lower with some above tolerances"), so on a low chart -- which this fixture has --
+    // a shorter cone is correct. What must hold at every altitude is that it is still a cone: the
+    // ratio below is what caught both the needle and, when the craft came down, the flat fan.
+    assert.ok(w > 15, `it is wide at the floor (${w.toFixed(0)}px)`);
+    assert.ok(h > 15, `and has real height from floor to apex (${h.toFixed(0)}px)`);
     assert.ok(w / h > 0.7 && w / h < 3, `and shaped like a beam rather than a needle (${w.toFixed(0)}x${h.toFixed(0)}, ratio ${(w / h).toFixed(2)})`);
 
     // NO GRADIENTS IN THE BEAM (operator, 2026-09-15: "gradient visible! We need smooth fills. no

@@ -1167,9 +1167,24 @@ function drawScanCurtain(ctx, view, lw) {
   // the price line peak"). `top` is the chart's axis ceiling, which the line can come close to --
   // a craft at 0.9 of it flies through the high candles. So the ceiling is the taller of the axis
   // top and the line's own highest point, and the saucer clears it by 15%.
+  // ABOVE THE PEAK, BUT UNDER THE CEILING (operator, 2026-09-15: "It needs to fly a bit higher
+  // than the price line peak", then -- when I raised it past the chart's own top -- "It's flying at
+  // the top of teh screen. don't do that ... set it lower with some above tolerances").
+  //
+  // Both mistakes were the same one: taking a single bound and scaling it. Too low and the craft
+  // flies through the high candles; too high and it leaves the frame. It wants a clearance over the
+  // line AND a hard ceiling under the chart's top, so it rides above the price wherever the price
+  // happens to be and never reaches the edge.
   const peak = (view.axes?.line ?? []).reduce((h, q) => Math.max(h, q.z ?? 0), 0);
-  const apex = { x: mx, y: my, z: Math.max(top, peak) * 1.15 };
-  const SPREAD = 9;                                        // the beam's half-width along the sweep
+  const clearance = Math.max(2.5, top * 0.1);              // the tolerance it keeps over the line
+  // the ceiling must never push it BELOW the line it is meant to fly over, so a floor of one unit
+  // above the peak wins if a chart ever comes that close to its own top
+  const apex = { x: mx, y: my, z: Math.max(peak + 1, Math.min(peak + clearance, top * 0.95)) };
+  // THE WIDTH FOLLOWS THE HEIGHT, or the shape changes with the price. A fixed half-width made a
+  // proper cone when the craft flew high and a flat fan when it flew low -- measured 110x34 on a
+  // low chart, which is a fan, not a beam. Tying it to the altitude keeps the same cone whatever
+  // the line is doing underneath.
+  const SPREAD = Math.max(3, Math.min(11, apex.z * 0.32));
   const RING = 44;
   // a point on the base ellipse: `f` scales the shell, `th` runs around it
   const ring = (th, f) => ({
