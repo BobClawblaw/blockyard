@@ -903,7 +903,7 @@ same whatever you choose here.
 
 The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Blockanoid, Space
 effects, Market effects and Tetrust. The two **effects** tabs are lists of switches, so they
-also get **all on** and **all off**; twenty-eight of them is a lot of clicking otherwise.
+also get **all on** and **all off**; twenty-nine of them is a lot of clicking otherwise.
 
 ### Block space
 
@@ -947,7 +947,7 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 
 ### Space effects and Market effects
 
-One tab per board. **Space effects** is a switch for each of the **28** idle effects the Block
+One tab per board. **Space effects** is a switch for each of the **29** idle effects the Block
 space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
 switch for each of the **16** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
 **No repeats within**: how many other effects must play before one can play again (12 by
