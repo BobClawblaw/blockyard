@@ -319,7 +319,9 @@ board.
 well as on its own page, and a size that is fine on the Markets page can be the whole panel
 there (2026-09-15, the supernova's white-out filled the Kiosk's Markets panel: "Test on kiosk
 display as well to avoid this in future!!!"). Sizes are capped by the board's width in grid
-units, never set in units alone, and a capture on the Kiosk page is part of shipping one.
+units (`boundedRadius`), never set in units alone, a capture on the Kiosk page is part of
+shipping one, and `test/kiosk.test.js` plays every effect at the Kiosk's panel size and holds
+the caps and the soft fills' opacity.
 
 **Effects.** Thirty-four, with a no-repeat window (12) per board; two lists (`effects` for Block
 space, `marketEffects` for Markets), nothing rare -- the pulse and the bulge are ordinary picks
@@ -509,7 +511,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 867 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 871 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

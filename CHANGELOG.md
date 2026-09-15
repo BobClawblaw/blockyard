@@ -24,6 +24,12 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
+- **A Kiosk test suite** (`test/kiosk.test.js`): every Markets and Block space effect plays
+  through the frame loop on a Kiosk-sized panel; the supernova, the black hole and the fireworks
+  are bounded by the board's width (`boundedRadius`) so no panel is covered; and `softStops`'
+  nested discs are checked to add up to the stop's opacity, never to solid.
+- **The supernova's gas is smooth**: more and larger blobs at a lower weight, barely stretched, so
+  they melt into one another rather than reading as radial streaks.
 - **Layered soft fills add up correctly.** `softStops` (the banding-free replacement for radial
   gradients) painted up to 220 nested discs each at a stop's whole alpha, so at the centre they
   stacked to solid — the supernova's pool and glow were opaque discs, and on the Kiosk's panel
