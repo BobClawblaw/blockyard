@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The sign-in card packs the same way: tighter padding, fields and note
 - The Display settings sheet packs the same way: rows, note and groups tighter, the sheet a little wider so hints wrap less, and on the two effects tabs the switches run two across with each hint as the row's tooltip — the Space effects tab is under half the scrolling it was
 - The About page fills the window and no more: the sky runs to the bottom edge with the credit line at its foot, the inner air is tighter, and the GitHub link and the tip pill share a row
 - The Diversions pages take the window: the wells of Tetrust, Blockout and Blockanoid grow to the window's height (they stopped at 600px), and the DOS screen is always 4:3 and as large as the window allows either way — at a 1093px window the 320×200 picture had been drawn squashed into a 761×720 box

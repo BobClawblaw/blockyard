@@ -412,15 +412,16 @@ textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: ve
 .login-body { display: grid; place-items: center; height: 100vh; overflow: auto; padding: 20px; }
 .login-card {
   width: 100%; max-width: 372px; background: var(--bg-1); border: 1px solid var(--line, #262c35);
-  border-radius: 12px; padding: 26px; box-shadow: var(--shadow);
+  border-radius: 12px; padding: 20px 22px 18px; box-shadow: var(--shadow);   /* packed (2026-09-15): 20/22 not 26 */
 }
-.login-card h1 { margin: 0 0 3px; font-size: 19px; letter-spacing: -.2px; }
-.login-card p.sub { margin: 0 0 20px; color: var(--fg-faint); font-size: 12px; }
-.field { margin-bottom: 12px; }
+.login-card h1 { margin: 0 0 2px; font-size: 19px; letter-spacing: -.2px; }
+.login-card p.sub { margin: 0 0 14px; color: var(--fg-faint); font-size: 12px; }
+.login-card .note { margin-top: 10px; }
+.field { margin-bottom: 10px; }
 .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-faint); margin-bottom: 4px; }
 .field input {
   width: 100%; background: #0c0e11; border: 1px solid var(--line, #262c35); color: var(--fg);
-  border-radius: var(--radius-sm); padding: 9px 10px; font: 14px var(--mono);
+  border-radius: var(--radius-sm); padding: 8px 10px; font: 14px var(--mono);
 }
 .field input:focus { outline: none; border-color: var(--accent-dim); box-shadow: 0 0 0 3px #f7931a1a; }
 .err { background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; }
