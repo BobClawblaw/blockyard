@@ -326,12 +326,12 @@ function fxNow(st, t) {
     let lo = Infinity, hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
     const hz = Math.max(lo, Math.min(hi, near.z));
     const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
-    const rs = Math.min(3.4, 0.07 * st.gridW) * grow;                  // the horizon, in grid units (4.8 on 2026-09-15 -- "double the size" -- then 3.4: "obscuring too much"), and never more than 7% of the board
+    const rs = Math.min(2.3, 0.047 * st.gridW) * grow;                 // the horizon, in grid units (4.8 on 2026-09-15 -- "double the size" -- then 3.4: "obscuring too much" -- then 2.3: "shrink up the black hole by 33%"), and never more than 4.7% of the board
     out.blackhole = { x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, rs, grow, lo, hi };
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
     // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
     // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
-    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, rPeak: Math.min(3.4, 0.07 * st.gridW) * 1.5, scale: 0, pull: 1 }] : [];
+    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, rPeak: Math.min(2.3, 0.047 * st.gridW) * 1.5, scale: 0, pull: 1 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
@@ -853,7 +853,7 @@ const SHELL_COLS = [[[255, 170, 110], [255, 235, 160]], [[140, 220, 255], [220, 
 // (operator, 2026-09-15: "have more than 1 firework going off at a time. 10 max. Vary the size ...
 // vary the height. Use the entire vertical viewport"), five on the block board; each launches at
 // its own moment in the first half of the run and lives long enough to overlap the next.
-export const FIREWORK_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe', 'pinwheel'];
+export const FIREWORK_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe'];   // no pinwheel: sparks fly straight (2026-09-15)
 export function fireworkShells(seed, gridW, gridH, price, zLo, zHi) {
   const count = price ? 10 : 5, life = price ? 0.28 : 0.33, SMOKE = 1.35;
   const out = [];
@@ -882,7 +882,7 @@ export function fireworkShells(seed, gridW, gridH, price, zLo, zHi) {
 //   crossette      a peony whose sparks each split four ways partway out
 //   strobe         the sparks blink in unison, white, on a beat
 //   pinwheel       every spark curls the same way -- a spiral opening out
-const SHELL_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe', 'pinwheel'];
+const SHELL_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe'];   // pinwheel is gone (2026-09-15: "a spiral effect ... defies physics of fireworks")
 // SMOOTH BY LAYERING, NOT BY GRADIENT (operator, 2026-09-15: "gradient visible! We need smooth
 // fills. no gradient shit!" -- then, of the block board: "what is still with the gradient fill
 // shit?!"). createRadialGradient bands on this rasteriser: the rings are plainly visible, and
@@ -909,9 +909,20 @@ function softStops(ctx, x, y, r, stops, N = 0) {
     const m = (i, d) => (va[i] ?? d) + (((vb[i] ?? d) - (va[i] ?? d)) * k);
     return `rgba(${Math.round(m(0, 0))},${Math.round(m(1, 0))},${Math.round(m(2, 0))},${m(3, 1).toFixed(4)})`;
   };
+  // THE DISCS ADD UP (2026-09-15: "far too much solid white" on the Kiosk -- the supernova's pool
+  // and glow were opaque discs). Each nested disc was painted at the stop's whole alpha, and a
+  // point at radius t lies under EVERY disc of radius >= t: two hundred discs at 0.08 stack to
+  // solid. What the caller means by a stop is the opacity of everything painted at that radius,
+  // so each disc carries only the INCREMENT -- painted from the outside in, the disc at t adds
+  // 1 - (1 - a(t)) / (1 - a(t_outer)), and the cumulative opacity at every radius is exactly a(t).
+  const alphaAt = (t) => { const m = at(t).match(/rgba\([^,]+,[^,]+,[^,]+,([^)]+)\)/); return m ? Math.min(0.999, Math.max(0, Number(m[1]))) : 1; };
+  let outer = 0;                                              // the cumulative opacity just outside the current disc
   for (let i = N; i >= 1; i--) {
-    const t = i / N;
-    ctx.fillStyle = at(t);
+    const t = i / N, want = alphaAt(t);
+    const inc = want > outer ? 1 - (1 - want) / (1 - outer) : 0;
+    if (want > outer) outer = want;
+    if (inc < 0.0005) continue;
+    ctx.fillStyle = at(t).replace(/,([^,]+)\)$/, `,${inc.toFixed(4)})`);
     ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r * t), 0, Math.PI * 2); ctx.fill();
   }
 }
@@ -1524,7 +1535,7 @@ function starGlint(ctx, x, y, size, col, f, now, lw) {
 // it, and the sphere's silhouette is LUMPY -- every blob's radius carries a low-order wobble by
 // its direction, so the cloud has lobes and bays rather than an outline. `colorAt(front, f, H)`,
 // if given, decides each blob's colour from its depth, the run and its own hashes.
-function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25], colorAt = null) {
+function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25], colorAt = null, blobScale = 1) {
   const blobs = [];
   const clumps = Math.max(4, Math.round(n / 14));
   const cdir = [];
@@ -1544,7 +1555,7 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
   for (const b of blobs) {
     const wob = 0.035 * Math.sin(now * 0.0013 + b.w) + 0.02 * Math.sin(now * 0.0029 + b.k);
     const x = cx + (b.x + wob) * shell, y = cy + (b.y - wob * 0.6) * shell * 0.85;
-    const r = shell * b.s * (0.8 + 0.7 * f);
+    const r = shell * b.s * (0.8 + 0.7 * f) * blobScale;
     const front = (b.z + 1) / 2;                                         // 0 at the back, 1 at the front
     let col, core;
     if (colorAt) { col = colorAt(front, f, b.H); core = col.map((v) => Math.round(v + (255 - v) * 0.45)); }
@@ -1653,23 +1664,27 @@ function drawSupernova(ctx, view, lw) {
     // INNER one is the deep violet heart that shows as the others thin.
     const blueShell = R0 * (0.6 + 4.6 * (1 - Math.exp(-1.9 * f)));
     const blueBright = bright * 0.7 * Math.pow(1 - f, 1.6);
-    gasCloud(ctx, c.x, c.y, blueShell, f, now, fx.seed + 31337, blueBright, [150, 195, 255], grad, disc, 130, [70, 110, 220], (front, ff, H) => {
+    gasCloud(ctx, c.x, c.y, blueShell, f, now, fx.seed + 31337, blueBright * 0.45, [150, 195, 255], grad, disc, 80, [70, 110, 220], (front, ff, H) => {
       const t = Math.min(1, ff / 0.5);
       return [Math.round(215 - 65 * t), Math.round(235 - 40 * t), 255].map((v, i) => Math.round(v * (0.75 + 0.25 * front) + (i === 2 ? 0 : 0)));
-    });
-    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc, 320, [60, 30, 120], (front, ff, H) => {
+    }, 0.55);
+    // THIN, NOT SOLID (2026-09-15, the Kiosk: "far too much solid white"): overlapping discs sum
+    // toward opaque however faint each is -- 320 blobs saturated, and 170 at a third still did --
+    // so the cloud is ninety blobs at an eighth of the weight, which peaks near half opacity at the
+    // centre and reads as gas the chart shows through
+    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright * 0.2, rc, grad, disc, 120, [60, 30, 120], (front, ff, H) => {
       const start = 0.18 + 0.55 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.28));   // when this patch turns violet
-      const white = [255, 255, 255], violet = [170, 105, 255], deep = [95, 45, 170];
+      const white = [225, 235, 255], violet = [170, 105, 255], deep = [95, 45, 170];   // blue-white, not solid white (2026-09-15)
       const c1 = white.map((v, i) => v + (violet[i] - v) * on);
       const shade = 0.55 + 0.45 * front;
       return c1.map((v, i) => Math.round(deep[i] + (v - deep[i]) * shade));
-    });
+    }, 0.55);   // half-size blobs: with blobs a third of the shell nearly all ninety overlapped at the centre
     if (f > 0.3) {
       const inner = Math.min(1, (f - 0.3) / 0.4);
-      gasCloud(ctx, c.x, c.y, shell * 0.55, f, now, fx.seed + 777, bright * 0.8 * inner, [150, 80, 255], grad, disc, 90, [60, 25, 130]);
+      gasCloud(ctx, c.x, c.y, shell * 0.55, f, now, fx.seed + 777, bright * 0.3 * inner, [150, 80, 255], grad, disc, 50, [60, 25, 130], null, 0.6);
     }
     // and the interior glow: the cloud lit from within
-    softStops(ctx, c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.22 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
+    softStops(ctx, c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.05 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
     // the shock band at the cloud's leading edge, soft, in the cloud's colour
     if (u < 0.6) {
       const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
@@ -1677,16 +1692,17 @@ function drawSupernova(ctx, view, lw) {
       band(r, R0 * (0.3 + 0.6 * (1 - fr)), rcs, 0.4 * (1 - fr) * gf);
     }
     // a wide pool of the cloud's colour on everything near
-    softStops(ctx, c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.2 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
+    softStops(ctx, c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.08 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
   }
   // --- the breakout: the whole picture goes white and comes back
   if (u >= 0.12 && u < 0.34) {
     const t = (u - 0.12) / 0.22, f = t < 0.12 ? t / 0.12 : Math.pow(1 - (t - 0.12) / 0.88, 1.7);
-    // a soft flash round the star, not the whole frame: bright at the heart, gone by six shells out
-    const W = R0 * 6.5;
-    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.92 * f).toFixed(3)})`], [0.4, `rgba(255,250,240,${(0.7 * f).toFixed(3)})`], [0.75, `rgba(255,248,235,${(0.25 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
-    // the burst itself is white gas, not a ball: a cloud thrown out with the flash
-    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, f, [255, 255, 255], grad, disc, 90, [200, 210, 240]);
+    // a soft flash round the star, not the whole frame -- and NOT SOLID (operator, 2026-09-15, via
+    // his wife on the Kiosk: "far too much solid white"): a modest disc, at most half opaque at its
+    // heart, thin by three shells out, and the white gas thrown with it at a third of the weight
+    const W = R0 * 4;
+    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.3 * f).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.15 * f).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.04 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
+    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, 0.12 * f, [255, 255, 255], grad, disc, 30, [200, 210, 240], null, 0.6);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
     // taken out on 2026-09-15; the white-out alone is the breakout)
   }

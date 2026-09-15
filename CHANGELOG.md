@@ -24,6 +24,14 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
+- **Layered soft fills add up correctly.** `softStops` (the banding-free replacement for radial
+  gradients) painted up to 220 nested discs each at a stop's whole alpha, so at the centre they
+  stacked to solid — the supernova's pool and glow were opaque discs, and on the Kiosk's panel
+  "far too much solid white". Each disc now carries only the increment, so the cumulative opacity
+  at every radius is exactly the stop's; measured on the Kiosk, the supernova's peak opacity fell
+  from about 0.9 to about 0.45 and the chart shows through it.
+- The black hole a third smaller again (2.3 units, at most 4.7% of the board); the fireworks'
+  pinwheel shell is gone (sparks fly straight).
 - **The scan line is a light curtain.** A vertical sheet of light standing on the board, floor
   to the chart's top, sweeping across: a hard white core with soft cyan faces, raster lines
   rippling down it, a bar of light it hangs from with glints at the ends, a glowing foot with a
@@ -82,7 +90,7 @@ All notable changes to this project are documented here. The format follows
   falling, twinkling; and a nebula of smoke that leaves the burst outward, drifting up, in the
   shell's colour gone grey, fading as it disperses and lingering after the sparks. Seven shell
   kinds by turn — the four above plus crossette (each spark splits four ways), strobe (the
-  sparks blink in unison) and pinwheel (a spiral opening out) — a lens flare at every burst (an
+  sparks blink in unison) — a lens flare at every burst (an
   anamorphic streak, four turning rays, a run of ghosts toward the picture's middle), glitter rain
   after the shell, and the schedule fits the run with a fade at its end, so nothing is ever cut.
   Up to **ten shells on Markets** over 14 s (five on Block space), launching at their own moments
