@@ -569,8 +569,27 @@ export class NodeMonitor extends EventEmitter {
     let raw = null;
     try {
       raw = await this.rpc.call('getrawmempool', [true], { heavy: true, key: `${this.id}:pool-verbose`, priority: 6 });
+      // A STREAK OF STALE DROPS IS ONE STORY, NOT A HUNDRED (2026-09-15: on a day the node answered
+      // slowly for thirteen hours, this poll -- lowest priority, so last to the lane -- was dropped
+      // as stale every four minutes and each drop was its own warn event: 188 of the feed's 200
+      // rows, everything else pushed out). A drop now opens a quality flag that counts, one event
+      // marks the streak's start, and one marks its end with the count and the span.
+      if (this.poolDrops?.n) {
+        const d = this.poolDrops;
+        this.addEvent({ kind: 'collector_recovered', severity: 'info', tag: 'collector', ts: Date.now(), text: `getrawmempool verbose answers again: dropped as stale ${d.n} time${d.n === 1 ? '' : 's'} over ${Math.round((Date.now() - d.since) / 60000)} min (longest wait ${Math.round(d.maxWait / 1000)}s) -- the node's RPC was too slow for the lowest-priority poll to get a turn` });
+        this.clearQuality('pool-poll-dropped');
+        this.poolDrops = null;
+      }
     } catch (err) {
-      this.addEvent({ kind: 'collector_error', severity: 'warn', tag: 'collector', ts: Date.now(), text: `getrawmempool verbose failed: ${err.message}` });
+      if (err?.kind === 'stale' && /dropped: waited/.test(err.message)) {
+        const waited = Number((/waited (\d+)ms/.exec(err.message) ?? [])[1] ?? 0);
+        const d = (this.poolDrops ??= { n: 0, since: Date.now(), maxWait: 0 });
+        d.n += 1; d.maxWait = Math.max(d.maxWait, waited);
+        if (d.n === 1) this.addEvent({ kind: 'collector_error', severity: 'warn', tag: 'collector', ts: Date.now(), text: `getrawmempool verbose dropped as stale (waited ${Math.round(waited / 1000)}s for the lane): the node's RPC is slow and this poll is the last in line; further drops are counted on the Node & RPC page until it answers again` });
+        this.flagQuality('pool-poll-dropped', `the full-pool poll (getrawmempool verbose) has been dropped as stale ${d.n} time${d.n === 1 ? '' : 's'} since ${new Date(d.since).toISOString().slice(11, 16)} UTC (longest wait ${Math.round(d.maxWait / 1000)}s): the node's RPC is answering slowly and this lowest-priority poll waits behind the live ones; the mempool panels show their last reading meanwhile`, 'warn');
+      } else {
+        this.addEvent({ kind: 'collector_error', severity: 'warn', tag: 'collector', ts: Date.now(), text: `getrawmempool verbose failed: ${err.message}` });
+      }
     }
     if (raw && typeof raw === 'object') {
       this.state.mempoolDist = summarizeMempool(raw);

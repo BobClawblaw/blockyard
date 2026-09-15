@@ -183,6 +183,21 @@ so far and an ETA; the address page repeats it. Things it says, and what they me
   restart (the server builds again), or run `node scripts/index-build.js --out <dir>` by hand.
   A pruned node, unreadable block files and a full disk are the usual causes.
 
+## "getrawmempool verbose dropped as stale" in Events, and the mempool panels look old
+
+The monitor keeps one RPC request in flight and serves the live polls first; the full-pool poll is
+the lowest priority, so when the node's RPC is slow it waits behind them and, past its freshness
+budget, is dropped rather than shown as current. A streak of drops is one warning event when it
+starts, a counter on **Node & RPC → data quality** while it lasts, and one event when the poll
+answers again with the count and the span. The Mempool, Block space and Mining panels show their
+last reading meanwhile and say how old it is.
+
+The cause is the node, not the monitor: look for what else is asking it. On 2026-09-15 an Umbrel
+node answered in seconds for thirteen hours while another BlockYard built its address index
+against it over the LAN, and the drops stopped the moment that build finished. A remote index
+build, a wallet rescan, `gettxoutsetinfo` from another tool, or an initial block download all
+show the same way.
+
 ## Markets or Kiosk show no prices
 
 - **"market polling is off"** — the default. Tick **Display settings → Markets & Price → Enable market polling**.
