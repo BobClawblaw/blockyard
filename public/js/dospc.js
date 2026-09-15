@@ -1204,7 +1204,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
   }
 
   /** Run the machine for `n` instructions, in slices, servicing the hardware between them. */
-  function run(n, slice = 2000) {
+  function run(n, slice = 8000) {
     let done = 0;
     while (done < n && !exited) {
       updateTimers(now());

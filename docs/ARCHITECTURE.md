@@ -825,8 +825,12 @@ dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+   
   call megamorphic and ran slower than the interpreter. Writes into a page holding decoded code
   clear only the instructions they overlap (DOOM and Quake both patch constants into their own span
   drawers on every call), and the machine calls `cpu.invalidate()` after it writes memory directly.
-  About 110 million instructions a second on DOOM and 108 on Quake headless, 100-133 in a Chromium
-  worker on this box (MEASUREMENTS §32-34).
+  The ALU operations have a handler each (their flag bookkeeping inline, not one shared routine
+  branching on the operation), so do the x87 forms Quake runs most, and the loop forms a memory
+  operand's address inline before the switch: the switch is too big for V8 to inline helpers into
+  every case, and those calls were most of what was left. About 141 million instructions a second on
+  Quake headless on one core and 115-118 in a Chromium worker; Quake's timedemo 52.5 fps of wall time
+  (MEASUREMENTS §32-35).
 - **`dospc.js`** is the machine, and it plays whichever DOS extender the program was bound to.
   `boot()` tells them apart by the file: `loadLE` finds DOOM's LE executable inside the DOS/4GW
   stub, loads it at +1 MB and applies its fixups; `parseCoff`/`bootCoff` find Quake's COFF image

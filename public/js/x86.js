@@ -1314,10 +1314,12 @@ export function createCpu(bus) {
   // invalidate()) drops that page's decodings. An instruction that runs over a page's end is not
   // cached, so a page can always be dropped on its own. A 16-bit code segment bypasses the cache.
   //
-  // word layout: bits 0-7 handler, 8-11 length, 12-14 g (the ModRM reg field, or an ALU/shift
-  // sub-operation), 15-17 e (the ModRM rm register), 18-21 base register (8 = none), 22-25 index
-  // register (8 = none), 26-27 scale, 28 the stack segment is the default (base ESP/EBP).
-  const H_STEP = 255;
+  // word layout: bits 0-9 handler, 10-13 length, 14-16 g (the ModRM reg field, or an ALU/shift
+  // sub-operation), 17-19 e (the ModRM rm register), 20-23 base register (8 = none), 24-27 index
+  // register (8 = none), 28-29 scale, 30 the stack segment is the default (base ESP/EBP).
+  const H_STEP = 1023;
+  const MEM_OPERAND = 1 << 31;          // the word has a ModRM memory operand: the loop forms its address
+  const ALU_OP = ['ADD', 'OR', null, null, 'AND', 'SUB', 'XOR', 'CMP'];   // ADC and SBB keep the shared routine
   let hid = 1;
   const H = {};
   for (const name of [
@@ -1333,6 +1335,94 @@ export function createCpu(bus) {
     'SETCC_R', 'SETCC_M', 'IMUL_R', 'IMUL_M', 'IMULI_R', 'IMULI_M',
     'MOVZX8_R', 'MOVZX8_M', 'MOVZX16_R', 'MOVZX16_M', 'MOVSX8_R', 'MOVSX8_M', 'MOVSX16_R', 'MOVSX16_M',
     'FPU_R', 'FPU_M',
+    // the ALU operations split by operation, and the x87 forms Quake runs most (see the switch)
+    'ADD_EG_R',
+    'ADD_EG_M',
+    'ADD_GE_R',
+    'ADD_GE_M',
+    'ADD_I_R',
+    'ADD_I_M',
+    'ADD_EAX',
+    'OR_EG_R',
+    'OR_EG_M',
+    'OR_GE_R',
+    'OR_GE_M',
+    'OR_I_R',
+    'OR_I_M',
+    'OR_EAX',
+    'AND_EG_R',
+    'AND_EG_M',
+    'AND_GE_R',
+    'AND_GE_M',
+    'AND_I_R',
+    'AND_I_M',
+    'AND_EAX',
+    'SUB_EG_R',
+    'SUB_EG_M',
+    'SUB_GE_R',
+    'SUB_GE_M',
+    'SUB_I_R',
+    'SUB_I_M',
+    'SUB_EAX',
+    'XOR_EG_R',
+    'XOR_EG_M',
+    'XOR_GE_R',
+    'XOR_GE_M',
+    'XOR_I_R',
+    'XOR_I_M',
+    'XOR_EAX',
+    'CMP_EG_R',
+    'CMP_EG_M',
+    'CMP_GE_R',
+    'CMP_GE_M',
+    'CMP_I_R',
+    'CMP_I_M',
+    'CMP_EAX',
+    'FLD_M32',
+    'FLD_M64',
+    'FST_M32',
+    'FSTP_M32',
+    'FST_M64',
+    'FSTP_M64',
+    'FILD_M32',
+    'FISTP_M32',
+    'FAR_M32_0',
+    'FAR_M32_1',
+    'FAR_M32_4',
+    'FAR_M32_5',
+    'FAR_M32_6',
+    'FAR_M32_7',
+    'FAR_M64_0',
+    'FAR_M64_1',
+    'FAR_M64_4',
+    'FAR_M64_5',
+    'FAR_M64_6',
+    'FAR_M64_7',
+    'FXCH_I',
+    'FLD_I',
+    'FST_I',
+    'FSTP_I',
+    'FAR_I_0',
+    'FAR_I_1',
+    'FAR_I_4',
+    'FAR_I_5',
+    'FAR_I_6',
+    'FAR_I_7',
+    'FARP_I_0',
+    'FARP_I_1',
+    'FARP_I_4',
+    'FARP_I_5',
+    'FARP_I_6',
+    'FARP_I_7',
+    'FNSTSW_AX',
+    'FCHS',
+    'FABS',
+    'FLD1',
+    'FLDZ',
+    'FCOMP_M32',
+    'FCOM_I',
+    'FCOMP_I',
+    'FCOMPP',
   ]) H[name] = hid++;
 
   const PAGES = M.length >>> 12;
@@ -1353,7 +1443,7 @@ export function createCpu(bus) {
         const lo = Math.max(p << 12, x - 14);
         for (let s = lo; s < pageEnd; s++) {
           const k = (s & 4095) * 3, w = tab[k];
-          if (w !== 0 && (w & 255) !== H_STEP && s + ((w >>> 8) & 15) > x) tab[k] = 0;
+          if (w !== 0 && (w & 1023) !== H_STEP && s + ((w >>> 10) & 15) > x) tab[k] = 0;
         }
       }
       x = pageEnd;
@@ -1387,15 +1477,15 @@ export function createCpu(bus) {
     if (mod === 1) { disp = (M[at + used] << 24) >> 24; used += 1; }
     else if (mod === 2) { disp = M[at + used] | (M[at + used + 1] << 8) | (M[at + used + 2] << 16) | (M[at + used + 3] << 24); used += 4; }
     dDisp = disp; dUsed = used;
-    return (base << 18) | (idx << 22) | (scale << 26) | (base === ESP || base === EBP ? 1 << 28 : 0);
+    return (base << 20) | (idx << 24) | (scale << 28) | (base === ESP || base === EBP ? 1 << 30 : 0);
   }
   function eaOf(w, disp) {
     let x = disp;
-    const b = (w >>> 18) & 15;
+    const b = (w >>> 20) & 15;
     if (b !== 8) x += R[b];
-    const i = (w >>> 22) & 15;
-    if (i !== 8) x += R[i] << ((w >>> 26) & 3);
-    return (x + segBase[(w & (1 << 28)) !== 0 ? SS : DS]) | 0;
+    const i = (w >>> 24) & 15;
+    if (i !== 8) x += R[i] << ((w >>> 28) & 3);
+    return (x + segBase[(w & (1 << 30)) !== 0 ? SS : DS]) | 0;
   }
 
   // decode the instruction at linear `a` into tab[k..k+2]; returns the word (H_STEP for "use step()")
@@ -1407,17 +1497,18 @@ export function createCpu(bus) {
       const m = M[at];
       g = (m >> 3) & 7; e = m & 7;
       if (m >= 0xc0) { dUsed = 0; return true; }
-      ea = decodeEA(m, at + 1); disp = dDisp;
+      ea = decodeEA(m, at + 1) | MEM_OPERAND; disp = dDisp;
       return false;
     };
     if (op < 0x40 && (op & 7) < 6) {
       const sub = op >> 3, form = op & 7;
       if (form === 4) { h = H.ALU_AL; g = sub; imm = M[a + 1]; len = 2; }
-      else if (form === 5) { h = H.ALU_EAX; g = sub; imm = i32at(a + 1); len = 5; }
+      else if (form === 5) { h = ALU_OP[sub] ? H[`${ALU_OP[sub]}_EAX`] : H.ALU_EAX; g = sub; imm = i32at(a + 1); len = 5; }
       else {
         const reg = modrm(a + 1);
         imm = sub; len = 2 + dUsed;
         h = [[H.ALU8_EG_M, H.ALU8_EG_R], [H.ALU32_EG_M, H.ALU32_EG_R], [H.ALU8_GE_M, H.ALU8_GE_R], [H.ALU32_GE_M, H.ALU32_GE_R]][form][reg ? 1 : 0];
+        if ((form === 1 || form === 3) && ALU_OP[sub]) h = H[`${ALU_OP[sub]}_${form === 1 ? 'EG' : 'GE'}_${reg ? 'R' : 'M'}`];
       }
     } else {
       switch (op) {
@@ -1436,6 +1527,7 @@ export function createCpu(bus) {
           if (op === 0x80) { h = reg ? H.GRP8_R : H.GRP8_M; imm = M[ia]; len = 3 + dUsed; }
           else if (op === 0x83) { h = reg ? H.GRP32_R : H.GRP32_M; imm = (M[ia] << 24) >> 24; len = 3 + dUsed; }
           else { h = reg ? H.GRP32_R : H.GRP32_M; imm = i32at(ia); len = 6 + dUsed; }
+          if (op !== 0x80 && ALU_OP[g]) h = H[`${ALU_OP[g]}_I_${reg ? 'R' : 'M'}`];
           break;
         }
         case 0x84: case 0x85: { const reg = modrm(a + 1); h = op === 0x85 ? (reg ? H.TEST32_R : H.TEST32_M) : (reg ? H.TEST8_R : H.TEST8_M); len = 2 + dUsed; break; }
@@ -1507,6 +1599,34 @@ export function createCpu(bus) {
           // the FPU: decoded once, executed by the same x87 core step() uses
           const reg = modrm(a + 1);
           h = reg ? H.FPU_R : H.FPU_M; imm = op | (M[a + 1] << 8); len = 2 + dUsed;
+          const m = M[a + 1];
+          if (!reg) {
+            if (op === 0xd9 && g === 0) h = H.FLD_M32;
+            else if (op === 0xd9 && g === 2) h = H.FST_M32;
+            else if (op === 0xd9 && g === 3) h = H.FSTP_M32;
+            else if (op === 0xdd && g === 0) h = H.FLD_M64;
+            else if (op === 0xdd && g === 2) h = H.FST_M64;
+            else if (op === 0xdd && g === 3) h = H.FSTP_M64;
+            else if (op === 0xdb && g === 0) h = H.FILD_M32;
+            else if (op === 0xdb && g === 3) h = H.FISTP_M32;
+            else if (op === 0xd8 && g === 3) h = H.FCOMP_M32;
+            else if ((op === 0xd8 || op === 0xdc) && g !== 2 && g !== 3) h = H[`FAR_M${op === 0xd8 ? 32 : 64}_${g}`];
+          } else {
+            if (op === 0xd9 && g === 1) h = H.FXCH_I;
+            else if (op === 0xd9 && g === 0) h = H.FLD_I;
+            else if (op === 0xdd && g === 2) h = H.FST_I;
+            else if (op === 0xdd && g === 3) h = H.FSTP_I;
+            else if (op === 0xd8 && g === 2) h = H.FCOM_I;
+            else if (op === 0xd8 && g === 3) h = H.FCOMP_I;
+            else if (op === 0xd8) h = H[`FAR_I_${g}`];
+            else if (op === 0xde && m === 0xd9) h = H.FCOMPP;
+            else if (op === 0xde && g !== 2 && g !== 3) h = H[`FARP_I_${g}`];
+            else if (op === 0xdf && m === 0xe0) h = H.FNSTSW_AX;
+            else if (op === 0xd9 && m === 0xe0) h = H.FCHS;
+            else if (op === 0xd9 && m === 0xe1) h = H.FABS;
+            else if (op === 0xd9 && m === 0xe8) h = H.FLD1;
+            else if (op === 0xd9 && m === 0xee) h = H.FLDZ;
+          }
           break;
         }
         case 0x0f: {
@@ -1527,7 +1647,7 @@ export function createCpu(bus) {
       }
     }
     if (h === 0 || (a & 4095) + len > 4096) return H_STEP;
-    const w = h | (len << 8) | (g << 12) | (e << 15) | ea;
+    const w = h | (len << 10) | (g << 14) | (e << 17) | ea;
     tab[k + 1] = disp; tab[k + 2] = imm;
     return w;
   }
@@ -1548,7 +1668,6 @@ export function createCpu(bus) {
         while (i < n) {
           i++;
           const a = eip;
-          opEip = a;
           const p = a >>> 12;
           if (p !== curP) {
             tab = pageTab[p];
@@ -1558,31 +1677,43 @@ export function createCpu(bus) {
           const k = (a & 4095) * 3;
           let w = tab[k];
           if (w === 0) { w = decodeAt(tab, k, a); tab[k] = w; }
-          const hnum = w & 255;
+          const hnum = w & 1023;
           if (hnum === H_STEP) {
+            opEip = a;
             step();
             if (stop) { n = i; break; }
             if (cs16) break;
             curP = -1;                          // step() may have loaded a page table afresh (a far jump, a block copy)
             continue;
           }
-          eip = a + ((w >>> 8) & 15);
-          const g = (w >>> 12) & 7, e = (w >>> 15) & 7;
+          eip = a + ((w >>> 10) & 15);
+          const g = (w >>> 14) & 7, e = (w >>> 17) & 7;
+          // THE ADDRESS, formed here once and inline rather than in each handler through a call: the
+          // switch is too big for V8 to inline a helper into every case, and the calls were 5%
+          let ad = 0;
+          if (w < 0) {
+            ad = tab[k + 1];
+            const b = (w >>> 20) & 15;
+            if (b !== 8) ad += R[b];
+            const x = (w >>> 24) & 15;
+            if (x !== 8) ad += R[x] << ((w >>> 28) & 3);
+            ad = (ad + segBase[(w & (1 << 30)) !== 0 ? SS : DS]) | 0;
+          }
           switch (hnum) {
             case 1: { const r = alu32(tab[k + 2], R[e], R[g]); if (tab[k + 2] !== 7) R[e] = r; break; }                      // ALU32_EG_R
-            case 2: { const ad = eaOf(w, tab[k + 1]); const sub = tab[k + 2]; const r = alu32(sub, rd(ad), R[g]); if (sub !== 7) wd(ad, r); break; }
+            case 2: { const sub = tab[k + 2]; const r = alu32(sub, rd(ad), R[g]); if (sub !== 7) wd(ad, r); break; }
             case 3: { const r = alu32(tab[k + 2], R[g], R[e]); if (tab[k + 2] !== 7) R[g] = r; break; }
-            case 4: { const sub = tab[k + 2]; const r = alu32(sub, R[g], rd(eaOf(w, tab[k + 1]))); if (sub !== 7) R[g] = r; break; }
+            case 4: { const sub = tab[k + 2]; const r = alu32(sub, R[g], rd(ad)); if (sub !== 7) R[g] = r; break; }
             case 5: { const sub = tab[k + 2]; const r = arith(sub, get8(e), get8(g), S8); if (sub !== 7) set8(e, r); break; }
-            case 6: { const ad = eaOf(w, tab[k + 1]); const sub = tab[k + 2]; const r = arith(sub, rbx(ad), get8(g), S8); if (sub !== 7) wb(ad, r); break; }
+            case 6: { const sub = tab[k + 2]; const r = arith(sub, rbx(ad), get8(g), S8); if (sub !== 7) wb(ad, r); break; }
             case 7: { const sub = tab[k + 2]; const r = arith(sub, get8(g), get8(e), S8); if (sub !== 7) set8(g, r); break; }
-            case 8: { const sub = tab[k + 2]; const r = arith(sub, get8(g), rbx(eaOf(w, tab[k + 1])), S8); if (sub !== 7) set8(g, r); break; }
+            case 8: { const sub = tab[k + 2]; const r = arith(sub, get8(g), rbx(ad), S8); if (sub !== 7) set8(g, r); break; }
             case 9: { const r = arith(g, R[EAX] & 0xff, tab[k + 2], S8); if (g !== 7) set8(0, r); break; }                  // ALU_AL
             case 10: { const r = alu32(g, R[EAX], tab[k + 2]); if (g !== 7) R[EAX] = r; break; }                            // ALU_EAX
             case 11: { const r = alu32(g, R[e], tab[k + 2]); if (g !== 7) R[e] = r; break; }                               // GRP32_R
-            case 12: { const ad = eaOf(w, tab[k + 1]); const r = alu32(g, rd(ad), tab[k + 2]); if (g !== 7) wd(ad, r); break; }
+            case 12: { const r = alu32(g, rd(ad), tab[k + 2]); if (g !== 7) wd(ad, r); break; }
             case 13: { const r = arith(g, get8(e), tab[k + 2], S8); if (g !== 7) set8(e, r); break; }                       // GRP8_R
-            case 14: { const ad = eaOf(w, tab[k + 1]); const r = arith(g, rbx(ad), tab[k + 2], S8); if (g !== 7) wb(ad, r); break; }
+            case 14: { const r = arith(g, rbx(ad), tab[k + 2], S8); if (g !== 7) wb(ad, r); break; }
             case 15: R[e] = inc(R[e], S32); break;                                                                          // INC32
             case 16: R[e] = dec(R[e], S32); break;
             case 17: push(R[e]); break;                                                                                     // PUSH32
@@ -1595,18 +1726,24 @@ export function createCpu(bus) {
             case 24: eip = (pop() + csb) >>> 0; R[ESP] += tab[k + 2]; break;                                                // RETN
             case 25: R[ESP] = R[EBP]; R[EBP] = pop(); break;                                                                // LEAVE
             case 26: logicFlags(R[e] & R[g], S32); break;                                                                   // TEST32_R
-            case 27: logicFlags(rd(eaOf(w, tab[k + 1])) & R[g], S32); break;
+            case 27: logicFlags(rd(ad) & R[g], S32); break;
             case 28: logicFlags(get8(e) & get8(g), S8); break;
-            case 29: logicFlags(rbx(eaOf(w, tab[k + 1])) & get8(g), S8); break;
+            case 29: logicFlags(rbx(ad) & get8(g), S8); break;
             case 30: set8(e, get8(g)); break;                                                                               // MOV8_EG_R
-            case 31: wb(eaOf(w, tab[k + 1]), get8(g)); break;
+            case 31: wb(ad, get8(g)); break;
             case 32: R[e] = R[g]; break;                                                                                    // MOV32_EG_R
-            case 33: wd(eaOf(w, tab[k + 1]), R[g]); break;
+            case 33: {                                                                                                     // MOV32_EG_M
+              // the common case inline: an aligned write to plain memory, not video, not cached code
+              const x = ad & AMASK;
+              if ((x & 3) === 0 && (x - 0x9fffd) >>> 0 >= 0x20003 && (codePage[x >>> 12] | codePage[(x + 3) >>> 12]) === 0) M32[x >> 2] = R[g];
+              else wd(ad, R[g]);
+              break;
+            }
             case 34: set8(g, get8(e)); break;                                                                               // MOV8_GE_R
-            case 35: set8(g, rbx(eaOf(w, tab[k + 1]))); break;
+            case 35: { const x = ad & AMASK; set8(g, (x - 0xa0000) >>> 0 < 0x20000 ? bus.vgaRead(x) : M[x]); break; }        // MOV8_GE_M
             case 36: R[g] = R[e]; break;                                                                                    // MOV32_GE_R
-            case 37: R[g] = rd(eaOf(w, tab[k + 1])); break;
-            case 38: R[g] = (eaOf(w, tab[k + 1]) - segBase[(w & (1 << 28)) !== 0 ? SS : DS]) | 0; break;                  // LEA
+            case 37: { const x = ad & AMASK; R[g] = (x & 3) === 0 ? M32[x >> 2] : rd(ad); break; }                        // MOV32_GE_M
+            case 38: R[g] = (ad - segBase[(w & (1 << 30)) !== 0 ? SS : DS]) | 0; break;                  // LEA
             case 39: break;                                                                                                 // NOP
             case 40: R[EAX] = (R[EAX] << 16) >> 16; break;                                                                  // CWDE
             case 41: R[EDX] = R[EAX] >> 31; break;                                                                          // CDQ
@@ -1616,41 +1753,128 @@ export function createCpu(bus) {
             case 45: wd((tab[k + 2] + segBase[DS]) | 0, R[EAX]); break;                                                     // A3
             case 46: set8(e, tab[k + 2]); break;                                                                            // MOV8_IR
             case 47: R[e] = tab[k + 2]; break;                                                                              // MOV32_IR
-            case 48: wb(eaOf(w, tab[k + 1]), tab[k + 2]); break;                                                           // MOV8_IM
-            case 49: wd(eaOf(w, tab[k + 1]), tab[k + 2]); break;                                                           // MOV32_IM
+            case 48: wb(ad, tab[k + 2]); break;                                                           // MOV8_IM
+            case 49: wd(ad, tab[k + 2]); break;                                                           // MOV32_IM
             case 50: R[e] = tab[k + 2]; break;                                                                              // MOV32_IRM
             case 51: { const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) R[e] = shift(g, R[e], c, S32); break; }
-            case 52: { const ad = eaOf(w, tab[k + 1]); const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) wd(ad, shift(g, rd(ad), c, S32)); break; }
+            case 52: { const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) wd(ad, shift(g, rd(ad), c, S32)); break; }
             case 53: { const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) set8(e, shift(g, get8(e), c, S8)); break; }
-            case 54: { const ad = eaOf(w, tab[k + 1]); const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) wb(ad, shift(g, rbx(ad), c, S8)); break; }
+            case 54: { const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) wb(ad, shift(g, rbx(ad), c, S8)); break; }
             case 55: logicFlags(get8(e) & tab[k + 2], S8); break;                                                           // TESTI8_R
-            case 56: logicFlags(rbx(eaOf(w, tab[k + 1])) & tab[k + 2], S8); break;
+            case 56: logicFlags(rbx(ad) & tab[k + 2], S8); break;
             case 57: logicFlags(R[e] & tab[k + 2], S32); break;
-            case 58: logicFlags(rd(eaOf(w, tab[k + 1])) & tab[k + 2], S32); break;
-            case 59: { const ad = eaOf(w, tab[k + 1]); wd(ad, inc(rd(ad), S32)); break; }                                   // INC32_M
-            case 60: { const ad = eaOf(w, tab[k + 1]); wd(ad, dec(rd(ad), S32)); break; }
+            case 58: logicFlags(rd(ad) & tab[k + 2], S32); break;
+            case 59: { wd(ad, inc(rd(ad), S32)); break; }                                   // INC32_M
+            case 60: { wd(ad, dec(rd(ad), S32)); break; }
             case 61: { const t = R[e]; push((eip - csb) | 0); eip = (t + csb) >>> 0; break; }                              // CALL_R
-            case 62: { const t = rd(eaOf(w, tab[k + 1])); push((eip - csb) | 0); eip = (t + csb) >>> 0; break; }
+            case 62: { const t = rd(ad); push((eip - csb) | 0); eip = (t + csb) >>> 0; break; }
             case 63: eip = (R[e] + csb) >>> 0; break;                                                                       // JMP_R
-            case 64: eip = (rd(eaOf(w, tab[k + 1])) + csb) >>> 0; break;
-            case 65: push(rd(eaOf(w, tab[k + 1]))); break;                                                                  // PUSH_M
+            case 64: eip = (rd(ad) + csb) >>> 0; break;
+            case 65: push(rd(ad)); break;                                                                  // PUSH_M
             case 66: set8(e, cond(tab[k + 2]) ? 1 : 0); break;                                                             // SETCC_R
-            case 67: wb(eaOf(w, tab[k + 1]), cond(tab[k + 2]) ? 1 : 0); break;
+            case 67: wb(ad, cond(tab[k + 2]) ? 1 : 0); break;
             case 68: imul2(S32, g, R[g], R[e]); break;                                                                      // IMUL_R
-            case 69: imul2(S32, g, R[g], rd(eaOf(w, tab[k + 1]))); break;
+            case 69: imul2(S32, g, R[g], rd(ad)); break;
             case 70: imul2(S32, g, R[e], tab[k + 2]); break;                                                                // IMULI_R
-            case 71: imul2(S32, g, rd(eaOf(w, tab[k + 1])), tab[k + 2]); break;
+            case 71: imul2(S32, g, rd(ad), tab[k + 2]); break;
             case 72: R[g] = get8(e); break;                                                                                 // MOVZX8_R
-            case 73: R[g] = rbx(eaOf(w, tab[k + 1])); break;
+            case 73: R[g] = rbx(ad); break;
             case 74: R[g] = R[e] & 0xffff; break;                                                                           // MOVZX16_R
-            case 75: R[g] = rw(eaOf(w, tab[k + 1])); break;
+            case 75: R[g] = rw(ad); break;
             case 76: R[g] = (get8(e) << 24) >> 24; break;                                                                   // MOVSX8_R
-            case 77: R[g] = (rbx(eaOf(w, tab[k + 1])) << 24) >> 24; break;
+            case 77: R[g] = (rbx(ad) << 24) >> 24; break;
             case 78: R[g] = (R[e] << 16) >> 16; break;                                                                      // MOVSX16_R
-            case 79: R[g] = (rw(eaOf(w, tab[k + 1])) << 16) >> 16; break;
-            case 80: { const x = tab[k + 2]; fpuCore(x & 255, x >>> 8, 0); break; }                                           // FPU_R
-            case 81: { const x = tab[k + 2]; fpuCore(x & 255, x >>> 8, eaOf(w, tab[k + 1])); break; }                        // FPU_M
-            default: throw new CpuFault(`cache handler ${hnum}`, a);
+            case 79: R[g] = (rw(ad) << 16) >> 16; break;
+            case 80: { opEip = a; const x = tab[k + 2]; fpuCore(x & 255, x >>> 8, 0); break; }                                           // FPU_R
+            case 81: { opEip = a; const x = tab[k + 2]; fpuCore(x & 255, x >>> 8, ad); break; }                        // FPU_M
+            case 82: { const a = R[e], b = R[g]; const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; R[e] = r; break; }
+            case 83: { const a = rd(ad), b = R[g]; const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; wd(ad, r); break; }
+            case 84: { const a = R[g], b = R[e]; const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; R[g] = r; break; }
+            case 85: { const a = R[g], b = rd(ad); const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; R[g] = r; break; }
+            case 86: { const a = R[e], b = tab[k + 2]; const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; R[e] = r; break; }
+            case 87: { const a = rd(ad), b = tab[k + 2]; const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; wd(ad, r); break; }
+            case 88: { const a = R[EAX], b = tab[k + 2]; const r = ((a) + (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_ADD; R[EAX] = r; break; }
+            case 89: { const a = R[e], b = R[g]; const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[e] = r; break; }
+            case 90: { const a = rd(ad), b = R[g]; const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; wd(ad, r); break; }
+            case 91: { const a = R[g], b = R[e]; const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[g] = r; break; }
+            case 92: { const a = R[g], b = rd(ad); const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[g] = r; break; }
+            case 93: { const a = R[e], b = tab[k + 2]; const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[e] = r; break; }
+            case 94: { const a = rd(ad), b = tab[k + 2]; const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; wd(ad, r); break; }
+            case 95: { const a = R[EAX], b = tab[k + 2]; const r = (a) | (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[EAX] = r; break; }
+            case 96: { const a = R[e], b = R[g]; const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[e] = r; break; }
+            case 97: { const a = rd(ad), b = R[g]; const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; wd(ad, r); break; }
+            case 98: { const a = R[g], b = R[e]; const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[g] = r; break; }
+            case 99: { const a = R[g], b = rd(ad); const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[g] = r; break; }
+            case 100: { const a = R[e], b = tab[k + 2]; const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[e] = r; break; }
+            case 101: { const a = rd(ad), b = tab[k + 2]; const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; wd(ad, r); break; }
+            case 102: { const a = R[EAX], b = tab[k + 2]; const r = (a) & (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[EAX] = r; break; }
+            case 103: { const a = R[e], b = R[g]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; R[e] = r; break; }
+            case 104: { const a = rd(ad), b = R[g]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; wd(ad, r); break; }
+            case 105: { const a = R[g], b = R[e]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; R[g] = r; break; }
+            case 106: { const a = R[g], b = rd(ad); const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; R[g] = r; break; }
+            case 107: { const a = R[e], b = tab[k + 2]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; R[e] = r; break; }
+            case 108: { const a = rd(ad), b = tab[k + 2]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; wd(ad, r); break; }
+            case 109: { const a = R[EAX], b = tab[k + 2]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB; R[EAX] = r; break; }
+            case 110: { const a = R[e], b = R[g]; const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[e] = r; break; }
+            case 111: { const a = rd(ad), b = R[g]; const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; wd(ad, r); break; }
+            case 112: { const a = R[g], b = R[e]; const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[g] = r; break; }
+            case 113: { const a = R[g], b = rd(ad); const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[g] = r; break; }
+            case 114: { const a = R[e], b = tab[k + 2]; const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[e] = r; break; }
+            case 115: { const a = rd(ad), b = tab[k + 2]; const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; wd(ad, r); break; }
+            case 116: { const a = R[EAX], b = tab[k + 2]; const r = (a) ^ (b); LF[2] = r; fSz = S32; fOp = F_LOGIC; R[EAX] = r; break; }
+            case 117: { const a = R[e], b = R[g]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 118: { const a = rd(ad), b = R[g]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 119: { const a = R[g], b = R[e]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 120: { const a = R[g], b = rd(ad); const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 121: { const a = R[e], b = tab[k + 2]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 122: { const a = rd(ad), b = tab[k + 2]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 123: { const a = R[EAX], b = tab[k + 2]; const r = ((a) - (b)) | 0; LF[0] = a; LF[1] = b; LF[2] = r; fSz = S32; fOp = F_SUB;  break; }
+            case 124: { sI32[0] = rd(ad); fpush(sF32[0]); break; }
+            case 125: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); fpush(sF64[0]); break; }
+            case 126: { sF32[0] = ST[ftop]; wd(ad, sI32[0]); break; }
+            case 127: { sF32[0] = fpop(); wd(ad, sI32[0]); break; }
+            case 128: { sF64[0] = ST[ftop]; wd(ad, sI32[0]); wd(ad + 4, sI32[1]); break; }
+            case 129: { sF64[0] = fpop(); wd(ad, sI32[0]); wd(ad + 4, sI32[1]); break; }
+            case 130: fpush(rd(ad)); break;
+            case 131: { writeReal(ad, K_I32, fpop()); break; }
+            case 132: { sI32[0] = rd(ad); const v = sF32[0], x = ST[ftop]; ST[ftop] = x + v; break; }
+            case 138: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); const v = sF64[0], x = ST[ftop]; ST[ftop] = x + v; break; }
+            case 148: { const v = ST[(ftop + e) & 7], x = ST[ftop]; ST[ftop] = x + v; break; }
+            case 154: { const j = (ftop + e) & 7, y = ST[j], x = ST[ftop]; ST[j] = y + x; fpop(); break; }
+            case 133: { sI32[0] = rd(ad); const v = sF32[0], x = ST[ftop]; ST[ftop] = x * v; break; }
+            case 139: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); const v = sF64[0], x = ST[ftop]; ST[ftop] = x * v; break; }
+            case 149: { const v = ST[(ftop + e) & 7], x = ST[ftop]; ST[ftop] = x * v; break; }
+            case 155: { const j = (ftop + e) & 7, y = ST[j], x = ST[ftop]; ST[j] = y * x; fpop(); break; }
+            case 134: { sI32[0] = rd(ad); const v = sF32[0], x = ST[ftop]; ST[ftop] = x - v; break; }
+            case 140: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); const v = sF64[0], x = ST[ftop]; ST[ftop] = x - v; break; }
+            case 150: { const v = ST[(ftop + e) & 7], x = ST[ftop]; ST[ftop] = x - v; break; }
+            case 156: { const j = (ftop + e) & 7, y = ST[j], x = ST[ftop]; ST[j] = x - y; fpop(); break; }
+            case 135: { sI32[0] = rd(ad); const v = sF32[0], x = ST[ftop]; ST[ftop] = v - x; break; }
+            case 141: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); const v = sF64[0], x = ST[ftop]; ST[ftop] = v - x; break; }
+            case 151: { const v = ST[(ftop + e) & 7], x = ST[ftop]; ST[ftop] = v - x; break; }
+            case 157: { const j = (ftop + e) & 7, y = ST[j], x = ST[ftop]; ST[j] = y - x; fpop(); break; }
+            case 136: { sI32[0] = rd(ad); const v = sF32[0], x = ST[ftop]; ST[ftop] = x / v; break; }
+            case 142: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); const v = sF64[0], x = ST[ftop]; ST[ftop] = x / v; break; }
+            case 152: { const v = ST[(ftop + e) & 7], x = ST[ftop]; ST[ftop] = x / v; break; }
+            case 158: { const j = (ftop + e) & 7, y = ST[j], x = ST[ftop]; ST[j] = x / y; fpop(); break; }
+            case 137: { sI32[0] = rd(ad); const v = sF32[0], x = ST[ftop]; ST[ftop] = v / x; break; }
+            case 143: { sI32[0] = rd(ad); sI32[1] = rd(ad + 4); const v = sF64[0], x = ST[ftop]; ST[ftop] = v / x; break; }
+            case 153: { const v = ST[(ftop + e) & 7], x = ST[ftop]; ST[ftop] = v / x; break; }
+            case 159: { const j = (ftop + e) & 7, y = ST[j], x = ST[ftop]; ST[j] = y / x; fpop(); break; }
+            case 144: { const j = (ftop + e) & 7, t = ST[ftop]; ST[ftop] = ST[j]; ST[j] = t; break; }
+            case 145: fpush(ST[(ftop + e) & 7]); break;
+            case 146: ST[(ftop + e) & 7] = ST[ftop]; break;
+            case 147: ST[(ftop + e) & 7] = ST[ftop]; fpop(); break;
+            case 160: R[EAX] = (R[EAX] & ~0xffff) | fswWord(); break;
+            case 161: ST[ftop] = -ST[ftop]; break;
+            case 162: ST[ftop] = Math.abs(ST[ftop]); break;
+            case 163: fpush(1); break;
+            case 164: fpush(0); break;
+            case 165: { sI32[0] = rd(ad); fcompare(ST[ftop], sF32[0]); fpop(); break; }
+            case 166: fcompare(ST[ftop], ST[(ftop + e) & 7]); break;
+            case 167: fcompare(ST[ftop], ST[(ftop + e) & 7]); fpop(); break;
+            case 168: fcompare(ST[ftop], ST[(ftop + 1) & 7]); fpop(); fpop(); break;
+            default: opEip = a; throw new CpuFault(`cache handler ${hnum}`, a);
           }
         }
       } catch (e) {

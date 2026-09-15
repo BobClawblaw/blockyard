@@ -1345,3 +1345,39 @@ In a Chromium worker: Quake 99-106 MIPS and 40-42 frames a second in a new game 
 **Checked, not assumed**: both games lock-stepped against the uncached interpreter (DOOM 400 M, Quake
 1.5 G instructions; registers and flags compared every 10,000; memory identical at the end), and the
 native fuzzer re-run through `run(1)` over 118k instructions with no mismatch.
+
+## 35. A second pass on the CPU: what paid and what did not (2026-09-15)
+
+Asked for all five of: split the ALU routine, specialise the hot x87 forms, cheaper dispatch, dead
+flags, and a block copy of the frame into video memory. **Method, after the first readings misled:**
+each build against a copy of the previous one (`oracle4`), pinned to one core with `taskset`, best of
+three; unpinned runs on this shared box moved +-5% between identical runs. Quake throughput as M
+instructions a second over its timedemo, and as **frames a second of wall time** over 600 timedemo
+frames -- the second catches work a MIPS figure cannot, such as a `rep movsd` that is one instruction
+however many bytes it moves. DOOM on `-timedemo demo1` only: its normal MIPS depends on how much time
+lands in its cheap wait loop, which a change to the machine's slice size alone moved by 5%.
+
+| build | Quake MIPS | Quake fps (wall) | DOOM timedemo MIPS |
+|---|---|---|---|
+| before (the cache, §34) | 101 | 37.7 | 103 |
+| ALU split per operation + hot x87 forms decoded to their own handlers | 133 | -- | -- |
+| + fused cmp/test+Jcc dispatch and "no flags" forms by flag liveness | 131 | -- | 110 |
+| the same without the look-ahead (fusion and no-flags off) | 133 | -- | 114.5 |
+| + the address formed inline in the loop instead of a call per handler | 141.5 | -- | 112 |
+| + aligned reads/writes inline in the hottest moves | 141 | 52.5 | 115 |
+| the same without the VGA block copy | 141 | 51 (noise) | -- |
+
+**Kept**: the ALU split, the x87 handlers, the inline address and moves -- Quake's frames a second of
+wall time 37.7 -> 52.5 (+40%). **Removed**: the fused branches and the no-flags forms (nothing gained;
+the look-ahead re-ran on every re-decode of DOOM's self-patching drawer), and the block copy (within
+noise: the frame copy is 64,000 bytes against 140 M instructions a second).
+
+The reason inlining mattered: `run()` is one function with 170-odd cases, V8's cumulative inlining
+budget runs out long before the helpers it calls, and every uninlined `eaOf` was a real call.
+
+**In a Chromium worker** (new game, `viewsize 80`): Quake 115-118 MIPS and 39-49 frames a second on
+screen, once the worker looked for a finished frame every 50,000 instructions instead of once per
+10 ms slice (two frame copies inside one slice had been showing as one). DOOM 139 MIPS.
+
+Checked: DOOM 400 M and Quake 1.5 G instructions lock-stepped identical to `oracle4` (memory equal),
+and the native fuzzer through `run(1)`, 78k instructions, no mismatch.

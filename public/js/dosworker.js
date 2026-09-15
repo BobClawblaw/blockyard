@@ -16,6 +16,7 @@ import { createSoundCard } from './soundcard.js';
 import { withControls, rebindKeys, quakeAutoexec, GAMES } from './dosio.js';
 
 const SLICE_MS = 10;
+const CHUNK = 50000;                       // instructions between looks for a finished picture
 
 let pc = null, card = null, audioPort = null;
 let running = false, scheduled = false;
@@ -114,7 +115,9 @@ function loop() {
   const start = performance.now();
   let n = 0;
   try {
-    do { n += pc.run(150000); } while (performance.now() - start < SLICE_MS && !pc.exited);
+    // in chunks of about half a millisecond, looking for a finished picture after each: at 50 frames
+    // a second two of Quake's frame copies could otherwise land in one 10 ms slice and one never be shown
+    do { n += pc.run(CHUNK); present(); } while (performance.now() - start < SLICE_MS && !pc.exited);
   } catch (e) {
     running = false;
     post({ type: 'error', message: e.message });
@@ -122,7 +125,6 @@ function loop() {
   }
   const spent = performance.now() - start;
   mips = mips * 0.95 + (n / Math.max(0.001, spent)) * 0.05 * 1000 / 1e6;
-  present();
   if (card && audioPort && card.buffered > 0) {
     const chunk = card.drain();
     audioPort.postMessage(chunk, [chunk.buffer]);
@@ -130,15 +132,14 @@ function loop() {
   if (performance.now() - lastStats > 1000) { lastStats = performance.now(); post({ type: 'stats', mips }); }
   if (!scheduled) { scheduled = true; yieldChannel.port2.postMessage(0); }
 }
-let mips = 0, lastStats = 0;
+let mips = 0, lastStats = 0, textTick = 0;
 
 function present() {
   if (pc.vga.mode === 0x13) {
     lastText = null;
     // a new picture: a page flipped (DOOM), the palette changed, or the linear window was written
-    // (Quake copies each finished frame into A0000h and never flips)
-    // (Quake copies each finished frame into A0000h and never flips). A copy can straddle two slices,
-    // so writes are only shown once a slice has passed without any: never half a frame
+    // (Quake copies each finished frame into A0000h and never flips). A copy can straddle two chunks,
+    // so writes are only shown once a chunk has passed without any: never half a frame
     const writing = pc.vga.writes !== seenWrites;
     seenWrites = pc.vga.writes;
     if (writing && pc.vga.frames === lastFrameSeq) return;
@@ -153,6 +154,7 @@ function present() {
     return;
   }
   lastFrameSeq = -1; lastPalSeq = -1;
+  if (++textTick % 20 !== 0) return;          // text mode changes slowly: look every ten milliseconds
   const cells = pc.mem.subarray(0xb8000, 0xb8000 + 4000);
   if (lastText && lastText.every((v, i) => v === cells[i])) return;
   lastText = cells.slice();

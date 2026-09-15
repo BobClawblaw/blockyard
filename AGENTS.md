@@ -348,6 +348,13 @@ does not specialise goes through `step()`. What will bite:
 - **Invalidation is by overlap, not by page.** Dropping the whole page on a write made DOOM *slower*
   with the cache than without: its span drawer patches its own immediates every call.
 - **Closures were tried and are slower** (megamorphic call per instruction): Quake 77 -> 69 MIPS.
+- **Second pass (operator: "do all 5")**, MEASUREMENTS §35: handlers split per ALU operation and for
+  the hot x87 forms, and the address formed inline in the loop, took Quake's timedemo from 37.7 to
+  52.5 fps of wall time. **Tried and removed, because they measured as nothing or worse:** fused
+  cmp/test+Jcc dispatch, flag-liveness "no flags" forms, and a block copy of `rep movs` into the VGA
+  window. Measure pinned to one core (`taskset`), best of three, against a copy of the previous build:
+  unpinned runs on this box vary +-5%, and **DOOM's MIPS is not a speed** unless it runs
+  `-timedemo demo1` (a scheduling change alters how much of its time is its cheap wait loop).
 - **Checked**: lock-stepped against the uncached interpreter -- DOOM 400 M, Quake 1.5 G instructions,
   registers and flags every 10,000, memory identical at the end -- and the native fuzzer re-run through
   `run(1)` (118k instructions, 0 mismatches). `cpu.step()` in the API is the interpreter alone.
