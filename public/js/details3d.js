@@ -1041,7 +1041,7 @@ function drawFireworks(ctx, view, lw) {
 //   breakout     0.12 - 0.3   the white-out: the whole picture goes white and comes back
 //   debris       0.14 - 1     the cloud: sixty knots on a boiling shell, filaments between them,
 //                             hot white-gold at first, orange, then deep red; the shock band at
-//                             its leading edge, the line inside it warped; debris tumbling out
+//                             its leading edge; debris tumbling out
 //   pulsar       0.45 - 1     the point pulsing at the centre, its blue nebula growing
 // Everything is a function of fx.u, the seed and the clock; the run fades in its last tenth.
 function drawSupernova(ctx, view, lw) {
@@ -1070,43 +1070,19 @@ function drawSupernova(ctx, view, lw) {
   const cool = Math.max(0, Math.min(1, (u - 0.14) / 0.86));
   const rc = cool < 0.35 ? mixc([255, 235, 190], [255, 150, 60], cool / 0.35) : mixc([255, 150, 60], [190, 50, 40], (cool - 0.35) / 0.65);
   const rcs = rc.join(',');
-  // --- ignition
+  // --- ignition: the star swells and brightens, cleanly (operator, 2026-09-15: "The electric
+  // crackle buildup does not look good" -- the filaments are gone; the swell and a breath are all)
   if (u < 0.14) {
     const f = u / 0.12, ease = Math.min(1, f * f);
-    const r = R0 * (0.12 + 0.5 * ease), pulse = 1 + 0.1 * Math.sin(now * 0.04);
-    disc(c.x, c.y, r * 2.2 * pulse, grad(c.x, c.y, r * 2.2 * pulse, [[0, `rgba(255,255,255,${(0.9 * ease).toFixed(3)})`], [0.3, `rgba(255,240,190,${(0.7 * ease).toFixed(3)})`], [0.6, `rgba(255,180,80,${(0.35 * ease).toFixed(3)})`], [1, 'rgba(255,140,40,0)']]));
-    const beat = Math.floor(now / 50); let x = (fx.seed ^ (beat * 2654435761)) >>> 0 || 1;
-    const rr = () => ((x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 4294967296);
-    const n = Math.floor(4 + 14 * ease);
-    for (let i = 0; i < n; i++) {
-      const ang = rr() * Math.PI * 2, r0 = r * (0.5 + 0.6 * rr()), r1 = r * (1.4 + 1.2 * rr());
-      const mid = { x: c.x + Math.cos(ang + (rr() - 0.5) * 0.5) * (r0 + r1) / 2 + (rr() - 0.5) * r * 0.5, y: c.y + Math.sin(ang + (rr() - 0.5) * 0.5) * (r0 + r1) / 2 + (rr() - 0.5) * r * 0.5 };
-      ctx.strokeStyle = `rgba(255,240,200,${(0.9 * ease).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.03);
-      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * r0, c.y + Math.sin(ang) * r0); ctx.lineTo(mid.x, mid.y); ctx.lineTo(c.x + Math.cos(ang) * r1, c.y + Math.sin(ang) * r1); ctx.stroke();
-    }
+    const r = R0 * (0.12 + 0.6 * ease), breath = 1 + 0.06 * Math.sin(now * 0.02) + 0.04 * Math.sin(now * 0.047);
+    disc(c.x, c.y, r * 3 * breath, grad(c.x, c.y, r * 3 * breath, [[0, `rgba(255,255,255,${(0.95 * ease).toFixed(3)})`], [0.2, `rgba(255,245,210,${(0.8 * ease).toFixed(3)})`], [0.5, `rgba(255,190,90,${(0.35 * ease).toFixed(3)})`], [1, 'rgba(255,140,40,0)']]));
+    disc(c.x, c.y, r * 0.5, `rgba(255,255,255,${ease.toFixed(3)})`);
   }
   // --- the debris cloud: knots on a boiling shell, filaments between them, expanding and slowing
   const band = (r, w, col, a) => {
     if (r <= 0 || a <= 0.003) return;
     const R = r + w;
-    disc(c.x, c.y, R, grad(c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(255,255,255,${(a * 0.9).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]));
-  };
-  const warp = (r, strength) => {
-    if (!price || strength <= 0.01) return;
-    const ptsL = line.map((p) => project(p.x, view.axes.y ?? 0, p.z, view));
-    for (const push of [1, 0.5]) {
-      ctx.strokeStyle = `rgba(255,250,230,${(0.35 * strength / push).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.12);
-      ctx.beginPath();
-      let open = false;
-      for (const p of ptsL) {
-        const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy) || 1;
-        if (d > r * 1.05) { open = false; continue; }
-        const k = Math.max(0, 1 - Math.abs(d - r) / (r * 0.6)) * strength * R0 * 0.45 * push;
-        const x = p.x + (dx / d) * k, y = p.y + (dy / d) * k;
-        if (open) ctx.lineTo(x, y); else { ctx.moveTo(x, y); open = true; }
-      }
-      ctx.stroke();
-    }
+    disc(c.x, c.y, R, grad(c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(255,235,205,${(a * 0.8).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]));
   };
   if (u >= 0.14) {
     const f = (u - 0.14) / 0.86;
@@ -1163,7 +1139,6 @@ function drawSupernova(ctx, view, lw) {
       const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
       disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(255,240,220,0)'], [0.7, `rgba(255,240,220,${(0.06 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(255,255,255,${(0.18 * (1 - fr) * gf).toFixed(3)})`]]));
       band(r, R0 * (0.25 + 0.55 * (1 - fr)), rcs, 0.55 * (1 - fr) * gf);
-      warp(r, (1 - fr) * gf);
     }
     // a wide pool of the cloud's colour on everything near
     disc(c.x, c.y, shell * 1.6, grad(c.x, c.y, shell * 1.6, [[0, `rgba(${rcs},${(0.14 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));

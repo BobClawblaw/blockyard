@@ -1020,9 +1020,11 @@ export function fxAt(t, fx) {
         const fr = Math.min(1, (fx.u - 0.14) / 0.46), ring = (thin ? 27 : 31) * (1 - Math.pow(1 - fr, 2.2));
         const front = g((d - ring) / 1.8) * (1 - fr * 0.6);
         const passed = ring - d;                              // > 0 once the front has gone by
-        const shake = passed > 0 && fx.u < 0.75 ? Math.max(0, Math.sin(fx.u * 70 + jitterOf(t.txid, 'sn' + fx.seed) * 6.28)) * Math.exp(-passed / 12) * (1 - (fx.u - 0.14) / 0.61) : 0;
+        // the shaking starts as the front APPROACHES, five units out, not once it has passed
+        // (operator: "trigger their shaking sooner in the blast radius")
+        const shake = passed > -5 && fx.u < 0.75 ? Math.max(0, Math.sin(fx.u * 70 + jitterOf(t.txid, 'sn' + fx.seed) * 6.28)) * Math.exp(-Math.max(0, passed) / 12) * (1 - (fx.u - 0.14) / 0.61) : 0;
         if (front > 0.02 || shake > 0.02) {
-          lift = Math.max(lift, 2.5 * A * front + 0.8 * A * shake);   // half the first cut (operator: "affects the candles too much")
+          lift = Math.max(lift, 1.25 * A * front + 0.4 * A * shake);   // a quarter of the first cut (operator: "affects the candles too much", then "half as much still")
           glow = Math.max(glow, A * front + 0.4 * A * shake);
           outline = Math.max(outline, A * front);
           if (front > w) colour = [255, 255, 255];
