@@ -443,13 +443,25 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       // when its RPC slows past the monitor's own threshold (rpc.slowLatencyMs, 5 s) the next file waits
       // until it recovers (2026-09-14, the first Mac install: 18 s answers and 90 s timeouts while the
       // build ran flat out -- which turned out to be gettxoutsetinfo, not the build, but the pacing stays)
+      let phase = null, phaseAt = Date.now(), lastFlag = 0, lastProgressAt = Date.now();
+      const flagLine = () => {
+        const pct = status.total ? Math.round((100 * status.done) / status.total) : 0;
+        const quiet = Date.now() - lastProgressAt;
+        return `the address index is being built: ${status.phase ?? 'starting'} ${Number(status.done ?? 0).toLocaleString()} of ${Number(status.total ?? 0).toLocaleString()} (${pct}%)${status.rows ? `, ${status.rows.toLocaleString()} rows so far` : ''}${status.eta ? `, about ${status.eta} left` : ''}${status.paused ? ' -- paused while the node\'s RPC is slow' : quiet > 120_000 ? ` -- no progress for ${Math.round(quiet / 60000)} min` : ''}`;
+      };
       const pace = rpcPacer(m.rpc, { slowMs: cfg.rpc?.slowLatencyMs ?? 5000, onChange: (held, t) => {
         status.paused = held;
+        lastFlag = Date.now(); m.flagQuality?.('address-index-building', flagLine(), 'info');   // on the flag the moment it changes
         app.log({ level: 'info', msg: held ? `address index build: paused while the node's RPC is ${t.breakerOpen ? 'refused' : t.lastError ? 'failing' : `answering in ${((t.avgLatencyMs ?? 0) / 1000).toFixed(1)} s`}` : 'address index build: resumed' });
       } });
       const say = (text, severity = 'info') => { m.addEvent?.({ kind: 'index', severity, tag: 'index', ts: Date.now(), text }); app.log({ level: severity === 'warn' ? 'warn' : 'info', msg: text }); };
       say(`address index: building ${dir} from ${m.id}'s block files with ${workers} workers -- the Overview shows the progress`);
-      let phase = null, phaseAt = Date.now(), lastFlag = 0;
+      // THE FLAG IS REWRITTEN ON A CLOCK, NOT ONLY ON PROGRESS (2026-09-15: "scan 5,720 of 5,721,
+      // about 1 s left (88m ago)" -- a build that had stopped moving showed its last good line,
+      // and a pause showed nothing at all until the next file finished). Every 30 s it says how
+      // long since anything happened, and a pause is on it the moment it begins.
+      const heartbeat = setInterval(() => { if (Date.now() - lastFlag > 25_000) { lastFlag = Date.now(); m.flagQuality?.('address-index-building', flagLine(), 'info'); } }, 30_000);
+      heartbeat.unref?.();
       buildIndex({
         rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers, pace,
         onProgress: (p) => {
@@ -457,13 +469,14 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
           const elapsed = (Date.now() - phaseAt) / 1000;
           const rate = elapsed > 0 && p.done > 0 ? p.done / elapsed : 0;
           Object.assign(status, { phase: p.phase, done: p.done, total: p.total, rows: p.rows ?? status.rows, eta: rate > 0 && p.total > p.done ? HMS((p.total - p.done) / rate) : null });
+          lastProgressAt = Date.now();
           if (Date.now() - lastFlag > 5000) {
             lastFlag = Date.now();
-            const pct = p.total ? Math.round((100 * p.done) / p.total) : 0;
-            m.flagQuality?.('address-index-building', `the address index is being built: ${p.phase} ${p.done.toLocaleString()} of ${p.total.toLocaleString()} (${pct}%)${p.rows ? `, ${p.rows.toLocaleString()} rows so far` : ''}${status.eta ? `, about ${status.eta} left` : ''}${status.paused ? ' -- paused while the node\'s RPC is slow' : ''}`, 'info');
+            m.flagQuality?.('address-index-building', flagLine(), 'info');
           }
         },
       }).then((manifest) => {
+        clearInterval(heartbeat);
         registerIndexBuild(dir, null);
         m.indexBuild = null;
         m.clearQuality?.('address-index-building');
@@ -471,6 +484,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
         say(`address index built: ${Number(manifest.rows ?? 0).toLocaleString()} rows to block ${Number(manifest.tip?.height ?? 0).toLocaleString()} in ${mins} min -- address pages are live`);
         try { follow(dir, m); } catch (err) { say(`address index ${dir}: built, but the follower could not start: ${err.message}`, 'warn'); }
       }).catch((err) => {
+        clearInterval(heartbeat);
         status.error = err.message;
         registerIndexBuild(dir, null);
         m.indexBuild = null;

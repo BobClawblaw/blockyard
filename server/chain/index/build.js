@@ -42,21 +42,38 @@ async function chainHashes(rpc, tip, onProgress, pace = null) {
   return { table, hashes };
 }
 
-class Pool {
-  constructor(size, workerData) {
-    this.workers = Array.from({ length: size }, () => new Worker(new URL('./worker.js', import.meta.url), { workerData }));
+export class Pool {
+  constructor(size, workerData, script = new URL('./worker.js', import.meta.url)) {
+    this.workers = Array.from({ length: size }, () => new Worker(script, { workerData }));
   }
   // run jobs, at most one per worker; onResult may be async (it is awaited before that worker's next
   // job); `pace`, if given, is awaited before each job is handed out -- the server's background build
   // uses it to hold the workers while the node's RPC is slow, since they share its disk
+  //
+  // A WORKER THAT DIES FAILS THE RUN (2026-09-15, the first Mac install: the build sat at "scan
+  // 5,720 of 5,721, about 1 s left" for an hour and a half). Only `message` was listened for, so a
+  // worker killed outright -- out of memory is the way on a machine with four of them beside the
+  // node -- answered nothing, its job was never finished and never reported, and the other workers
+  // drained the list and left the run waiting for a reply that could not come. `exit` and `error`
+  // are the reply now: the run rejects, naming the job and the way to run again.
   async run(jobs, onResult, pace = null) {
     let next = 0, failed = null;
     await Promise.all(this.workers.map((w) => new Promise((resolve) => {
+      let current = null;
+      const die = (why) => {
+        if (failed) { resolve(); return; }
+        failed = new Error(`an index worker ${why} while on ${current ? JSON.stringify(current) : 'no job'} -- if the machine ran out of memory, run again with fewer workers (addressIndexWorkers in config/local.json; each needs about 2.5 GB)`);
+        resolve();
+      };
+      w.on('exit', (code) => { if (current) die(`exited with code ${code}`); });
+      w.on('error', (err) => die(`threw: ${err?.message ?? err}`));
       const go = async () => {
-        if (failed || next >= jobs.length) { resolve(); return; }
+        if (failed || next >= jobs.length) { current = null; resolve(); return; }
         const job = jobs[next++];
         if (pace) { try { await pace(); } catch (err) { failed = err; resolve(); return; } }
+        current = job;
         w.once('message', async (msg) => {
+          current = null;
           if (msg.type === 'error') { failed = new Error(`${JSON.stringify(msg.job)}: ${msg.message}`); resolve(); return; }
           try { await onResult(msg); } catch (err) { failed = err; resolve(); return; }
           go();

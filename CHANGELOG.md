@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A dead index worker fails the build instead of hanging it.** The worker pool listened for a
+  reply only, so a worker killed outright (out of memory, with four beside the node) left its job
+  unanswered and the build sat at "scan 5,720 of 5,721, about 1 s left" for an hour and a half on
+  the first Mac install. The run now rejects the moment a worker exits or throws, naming the job
+  and the fix (fewer `addressIndexWorkers`); the progress flag is rewritten every 30 s and says
+  *no progress for N min* when nothing has moved, and a pause shows the moment it begins.
 - **The no-repeat window holds from the first pick.** It was read with a slice whose index went
   negative while fewer effects had played than the window is wide, and a negative index counts
   from the end: nine plays under a window of eleven blocked only the last two, so an effect could

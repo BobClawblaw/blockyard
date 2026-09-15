@@ -159,6 +159,14 @@ so far and an ETA; the address page repeats it. Things it says, and what they me
   [INSTALL](INSTALL.md#bitcoinconf-settings-worth-having), or let it run overnight.
 - **The ETA is wrong at first** — it is computed from the files done so far in the current phase
   and settles after the first few; files are not all the same size.
+- **It stopped one short — "scan 5,720 of 5,721, about 1 s left" for an hour** — a worker
+  died, most likely killed for memory (four workers is about 10 GB beside the node). Since
+  2026-09-15 that fails the build at once with `an index worker exited with code N while on
+  {"type":"scan","file":...}` and the flag turns to *build failed*; before that fix the build
+  hung there for good. Either way: restart BlockYard with fewer workers (`addressIndexWorkers` on
+  the node entry in `config/local.json`). The build starts over; it is not resumable. The flag
+  also says **no progress for N min** whenever nothing has moved for two minutes, so a stall is
+  visible as one rather than as a stale ETA.
 - **Hours, not minutes** — expect **a few hours**: 29 min 45 s is 16 workers on NVMe, and four
   workers (the installer's default) are roughly four times slower; **spinning disks** are slower still whatever the
   number, and there one worker is the fast setting, because parallel readers only seek against

@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'n
 import os from 'node:os';
 import path from 'node:path';
 import { hash256, decodeTx } from '../server/chain/tx.js';
+import { Pool } from '../server/chain/index/build.js';
 import { MAGIC } from '../server/chain/blockfile.js';
 import { blockRows, RowSink, ROW, readRow, scriptKey } from '../server/chain/index/rows.js';
 import { buildIndex } from '../server/chain/index/build.js';
@@ -176,4 +177,30 @@ test('THE PACER holds a build while the node is failing or slow, eases while it 
   assert.equal(changes.at(-1), true, 'a fresh failure holds too');
   t = { ...t, lastGoodAt: Date.now() + 1 }; await q;
   assert.equal(changes.at(-1), false, 'and a good answer after it releases');
+});
+
+test('a worker that dies fails the build, naming the job -- it does not hang at N-1 of N', async () => {
+  // 2026-09-15, the first Mac install: "scan 5,720 of 5,721 (100%), about 1 s left (88m ago)".
+  // The pool listened for `message` only; a worker killed outright never sent one, and the run
+  // waited for it forever.
+  const script = new URL('./fixtures/index-worker-dies.js', import.meta.url);
+  const pool = new Pool(2, {}, script);
+  try {
+    const done = [];
+    await pool.run([{ type: 'ok', n: 1 }, { type: 'ok', n: 2 }, { type: 'ok', n: 3 }], (msg) => { done.push(msg.job.n); });
+    assert.deepEqual(done.sort(), [1, 2, 3], 'a healthy run completes');
+  } finally { await pool.close(); }
+  const dying = new Pool(2, {}, script);
+  try {
+    const t0 = Date.now();
+    await assert.rejects(
+      dying.run([{ type: 'ok', n: 1 }, { type: 'die', n: 2 }, { type: 'ok', n: 3 }, { type: 'ok', n: 4 }], () => {}),
+      (err) => /exited with code 3/.test(err.message) && /"type":"die"/.test(err.message) && /fewer workers/.test(err.message),
+    );
+    assert.ok(Date.now() - t0 < 5000, 'and promptly, not after a timeout');
+  } finally { await dying.close(); }
+  const throwing = new Pool(1, {}, script);
+  try {
+    await assert.rejects(throwing.run([{ type: 'throw', n: 1 }], () => {}), (err) => /threw: worker blew up/.test(err.message));
+  } finally { await throwing.close(); }
 });
