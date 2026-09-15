@@ -997,23 +997,8 @@ export function fxAt(t, fx) {
       return { glow: hot * A * w, outline: 0.8 * hot * A * w, lift: (inward ? 0.4 : 3.2) * A * w,
         color: inward ? [150, 190, 255] : [255, 255, 245] };
     }
-    case 'firework': {
-      // three bursts, each at its own moment and place, each a ring that expands and dies
-      let glow = 0, outline = 0, lift = 0, col = [255, 200, 120];
-      for (let i = 0; i < 3; i++) {
-        const t0 = 0.05 + 0.26 * i, life = 0.45;
-        const v = (fx.u - t0) / life;
-        if (!(v > 0 && v < 1)) continue;
-        const bx = fxHash(fx.seed + i * 31 + 1) * fx.gridW, by = fxHash(fx.seed + i * 31 + 2) * fx.gridH;
-        const r = 9 * Math.pow(v, 0.55);
-        const w = g((Math.hypot(cx - bx, cy - by) - r) / 1.4) * (1 - v);
-        if (w > glow) {
-          glow = w; outline = 0.9 * w; lift = 1.8 * w;
-          col = [[255, 170, 110], [140, 220, 255], [220, 160, 255]][i];
-        }
-      }
-      return glow > 0.02 ? { glow: A * glow, outline: A * outline, lift: A * lift, color: col } : FX_NONE;
-    }
+    // 'firework' lights through fxNow's heads now (details3d fireworkShells): one head per live
+    // shell, in the shell's colour -- see the heads branch below
     case 'flare': {
       // one cube goes supernova and lights its neighbourhood -- the same hashed cube every replay
       const fxp = fxHash(fx.seed + 7) * fx.gridW, fyp = fxHash(fx.seed + 8) * fx.gridH;
@@ -1126,6 +1111,7 @@ export function fxAt(t, fx) {
       return { glow: 0.85 * A * w, outline: 0.2 * A * w, lift: 0, color: col };
     }
     case 'pulse':        // the price line's surge lights the candles under its head (details3d fxNow)
+    case 'firework':     // each shell lights its surroundings in its colour (details3d fxNow)
     case 'lightcycle':
     case 'packets':
     case 'centipede':

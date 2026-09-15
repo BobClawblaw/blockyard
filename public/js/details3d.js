@@ -287,6 +287,21 @@ function fxNow(st, t) {
     const reach = Math.hypot(Math.max(f.x, st.gridW - f.x), Math.max(f.y, st.gridH - f.y));
     Object.assign(out, { x: f.x, y: f.y, r: reach * (1 - Math.pow(1 - u, 2)), w: 2.2 + 2.4 * u });
   }
+  // THE FIREWORKS LIGHT THEIR SURROUNDINGS IN THEIR OWN COLOUR (operator, 2026-09-15: "emissive
+  // colored lighting illuminating the explosion area in the explosion color"): every live shell is a
+  // head at its burst point, in its colour, as wide as the shell has spread, fading as it dies
+  if (f.kind === 'firework') {
+    const price = (st.axes?.line?.length ?? 0) > 1;
+    const heads = [];
+    for (const sh of fireworkShells(f.seed, st.gridW, st.gridH, price, 1, price ? (st.axes?.zTop ?? 34) : 16)) {
+      const v = (u - sh.t0) / sh.life;
+      if (!(v > 0.2 && v < 1.15)) continue;
+      const s2 = Math.min(1, (v - 0.2) / 0.8);
+      const spread = 1 - Math.exp(-3.4 * s2);
+      heads.push({ x: sh.bx, y: sh.by, color: sh.cols[0], alpha: Math.pow(Math.max(0, 1 - s2), 1.2) * (v < 0.28 ? 1 : 0.85), r: (price ? 7 : 8) * sh.size * (0.5 + 0.9 * spread) });
+    }
+    out.heads = heads;
+  }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
   // heads branch, as the agents do)
@@ -795,11 +810,38 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0, pale = false) {
 //     curved trail of the last few positions, slowing and pulled down, twinkling, fading;
 //   * the SMOKE is a nebula: soft gradient blobs that leave the burst outward, growing, drifting
 //     up, in the shell's colour gone grey, and fade as they disperse -- on after the sparks;
-//   * five shells on the price board (three on the block board, where the lighting ring keeps
-//     to three), each its own colour, moment and place; the price board's burst at the chart's
-//     own heights. Deterministic in fx.seed, as every effect is, so it replays and can be tested;
+//   * up to ten shells on the price board, five on the block board (fireworkShells), overlapping,
+//     of every size, at every height of the picture, each lighting the candles under it in its
+//     own colour. Deterministic in fx.seed, as every effect is, so it replays and can be tested;
 //     only the twinkle reads the clock.
 const SHELL_COLS = [[[255, 170, 110], [255, 235, 160]], [[140, 220, 255], [220, 245, 255]], [[220, 160, 255], [255, 200, 240]], [[130, 255, 190], [235, 255, 220]], [[255, 120, 150], [255, 210, 120]], [[255, 215, 90], [255, 250, 210]], [[120, 200, 255], [255, 140, 200]]];
+
+// THE SHELLS OF A DISPLAY, from the seed: where and when each bursts, how big, what kind, what
+// colour. Shared by the drawing (drawFireworks) and the lighting (fxNow's heads), so the candles
+// glow in a shell's own colour exactly where and when it bursts. Up to ten on the price board
+// (operator, 2026-09-15: "have more than 1 firework going off at a time. 10 max. Vary the size ...
+// vary the height. Use the entire vertical viewport"), five on the block board; each launches at
+// its own moment in the first half of the run and lives long enough to overlap the next.
+export const FIREWORK_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe', 'pinwheel'];
+export function fireworkShells(seed, gridW, gridH, price, zLo, zHi) {
+  const count = price ? 10 : 5, life = price ? 0.28 : 0.33, SMOKE = 1.7;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const H = (k) => hash01(seed + i * 131 + k);
+    out.push({
+      i, life, smoke: SMOKE,
+      t0: 0.02 + H(0) * (price ? 0.5 : 0.4),
+      bx: 0.08 * gridW + H(1) * 0.84 * gridW, by: H(2) * gridH,
+      zc: zLo + (zHi - zLo) * (0.15 + 0.8 * H(3)),
+      size: 0.45 + 0.85 * H(4),                                // of the board's shell radius: small to big
+      kind: FIREWORK_KINDS[Math.floor(H(8) * FIREWORK_KINDS.length)],
+      cols: SHELL_COLS[Math.floor(H(9) * SHELL_COLS.length)],
+      drift: (H(5) < 0.5 ? -1 : 1) * (0.12 + 0.2 * H(6)) * gridW,
+      H,
+    });
+  }
+  return out;
+}
 // THE SHELL KINDS, by turn: how the sparks fly. (operator, 2026-09-15: "Make more varied
 // explosions. More effects. Lensflare? Really think stunning to see.")
 //   peony          round, two colours
@@ -817,13 +859,9 @@ function drawFireworks(ctx, view, lw) {
   const P = (x, y, z) => project(x, y, z, view);
   const line = view.axes?.line;
   const price = line?.length > 1;
-  let zLo = 6, zHi = 12;
-  if (price) { zLo = Infinity; zHi = -Infinity; for (const p of line) { zLo = Math.min(zLo, p.z); zHi = Math.max(zHi, p.z); } }
-  // THE SCHEDULE FITS THE RUN (2026-09-15: "The fireworks just disappear"): the fifth shell used
-  // to burst at 71% of the run with a 55% life, so the run ended with it mid-air and the whole
-  // thing was cut. Now the last shell's smoke is gone by u = 1, and the final tenth of the run
-  // fades everything left, so nothing is ever cut.
-  const shells = price ? 5 : 3, gap = price ? 0.13 : 0.2, life = price ? 0.27 : 0.33, SMOKE = 1.7;
+  // THE WHOLE HEIGHT of the picture: the floor to the chart's top on the price board, the floor
+  // to well above the cubes on the block board
+  const zLo = 1, zHi = price ? (view.axes?.zTop ?? 34) : 16;
   const gf = Math.min(1, (1 - fx.u) / 0.1);                  // the run's own fade-out
   const gradientOf = (x, y, r, stops) => {
     const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
@@ -840,23 +878,18 @@ function drawFireworks(ctx, view, lw) {
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const seg = (a, b, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
   const now = view.now ?? 0;
-  const cx0 = (view.boardW ?? 0) / 2, cy0 = -(view.boardH ?? 0) / 4;   // where the lens flare's ghosts run toward: the picture's middle, roughly
-  for (let i = 0; i < shells; i++) {
-    const H = (k) => hash01(fx.seed + i * 131 + k);
-    const t0 = 0.02 + gap * i;
-    const v = (fx.u - t0) / life;
-    if (!(v > 0 && v < SMOKE)) continue;                     // the smoke outlives the shell
-    const [col, col2] = SHELL_COLS[(i + Math.floor(H(9) * 3)) % SHELL_COLS.length];
+  const cx0 = (view.boardW ?? 0) / 2, cy0 = -(view.boardH ?? 0) / 4;
+  for (const sh of fireworkShells(fx.seed, fx.gridW, fx.gridH, price, zLo, zHi)) {
+    const { H, life, smoke: SMOKE, kind } = sh;
+    const v = (fx.u - sh.t0) / life;
+    if (!(v > 0 && v < SMOKE)) continue;
+    const [col, col2] = sh.cols;
     const c1 = col.join(','), c2 = col2.join(',');
-    const bx = 0.1 * fx.gridW + H(1) * 0.8 * fx.gridW, by = H(2) * fx.gridH;
-    const zc = zLo + (zHi - zLo) * (0.4 + 0.55 * H(3));
-    const top = P(bx, by, zc);
-    const R0 = U * (price ? 6.5 : 8) * (0.85 + 0.3 * H(4));
-    const kind = SHELL_KINDS[(i + Math.floor(H(8) * 2)) % SHELL_KINDS.length];
+    const top = P(sh.bx, sh.by, sh.zc);
+    const R0 = U * (price ? 7 : 8) * sh.size;
     // --- the launch: a parabola from the floor, off to one side, to the burst point
     const RISE = 0.2;
-    const drift = (H(5) < 0.5 ? -1 : 1) * (0.12 + 0.2 * H(6)) * fx.gridW;
-    const arc = (f) => P(bx - drift * (1 - f), by, zc * (1 - (1 - f) * (1 - f)));   // decelerating climb
+    const arc = (f) => P(sh.bx - sh.drift * (1 - f), sh.by, zLo + (sh.zc - zLo) * (1 - (1 - f) * (1 - f)));
     if (v < RISE) {
       const f = v / RISE;
       const head = arc(f);
@@ -864,7 +897,7 @@ function drawFireworks(ctx, view, lw) {
       for (let k = 0; k <= 8; k++) tail.push(arc(Math.max(0, f - (k / 8) * 0.22)));
       for (let k = 0; k < 8; k++) {
         const a = (1 - k / 8) * gf;
-        seg(tail[k], tail[k + 1], `rgba(${c1},${(0.35 * a).toFixed(3)})`, U * 0.26 * a);
+        seg(tail[k], tail[k + 1], `rgba(${c1},${(0.35 * a).toFixed(3)})`, U * 0.26 * a * sh.size);
         seg(tail[k], tail[k + 1], `rgba(255,240,210,${(0.9 * a).toFixed(3)})`, U * 0.08 * a);
       }
       for (let k = 0; k < 10; k++) {
@@ -877,29 +910,38 @@ function drawFireworks(ctx, view, lw) {
     }
     const s = Math.min(1, (v - RISE) / (1 - RISE));          // 0 at the burst, 1 when the sparks are out
     const ss = (v - RISE) / (SMOKE - RISE);                   // the smoke's own clock, 0..1 over the longer life
-    // --- the smoke: a nebula leaving the burst outward, growing, drifting up, going grey, fading
-    const smoke = [Math.round(col[0] * 0.45 + 95), Math.round(col[1] * 0.45 + 95), Math.round(col[2] * 0.45 + 105)].join(',');
-    for (let k = 0; k < 9; k++) {
-      const ang = (k / 9) * Math.PI * 2 + H(70 + k) * 0.7, sp = 0.5 + 0.7 * H(80 + k);
-      const dist = R0 * 0.55 * sp * (1 - Math.exp(-2.2 * ss)), rise = R0 * 0.25 * ss;
-      const x = top.x + Math.cos(ang) * dist, y = top.y + Math.sin(ang) * dist * 0.8 - rise;
-      const r = R0 * (0.22 + 0.7 * ss) * (0.8 + 0.4 * H(90 + k));
-      const a = 0.22 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
-      if (a < 0.005) continue;
-      disc(x, y, r, gradientOf(x, y, r, [[0, `rgba(${smoke},${a.toFixed(3)})`], [0.45, `rgba(${smoke},${(a * 0.55).toFixed(3)})`], [1, `rgba(${smoke},0)`]]));
+    // --- THE DISSIPATION (operator: "The dissipation effects need to be more detailed"): a nebula
+    // of sixteen lumps, each two gradient discs offset so it is not round, leaving the burst
+    // outward and curling as it goes, the shell's colour gone grey with the colour still in its
+    // heart; embers falling slowly through it, flickering; ash sinking after them; all of it
+    // fading as it disperses and gone before the run ends
+    const smokeCol = [Math.round(col[0] * 0.4 + 90), Math.round(col[1] * 0.4 + 90), Math.round(col[2] * 0.4 + 100)].join(',');
+    for (let k = 0; k < 16; k++) {
+      const ang = (k / 16) * Math.PI * 2 + H(70 + k) * 0.7, sp = 0.45 + 0.75 * H(80 + k);
+      const curl = Math.sin(ss * Math.PI * 2 * (0.5 + H(85 + k)) + k) * R0 * 0.12 * ss;
+      const dist = R0 * 0.6 * sp * (1 - Math.exp(-2.2 * ss)), rise = R0 * 0.3 * ss;
+      const x = top.x + Math.cos(ang) * dist + curl, y = top.y + Math.sin(ang) * dist * 0.8 - rise;
+      const r = R0 * (0.2 + 0.75 * ss) * (0.7 + 0.5 * H(90 + k));
+      const a = 0.2 * Math.pow(1 - ss, 1.5) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
+      if (a < 0.004) continue;
+      disc(x, y, r, gradientOf(x, y, r, [[0, `rgba(${smokeCol},${a.toFixed(3)})`], [0.5, `rgba(${smokeCol},${(a * 0.5).toFixed(3)})`], [1, `rgba(${smokeCol},0)`]]));
+      const ox = x + Math.cos(ang + 1.3) * r * 0.45, oy = y + Math.sin(ang + 1.3) * r * 0.35;
+      disc(ox, oy, r * 0.7, gradientOf(ox, oy, r * 0.7, [[0, `rgba(${c1},${(a * 0.35 * (1 - ss)).toFixed(3)})`], [0.6, `rgba(${smokeCol},${(a * 0.4).toFixed(3)})`], [1, `rgba(${smokeCol},0)`]]));
     }
-    // --- glitter rain: after the shell, tiny white points drifting down and twinkling, thinning out
-    if (ss > 0.2) {
-      const gl = (ss - 0.2) / 0.8;
-      for (let k = 0; k < 26; k++) {
-        const ang = H(300 + k) * Math.PI * 2, d = R0 * (0.3 + 0.8 * H(320 + k));
-        const x = top.x + Math.cos(ang) * d + Math.sin(now * 0.003 + k) * U * 0.3, y = top.y + Math.sin(ang) * d * 0.7 + R0 * (0.2 + 1.1 * gl) * (0.6 + 0.4 * H(340 + k));
-        const tw = Math.max(0, Math.sin(now * 0.025 + k * 2.3));
-        const a = 0.9 * tw * (1 - gl) * gf;
-        if (a > 0.02) disc(x, y, U * 0.05, `rgba(255,255,255,${a.toFixed(3)})`);
+    if (ss > 0.15) {
+      const em = (ss - 0.15) / 0.85;
+      for (let k = 0; k < 18; k++) {
+        const ang = H(300 + k) * Math.PI * 2, d = R0 * (0.25 + 0.75 * H(320 + k));
+        const x = top.x + Math.cos(ang) * d + Math.sin(now * 0.002 + k) * U * 0.35, y = top.y + Math.sin(ang) * d * 0.7 + R0 * (0.15 + 1.2 * em) * (0.5 + 0.5 * H(340 + k));
+        const flick = 0.5 + 0.5 * Math.sin(now * 0.02 + k * 2.3);
+        const a = (1 - em) * gf;
+        if (a > 0.02) {
+          disc(x, y, U * 0.11 * (1 - 0.5 * em), gradientOf(x, y, U * 0.11, [[0, `rgba(255,255,255,${(0.9 * a * flick).toFixed(3)})`], [0.5, `rgba(${c2},${(0.7 * a * flick).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+          if (k % 3 === 0) disc(x + U * 0.2, y + U * 0.5 * em, U * 0.03, `rgba(${smokeCol},${(0.6 * a).toFixed(3)})`);   // ash
+        }
       }
     }
-    if (v >= 1) continue;                                     // only the smoke and the glitter are left
+    if (v >= 1) continue;                                     // only the dissipation is left
     // --- the burst: a flash, a lens flare, and a shockwave ring racing out and thinning
     if (s < 0.14) {
       const f = (1 - s / 0.14) * gf;
@@ -907,8 +949,6 @@ function drawFireworks(ctx, view, lw) {
       disc(top.x, top.y, r, gradientOf(top.x, top.y, r, [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.3, `rgba(${c2},${(0.7 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
     }
     if (s < 0.35) {
-      // THE LENS FLARE: an anamorphic streak across the burst, four thin rays turning slowly,
-      // and a run of faint ghosts along the line from the burst toward the picture's middle
       const f = Math.pow(1 - s / 0.35, 1.5) * gf;
       const L = R0 * 2.6;
       ctx.strokeStyle = linearOf(top.x - L, top.y, top.x + L, top.y, [[0, `rgba(${c2},0)`], [0.35, `rgba(${c2},${(0.35 * f).toFixed(3)})`], [0.5, `rgba(255,255,255,${(0.9 * f).toFixed(3)})`], [0.65, `rgba(${c2},${(0.35 * f).toFixed(3)})`], [1, `rgba(${c2},0)`]]);
@@ -933,6 +973,14 @@ function drawFireworks(ctx, view, lw) {
       ctx.strokeStyle = `rgba(255,255,255,${(0.55 * (1 - f) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.12 * (1 - f));
       ctx.beginPath(); ctx.arc(top.x, top.y, R0 * 1.25 * f, 0, Math.PI * 2); ctx.stroke();
     }
+    // --- EMISSIVE LIGHT on the explosion's surroundings (operator: "emissive colored lighting
+    // illuminating the explosion area in the explosion color"): a wide soft pool of the shell's
+    // colour over everything near the burst, strongest at the burst and fading with the shell
+    // (the candles under it glow in the colour too, through fxNow's heads)
+    {
+      const f = Math.pow(1 - s, 1.3) * gf, r = R0 * 2.4;
+      disc(top.x, top.y + R0 * 0.2 * s, r, gradientOf(top.x, top.y + R0 * 0.2 * s, r, [[0, `rgba(${c1},${(0.32 * f).toFixed(3)})`], [0.4, `rgba(${c1},${(0.14 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+    }
     // --- the shell
     const N = kind === 'ring' ? 60 : kind === 'crossette' ? 36 : 84;
     const fade = Math.pow(1 - s, kind === 'willow' ? 0.8 : 1.2) * gf;
@@ -940,7 +988,7 @@ function drawFireworks(ctx, view, lw) {
     const gscale = kind === 'willow' ? 1.9 : kind === 'ring' ? 0.7 : 1;
     const pos = (k, sq, scale) => {
       const jitter = kind === 'ring' ? 0.03 : 0.25;
-      const curl = kind === 'pinwheel' ? 2.4 * sq : 0;                        // every spark curls the same way
+      const curl = kind === 'pinwheel' ? 2.4 * sq : 0;
       const ang = (k / N) * Math.PI * 2 + (H(100 + k) - 0.5) * jitter + curl;
       const len = R0 * (kind === 'ring' ? 0.9 : 0.6 + 0.5 * H(200 + k)) * scale;
       const sp = spreadAt(sq);
@@ -958,7 +1006,7 @@ function drawFireworks(ctx, view, lw) {
         const p = pos(k, Math.max(0, s - (q / steps) * back), scale);
         if (prev) {
           const a = (1 - q / (steps + 1)) * blink;
-          seg(prev, p, `rgba(${c},${(0.28 * fade * a).toFixed(3)})`, U * 0.2 * a);
+          seg(prev, p, `rgba(${c},${(0.28 * fade * a).toFixed(3)})`, U * 0.2 * a * sh.size);
           seg(prev, p, `rgba(${c},${(0.95 * fade * a).toFixed(3)})`, U * 0.07 * a);
         }
         prev = p;
@@ -966,7 +1014,6 @@ function drawFireworks(ctx, view, lw) {
       const tw = 0.55 + 0.45 * Math.sin(now * 0.02 + k * 1.7);
       const pop = kind === 'chrysanthemum' && s > 0.3 && hash01(fx.seed + k * 7 + Math.floor(now / 50)) < 0.12;
       disc(prev.x, prev.y, U * (pop ? 0.2 : 0.075) * scale, `rgba(255,255,255,${(fade * blink * (pop ? 1 : 0.9 * tw)).toFixed(3)})`);
-      // a crossette splits: past the middle of its flight each spark bursts four ways, short
       if (kind === 'crossette' && s > 0.42) {
         const s2 = (s - 0.42) / 0.58, f2 = Math.pow(1 - s2, 1.3) * gf;
         for (let m = 0; m < 4; m++) {
@@ -977,7 +1024,6 @@ function drawFireworks(ctx, view, lw) {
         }
       }
     }
-    if (s < 0.5) { const f = (1 - s / 0.5) * gf; const r = R0 * spreadAt(s) * 1.1, y = top.y + R0 * 0.3 * s; disc(top.x, y, r, gradientOf(top.x, y, r, [[0, `rgba(${c2},${(0.16 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]])); }
     disc(top.x, top.y + R0 * 0.25 * s, U * 0.16 * fade, `rgba(255,255,255,${(0.7 * fade).toFixed(3)})`);
   }
   ctx.lineWidth = lw;
