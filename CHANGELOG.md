@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 - The supernova's violet stage comes sooner and heavier: the debris turns purple patch by patch from a tenth of the run, a violet heart and a wider violet cloud rise behind it, so the nebula is prominently purple as the pulsar starts to blink and holds its weight until four fifths of the run; the white plumes are drawn on a half-resolution layer to keep the frame cheap
 - The supernova's opening explosion is a white-hot flash, held for a moment and washing far out, that throws a hundred and twenty-eight plumes of white gas in every direction, each flying and growing on its own out to nine star radii and drifting on until the effect is nearly done
 
+### Added
+
+- **DOOM, the fourth Diversion.** The shareware `DOOM.EXE` v1.9 and `DOOM1.WAD` from `doom_dos/`,
+  unmodified, running on a PC emulated in the browser with no dependencies: an i386 interpreter
+  (`public/js/x86.js`), the DOS/4GW machine around it — DOS, DPMI, BIOS, PIC, timer, keyboard and a
+  planar VGA (`dospc.js`) — and a Sound Blaster Pro 2 with an OPL3 for the effects and the music
+  (`soundcard.js`), in a worker (`doomworker.js`). Demos, menus, savegames and ENDOOM all work; 35
+  frames a second at about 95 million emulated instructions a second. Mouse capture, a WASD
+  scheme, smoothing, full screen; pauses when you look away; savegames and DOOM's config stay in
+  the browser. The server hands out the game files at `/doom/NAME` (`server/http/doom.js`).
+
 ### Changed
 
 - **The energy pulse is heat, not blue, and its head is a crackling ball of plasma.** Behind the

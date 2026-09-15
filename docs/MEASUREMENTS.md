@@ -1252,3 +1252,44 @@ showing STALLED. Block intervals are close to exponential with a 10-minute mean,
 minutes or more has probability e^-4, about 1.8% -- once in fifty blocks, a few times a day. Stalled
 now means a connected peer reports a higher tip (`getpeerinfo` `synced_headers`); peers agreeing on
 the tip is a long gap and synced; no peer height at all waits two hours.
+
+## 32. The DOOM Diversion's emulated PC (2026-09-15)
+
+Not the node: the i386 and the PC in `public/js/x86.js` and `dospc.js` running the shareware
+`DOOM.EXE` v1.9 (the Diversion). Taken on this box -- AMD Ryzen 9 9950X3D, Node v22.23.2, Chromium
+152 (snap, headless). Reproduce the headless figures with `node scripts/doom-bench.js`.
+
+**Speed of the interpreter**, 400 M instructions of DOOM's title and demos on a clock of 30 M
+instructions to the virtual second:
+
+| build | instructions a second |
+|---|---|
+| first cut: unsigned values (`>>> 0`), flag operands in closure variables, a try/catch per instruction | 66-68 M |
+| every value an int32, lazy flags in an `Int32Array`, one try/catch around the loop, 32-bit fast paths | 95 M |
+| the same with the Sound Blaster and OPL3 attached, synthesising at 44.1 kHz per call of `tick` | 73 M |
+| the OPL's per-register work hoisted out of the sample loop | 82 M |
+| `tick` working in batches of at least 128 frames (it had been called every 2,000 instructions: a sample or two each) | **92 M** |
+
+The try/catch alone was 14% of the profile, and the collector 1.5% from doubles boxed in closure
+variables; the rewrite was checked instruction by instruction against the first cut for 40 M
+instructions (identical except the start-up's environment read, which the first cut got wrong).
+
+**In the browser**, the machine in a worker, sound on: **94-110 M instructions a second, 34-37
+frames a second** -- DOOM's own cap is 35. The game needs about a million instructions a frame of
+real work; the rest of each tic it spends in its own busy wait for the timer. The page's CSP forbids
+eval, so a JIT was never an option; a slower machine than this one has roughly a factor of two in
+hand before DOOM drops below 35.
+
+**Start-up**: graphics mode after 8.0 M instructions without a sound card, 17.0 M with one (the
+DMX driver probes the DSP and the OPL); 20 pages flipped by 31 M.
+
+**Correctness of the CPU, measured against the host's own**: a differential fuzzer ran random
+instructions natively (a C harness in 64-bit mode, 32-bit operands, register forms) and in `x86.js`,
+comparing all registers and every flag the instruction defines -- ALU rows, immediates, shifts and
+rotates with counts past the width, MUL/IMUL/DIV/IDIV including divide faults, BT/BTS/BTR/BTC,
+BSF/BSR, SHLD/SHRD, MOVZX/MOVSX, SETcc, BSWAP, XADD, CMPXCHG, SAHF/LAHF. Two seeds, 78,565
+instructions, 2,338 divide faults agreed, **zero mismatches**. The harness needs a C compiler, so it
+is not in `npm test`; `test/x86.test.js` keeps a case from each class it covered.
+
+**The music is in tune**: over 10 s of the title music, 178 notes keyed on, 96 of them within
+2.5 cents of equal temperament; the rest spread to +-50 cents, which is DMX's pitch bends.

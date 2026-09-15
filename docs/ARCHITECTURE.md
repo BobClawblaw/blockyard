@@ -659,6 +659,7 @@ loaded from the same origin. There is no build step and no framework.
 | `settings.js` | display settings: `DEFAULTS`, the `PANEL` rows of the settings dialog, `normalise()`, and the option builders (`spaceOptions`, `enabledEffects`, ...) the boards read; stored on the server (`/api/settings`) with a `localStorage` copy |
 | `about.js` | the About page (version, system and node info) |
 | `tetris.js` / `tetrust.js`, `breakout.js` / `blockout.js`, `arkanoid.js` / `blockanoid.js`, `tetsound.js` | the Diversions: pure game rules in the first file of each pair, the tab drawn on the 3D engine in the second, and Tetrust's sound |
+| `x86.js`, `dospc.js`, `soundcard.js`, `doomworker.js`, `doomaudio.js`, `doomio.js`, `doom.js` | the DOOM Diversion: an i386 interpreter, the DOS/4GW PC around it, a Sound Blaster Pro 2 with an OPL3, the worker the machine runs in, the AudioWorklet it plays through, the pure keyboard/config/text-mode helpers, and the tab (section 3.4) |
 | `fmt.js` | formatters: decimal units (as the node prints them), `–` for anything absent |
 | `login.js` | the login page (a separate file because of the CSP) |
 
@@ -789,6 +790,51 @@ What this means for front-end code:
 `test/csp.test.js` and `test/web-contract.test.js` enforce these rules.
 
 ---
+
+### 3.4 The DOOM Diversion
+
+The shareware `DOOM.EXE` v1.9 runs unmodified on a PC emulated in the browser. Nothing is ported
+and no dependency is used; every layer is this repository's own:
+
+```
+doom.js (page)  --scancodes, mouse, run/pause-->  doomworker.js (Worker)
+      ^                                              |
+      |  frames (320x200 indices + palette),         |  createPC()      dospc.js
+      |  text-mode cells, stats                      |    createCpu()   x86.js
+      +----------------------------------------------+    soundcard.js  (SB Pro 2 + OPL3)
+doomaudio.js (AudioWorklet) <--stereo PCM over a MessagePort--+
+```
+
+- **`x86.js`** is a user-mode i386 with a small x87, interpreted. No paging, rings or real mode:
+  a DOS/4GW program runs flat, and segment registers carry only a base. The page's CSP forbids
+  eval, so there is no JIT; speed comes from keeping every value an int32 (a `>>> 0` above 2^31
+  is a double and, in a closure variable, an allocation), lazy flags recorded in an `Int32Array`,
+  one try/catch around the loop rather than each instruction, and 32-bit fast paths for the
+  instructions a Watcom build is made of. About 95 million instructions a second in Node and in
+  a Chromium worker on this box; DOOM needs about a million a frame (MEASUREMENTS §32).
+- **`dospc.js`** is the machine. `loadLE` finds the LE executable inside the bound DOS/4GW stub,
+  loads it at +1 MB and applies its fixups; the extender itself never runs, because this file
+  answers what the extender would: INT 21h (files from an in-memory, case-insensitive directory;
+  written files handed to the host on close), INT 31h DPMI (descriptors, memory blocks,
+  protected-mode vectors), INT 10h/16h/33h, and the hardware a DOS game programs directly: the
+  8259s, the 8254, the keyboard controller, and a VGA with planar memory, unchained mode and CRTC
+  page flipping, which is how DOOM draws. The clock is injected (`now()`): wall time in the
+  worker, instruction count in tests, so a headless boot is the same run every time.
+- **`soundcard.js`** is a Sound Blaster Pro 2 at 220h/IRQ 7/DMA 1 — the DSP's command set and the
+  8237 DMA controller it pulls samples through — and an OPL3 modelled as operators with
+  documented envelope rates. `tick(t)` produces output for the machine time that passed and raises
+  the end-of-block interrupt from inside the same loop.
+- **`doomworker.js`** runs the machine in ~10 ms slices, yielding between them so input arrives,
+  and sends a frame only when the CRTC start address or the palette changed. The frame buffer
+  bounces between the worker and the page so no frame allocates. Savegames and `default.cfg`
+  are kept in IndexedDB.
+- **`doom.js`** draws, captures input, pauses when the tab is not on screen (the worker's clock
+  stops, so nothing moves), and uses a ScriptProcessor when `audioWorklet` is unavailable — a
+  plain-HTTP LAN address is not a secure context.
+
+The game files are served from `doom_dos/` at the repository root by `server/http/doom.js`
+(`/doom/NAME`, 8.3 names of `.EXE`, `.WAD` and `.CFG` only, behind the session when accounts are
+on) rather than from `public/`, whose every file feeds the build id.
 
 ## 4. The 3D engine
 

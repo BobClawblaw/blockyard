@@ -19,6 +19,7 @@ import { renderKiosk } from './kiosk.js';
 import { renderTetrust } from './tetrust.js';
 import { renderBlockout } from './blockout.js';
 import { renderBlockanoid } from './blockanoid.js';
+import { renderDoom } from './doom.js';
 import { renderAbout } from './about.js';
 import { renderChain, renderMempool, renderPeers, renderNetwork, renderLogs, renderNode, renderAdmin, ensureLogsLoaded, init as initPanels, initChainDrill } from './panels.js';
 
@@ -519,6 +520,7 @@ export function render() {
     case 'tetrust': renderTetrust(s, state, helpers); break;
     case 'blockout': renderBlockout(s, state, helpers); break;
     case 'blockanoid': renderBlockanoid(s, state, helpers); break;
+    case 'doom': renderDoom(s, state, helpers); break;
     case 'about': renderAbout(s, state, helpers); break;
   }
 }
@@ -908,7 +910,7 @@ function shortBuild(build) {
 // subroutes; they stay on the URL so every explorer page is a link.
 // The games live behind the Diversions pop-down at the end of the nav; the menu shows as the
 // active tab while one of them is open, since its own button is out of sight inside the popup.
-const DIVERSION_PAGES = ['tetrust', 'blockout', 'blockanoid'];
+const DIVERSION_PAGES = ['tetrust', 'blockout', 'blockanoid', 'doom'];
 
 function setPage(route) {
   const [page, ...rest] = String(route).split('/');

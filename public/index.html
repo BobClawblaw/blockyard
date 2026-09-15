@@ -99,6 +99,7 @@
     <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
     <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
     <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
+    <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
   </div>
 
   <!-- Display settings (settings.js). Hidden until the gear is pressed; the contents are
@@ -587,6 +588,42 @@
           </div>
           <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
           <table class="tetscores" id="tetScores"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOOM (public/js/doom.js): the shareware DOOM.EXE v1.9 from doom_dos/, unmodified, on a PC this
+         repository emulates -- x86.js the CPU, dospc.js DOS/4GW and the hardware, soundcard.js a
+         Sound Blaster Pro 2 -- running in a worker (doomworker.js). The canvas is the monitor. -->
+    <section class="page" data-page="doom">
+      <div class="tetrust doom" id="doom">
+        <div class="card doomcard">
+          <h3>DOOM <span class="sp"></span><span class="src">shareware v1.9 · Knee-Deep in the Dead · on an emulated 486</span></h3>
+          <div class="doomwrap" id="doomWrap">
+            <canvas class="doomscreen" id="doomScreen" width="320" height="200"></canvas>
+            <div class="tetover" id="doomOver">
+              <div class="tetmsg" id="doomMsg">DOOM</div>
+              <div class="tetsub" id="doomSub"></div>
+              <button type="button" class="btn primary" id="doomPlay">play</button>
+            </div>
+            <button type="button" class="btn primary doomagain hidden" id="doomPlay2">play again</button>
+          </div>
+        </div>
+        <div class="card tethud">
+          <h3>Machine</h3>
+          <div class="tetstats" id="doomStatus"></div>
+          <h3>Keys</h3>
+          <div class="tetkeys" id="doomKeys"></div>
+          <div class="tetkeys">click the screen to capture the mouse (Esc gives it back) · left fire · right strafe · middle walk</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="doomSound" aria-pressed="false" title="the Sound Blaster: effects and the OPL music">♫ sound</button>
+            <button type="button" class="tetsw" id="doomWasd" aria-pressed="false" title="W A S D to walk and strafe, E to open; takes effect on the next start">⌨ WASD</button>
+            <button type="button" class="tetsw" id="doomSmooth" aria-pressed="false" title="smooth the 320x200 picture instead of showing its pixels">◌ smooth</button>
+            <button type="button" class="tetsw" id="doomFull" title="the screen alone, full screen">⛶ full screen</button>
+          </div>
+          <h3>About</h3>
+          <div class="tetkeys">DOOM is id Software's (1993), from the shareware files in <code>doom_dos/</code> on this server. The PC under it is BlockYard's own: an i386, DOS/4GW, a VGA and a Sound Blaster written in JavaScript, with no dependencies. Savegames and settings stay in this browser.</div>
         </div>
       </div>
     </section>

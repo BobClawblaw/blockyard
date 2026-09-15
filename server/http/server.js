@@ -7,6 +7,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import { StaticFiles, SECURITY_HEADERS, securityHeaders } from './static.js';
+import { serveDoom } from './doom.js';
 import { routes, HttpError } from './api.js';
 import { parseCookies, serializeCookie, csrfOk } from '../auth/sessions.js';
 import { ipDecision } from '../netinfo.js';
@@ -136,6 +137,13 @@ export function createAppServer(app) {
         return res.end();
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return sendJson(req, res, 405, { error: { message: 'method not allowed', kind: 'method' } });
+      // The DOOM Diversion's game files (http/doom.js). Behind the session when accounts are on:
+      // five megabytes of somebody else's game is not a public asset of this monitor.
+      if (path.startsWith('/doom/')) {
+        if (!openAccess && !resolveSession(req, app)) return sendJson(req, res, 401, { error: { message: 'authentication required', kind: 'auth' }, login: '/login' });
+        const done = await serveDoom(req, res, path, app.doomDir, { tls: app.tls, hstsMs });
+        if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
+      }
       const out = await statics.serve(req, res, path);
       if (out?.error) return serveStaticError(req, res, statics, path, out.error, H());
       app.access({ req, res, path, status: out?.status ?? 200, ms: Date.now() - started, ip, user: null });

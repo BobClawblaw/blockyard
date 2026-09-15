@@ -20,6 +20,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Tetrust](#tetrust)
 - [Blockout](#blockout)
 - [Blockanoid](#blockanoid)
+- [DOOM](#doom)
 - [Peers](#peers)
 - [Network](#network)
 - [Mining](#mining)
@@ -711,6 +712,79 @@ rather than the look, flipping them reaches the game you are playing, not just t
 
 ---
 
+## DOOM
+
+The shareware episode of DOOM, **Knee-Deep in the Dead**, under **Diversions**. Not a remake: it is
+id Software's own `DOOM.EXE` v1.9 and `DOOM1.WAD`, unmodified, running on a 486 PC that BlockYard
+emulates in your browser — the processor, DOS and its memory extender, the VGA card and a Sound
+Blaster, all written in JavaScript. It plays exactly as it did in 1993, demos, sound effects, OPL
+music and all.
+
+Press **play**. The machine boots (you will see DOOM's own start-up screen for a moment), the
+demos start, and **Esc** opens DOOM's menu: **New Game** from there.
+
+### The files
+
+The game's files live on the server, in `doom_dos/` beside the application — the shareware
+package the operator put there. Without `DOOM.EXE` and `DOOM1.WAD` in that directory the page
+says which file is missing instead of starting. Nothing is downloaded from anywhere else.
+
+### Playing
+
+**Click the screen to capture the mouse**: moving it turns, the left button fires, the right
+strafes, the middle walks forward. **Esc** gives the mouse back (and opens DOOM's menu). The
+keyboard is DOOM's own:
+
+| Keys (classic) | |
+|---|---|
+| **↑** **↓** | walk |
+| **←** **→** | turn |
+| **Alt** + **←** **→** | strafe |
+| **Ctrl** or left click | fire |
+| **Space** | open doors, press switches |
+| **Shift** (held) | run |
+| **1**–**7** | choose a weapon |
+| **Tab** | the map |
+| **Esc** | DOOM's menu |
+| **F2** / **F3** | save / load |
+| **F5** | detail · **F11** gamma |
+
+The **⌨ WASD** switch moves walking to **W** **S**, strafing to **A** **D** and opening doors to
+**E**, for anyone who learned on a later game. DOOM reads its keys when it starts, so the switch
+applies the next time you press play (quit from DOOM's menu, then **play again**).
+
+### Pausing, saving, quitting
+
+**It pauses when you look away** — another browser tab, or another page of the monitor — and the
+emulated machine stops dead: its clock stops with it, so nothing moves while you are gone. Press
+**resume** to carry on.
+
+**Savegames and settings stay in this browser.** DOOM's six save slots, and the configuration it
+writes when you quit (volumes, screen size, detail), are kept in the browser's storage and come
+back the next time you play — on this browser only; they are never sent to the server.
+
+**Quitting** from DOOM's menu ends the program the way it ended in DOS: the text-mode ENDOOM screen,
+and a **play again** button.
+
+### The switches on the panel
+
+| Switch | |
+|---|---|
+| **♫ sound** | The Sound Blaster, on or muted. |
+| **⌨ WASD** | The control scheme above; applies at the next start. |
+| **◌ smooth** | Smooths the 320×200 picture instead of showing its square pixels. |
+| **⛶ full screen** | The screen alone. In Chrome it also keeps **Esc** for DOOM's menu. |
+
+The **Machine** panel says what the PC is doing: running or paused, how fast the emulated
+processor is going (in millions of instructions a second), how many frames reach the screen, and
+the sound card's rate. DOOM draws at most 35 frames a second, as it always did.
+
+If the sound will not start, the page may be served over plain HTTP from a LAN address: the browser
+refuses its low-latency audio there, and DOOM falls back to a simpler path that works everywhere
+but can crackle when the machine is busy.
+
+---
+
 ## Peers
 
 | Panel | What it shows |
@@ -862,6 +936,7 @@ can bookmark it or send it to someone who can reach the same monitor:
 | Tetrust | `#tetrust` |
 | Blockout | `#blockout` |
 | Blockanoid | `#blockanoid` |
+| DOOM | `#doom` |
 | Peers | `#peers` |
 | Network | `#network` |
 | Mining | `#mining` |

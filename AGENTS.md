@@ -182,6 +182,10 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
   (page #space)      the viewer at window size + being-built and tip panels
                      (renderBlockSpace in mining.js)
   js/goggles.js      the 2D treemap maps (squarify) that the 3D viewer sits beside
+  js/x86.js, dospc.js, soundcard.js, doomworker.js, doomaudio.js, doomio.js, doom.js
+                     the DOOM Diversion: an i386 interpreter, the DOS/4GW PC, a Sound Blaster
+                     Pro 2 + OPL3, the worker, the AudioWorklet, pure I/O helpers, the tab.
+                     The game files are doom_dos/ at the repo root, served by http/doom.js.
 scripts/doc-counts.js  derives the test count the docs quote (--check / --fix)
 test/                fixtures/log-samples.txt = frozen REAL log lines
 test/helpers/http.js   boots the REAL app in-process: N fake nodes, log sink, TLS.
@@ -260,6 +264,40 @@ silently ate another test's result line — rule 22.
    User admin, the audit trail and password changes 403 on the role; node writes are
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
+
+## Current state (2026-09-15): DOOM
+
+**DOOM is the fourth Diversion** (operator: "I've added doom_dos to the project directory. Get DOOM
+working as a diversion inside blockyard with zero dependancies"; then, offered a source port instead,
+chose the emulator). The shareware `DOOM.EXE` v1.9 runs **unmodified** on a PC this repo emulates;
+nothing of id's code is ported, so the repo stays Apache-2.0 apart from the game files themselves.
+Built on the `doom` branch. What will bite:
+
+- **No JIT, ever.** The page's CSP is `script-src 'self'` with no `unsafe-eval` (rule-level, see
+  csp.test.js), so `x86.js` is a pure interpreter and speed is its whole problem. Keep every value
+  an int32 (`| 0`, never `>>> 0` on a hot path: above 2^31 it is a double, and a double stored in a
+  closure variable allocates), keep the lazy flags in their `Int32Array`, and do not put a
+  try/catch back inside the instruction loop. Numbers in MEASUREMENTS §32; `node
+  scripts/doom-bench.js` re-measures.
+- **The extender is not emulated, it is impersonated.** `dospc.js` loads the LE at +1 MB and answers
+  INT 21h/31h itself. Things DOOM checks that are easy to miss: `INT 21h AX=FF00 DX=78h` must say
+  DOS/4G; the environment is read through a selector with a base (so DS bases are honoured);
+  **the BIOS mode byte at 0x449** decides whether DOOM returns to text mode on quit (without it,
+  no ENDOOM).
+- **VGA is planar.** DOOM unchains mode 13h and flips pages with the CRTC start address; a frame is
+  "new" when `vga.frames` (CRTC start writes) or `vga.palSeq` moves.
+- **The sound card's `tick` batches** (at least 128 frames): called every 2,000 instructions it
+  was re-preparing the synth 40,000 times a second.
+- **Audio in an insecure context.** On plain HTTP to a LAN address there is no `audioWorklet`;
+  `doom.js` falls back to a ScriptProcessor. Both paths take the same MessagePort stream.
+- **The CPU was fuzzed against the host CPU** (78k instructions, 0 mismatches) with a C harness that
+  is not in the repo (it needs gcc); `test/x86.test.js` holds a case per class. Re-fuzz after any
+  change to flags, shifts, multiply or divide.
+- **`doom_dos/` is not in package.json `files`**, so an npm install has no game and the page says
+  which file is missing. Whether the shareware files ship is the operator's call.
+- Tests: `test/x86.test.js`, `test/doom-pc.test.js` (boots the real DOOM.EXE headless when
+  doom_dos/ is present, a named skip when not), `test/doom-io.test.js` (keys, config, text mode,
+  the `/doom/` route).
 
 ## Current state (2026-09-14)
 
@@ -511,7 +549,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 873 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 905 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
