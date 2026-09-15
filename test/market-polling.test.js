@@ -55,6 +55,18 @@ test('the market endpoints answer "off" and PARK the feed until the switch is on
   assert.equal(app.markets.touched, 2);
 });
 
+test('/api/price: the cached spot while polling is on, null (and why) while it is off; never a touch', async () => {
+  const app = { settingsFile: tmpFile(), markets: { ...fakeFeed(), async spot() { return { usd: 76_400.5, at: 1, source: 'spot' }; } } };
+  const off = await route('/api/price').handler({ query: {} }, app);
+  assert.equal(off.usd, null); assert.equal(off.polling, false); assert.match(off.note, /Enable market polling/);
+  fs.writeFileSync(app.settingsFile, JSON.stringify({ markets: { polling: true } }));
+  const on = await route('/api/price').handler({ query: {} }, app);
+  assert.equal(on.usd, 76_400.5); assert.equal(on.source, 'spot');
+  assert.equal(app.markets.touched, 0, 'the price never starts the feed polling');
+  const none = await route('/api/price').handler({ query: {} }, { settingsFile: app.settingsFile, markets: null });
+  assert.equal(none.usd, null); assert.equal(none.enabled, false);
+});
+
 test('BLOCKYARD_MARKETS=0 is the hard off: the switch cannot turn it on', async () => {
   const app = { settingsFile: tmpFile(), markets: null };
   fs.writeFileSync(app.settingsFile, JSON.stringify({ markets: { polling: true } }));

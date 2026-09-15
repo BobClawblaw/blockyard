@@ -822,7 +822,7 @@ The block under construction and who has been mining.
 
 | Panel | What it shows |
 |---|---|
-| **Reward stats** | The last 144 blocks: the miners' reward (subsidy plus fees), the average fees per block and the average fee per transaction, from `getblockstats`, rolled forward a block at a time. |
+| **Reward stats** | The last 144 blocks: the miners' reward (subsidy plus fees), the average fees per block and the average fee per transaction, from `getblockstats`, rolled forward a block at a time. Each carries its dollar figure while market polling is on (the cached spot price, never a new poll); off, a note says so. |
 | **Difficulty adjustment** | Blocks remaining in the current period and when it ends at the pace so far, the estimated change (the pace projected over the period against the ten-minute target, within the protocol's factor-of-four bounds), the previous change, and the next halving's height and date. |
 | **Pools** | The last week's blocks by pool, as a donut with its legend: luck (blocks found against the 1,008 the target spacing would give), the block count and how many pools. Every coinbase of the week is read from the node, eight every few seconds behind the live polls, and the note says how far that has got. |
 | **Hashrate & difficulty** | The week's hashrate from `getnetworkhashps` and the current difficulty, and a year's chart: one block header a day gives that day's mean interval, and difficulty × 2³² over it is the day's hashrate estimate (the thin line), with a seven-day mean over it and the difficulty's steps on the right axis. |

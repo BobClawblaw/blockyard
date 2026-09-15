@@ -1261,6 +1261,8 @@ canvas.chart.xs, .chart.xs { height: 86px }
 .netstats .ns .v { font-size: 22px; font-weight: 650; color: var(--fg); font-variant-numeric: tabular-nums; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .netstats .ns .v small { font-size: 11px; font-weight: 400; color: var(--fg-dim); margin-left: 4px; }
 .netstats .ns .s { font-size: 11px; color: var(--fg-dim); font-family: var(--mono); }
+.netstats .ns .s .usd { display: block; color: var(--ok); font-size: 13px; font-weight: 600; }
+.netstats .usdnote { grid-column: 1 / -1; }
 .netstats .up { color: var(--ok); } .netstats .down { color: var(--bad); }
 .donutwrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; }
 .donutwrap canvas.donut { width: 100%; height: 220px; }

@@ -1122,8 +1122,20 @@ function agoWords(ms, now = Date.now()) {
 }
 function tera(d) { return d == null || !Number.isFinite(d) ? '–' : `${(d / 1e12).toFixed(2)}T`; }
 
+// the spot price for the dollar lines, asked for at most once a minute while the page is
+// painted, and only ever the cached one (/api/price never starts the exchange polling)
+const PRICE = { usd: null, at: 0, askedAt: 0, busy: false, off: false };
+function askPrice(h) {
+  const now = Date.now();
+  if (PRICE.busy || now - PRICE.askedAt < 60_000 || typeof h.api !== 'function') return;
+  PRICE.busy = true; PRICE.askedAt = now;
+  h.api('/api/price').then((d) => { PRICE.usd = d?.usd ?? null; PRICE.at = d?.at ?? now; PRICE.off = d?.polling === false || d?.enabled === false; }).catch(() => {}).finally(() => { PRICE.busy = false; h.render?.(); });
+}
+const usd = (v) => (v == null || !Number.isFinite(v) ? '' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
 export function networkPanels(n, h) {
   const F = h.fmt, esc = F.esc;
+  askPrice(h);
   const put = (id, html) => { const el = document.getElementById(id); if (el && el.__html !== html) { el.innerHTML = html; el.__html = html; } };
   if (!n) {
     for (const id of ['mnRewards', 'mnAdjust', 'mnPoolsWeek', 'mnHashrate']) put(id, '<div class="note tiny faint">not in this snapshot yet — the node has not been asked</div>');
@@ -1131,10 +1143,15 @@ export function networkPanels(n, h) {
   }
   // reward stats
   const r = n.rewards ?? {};
+  // the dollar lines (operator, 2026-09-15: "Add dollar figures"): under each figure while a
+  // price is at hand; a faint note instead while market polling is off
+  const px = PRICE.usd;
+  const dollars = (sat) => (px != null && sat != null ? `<span class="usd">${usd(sat / 1e8 * px)}</span>` : '');
   put('mnRewards', r.blocks
-    ? stat('Miners reward', `${(r.minersRewardSat / 1e8).toFixed(2)}<small>BTC</small>`, `${r.blocks} blocks · #${r.from}–#${r.to}`)
-      + stat('Avg block fees', `${(r.avgBlockFeeSat / 1e8).toFixed(4)}<small>BTC/block</small>`)
-      + stat('Avg tx fee', `${r.avgTxFeeSat == null ? '–' : F.num(r.avgTxFeeSat)}<small>sats/tx</small>`, `${F.num(r.txs)} transactions`)
+    ? stat('Miners reward', `${(r.minersRewardSat / 1e8).toFixed(2)}<small>BTC</small>`, `${dollars(r.minersRewardSat)}${r.blocks} blocks · #${r.from}–#${r.to}`)
+      + stat('Avg block fees', `${(r.avgBlockFeeSat / 1e8).toFixed(4)}<small>BTC/block</small>`, dollars(r.avgBlockFeeSat))
+      + stat('Avg tx fee', `${r.avgTxFeeSat == null ? '–' : F.num(r.avgTxFeeSat)}<small>sats/tx</small>`, `${dollars(r.avgTxFeeSat)}${F.num(r.txs)} transactions`)
+      + (px == null && PRICE.off ? '<div class="note tiny faint usdnote">dollar figures need market polling (Display settings → Markets &amp; Price)</div>' : '')
     : '<div class="note tiny faint">reading the last 144 blocks…</div>');
   const src = document.getElementById('mnRewardsSrc'); if (src) src.textContent = `last ${r.blocks || 144} blocks · getblockstats`;
   // the difficulty period

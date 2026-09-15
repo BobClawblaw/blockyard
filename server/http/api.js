@@ -460,6 +460,20 @@ export const routes = [
       return app.markets.view();
     },
   },
+  // THE SPOT PRICE, for dollar figures on pages that are not Markets (the Mining tab's reward
+  // stats, 2026-09-15: "Add dollar figures"): the feed's median while it is polling, else the
+  // explorer's cached spot read (two exchanges, at most once a minute) -- and null, saying why,
+  // while market polling is off. Does NOT touch the feed: asking the price here never starts
+  // the week-long polling that Markets does.
+  {
+    method: 'GET', path: '/api/price', auth: 'any',
+    handler: async (ctx, app) => {
+      if (!app.markets) return { ok: true, usd: null, enabled: false, note: MARKETS_OFF };
+      if (!(await marketsPollingOn(app))) return { ok: true, usd: null, polling: false, note: POLLING_OFF };
+      const p = await Promise.race([app.markets.spot().catch(() => null), new Promise((res) => { setTimeout(res, 1500, null).unref?.(); })]);
+      return { ok: true, usd: p?.usd ?? null, at: p?.at ?? null, source: p?.source ?? null };
+    },
+  },
   // The depth chart: the books as cumulative depth, and the snapshot `ago` seconds earlier.
   {
     method: 'GET', path: '/api/markets/depth', auth: 'any',
