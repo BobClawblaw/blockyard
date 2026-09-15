@@ -9,9 +9,10 @@
 // Messages in:  boot {rate}, run {on}, key {codes}, mouse {dx, dy, buttons}, audio {port}
 // Messages out: status {text}, frame {pixels, palette?}, text {cells, cursor}, stats {mips},
 //               saved {name}, exit {code, cells}, error {message}
+//               (and controls {scheme}: rebind the running game's keys)
 import { createPC } from './dospc.js';
 import { createSoundCard } from './soundcard.js';
-import { withControls } from './doomio.js';
+import { withControls, rebindKeys } from './doomio.js';
 
 const SLICE_MS = 10;
 
@@ -19,7 +20,8 @@ let pc = null, card = null, audioPort = null;
 let running = false, scheduled = false;
 let clock = 0, lastWall = 0;               // machine time: wall time while running, frozen while not
 let lastFrameSeq = -1, lastPalSeq = -1, lastText = null;
-let pixels = new Uint8Array(64000);        // bounced back by the page after each frame, to reuse
+let pixels = new Uint8Array(64000);
+const keyEntries = {};                     // where DOOM's key settings live, once found        // bounced back by the page after each frame, to reuse
 const yieldChannel = new MessageChannel();
 yieldChannel.port1.onmessage = () => { scheduled = false; loop(); };
 
@@ -155,6 +157,14 @@ self.onmessage = async (e) => {
       case 'key': if (pc) for (const c of m.codes) pc.key(c); break;
       case 'mouse':
         if (pc) { pc.mouse.dx += m.dx; pc.mouse.dy += m.dy; pc.mouse.buttons = m.buttons; }
+        break;
+      case 'controls':
+        if (pc) {
+          // the running game's keys now, and the config it would read if it started again
+          rebindKeys(pc.mem, m.scheme, keyEntries);
+          const cfg = pc.dir.get('DEFAULT.CFG');
+          if (cfg) pc.dir.set('DEFAULT.CFG', withControls(cfg, m.scheme));
+        }
         break;
       case 'audio': audioPort = m.port; break;
       case 'pixels': pixels = new Uint8Array(m.buffer); break;

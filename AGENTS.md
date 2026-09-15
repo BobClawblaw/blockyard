@@ -286,6 +286,11 @@ Built on the `doom` branch. What will bite:
   no ENDOOM).
 - **VGA is planar.** DOOM unchains mode 13h and flips pages with the CRTC start address; a frame is
   "new" when `vga.frames` (CRTC start writes) or `vga.palSeq` moves.
+- **Controls are rebound live, in DOOM's memory.** DOOM reads key bindings once, at start-up, into
+  its defaults table (20-byte entries: name pointer, pointer to the live int, default,
+  scantranslate, the scancode it saves back). `rebindKeys` in `doomio.js` finds entries by name
+  and writes both, so the WASD switch (the default) applies mid-game with no restart or refresh
+  (operator: "have to refresh for settings to take effect").
 - **The sound card's `tick` batches** (at least 128 frames): called every 2,000 instructions it
   was re-preparing the synth 40,000 times a second.
 - **Audio in an insecure context.** On plain HTTP to a LAN address there is no `audioWorklet`;

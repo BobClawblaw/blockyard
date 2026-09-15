@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scancodes, withControls, CONTROLS, CP437, CGA, textRuns, paletteLut } from '../public/js/doomio.js';
+import { scancodes, withControls, CONTROLS, DEFAULT_CONTROLS, CP437, CGA, textRuns, paletteLut } from '../public/js/doomio.js';
 import { DOOM_NAME, findDoomFile } from '../server/http/doom.js';
 import { withApp } from './helpers/http.js';
 
@@ -36,6 +36,8 @@ test('the control schemes rewrite the keys DOOM reads from default.cfg, and alwa
   const classic = cfgText(withControls(withControls(shipped, 'wasd'), 'classic'));
   for (const [k, v] of Object.entries(CONTROLS.classic)) assert.match(classic, new RegExp(`^${k}\\t\\t${v}$`, 'm'), `${k} back to the game's own`);
   assert.equal((classic.match(/^key_up/gm) ?? []).length, 1, 'rewritten in place, never duplicated');
+  assert.equal(DEFAULT_CONTROLS, 'wasd', 'WASD unless someone turns it off (operator: "not enabled by default")');
+  assert.match(cfgText(withControls(shipped)), /^key_up\t\t17$/m, 'and a config with no scheme named gets WASD');
 });
 
 test('text mode: code page 437 is 256 characters, and a screen becomes runs of one colour', () => {

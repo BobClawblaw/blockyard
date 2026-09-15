@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPC, loadLE, MEM_SIZE } from '../public/js/dospc.js';
 import { createSoundCard, Opl3, oplRateTimes } from '../public/js/soundcard.js';
+import { rebindKeys, withControls } from '../public/js/doomio.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DOOM = path.join(ROOT, 'doom_dos');
@@ -55,6 +56,19 @@ test('DOOM.EXE boots: DOS/4GW is believed, the zone is allocated, the WAD is rea
   const frame = pc.renderIndexed(new Uint8Array(64000));
   assert.ok(new Set(frame).size > 100, 'the title screen, not a blank page');
   assert.deepEqual([...pc.unhandled], [], 'no DOS, DPMI or BIOS call went unanswered');
+
+  // THE KEYS, LIVE (operator: "have to refresh for settings to take effect"): the defaults table
+  // DOOM loaded its config into is found by name and rewritten in place
+  const dv = new DataView(pc.mem.buffer);
+  const liveKey = (entries, name) => dv.getInt32(dv.getUint32(entries[name] + 4, true), true);
+  const entries = {};
+  assert.equal(rebindKeys(pc.mem, 'classic', entries), 7, 'all seven movement settings found');
+  assert.equal(liveKey(entries, 'key_up'), 0xad, 'classic: the up arrow, in DOOM\'s own key code');
+  assert.equal(liveKey(entries, 'key_use'), 32);
+  assert.equal(rebindKeys(pc.mem, 'wasd', entries), 7);
+  assert.equal(liveKey(entries, 'key_up'), 119, 'w');
+  assert.equal(liveKey(entries, 'key_straferight'), 100, 'd');
+  assert.equal(dv.getInt32(entries.key_strafeleft + 16, true), 30, 'and the scancode DOOM writes back to its config on quit');
 });
 
 // ------------------------------------------------------------------ the hardware, without DOOM

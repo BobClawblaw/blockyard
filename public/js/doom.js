@@ -10,7 +10,7 @@
 // Same manners as the other Diversions: it pauses when you change tabs or look away, holds the
 // machine exactly where it was (the emulated clock stops with it, so no demon moves), and resumes
 // on the button. Savegames and the config the game writes on quit are kept in this browser.
-import { scancodes, textRuns, paletteLut } from './doomio.js';
+import { scancodes, textRuns, paletteLut, DEFAULT_CONTROLS } from './doomio.js';
 
 const CONTROLS_KEY = 'blockyard.doom.controls';
 const SMOOTH_KEY = 'blockyard.doom.smooth';
@@ -101,7 +101,7 @@ function overlay(msg, sub, button, dim = true) {
 }
 
 function drawHud() {
-  const controls = pref(CONTROLS_KEY, 'classic');
+  const controls = pref(CONTROLS_KEY, DEFAULT_CONTROLS);
   const keys = el('doomKeys');
   if (keys) {
     keys.textContent = controls === 'wasd'
@@ -195,7 +195,7 @@ async function powerOn() {
   w.onmessage = (e) => onWorker(e.data);
   w.onerror = (e) => fail(e.message || 'the machine failed to start');
   if (port) w.postMessage({ type: 'audio', port }, [port]);
-  w.postMessage({ type: 'boot', rate: G.audio ? G.audio.sampleRate : 0, controls: pref(CONTROLS_KEY, 'classic') });
+  w.postMessage({ type: 'boot', rate: G.audio ? G.audio.sampleRate : 0, controls: pref(CONTROLS_KEY, DEFAULT_CONTROLS) });
   drawHud();
 }
 
@@ -325,9 +325,11 @@ function bind() {
   el('doomPlay')?.addEventListener('click', () => resume());
   el('doomPlay2')?.addEventListener('click', () => resume());
   el('doomWasd')?.addEventListener('click', () => {
-    setPref(CONTROLS_KEY, pref(CONTROLS_KEY, 'classic') === 'wasd' ? 'classic' : 'wasd');
+    const scheme = pref(CONTROLS_KEY, DEFAULT_CONTROLS) === 'wasd' ? 'classic' : 'wasd';
+    setPref(CONTROLS_KEY, scheme);
     drawHud();
-    if (G.phase === 'running' || G.phase === 'paused') G.h?.toast?.('controls change on the next start (the game reads its config when it boots)');
+    // straight into the running game: no restart, no refresh
+    G.worker?.postMessage({ type: 'controls', scheme });
   });
   el('doomSmooth')?.addEventListener('click', () => { setPref(SMOOTH_KEY, pref(SMOOTH_KEY, '0') === '1' ? '0' : '1'); drawHud(); });
   el('doomSound')?.addEventListener('click', () => {

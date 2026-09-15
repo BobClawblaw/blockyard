@@ -732,16 +732,16 @@ says which file is missing instead of starting. Nothing is downloaded from anywh
 ### Playing
 
 **Click the screen to capture the mouse**: moving it turns, the left button fires, the right
-strafes, the middle walks forward. **Esc** gives the mouse back (and opens DOOM's menu). The
-keyboard is DOOM's own:
+strafes, the middle walks forward. **Esc** gives the mouse back (and opens DOOM's menu). The keys
+are **WASD** by default:
 
-| Keys (classic) | |
+| Keys | |
 |---|---|
-| **↑** **↓** | walk |
+| **W** **S** | walk |
+| **A** **D** | strafe |
 | **←** **→** | turn |
-| **Alt** + **←** **→** | strafe |
+| **E** | open doors, press switches |
 | **Ctrl** or left click | fire |
-| **Space** | open doors, press switches |
 | **Shift** (held) | run |
 | **1**–**7** | choose a weapon |
 | **Tab** | the map |
@@ -749,9 +749,10 @@ keyboard is DOOM's own:
 | **F2** / **F3** | save / load |
 | **F5** | detail · **F11** gamma |
 
-The **⌨ WASD** switch moves walking to **W** **S**, strafing to **A** **D** and opening doors to
-**E**, for anyone who learned on a later game. DOOM reads its keys when it starts, so the switch
-applies the next time you press play (quit from DOOM's menu, then **play again**).
+Turn the **⌨ WASD** switch off for DOOM's own 1993 keys: **↑** **↓** walk, **Alt** + **←** **→**
+strafe (or **,** and **.**), **Space** opens. The switch applies **at once**, in the middle of a
+game — the page rewrites the running game's key settings — and DOOM saves whichever you chose
+when you quit.
 
 ### Pausing, saving, quitting
 
@@ -771,7 +772,7 @@ and a **play again** button.
 | Switch | |
 |---|---|
 | **♫ sound** | The Sound Blaster, on or muted. |
-| **⌨ WASD** | The control scheme above; applies at the next start. |
+| **⌨ WASD** | W A S D and E (the default), or DOOM's own keys; applies immediately. |
 | **◌ smooth** | Smooths the 320×200 picture instead of showing its square pixels. |
 | **⛶ full screen** | The screen alone. In Chrome it also keeps **Esc** for DOOM's menu. |
 

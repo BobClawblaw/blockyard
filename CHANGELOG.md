@@ -15,8 +15,8 @@ All notable changes to this project are documented here. The format follows
   (`public/js/x86.js`), the DOS/4GW machine around it — DOS, DPMI, BIOS, PIC, timer, keyboard and a
   planar VGA (`dospc.js`) — and a Sound Blaster Pro 2 with an OPL3 for the effects and the music
   (`soundcard.js`), in a worker (`doomworker.js`). Demos, menus, savegames and ENDOOM all work; 35
-  frames a second at about 95 million emulated instructions a second. Mouse capture, a WASD
-  scheme, smoothing, full screen; pauses when you look away; savegames and DOOM's config stay in
+  frames a second at about 95 million emulated instructions a second. Mouse capture, WASD keys by
+  default (the switch rebinds the running game at once, no restart), smoothing, full screen; pauses when you look away; savegames and DOOM's config stay in
   the browser. The server hands out the game files at `/doom/NAME` (`server/http/doom.js`).
 
 ### Changed

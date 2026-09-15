@@ -40,18 +40,66 @@ export function scancodes(code, down) {
 }
 
 // ------------------------------------------------------------------ the config
-/** Scancodes the two control schemes bind, by DOOM's config key. */
+/** Scancodes the two control schemes bind, by DOOM's config key. WASD is the default. */
 export const CONTROLS = {
   classic: { key_up: 72, key_down: 80, key_left: 75, key_right: 77, key_strafeleft: 51, key_straferight: 52, key_use: 57 },
   wasd: { key_up: 17, key_down: 31, key_left: 75, key_right: 77, key_strafeleft: 30, key_straferight: 32, key_use: 18 },
 };
+export const DEFAULT_CONTROLS = 'wasd';
+
+// DOOM's own key codes for those scancodes (its scantokey table): letters and punctuation are their
+// lowercase ASCII, the arrows are 0xac-0xaf
+const DOOM_KEY = { 17: 119, 31: 115, 30: 97, 32: 100, 18: 101, 72: 0xad, 80: 0xaf, 75: 0xac, 77: 0xae, 51: 44, 52: 46, 57: 32 };
+
+/**
+ * REBIND A RUNNING DOOM (operator, 2026-09-15: "have to refresh for settings to take effect").
+ * DOOM reads its keys from default.cfg once, at start-up, into its defaults table: one 20-byte
+ * entry a setting -- the name's address, the address of the live int, the default, whether the
+ * value is a scancode, and the scancode as read (which is what the game writes back on quit). This
+ * finds each key's entry by its name in the program's memory and writes both the live key code and
+ * the scancode, so the change applies to the next key press and survives the config DOOM saves.
+ * Returns how many settings it rewrote (0 before the program is loaded, or for an unknown build).
+ */
+export function rebindKeys(mem, controls, cache = {}) {
+  const scheme = CONTROLS[controls];
+  if (!scheme) return 0;
+  const dv = new DataView(mem.buffer, mem.byteOffset, mem.length);
+  const lo = 0x100000, hi = Math.min(mem.length - 32, 0x400000);   // where the loader puts the program
+  let n = 0;
+  for (const [key, scan] of Object.entries(scheme)) {
+    let entry = cache[key];
+    if (entry === undefined) {
+      entry = null;
+      const name = [...key].map((c) => c.charCodeAt(0)).concat(0);
+      for (let i = lo; i < hi && entry === null; i++) {
+        if (mem[i] !== name[0]) continue;
+        let j = 1;
+        while (j < name.length && mem[i + j] === name[j]) j++;
+        if (j < name.length) continue;
+        // a name alone is not proof (the linker packs strings, so no terminator need precede one):
+        // the entry is the 4-aligned pointer to it whose scantranslate field says it is a key
+        for (let p = lo & ~3; p < hi; p += 4) {
+          if (dv.getUint32(p, true) === i && dv.getUint32(p + 12, true) === 1) { entry = p; break; }
+        }
+      }
+      cache[key] = entry;
+    }
+    if (entry === null) continue;
+    const live = dv.getUint32(entry + 4, true);
+    if (live < lo || live >= hi) continue;
+    dv.setInt32(live, DOOM_KEY[scan], true);
+    dv.setInt32(entry + 16, scan, true);
+    n++;
+  }
+  return n;
+}
 
 /**
  * DOOM's config (its `default.cfg`, bytes) with a control scheme laid over it. Every scheme turns
  * the mouse on: the shipped file has `use_mouse 0`, and a browser always has one. A key missing
  * from the file is appended rather than dropped, so a config the game wrote itself survives.
  */
-export function withControls(bytes, controls = 'classic') {
+export function withControls(bytes, controls = DEFAULT_CONTROLS) {
   let text = '';
   for (const b of bytes) text += String.fromCharCode(b);
   const set = (key, value) => {
