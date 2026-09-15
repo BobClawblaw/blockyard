@@ -336,9 +336,16 @@ function fxNow(st, t) {
     const hx = xa + (xb - xa) * travel;
     let hy, hz, lo = 0, hi = 0;
     if (line) {
-      let near = line[0]; for (const p of line) if (Math.abs(p.x - hx) < Math.abs(near.x - hx)) near = p;
+      // THROUGH SPACE, NOT ALONG THE LINE (operator, 2026-09-15: "I don't want the black hole
+      // moving along the yellow line. I want it moving through space from point A to point B, and
+      // have everything warp around it ... riding the line hides that amazing effect"): a straight
+      // run from one height to another, both drawn from the seed inside the line's own range, so
+      // the hole crosses the line's path rather than sitting on it and the line is seen bending
+      // round the shadow as it passes
       lo = Infinity; hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
-      hz = Math.max(lo, Math.min(hi, near.z));
+      const R = Math.max(1, hi - lo);
+      const za = lo + R * (0.15 + 0.85 * hash01(f.seed + 6)), zb = lo + R * (0.15 + 0.85 * hash01(f.seed + 7));
+      hz = za + (zb - za) * travel;
       hy = st.axes.y ?? st.gridH / 2;
     } else {
       // ON THE BLOCK BOARD IT HOVERS (operator, 2026-09-15: "Explore if we can have the black hole
@@ -362,7 +369,16 @@ function fxNow(st, t) {
     // the head reaches wider on the block board (2.2 horizons against 1.5), where the cubes are
     // small and many and a narrow reach caught almost none of them from three units up
     const reach = line ? 1.5 : 2.2;
-    out.heads = grow > 0.02 ? [{ x: hx, y: hy, z: hz, color: [255, 160, 60], alpha: grow, r: rs * reach, rPeak: boundedRadius(2.3, 0.047, st.gridW) * reach, scale: 0, pull: 1 }] : [];
+    // LIFTED OUT WHOLE, NOT SHEARED, on the block board (operator, 2026-09-15: "too much bad
+    // shearing of the blocks around the black hole on the block space page. instead of stretching,
+    // can it just lift the blocks out?"): no corner lean there (lean 0 -- buildScene's orbit
+    // carries the cube toward the hole as one piece, its own shape, and it shrinks away into it).
+    // Not `lift` either: that extrudes a cube into a column from the floor, which read as an even
+    // longer stretch
+    // ...and `shrink` on the block board: the scale alone flattens a cube into a plate (it is a
+    // height override), and a plate sliding toward the hole was the "shearing"; shrunk in
+    // footprint as well it stays a cube, a smaller one, all the way in
+    out.heads = grow > 0.02 ? [{ x: hx, y: hy, z: hz, color: [255, 160, 60], alpha: grow, r: rs * reach, rPeak: boundedRadius(2.3, 0.047, st.gridW) * reach, scale: 0, pull: 1, lean: line ? 1 : 0, shrink: !line }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
@@ -1290,27 +1306,31 @@ function drawScanCurtain(ctx, view, lw) {
   // which is what carries it out of the viewport
   const onBoard = !!ends;
   // --- the volume: nested cone shells, widest and faintest first
+  // DIMMER (operator, 2026-09-15: "the brightness of the scanner cone in the block space view needs
+  // to be toned down. It's too bright. Actually tone down beam brightness on both"): the shells,
+  // the axis, the pool and the rim all at a little over half of what they were
+  const DIM = 0.55;
   if (onBoard) for (const [f, a] of [[1, 0.018], [0.88, 0.019], [0.76, 0.021], [0.64, 0.023], [0.53, 0.026], [0.43, 0.029], [0.34, 0.033], [0.26, 0.038], [0.19, 0.044], [0.13, 0.05]]) {
-    const fill = `rgba(120,220,255,${(a * amp).toFixed(3)})`;
+    const fill = `rgba(120,220,255,${(a * DIM * amp).toFixed(3)})`;
     for (let i = 0; i < RING; i++) {
       tri(apex, ring((i / RING) * Math.PI * 2, f), ring(((i + 1) / RING) * Math.PI * 2, f), fill);
     }
   }
   // the hot axis: a thin cone down the middle, and the shaft itself
   if (onBoard) for (let i = 0; i < RING; i++) {
-    tri(apex, ring((i / RING) * Math.PI * 2, 0.08), ring(((i + 1) / RING) * Math.PI * 2, 0.08), `rgba(235,250,255,${(0.10 * amp).toFixed(3)})`);
+    tri(apex, ring((i / RING) * Math.PI * 2, 0.08), ring(((i + 1) / RING) * Math.PI * 2, 0.08), `rgba(235,250,255,${(0.10 * DIM * amp).toFixed(3)})`);
   }
 
   // --- where it lands: a pool on the floor, brightest at the axis
   if (onBoard) {
     const c = P({ x: mx, y: my, z: 0 });
     const r = U * Math.max(half, SPREAD) * 1.35;
-    soft(c.x, c.y, r, '150,225,255', 1.5 * amp);
-    soft(c.x, c.y, r * 0.42, '225,248,255', 1.1 * amp);
+    soft(c.x, c.y, r, '150,225,255', 1.5 * DIM * amp);
+    soft(c.x, c.y, r * 0.42, '225,248,255', 1.1 * DIM * amp);
   }
   // the rim of the pool, so the cone reads as landing on something
   if (onBoard) for (let i = 0; i < RING; i++) {
-    seg(ring((i / RING) * Math.PI * 2, 1), ring(((i + 1) / RING) * Math.PI * 2, 1), `rgba(170,235,255,${(0.28 * amp).toFixed(3)})`, U * 0.05);
+    seg(ring((i / RING) * Math.PI * 2, 1), ring(((i + 1) / RING) * Math.PI * 2, 1), `rgba(170,235,255,${(0.28 * DIM * amp).toFixed(3)})`, U * 0.05);
   }
 
   // --- the source: the UFO, flying the beam (operator, 2026-09-15: "The top-down view in block

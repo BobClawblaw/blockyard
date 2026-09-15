@@ -1206,6 +1206,11 @@ export function fxAt(t, fx) {
             // does not unwind as the head shrinks; the current pull only says how far along the
             // line from home to that orbit the tile sits
             pullPeak: (hd.pull ?? 0) * (hd.rPeak ? g(Math.hypot(ddx, ddy) / Math.max(0.2, hd.rPeak)) : reach),
+            // `lean`: how much the corners lean and stretch toward the head on top of the glide
+            // (1 on the price board; 0 on the block board, where the cubes are lifted out whole)
+            lean: hd.lean ?? 1,
+            // `shrink`: scale the footprint with the height, so the cube stays a cube as it goes
+            shrink: hd.shrink ? 1 : 0,
           };
         }
       }
@@ -1317,7 +1322,10 @@ export function buildScene(tiles, o = {}) {
     // A SHORTER CUBE, the same way: `tall` on a copy. A collapse or a dig is a height override,
     // never an edit to the tile the board was built from.
     const sc = fxv.scale == null ? 1 : fxv.scale;
-    const shaped = sc < 0.999 ? { ...t, tall: Math.max(0.04, cubeHeight(t) * sc) } : t;
+    let shaped = sc < 0.999 ? { ...t, tall: Math.max(0.04, cubeHeight(t) * sc) } : t;
+    // a WHOLE smaller cube, not a plate, where the head asks for it (the black hole over the block
+    // board): the footprint shrinks about its centre with the height
+    if (sc < 0.999 && fxv.shrink) { const s2 = Math.max(0.08, t.s * Math.max(0.08, sc)); shaped = { ...shaped, x: t.x + (t.s - s2) / 2, y: t.y + (t.s - s2) / 2, s: s2 }; }
     // NEON is a flat cube: no facets, no crown -- solid faces and the tubes on their edges
     const f = tileFaces(fxv.lift > 0.001 ? { ...shaped, fxz: fxv.lift } : shaped, o, t.s >= facetMin && o.neon !== true);
     // SPAGHETTIFIED (operator, 2026-09-15: "the candles need to stretch and bend toward the hole
@@ -1332,7 +1340,11 @@ export function buildScene(tiles, o = {}) {
       // shrinks with the pull, flattened toward the disk's plane -- and its corners lean and
       // stretch toward the hole on top of that
       const hp = project(fxv.pullAt.x, fxv.pullAt.y, fxv.pullAt.z, o);
-      const pts = [...f.top, ...f.sides.flatMap((sd) => sd.points)];
+      // EVERY CORNER THE CUBE HAS, the bevel's inner quad included -- it was left at home while
+      // the top and sides moved, so a bevelled cube on the block board drew as a slab stretched
+      // from its old place to its new one (operator, 2026-09-15: "too much bad shearing"); the
+      // crown's points are projected later through f.P, which is shifted the same way below
+      const pts = [...f.top, ...f.sides.flatMap((sd) => sd.points), ...(f.inset ?? [])];
       const uniq = [...new Set(pts)];
       const cx0 = uniq.reduce((a, p) => a + p.x, 0) / uniq.length, cy0 = uniq.reduce((a, p) => a + p.y, 0) / uniq.length;
       // THE ORBIT IS LAID OUT AGAINST THE HOLE'S FULL SIZE, and the tile sits somewhere on the
@@ -1356,9 +1368,11 @@ export function buildScene(tiles, o = {}) {
       const tops = new Set([...f.top, ...f.sides.flatMap((sd) => [sd.points[0], sd.points[1]])]);
       for (const p of uniq) {
         p.x += sx; p.y += sy;                                           // carried toward, and round, the orbit
-        const k = (tops.has(p) ? 0.55 : 0.2) * peak * k0;              // and leaning in
+        const k = (tops.has(p) ? 0.55 : 0.2) * peak * k0 * (fxv.lean ?? 1);   // and leaning in (not on the block board: lean 0)
         p.x += (hp.x - p.x) * k; p.y += (hp.y - p.y) * k;
       }
+      const P0 = f.P, kc = 0.55 * peak * k0 * (fxv.lean ?? 1);
+      f.P = (x, y, z) => { const p = P0(x, y, z); const q = { x: p.x + sx, y: p.y + sy }; q.x += (hp.x - q.x) * kc; q.y += (hp.y - q.y) * kc; return q; };
     }
     // an x-rayed tile's body is glass: most of its alpha goes, and its edges come back below
     const xray = fxv.xray ?? 0;
