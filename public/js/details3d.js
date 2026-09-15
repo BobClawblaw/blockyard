@@ -326,12 +326,12 @@ function fxNow(st, t) {
     let lo = Infinity, hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
     const hz = Math.max(lo, Math.min(hi, near.z));
     const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
-    const rs = 4.8 * grow;                                             // the horizon, in grid units (doubled 2026-09-15: "double the size of the hole")
+    const rs = Math.min(3.4, 0.07 * st.gridW) * grow;                  // the horizon, in grid units (4.8 on 2026-09-15 -- "double the size" -- then 3.4: "obscuring too much"), and never more than 7% of the board
     out.blackhole = { x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, rs, grow, lo, hi };
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
     // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
     // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
-    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, rPeak: 4.8 * 1.5, scale: 0, pull: 1 }] : [];
+    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, rPeak: Math.min(3.4, 0.07 * st.gridW) * 1.5, scale: 0, pull: 1 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
@@ -952,7 +952,7 @@ function drawFireworks(ctx, view, lw) {
     const [col, col2] = sh.cols;
     const c1 = col.join(','), c2 = col2.join(',');
     const top = P(sh.bx, sh.by, sh.zc);
-    const R0 = U * (price ? 7 : 8) * sh.size;
+    const R0 = U * Math.min(price ? 4.5 : 6, 0.09 * fx.gridW) * sh.size;   // 7 and 8 until 2026-09-15 ("same with fireworks" -- on the Kiosk's panel ten shells carpeted it); never more than 9% of the board
     // --- the launch: a parabola from the floor, off to one side, to the burst point
     const RISE = 0.2;
     const arc = (f) => P(sh.bx - sh.drift * (1 - f), sh.by, zLo + (sh.zc - zLo) * (1 - (1 - f) * (1 - f)));
@@ -1361,7 +1361,7 @@ function drawBlackHole(ctx, view, lw) {
   // the disk nearly edge-on, a thin band crossing in front of the shadow, the far side thrown
   // into a great arch over the top and a smaller one beneath
   const TILT = 0.04, SQUASH = 0.17;
-  const inner = rs * 1.5, outer = rs * 6.4;
+  const inner = rs * 1.5, outer = rs * 5;     // 6.4 horizons at the largest ("twice as large"), then 5 ("obscuring too much")
   const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
   const H = (k) => hash01(fx.seed + k);
   softStops(ctx, c.x, c.y, outer * 1.15, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]);
@@ -1594,7 +1594,13 @@ function drawSupernova(ctx, view, lw) {
     sz = best.z;
   }
   const c = project(sx, sy, sz, view);
-  const R0 = U * (price ? 6 : 7);
+  // BOUNDED (operator, 2026-09-15: "supernova and black hole nebula effects take up too much
+  // screen space ... it's obscuring too much"): the shell was sized at half the board and the
+  // white-out was the whole frame, which on the Kiosk's panel was the whole panel; the shell is
+  // about a third of the board now and the flash a soft disc round the star
+  // ...and never more than 7% of the board's width, whatever the board (the Kiosk's block-space
+  // panel is 44 units across and small on screen: at 4.5 units the cloud covered most of it)
+  const R0 = U * Math.min(price ? 3.4 : 4.5, 0.07 * fx.gridW);
   const gf = Math.min(1, (1 - u) / 0.1);
   // still a real gradient maker, because gasCloud() takes one as a callback for its puffs; every
   // FILL drawn directly by this function is layered flat discs now (softStops)
@@ -1642,7 +1648,7 @@ function drawSupernova(ctx, view, lw) {
     // thinning first; the MAIN one behind it is white at the start, and violet grows into it
     // patch by patch, each blob turning on its own schedule, until the whole is purple; the
     // INNER one is the deep violet heart that shows as the others thin.
-    const blueShell = R0 * (0.6 + 6 * (1 - Math.exp(-1.9 * f)));
+    const blueShell = R0 * (0.6 + 4.6 * (1 - Math.exp(-1.9 * f)));
     const blueBright = bright * 0.7 * Math.pow(1 - f, 1.6);
     gasCloud(ctx, c.x, c.y, blueShell, f, now, fx.seed + 31337, blueBright, [150, 195, 255], grad, disc, 130, [70, 110, 220], (front, ff, H) => {
       const t = Math.min(1, ff / 0.5);
@@ -1673,8 +1679,9 @@ function drawSupernova(ctx, view, lw) {
   // --- the breakout: the whole picture goes white and comes back
   if (u >= 0.12 && u < 0.34) {
     const t = (u - 0.12) / 0.22, f = t < 0.12 ? t / 0.12 : Math.pow(1 - (t - 0.12) / 0.88, 1.7);
-    const W = Math.max(view.boardW ?? 2000, 2000) * 1.5;
-    ctx.fillStyle = `rgba(255,252,245,${(0.92 * f).toFixed(3)})`; ctx.fillRect(c.x - W, c.y - W, 2 * W, 2 * W);
+    // a soft flash round the star, not the whole frame: bright at the heart, gone by six shells out
+    const W = R0 * 6.5;
+    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.92 * f).toFixed(3)})`], [0.4, `rgba(255,250,240,${(0.7 * f).toFixed(3)})`], [0.75, `rgba(255,248,235,${(0.25 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
     // the burst itself is white gas, not a ball: a cloud thrown out with the flash
     gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, f, [255, 255, 255], grad, disc, 90, [200, 210, 240]);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had

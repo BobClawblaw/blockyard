@@ -315,6 +315,12 @@ Core (`BLOCKYARD_NODE=main node scripts/shots.mjs`); a fresh browser profile def
 node in the config, which on this box is the slow Umbrel -- the first pass photographed an empty
 board.
 
+**Effects are checked on the Kiosk too.** Every effect plays on the Kiosk's two small panels as
+well as on its own page, and a size that is fine on the Markets page can be the whole panel
+there (2026-09-15, the supernova's white-out filled the Kiosk's Markets panel: "Test on kiosk
+display as well to avoid this in future!!!"). Sizes are capped by the board's width in grid
+units, never set in units alone, and a capture on the Kiosk page is part of shipping one.
+
 **Effects.** Thirty-four, with a no-repeat window (12) per board; two lists (`effects` for Block
 space, `marketEffects` for Markets), nothing rare -- the pulse and the bulge are ordinary picks
 on the Markets list since 2026-09-14. The bulge is a ball that fits the line: exactly
