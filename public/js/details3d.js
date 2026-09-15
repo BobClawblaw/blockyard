@@ -1660,20 +1660,21 @@ function drawSaberLine(ctx, pts, lw, fx, view, GLOW, CORE) {
   // the hum: the glow breathes on two fast sines, never still
   const hum = 1 + 0.06 * Math.sin(now * 0.05) + 0.035 * Math.sin(now * 0.131 + 1);
   const bright = 0.9 + 0.1 * Math.sin(now * 0.021);
-  stroke(34 * hum, `rgba(${c},${(0.10 * bright).toFixed(3)})`, along);
-  stroke(20 * hum, `rgba(${c},${(0.22 * bright).toFixed(3)})`, along);
-  stroke(11 * hum, `rgba(${c},${(0.55 * bright).toFixed(3)})`, along);
-  stroke(6.5, `rgba(${pale},0.9)`, along);
-  stroke(3.2, `rgba(255,255,255,${(0.95 * bright).toFixed(3)})`, along);
+  // a third thicker than the first cut (operator, 2026-09-15: "make the saber effect a bit thicker")
+  stroke(44 * hum, `rgba(${c},${(0.11 * bright).toFixed(3)})`, along);
+  stroke(27 * hum, `rgba(${c},${(0.24 * bright).toFixed(3)})`, along);
+  stroke(15 * hum, `rgba(${c},${(0.58 * bright).toFixed(3)})`, along);
+  stroke(8.8, `rgba(${pale},0.92)`, along);
+  stroke(4.4, `rgba(255,255,255,${(0.95 * bright).toFixed(3)})`, along);
   // the core shimmers: a thin white thread whose brightness runs along the blade
   for (let k = 0; k < blade.length - 1; k++) {
     const f = 0.5 + 0.5 * Math.sin(now * 0.03 + k * 0.9);
-    ctx.strokeStyle = `rgba(255,255,255,${(0.35 * f).toFixed(3)})`; ctx.lineWidth = lw * 1.4;
+    ctx.strokeStyle = `rgba(255,255,255,${(0.35 * f).toFixed(3)})`; ctx.lineWidth = lw * 1.9;
     ctx.beginPath(); ctx.moveTo(blade[k].x, blade[k].y); ctx.lineTo(blade[k + 1].x, blade[k + 1].y); ctx.stroke();
   }
   // the tip: a bright point with the colour's bloom round it
   const tip = blade[blade.length - 1];
-  for (const [r, colour, a] of [[9, c, 0.25], [5, pale, 0.7], [2.4, '255,255,255', 1]]) {
+  for (const [r, colour, a] of [[12, c, 0.25], [6.8, pale, 0.7], [3.2, '255,255,255', 1]]) {
     ctx.fillStyle = `rgba(${colour},${a})`; ctx.beginPath(); ctx.arc(tip.x, tip.y, lw * r, 0, Math.PI * 2); ctx.fill();
   }
   // the hilt flashes at ignition and again as the blade comes home
