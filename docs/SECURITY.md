@@ -133,9 +133,15 @@ Every call and every refusal is appended to the audit trail.
 
 ## Transport security
 
-- HTTPS is built in: name a certificate and key and **every** listener serves HTTPS. A
-  half-configured pair or an expired certificate stops the start-up; a certificate close to
-  expiry starts with a warning, and the log prints its fingerprint.
+- HTTPS is the default on **every** listener. With no certificate named, the server makes its
+  own self-signed one on first start (`server/tls/selfsigned.js`, under `<data>/tls/`, the key
+  mode 600, ECDSA P-256), naming the addresses it is reached on, and remakes it when it nears
+  expiry or stops naming a bound address; the log prints its fingerprint. A certificate of your
+  own replaces it (`BLOCKYARD_TLS_CERT`/`_KEY`); a half-configured pair or an expired
+  certificate stops the start-up. `BLOCKYARD_TLS=0` is plain HTTP, for a proxy in front.
+- A self-signed certificate proves nothing about who you are talking to the first time; it
+  does encrypt the session and pins the fingerprint after that. Compare the fingerprint the
+  log prints with the one the browser shows before trusting it on a network you do not own.
 - Over HTTPS the session cookie is `Secure` and `Strict-Transport-Security` is sent with a
   two-day lifetime, without `includeSubDomains` or `preload` — a LAN address can be reissued,
   and HSTS cannot be withdrawn once a browser has it.

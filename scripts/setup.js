@@ -19,6 +19,8 @@
 import { existsSync, statSync, writeFileSync, copyFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
+import http from 'node:http';
+import https from 'node:https';
 import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
@@ -177,15 +179,24 @@ export const RPC_PORT = { main: 8332, test: 18332, testnet4: 48332, signet: 3833
 
 /** Is a BlockYard (or anything) already answering on this port? */
 export async function portInUse(host, port) {
-  const at = `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}/api/health`;
-  try {
-    const r = await fetch(at, { signal: AbortSignal.timeout(1500) });
-    const j = await r.json().catch(() => null);
-    return { busy: true, blockyard: j?.version ?? null };
-  } catch (err) {
-    const refused = /ECONNREFUSED/.test(err?.cause?.code ?? '') || /ECONNREFUSED/.test(err?.message ?? '') || err?.name === 'TimeoutError';
-    return { busy: !refused, blockyard: null };
-  }
+  // HTTPS is the default (2026-09-15) and its certificate is self-signed, so the probe tries
+  // https first without checking the chain, then plain http
+  const h = host === '0.0.0.0' ? '127.0.0.1' : host;
+  const probe = (mod, scheme) => new Promise((resolve) => {
+    const req = mod.get({ host: h, port, path: '/api/health', timeout: 1500, rejectUnauthorized: false }, (res) => {
+      let text = '';
+      res.on('data', (d) => { text += d; });
+      res.on('end', () => { let j = null; try { j = JSON.parse(text); } catch { /* not ours */ } resolve({ ok: true, scheme, blockyard: j?.version ?? null }); });
+    });
+    req.on('timeout', () => { req.destroy(new Error('timeout')); });
+    req.on('error', (err) => resolve({ ok: false, err }));
+  });
+  const s = await probe(https, 'https');
+  if (s.ok) return { busy: true, blockyard: s.blockyard };
+  const p = await probe(http, 'http');
+  if (p.ok) return { busy: true, blockyard: p.blockyard };
+  const refused = (e) => /ECONNREFUSED/.test(e?.code ?? '') || /ECONNREFUSED/.test(e?.message ?? '') || /timeout/.test(e?.message ?? '');
+  return { busy: !(refused(s.err) && refused(p.err)), blockyard: null };
 }
 
 // ------------------------------------------------------------------------------------ the flow
@@ -300,7 +311,8 @@ async function main() {
   out(step(3, STEPS, 'The web interface'));
   say(c.dim('127.0.0.1 (the default) keeps it to this machine -- reach it from elsewhere over an SSH'));
   say(c.dim('tunnel; a LAN address, or 0.0.0.0, opens it to everyone who can reach the port. Sign-in'));
-  say(c.dim('is on either way: the first start prints the admin password once (docs/SECURITY.md).'));
+  say(c.dim('is on either way: the first start prints the admin password once, and it serves HTTPS'));
+  say(c.dim('with a certificate it makes for itself -- expect one browser warning per address (docs/SECURITY.md).'));
   a.host = await ask('bind address', arg('host', '127.0.0.1'), validate.host);
   // ANYTHING BUT LOOPBACK IS SAID TWICE (operator, 2026-09-15: "hardened and on 127.0.0.1,
   // unless the user explicitly types 0.0.0.0 in the installer"): typing it is the first time,
@@ -396,7 +408,7 @@ async function main() {
   else say(c.dim('nothing to build'));
 
   // --------------------------------------------------------------------------------- done
-  const url = `http://${a.host === '0.0.0.0' ? '127.0.0.1' : a.host}:${a.port}`;
+  const url = `https://${a.host === '0.0.0.0' ? '127.0.0.1' : a.host}:${a.port}`;
   out();
   out(box([
     `${c.bold('start it')}     ${c.accent('npm start')}${!YES ? c.dim('       (or answer yes below)') : ''}`,

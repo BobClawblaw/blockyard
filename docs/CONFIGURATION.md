@@ -100,13 +100,15 @@ Durations are in milliseconds unless the name says otherwise (`retentionHours`).
 | `server.port` | `21000` | TCP port. It is the same port on every address. It must be an integer from 1 to 65535. |
 | `server.allowCidrs` | `[]` | Client allowlist. Empty means every client that can reach the port is admitted. Otherwise only addresses inside one of the networks connect, and everyone else gets HTTP 403 (the reason goes to the server log). Entries are CIDRs or bare addresses (a bare address means `/32` or `/128`), IPv4 or IPv6, compared bit by bit. An entry that cannot be parsed stops the boot. |
 | `server.trustProxy` | `false` | When `true`, the client address is the **first** entry of the `X-Forwarded-For` header instead of the socket's peer address. That address feeds the CIDR allowlist, the rate limits and the audit log. Turn it on only when a reverse proxy you control is the sole way in and it sets that header. Otherwise any client can pick its own address and walk past `allowCidrs`. |
-| `server.tls.cert` | `null` | Path to a PEM certificate. TLS is on only when `cert` and `key` are both set, and then every listener serves HTTPS. |
+| `server.tls.enabled` | `true` | HTTPS on every listener. With no `cert`/`key` named, the server makes its own self-signed certificate under `<data>/tls/` on first start (see INSTALL §9). `false` serves plain HTTP, for a reverse proxy that terminates TLS. |
+| `server.tls.cert` | `null` | Path to a PEM certificate of your own, used instead of the made one. Set it together with `key`. |
 | `server.tls.key` | `null` | Path to the PEM private key for `cert`. This file is secret. |
 | `server.tls.hstsMs` | `172800000` (2 days) | `max-age` of the `Strict-Transport-Security` header. It is sent on TLS responses only. `0` turns it off. `includeSubDomains` and `preload` are never sent. |
 
 When TLS is on, `auth.secureCookie` is forced to `true`. At startup the server logs
 the certificate's SHA-256 fingerprint and whether it is self-signed. It also warns
-when the certificate expires within 14 days.
+when the certificate expires within 14 days — and remakes its own, if it made it, at that
+point or when the certificate no longer names a bound address.
 
 ### nodes
 
@@ -384,7 +386,8 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_PORT` | `server.port` | number | `21000` | Listen port. |
 | `BLOCKYARD_ALLOW_CIDRS` | `server.allowCidrs` | list | *(empty: everyone)* | Client allowlist, for example `192.0.2.0/24,2001:db8::/32`. |
 | `BLOCKYARD_TRUST_PROXY` | `server.trustProxy` | boolean | `false` | Take the client address from `X-Forwarded-For`. |
-| `BLOCKYARD_TLS_CERT` | `server.tls.cert` | path | unset | PEM certificate. Set it together with `BLOCKYARD_TLS_KEY`. |
+| `BLOCKYARD_TLS` | `server.tls.enabled` | boolean | `true` | `0` serves plain HTTP (behind a TLS-terminating proxy). |
+| `BLOCKYARD_TLS_CERT` | `server.tls.cert` | path | unset | PEM certificate of your own, instead of the made one. Set it together with `BLOCKYARD_TLS_KEY`. |
 | `BLOCKYARD_TLS_KEY` | `server.tls.key` | path | unset | PEM private key. Set it together with `BLOCKYARD_TLS_CERT`. |
 | `BLOCKYARD_NODE_URL` | `nodes[0].rpcUrl` | URL | `http://127.0.0.1:8332` | RPC endpoint of the first node. |
 | `BLOCKYARD_DATADIR` | `nodes[0].datadir` | path | `/home/bitcoin/.bitcoin` | Data directory of the first node. It also **clears** `nodes[0].cookieFile`, so the cookie is looked up under the new datadir. |
@@ -578,10 +581,10 @@ instead:
 BLOCKYARD_ADMIN_PASSWORD='choose-a-long-passphrase' npm start
 ```
 
-Then create personal accounts with `npm run user -- create <name> <role>`. Without
-TLS, the startup log warns that the session cookie crosses the network in clear
-text. Pair accounts with one of the TLS options below, or with a loopback bind and
-an SSH tunnel.
+Then create personal accounts with `npm run user -- create <name> <role>`. HTTPS is on by
+default with the monitor's own certificate; if you turn it off (`BLOCKYARD_TLS=0`) on a bind
+that crosses the LAN, the startup log warns that the session cookie crosses the network in
+clear text. Pair that with a TLS-terminating proxy, or with a loopback bind and an SSH tunnel.
 
 Accounts plus two node writes that operators may run:
 
@@ -597,7 +600,8 @@ Accounts plus two node writes that operators may run:
 
 ### TLS
 
-Built-in HTTPS on every listener:
+HTTPS is on by default, with a certificate the server makes for itself. A certificate of your
+own, on every listener:
 
 ```json
 {

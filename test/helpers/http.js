@@ -78,7 +78,9 @@ export async function withApp({ nodes = 1, config = {}, adminPassword = null, tl
     server: {
       host: '127.0.0.1',
       port,
-      ...(tlsFiles ? { tls: { cert: tlsFiles.cert, key: tlsFiles.key } } : {}),
+      // HTTPS is the server's default since 2026-09-15 (a certificate it makes itself); the
+      // tests talk plain HTTP unless one hands in a certificate, so the default here is off
+      ...(tlsFiles ? { tls: { cert: tlsFiles.cert, key: tlsFiles.key } } : { tls: { enabled: false } }),
     },
     nodes: nodeDefs,
     store: { dir: path.join(dir, 'store'), retentionHours: 1, snapshotEveryMs: 3_600_000 },

@@ -12,7 +12,7 @@ machines you choose. Every setting mentioned here is described in full in
 - [6. Run it as a service](#6-run-it-as-a-service)
 - [7. Decide who can reach it](#7-decide-who-can-reach-it)
 - [8. Accounts (optional)](#8-accounts-optional)
-- [9. HTTPS (optional)](#9-https-optional)
+- [9. HTTPS (on by default)](#9-https-on-by-default)
 - [10. Behind a reverse proxy (optional)](#10-behind-a-reverse-proxy-optional)
 - [11. Updating](#11-updating)
 - [12. Uninstalling](#12-uninstalling)
@@ -401,17 +401,35 @@ Roles: `viewer` reads; `operator` may also run node actions that you have enable
 also manages users and reads the audit trail. Node actions are off unless you enable them
 explicitly — see [SECURITY.md](SECURITY.md#node-writes).
 
-## 9. HTTPS (optional)
+## 9. HTTPS (on by default)
 
-Name a certificate and key and every listener serves HTTPS:
+Every listener serves HTTPS out of the box. With no certificate of your own named, the first
+start makes one: a self-signed certificate and key under `<data>/tls/` (`data/tls/cert.pem` and
+`key.pem`, the key readable by the service account only), naming the addresses the monitor is
+reached on — the bound hosts, this machine's addresses and hostname, `localhost`. It is remade
+by itself when it nears expiry (825 days) or stops naming a bound address. Browsers warn once
+per address about a self-signed certificate and then remember it; the start-up log prints its
+fingerprint so you can compare.
+
+To add a name or address (say, a DNS name you gave the machine) or start over:
+
+```bash
+blockyard tls --san monitor.lan.example        # or: node scripts/tls.js --san ...
+blockyard tls --force                          # a fresh key and certificate
+blockyard tls --print > blockyard.crt          # the certificate, for another machine's trust store
+```
+
+To use a certificate of your own instead, name it and every listener serves that:
 
 ```bash
 BLOCKYARD_TLS_CERT=/etc/blockyard/cert.pem BLOCKYARD_TLS_KEY=/etc/blockyard/key.pem npm start
 ```
 
-or in `config/local.json`: `"server": { "tls": { "cert": "...", "key": "..." } }`.
+or in `config/local.json`: `"server": { "tls": { "cert": "...", "key": "..." } }`. To serve plain
+HTTP — behind a reverse proxy that terminates TLS (section 10) — set `BLOCKYARD_TLS=0` or
+`"server": { "tls": { "enabled": false } }`.
 
-A self-signed certificate is fine on a LAN (expect one browser warning per address):
+If you would rather make the certificate with openssl yourself:
 
 ```bash
 sudo mkdir -p /etc/blockyard
@@ -427,8 +445,8 @@ rather than silently serving plain HTTP.
 
 ## 10. Behind a reverse proxy (optional)
 
-If you already run nginx, Caddy or similar, bind the monitor to `127.0.0.1` and let the proxy
-terminate TLS. The live stream (`/api/stream`) is Server-Sent Events, so the proxy must not
+If you already run nginx, Caddy or similar, bind the monitor to `127.0.0.1`, set
+`BLOCKYARD_TLS=0` so it speaks plain HTTP to the proxy, and let the proxy terminate TLS. The live stream (`/api/stream`) is Server-Sent Events, so the proxy must not
 buffer it. An nginx example:
 
 ```nginx
@@ -505,5 +523,5 @@ sudo userdel blockyard
 - [ ] the start-up log shows the addresses you intended, and no node offline
 - [ ] you have decided who can reach the port: it binds `127.0.0.1` until you say otherwise (bind, firewall, `allowCidrs`)
 - [ ] accounts stay on (the default) if the port is reachable by people who should not see your node; you have the admin password from the first start
-- [ ] HTTPS on, or a proxy / tunnel in front, if the network is not trusted
+- [ ] HTTPS is on by default with the monitor's own certificate; a certificate of your own, or a proxy / tunnel in front, if you want no browser warning
 - [ ] **Enable market polling** ticked in Display settings if you want the Markets and Kiosk tabs (off by default); `BLOCKYARD_MARKETS=0` on machines that must make no outbound connections at all

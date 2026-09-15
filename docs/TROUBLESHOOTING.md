@@ -302,6 +302,12 @@ browser in kiosk mode pointed at `http://<host>:21000/#kiosk`.
 - **"too many attempts"** — the lockout lasts 10 minutes per username and per address.
 - **Sign-in does not stick** — over plain HTTP, make sure `BLOCKYARD_SECURE_COOKIE` is not set
   (a `Secure` cookie is never sent over HTTP). Behind a TLS proxy, set it.
+- **The browser warns about the certificate** — expected once per address: the monitor's own
+  certificate is self-signed. Compare the fingerprint in the start-up log with the browser's,
+  then accept it. To be rid of the warning, name a certificate of your own (INSTALL §9) or put
+  a proxy with a real one in front (§10).
+- **`https://` says the connection was reset, or `http://` shows nothing** — the port speaks
+  one or the other: HTTPS unless `BLOCKYARD_TLS=0`. Use the scheme the start-up log prints.
 
 ## Tests fail on a fresh clone
 

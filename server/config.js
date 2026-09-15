@@ -41,15 +41,19 @@ const DEFAULTS = {
     allowCidrs: [],
     trustProxy: false,
     // TLS is off unless both files are named, and then it is on for every listener.
-    // It stays opt-in because this box is a LAN monitor whose certificate has no
-    // issuer: a self-signed cert produces a browser warning on every address change,
-    // and the alternative already documented (an SSH tunnel to 127.0.0.1, or a
-    // reverse proxy that owns the cert) is better on a machine you control.
-    // What was missing until 2026-09-09 was the option at all -- serving a session
-    // cookie and every RPC reply over plain HTTP on a LAN is not a gap you get to
-    // call "documented, therefore fine".
+    // It was opt-in because a self-signed certificate produces a browser warning per
+    // address and an SSH tunnel or a reverse proxy that owns a real certificate is better
+    // on a machine you control. What was missing until 2026-09-09 was the option at all --
+    // serving a session cookie and every RPC reply over plain HTTP on a LAN is not a gap
+    // you get to call "documented, therefore fine".
+    // HTTPS BY DEFAULT since 2026-09-15 (operator: "make https the forced default"): with
+    // no certificate of your own named, the server makes a self-signed one on first start
+    // (server/tls/selfsigned.js, kept under <data>/tls) naming the addresses it is reached
+    // on, and serves HTTPS with it. BLOCKYARD_TLS=0 (server.tls.enabled: false) is the way
+    // to plain HTTP, for a reverse proxy that terminates TLS in front.
     tls: {
-      cert: null,   // PEM; BLOCKYARD_TLS_CERT
+      enabled: true,
+      cert: null,   // PEM; BLOCKYARD_TLS_CERT -- your own certificate, instead of the made one
       key: null,    // PEM; BLOCKYARD_TLS_KEY
       // Sent over TLS responses only. Two days, not the usual year: a LAN address
       // can be reissued to something else, and HSTS is the header that cannot be
@@ -404,6 +408,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     'BLOCKYARD_LOG_SOURCE': ['log.enabled', Boolean],
     'BLOCKYARD_MARKETS': ['markets.enabled', Boolean],
     'BLOCKYARD_SECURE_COOKIE': ['auth.secureCookie', Boolean],
+    'BLOCKYARD_TLS': ['server.tls.enabled', Boolean],
     'BLOCKYARD_TLS_CERT': ['server.tls.cert', String],
     'BLOCKYARD_TLS_KEY': ['server.tls.key', String],
     'BLOCKYARD_ACTIONS': ['actions.allow', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
@@ -502,8 +507,12 @@ export function configProblems() { return problems; }
 function validateTls(cfg, now = Date.now()) {
   const tls = cfg.server.tls ?? {};
   cfg.server.tls = tls;
-  cfg.tls = Boolean(tls.cert || tls.key);
-  if (!cfg.tls) return;
+  if (tls.enabled === false) { cfg.tls = false; cfg.__tlsAuto = false; return; }   // plain HTTP, chosen
+  cfg.tls = true;
+  // no certificate named: the server makes its own at boot (main.js, ensureSelfSigned) and
+  // inspects it then -- so nothing below applies yet
+  if (!tls.cert && !tls.key) { cfg.__tlsAuto = true; return; }
+  cfg.__tlsAuto = false;
   if (!tls.cert || !tls.key) {
     problems.push(`server.tls needs BOTH cert and key (got ${tls.cert ? 'cert only' : 'key only'}); a half-configured TLS would fall back to plaintext on a port you believe is HTTPS`);
     return;
@@ -516,6 +525,12 @@ function validateTls(cfg, now = Date.now()) {
     }
   }
   if (problems.length) return;
+  inspectTls(cfg, tls, now);
+}
+
+// read the certificate: fingerprint, expiry, whether it is self-signed; problems for an
+// unparseable or expired one, a note for one about to expire
+export function inspectTls(cfg, tls, now = Date.now()) {
   try {
     const x = new crypto.X509Certificate(fs.readFileSync(tls.cert, 'utf8'));
     tls.fingerprint = x.fingerprint256;

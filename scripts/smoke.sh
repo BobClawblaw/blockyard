@@ -63,7 +63,7 @@ echo "== booting server on :${PORT} (fake node :${FAKE_PORT}) =="
 # signed-in contract (sessions, CSRF, per-user audit, RBAC). The open posture gets its
 # own instance further down, on its own port, so both are asserted rather than one
 # replacing the other.
-BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_AUTH=1 \
+BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_AUTH=1 BLOCKYARD_TLS=0 \
 BLOCKYARD_DATA="$DIR" BLOCKYARD_FAKE_NODE=1 BLOCKYARD_PORT="$PORT" BLOCKYARD_ADMIN_PASSWORD="$PW" \
 BLOCKYARD_LOG_LEVEL=warn FAKE_PORT="$FAKE_PORT" node server/main.js >"$DIR/server.log" 2>&1 &
 SRV=$!

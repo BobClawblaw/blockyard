@@ -57,9 +57,12 @@ function cfgWith(tls, dir) {
   return file;
 }
 
-test('defaults load with TLS off and say the scheme is http', () => {
+test('defaults load with TLS ON -- the monitor\'s own certificate, made at boot -- and no certificate named', () => {
+  // (it shipped off until 2026-09-15: "make https the forced default"; test/selfsigned.test.js
+  // covers the made certificate and BLOCKYARD_TLS=0)
   const cfg = loadConfig({ configFile: '/nonexistent.json', ifaces });
-  assert.equal(cfg.tls, false);
+  assert.equal(cfg.tls, true);
+  assert.equal(cfg.__tlsAuto, true);
   assert.equal(cfg.server.tls.cert, null);
   assert.equal(cfg.auth.secureCookie, false, 'off by default; boot forces it on when TLS is on');
 });

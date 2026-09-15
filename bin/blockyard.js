@@ -27,11 +27,12 @@ const COMMANDS = {
   start: 'server/main.js',
   'index-build': 'scripts/index-build.js',
   users: 'scripts/manage-users.js',
+  tls: 'scripts/tls.js',
 };
 const cmd = process.argv[2];
 if (!COMMANDS[cmd]) {
   const version = JSON.parse((await import('node:fs')).readFileSync(path.join(root, 'package.json'), 'utf8')).version;
-  process.stdout.write(`BlockYard ${version}\n\n  blockyard setup          ask where the node is, check it, write the config, build the index\n  blockyard start          run the monitor\n  blockyard check          the same checks as setup, any time\n  blockyard index-build    build the address index by hand (--out <dir> [--workers N])\n  blockyard users          manage accounts\n\nconfig ${process.env.BLOCKYARD_CONFIG}\ndata   ${process.env.BLOCKYARD_DATA}\n`);
+  process.stdout.write(`BlockYard ${version}\n\n  blockyard setup          ask where the node is, check it, write the config, build the index\n  blockyard start          run the monitor\n  blockyard check          the same checks as setup, any time\n  blockyard index-build    build the address index by hand (--out <dir> [--workers N])\n  blockyard users          manage accounts\n  blockyard tls            remake this monitor's own HTTPS certificate (--san to add names)\n\nconfig ${process.env.BLOCKYARD_CONFIG}\ndata   ${process.env.BLOCKYARD_DATA}\n`);
   process.exit(cmd ? 2 : 0);
 }
 // the scripts decide "am I being run directly?" by comparing argv[1] to their own path, so hand

@@ -13,7 +13,8 @@ serves charts plus a live event feed to several users at once. This box watches 
 ```bash
 npm start                     # port 21000; SHIPS bound to 127.0.0.1 with sign-in ON (2026-09-15) -- this box overrides both in config/local.json (0.0.0.0 since 2026-09-11, auth off; the host's port-guard script admits the LAN interface and lo, and tailscale0 for 21000 only)
 BLOCKYARD_AUTH=0 npm start      # open mode: no sign-in, anyone who can reach the bind reads as `viewer`
-BLOCKYARD_TLS_CERT=… BLOCKYARD_TLS_KEY=… npm start  # HTTPS on every listener; cookie becomes Secure
+BLOCKYARD_TLS=0 npm start        # plain HTTP (HTTPS is the default since 2026-09-15, with a certificate the server makes itself under data/tls)
+BLOCKYARD_TLS_CERT=… BLOCKYARD_TLS_KEY=… npm start  # your own certificate instead of the made one
 BLOCKYARD_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it lost
 npm run dev                   # port 18088 + an in-process fake node doing IBD
 npm test                      # node:test, zero dependencies; the count in this file is generated -- see "Counts" below
@@ -556,7 +557,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 909 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 914 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

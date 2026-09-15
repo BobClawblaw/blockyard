@@ -46,7 +46,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 909 unit tests, all built in
+npm test            # optional: 914 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open http://127.0.0.1:21000
 ```
@@ -113,8 +113,12 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
   over an SSH tunnel, or bind a LAN address (`BLOCKYARD_BIND`) when you decide the LAN may
   see it; open, read-only access with no account is a choice (`BLOCKYARD_AUTH=0`), announced
   at boot.
+- **HTTPS by default** — the first start makes the monitor its own certificate (no
+  dependencies: the X.509 is written by hand), and every listener serves it; a certificate of
+  your own with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`, or `BLOCKYARD_TLS=0` behind a
+  proxy that terminates TLS.
 - **Where it listens is your decision** — `127.0.0.1`, a LAN address, a VPN address, or
-  several. Built-in HTTPS with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`.
+  several.
 - **No outbound connections out of the box**: a fresh install talks to nothing but your node.
   The one exception is opt-in — a checkbox, **Display settings → Markets & Price → Enable
   market polling**, turns on the exchange feed for the Markets and Kiosk tabs, Overview's price
@@ -130,7 +134,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 909 unit tests (node:test, no dependencies)
+npm test             # 914 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -147,7 +151,7 @@ and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
 The test suite is
-comprehensive (909 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (914 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

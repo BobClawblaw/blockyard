@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- **HTTPS by default.** Every listener serves HTTPS; with no certificate named, the first start makes the monitor its own self-signed one under `<data>/tls/` — written without dependencies (`server/tls/selfsigned.js`, ECDSA P-256), naming the bound hosts, this machine's addresses and hostname — and remakes it near expiry or when a bound address is missing from it. `blockyard tls` remakes it by hand (`--san` to add names, `--print` to export it). Your own certificate still replaces it; `BLOCKYARD_TLS=0` serves plain HTTP behind a proxy. The installer's summary and port probe know both schemes.
 
 ## [0.0.10] — 2026-09-15
 

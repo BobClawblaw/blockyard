@@ -12,6 +12,9 @@ import { createAppServer } from './http/server.js';
 import { computeBuildId } from './http/static.js';
 import { NodeMonitor } from './collect/monitor.js';
 import { localAddresses, bindProblemMessage, planBinds } from './netinfo.js';
+import { ensureSelfSigned } from './tls/selfsigned.js';
+import { inspectTls } from './config.js';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 // ONE PLACE, NOT TWO. This was a literal here AND a "version" field in package.json, and on
@@ -68,6 +71,18 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   // Decided here, before any listener exists, and the cookie follows it: a Secure
   // cookie on an HTTP listener is a cookie the browser will not send, which reads
   // as "login keeps failing" -- so the two settings must not be independently set.
+  // HTTPS BY DEFAULT (2026-09-15): no certificate named means the monitor's own, made here on
+  // first start under <data>/tls and kept, naming every address it can be reached on -- the
+  // bound hosts, this machine's addresses, its hostname, localhost -- and remade when it nears
+  // expiry or stops naming a bound host. BLOCKYARD_TLS=0 is plain HTTP.
+  if (cfg.__tlsAuto) {
+    const bound = (cfg.server.hosts ?? [cfg.server.host]).filter((h) => h && h !== '0.0.0.0' && h !== '::');
+    const sans = ['localhost', os.hostname(), '127.0.0.1', '::1', ...bound, ...localAddresses().map((a) => a.address)];
+    const made = ensureSelfSigned(path.join(cfg.store.dir, 'tls'), { sans, mustName: bound });
+    cfg.server.tls.cert = made.certFile; cfg.server.tls.key = made.keyFile;
+    if (made.made) app.log({ level: 'warn', msg: `made this monitor's own self-signed certificate (${made.why}) at ${made.certFile}, valid to ${new Date(made.notAfter).toISOString().slice(0, 10)}, for ${made.sans.join(', ')} -- browsers warn once per address; name your own with BLOCKYARD_TLS_CERT/KEY, or BLOCKYARD_TLS=0 behind a proxy that terminates TLS` });
+    inspectTls(cfg, cfg.server.tls);   // fingerprint, expiry note, self-signed flag for the log line below
+  }
   app.tls = Boolean(cfg.server.tls?.cert && cfg.server.tls?.key);
   if (app.tls) {
     app.tlsOptions = {
