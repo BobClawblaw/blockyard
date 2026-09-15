@@ -289,8 +289,10 @@ function renderOverview(s) {
   const stripOn = !!loadSettings().markets?.overviewSummary;
   const strip = document.getElementById('ovMkSummary');
   if (strip) {
-    strip.hidden = !stripOn || !overviewMarkets;
-    if (stripOn && overviewMarkets) strip.innerHTML = marketsSummaryHtml(overviewMarkets, F);
+    // and nothing to show while the feed is off (the default): the strip stays hidden
+    const have = overviewMarkets && overviewMarkets.enabled !== false;
+    strip.hidden = !stripOn || !have;
+    if (stripOn && have) strip.innerHTML = marketsSummaryHtml(overviewMarkets, F);
   }
 
   const mp = s.mempool ?? {};

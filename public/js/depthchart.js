@@ -90,13 +90,13 @@ export function depthSums(ser, pct) {
   return { bids: ser.bid[ib] ?? null, asks: ser.ask[ia] ?? null, atLeast: Boolean(ser.bidPart?.[ib] || ser.askPart?.[ia]) };
 }
 
-export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = false } = {}) {
+export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = false, empty = null } = {}) {
   if (!canvas?.getContext) return null;
   const PAD = compact ? PAD_COMPACT : PAD_FULL;
   const { ctx, w, h } = prep(canvas);
   if (!ser) {
     ctx.fillStyle = '#6a7484'; ctx.textAlign = 'center';
-    ctx.fillText('asking the exchanges for their order books…', w / 2, h / 2);
+    ctx.fillText(empty ?? 'asking the exchanges for their order books…', w / 2, h / 2);
     return null;
   }
   const plotW = Math.max(10, w - PAD.left - PAD.right), plotH = Math.max(40, h - PAD.top - PAD.bottom);
@@ -237,8 +237,12 @@ export function depthBarHtml(ago = D.ago, zoom = D.zoom) {
     <div class="mkgrp"><span class="mklab">price window</span>${ZOOMS.map(([z, l]) => b('data-zoom', z, l, z === zoom)).join('')}</div>`;
 }
 
+// what the empty chart says while the feed is off: the switch, or the server's hard off
+const offText = (d) => (d?.enabled === false ? (d.polling === false ? 'market polling is off — Display settings → Markets & Price → Enable market polling' : 'market data is off on this server') : null);
+
 export function depthNote(d, fmt) {
   if (!d) return 'asking the exchanges for their order books…';
+  if (d.enabled === false) return d.note ?? 'market data is off on this monitor';
   if (d.warming) return 'reading the order books for the first time…';
   const agoL = AGOS.find(([s]) => s === d.ago)?.[1] ?? `${d.ago} s`;
   const parts = [`books read at ${clock(d.at)} UTC, every ${Math.round((d.bookMs ?? DEPTH_MS) / 1000)} s while this tab is open`];
@@ -252,7 +256,7 @@ export function depthNote(d, fmt) {
 function draw() {
   const canvas = document.getElementById('mkDepth');
   if (!canvas) return;
-  drawDepth(canvas, depthSeries(D.data), { zoom: D.zoom, hover: D.hover });
+  drawDepth(canvas, depthSeries(D.data), { zoom: D.zoom, hover: D.hover, empty: offText(D.data) });
 }
 
 /**
@@ -282,7 +286,7 @@ export function renderDepthInto(canvasId, h, { zoom = 0.025, compact = true } = 
   ensureDepth(h);
   const canvas = document.getElementById(canvasId);
   if (!canvas) return null;
-  return drawDepth(canvas, depthSeries(D.data), { zoom, compact });
+  return drawDepth(canvas, depthSeries(D.data), { zoom, compact, empty: offText(D.data) });
 }
 
 export function renderDepth(h) {

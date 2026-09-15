@@ -35,12 +35,14 @@ test('the strip is ON by default, and the outbound promise says so', () => {
   assert.equal(DEFAULTS.markets.overviewSummary, true);
   assert.equal(loadSettings(store()).markets.overviewSummary, true, 'and a fresh browser agrees');
 
+  // ...and since 2026-09-15 market polling itself ships OFF ("true zero telemetry out of the
+  // box": the Enable market polling checkbox), so the promise is now two-part: polling is off by
+  // default, and with it on, the landing page reaches out too. The table row must say both.
   const sec = fs.readFileSync(path.join(ROOT, 'docs', 'SECURITY.md'), 'utf8');
-  const row = sec.split('\n').find((l) => l.startsWith('| while someone has the **Markets**'));
+  const row = sec.split('\n').find((l) => /^\| .*\*\*Markets\*\*/.test(l));
   assert.ok(row, 'the outbound-connections table should still carry that row');
-  assert.match(row, /on by default/,
-    'SECURITY.md must say the landing page reaches out by default, now that it does');
-  assert.equal(/off by default/.test(row), false, 'and must not still claim the opposite');
+  assert.match(row, /off by default/, 'SECURITY.md must say polling ships off');
+  assert.match(row, /Enable market polling/, 'and where the switch is');
 });
 
 test('it has a control, so it is not a hidden preference', () => {
@@ -103,7 +105,7 @@ test('it spans the grid, because a twelfth of it is a column not a strip', () =>
 test('the documented outbound promise mentions Overview', () => {
   // If the code can contact exchanges from Overview, the security document may not say otherwise.
   const sec = fs.readFileSync(path.join(ROOT, 'docs', 'SECURITY.md'), 'utf8');
-  const row = sec.split('\n').find((l) => l.startsWith('| while someone has the **Markets**'));
+  const row = sec.split('\n').find((l) => /^\| .*\*\*Markets\*\*/.test(l));
   assert.ok(row, 'the outbound-connections table should still carry that row');
   assert.match(row, /Overview/,
     'the table must name Overview now that its price line can wake the exchange feed');

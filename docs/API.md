@@ -1029,8 +1029,9 @@ To poll incrementally, keep `maxSeq` and pass it back as `since`. The filters ar
 
 Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex and OKX. **This is the only outbound connection BlockYard makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
 
-- **On demand.** Nothing is fetched until someone calls `/api/markets` or `/api/markets/depth`. Each call "touches" the feed. The dashboard's Overview makes that call by default (Display settings → Markets & Price → Price line on Overview), so a monitor with anyone on its landing page is polling. While touched, it polls tickers every 15 s, hourly candles every 5 min and order books every 30 s. It stops 10 minutes after the last touch.
-- `BLOCKYARD_MARKETS=0` (or `markets.enabled=false`) turns it off. Both endpoints then answer `{ "ok": true, "enabled": false, "note": "market data is off on this monitor (...)" }`.
+- **Off by default.** Polling runs only while the Display setting **Markets & Price → Enable market polling** is on (`markets.polling` in the shared settings file, read per request). With it off, both endpoints answer `{ "ok": true, "enabled": false, "polling": false, "note": "market polling is off ..." }`, the call parks the feed, and the monitor makes no outbound connection but to the node.
+- `BLOCKYARD_MARKETS=0` (or `markets.enabled=false`) removes the feed altogether; both endpoints then answer `{ "ok": true, "enabled": false, "note": "market data is off on this server ..." }` whatever the setting.
+- **On demand.** With polling on, nothing is fetched until someone calls `/api/markets` or `/api/markets/depth`. Each call "touches" the feed. The dashboard's Overview makes that call by default (Display settings → Markets & Price → Price line on Overview), so a monitor with anyone on its landing page is polling. While touched, it polls tickers every 15 s, hourly candles every 5 min and order books every 30 s. It stops 10 minutes after the last touch.
 - An exchange that fails keeps its last data and reports `error`. It is never dropped or zero-filled.
 
 ### `GET /api/markets`

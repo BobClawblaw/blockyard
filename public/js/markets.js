@@ -307,6 +307,7 @@ function fetchMarkets(h, now) {
 // 24 h high, low and volume and the spread across books; every exchange's last, change and
 // spread; how fresh it is. Pure: the /api/markets reply in, markup out.
 export function priceInfoHtml(d, fmt, now = Date.now()) {
+  if (d?.enabled === false) return `<div class="kp-wait">${fmt.esc(d.note ?? 'market data is off on this monitor')}</div>`;
   if (!d?.exchanges) return '<div class="kp-wait">asking the exchanges…</div>';
   const usd = d.exchanges.filter((e) => e.quote === 'USD' && e.last != null && !e.stale);
   const med = d.summary?.median ?? null;
@@ -335,7 +336,19 @@ export function renderPriceInfo(id, h) {
 // The 3D board alone, on any canvas -- the Kiosk tab's markets panel (kiosk.js)
 export function renderMarketsBoard(id, h) {
   fetchMarkets(h, Date.now());
-  if (M.data?.enabled === false) return null;
+  if (M.data?.enabled === false) {
+    // the Kiosk's board says so on its own canvas, since there is nothing else on that panel
+    const cv = document.getElementById(id), ctx = cv?.getContext?.('2d');
+    if (ctx) {
+      const w = cv.clientWidth || 600, hh = cv.clientHeight || 300;
+      if (cv.width !== w || cv.height !== hh) { cv.width = w; cv.height = hh; }
+      ctx.clearRect(0, 0, w, hh);
+      ctx.fillStyle = '#6a7484'; ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(M.data.polling === false ? 'market polling is off' : 'market data is off on this server', w / 2, hh / 2 - 10);
+      if (M.data.polling === false) ctx.fillText('Display settings → Markets & Price → Enable market polling', w / 2, hh / 2 + 12);
+    }
+    return { label: M.data.polling === false ? 'market polling is off · Display settings → Markets & Price' : 'market data is off on this server' };
+  }
   const b = drawBoard(id);
   if (!b) return null;
   const last = b.ser.candles.at(-1)?.c;
@@ -348,7 +361,19 @@ export function renderMarkets(s, state, h) {
   const put = (id, html) => { const el = document.getElementById(id); if (el && el.__html !== html) { el.innerHTML = html; el.__html = html; } };
   const d = M.data;
   if (!d) { put('mkTable', `<div class="note">${M.error ? h.fmt.esc(M.error) : 'asking the exchanges…'}</div>`); return; }
-  if (d.enabled === false) { put('mkTable', `<div class="caveat">${h.fmt.esc(d.note ?? 'market data is off')}</div>`); return; }
+  // OFF: the note at the TOP, where the figures go, with a button to the switch -- and the board,
+  // the chart and the depth panel folded away (the CSS class), because six hundred pixels of empty
+  // board above a note nobody scrolls to is no way to say "polling is off" (2026-09-15)
+  const card = document.querySelector('section.page[data-page="markets"] .mkcard');
+  if (d.enabled === false) {
+    card?.classList.add('mk-off');
+    put('mkBar', '');
+    put('mkTable', '');
+    put('mkSummary', `<div class="caveat mkoff">${h.fmt.esc(d.note ?? 'market data is off')}${d.polling === false ? ' <button type="button" class="btn small" id="mkOpenSettings">Open Display settings</button>' : ''}</div>`);
+    document.getElementById('mkOpenSettings')?.addEventListener('click', () => document.getElementById('btnSettings')?.click(), { once: true });
+    return;
+  }
+  card?.classList.remove('mk-off');
   put('mkSummary', summaryHtml(d, h.fmt));
   put('mkBar', toolbarHtml(d));
   bindChart();

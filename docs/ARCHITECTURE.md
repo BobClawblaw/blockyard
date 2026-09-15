@@ -192,8 +192,9 @@ it directly; running the file as a script calls it and prints the banner.
    missing is skipped with a logged reason rather than kept as a permanently
    offline panel. `wireMonitor()` connects each monitor's events to the SSE hub
    and coalesces pushes to one snapshot per second.
-8. `MarketFeed` is created if `markets.enabled` is set. It stays idle until the
-   Markets API is requested.
+8. `MarketFeed` is created if `markets.enabled` is set. It stays idle until the Markets
+   API is requested with the **Enable market polling** setting on (off by default; read from
+   the shared settings file per request, `marketsPollingOn` in `http/api.js`).
 9. One HTTP(S) server is created per bound address, all sharing the same `app`.
    An address missing at boot is skipped with a warning. Boot is fatal only when
    none of the configured addresses exist.
@@ -346,7 +347,9 @@ Bitstamp, Bitfinex and OKX.
   with its error, never zero-filled. Tickers older than three intervals are marked
   `stale`.
 
-`BLOCKYARD_MARKETS=0` (or `markets.enabled: false`) disables all of it.
+Polling is off by default — the **Enable market polling** Display setting turns it on, and a
+request with it off parks the feed. `BLOCKYARD_MARKETS=0` (or `markets.enabled: false`)
+removes the feed altogether.
 
 ### 2.4 The RPC lane (`server/rpc/client.js`)
 

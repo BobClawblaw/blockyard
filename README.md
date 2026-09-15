@@ -5,8 +5,8 @@ A live, multi-user web monitor and block explorer for
 
 Point it at your node and open a browser: live charts, a 3D block-space viewer,
 a block / transaction / address explorer, exchange prices with order-book depth, and a
-kiosk view for a wall screen. No dependencies to install, no CDN, no telemetry, and
-read-only toward your node by default.
+kiosk view for a wall screen. No dependencies to install, no CDN, no telemetry, no outbound
+connection but to your node out of the box, and read-only toward your node by default.
 
 **This is 100% machine-generated code, directed by a human operator.** Every line of the
 server, the browser app, the 3D engine, the tests and these documents was written by an AI
@@ -24,7 +24,7 @@ bugs.**
 | **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with **34 idle effects**, from ripples and light cycles to a lightning ball, ball lightning, a UFO's tractor beam, Missile Command, fireworks, code rain and a demoscene plasma. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
 | **A board you can tune.** Neon-tube blocks, a metallic sheen or a chrome finish that mirrors a horizon, a movable lamp, a touch of perspective, a spiral galaxy behind the board, and a switch for every one of the 34 effects — in a tabbed settings panel. Stored on the server (`config/blockyard.json`), so every screen sees the same board; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
 | **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so BlockYard builds its own from the node's block files (**a few hours** on first start, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
-| **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
+| **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Off until you tick **Enable market polling** — it is the one thing that talks to anyone but your node — and, once on, fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
 | **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, full screen with one click. | ![Kiosk](docs/images/kiosk.jpg) |
 | **Tetrust, Blockout and Blockanoid.** Three playable games built on the same 3D engine — trust, but verify. Tetrust is Tetris: the well is the block-space board and the music is synthesised in the browser. Blockout is Breakout, where the wall is made of block-space stones and the bat follows your mouse. Blockanoid is Arkanoid: a different wall every level, silver bricks that take more than one hit, gold that takes none, and capsules that fall out of what you break — laser, wide, catch, slow, three balls, a life. All three pause when you look away and keep high scores per browser. And **DOOM**: the real shareware `DOOM.EXE` from 1993, unmodified, on a 486 PC emulated in the browser — processor, DOS extender, VGA and Sound Blaster written from scratch, still with no dependencies. | ![Tetrust](docs/images/tetrust.jpg) |
 
@@ -46,7 +46,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 905 unit tests, all built in
+npm test            # optional: 909 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open http://127.0.0.1:21000
 ```
@@ -112,10 +112,11 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
   on with `BLOCKYARD_AUTH=1`.
 - **Where it listens is your decision** — bind to `127.0.0.1`, a LAN address, a VPN
   address, or several. Built-in HTTPS with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`.
-- **Outbound connections are limited and on demand**: exchange APIs only while someone has
-  the Markets, Kiosk or Overview tab open — Overview's price line is on by default, so the landing
-  page reaches out unless you switch it off — plus a cached spot price for the explorer's dollar
-  figures. `BLOCKYARD_MARKETS=0` turns all of it off.
+- **No outbound connections out of the box**: a fresh install talks to nothing but your node.
+  The one exception is opt-in — a checkbox, **Display settings → Markets & Price → Enable
+  market polling**, turns on the exchange feed for the Markets and Kiosk tabs, Overview's price
+  line and the explorer's dollar figures, and even then the server asks the exchanges only while
+  someone is looking. `BLOCKYARD_MARKETS=0` removes the feed so that no checkbox can turn it on.
 
 Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 [SECURITY.md](SECURITY.md).
@@ -126,7 +127,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 905 unit tests (node:test, no dependencies)
+npm test             # 909 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -142,7 +143,7 @@ Published 2026-09-14: on [npm](https://www.npmjs.com/package/blockyard) as `bloc
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
 The test suite is
-comprehensive (905 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (909 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

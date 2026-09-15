@@ -301,6 +301,9 @@ canvas.chart.short { height: 84px; }
   font-size: 11.5px; line-height: 1.45;
 }
 .caveat.bad { background: #1c1214; border-color: #50242a; color: #f0a8ad; }
+/* Markets with polling off: the note at the top, the board / chart / depth panel folded away */
+.caveat.mkoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 12.5px; padding: 10px 12px; }
+.mkcard.mk-off .mklayout, .mkcard.mk-off .mkchart, .mkcard.mk-off .mksub, .mkcard.mk-off #mkDepthBar, .mkcard.mk-off #mkDepthNote { display: none; }
 .caveat b { color: #fff; font-weight: 650; }
 
 /* status badges (used across every page, not just the sync strip) */

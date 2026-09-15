@@ -273,7 +273,11 @@ const DEFAULTS = {
   },
   // The Markets tab (server/collect/markets.js): public exchange APIs over HTTPS -- the one
   // outbound connection that is not the node. Polled only while someone has the tab open, and
-  // parked idleAfterMs after the last request. BLOCKYARD_MARKETS=0 turns it off.
+  // parked idleAfterMs after the last request. BLOCKYARD_MARKETS=0 removes it altogether.
+  // POLLING IS OFF OUT OF THE BOX regardless (operator, 2026-09-15: "disable markets by default so
+  // we can claim true zero telemetry out of the box" ... "an app wide 'Enable Market Polling'
+  // checkbox"): the feed is built here but asks nobody anything until the switch in Display
+  // settings -> Markets & Price -> Enable market polling is on (http/api.js marketsPollingOn).
   markets: {
     enabled: true,
     tickerMs: 15000,

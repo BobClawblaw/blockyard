@@ -128,6 +128,8 @@ test('markets are wired, on by default, and switch off with BLOCKYARD_MARKETS=0'
   assert.match(html, /<button data-page="markets">/);
   assert.match(html, /id="mkBoard"/);
   assert.match(read('../public/js/app.js'), /case 'markets'/);
+  // the feed is built by default (the POLLING switch, off out of the box, is a Display setting:
+  // test/market-polling.test.js); BLOCKYARD_MARKETS=0 removes it altogether
   assert.equal(loadConfig({ configFile: '/nonexistent-local.json' }).markets.enabled, true);
   process.env.BLOCKYARD_MARKETS = '0';
   try { assert.equal(loadConfig({ configFile: '/nonexistent-local.json' }).markets.enabled, false); } finally { delete process.env.BLOCKYARD_MARKETS; }

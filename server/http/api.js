@@ -12,8 +12,36 @@ import { xSearch, xTx, xBlock, xAddress } from './explorer.js';
 
 // Dollar figures for the explorer: a spot price if one is at hand within 1.5 s -- never a slower
 // page for want of one (server/collect/markets.js spot()).
+// THE MARKET SWITCH (operator, 2026-09-15: "disable markets by default so we can claim true zero
+// telemetry out of the box" ... "an app wide 'Enable Market Polling' checkbox"). Two layers:
+//   - BLOCKYARD_MARKETS=0 (markets.enabled=false) removes the feed from the server altogether;
+//     nothing in the browser can turn it on. For machines that must never reach out.
+//   - otherwise the feed exists but polls only while the Display setting
+//     markets.polling is on -- and that ships OFF, so a fresh install makes no outbound
+//     connection but to the node until someone ticks the box.
+// The setting lives in the server's settings file (config/blockyard.json, the same one every
+// screen shares); it is read here per request, cached on the file's mtime and size, so a tick in
+// the panel takes effect on the next call without a restart -- and the next call also PARKS the
+// feed, so unticking stops the exchange traffic at once rather than ten minutes later.
+const MARKETS_OFF = 'market data is off on this server (BLOCKYARD_MARKETS=0 or markets.enabled=false); the switch in Display settings cannot turn it on';
+const POLLING_OFF = 'market polling is off -- the default, so that out of the box this monitor makes no outbound connection but to your node. Turn it on under Display settings → Markets & Price → Enable market polling';
+const pollingCache = new WeakMap();
+export async function marketsPollingOn(app) {
+  const file = app.settingsFile;
+  if (!file) return false;
+  let st;
+  try { st = await fsp.stat(file); } catch { return false; }
+  const hit = pollingCache.get(app);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.value;
+  let value = false;
+  try { value = JSON.parse(await fsp.readFile(file, 'utf8'))?.markets?.polling === true; } catch { value = false; }
+  pollingCache.set(app, { mtimeMs: st.mtimeMs, size: st.size, value });
+  return value;
+}
+const pollingOff = (app) => { app.markets?.stop?.(); return { ok: true, enabled: false, polling: false, note: POLLING_OFF }; };
+
 async function withUsd(app, r) {
-  if (!r?.ok || !app.markets) return r;
+  if (!r?.ok || !app.markets || !(await marketsPollingOn(app))) return r;
   const p = await Promise.race([app.markets.spot().catch(() => null), new Promise((res) => { setTimeout(res, 1500, null).unref?.(); })]);
   return { ...r, usd: p?.usd ?? null };
 }
@@ -425,8 +453,9 @@ export const routes = [
   // Exchange prices (server/collect/markets.js). Asking is what keeps the feed polling.
   {
     method: 'GET', path: '/api/markets', auth: 'any',
-    handler: (ctx, app) => {
-      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BLOCKYARD_MARKETS=0 or markets.enabled=false)' };
+    handler: async (ctx, app) => {
+      if (!app.markets) return { ok: true, enabled: false, note: MARKETS_OFF };
+      if (!(await marketsPollingOn(app))) return pollingOff(app);
       app.markets.touch();
       return app.markets.view();
     },
@@ -434,8 +463,9 @@ export const routes = [
   // The depth chart: the books as cumulative depth, and the snapshot `ago` seconds earlier.
   {
     method: 'GET', path: '/api/markets/depth', auth: 'any',
-    handler: (ctx, app) => {
-      if (!app.markets) return { ok: true, enabled: false, note: 'market data is off on this monitor (BLOCKYARD_MARKETS=0 or markets.enabled=false)' };
+    handler: async (ctx, app) => {
+      if (!app.markets) return { ok: true, enabled: false, note: MARKETS_OFF };
+      if (!(await marketsPollingOn(app))) return pollingOff(app);
       app.markets.touch();
       return app.markets.depthView(Number(ctx.query.ago) || 600);
     },

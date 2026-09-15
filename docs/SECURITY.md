@@ -150,13 +150,15 @@ Everything in the monitor talks only to your node, **except**:
 
 | when | to | what is sent |
 |---|---|---|
-| while someone has the **Markets**, **Kiosk** or **Overview** tab open — Overview's price line is **on by default**, so the landing page reaches out unless you switch it off — and for 10 minutes after the last request | `api.exchange.coinbase.com`, `api.kraken.com`, `www.bitstamp.net`, `api-pub.bitfinex.com`, `www.okx.com` (HTTPS) | public ticker, hourly candle and order-book requests with a `User-Agent` naming the software — nothing about your node |
-| when someone opens an **explorer** page and no fresh market price is at hand | two of the exchanges above, at most once a minute | a public ticker request |
+| only with **Enable market polling** ticked in Display settings (**off by default**), while someone has the **Markets**, **Kiosk** or **Overview** tab open — Overview's price line reads the same feed unless you switch it off — and for 10 minutes after the last request | `api.exchange.coinbase.com`, `api.kraken.com`, `www.bitstamp.net`, `api-pub.bitfinex.com`, `www.okx.com` (HTTPS) | public ticker, hourly candle and order-book requests with a `User-Agent` naming the software — nothing about your node |
+| with polling on, when someone opens an **explorer** page and no fresh market price is at hand | two of the exchanges above, at most once a minute | a public ticker request |
 
-Nothing is fetched when nobody is looking. Your machine's public address is visible to those
-exchanges when a request is made, as with any web request. To make **no** outbound connections
-at all, set `BLOCKYARD_MARKETS=0` (or `"markets": { "enabled": false }`): the Markets and Kiosk
-tabs then say that market data is off, and the explorer shows no dollar figures.
+**Out of the box none of this happens**: polling is off until someone ticks **Display settings → Markets & Price → Enable market polling**, and until then the
+Markets and Kiosk tabs say so and the explorer shows no dollar figures. The switch is a Display
+setting shared by every screen, so anyone who can change settings on this monitor can turn it
+on; `BLOCKYARD_MARKETS=0` (or `"markets": { "enabled": false }`) removes the feed from the
+server so that no checkbox can. With polling on, nothing is fetched when nobody is looking. Your machine's public address is visible to those exchanges
+when a request is made, as with any web request.
 
 The monitor sends no telemetry, checks for no updates, and phones home to no one.
 
@@ -190,6 +192,6 @@ and errors; they never contain passwords, session tokens or RPC credentials.
 - Turn accounts on if anyone who can reach the port should not see your node.
 - Use HTTPS, a reverse proxy, or an SSH tunnel on untrusted networks.
 - Leave node actions off unless you have a specific need, and then enable only that action.
-- Set `BLOCKYARD_MARKETS=0` on machines that must not make outbound connections.
+- Set `BLOCKYARD_MARKETS=0` on machines that must not make outbound connections: the polling checkbox (off by default) then cannot turn the feed on.
 - Keep `config/local.json` and `data/` readable only by the service account.
 - Keep Node.js current within the 22.x line or later.

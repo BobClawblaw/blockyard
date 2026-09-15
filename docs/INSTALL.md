@@ -146,9 +146,10 @@ Balances are checked against the node: 40 of 40 sampled addresses equal `scantxo
 satoshi (`node scripts/index-benchmark.js` runs that check and the lookup timings against your
 own build).
 
-**Outbound network access** is needed only for the Markets and Kiosk tabs and for the
-explorer's dollar figures (HTTPS to five exchanges' public APIs). Everything else talks only
-to your node. See [SECURITY.md](SECURITY.md#outbound-connections).
+**Outbound network access**: none, out of the box — everything talks only to your node. The
+Markets and Kiosk tabs and the explorer's dollar figures need the exchange feed (HTTPS to five
+exchanges' public APIs), which is off until you tick **Display settings → Markets & Price → Enable market polling**
+in the browser. See [SECURITY.md](SECURITY.md#outbound-connections).
 
 ## 2. Get the code
 
@@ -503,4 +504,4 @@ sudo userdel blockyard
 - [ ] you have decided who can reach the port (bind, firewall, `allowCidrs`)
 - [ ] accounts on if the port is reachable by people who should not see your node
 - [ ] HTTPS on, or a proxy / tunnel in front, if the network is not trusted
-- [ ] `BLOCKYARD_MARKETS=0` if the machine must make no outbound connections
+- [ ] **Enable market polling** ticked in Display settings if you want the Markets and Kiosk tabs (off by default); `BLOCKYARD_MARKETS=0` on machines that must make no outbound connections at all

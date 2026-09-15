@@ -428,11 +428,14 @@ Core supports.
 
 ## Markets
 
-The BTC/USD price from five exchanges' public APIs. The server fetches market data
-**only while someone is reading it** — the Markets or Kiosk tab, or Overview, whose price
-line (**Display settings → Markets & Price → Price line on Overview**, on by default) reads
-the same feed — and stops about ten minutes after the last request. Switch that line off
-and, with no one on Markets or Kiosk, the monitor makes no exchange requests at all.
+The BTC/USD price from five exchanges' public APIs. **Polling is off by default**: out of
+the box the monitor makes no outbound connection but to your node, and Markets and Kiosk say
+so. Tick **Display settings → Markets & Price → Enable market polling** — one switch for
+every screen of this monitor, no restart needed. With it on, the server fetches market data
+**only while someone is reading it** — the Markets or Kiosk tab, or Overview, whose price line
+(**Display settings → Markets & Price → Price line on Overview**) reads the same feed — and
+stops about ten minutes after the last request. Switch that line off and, with no one on
+Markets or Kiosk, the monitor makes no exchange requests at all.
 
 ![Markets](images/markets.jpg)
 
@@ -1043,9 +1046,11 @@ Markets & Price.
 
 ### Markets & Price
 
-The candle board on Markets and Kiosk: the **star field** on or off, and **board effects** — one
-switch for everything that moves on this board, both the idle effects and the flight when the
-candles refresh. Which idle effects may play is the **Market effects** tab.
+First the feed itself: **Enable market polling**, off out of the box, is the one switch that
+lets this monitor talk to anyone but your node (see [Markets](#markets)). Then the candle board
+on Markets and Kiosk: the **star field** on or off, and **board effects** — one switch for
+everything that moves on this board, both the idle effects and the flight when the candles
+refresh. Which idle effects may play is the **Market effects** tab.
 
 Your toolbar choices are remembered too: the **exchange** whose candles are drawn and the
 **range** (24 hours, 48 hours or 7 days). Click them on the Markets page or set them here; either
@@ -1053,7 +1058,8 @@ way the page opens where you left it.
 
 | setting | what it does |
 |---|---|
-| **Price line on Overview** | The USD median, spread, 24 h volume and how many books reported, at the top of Overview. **On by default** — and because it needs the exchange feed, this monitor then contacts five exchanges whenever Overview is open, not only on Markets and Kiosk. Switch it off and the landing page talks to nothing but your node. |
+| **Enable market polling** | **Off by default.** Lets the server ask five exchanges for prices, candles and order books — the only thing the monitor ever says to anyone but your node. Until it is on, Markets and Kiosk say so and the explorer shows no dollar figures. Shared by every screen; takes effect at once, and unticking parks the feed at once. (`BLOCKYARD_MARKETS=0` on the server removes the feed so that this box cannot turn it on.) |
+| **Price line on Overview** | The USD median, spread, 24 h volume and how many books reported, at the top of Overview. It needs market polling (above); with that on, this monitor then contacts five exchanges whenever Overview is open, not only on Markets and Kiosk. Switch it off and the landing page talks to nothing but your node. |
 | **Price view** | Which price panel Markets draws: the *flat chart* (default) or the *3D candle board*. One at a time; the 2D / 3D buttons on the page set the same thing. |
 
 ### Blockout

@@ -123,6 +123,10 @@ export const DEFAULTS = Object.freeze({
   // the grid glow. that's just terrible"). Never-show makes the switch a control nobody may use,
   // and a control that must stay off is worse than no control: the board forces it off now.
   markets: Object.freeze({
+    // THE SWITCH (operator, 2026-09-15: "an app wide 'Enable Market Polling' checkbox"): off out
+    // of the box, so a fresh monitor makes no outbound connection but to the node. The server
+    // reads it from the shared settings file on every market request (http/api.js).
+    polling: false,
     stars: true,
     effects: true,        // the idle effects and the flight when the candles refresh
     // THE TOOLBAR REMEMBERS (operator, 2026-09-12: "We need to remember the user settings for the
@@ -426,8 +430,15 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'markets',
     title: 'Markets & Price',
-    note: 'The candle board on Markets and Kiosk.',
+    note: 'The exchange feed, and the candle board on Markets and Kiosk.',
     rows: Object.freeze([
+      Object.freeze({
+        key: 'polling', label: 'Enable market polling', kind: 'toggle',
+        hint: 'Let the server ask five exchanges (Coinbase, Kraken, Bitstamp, Bitfinex, OKX) for prices, candles and order books. '
+          + 'Off out of the box: this is the only thing the monitor ever says to anyone but your node, and until it is on, '
+          + 'Markets and Kiosk say so and the explorer shows no dollar figures. On, the server asks only while someone is looking, '
+          + 'and stops ten minutes after the last look. Shared by every screen of this monitor',
+      }),
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
       Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'The idle effects while the board rests (which of them is the Market effects tab) and the flight when the candles refresh. Off draws the board and leaves it alone' }),
       Object.freeze({
@@ -441,8 +452,8 @@ export const PANEL = Object.freeze([
       Object.freeze({
         key: 'overviewSummary', label: 'Price line on Overview', kind: 'toggle',
         hint: 'Median, spread, 24 h volume and how many books reported, at the top of Overview. '
-          + 'On by default: it needs the exchange feed, so leaving it on means this monitor '
-          + 'contacts five exchanges whenever Overview is open, not only on Markets and Kiosk. '
+          + 'It needs market polling (above); with that on, leaving this on means this monitor contacts '
+          + 'five exchanges whenever Overview is open, not only on Markets and Kiosk. '
           + 'Switch it off and the landing page talks to nothing but your node.',
       }),
       Object.freeze({

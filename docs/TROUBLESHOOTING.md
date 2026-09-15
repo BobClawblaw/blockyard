@@ -181,7 +181,8 @@ so far and an ETA; the address page repeats it. Things it says, and what they me
 
 ## Markets or Kiosk show no prices
 
-- **"market data is off"** — `BLOCKYARD_MARKETS=0` or `markets.enabled: false` is set.
+- **"market polling is off"** — the default. Tick **Display settings → Markets & Price → Enable market polling**.
+- **"market data is off on this server"** — `BLOCKYARD_MARKETS=0` or `markets.enabled: false` is set on the server; the checkbox cannot override it.
 - **"asking the exchanges…" for a long time** — the server cannot reach the exchanges. Test
   from the server: `curl -sI https://api.exchange.coinbase.com/products/BTC-USD/ticker`. Check
   outbound firewall rules and DNS.

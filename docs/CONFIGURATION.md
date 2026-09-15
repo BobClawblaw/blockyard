@@ -340,17 +340,18 @@ Available actions:
 The Markets tab fetches public BTC/USD prices, hourly candles and order books from
 five exchanges over HTTPS: Coinbase, Kraken, Bitstamp, Bitfinex and OKX (OKX quotes
 BTC/USDT). The fetches run on the server, not in the browser. This is BlockYard's
-only outbound connection other than the node. Exchanges see this server's IP
-address and a User-Agent, nothing about the node. Polling starts when a browser asks
-for market data -- the Markets and Kiosk tabs, and Overview's price line, which is on by
-default (Display settings → Markets & Price → Price line on Overview) -- and stops
-`idleAfterMs` after the last request, so an unwatched monitor makes no exchange traffic.
-With that line switched off, only Markets and Kiosk start it. The exchange list is fixed
-in code.
+only outbound connection other than the node, and **polling is off by default**: a fresh
+install makes no request to anyone but the node until someone ticks **Display settings → Markets & Price → Enable market polling** in the browser (a Display
+setting, stored in `config/blockyard.json` and shared by every screen; no restart).
+Exchanges then see this server's IP address and a User-Agent, nothing about the node. Polling starts when a browser asks for market data
+-- the Markets and Kiosk tabs, and Overview's price line (Display settings → Markets &
+Price → Price line on Overview) -- and stops `idleAfterMs` after the last request, so an
+unwatched monitor makes no exchange traffic. With that line switched off, only Markets
+and Kiosk start it. The exchange list is fixed in code.
 
 | key | default | meaning |
 |---|---|---|
-| `markets.enabled` | `true` | `false` removes the feed entirely, and no request is ever made. |
+| `markets.enabled` | `true` | `false` removes the feed entirely: no request is ever made, Markets and Kiosk say so, and the **Enable market polling** checkbox cannot turn it on. |
 | `markets.tickerMs` | `15000` | Ticker (last, bid, ask, 24 h volume) refresh. |
 | `markets.candleMs` | `300000` | Hourly candle refresh. |
 | `markets.bookMs` | `30000` | Order book refresh, for the depth chart. |
@@ -404,7 +405,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH` | `actions.allowWritesWithoutAuth` | boolean | `false` | Permit actions while accounts are off. |
 | `BLOCKYARD_LOG_SOURCE` | `log.enabled` | boolean | `false` | `1` tails node log files; `0` (or unset) runs on RPC alone. |
 | `BLOCKYARD_LOG_LEVEL` | `log.level` | string | `info` | `debug`, `info`, `warn` or `error`. |
-| `BLOCKYARD_MARKETS` | `markets.enabled` | boolean | `true` | `0` turns the Markets feed off. |
+| `BLOCKYARD_MARKETS` | `markets.enabled` | boolean | `true` | `0` removes the Markets feed; the polling checkbox then cannot turn it on. |
 | `BLOCKYARD_MINING` | *(none)* | `0` or anything | on | `0` turns off miner attribution, which decodes each block's coinbase to show the pool tag. Block sizes, fees and weights are unaffected. Only the literal `0` disables it. |
 | `BLOCKYARD_MINING_BACKFILL` | *(none)* | number | `36` | How many recent blocks are attributed to miners at startup. |
 | `BLOCKYARD_MINING_TEMPLATE` | *(none)* | `0` or anything | on | `0` turns off the "block being built" card. Since 2026-09-13 the template is **assembled from the mempool this monitor already reads**, so leaving it on costs your node no RPC call at all — it costs this process ~50-70 ms of CPU per assembly. Before that it was a `getblocktemplate` worth over a second of the node's single RPC thread, which is why the switch exists. Only the literal `0` disables it. |
@@ -661,9 +662,11 @@ Things to know about specific binds:
 - For this machine only, use `"hosts": ["127.0.0.1"]` and reach it with
   `ssh -L 21000:127.0.0.1:21000 user@monitor-host`.
 
-### Markets off
+### Markets off, for good
 
-No outbound connections except to the node:
+Out of the box there are no outbound connections except to the node, because market polling is
+a checkbox that ships unticked (**Display settings → Markets & Price → Enable market polling**). To be certain a machine never reaches out whatever anyone
+ticks, remove the feed from the server:
 
 ```json
 {
