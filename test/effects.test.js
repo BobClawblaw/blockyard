@@ -351,8 +351,13 @@ test('THE SCAN IS A CONE, NOT A STACK OF SHEETS', () => {
     // and it has real extent: wide where it lands, tall to its source
     const ys = tris.flatMap((t) => t.map((p) => p.y)), xs = tris.flatMap((t) => t.map((p) => p.x));
     const apexY = Number(apexKey.split(',')[1]);
-    assert.ok(Math.max(...xs) - Math.min(...xs) > 20, 'it is wide at the floor');
-    assert.ok(Math.max(...ys) - apexY > 40, 'and tall from floor to apex');
+    // PROPORTION, not just presence. The first cut passed both of these -- 49px wide by 147px tall --
+    // and was a needle on screen (operator: "the scanner effect is fucked now"). A spotlight reads
+    // as one when the width where it lands is comparable to its height; a tall thin spike does not.
+    const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - apexY;
+    assert.ok(w > 20, `it is wide at the floor (${w.toFixed(0)}px)`);
+    assert.ok(h > 40, `and tall from floor to apex (${h.toFixed(0)}px)`);
+    assert.ok(w / h > 0.7 && w / h < 3, `and shaped like a beam rather than a needle (${w.toFixed(0)}x${h.toFixed(0)}, ratio ${(w / h).toFixed(2)})`);
   } finally {
     globalThis.requestAnimationFrame = prevRaf;
     globalThis.performance = prevPerf;

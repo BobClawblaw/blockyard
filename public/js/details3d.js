@@ -1115,8 +1115,13 @@ function drawScanCurtain(ctx, view, lw) {
   const half = Math.hypot(B.x - A.x, B.y - A.y) / 2;      // reach along the front line
   const ax = -fx.dy, ay = fx.dx;                          // unit vector ALONG the front
   const sx = fx.dx, sy = fx.dy;                           // unit vector along the SWEEP
-  const apex = { x: mx, y: my, z: top * 1.5 };
-  const SPREAD = 5.5;                                      // the beam's half-width across the sweep
+  // PROPORTIONS ARE THE WHOLE EFFECT (operator, 2026-09-15: the first cut "is fucked"). It put the
+  // apex at top*1.5 -- z = 51 on the price board -- over a base barely 5 units across, which draws
+  // 49px wide by 147px tall: a needle, not a beam. A spotlight reads as a spotlight when its height
+  // and the width where it lands are comparable, so the apex sits just under the chart's own top
+  // and the pool is wide enough to look like something landed in it.
+  const apex = { x: mx, y: my, z: top * 0.9 };
+  const SPREAD = 9;                                        // the beam's half-width along the sweep
   const RING = 44;
   // a point on the base ellipse: `f` scales the shell, `th` runs around it
   const ring = (th, f) => ({
@@ -1148,7 +1153,7 @@ function drawScanCurtain(ctx, view, lw) {
   // --- where it lands: a pool on the floor, brightest at the axis
   {
     const c = P({ x: mx, y: my, z: 0 });
-    const r = U * Math.max(half, SPREAD) * 0.9;
+    const r = U * Math.max(half, SPREAD) * 1.35;
     disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, `rgba(235,250,255,${(0.42 * amp).toFixed(3)})`], [0.35, `rgba(150,225,255,${(0.2 * amp).toFixed(3)})`], [1, 'rgba(110,200,255,0)']]));
   }
   // the rim of the pool, so the cone reads as landing on something
