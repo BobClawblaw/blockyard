@@ -26,13 +26,17 @@ All notable changes to this project are documented here. The format follows
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
 - **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
   the star is a glint — halo, hot core, diffraction spikes — growing and blue-shifting from warm white to blue-white as it goes (`starGlint`, a new renderer); the whole picture whites out and comes back, with a
-  lens flare the width of the chart; the debris is a **volume of gas** (`gasCloud`: a sphere of
-  150 soft blobs, denser toward the rim so the limb is bright, carried outward by the expansion
-  in proportion to their own radius, the front ones hotter and paler, boiling slowly on the
-  clock, cooling white-gold → orange → deep red as it dims — no lines anywhere), a soft shock band
-  at its leading edge throwing the candles it crosses and shaking them as it approaches; and as
-  the cloud dims a **pulsar** appears — a point beating seven times a second at the centre, two
-  thin beams sweeping round, inside a blue pulsar-wind nebula that grows. 16 s (24 on Markets), the cloud dispersing slowly. First cut: It only ever lit a cube and its neighbours, which on a chart
+  no flare (its turning rays read as glints and went); the debris is a **volume of gas**
+  (`gasCloud`: clumped, streaked, lumpy blobs — ellipses stretched along their own radial lines,
+  gathered in clumps, on a sphere with lobes and bays — carried outward by the expansion in
+  proportion to their own radius, the front ones paler, boiling slowly on the clock, in three
+  layers as the reference shows: a blue cloud out in front expanding fastest and thinning first,
+  a white one behind it into which violet grows patch by patch on each blob's own schedule, and a
+  deep violet heart showing as the others thin — no lines anywhere), a soft shock band at its
+  leading edge throwing the candles it crosses and shaking them as it approaches; and as the
+  cloud dims a **pulsar** appears — a point beating seven times a second at the centre, two thin
+  beams sweeping round, inside a pulsar-wind nebula of the same gas that grows. 16 s (24 on
+  Markets), the cloud dispersing slowly. First cut: It only ever lit a cube and its neighbours, which on a chart
   of candles was one candle blinking. Now, on both boards over the same lit tile: the star swells
   white-hot with crackle rising over it, blows out in a white flash and a lens flare the width of
   the chart, a shockwave ring races outward and thins, seventy-two filaments of plasma are flung
