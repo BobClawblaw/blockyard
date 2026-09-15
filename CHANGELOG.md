@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Mining tab's pool pie folds its smallest pools into "Other" when its card is too short for every name, so no label runs off the bottom
 - The Peers tab packs the same way: a long onion or i2p address no longer makes the whole page scroll sideways (the address clips with an ellipsis and carries the full text as its title; a wide table scrolls inside its card), rows and service badges tighter, the top strip's cards at their own heights
 - The Explorer packs the same way: a smaller title, the block strip's padding and scrollbar band trimmed, tighter table rows and the table reaching the window's bottom edge — three more blocks on the first screen
 - The Mempool tab keeps its two columns down to 900px (it stacked from 1100, which put a 1093px window on one long column); The Mempool tab: already one screen after the global packing, so the room over goes to its time-series charts, a fifth taller, and the note cards under them sit tight to their line

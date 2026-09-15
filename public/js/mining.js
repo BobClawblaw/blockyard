@@ -1299,17 +1299,29 @@ function poolDonut(canvas, pools, F) {
   R = Math.max(50, R);
   const LH = font + 4, r = R * 0.28;
   if (!total) { ctx.fillStyle = COL.text; ctx.font = `${font}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('no blocks read yet', cx, cy); return; }
-  // slices: the named ones, and the rest under half a percent as one
-  const small = pools.filter((p) => (p.blocks / total) * 100 < 0.5);
-  const big = pools.filter((p) => (p.blocks / total) * 100 >= 0.5);
-  const slices = [...big, ...(small.length ? [{ name: `Other (${(small.reduce((s, p) => s + p.blocks, 0) / total * 100).toFixed(2)}%)`, blocks: small.reduce((s, p) => s + p.blocks, 0), other: true }] : [])];
-  let a0 = -Math.PI / 2;
-  const laid = slices.map((p, i) => {
-    const a1 = a0 + (p.blocks / total) * Math.PI * 2, mid = (a0 + a1) / 2;
-    const out = { p, i, a0, a1, mid, color: p.other ? '#8d93a1' : DONUT_COLORS[i % DONUT_COLORS.length] };
-    a0 = a1;
-    return out;
-  });
+  // slices: the named ones, and the rest under a threshold as one "Other". The threshold starts at
+  // half a percent and rises until each side's stack of labels FITS THE CANVAS (operator,
+  // 2026-09-15: "getting cut off on mining screen left bottom" -- fourteen names at 16px need
+  // 230px, and a short card gave them 220), so on a small card the small pools fold into Other
+  // rather than run off the bottom
+  const build = (threshold) => {
+    const small = pools.filter((p) => (p.blocks / total) * 100 < threshold);
+    const big = pools.filter((p) => (p.blocks / total) * 100 >= threshold);
+    const slices = [...big, ...(small.length ? [{ name: `Other (${(small.reduce((s, p) => s + p.blocks, 0) / total * 100).toFixed(2)}%)`, blocks: small.reduce((s, p) => s + p.blocks, 0), other: true }] : [])];
+    let a0 = -Math.PI / 2;
+    return slices.map((p, i) => {
+      const a1 = a0 + (p.blocks / total) * Math.PI * 2, mid = (a0 + a1) / 2;
+      const out = { p, i, a0, a1, mid, color: p.other ? '#8d93a1' : DONUT_COLORS[i % DONUT_COLORS.length] };
+      a0 = a1;
+      return out;
+    });
+  };
+  let laid = build(0.5);
+  for (const threshold of [1, 2, 3, 5, 8, 12]) {
+    const perSide = [1, -1].map((dir) => laid.filter((x) => (Math.cos(x.mid) >= 0 ? 1 : -1) === dir).length);
+    if (Math.max(...perSide) * LH <= h - 6) break;
+    laid = build(threshold);
+  }
   // the pie
   for (const s of laid) {
     ctx.beginPath(); ctx.arc(cx, cy, R, s.a0, s.a1); ctx.arc(cx, cy, r, s.a1, s.a0, true); ctx.closePath();
