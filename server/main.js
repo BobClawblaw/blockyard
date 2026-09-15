@@ -79,7 +79,8 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       app.log({ level: 'info', msg: 'TLS is on, so the session cookie is now Secure (a Secure cookie over plain HTTP is never sent, which looks like a login that will not stick)' });
     }
     app.log({ level: 'warn', msg: `TLS on (fingerprint ${String(cfg.server.tls.fingerprint).slice(0, 17)}…${cfg.server.tls.selfSigned ? ', self-signed: expect a browser warning the first time per address' : ''})${cfg.__tlsExpiring ? `; WARNING ${cfg.__tlsExpiring}` : ''}` });
-  } else if (cfg.auth.enabled) {
+  } else if (cfg.auth.enabled && !(cfg.server.hosts ?? [cfg.server.host]).every((h) => LOOPBACK.has(h))) {
+    // (not said for a loopback-only bind -- the default now -- where nothing crosses the LAN)
     app.log({ level: 'warn', msg: 'serving HTTP, not HTTPS: the session cookie and every RPC reply cross the LAN in the clear. Either put a TLS terminator in front (then BLOCKYARD_SECURE_COOKIE=1), name server.tls.cert/key, or bind 127.0.0.1 and use an SSH tunnel -- see README, "TLS, or the lack of it".' });
   }
   app.scheme = app.tls ? 'https' : 'http';
@@ -130,7 +131,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     const where = (cfg.server.hosts ?? [cfg.server.host]).join(', ') || '(wildcard)';
     app.log({
       level: 'warn',
-      msg: `NO SIGN-IN (auth.enabled=false, the default): anyone who can reach ${where}:${cfg.server.port} reads this monitor — charts, the event feed, peer and mempool detail, and the read-only RPC console — as role "viewer". Not open to them: user administration, the audit trail, password changes, and node writes (set BLOCKYARD_AUTH=1 for accounts, roles, sessions and CSRF).`,
+      msg: `NO SIGN-IN (auth.enabled=false -- accounts were switched off; they are on out of the box): anyone who can reach ${where}:${cfg.server.port} reads this monitor — charts, the event feed, peer and mempool detail, and the read-only RPC console — as role "viewer". Not open to them: user administration, the audit trail, password changes, and node writes (BLOCKYARD_AUTH=1, or drop the override, for accounts, roles, sessions and CSRF).`,
     });
   }
 
@@ -344,7 +345,10 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   }
   const served = plan.bindable.map((h) => `${app.scheme}://${h}:${cfg.server.port}`);
   app.log({ level: 'info', msg: `BlockYard ${VERSION} listening on ${served.join(' and ')}` });
-  if (!plan.bindable.includes('0.0.0.0') && !plan.bindable.includes('::')) {
+  const loopbackOnly = plan.bindable.every((h) => LOOPBACK.has(h));
+  if (loopbackOnly) {
+    app.log({ level: 'info', msg: 'bound to this machine only (the default): reach it from elsewhere over an SSH tunnel, or bind a LAN address with BLOCKYARD_BIND / server.hosts -- docs/INSTALL.md §7' });
+  } else if (!plan.bindable.includes('0.0.0.0') && !plan.bindable.includes('::')) {
     const v4 = localAddresses().filter((a) => a.family === 'IPv4' && !plan.bindable.includes(a.address) && !a.internal);
     const v6 = localAddresses().filter((a) => a.family === 'IPv6' && !plan.bindable.includes(a.address) && !a.internal).length;
     // warn, not info: when loopback is not among the bound addresses, "connection
@@ -354,7 +358,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     app.log({
       level: 'warn',
       msg: `bound to specific interfaces -- NOT reachable on ${v4.map((a) => `${a.address} (${a.name})`).join(', ') || 'other IPv4 addresses'}`
-        + `${v6 ? ` (plus ${v6} IPv6 address(es))` : ''}, and not on 127.0.0.1 either: use one of the addresses above from this machine too.`,
+        + `${v6 ? ` (plus ${v6} IPv6 address(es))` : ''}${plan.bindable.some((h) => LOOPBACK.has(h)) ? '.' : ', and not on 127.0.0.1 either: use one of the addresses above from this machine too.'}`,
     });
     if (plan.missing.length) {
       app.log({ level: 'warn', msg: `skipped at boot: ${plan.missing.join(', ')} -- clients that would have used those addresses will get "connection refused", which is not a crash` });
@@ -609,6 +613,8 @@ function installShutdown(app) {
   });
 }
 
+const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost']);
+
 export function banner(app) {
   const lines = [];
   const host = app.cfg.server.host;
@@ -624,7 +630,15 @@ export function banner(app) {
     // Same content as the boot warning, in the banner: the first thing on screen
     // after `npm start` should be the sentence about who can read the node.
     lines.push('    login    DISABLED — open to anyone who can reach the addresses above (role: viewer, read-only)');
-    lines.push('             user admin, the audit trail and node writes stay closed; BLOCKYARD_AUTH=1 turns accounts on');
+    lines.push('             user admin, the audit trail and node writes stay closed; BLOCKYARD_AUTH=1 turns accounts back on');
+  }
+  // LOOPBACK IS THE DEFAULT (2026-09-15): say how to reach it from anywhere else, because "it
+  // works on the box and nowhere else" is the first thing a new install runs into now
+  const hosts = app.cfg.server.hosts ?? [host];
+  if (hosts.every((h) => LOOPBACK.has(h))) {
+    const p = app.cfg.server.port;
+    lines.push(`    reach    this machine only. From elsewhere: ssh -L ${p}:127.0.0.1:${p} you@this-host, then http://localhost:${p}`);
+    lines.push('             or bind a LAN address: BLOCKYARD_BIND=192.0.2.10 (or 0.0.0.0 for every interface) — docs/INSTALL.md §7');
   }
   lines.push(`    nodes    ${[...app.monitors.values()].map((m) => `${m.id} -> ${m.rpc.url}`).join(', ')}`);
   if (app.cfg.server.allowCidrs.length) lines.push(`    CIDRs    ${app.cfg.server.allowCidrs.join(', ')}`);

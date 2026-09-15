@@ -93,7 +93,7 @@ test("a hermetic run can opt out of this machine's config file", () => {
   process.env.BLOCKYARD_CONFIG = 'none';
   try {
     const hermetic = loadConfig({ configFile: undefined, ifaces: IFACES });
-    assert.deepEqual(hermetic.server.hosts, ['0.0.0.0'], 'BLOCKYARD_CONFIG=none must ignore the machine file entirely');
+    assert.deepEqual(hermetic.server.hosts, ['127.0.0.1'], 'BLOCKYARD_CONFIG=none must ignore the machine file entirely (and the shipped bind is loopback)');
   } finally {
     if (prev === undefined) delete process.env.BLOCKYARD_CONFIG; else process.env.BLOCKYARD_CONFIG = prev;
   }

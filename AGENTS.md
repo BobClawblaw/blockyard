@@ -11,8 +11,8 @@ serves charts plus a live event feed to several users at once. This box watches 
 ## Run it
 
 ```bash
-npm start                     # port 21000, NO sign-in by default; bound to config/local.json server.hosts (this box: 0.0.0.0 since 2026-09-11; the host's port-guard script admits the LAN interface and lo, and tailscale0 for 21000 only)
-BLOCKYARD_AUTH=1 npm start      # accounts on: login, roles, sessions, CSRF, per-user audit
+npm start                     # port 21000; SHIPS bound to 127.0.0.1 with sign-in ON (2026-09-15) -- this box overrides both in config/local.json (0.0.0.0 since 2026-09-11, auth off; the host's port-guard script admits the LAN interface and lo, and tailscale0 for 21000 only)
+BLOCKYARD_AUTH=0 npm start      # open mode: no sign-in, anyone who can reach the bind reads as `viewer`
 BLOCKYARD_TLS_CERT=… BLOCKYARD_TLS_KEY=… npm start  # HTTPS on every listener; cookie becomes Secure
 BLOCKYARD_LOG_SOURCE=0 npm start # RPC only: opens no log file, and says what it lost
 npm run dev                   # port 18088 + an in-process fake node doing IBD
@@ -63,8 +63,10 @@ node.
 
 No npm install step exists **by design** — see Rule 1.
 
-**Access is open by default** (`auth.enabled: false`): anyone who can reach the bound
-addresses reads everything, as role `viewer`. That role is a hard ceiling, not a config
+**Access is sign-in by default since 2026-09-15** (`auth.enabled: true`, bound to `127.0.0.1`;
+the first outside review of 0.0.9 called out the open wildcard default). Open mode
+(`auth.enabled: false`) is a choice: anyone who can reach the bound addresses reads
+everything, as role `viewer`. That role is a hard ceiling, not a config
 value — user admin, the audit trail, password changes and every node write stay closed,
 and node writes refuse to be enabled at all while accounts are off unless
 `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1` says so deliberately. Rule 23.
@@ -259,8 +261,8 @@ silently ate another test's result line — rule 22.
    and env-var assertions live in `test/config-env.test.js`, which boots nothing.
    Rule 24.
 
-11. **Open by default is a posture, so it needs a ceiling and a loud line.** Anyone
-   reaching the port reads as `viewer` — hardcoded, not configurable, not raisable.
+11. **Open mode is a posture, so it needs a ceiling and a loud line** (it was the default
+   until 2026-09-15; now it is chosen). Anyone reaching the port reads as `viewer` — hardcoded, not configurable, not raisable.
    User admin, the audit trail and password changes 403 on the role; node writes are
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.

@@ -357,10 +357,10 @@ Where the monitor listens is a security decision. Set `server.host` in `config/l
 
 | bind | who can connect | typical use |
 |---|---|---|
-| `"127.0.0.1"` | this machine only | reach it with an SSH tunnel: `ssh -L 21000:127.0.0.1:21000 you@host` |
+| `"127.0.0.1"` (the default) | this machine only | reach it with an SSH tunnel: `ssh -L 21000:127.0.0.1:21000 you@host` |
 | `"192.0.2.10"` (a LAN address) | anything that can route to that address | a home or office LAN |
 | `["192.0.2.10", "198.51.100.7"]` | exactly those addresses | LAN plus a VPN such as Tailscale or WireGuard |
-| `"0.0.0.0"` (the default) | every interface | behind a firewall you control |
+| `"0.0.0.0"` | every interface | behind a firewall you control |
 
 Notes:
 
@@ -378,15 +378,17 @@ Notes:
 - `server.allowCidrs` (or `BLOCKYARD_ALLOW_CIDRS=192.0.2.0/24,2001:db8::/32`) makes the
   monitor itself refuse clients outside those networks, as a second line of defence.
 
-## 8. Accounts (optional)
+## 8. Accounts (on by default)
 
-By default anyone who can reach the port reads the monitor as a `viewer` — charts, the
-explorer, the event stream, the read-only RPC console. User administration, the audit trail
-and every node write stay closed.
+Sign-in is required out of the box. The first start with an empty data directory creates an
+`admin` account and prints its password **once** in the log (under systemd: `journalctl -u
+blockyard`). Set your own instead with `BLOCKYARD_ADMIN_PASSWORD` for that first start.
 
-To require sign-in, set `"auth": { "enabled": true }` or `BLOCKYARD_AUTH=1` and restart. The
-first start with an empty data directory creates an `admin` account and prints its password
-**once** in the log. Set your own instead with `BLOCKYARD_ADMIN_PASSWORD` for that first start.
+To open the monitor to readers with no account, set `"auth": { "enabled": false }` or
+`BLOCKYARD_AUTH=0` and restart: anyone who can reach the port then reads it as a `viewer` —
+charts, the explorer, the event stream, the read-only RPC console — while user
+administration, the audit trail and every node write stay closed. The boot log names the
+addresses that leaves readable.
 
 Manage accounts from the Admin page, or from the shell — for example, to reset the admin
 password:
@@ -501,7 +503,7 @@ sudo userdel blockyard
 - [ ] `npm run check` passes: Core 25.0+, `txindex` synced, the block files readable, no pruning
 - [ ] the index directory has ~125 GB free and is writable by the service account
 - [ ] the start-up log shows the addresses you intended, and no node offline
-- [ ] you have decided who can reach the port (bind, firewall, `allowCidrs`)
-- [ ] accounts on if the port is reachable by people who should not see your node
+- [ ] you have decided who can reach the port: it binds `127.0.0.1` until you say otherwise (bind, firewall, `allowCidrs`)
+- [ ] accounts stay on (the default) if the port is reachable by people who should not see your node; you have the admin password from the first start
 - [ ] HTTPS on, or a proxy / tunnel in front, if the network is not trusted
 - [ ] **Enable market polling** ticked in Display settings if you want the Markets and Kiosk tabs (off by default); `BLOCKYARD_MARKETS=0` on machines that must make no outbound connections at all

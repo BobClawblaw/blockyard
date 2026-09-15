@@ -82,10 +82,11 @@ export async function withApp({ nodes = 1, config = {}, adminPassword = null, tl
     },
     nodes: nodeDefs,
     store: { dir: path.join(dir, 'store'), retentionHours: 1, snapshotEveryMs: 3_600_000 },
-    // Accounts stay ON here even though the server default is now OFF: most tests
-    // using this helper are testing the signed-in paths (sessions, CSRF, per-user
-    // audit, the login throttle). Open mode is opted into explicitly with
-    // { auth: false } so that choice stays visible at the call site.
+    // Accounts ON here, as they are in the shipped default (since 2026-09-15; before that
+    // the server shipped open and this helper disagreed on purpose): most tests using this
+    // helper are testing the signed-in paths (sessions, CSRF, per-user audit, the login
+    // throttle). Open mode is opted into explicitly with { auth: false } so that choice
+    // stays visible at the call site.
     auth: { enabled: auth !== false, dataDir: path.join(dir, 'auth') },
     poll: { fastMs: 1500, midMs: 3000, slowMs: 6000, rareMs: 20000 },
     log: { level: 'error', healthMs: 5000 },

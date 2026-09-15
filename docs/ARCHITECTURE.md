@@ -526,11 +526,12 @@ flowchart LR
 
 ### 2.7 Auth (`server/auth/*`)
 
-- **Open by default.** With `auth.enabled: false` (the default), every request is
+- **Sign-in by default** (since 2026-09-15; it shipped open in 0.0.9), bound to
+  `127.0.0.1`. With `auth.enabled: false` (`BLOCKYARD_AUTH=0`), every request is
   served as a frozen anonymous user with role `viewer`. That ceiling is hardcoded,
   not configurable. Admin routes return 403 in both modes, CSRF is not needed
   because there is no cookie to ride, and rate limits apply per client address.
-- **Accounts.** `BLOCKYARD_AUTH=1` turns on:
+- **Accounts** (the default; `BLOCKYARD_AUTH=1` restores them after an override):
   - scrypt password hashes (upgraded to current parameters on login)
   - session tokens that are stored hashed, with idle and absolute TTLs
   - double-submit CSRF (the token in a header or body is compared with the

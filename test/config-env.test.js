@@ -23,10 +23,12 @@ async function withEnv(vars, fn) {
   }
 }
 
-test('accounts are OFF by default, and BLOCKYARD_AUTH is the switch back', () => {
-  assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.enabled, false,
-    'the default posture: open reads, no sign-in');
-  assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces, env: undefined }).auth.enabled, false);
+test('accounts are ON by default (2026-09-15), and BLOCKYARD_AUTH is the switch', () => {
+  assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.enabled, true,
+    'the default posture since the 0.0.9 review: sign-in');
+  assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces, env: undefined }).auth.enabled, true);
+  assert.deepEqual(loadConfig({ configFile: '/nonexistent.json', ifaces }).server.hosts, ['127.0.0.1'],
+    'and bound to this machine only');
   return withEnv({ BLOCKYARD_AUTH: '1' }, () => {
     assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.enabled, true);
   }).then(() => withEnv({ BLOCKYARD_AUTH: '0' }, () => {
@@ -38,7 +40,7 @@ test('the writes-while-open guard is a boot error with both ways out named', () 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-env-'));
   try {
     const f = path.join(dir, 'c.json');
-    fs.writeFileSync(f, JSON.stringify({}));
+    fs.writeFileSync(f, JSON.stringify({ auth: { enabled: false } }));   // open mode is chosen now, not the default
     return withEnv({ BLOCKYARD_ENABLE_ACTIONS: '1', BLOCKYARD_ACTIONS: 'savemempool' }, () => {
       assert.throws(() => loadConfig({ configFile: f, ifaces }),
         /accounts are OFF[\s\S]*BLOCKYARD_AUTH=1[\s\S]*BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH/);

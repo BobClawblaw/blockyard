@@ -298,9 +298,19 @@ async function main() {
 
   // ------------------------------------------------------------------------ 3. the web interface
   out(step(3, STEPS, 'The web interface'));
-  say(c.dim('127.0.0.1 keeps it to this machine; 0.0.0.0 opens it to everyone who can'));
-  say(c.dim('reach the port (docs/SECURITY.md).'));
+  say(c.dim('127.0.0.1 (the default) keeps it to this machine -- reach it from elsewhere over an SSH'));
+  say(c.dim('tunnel; a LAN address, or 0.0.0.0, opens it to everyone who can reach the port. Sign-in'));
+  say(c.dim('is on either way: the first start prints the admin password once (docs/SECURITY.md).'));
   a.host = await ask('bind address', arg('host', '127.0.0.1'), validate.host);
+  // ANYTHING BUT LOOPBACK IS SAID TWICE (operator, 2026-09-15: "hardened and on 127.0.0.1,
+  // unless the user explicitly types 0.0.0.0 in the installer"): typing it is the first time,
+  // this question the second -- except when --host named it on the command line, which is as
+  // explicit as it gets
+  if (!['127.0.0.1', '::1'].includes(a.host) && arg('host') !== a.host) {
+    const who = a.host === '0.0.0.0' ? 'everyone who can reach this machine on any interface' : `everyone who can reach ${a.host}`;
+    say(`${c.warn('!')} ${who} will get the sign-in page on port ${arg('port', '21000')}; docs/SECURITY.md before opening it further`);
+    if (!(await yes(`bind ${a.host} rather than 127.0.0.1?`, false))) { a.host = '127.0.0.1'; say(c.dim('127.0.0.1 then -- an SSH tunnel reaches it from elsewhere')); }
+  }
   for (;;) {
     a.port = await ask('port', arg('port', '21000'), validate.port);
     const inUse = await portInUse(a.host, a.port);

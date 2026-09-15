@@ -89,7 +89,7 @@ Other statuses: `204` for `OPTIONS` on any path (`Allow: GET,POST,DELETE,HEAD`).
 
 Each route in the table has one of three auth levels:
 
-| Level | Accounts off (default) | Accounts on (`BLOCKYARD_AUTH=1`) |
+| Level | Accounts off (`BLOCKYARD_AUTH=0`) | Accounts on (the default) |
 |---|---|---|
 | `none` | Open. | Open. No session needed. |
 | `any` | Served as the built-in anonymous user (`role: "viewer"`). | Any valid, non-disabled session. Without one: `401`. |
@@ -97,14 +97,14 @@ Each route in the table has one of three auth levels:
 
 The roles are `viewer` < `operator` < `admin`. No route in the table requires `viewer` or `operator` by itself. Those two roles matter in two places only: each node action names a minimum role (section 14), and `POST /api/password` needs `admin` to change *another* user's password.
 
-**Open mode (the default, `auth.enabled=false`).** No sign-in. Anyone who can reach the port can read everything (state, charts, events, peers, mempool, explorer, markets, the read-only RPC console) as `viewer`. The ceiling is fixed and nothing can raise it. As a result:
+**Open mode (`auth.enabled=false`, a choice; the default is accounts on).** No sign-in. Anyone who can reach the port can read everything (state, charts, events, peers, mempool, explorer, markets, the read-only RPC console) as `viewer`. The ceiling is fixed and nothing can raise it. As a result:
 
 - user administration, `/api/audit` and password changes are closed;
 - node writes (`/api/action`) are refused unless `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH=1` was set deliberately;
 - `/api/login` answers `403 accounts_disabled`;
 - `GET /login` redirects (`302`) to `/`.
 
-**Accounts mode (`BLOCKYARD_AUTH=1`).** Sign-in, roles, sessions, CSRF protection and a per-user audit trail. On first start with no users, an `admin` account is created. Its password comes from `BLOCKYARD_ADMIN_PASSWORD`, or is generated and printed once to the server log.
+**Accounts mode (the default).** Sign-in, roles, sessions, CSRF protection and a per-user audit trail. On first start with no users, an `admin` account is created. Its password comes from `BLOCKYARD_ADMIN_PASSWORD`, or is generated and printed once to the server log.
 
 ### Session cookie
 
@@ -1223,7 +1223,7 @@ If the node refuses, the answer is `200` with `{ "ok": false, "action", "method"
 
 ## 15. Accounts, sessions, users and audit
 
-These routes are meaningful only with `BLOCKYARD_AUTH=1`. In open mode they answer as noted.
+These routes are meaningful only with accounts on (the default). In open mode they answer as noted.
 
 The user object returned by these routes (`publicUser`):
 

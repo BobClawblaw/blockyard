@@ -68,11 +68,13 @@ Environment=BLOCKYARD_NODE_URL=http://127.0.0.1:8331
 Environment=BLOCKYARD_DATADIR=/home/bitcoin/.bitcoin
 Environment=BLOCKYARD_LOGFILE=/home/bitcoin/.bitcoin/debug.log
 Environment=BLOCKYARD_LOG_LEVEL=info
-# ACCESS: accounts are OFF by default, so anyone who can reach the bound addresses
-# reads this monitor (role "viewer": charts, feeds, read-only RPC console). User
-# administration, the audit trail and node writes stay closed to them. Uncomment to
-# require sign-in (accounts, roles, sessions, CSRF, per-user audit):
-#Environment=BLOCKYARD_AUTH=1
+# ACCESS: hardened out of the box (2026-09-15) -- bound to 127.0.0.1 and sign-in ON;
+# the first start prints the admin password once (or set BLOCKYARD_ADMIN_PASSWORD).
+# To serve a LAN address put it in config/local.json (`server.hosts`) or uncomment
+# the first line; to open the monitor to readers with no account, the second --
+# then anyone who can reach the bound addresses reads it as role "viewer".
+#Environment=BLOCKYARD_BIND=0.0.0.0
+#Environment=BLOCKYARD_AUTH=0
 #
 # Node writes stay off, and while accounts are off they stay off even if actions are
 # enabled -- a write with no identity behind it is not attributable. Enabling needs

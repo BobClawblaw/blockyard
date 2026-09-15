@@ -865,8 +865,7 @@ How the monitor treats your node, and where every number comes from.
 
 ## Admin
 
-Visible only when accounts are enabled (`BLOCKYARD_AUTH=1`) and you are signed in as an
-admin.
+Visible only when accounts are enabled (the default) and you are signed in as an admin.
 
 - **Users**: every account with its role, creation date and last login, with buttons
   to change the role or disable the account. **generate password** creates a user

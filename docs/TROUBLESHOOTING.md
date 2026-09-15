@@ -54,6 +54,10 @@ The Node & RPC page shows the last error. Common causes:
 
 ## The page does not load from another machine
 
+0. Out of the box the monitor binds `127.0.0.1` and answers this machine only. Either reach
+   it over an SSH tunnel (`ssh -L 21000:127.0.0.1:21000 you@host`, then `http://localhost:21000`)
+   or bind a LAN address: `BLOCKYARD_BIND=192.0.2.10` (or `0.0.0.0`), or `server.hosts` in
+   `config/local.json`, and restart.
 1. From the other machine, check how it reaches the server: `ip route get <address>`.
 2. Make sure that address is one the monitor binds — see the start-up log. A LAN-only bind is
    not reachable over a VPN unless the VPN address is also listed in `server.host`.

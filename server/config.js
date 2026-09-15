@@ -27,9 +27,13 @@ Defaults are Bitcoin Core's own, so \`npm start\` works against a stock local no
 
 const DEFAULTS = {
   server: {
-    // Multi-user means the LAN has to reach it, so it binds broadly by default.
-    // Set BLOCKYARD_BIND=127.0.0.1 to keep it on this machine only.
-    host: '0.0.0.0',
+    // THIS MACHINE ONLY, out of the box (2026-09-15, after the first outside review of 0.0.9:
+    // "Default is 0.0.0.0 with auth disabled, so anyone that can hit port 21000 gets node state
+    // plus the read RPC console ... I would run it only bound to 127.0.0.1, with BLOCKYARD_AUTH=1,
+    // behind SSH/TLS" -- operator: "Update the default setup to be hardened"). It bound 0.0.0.0
+    // because multi-user means the LAN has to reach it; now reaching it from elsewhere is a
+    // decision you make -- BLOCKYARD_BIND=0.0.0.0, or a LAN address, or `blockyard setup`.
+    host: '127.0.0.1',
     // 21000 (operator, 2026-09-13: "make default web port 21000 for access"). It was 8088, which
     // sits in the range every other monitor on a box reaches for; this one is ours.
     port: 21000,
@@ -193,10 +197,11 @@ const DEFAULTS = {
     auditKeep: 5,
   },
   auth: {
-    // OPEN BY DEFAULT, like a block explorer: anyone who can reach the listen
-    // addresses reads the dashboard with no account. This is a posture decision, not
-    // a convenience -- see README "Open by default" and the boot warning, which names
-    // the addresses this leaves readable.
+    // SIGN-IN BY DEFAULT (2026-09-15, the same review): the first start creates an `admin`
+    // account and prints its password once (or takes BLOCKYARD_ADMIN_PASSWORD). It shipped OPEN,
+    // like a block explorer, so that anyone who could reach the port could read; that is still
+    // available -- BLOCKYARD_AUTH=0, or auth.enabled: false -- as a posture you choose, announced
+    // by the boot warning that names the addresses it leaves readable.
     //
     // What "open" is bounded by, in server/http/server.js:
     //   * the anonymous role is `viewer` and the ceiling is not configurable; user
@@ -207,9 +212,9 @@ const DEFAULTS = {
     //     should discover by accident);
     //   * rate limits key on the IP, so one noisy tab cannot spend everyone's bucket.
     //
-    // Set BLOCKYARD_AUTH=1 (or auth.enabled in config/local.json) for accounts, roles,
-    // sessions, CSRF and the audit trail-by-user.
-    enabled: false,
+    // Accounts, roles, sessions, CSRF and the audit trail-by-user are on; BLOCKYARD_AUTH=0
+    // (or auth.enabled: false in config/local.json) opens the monitor to readers.
+    enabled: true,
     dataDir: null,
     // THE LONG ONE IS THE ABSOLUTE LIFETIME, the short one the idle ceiling -- which is the way
     // round the names read, and the opposite of what shipped until 2026-09-13. With an 8 h
@@ -534,7 +539,7 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   if (!Number.isInteger(cfg.server.port) || cfg.server.port < 1 || cfg.server.port > 65535) problems.push('server.port invalid');
   // `hosts` is the truth: one address, a comma list, or an array all normalise here.
   // `host` stays populated with the first entry for anything that still reads it.
-  cfg.server.hosts = hostList(cfg.server.hosts ?? cfg.server.host ?? '0.0.0.0');
+  cfg.server.hosts = hostList(cfg.server.hosts ?? cfg.server.host ?? '127.0.0.1');
   cfg.server.host = cfg.server.hosts[0];
   if (!cfg.server.hosts.length) problems.push('server.hosts is empty; nothing would be served');
   // A hostname here binds whatever DNS says at boot, and fails at listen() with a

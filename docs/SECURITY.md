@@ -5,7 +5,7 @@ page describes the access model, what protects it, and exactly what leaves your 
 To report a vulnerability, see [SECURITY.md](../SECURITY.md) at the repository root.
 
 - [Threat model in one paragraph](#threat-model-in-one-paragraph)
-- [Access: open by default, accounts on request](#access-open-by-default-accounts-on-request)
+- [Access: sign-in by default, open on request](#access-sign-in-by-default-open-on-request)
 - [Accounts, sessions and passwords](#accounts-sessions-and-passwords)
 - [Talking to the node](#talking-to-the-node)
 - [Node writes](#node-writes)
@@ -26,10 +26,19 @@ monitor leaking information about you to third parties (limited to the on-demand
 connections listed below, which you can turn off). The monitor does not hold keys and has no
 wallet access.
 
-## Access: open by default, accounts on request
+## Access: sign-in by default, open on request
 
-With the default `auth.enabled: false`, anyone who can reach the port reads the monitor
-with the fixed role `viewer`:
+**Out of the box the monitor listens on `127.0.0.1` only and requires sign-in.** The first
+start creates an `admin` account and prints its password once (or takes it from
+`BLOCKYARD_ADMIN_PASSWORD`). Reach it from another machine over an SSH tunnel
+(`ssh -L 21000:127.0.0.1:21000 you@host`), or bind a LAN address with `BLOCKYARD_BIND` /
+`server.hosts` once you have decided who may see it. These are the defaults since
+2026-09-15; 0.0.9 shipped bound to every interface with no sign-in, which the first outside
+review rightly called out.
+
+Open access is still available as a posture you choose: with `auth.enabled: false`
+(`BLOCKYARD_AUTH=0`), anyone who can reach the port reads the monitor with the fixed role
+`viewer`:
 
 | open to anyone who can reach the port | still closed |
 |---|---|
@@ -42,7 +51,7 @@ The `viewer` ceiling cannot be raised by configuration or by any credential whil
 are off. The start-up log states which addresses are readable and how to close them, so
 "anyone on the LAN can read your node" is never a surprise.
 
-Set `BLOCKYARD_AUTH=1` (or `"auth": { "enabled": true }`) to require sign-in. Roles:
+With sign-in on (the default; `BLOCKYARD_AUTH=1` restores it after an override), roles:
 
 | role | may |
 |---|---|

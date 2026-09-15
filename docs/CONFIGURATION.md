@@ -95,7 +95,7 @@ Durations are in milliseconds unless the name says otherwise (`retentionHours`).
 
 | key | default | meaning |
 |---|---|---|
-| `server.host` | `"0.0.0.0"` | Address to listen on. Kept for compatibility; `server.hosts` wins when both are set. |
+| `server.host` | `"127.0.0.1"` | Address to listen on — this machine only, by default. Kept for compatibility; `server.hosts` wins when both are set. |
 | `server.hosts` | *(unset; falls back to `host`)* | Addresses to listen on: an array (`["192.0.2.10", "2001:db8::10"]`), or a single string with commas (`"192.0.2.10,198.51.100.7"`). One HTTP server is started per address, and all of them share sessions, rate limits and monitors. Entries must be address literals: IPv4, IPv6, `0.0.0.0`, `::`, or `localhost`. Hostnames are refused. See [Binding](#binding-to-specific-addresses). |
 | `server.port` | `21000` | TCP port. It is the same port on every address. It must be an integer from 1 to 65535. |
 | `server.allowCidrs` | `[]` | Client allowlist. Empty means every client that can reach the port is admitted. Otherwise only addresses inside one of the networks connect, and everyone else gets HTTP 403 (the reason goes to the server log). Entries are CIDRs or bare addresses (a bare address means `/32` or `/128`), IPv4 or IPv6, compared bit by bit. An entry that cannot be parsed stops the boot. |
@@ -379,8 +379,8 @@ Environment variables override `config/local.json`.
 | variable | sets | type | default | meaning |
 |---|---|---|---|---|
 | `BLOCKYARD_CONFIG` | *(which file is read)* | path or `none` | `<repo>/config/local.json` | Configuration file to read. `none`/`off`/`no`/`-` reads no file. |
-| `BLOCKYARD_BIND` | `server.host` | list | `0.0.0.0` | Listen address(es), for example `127.0.0.1` or `192.0.2.10,2001:db8::10`. If both are set, this wins over `BLOCKYARD_HOST`. Ignored when the file sets `server.hosts` (see [Known quirks](#known-quirks)). |
-| `BLOCKYARD_HOST` | `server.host` | list | `0.0.0.0` | Same as `BLOCKYARD_BIND`. |
+| `BLOCKYARD_BIND` | `server.host` | list | `127.0.0.1` | Listen address(es), for example `0.0.0.0` or `192.0.2.10,2001:db8::10`. If both are set, this wins over `BLOCKYARD_HOST`. Ignored when the file sets `server.hosts` (see [Known quirks](#known-quirks)). |
+| `BLOCKYARD_HOST` | `server.host` | list | `127.0.0.1` | Same as `BLOCKYARD_BIND`. |
 | `BLOCKYARD_PORT` | `server.port` | number | `21000` | Listen port. |
 | `BLOCKYARD_ALLOW_CIDRS` | `server.allowCidrs` | list | *(empty: everyone)* | Client allowlist, for example `192.0.2.0/24,2001:db8::/32`. |
 | `BLOCKYARD_TRUST_PROXY` | `server.trustProxy` | boolean | `false` | Take the client address from `X-Forwarded-For`. |
@@ -633,9 +633,9 @@ matters here too: it makes the proxy the only way in.
 
 ### Binding to specific addresses
 
-The default `0.0.0.0` listens on every IPv4 interface the machine has, including VPN
-tunnels and container bridges. To serve exactly one LAN address and one VPN
-address, and admit only clients from those networks:
+The default `127.0.0.1` answers this machine only. `0.0.0.0` listens on every IPv4
+interface the machine has, including VPN tunnels and container bridges. To serve exactly
+one LAN address and one VPN address, and admit only clients from those networks:
 
 ```json
 {
@@ -716,7 +716,7 @@ sudo systemctl edit blockyard
 
 ```ini
 [Service]
-Environment=BLOCKYARD_AUTH=1
+Environment=BLOCKYARD_BIND=192.0.2.10
 Environment=BLOCKYARD_DATA=/var/lib/blockyard
 ```
 

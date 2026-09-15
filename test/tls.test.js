@@ -187,12 +187,21 @@ test('without TLS the boot warns, in words', async () => {
   // the hijack raced the test runner's own TAP writer and ate the reported results of
   // unrelated tests in the same file. Observing a warning must not be allowed to hide
   // other observations -- the same class of bug as a log line that hides a fault.
+  // ...and only when something CROSSES the LAN: the helper binds 127.0.0.1 -- the shipped
+  // default since 2026-09-15 -- where the cookie never leaves the machine, so that boot is quiet
+  // about it; a wildcard bind on the same port still gets the words
+  const quiet = logSink();
+  await withApp({ log: quiet }, async ({ app }) => {
+    assert.equal(app.tls, false);
+    assert.ok(!/serving HTTP, not HTTPS/.test(quiet.text()), 'loopback only: nothing crosses the LAN, so no warning');
+    assert.ok(!/TLS on/.test(quiet.text()), 'no claim of encryption that is not happening');
+  });
   const log = logSink();
-  await withApp({ log }, async ({ app }) => {
+  await withApp({ log, config: { server: { host: '0.0.0.0' } } }, async ({ app }) => {
     assert.equal(app.tls, false);
     const out = log.text();
     assert.match(out, /warn serving HTTP, not HTTPS/,
-      'the plaintext default has to be loud at boot, not a footnote in a README nobody opens');
+      'a plaintext LAN bind has to be loud at boot, not a footnote in a README nobody opens');
     assert.match(out, /server\.tls\.cert/, 'and it names what to set, not just what is wrong');
     assert.ok(!/TLS on/.test(out), 'no claim of encryption that is not happening');
   });

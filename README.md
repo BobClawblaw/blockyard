@@ -107,11 +107,14 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
 
 ## Security at a glance
 
-- **Open, read-only access by default** — like a block explorer, anyone who can reach the
-  port can look. Accounts, roles, sessions, CSRF protection and a per-user audit trail turn
-  on with `BLOCKYARD_AUTH=1`.
-- **Where it listens is your decision** — bind to `127.0.0.1`, a LAN address, a VPN
-  address, or several. Built-in HTTPS with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`.
+- **Hardened out of the box** — it listens on `127.0.0.1` only and requires sign-in: the
+  first start creates an `admin` account and prints its password once. Accounts, roles,
+  sessions, CSRF protection and a per-user audit trail are on. Reach it from another machine
+  over an SSH tunnel, or bind a LAN address (`BLOCKYARD_BIND`) when you decide the LAN may
+  see it; open, read-only access with no account is a choice (`BLOCKYARD_AUTH=0`), announced
+  at boot.
+- **Where it listens is your decision** — `127.0.0.1`, a LAN address, a VPN address, or
+  several. Built-in HTTPS with `BLOCKYARD_TLS_CERT` / `BLOCKYARD_TLS_KEY`.
 - **No outbound connections out of the box**: a fresh install talks to nothing but your node.
   The one exception is opt-in — a checkbox, **Display settings → Markets & Price → Enable
   market polling**, turns on the exchange feed for the Markets and Kiosk tabs, Overview's price

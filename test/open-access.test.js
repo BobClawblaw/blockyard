@@ -31,12 +31,13 @@ test('enabling node writes while accounts are off refuses to boot', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-open-'));
   try {
     const f = path.join(dir, 'c.json');
-    fs.writeFileSync(f, JSON.stringify({ actions: { enabled: true, allow: ['savemempool'] } }));
+    fs.writeFileSync(f, JSON.stringify({ auth: { enabled: false }, actions: { enabled: true, allow: ['savemempool'] } }));   // open mode is chosen now, not the default
     assert.throws(() => loadConfig({ configFile: f, ifaces }),
       /accounts are OFF[\s\S]*BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH/,
       'the error has to name both ways out, not just the refusal');
     // The override exists so that the dangerous combination has to be chosen twice.
     fs.writeFileSync(f, JSON.stringify({
+      auth: { enabled: false },
       actions: { enabled: true, allow: ['savemempool'], allowWritesWithoutAuth: true },
     }));
     const ok = loadConfig({ configFile: f, ifaces });
