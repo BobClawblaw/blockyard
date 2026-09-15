@@ -109,7 +109,7 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3
 /* the donation address: the same pill, and the whole thing is the copy button */
 .abdon { display: inline-flex; align-items: center; gap: 16px; align-self: flex-start; padding: 12px 18px 12px 12px; border-radius: 16px;
   border: 1px solid #2a3543; background: rgba(8, 12, 18, .8); color: var(--fg); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
-.abdon .abqr { flex: 0 0 auto; width: 132px; height: 132px; border-radius: 6px; }
+.abdon .abqr { flex: 0 0 auto; width: 132px; height: 132px; border-radius: 6px; image-rendering: pixelated; image-rendering: crisp-edges; background: #fff; }
 .abdon .abdontext { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .abdon .abdonlbl { display: inline-flex; align-items: center; gap: 8px; }
 .abdon code { font-size: 12px; letter-spacing: .2px; color: var(--accent); word-break: break-all; }

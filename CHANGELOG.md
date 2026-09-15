@@ -18,6 +18,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The donation QR shows on Safari.** It was an inline SVG of 800 module rects, and Safari on
+  the first Mac install painted its white ground and none of the rects. It is a PNG now
+  (`public/donate-qr.png`, from the same generator, checked to decode to the address), painted
+  the same everywhere.
 - **A dead index worker fails the build instead of hanging it.** The worker pool listened for a
   reply only, so a worker killed outright (out of memory, with four beside the node) left its job
   unanswered and the build sat at "scan 5,720 of 5,721, about 1 s left" for an hour and a half on
