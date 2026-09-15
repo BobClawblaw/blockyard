@@ -86,9 +86,13 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3
    the one view with no data for it to sit behind, so the sky canvas fills the
    panel and the text floats over it -- the same arrangement Tetrust uses.
    ========================================================================== */
-.aboutwrap { position: relative; border-radius: var(--radius); overflow: hidden; background: #000; border: 1px solid var(--line-soft); min-height: min(calc(100vh - 150px), 820px); }
+/* the same packing every tab got (2026-09-15, "same treatment on the about page"): the sky fills the
+   window to its bottom edge, the inner air is tighter, and the GitHub link and the tip pill share a
+   row -- so the whole page, credit line included, sits on one screen with no scroll */
+.aboutwrap { position: relative; border-radius: var(--radius); overflow: hidden; background: #000; border: 1px solid var(--line-soft); min-height: calc(100vh - 100px); }
 .absky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.aboutinner { position: relative; z-index: 1; padding: 42px clamp(20px, 5vw, 64px); display: flex; flex-direction: column; gap: 26px; max-width: 1080px; margin: 0 auto; }
+.aboutinner { position: relative; z-index: 1; padding: 28px clamp(20px, 5vw, 64px) 22px; display: flex; flex-direction: column; gap: 18px; max-width: 1080px; margin: 0 auto; min-height: calc(100vh - 100px); box-sizing: border-box; }
+.ablinks { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
 .abhead { display: flex; align-items: flex-start; gap: 18px; }
 .ablogo { width: 64px; height: 64px; flex: 0 0 auto; border-radius: 14px; box-shadow: 0 0 28px #f7931a55; }
 .abhead h1 { margin: 0 0 6px; font-size: 34px; font-weight: 600; letter-spacing: .3px; text-shadow: 0 2px 14px #000; }
@@ -98,9 +102,9 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3
    BlockYard is, and it sits over a galaxy, so it needs the contrast. */
 .abhead p { margin: 0; max-width: 62ch; color: #ffffff; line-height: 1.6; text-shadow: 0 1px 8px #000; }
 .abcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 14px; }
-.abcard { background: rgba(8, 12, 18, .72); border: 1px solid #1d2733; border-radius: var(--radius); padding: 14px 16px; }
-.abcard h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); font-weight: 600; }
-.abrow { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding: 3px 0; font-family: var(--mono); font-size: 12.5px; }
+.abcard { background: rgba(8, 12, 18, .72); border: 1px solid #1d2733; border-radius: var(--radius); padding: 11px 14px; }
+.abcard h3 { margin: 0 0 7px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-faint); font-weight: 600; }
+.abrow { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; padding: 2px 0; font-family: var(--mono); font-size: 12.5px; }
 .abrow span { color: var(--fg-dim); }
 .abrow b { font-weight: 600; color: var(--fg); text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .abgh { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; padding: 9px 15px; border-radius: 999px;
@@ -109,7 +113,7 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3
 /* the donation address: the same pill, and the whole thing is the copy button */
 .abdon { display: inline-flex; align-items: center; gap: 16px; align-self: flex-start; padding: 12px 18px 12px 12px; border-radius: 16px;
   border: 1px solid #2a3543; background: rgba(8, 12, 18, .8); color: var(--fg); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
-.abdon .abqr { flex: 0 0 auto; width: 132px; height: 132px; border-radius: 6px; image-rendering: pixelated; image-rendering: crisp-edges; background: #fff; }
+.abdon .abqr { flex: 0 0 auto; width: 112px; height: 112px; border-radius: 6px; image-rendering: pixelated; image-rendering: crisp-edges; background: #fff; }
 .abdon .abdontext { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .abdon .abdonlbl { display: inline-flex; align-items: center; gap: 8px; }
 .abdon code { font-size: 12px; letter-spacing: .2px; color: var(--accent); word-break: break-all; }
@@ -121,7 +125,7 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3
 @media (max-width: 620px) { .abdon { flex-direction: column; align-items: flex-start; } }
 /* Solid white, not the dim grey the other captions use (operator, 2026-09-12) -- it is the
    one line on the page that is a statement rather than a reading. */
-.abcredit { margin: 0; padding-top: 6px; color: #ffffff; font-size: 13px; font-style: italic; letter-spacing: .3px; text-shadow: 0 1px 8px #000; }
+.abcredit { margin: auto 0 0; padding-top: 6px; color: #ffffff; font-size: 13px; font-style: italic; letter-spacing: .3px; text-shadow: 0 1px 8px #000; }
 @media (max-width: 620px) { .abhead { flex-direction: column; gap: 12px; } .abhead h1 { font-size: 27px; } }
 #loginCard h1 b, .login h1 b { color: var(--accent); }
 .brand small { color: var(--fg-faint); font-weight: 500; }
