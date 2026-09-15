@@ -1175,12 +1175,11 @@ function drawSupernova(ctx, view, lw) {
     const f = (u - 0.45) / 0.55, on = Math.min(1, f / 0.1) * gf;
     const period = 140, ph = ((now % period) / period), pulse = Math.pow(Math.max(0, 1 - Math.abs(ph - 0.5) * 6), 2);   // a sharp beat, seven a second (operator: "Pulsar needs to pulse quicker")
     const neb = R0 * (0.25 + 1.1 * f);
-    disc(c.x, c.y, neb, grad(c.x, c.y, neb, [[0, `rgba(160,210,255,${(0.3 * on).toFixed(3)})`], [0.5, `rgba(110,170,255,${(0.14 * on).toFixed(3)})`], [1, 'rgba(80,130,255,0)']]));
-    // the wind nebula's own knots, turning
-    for (let k = 0; k < 8; k++) {
-      const ang = now * 0.0006 + (k / 8) * Math.PI * 2, rr = neb * 0.6;
-      disc(c.x + Math.cos(ang) * rr, c.y + Math.sin(ang) * rr * 0.8, neb * 0.3, grad(c.x + Math.cos(ang) * rr, c.y + Math.sin(ang) * rr * 0.8, neb * 0.3, [[0, `rgba(200,230,255,${(0.14 * on).toFixed(3)})`], [1, 'rgba(120,180,255,0)']]));
-    }
+    // THE WIND NEBULA IS A GAS CLOUD TOO (operator, 2026-09-15: "The pulsar nebula needs the gas
+    // cloud too"): a small blue-white sphere of blobs blown outward from the pulsar, growing with
+    // it, lit from the centre, the pulsar's beat showing in its brightness
+    disc(c.x, c.y, neb, grad(c.x, c.y, neb, [[0, `rgba(190,225,255,${(0.28 * on).toFixed(3)})`], [0.5, `rgba(120,175,255,${(0.12 * on).toFixed(3)})`], [1, 'rgba(80,130,255,0)']]));
+    gasCloud(ctx, c.x, c.y, neb, f, now, fx.seed + 4242, on * (0.75 + 0.25 * pulse), [170, 215, 255], grad, disc, 70, [40, 70, 170]);
     const rp = R0 * (0.12 + 0.25 * pulse);
     disc(c.x, c.y, rp * 2.4, grad(c.x, c.y, rp * 2.4, [[0, `rgba(255,255,255,${((0.5 + 0.5 * pulse) * on).toFixed(3)})`], [0.3, `rgba(200,235,255,${(0.55 * pulse * on).toFixed(3)})`], [1, 'rgba(140,200,255,0)']]));
     disc(c.x, c.y, rp * 0.5, `rgba(255,255,255,${on.toFixed(3)})`);
