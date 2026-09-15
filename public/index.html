@@ -478,12 +478,13 @@
           <div class="khead"><b>Block space</b><span class="faint">the next block's worth of the mempool</span></div>
           <div class="treemapwrap kboard"><canvas class="treemap" id="kSpace"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div><div class="goggles-tip hidden"></div></div>
         </div>
-        <div class="kpanel kbf">
-          <div class="khead"><b>Block flow</b><span class="faint">projected → being built → the chain</span></div>
+        <div class="kpanel kbf flowtight">
+          <!-- the full-screen button lives in this head now (2026-09-15): floated at the kiosk's
+               corner it sat over the flow's cards once the strip was tightened -->
+          <div class="khead"><b>Block flow</b><span class="faint">projected → being built → the chain</span><span class="sp"></span><button type="button" class="kfull" id="kFull" title="full screen">full screen</button></div>
           <div id="kTrain" class="flowwrap"></div>
         </div>
         </div>
-        <button type="button" class="kfull" id="kFull" title="full screen">full screen</button>
       </div>
     </section>
     <!-- TETRUST: a Tetris on the 3D engine (operator, 2026-09-12). The well is a board3d, so it wears

@@ -111,7 +111,7 @@ test('the kiosk shows the chain: a Block flow panel under Block space, fed like 
   const html = read('../public/index.html');
   const k = html.slice(html.indexOf('id="kiosk"'), html.indexOf('MARKETS -->'));
   assert.ok(k.indexOf('id="kSpace"') < k.indexOf('id="kTrain"'), 'Block flow comes after Block space');
-  assert.match(k, /<div class="kpanel kbf">[^]*id="kTrain" class="flowwrap"/);
+  assert.match(k, /<div class="kpanel kbf flowtight">[^]*id="kTrain" class="flowwrap"/);   // .flowtight: the same tight flow as Mining and Overview (2026-09-15)
   const kiosk = read('../public/js/kiosk.js');
   assert.match(kiosk, /blockFlow\(train, flowArgs\(s, state\), h\.fmt\)/);
   assert.match(kiosk, /h\.nextBlock\?\.\(\)/, 'the block being built is asked for');
@@ -130,7 +130,7 @@ test('the kiosk is two independent columns, and Block flow is a fixed strip that
   assert.ok(/id="kMarkets"/.test(cols[0]) && /id="kPrice"/.test(cols[0]), 'markets over price');
   assert.ok(/id="kSpace"/.test(cols[1]) && /id="kTrain"/.test(cols[1]), 'block space over block flow');
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
-  assert.match(css, /\.kcol > \.kbf \{ flex: 0 0 auto; height: 240px; \}/);
+  assert.match(css, /\.kcol > \.kbf \{ flex: 0 0 auto; height: 170px; \}/);   // 170 since 2026-09-15: the cards at 80% zoom, no legend, tight paddings
   assert.match(css, /\.kbf \.flowwrap \{[^}]*overflow-y: hidden/);
   assert.match(css, /\.kbf \.flownote, \.kbf \.tiplegend \{ display: none; \}/);
 });

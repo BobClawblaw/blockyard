@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Kiosk packs the same way: tighter heads and gaps, the price panel's padding trimmed, the Block flow strip a quarter shorter with the tight flow, and the full-screen button in that strip's head instead of floating over its cards
 - The Mining tab's pie and year chart size themselves to the window's height, so the flow, the two figure cards and the two chart cards with their View more links fit one screen from about 900px tall
 - The Mining tab follows mempool.space's mining dashboard layout: two columns in its order (reward stats, difficulty adjustment; pools, hashrate; recent blocks, adjustments) under the block flow, our own panels beneath, and **View more »** on four cards opening that card full screen, with the whole week of pools as a table, the year's chart large, the whole attributed window of blocks and a year of adjustments
 - Every tab packs the same way: the card padding and heading spacing that Mining, Overview and Block space got are the default now, and a short card beside a tall one keeps its own height instead of being stretched to match (Chain & Sync's drill-down card had a thousand pixels of nothing under its input; Node & RPC's poll cadence and connection cards hundreds)
