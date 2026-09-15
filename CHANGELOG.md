@@ -66,8 +66,9 @@ All notable changes to this project are documented here. The format follows
   Up to **ten shells on Markets** over 14 s (five on Block space), launching at their own moments
   so several are up at once, of every size, at every height of the picture; each shell lights
   the candles under it and a wide pool round it **in its own colour** (one schedule serves the
-  drawing and the lighting); and the dissipation is sixteen lumpy smoke bodies curling outward
-  with the colour still in their hearts, embers falling and flickering, ash sinking after.
+  drawing and the lighting); and the dissipation is a volume of gas (`gasCloud`, the supernova's
+  renderer: sixty soft blobs on a sphere carried out from the burst, drifting up, the shell's
+  colour going grey), embers falling and flickering, ash sinking after.
 - **Ball lightning on Markets:** a quarter of its original size, a third of the block board's
   speed (27.5 s), throws half as many arcs, one strike in five blooms a lens flare, rides
   up and down across most of the chart's height, throws nothing once off the board so the run
