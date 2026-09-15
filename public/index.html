@@ -943,35 +943,21 @@
     <!-- ==================================================== NODE & RPC -->
     <section class="page" data-page="node">
       <div class="grid">
-        <div class="card w6">
+        <!-- TWO STACKS (2026-09-15, "same treatment on the node & rpc tab"): the cards are of very
+             different heights -- RPC etiquette is fourteen figures and a chart, Poll cadence five
+             rows -- and as grid rows they left holes beside the short ones. Each stack packs its
+             own cards; the etiquette figures run in two columns. -->
+        <div class="ovcols ndcols">
+          <div class="ovcol">
+            <div class="card">
           <h3>RPC etiquette <span class="sp"></span><span class="src">what this app asks of the node</span></h3>
-          <dl class="kv" id="ndRpc"></dl>
+          <dl class="kv two" id="ndRpc"></dl>
           <canvas class="chart short" id="ndLatChart"></canvas>
           <div class="note tiny faint">The node's RPC server services one connection at a time on a single thread. This app keeps one request in flight, spaces them, batches multiple methods per connection, and drops a poll that could not answer in time to be true.</div>
         </div>
-        <div class="card w6">
-          <h3>Poll cadence <span class="sp"></span><span class="src">configured vs actual</span></h3>
-          <table class="t" id="ndCadence"><thead><tr><th>tier</th><th class="r">configured</th><th class="r">actual</th><th class="r">last run</th></tr></thead><tbody></tbody></table>
-          <div class="note tiny faint" id="ndCadenceNote"></div>
-        </div>
-
-        <div class="card w6">
+            <div class="card">
           <h3>Data quality <span class="sp"></span><span class="src">known gaps, stated</span></h3>
           <div id="ndQuality"></div>
-        </div>
-        <div class="card w3">
-          <h3>Monitor self-telemetry <span class="sp"></span><span class="src">this process</span></h3>
-          <dl class="kv" id="ndSelf"></dl>
-          <canvas class="chart short" id="ndSelfChart"></canvas>
-        </div>
-        <div class="card w3">
-          <h3>Log tail <span class="sp"></span><span class="src">follow state</span></h3>
-          <dl class="kv" id="ndTail"></dl>
-        </div>
-
-        <div class="card w6">
-          <h3>Panel sources <span class="sp"></span><span class="src">provenance</span></h3>
-          <div id="ndSources"></div>
         </div>
         <!-- THE NODE CONNECTION (operator, 2026-09-12: "Still left to do is a config connection in
              the web settings. We have no way for users to configure a connection to their rpc
@@ -981,7 +967,7 @@
              No credential fields, deliberately: authentication is the node's own .cookie, found
              from the data directory (server/config.js resolveCookie). Asking for an RPC password on
              a page that is open access by default is not something to add quietly. -->
-        <div class="card w6">
+                    <div class="card">
           <h3>Node connection <span class="sp"></span><span class="src">where this monitor looks</span></h3>
           <!-- the placeholder deliberately is NOT a URL: web-contract.test.js refuses an http(s)
                literal outside an <a href>, because in shipped markup that reads as a resource load
@@ -999,7 +985,29 @@
           <div class="note tiny" id="cnOut"></div>
           <div class="note tiny faint">Authentication uses the node's <span class="mono">.cookie</span> from the data directory; no password is asked for or kept here. Saving writes this monitor's own configuration file and takes effect on restart.</div>
         </div>
-        <div class="card w6">
+          </div>
+          <div class="ovcol">
+            <div class="card">
+          <h3>Poll cadence <span class="sp"></span><span class="src">configured vs actual</span></h3>
+          <table class="t" id="ndCadence"><thead><tr><th>tier</th><th class="r">configured</th><th class="r">actual</th><th class="r">last run</th></tr></thead><tbody></tbody></table>
+          <div class="note tiny faint" id="ndCadenceNote"></div>
+        </div>
+            <div class="ovpair">
+              <div class="card">
+          <h3>Monitor self-telemetry <span class="sp"></span><span class="src">this process</span></h3>
+          <dl class="kv" id="ndSelf"></dl>
+          <canvas class="chart short" id="ndSelfChart"></canvas>
+        </div>
+              <div class="card">
+          <h3>Log tail <span class="sp"></span><span class="src">follow state</span></h3>
+          <dl class="kv" id="ndTail"></dl>
+        </div>
+            </div>
+            <div class="card">
+          <h3>Panel sources <span class="sp"></span><span class="src">provenance</span></h3>
+          <div id="ndSources"></div>
+        </div>
+            <div class="card">
           <h3>RPC console <span class="sp"></span><span class="src">read-only allowlist</span></h3>
           <div class="rowform">
             <input class="f grow minw-180" id="rpcMethod" placeholder="method, e.g. getblockchaininfo">
@@ -1008,6 +1016,8 @@
           </div>
           <div class="note tiny faint" id="rpcNote">Mutating, wallet- and peer-control methods are refused by this app regardless of what the node would do.</div>
           <pre class="mono tiny output-box" id="rpcOut"></pre>
+        </div>
+          </div>
         </div>
       </div>
     </section>
