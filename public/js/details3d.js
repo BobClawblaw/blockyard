@@ -915,18 +915,15 @@ function drawFireworks(ctx, view, lw) {
     // outward and curling as it goes, the shell's colour gone grey with the colour still in its
     // heart; embers falling slowly through it, flickering; ash sinking after them; all of it
     // fading as it disperses and gone before the run ends
-    const smokeCol = [Math.round(col[0] * 0.4 + 90), Math.round(col[1] * 0.4 + 90), Math.round(col[2] * 0.4 + 100)].join(',');
-    for (let k = 0; k < 16; k++) {
-      const ang = (k / 16) * Math.PI * 2 + H(70 + k) * 0.7, sp = 0.45 + 0.75 * H(80 + k);
-      const curl = Math.sin(ss * Math.PI * 2 * (0.5 + H(85 + k)) + k) * R0 * 0.12 * ss;
-      const dist = R0 * 0.6 * sp * (1 - Math.exp(-2.2 * ss)), rise = R0 * 0.3 * ss;
-      const x = top.x + Math.cos(ang) * dist + curl, y = top.y + Math.sin(ang) * dist * 0.8 - rise;
-      const r = R0 * (0.2 + 0.75 * ss) * (0.7 + 0.5 * H(90 + k));
-      const a = 0.2 * Math.pow(1 - ss, 1.5) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
-      if (a < 0.004) continue;
-      disc(x, y, r, gradientOf(x, y, r, [[0, `rgba(${smokeCol},${a.toFixed(3)})`], [0.5, `rgba(${smokeCol},${(a * 0.5).toFixed(3)})`], [1, `rgba(${smokeCol},0)`]]));
-      const ox = x + Math.cos(ang + 1.3) * r * 0.45, oy = y + Math.sin(ang + 1.3) * r * 0.35;
-      disc(ox, oy, r * 0.7, gradientOf(ox, oy, r * 0.7, [[0, `rgba(${c1},${(a * 0.35 * (1 - ss)).toFixed(3)})`], [0.6, `rgba(${smokeCol},${(a * 0.4).toFixed(3)})`], [1, `rgba(${smokeCol},0)`]]));
+    const smokeRc = [Math.round(col[0] * 0.45 + 95), Math.round(col[1] * 0.45 + 95), Math.round(col[2] * 0.45 + 105)];
+    const smokeCol = smokeRc.join(',');
+    // THE SMOKE IS A VOLUME OF GAS (operator, 2026-09-15: "Use the gas cloud for the fireworks
+    // smoke too"): the supernova's renderer, smaller -- a sphere of soft blobs carried out from
+    // the burst, drifting up, going from the shell's colour toward grey as it disperses
+    {
+      const sr = R0 * (0.3 + 1.1 * (1 - Math.exp(-2.2 * ss))), rise = R0 * 0.3 * ss;
+      const sa = 0.9 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
+      if (sa > 0.01) gasCloud(ctx, top.x, top.y - rise, sr, ss, now, fx.seed + sh.i * 977, sa, smokeRc, gradientOf, disc, 60, [50, 50, 58]);
     }
     if (ss > 0.15) {
       const em = (ss - 0.15) / 0.85;
@@ -1035,7 +1032,7 @@ function drawFireworks(ctx, view, lw) {
 // front, the back ones darker and redder, the front ones paler and hotter. The whole thing
 // expands homologously (every blob's distance in proportion to its own), grows, boils slowly on
 // the clock, and cools from `rc` toward dark red as `f` runs 0..1. No strokes: gradients only.
-function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150) {
+function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25]) {
   const blobs = [];
   for (let k = 0; k < n; k++) {
     const H = (q) => hash01(seed + 5000 + k * 37 + q);
@@ -1044,7 +1041,6 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
     blobs.push({ x: rho * Math.sin(ph) * Math.cos(th), y: rho * Math.sin(ph) * Math.sin(th), z: rho * Math.cos(ph), s: 0.09 + 0.13 * H(4), w: H(5) * Math.PI * 2, k });
   }
   blobs.sort((a, b) => a.z - b.z);                                       // back to front
-  const dark = [90, 20, 25];
   for (const b of blobs) {
     const wob = 0.035 * Math.sin(now * 0.0013 + b.w) + 0.02 * Math.sin(now * 0.0029 + b.k);
     const x = cx + (b.x + wob) * shell, y = cy + (b.y - wob * 0.6) * shell * 0.85;
