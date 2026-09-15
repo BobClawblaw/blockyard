@@ -1110,20 +1110,6 @@ function drawBlackHole(ctx, view, lw) {
     const px = rr * Math.cos(ang), py = rr * Math.sin(ang) * SQUASH;
     return { x: c.x + px * Math.cos(TILT) - py * Math.sin(TILT), y: c.y + px * Math.sin(TILT) + py * Math.cos(TILT) };
   };
-  // the body of one half of the disk: a ring sector filled with a radial gradient in the disk's own
-  // plane (drawn under the transform, so the gradient is elliptical with it)
-  const body = (a0, a1) => {
-    if (!canT) return;
-    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(TILT); ctx.scale(1, SQUASH);
-    ctx.beginPath(); ctx.arc(0, 0, outer, a0, a1); ctx.arc(0, 0, inner, a1, a0, true); ctx.closePath();
-    ctx.fillStyle = grad(0, 0, outer, [[inner / outer, `rgba(255,250,215,${(0.95 * grow).toFixed(3)})`], [(inner + (outer - inner) * 0.12) / outer, `rgba(255,215,110,${(0.9 * grow).toFixed(3)})`], [(inner + (outer - inner) * 0.4) / outer, `rgba(255,140,50,${(0.7 * grow).toFixed(3)})`], [(inner + (outer - inner) * 0.75) / outer, `rgba(200,60,25,${(0.35 * grow).toFixed(3)})`], [1, 'rgba(120,20,10,0)']]);
-    ctx.fill();
-    // the Doppler side, as a linear gradient across the same sector: bright on the left, dark right
-    ctx.beginPath(); ctx.arc(0, 0, outer, a0, a1); ctx.arc(0, 0, inner, a1, a0, true); ctx.closePath();
-    const dg = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(-outer, 0, outer, 0) : null;
-    if (dg && typeof dg.addColorStop === 'function') { dg.addColorStop(0, `rgba(255,255,230,${(0.35 * grow).toFixed(3)})`); dg.addColorStop(0.45, 'rgba(255,255,230,0)'); dg.addColorStop(0.6, 'rgba(60,10,10,0)'); dg.addColorStop(1, `rgba(40,5,5,${(0.5 * grow).toFixed(3)})`); ctx.fillStyle = dg; ctx.fill(); }
-    ctx.restore();
-  };
   // the fibres: thin streaks spiralling inward, each sheared along the flow, in the disk's plane
   const streaks = [];
   for (let k = 0; k < 520; k++) {
@@ -1149,14 +1135,6 @@ function drawBlackHole(ctx, view, lw) {
     }
     ctx.restore();
   };
-  const drawShadow = () => {
-    // the photon ring: thin, white-hot, hugging the shadow, with a faint gap to the disk's inner edge
-    ctx.strokeStyle = `rgba(255,245,215,${(0.95 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.045);
-    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.07, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = `rgba(255,190,100,${(0.45 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.14);
-    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.11, 0, Math.PI * 2); ctx.stroke();
-    disc(c.x, c.y, rs * 1.1, grad(c.x, c.y, rs * 1.1, [[0, 'rgba(0,0,0,1)'], [0.88, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
-  };
   // --- THE FAR HALF, LIFTED INTO THE ARCH (operator, 2026-09-15: "the disc above is not merging
   // with the sides, and looks really bad" -- the arch was a circle drawn round the shadow while
   // the disk is an ellipse in its own plane, two surfaces that met by accident). The arch IS the
@@ -1175,15 +1153,19 @@ function drawBlackHole(ctx, view, lw) {
   // near half is the same strips now, laid on the flat ellipse, so the colour at any radius is
   // the same on both sides of the line and there is no line.
   const archBody = (mode) => {
-    const under = mode === 'under', near = mode === 'near';
+    // 'ring': ONE CLOSED POLYGON PER STRIP round the whole disk -- the flat mapping over the near
+    // half, the lifted mapping over the far -- so there is no interior edge at the midline at all
+    // (2026-09-15: "still see harsh line bisecting" -- two fills sharing an edge draw that edge,
+    // antialiased twice, however well their colours agree). 'under' is the second image alone.
+    const under = mode === 'under';
     const STRIPS = 40, dim = under ? 0.55 : 1;
-    const at = (rr, ang) => (near ? toScreen(rr, ang) : farPt(rr, ang, under));
-    const a0 = near ? 0 : Math.PI;
+    const at = (rr, ang) => (under ? farPt(rr, ang, true) : ang <= Math.PI ? toScreen(rr, ang) : farPt(rr, ang, false));
+    const a0 = under ? Math.PI : 0, aSpan = under ? Math.PI : Math.PI * 2, N = under ? 36 : 72;
     for (let k = 0; k < STRIPS; k++) {
       const t0 = k / STRIPS, t1 = (k + 1) / STRIPS, r0 = inner + (outer - inner) * t0, r1 = inner + (outer - inner) * t1, heat = 1 - (t0 + t1) / 2;
       ctx.beginPath();
-      for (let i = 0; i <= 36; i++) { const ang = a0 + (Math.PI * i) / 36; const p = at(r1, ang); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
-      for (let i = 36; i >= 0; i--) { const ang = a0 + (Math.PI * i) / 36; const p = at(r0, ang); ctx.lineTo(p.x, p.y); }
+      for (let i = 0; i <= N; i++) { const ang = a0 + (aSpan * i) / N; const p = at(r1, ang); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
+      for (let i = N; i >= 0; i--) { const ang = a0 + (aSpan * i) / N; const p = at(r0, ang); ctx.lineTo(p.x, p.y); }
       ctx.closePath();
       // bright, never brown: the rim stays a saturated orange rather than a dark red at low alpha
       const R = 255, G = Math.round(95 + 160 * Math.pow(heat, 0.7)), B = Math.round(25 + 200 * Math.pow(heat, 2.2));
@@ -1209,11 +1191,16 @@ function drawBlackHole(ctx, view, lw) {
     }
   };
   archBody('under'); archStreaks(true);                                 // the second image, under
-  archBody('over'); archStreaks(false);                                 // the great arch, over
-  drawShadow();
-  // --- the near half, in front of the hole: the same strips, on the flat ellipse
-  archBody('near');
+  // the shadow, then the whole disk over it -- the far half is lifted clear of the shadow, the
+  // near half crosses in front of it -- then the fibres, then the photon ring over everything
+  disc(c.x, c.y, rs * 1.1, grad(c.x, c.y, rs * 1.1, [[0, 'rgba(0,0,0,1)'], [0.88, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
+  archBody('ring');
+  archStreaks(false);
   drawStreaks(false);
+  ctx.strokeStyle = `rgba(255,245,215,${(0.95 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.045);
+  ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.07, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,190,100,${(0.45 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.14);
+  ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.11, 0, Math.PI * 2); ctx.stroke();
   // --- lensed starlight: short arcs of white round the horizon, the sky behind bent into rings
   for (let k = 0; k < 26; k++) {
     const hk = (q) => hash01(fx.seed + 800 + k * 7 + q);
