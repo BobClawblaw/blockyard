@@ -1746,17 +1746,18 @@ function drawSupernova(ctx, view, lw) {
   // half again -- they reach nine star radii, keep flying after the flash has gone, and only
   // thin out slowly, so the white gas is still drifting outward when the blue debris rises
   // AND AGAIN (operator, 2026-09-15: "the white plumes still fade too fast, make them linger
-  // longer. Double the amount again"): sixty-four plumes, holding full for the first fifth of
+  // longer. Double the amount again" -- then "Double the white ejecta again. We're getting
+  // closer!"): a hundred and twenty-eight plumes, holding full for the first fifth of
   // their flight and thinning slowly over the rest, still drifting at nine tenths of the effect
   if (u >= 0.12 && u < 0.9) {
     const t = (u - 0.12) / 0.78, g = t < 0.04 ? t / 0.04 : t < 0.2 ? 1 : Math.pow(1 - (t - 0.2) / 0.8, 0.7);
-    for (let k = 0; k < 64; k++) {
+    for (let k = 0; k < 128; k++) {
       const H = (q) => hash01(fx.seed + 4400 + k * 19 + q);
-      const ang = (k / 64) * Math.PI * 2 + (H(1) - 0.5) * 0.3, sp = 0.5 + 1.0 * H(2);
+      const ang = (k / 128) * Math.PI * 2 + (H(1) - 0.5) * 0.2, sp = 0.4 + 1.2 * H(2);
       const reach = R0 * (0.6 + 9 * t) * sp, ease = 1 - Math.exp(-2.2 * t);
       const px = c.x + Math.cos(ang) * reach * ease, py = c.y + Math.sin(ang) * 0.75 * reach * ease;
       const shell = R0 * (0.5 + 2.8 * t) * (0.7 + 0.6 * H(3));
-      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.08 * g * (1 - 0.3 * sp), [245, 248, 255], grad, disc, 32, [180, 195, 235], null, 1, 1.3);
+      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.07 * g * (1 - 0.3 * sp), [245, 248, 255], grad, disc, 24, [180, 195, 235], null, 1, 1.3);
     }
   }
   // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing

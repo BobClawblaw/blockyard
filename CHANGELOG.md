@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
-- The supernova's opening explosion is a white-hot flash, held for a moment and washing far out, that throws sixty-four plumes of white gas in every direction, each flying and growing on its own out to nine star radii and drifting on until the effect is nearly done
+- The supernova's opening explosion is a white-hot flash, held for a moment and washing far out, that throws a hundred and twenty-eight plumes of white gas in every direction, each flying and growing on its own out to nine star radii and drifting on until the effect is nearly done
 
 ### Changed
 
