@@ -285,5 +285,5 @@ test('the no-repeat window holds from the very first pick: nothing repeats befor
 
 test('ball lightning crosses the price board a third slower than the block board', () => {
   // operator, 2026-09-15: "cut the speed by 33% now that it's slower"
-  assert.equal(MARKET_MS.stormball, 16500, '11 s on the block board, 16.5 s on the candles');
+  assert.equal(MARKET_MS.stormball, 27500, '11 s on the block board, 27.5 s on the candles (a third slower, then 40% slower again)');
 });

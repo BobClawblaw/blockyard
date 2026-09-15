@@ -162,9 +162,10 @@ const FX_MS = {
   // stormball replaced portal (2026-09-14); slow on purpose -- it drifts across the whole view
   boulderdash: 6400, stormball: 11000,};
 export const FX_KINDS = Object.keys(FX_MS);
-// the price board's own lengths, where they differ: ball lightning crosses it a third slower
-// (operator, 2026-09-15: "cut the speed by 33% now that it's slower")
-export const MARKET_MS = { stormball: 16500, firework: 14000 };   // and a fireworks display of five shells, each with its smoke, needs the time
+// the price board's own lengths, where they differ: ball lightning crosses it at a third of the
+// block board's speed -- 11 s there; a third slower (16.5 s, operator 2026-09-15: "cut the speed
+// by 33% now that it's slower"), then 40% slower again (27.5 s: "Slow it down movement by 40%")
+export const MARKET_MS = { stormball: 27500, firework: 14000 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.

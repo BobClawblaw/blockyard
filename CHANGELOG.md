@@ -21,7 +21,8 @@ All notable changes to this project are documented here. The format follows
   anamorphic streak, four turning rays, a run of ghosts toward the picture's middle), glitter rain
   after the shell, and the schedule fits the run with a fade at its end, so nothing is ever cut.
   Five shells on Markets over 14 s at the chart's own heights, three on Block space.
-- **Ball lightning on Markets:** a quarter of its original size, a third slower (16.5 s), rides
+- **Ball lightning on Markets:** a quarter of its original size, a third of the block board's
+  speed (27.5 s), throws half as many arcs, one strike in five blooms a lens flare, rides
   up and down across most of the chart's height, throws nothing once off the board so the run
   ends with it long gone, and every strike is a flash — the halo blazes, a white flash blooms
   where it lands, a bead of light runs the channel, sparks spray and fall, two or three branches.

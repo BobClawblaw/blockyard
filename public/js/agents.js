@@ -268,6 +268,36 @@ function bloom(ctx, x, y, r, rgb, a = 1) {
   }
 }
 
+/**
+ * A lens flare at a bright point: an anamorphic streak in the colour, a white core, four thin
+ * rays turning slowly, and a run of faint ghosts along the line toward the picture's middle.
+ * `f` is 1 at full and 0 gone. Gradients only, no composite modes (the canvas rules).
+ */
+export function lensFlare(ctx, x, y, L, rgb, f, view, lw) {
+  if (f <= 0) return;
+  const c = rgb.join(',');
+  const lin = (x0, y0, x1, y1, stops) => {
+    const g = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(x0, y0, x1, y1) : null;
+    if (!g || typeof g.addColorStop !== 'function') return stops[Math.floor(stops.length / 2)][1];
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    return g;
+  };
+  const stroke = (x0, y0, x1, y1, fill, w) => { ctx.strokeStyle = fill; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
+  stroke(x - L * 0.7, y, x + L * 0.7, y, lin(x - L * 0.7, y, x + L * 0.7, y, [[0, `rgba(${c},0)`], [0.5, `rgba(${c},${(0.25 * f).toFixed(3)})`], [1, `rgba(${c},0)`]]), L * 0.06);
+  stroke(x - L, y, x + L, y, lin(x - L, y, x + L, y, [[0, `rgba(${c},0)`], [0.35, `rgba(${c},${(0.35 * f).toFixed(3)})`], [0.5, `rgba(255,255,255,${(0.9 * f).toFixed(3)})`], [0.65, `rgba(${c},${(0.35 * f).toFixed(3)})`], [1, `rgba(${c},0)`]]), L * 0.018);
+  const spin = (view.now ?? 0) * 0.0004;
+  for (let k = 0; k < 4; k++) {
+    const ang = spin + (k / 4) * Math.PI, rl = L * 0.45;
+    const x0 = x - Math.cos(ang) * rl, y0 = y - Math.sin(ang) * rl, x1 = x + Math.cos(ang) * rl, y1 = y + Math.sin(ang) * rl;
+    stroke(x0, y0, x1, y1, lin(x0, y0, x1, y1, [[0, 'rgba(255,255,255,0)'], [0.5, `rgba(255,255,255,${(0.5 * f).toFixed(3)})`], [1, 'rgba(255,255,255,0)']]), L * 0.008);
+  }
+  const cx0 = (view.boardW ?? 0) / 2, cy0 = -(view.boardH ?? 0) / 4;
+  for (let k = 1; k <= 4; k++) {
+    const t = k * 0.3, gx = x + (cx0 - x) * t, gy = y + (cy0 - y) * t, gr = L * 0.05 * (0.6 + t), ga = 0.14 * f * (1 - k / 6);
+    ctx.fillStyle = `rgba(${c},${ga.toFixed(3)})`; ctx.beginPath(); ctx.arc(gx, gy, Math.max(1, gr), 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 /** A square standing at grid (x, y) at height z, as screen points. */
 const quad = (view, x, y, z, r) => [
   project(x - r, y - r, z, view), project(x + r, y - r, z, view),
@@ -748,12 +778,18 @@ defineAgent('stormball', {
     const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
     const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
     const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
-    // bursts of arcs: a few a second, one to three at a time, each alive for a moment
+    // bursts of arcs: a few a second, one to three at a time, each alive for a moment -- half as
+    // often on the price board (operator, 2026-09-15: "Tone down chance of emitting lightning by
+    // 50%"), where the run is also slower, so per second it is quieter still
     const arcs = [];
-    for (let u = 0.03; u < 0.97; u += 0.016 + 0.035 * rnd()) {
+    const every = line?.length > 1 ? 2 : 1;
+    for (let u = 0.03; u < 0.97; u += (0.016 + 0.035 * rnd()) * every) {
       const n = 1 + Math.floor(rnd() * 4);
       for (let k = 0; k < n; k++) {
         const arc = { u0: u + rnd() * 0.01, life: 0.02 + 0.035 * rnd(), ang: rnd() * Math.PI * 2, reach: 3.5 + 8 * rnd(), seed: Math.floor(rnd() * 1e9) };
+        // one strike in five flares: a lens flare blooms where it lands (operator, 2026-09-15:
+        // "Consider adding the lense flare effect on occasional lightning strikes")
+        if (rnd() < 0.2) arc.flare = true;
         // A SECOND ARC OFF THE STRUCK BLOCK, AND SOMETIMES A THIRD (operator, 2026-09-14: "a small
         // chance for a second arc to spawn from the block and arc to a different block", then "Make
         // the secondary arcing more frequent, and have a 50% for an additional third arc"). Half
@@ -817,7 +853,7 @@ defineAgent('stormball', {
       // the block the arc strikes: the tallest cell near where it is thrown, and none if the floor is bare
       const hit = strike(p.x + Math.cos(arc.ang) * arc.reach, p.y + Math.sin(arc.ang) * arc.reach);
       if (!hit) continue;
-      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6, age });
+      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6, age, flare: !!arc.flare });
       // THE BLOCK IT TOUCHES IS ELECTRIFIED: a hard blue flare that flickers while the arc lives and
       // dies away after it -- lit through fxAt's heads, so only the cubes actually struck light up
       const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
@@ -912,6 +948,9 @@ defineAgent('stormball', {
       stroke(main, edge, sz * 0.055, 0.95 * arc.strength);
       stroke(main, '245,252,255', sz * (0.022 + 0.02 * flash), arc.strength);
       if (flash > 0) bloom(ctx, end.x, end.y, R * 1.6 * (1.2 - flash * 0.5), [255, 255, 255], 0.9 * flash);
+      // the occasional strike flares: an anamorphic streak through the landing, four turning
+      // rays, and a run of ghosts off toward the picture's middle, over the first third of the arc
+      if (arc.flare && age < 0.35) lensFlare(ctx, end.x, end.y, R * 2.2, arc.chain ? [110, 255, 170] : [140, 220, 255], Math.pow(1 - age / 0.35, 1.5), view, lw);
       // the bead: a bright knot of light running the channel in the first third of the arc's life
       const run = Math.min(1, age / 0.35), bi = Math.min(main.length - 1, Math.floor(run * (main.length - 1)));
       if (age < 0.5) bloom(ctx, main[bi].x, main[bi].y, sz * 0.22, [235, 250, 255], 0.9 * (1 - age));
