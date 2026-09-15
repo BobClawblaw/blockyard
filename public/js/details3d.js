@@ -1092,103 +1092,97 @@ function drawBlackHole(ctx, view, lw) {
   };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const canT = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
-  const TILT = -0.2, SQUASH = 0.3;                                       // the disk seen nearly edge-on, a little turned
-  const inner = rs * 1.4, outer = rs * 6.4;   // twice the reach (operator, 2026-09-15: "make the accretion discs twice as large")
+  // THE LOOK OF THE REFERENCE (operator, 2026-09-15, with NASA's still of the disk: "Is there any
+  // way we can get it looking closer to this?"): the disk seen well above its plane, not edge-on;
+  // a broad continuous body, white-yellow at its inner edge through orange to a dark red rim that
+  // fades to nothing; FIBROUS -- hundreds of thin streaks spiralling inward over it, sheared by
+  // the Keplerian flow, brightest on the approaching side; the shadow in the middle with a thin
+  // photon ring, a gap, and the far side's thin lensed arch hugging it over the top.
+  const TILT = -0.12, SQUASH = 0.55;
+  const inner = rs * 1.5, outer = rs * 6.4;
   const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
   const H = (k) => hash01(fx.seed + k);
-  // --- the glow of the whole thing on the chart round it
   disc(c.x, c.y, outer * 1.15, grad(c.x, c.y, outer * 1.15, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]));
-  // --- THE DISK IS GAS (operator, 2026-09-15: "use the gas cloud for the accretion disk. Only
-  // half the disc is drawn and clips through the galaxy spiral skybox"): the WHOLE ring, both
-  // halves, as blobs of glowing gas on Keplerian orbits in the disk's plane -- denser and hotter
-  // inside, each blob an ellipse stretched along its orbit, brighter on the approaching side --
-  // seen nearly edge-on and a little turned. The far half is drawn first and the shadow over it,
-  // the near half over the shadow; nothing has a hard edge, so it lies over the sky instead of
-  // cutting through it.
   const toScreen = (rr, ang) => {
     const px = rr * Math.cos(ang), py = rr * Math.sin(ang) * SQUASH;
     return { x: c.x + px * Math.cos(TILT) - py * Math.sin(TILT), y: c.y + px * Math.sin(TILT) + py * Math.cos(TILT) };
   };
-  const blobs = [];
-  for (let k = 0; k < 480; k++) {
+  // the body of one half of the disk: a ring sector filled with a radial gradient in the disk's own
+  // plane (drawn under the transform, so the gradient is elliptical with it)
+  const body = (a0, a1) => {
+    if (!canT) return;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(TILT); ctx.scale(1, SQUASH);
+    ctx.beginPath(); ctx.arc(0, 0, outer, a0, a1); ctx.arc(0, 0, inner, a1, a0, true); ctx.closePath();
+    ctx.fillStyle = grad(0, 0, outer, [[inner / outer, `rgba(255,250,215,${(0.95 * grow).toFixed(3)})`], [(inner + (outer - inner) * 0.12) / outer, `rgba(255,215,110,${(0.9 * grow).toFixed(3)})`], [(inner + (outer - inner) * 0.4) / outer, `rgba(255,140,50,${(0.7 * grow).toFixed(3)})`], [(inner + (outer - inner) * 0.75) / outer, `rgba(200,60,25,${(0.35 * grow).toFixed(3)})`], [1, 'rgba(120,20,10,0)']]);
+    ctx.fill();
+    // the Doppler side, as a linear gradient across the same sector: bright on the left, dark right
+    ctx.beginPath(); ctx.arc(0, 0, outer, a0, a1); ctx.arc(0, 0, inner, a1, a0, true); ctx.closePath();
+    const dg = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(-outer, 0, outer, 0) : null;
+    if (dg && typeof dg.addColorStop === 'function') { dg.addColorStop(0, `rgba(255,255,230,${(0.35 * grow).toFixed(3)})`); dg.addColorStop(0.45, 'rgba(255,255,230,0)'); dg.addColorStop(0.6, 'rgba(60,10,10,0)'); dg.addColorStop(1, `rgba(40,5,5,${(0.5 * grow).toFixed(3)})`); ctx.fillStyle = dg; ctx.fill(); }
+    ctx.restore();
+  };
+  // the fibres: thin streaks spiralling inward, each sheared along the flow, in the disk's plane
+  const streaks = [];
+  for (let k = 0; k < 520; k++) {
     const hk = (q) => hash01(fx.seed + 400 + k * 13 + q);
-    const rr = inner + (outer - inner) * Math.pow(hk(1), 1.6);          // denser inside
-    const omega = 0.0022 * Math.pow(inner / rr, 1.5);
-    const ang = (hk(2) * Math.PI * 2 + now * omega) % (Math.PI * 2);
-    const heat = 1 - (rr - inner) / (outer - inner);
-    const kind = hk(4);
-    const col = kind < 0.1 ? [90, 230, 150] : kind < 0.2 ? [255, 90, 90] : [255, Math.round(120 + 130 * heat), Math.round(40 + 120 * heat * heat)];
-    blobs.push({ rr, ang, heat, col, s: rs * (0.18 + 0.3 * hk(5)) * (0.6 + 0.4 * heat), far: Math.sin(ang) < 0, k });
+    const r0 = inner + (outer - inner) * Math.pow(hk(1), 1.3);
+    const omega = 0.0016 * Math.pow(inner / r0, 1.5);
+    const a0 = hk(2) * Math.PI * 2 + now * omega;
+    const span = (0.25 + 0.9 * hk(3)) * Math.pow(inner / r0, 0.4), heat = 1 - (r0 - inner) / (outer - inner);
+    streaks.push({ r0, a0, span, heat, w: rs * (0.02 + 0.045 * hk(4)), bright: 0.4 + 0.6 * hk(5), kind: hk(6), k });
   }
-  const drawBlob = (b) => {
-    const p = toScreen(b.rr, b.ang), q = toScreen(b.rr, b.ang + 0.05);
-    const tang = Math.atan2(q.y - p.y, q.x - p.x);
-    const dop = doppler(b.ang);
-    const a = 0.34 * grow * (0.35 + 0.65 * b.heat) * Math.min(1.25, dop) / 1.25;
-    const core = b.col.map((v) => Math.round(v + (255 - v) * 0.45 * Math.min(1, dop) * b.heat));
-    const cs = b.col.join(','), ks = core.join(',');
-    if (canT) {
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(tang); ctx.scale(2.6, 0.8);
-      ctx.fillStyle = grad(0, 0, b.s, [[0, `rgba(${ks},${a.toFixed(3)})`], [0.4, `rgba(${cs},${(a * 0.7).toFixed(3)})`], [1, `rgba(${cs},0)`]]);
-      ctx.beginPath(); ctx.arc(0, 0, b.s, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    } else disc(p.x, p.y, b.s, grad(p.x, p.y, b.s, [[0, `rgba(${ks},${a.toFixed(3)})`], [1, `rgba(${cs},0)`]]));
+  const drawStreaks = (far) => {
+    if (!canT) return;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(TILT); ctx.scale(1, SQUASH); ctx.lineCap = 'round';
+    for (const st of streaks) {
+      const mid = st.a0 + st.span / 2, isFar = Math.sin(mid) < 0;
+      if (isFar !== far) continue;
+      const dop = doppler(mid), heat = st.heat;
+      const col = st.kind < 0.06 ? '120,240,170' : st.kind < 0.12 ? '255,110,110' : heat > 0.7 ? '255,250,225' : heat > 0.35 ? '255,215,120' : '255,120,50';
+      ctx.strokeStyle = `rgba(${col},${(0.7 * grow * st.bright * Math.min(1.2, dop) / 1.2 * (0.35 + 0.65 * heat)).toFixed(3)})`; ctx.lineWidth = st.w * (0.8 + 0.6 * heat);
+      ctx.beginPath();
+      for (let i = 0; i <= 10; i++) { const t = i / 10, rr = st.r0 * (1 - 0.07 * t), ang = st.a0 + st.span * t; const x = rr * Math.cos(ang), y = rr * Math.sin(ang); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      ctx.stroke();
+    }
+    ctx.restore();
   };
   const drawShadow = () => {
-    ctx.strokeStyle = `rgba(255,240,200,${(0.9 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.06);
-    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.08, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = `rgba(255,200,120,${(0.5 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.16);
-    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.12, 0, Math.PI * 2); ctx.stroke();
-    disc(c.x, c.y, rs * 1.12, grad(c.x, c.y, rs * 1.12, [[0, 'rgba(0,0,0,1)'], [0.86, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
+    // the photon ring: thin, white-hot, hugging the shadow, with a faint gap to the disk's inner edge
+    ctx.strokeStyle = `rgba(255,245,215,${(0.95 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.045);
+    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.07, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,190,100,${(0.45 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.14);
+    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.11, 0, Math.PI * 2); ctx.stroke();
+    disc(c.x, c.y, rs * 1.1, grad(c.x, c.y, rs * 1.1, [[0, 'rgba(0,0,0,1)'], [0.88, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
   };
-  // the far half, behind the hole
-  for (const b of blobs) if (b.far) drawBlob(b);
-  // the far side's lensed image: ONE CONTINUOUS RING round the shadow -- thick over the top,
-  // where the arch is, thinning smoothly round the sides into the second image under the bottom
-  // and back, never ending (operator, 2026-09-15, of the arch stopping short on one side: "That
-  // needs to not happen and extend around cleanly")
-  const upness = (ang) => 0.5 - 0.5 * Math.sin(ang);                   // 1 over the top (sin < 0 is up on screen), 0 under
-  // ONE SMOOTH BAND (operator, 2026-09-15: "notice the gradient as well. That needs to be
-  // smooth"): the ring was 48 stroked arcs stepping in width, a stair with spokes. It is one
-  // filled shape now -- an inner circle and an outer edge that varies smoothly with the angle,
-  // 180 vertices -- filled twice: with a radial gradient from hot at the horizon to nothing at
-  // the outer edge, and with a linear gradient across it for the Doppler side, bright on the
-  // left where the gas comes toward us and dark on the right.
+  // --- the far half, behind the hole
+  body(Math.PI, Math.PI * 2);
+  drawStreaks(true);
+  // --- the far side's lensed image: a thin band hugging the shadow, thickest over the top,
+  // thinning smoothly round the sides into the second image under, one filled shape (2026-09-15:
+  // "extend around cleanly ... the gradient needs to be smooth")
+  const upness = (ang) => 0.5 - 0.5 * Math.sin(ang);
   {
-    const rIn = rs * 1.03, rMax = rs * (1.03 + 1.0);
+    const rIn = rs * 1.12, rMax = rs * 1.62;
     const ringPath = () => {
       ctx.beginPath();
-      for (let k = 0; k <= 180; k++) { const ang = (Math.PI * 2 * k) / 180, R = rs * (1.03 + 0.22 + 0.78 * upness(ang)); const x = c.x + Math.cos(ang) * R, y = c.y + Math.sin(ang) * R; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      for (let k = 0; k <= 180; k++) { const ang = (Math.PI * 2 * k) / 180, R = rs * (1.12 + 0.12 + 0.38 * upness(ang)); const x = c.x + Math.cos(ang) * R, y = c.y + Math.sin(ang) * R; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
       ctx.closePath();
       ctx.moveTo(c.x + rIn, c.y); ctx.arc(c.x, c.y, rIn, 0, Math.PI * 2, true);
       ctx.closePath();
     };
     ringPath();
-    ctx.fillStyle = grad(c.x, c.y, rMax, [[0, 'rgba(255,220,150,0)'], [rIn / rMax, `rgba(255,225,160,${(0.55 * grow).toFixed(3)})`], [(rIn + rs * 0.35) / rMax, `rgba(255,170,70,${(0.38 * grow).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]);
+    ctx.fillStyle = grad(c.x, c.y, rMax, [[0, 'rgba(255,220,150,0)'], [rIn / rMax, `rgba(255,240,200,${(0.8 * grow).toFixed(3)})`], [(rIn + rs * 0.2) / rMax, `rgba(255,170,70,${(0.5 * grow).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]);
     ctx.fill('evenodd');
     ringPath();
     const dopGrad = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(c.x - rMax, c.y, c.x + rMax, c.y) : null;
-    if (dopGrad && typeof dopGrad.addColorStop === 'function') {
-      dopGrad.addColorStop(0, `rgba(255,245,215,${(0.42 * grow).toFixed(3)})`); dopGrad.addColorStop(0.5, `rgba(255,220,160,${(0.12 * grow).toFixed(3)})`); dopGrad.addColorStop(1, `rgba(120,40,20,${(0.25 * grow).toFixed(3)})`);
-      ctx.fillStyle = dopGrad;
-    } else ctx.fillStyle = `rgba(255,230,180,${(0.15 * grow).toFixed(3)})`;
+    if (dopGrad && typeof dopGrad.addColorStop === 'function') { dopGrad.addColorStop(0, `rgba(255,255,230,${(0.4 * grow).toFixed(3)})`); dopGrad.addColorStop(0.5, 'rgba(255,220,160,0)'); dopGrad.addColorStop(1, `rgba(120,40,20,${(0.3 * grow).toFixed(3)})`); ctx.fillStyle = dopGrad; }
+    else ctx.fillStyle = `rgba(255,230,180,${(0.15 * grow).toFixed(3)})`;
     ctx.fill('evenodd');
   }
-  // the ring as gas too, over the band, so it has no hard edge -- gathered where it is thick
-  for (let k = 0; k < 110; k++) {
-    const hk = (q) => hash01(fx.seed + 2200 + k * 11 + q);
-    const ang = hk(1) * Math.PI * 2, up = upness(ang);
-    if (hk(6) > 0.3 + 0.7 * up) continue;                                // fewer where the ring is thin
-    const rr = rs * (1.05 + (0.15 + 0.85 * up) * hk(2));
-    const drift = now * 0.0006;
-    const x = c.x + Math.cos(ang + drift) * rr, y = c.y + Math.sin(ang + drift) * rr;
-    const dop = doppler(ang + Math.PI), a = 0.3 * grow * Math.min(1, dop) * (0.5 + 0.5 * up), sz = rs * (0.1 + 0.18 * hk(3)) * (0.6 + 0.4 * up);
-    if (canT) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang + drift + Math.PI / 2); ctx.scale(2.2, 0.8); ctx.fillStyle = grad(0, 0, sz, [[0, `rgba(255,235,180,${a.toFixed(3)})`], [0.5, `rgba(255,170,70,${(a * 0.6).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]); ctx.beginPath(); ctx.arc(0, 0, sz, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
-    else disc(x, y, sz, grad(x, y, sz, [[0, `rgba(255,235,180,${a.toFixed(3)})`], [1, 'rgba(255,120,40,0)']]));
-  }
   drawShadow();
-  // the near half, in front of the hole
-  for (const b of blobs) if (!b.far) drawBlob(b);
+  // --- the near half, in front of the hole
+  body(0, Math.PI);
+  drawStreaks(false);
   // --- lensed starlight: short arcs of white round the horizon, the sky behind bent into rings
   for (let k = 0; k < 26; k++) {
     const hk = (q) => hash01(fx.seed + 800 + k * 7 + q);

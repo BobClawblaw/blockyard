@@ -28,11 +28,12 @@ All notable changes to this project are documented here. The format follows
   a point of darkness opens on the price line and grows to a horizon nearly five units across over 26 s; the line bends round it as
   through a lens (`lensPoints`, the Einstein-radius push), the candles it reaches stretch and lean
   toward it (their faces sheared toward the hole, the tops dragged hardest) and then shrink away
-  into it (a head that scales, by reach — smooth, never a blink), and an accretion disk of gas in
-  the chart's own colours — gold, and the candles' green and red — three hundred blobs on
-  Keplerian orbits in the disk's plane, the whole ring, its far half behind the shadow and its
-  near half across it, spirals in brighter on the side coming
-  toward you, its far side lensed into one continuous band round the shadow — thick over the top where the arch is, thinning smoothly round the sides into the second image under the bottom — filled with radial and linear gradients so nothing steps or ends,
+  into it (a head that scales, by reach — smooth, never a blink), and an accretion disk seen well above its plane, as in NASA's still — a broad
+  continuous body white-yellow at its inner edge through orange to a dark red rim, five hundred
+  thin fibres spiralling inward over it sheared by the Keplerian flow (a few in the candles'
+  green and red), the whole ring, its far half behind the shadow and its near half across it —
+  spirals in brighter on the side coming
+  toward you, its far side lensed into one continuous thin band hugging the shadow — thickest over the top, thinning smoothly round the sides into the second image under the bottom — filled with radial and linear gradients so nothing steps or ends,
   a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
   straightens and the candles come back. Thirty-three effects; fifteen on Markets.
 - **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
