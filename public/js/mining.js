@@ -1177,8 +1177,6 @@ export function networkPanels(n, h) {
       : p.blocks ? `${F.num(p.blocks)} blocks in the last seven days, every coinbase read from this node; a name appears only where the curated pool map or your alias file says so.` : '';
   }
   poolDonut(h.canvas('mnPoolDonut'), p.pools ?? [], F);
-  put('mnPoolLegend', (p.pools ?? []).slice(0, 14).map((x, i) => `<div><i class="sw${i % DONUT_COLORS.length}"></i><span title="${esc(x.name)}">${esc(x.name.length > 18 ? `${x.name.slice(0, 17)}…` : x.name)}</span><b>${x.sharePct.toFixed(1)}%</b></div>`).join('')
-    + ((p.pools ?? []).length > 14 ? `<div><i class="sw14"></i><span>${(p.pools.length - 14)} more</span><b>${p.pools.slice(14).reduce((s, x) => s + x.sharePct, 0).toFixed(1)}%</b></div>` : ''));
   // hashrate and difficulty
   const hr = n.hashrate ?? {};
   put('mnHashrate', stat('Hashrate (1w)', hr.networkHashPs != null ? F.eh(hr.networkHashPs / 1e18) : '–', 'getnetworkhashps, 1008 blocks')
@@ -1214,29 +1212,75 @@ export function networkPanels(n, h) {
 }
 
 function poolDonut(canvas, pools, F) {
+  // THE LABELLED PIE (operator, 2026-09-15, with the reference: "I want this view. With pool
+  // names clustered with colored lines linking to their pie slice"): every pool named beside the
+  // pie, the big ones on the side their slice faces, the small ones stacked where there is room,
+  // each name joined to its own slice by a leader in the slice's colour. Slices under half a
+  // percent are gathered into "Other (x.xx%)". Labels on a side are laid out top to bottom at
+  // their slice's height and pushed apart where they would overlap, so the leaders fan out.
   if (!canvas?.getContext) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = canvas.clientWidth || 260, h = canvas.clientHeight || 220;
+  const w = canvas.clientWidth || 520, h = canvas.clientHeight || 440;
   if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   const total = pools.reduce((s, p) => s + p.blocks, 0);
-  const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 6, r = R * 0.42;
-  if (!total) { ctx.fillStyle = COL.text; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('no blocks read yet', cx, cy); return; }
-  const shown = pools.slice(0, 14), rest = pools.slice(14).reduce((s, p) => s + p.blocks, 0);
-  const slices = rest ? [...shown, { name: 'other', blocks: rest }] : shown;
+  const font = w < 520 ? 11 : 12.5, LH = font + 4;
+  const cx = w / 2, cy = h / 2;
+  const R = Math.max(40, Math.min(h / 2 - 14, w * 0.27)), r = R * 0.28;
+  if (!total) { ctx.fillStyle = COL.text; ctx.font = `${font}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('no blocks read yet', cx, cy); return; }
+  // slices: the named ones, and the rest under half a percent as one
+  const small = pools.filter((p) => (p.blocks / total) * 100 < 0.5);
+  const big = pools.filter((p) => (p.blocks / total) * 100 >= 0.5);
+  const slices = [...big, ...(small.length ? [{ name: `Other (${(small.reduce((s, p) => s + p.blocks, 0) / total * 100).toFixed(2)}%)`, blocks: small.reduce((s, p) => s + p.blocks, 0), other: true }] : [])];
   let a0 = -Math.PI / 2;
-  slices.forEach((p, i) => {
-    const a1 = a0 + (p.blocks / total) * Math.PI * 2;
-    ctx.beginPath(); ctx.arc(cx, cy, R, a0, a1); ctx.arc(cx, cy, r, a1, a0, true); ctx.closePath();
-    ctx.fillStyle = DONUT_COLORS[i % DONUT_COLORS.length]; ctx.fill();
-    ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 1; ctx.stroke();
+  const laid = slices.map((p, i) => {
+    const a1 = a0 + (p.blocks / total) * Math.PI * 2, mid = (a0 + a1) / 2;
+    const out = { p, i, a0, a1, mid, color: p.other ? '#8d93a1' : DONUT_COLORS[i % DONUT_COLORS.length] };
     a0 = a1;
+    return out;
   });
-  ctx.fillStyle = COL.text; ctx.font = '600 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  // the pie
+  for (const s of laid) {
+    ctx.beginPath(); ctx.arc(cx, cy, R, s.a0, s.a1); ctx.arc(cx, cy, r, s.a1, s.a0, true); ctx.closePath();
+    ctx.fillStyle = s.color; ctx.fill();
+    ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  // the labels: each side laid out top to bottom, pushed apart to LH
+  const side = (dir) => {
+    const list = laid.filter((s) => (Math.cos(s.mid) >= 0 ? 1 : -1) === dir).map((s) => ({ s, y: cy + Math.sin(s.mid) * (R + 12), ax: cx + Math.cos(s.mid) * R, ay: cy + Math.sin(s.mid) * R }));
+    list.sort((p, q) => p.y - q.y);
+    for (let k = 1; k < list.length; k++) if (list[k].y < list[k - 1].y + LH) list[k].y = list[k - 1].y + LH;
+    // keep them on the canvas: push the stack up from the bottom, then down from the top
+    const over = list.length ? list[list.length - 1].y - (h - LH / 2) : 0;
+    if (over > 0) for (const l of list) l.y -= over;
+    for (let k = 0; k < list.length; k++) if (list[k].y < LH / 2) list[k].y = LH / 2; else if (k && list[k].y < list[k - 1].y + LH) list[k].y = list[k - 1].y + LH;
+    return list;
+  };
+  const gap = 34;
+  ctx.font = `${font}px system-ui, sans-serif`; ctx.textBaseline = 'middle'; ctx.lineWidth = 1.5;
+  for (const dir of [1, -1]) {
+    const labelX = cx + dir * (R + gap), edgeX = cx + dir * (R + gap - 8);
+    ctx.textAlign = dir > 0 ? 'left' : 'right';
+    for (const l of side(dir)) {
+      const name = l.s.p.name.length > 16 && !l.s.p.other ? `${l.s.p.name.slice(0, 15)}…` : l.s.p.name;
+      ctx.strokeStyle = l.s.color;
+      ctx.beginPath(); ctx.moveTo(l.ax, l.ay); ctx.lineTo(edgeX, l.y); ctx.lineTo(labelX - dir * 3, l.y); ctx.stroke();
+      ctx.fillStyle = '#c7c9d1';
+      ctx.fillText(name, labelX, l.y);
+      // the share, faint, after the name on the right side and before it on the left
+      const pct = `${(l.s.p.blocks / total * 100).toFixed(1)}%`;
+      ctx.fillStyle = '#7d8b99'; ctx.font = `${font - 1.5}px ${'var(--mono), monospace'}`;
+      const nameW = ctx.measureText(name).width;
+      if (dir > 0) ctx.fillText(pct, labelX + nameW + 8, l.y); else ctx.fillText(pct, labelX - nameW - 8, l.y);
+      ctx.font = `${font}px system-ui, sans-serif`;
+    }
+  }
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COL.text; ctx.font = `600 ${font + 1}px system-ui, sans-serif`;
   ctx.fillText(`${F.num(total)}`, cx, cy - 7);
-  ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = '#7d8b99';
+  ctx.font = `${font - 2}px system-ui, sans-serif`; ctx.fillStyle = '#7d8b99';
   ctx.fillText('blocks', cx, cy + 8);
 }
 
