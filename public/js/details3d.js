@@ -243,7 +243,10 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // depth or turns in place, anything that moves a tile -- stays on the block board.
 const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
-const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber']);   // the black hole left this set on 2026-09-15: it hovers over the block board too
+// the black hole is back on the price board only (operator, 2026-09-15, after a day of it hovering
+// over the block board: "still snapping into place. Just remove the black hole effect from block
+// space if you can't fix it")
+const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber', 'blackhole']);
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
 // list ... the Block Space effects specific to that panel, and settings specific to market panel"):
 // settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
@@ -331,8 +334,8 @@ function fxNow(st, t) {
   // THE BLACK HOLE (2026-09-15): where it sits on the chart, how big its horizon is this frame,
   // and -- through a head that HIDES -- which candles it has swallowed; the tiles near it glow the
   // disk's orange. Everything the renderer needs rides on `out.blackhole`.
-  if (f.kind === 'blackhole') {
-    const line = st.axes?.line?.length > 1 ? st.axes.line : null;
+  if (f.kind === 'blackhole' && st.axes?.line?.length > 1) {
+    const line = st.axes.line;
     // IT CROSSES (operator, 2026-09-15: "get the black hole effect on the market display to slowly
     // move from one side to the other"): from a fifth of the way in on one side to a fifth from
     // the other, the way the front effects go (f.dx), easing in and out so it is still while it
@@ -359,21 +362,6 @@ function fxNow(st, t) {
       const za = lo + R * (0.15 + 0.85 * hash01(f.seed + 6)), zb = lo + R * (0.15 + 0.85 * hash01(f.seed + 7));
       hz = za + (zb - za) * travel;
       hy = st.axes.y ?? st.gridH / 2;
-    } else {
-      // ON THE BLOCK BOARD IT HOVERS (operator, 2026-09-15: "Explore if we can have the black hole
-      // high off the ground enough and test vs Block Display"): seven units above the tallest
-      // cube, on a row a little off the middle, so the disk hangs over the board and the cubes
-      // beneath it are drawn UP into orbit rather than the disk being buried among them.
-      // TWICE THAT HIGH since (operator, 2026-09-15: "make the black hole higher off the grid,
-      // double what height it is now"): the reach is measured across the board, not up, so the
-      // cubes under it are still caught -- they just rise further into the orbit
-      if (f.alt == null) {
-        const tops = cellTops(st.restTiles || [], st.gridW, st.gridH);
-        let highest = 0; for (let i = 0; i < tops.length; i++) highest = Math.max(highest, tops[i]);
-        f.alt = (highest + 7) * 2;
-      }
-      hz = f.alt; lo = 0; hi = f.alt;
-      hy = st.gridH * (0.4 + 0.2 * hash01(f.seed + 4));
     }
     // ...AND ALL THE WAY HOME BEFORE THE END (operator, 2026-09-15: "still snapping into place on
     // last frame to drop in"): the release curve reached zero only at u = 1, so on the last frame
@@ -388,9 +376,7 @@ function fxNow(st, t) {
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
     // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
     // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
-    // the head reaches wider on the block board (2.2 horizons against 1.5), where the cubes are
-    // small and many and a narrow reach caught almost none of them from three units up
-    const reach = line ? 1.5 : 2.2;
+    const reach = 1.5;
     // LIFTED OUT WHOLE, NOT SHEARED, on the block board (operator, 2026-09-15: "too much bad
     // shearing of the blocks around the black hole on the block space page. instead of stretching,
     // can it just lift the blocks out?"): no corner lean there (lean 0 -- buildScene's orbit

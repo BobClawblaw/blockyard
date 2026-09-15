@@ -172,7 +172,6 @@ export const DEFAULTS = Object.freeze({
   effects: Object.freeze({
     ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true, xray: true,
     lightcycle: true, ball: true,
-    blackhole: true,      // hovers over the board and crosses it, drawing cubes up into orbit (2026-09-15)
     shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true,
     // the agents: something happening on the board, rather than a pattern over it
@@ -303,7 +302,7 @@ const FX_ROW = Object.freeze({
   bulge: Object.freeze({ label: 'Pipe bulge', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
   breathe: Object.freeze({ label: 'Breathe', hint: 'The price line breathes: three slow swells from the plain wire to the pulse\u2019s white heat and back' }),
   saber: Object.freeze({ label: 'Light saber', hint: 'The price line ignites from its left end as a light saber -- blue, green, red or purple -- hums, spits sparks, and retracts' }),
-  blackhole: Object.freeze({ label: 'Black hole', hint: 'A point of darkness opens high over the board and grows, then crosses it slowly from one side to the other: the cubes beneath are drawn up into orbit round it and swallowed, and an accretion disk of the board\u2019s own colours spirals in round the shadow -- brighter on the side coming toward you, its far side arched over the top -- until it lets everything go' }),
+  blackhole: Object.freeze({ label: 'Black hole', hint: 'A point of darkness opens on the price line and grows, then drifts slowly across the chart from one side to the other: the line bends round it, the candles nearest are swallowed into orbit, and an accretion disk of the chart\u2019s own colours spirals in round the shadow -- brighter on the side coming toward you, its far side arched over the top -- until it lets everything go' }),
   shockwave: Object.freeze({ label: 'Shockwave', hint: 'A hard ring that throws the blocks it passes into the air' }),
   nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
   firework: Object.freeze({ label: 'Fireworks', hint: 'Three bursts, each at its own moment and place' }),
@@ -523,7 +522,7 @@ export const PANEL = Object.freeze([
     note: 'What the Block space board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The Markets board has a list of its own, on the next tab.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'lightcycle', 'ball', 'blackhole', 'shockwave', 'nova',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'lightcycle', 'ball', 'shockwave', 'nova',
       'firework', 'flare', 'wave', 'quake', 'rain', 'sparkle', 'checker', 'radar', 'vortex', 'powerup',
       'combo', 'aurora', 'plasma', 'centipede', 'tractor', 'missile', 'boulderdash', 'stormball',
     ]),
