@@ -1004,8 +1004,14 @@ export function fxAt(t, fx) {
       const fxp = fxHash(fx.seed + 7) * fx.gridW, fyp = fxHash(fx.seed + 8) * fx.gridH;
       const bell = Math.sin(Math.PI * fx.u);
       const d = Math.hypot(cx - fxp, cy - fyp);
-      const w = g(d / (1.2 + 7 * bell)) * bell;
-      return w > 0.02 ? { glow: A * w, outline: 0.8 * A * w, lift: 1.4 * A * w, color: [255, 245, 205] } : FX_NONE;
+      // A SUPERNOVA'S LIGHT (2026-09-15, drawn in details3d drawSupernova): on a thin board -- the
+      // price board, eight deep -- the light reaches three times as far, so the chart is lit, and
+      // it cools with the remnant, gold to red to violet, after the white of the blast
+      const thin = fx.gridH <= 12;
+      const w = g(d / (1.2 + (thin ? 22 : 7) * bell)) * bell;
+      const cool = Math.max(0, Math.min(1, (fx.u - 0.2) / 0.8));
+      const col = fx.u < 0.2 ? [255, 250, 230] : cool < 0.5 ? [255, Math.round(200 - 110 * cool * 2), Math.round(90 - 20 * cool * 2)] : [Math.round(255 - 85 * (cool - 0.5) * 2), 90, Math.round(70 + 185 * (cool - 0.5) * 2)];
+      return w > 0.02 ? { glow: A * w, outline: 0.8 * A * w, lift: 1.4 * A * w, color: col } : FX_NONE;
     }
     case 'wave': {
       // a swell rolling across the board: the cubes rise and fall with it, several crests at once

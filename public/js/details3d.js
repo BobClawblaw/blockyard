@@ -14,11 +14,11 @@
 //  3. Zero dependencies, no CDN.
 
 import { packBlock, packExact, vbytesPerUnit, vsizeForSide } from './blockpack.js';
-import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops } from './blockscene3d.js';
+import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
-import { AGENTS, isAgent, rng } from './agents.js';
+import { AGENTS, isAgent, rng, lensFlare } from './agents.js';
 
 const STATE = new WeakMap();
 
@@ -150,7 +150,7 @@ const FX_MS = {
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
   breathe: 9000,                               // the price line breathes: three slow swells between the wire and the pulse's heat
   saber: 8000,                                 // the price line ignites as a light saber, hums, and retracts
-  shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
+  shockwave: 4200, nova: 5200, firework: 5600, flare: 8000, wave: 6000, quake: 3200,   // flare 3600 -> 8000 (2026-09-15: it is a supernova now)
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
   // Longer than the fields, because something that travels needs time to be watched -- a field
@@ -167,7 +167,7 @@ export const FX_KINDS = Object.keys(FX_MS);
 // the price board's own lengths, where they differ: ball lightning crosses it at a third of the
 // block board's speed -- 11 s there; a third slower (16.5 s, operator 2026-09-15: "cut the speed
 // by 33% now that it's slower"), then 40% slower again (27.5 s: "Slow it down movement by 40%")
-export const MARKET_MS = { stormball: 27500, firework: 14000 };   // and a fireworks display of five shells, each with its smoke, needs the time
+export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 12000 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
@@ -1029,6 +1029,114 @@ function drawFireworks(ctx, view, lw) {
   ctx.lineWidth = lw;
 }
 
+// A SUPERNOVA (operator, 2026-09-15: "build the supernova" -- the solar flare only ever lit a cube
+// and its neighbours, and on a chart of candles that was one candle blinking). Drawn on both
+// boards over the lit tiles, on the same star fxAt lights (fxHash(seed + 7, 8)):
+//   ignition     0    - 0.12  the star swells white-hot, crackle filaments rising over it
+//   detonation   0.12 - 0.18  a white-out flash, and a lens flare the width of the chart
+//   shockwave    0.14 - 0.6   a ring racing outward, thinning, lighting what it crosses
+//   ejecta       0.14 - 1     filaments of plasma flung out on every side, slowing, fading
+//   remnant      0.2  - 1     a ring nebula -- brighter at the rim than the middle, as they are --
+//                             expanding for the rest of the run and cooling gold -> red -> violet
+//   aftermath    0.18 - 1     the star's core as a white dwarf, fading over the run
+// Everything is a function of fx.u, the seed and the clock; the run fades in its last tenth.
+function drawSupernova(ctx, view, lw) {
+  const fx = view.fx;
+  if (!fx || fx.kind !== 'flare') return;
+  const U = view.unit ?? 8, u = fx.u, now = view.now ?? 0;
+  const line = view.axes?.line, price = line?.length > 1;
+  const sx = fxHash(fx.seed + 7) * fx.gridW, sy = price ? (view.axes.y ?? fx.gridH / 2) : fxHash(fx.seed + 8) * fx.gridH;
+  let sz = 3;
+  if (price) {   // the star sits on the price line at that hour
+    let best = line[0]; for (const p of line) if (Math.abs(p.x - sx) < Math.abs(best.x - sx)) best = p;
+    sz = best.z;
+  }
+  const c = project(sx, sy, sz, view);
+  const R0 = U * (price ? 6 : 7);
+  const gf = Math.min(1, (1 - u) / 0.1);
+  const grad = (x, y, r, stops) => {
+    const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
+    if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    return g;
+  };
+  const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
+  // the remnant's colour cools with the run: gold, then red, then violet
+  const cool = Math.max(0, Math.min(1, (u - 0.2) / 0.8));
+  const mixc = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const rc = cool < 0.5 ? mixc([255, 200, 90], [255, 90, 70], cool * 2) : mixc([255, 90, 70], [170, 90, 255], (cool - 0.5) * 2);
+  const rcs = rc.join(',');
+  // --- ignition
+  if (u < 0.14) {
+    const f = u / 0.12, ease = Math.min(1, f * f);
+    const r = R0 * (0.12 + 0.5 * ease), pulse = 1 + 0.1 * Math.sin(now * 0.04);
+    disc(c.x, c.y, r * 2.2 * pulse, grad(c.x, c.y, r * 2.2 * pulse, [[0, `rgba(255,255,255,${(0.9 * ease).toFixed(3)})`], [0.3, `rgba(255,240,190,${(0.7 * ease).toFixed(3)})`], [0.6, `rgba(255,180,80,${(0.35 * ease).toFixed(3)})`], [1, 'rgba(255,140,40,0)']]));
+    const beat = Math.floor(now / 50); let x = (fx.seed ^ (beat * 2654435761)) >>> 0 || 1;
+    const rr = () => ((x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 4294967296);
+    const n = Math.floor(4 + 14 * ease);
+    for (let i = 0; i < n; i++) {
+      const ang = rr() * Math.PI * 2, r0 = r * (0.5 + 0.6 * rr()), r1 = r * (1.4 + 1.2 * rr());
+      const mid = { x: c.x + Math.cos(ang + (rr() - 0.5) * 0.5) * (r0 + r1) / 2 + (rr() - 0.5) * r * 0.5, y: c.y + Math.sin(ang + (rr() - 0.5) * 0.5) * (r0 + r1) / 2 + (rr() - 0.5) * r * 0.5 };
+      ctx.strokeStyle = `rgba(255,240,200,${(0.9 * ease).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.03);
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * r0, c.y + Math.sin(ang) * r0); ctx.lineTo(mid.x, mid.y); ctx.lineTo(c.x + Math.cos(ang) * r1, c.y + Math.sin(ang) * r1); ctx.stroke();
+    }
+  }
+  // --- detonation: the white-out, and a flare the width of the chart
+  if (u >= 0.12 && u < 0.3) {
+    const f = Math.pow(1 - (u - 0.12) / 0.18, 1.6);
+    disc(c.x, c.y, R0 * 2.2, grad(c.x, c.y, R0 * 2.2, [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.35, `rgba(255,250,235,${(0.6 * f).toFixed(3)})`], [1, 'rgba(255,230,190,0)']]));
+    lensFlare(ctx, c.x, c.y, R0 * 9, [255, 230, 170], f, view, lw);
+  }
+  // --- the shockwave
+  if (u >= 0.14 && u < 0.6) {
+    const f = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - f, 2.2));
+    ctx.strokeStyle = `rgba(255,255,255,${(0.75 * (1 - f) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.22 * (1 - f) + lw);
+    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(${rcs},${(0.35 * (1 - f) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.6 * (1 - f));
+    ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.96, 0, Math.PI * 2); ctx.stroke();
+  }
+  // --- the ejecta: filaments flung out, slowing and fading, gold and violet by turns
+  if (u >= 0.14) {
+    const f = (u - 0.14) / 0.86, spread = 1 - Math.exp(-2.6 * f);
+    for (let k = 0; k < 72; k++) {
+      const H = (q) => hash01(fx.seed + k * 17 + q);
+      const ang = (k / 72) * Math.PI * 2 + (H(1) - 0.5) * 0.12, len = R0 * (2 + 2.2 * H(2));
+      const tip = len * spread, tail = Math.max(0, tip - len * (0.12 + 0.1 * H(3)) * (1 - f * 0.6));
+      const col = k % 3 === 0 ? '200,140,255' : k % 3 === 1 ? '255,200,110' : '255,240,200';
+      const a = Math.pow(1 - f, 1.4) * gf;
+      if (a < 0.02) continue;
+      ctx.strokeStyle = `rgba(${col},${(0.8 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, U * 0.045 * (1 - f * 0.5));
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * tail, c.y + Math.sin(ang) * tail); ctx.lineTo(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip); ctx.stroke();
+      disc(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip, Math.max(lw, U * 0.05), `rgba(255,255,255,${(0.9 * a).toFixed(3)})`);
+    }
+  }
+  // --- the remnant: a ring nebula expanding for the rest of the run, cooling as it goes
+  if (u >= 0.2) {
+    const f = (u - 0.2) / 0.8, ring = R0 * (0.4 + 2.4 * (1 - Math.exp(-2 * f)));
+    const a0 = 0.26 * (f < 0.15 ? f / 0.15 : Math.pow(1 - (f - 0.15) / 0.85, 1.2)) * gf;
+    // the shell: lobes on the ring, each a gradient blob, brighter than the middle
+    for (let k = 0; k < 26; k++) {
+      const H = (q) => hash01(fx.seed + k * 23 + q);
+      const ang = (k / 26) * Math.PI * 2 + (H(1) - 0.5) * 0.3, rad = ring * (0.92 + 0.16 * H(2));
+      const wob = Math.sin(now * 0.0012 + k) * ring * 0.04;
+      const x = c.x + Math.cos(ang) * rad + wob, y = c.y + Math.sin(ang) * rad * 0.8 - wob;
+      const r = ring * (0.28 + 0.2 * H(3)) * (0.7 + 0.6 * f);
+      const lobe = mixc(rc, [255, 255, 255], 0.25 * H(4)).join(',');
+      disc(x, y, r, grad(x, y, r, [[0, `rgba(${lobe},${a0.toFixed(3)})`], [0.5, `rgba(${rcs},${(a0 * 0.5).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    }
+    // the interior: thin and dark, a faint haze of the colour
+    disc(c.x, c.y, ring * 0.9, grad(c.x, c.y, ring * 0.9, [[0, `rgba(${rcs},${(a0 * 0.12).toFixed(3)})`], [0.7, `rgba(${rcs},${(a0 * 0.2).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    // the light on everything near: a wide pool of the remnant's colour
+    disc(c.x, c.y, ring * 1.6, grad(c.x, c.y, ring * 1.6, [[0, `rgba(${rcs},${(a0 * 0.5).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+  }
+  // --- the aftermath: the white dwarf
+  if (u >= 0.18) {
+    const f = (u - 0.18) / 0.82, a = Math.pow(1 - f, 0.8) * gf, tw = 0.8 + 0.2 * Math.sin(now * 0.03);
+    disc(c.x, c.y, R0 * 0.35 * (1 - 0.6 * f), grad(c.x, c.y, R0 * 0.35 * (1 - 0.6 * f), [[0, `rgba(255,255,255,${(a * tw).toFixed(3)})`], [0.4, `rgba(220,235,255,${(0.6 * a).toFixed(3)})`], [1, 'rgba(180,200,255,0)']]));
+  }
+  ctx.lineWidth = lw;
+}
+
 // THE LIGHTNING BALL, over the cubes: the grid line it has traced burning behind it and cooling
 // over 16 units, a plasma ball of one pale gradient with a white-hot heart, and bolts jumping from it
 // to the grid crossings round it, new every frame. Plain rgba fills and strokes only.
@@ -1573,7 +1681,18 @@ function curveByLength(pts, samples = 400) {
     // (the pulse's head bulge sits at the very end of the line once the head has run off it)
     return curveAt(pts, Math.min(0.999999, a.s + (b.s - a.s) * f));
   };
-  return { total, at, travel: bulgeTravel(table) };
+  // the length along the curve at parameter s (0..1 by point index, as headPoint and curveAt count):
+  // the pulse's bulge is placed with this, so it sits ON the head rather than a share of the length
+  // along -- which drifted from the head wherever the candles' hops were unequal (operator,
+  // 2026-09-15: "the bulge effect is lagging behind the energy. They should be on top of each other")
+  const lenAt = (sv) => {
+    const S = Math.max(0, Math.min(1, sv));
+    let lo = 0, hi = samples;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (table[mid].s < S) lo = mid; else hi = mid; }
+    const a = table[lo], b = table[hi], f = b.s > a.s ? (S - a.s) / (b.s - a.s) : 0;
+    return a.len + (b.len - a.len) * f;
+  };
+  return { total, at, lenAt, travel: bulgeTravel(table) };
 }
 
 function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
@@ -1949,7 +2068,7 @@ function priceLine(ctx, view, axes) {
     // lot more vibrance, presence, and effect"): the swell is the bulge effect's own full size now
     // ...then THREE TIMES THAT (operator: "make the bulge 3 times larger for the energy pulse. It's
     // not obvious the line is being deformed"), then half of that ("reduce the bulge by half")
-    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.total * headFrac, (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + 1.5 * (BULGE_BALL - 1) * fadeIn), hotLayers, curve);
+    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.lenAt(headFrac), (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + 1.5 * (BULGE_BALL - 1) * fadeIn), hotLayers, curve);
   }
   // THE HAZE (operator, 2026-09-15: "haze effects of some sort for the energy blurring and
   // interfering with the affected areas"): three ghost copies of the charged stretch, each thrown
@@ -2873,7 +2992,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // name and calls it with a hand-built view -- and the registry simply points at them.
   const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
   if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
-  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); }
+  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 

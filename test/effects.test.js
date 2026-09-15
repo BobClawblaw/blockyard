@@ -287,3 +287,39 @@ test('ball lightning crosses the price board a third slower than the block board
   // operator, 2026-09-15: "cut the speed by 33% now that it's slower"
   assert.equal(MARKET_MS.stormball, 27500, '11 s on the block board, 27.5 s on the candles (a third slower, then 40% slower again)');
 });
+
+test('every Markets effect plays through the frame loop on a candle board without throwing', () => {
+  // 2026-09-15: the supernova called a helper it had not imported; the first frame threw, the
+  // loop died, and the board froze on that frame for the rest of the run. Nothing here triggered
+  // a field effect on a price board, so nothing caught it. This does, for every kind on the list.
+  let rafPending = null; let T = 0;
+  const realRaf = globalThis.requestAnimationFrame, realCaf = globalThis.cancelAnimationFrame, realPerf = globalThis.performance, realWin = globalThis.window, realMM = globalThis.matchMedia, realST = globalThis.setTimeout;
+  globalThis.window = { devicePixelRatio: 1, matchMedia: () => ({ matches: false }) };
+  globalThis.matchMedia = () => ({ matches: false });
+  globalThis.performance = { now: () => T };
+  globalThis.requestAnimationFrame = (fn) => { rafPending = fn; return 42; };
+  globalThis.cancelAnimationFrame = () => { rafPending = null; };
+  globalThis.document = globalThis.document ?? {};
+  globalThis.setTimeout = () => 1;   // no scheduler: only what is triggered plays
+  try {
+    const ctx = new Proxy({ canvas: {}, lineWidth: 1 }, {
+      get(tg, k) { if (k in tg) return tg[k]; if (k === 'measureText') return (s) => ({ width: String(s).length * 6 }); if (k === 'createRadialGradient' || k === 'createLinearGradient') return () => ({ addColorStop() {} }); return () => tg.canvas; },
+      set(tg, k, v) { tg[k] = v; return true; },
+    });
+    const canvas = { clientWidth: 1500, clientHeight: 600, width: 0, height: 0, style: {}, getContext: () => ctx, addEventListener: () => {}, setPointerCapture: () => {}, isConnected: true };
+    const step = (t) => { const fn = rafPending; rafPending = null; T = t; if (fn) fn(t); };
+    const tiles = [], line = [];
+    for (let i = 0; i < 24; i++) { const z0 = 10 + 6 * Math.sin(i / 4); tiles.push({ txid: `b:${i}`, x: i * 2 + 0.3, y: 3, s: 1.4, floor: z0, tall: 2, color: '#3c9' }); tiles.push({ txid: `v:${i}`, x: i * 2 + 0.3, y: 0.5, s: 1.4, tall: 1, color: '#3c9' }); line.push({ x: i * 2 + 1, z: z0 + 1 }); }
+    const axes = { y: 3.7, zTop: 40, z: [], x: [], line };
+    board3d(canvas, tiles, { gridW: 48, gridH: 8, axes, space: true, stars: false, idleFx: true, oblique: { ox: 0.07, oy: 0.95, dy: 0.3, headroom: 36, flight: 10, anchor: 'bottom' }, transition: { rise: 0, travel: 1, drop: 0 } });
+    for (let i = 1; i <= 30; i++) step(i * 16);
+    for (const kind of MARKET_FX) {
+      T = 5000 + MARKET_FX.indexOf(kind) * 40000;
+      assert.equal(triggerIdle(canvas, kind), true, `${kind} triggers`);
+      // frames across the whole run, including past its end
+      for (let i = 1; i <= 40; i++) assert.doesNotThrow(() => step(T + i * 700), `${kind}: frame ${i} draws without throwing`);
+    }
+  } finally {
+    globalThis.requestAnimationFrame = realRaf; globalThis.cancelAnimationFrame = realCaf; globalThis.performance = realPerf; globalThis.window = realWin; globalThis.matchMedia = realMM; globalThis.setTimeout = realST;
+  }
+});

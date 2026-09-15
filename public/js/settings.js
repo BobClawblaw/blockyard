@@ -324,7 +324,7 @@ const MARKET_HINT = Object.freeze({
   bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes',
   stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle often throws a green arc on to another, and that one sometimes on to a third',
   cascade: 'The candles light in order, tallest first',
-  flare: 'One candle goes supernova and lights its neighbourhood',
+  flare: 'One candle goes supernova: it swells white-hot, blows out in a flash and a lens flare, a shockwave rings out across the chart, plasma is flung on every side, and a ring nebula expands and cools for the rest of the run',
 });
 // THE WINDOW'S TOP IS THE LIST'S LENGTH (operator, 2026-09-14: "for the markets page, all we have
 // is 12 effects, so max the slider out at max effects"): a window wider than the list is the same

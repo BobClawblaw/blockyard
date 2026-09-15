@@ -24,6 +24,20 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
+- **The solar flare is a supernova.** It only ever lit a cube and its neighbours, which on a chart
+  of candles was one candle blinking. Now, on both boards over the same lit tile: the star swells
+  white-hot with crackle rising over it, blows out in a white flash and a lens flare the width of
+  the chart, a shockwave ring races outward and thins, seventy-two filaments of plasma are flung
+  on every side, a ring nebula (brighter at the rim than the middle) expands for the rest of the
+  run and cools gold → red → violet, and the star is left as a white dwarf fading. Its light on
+  the candles cools with it and reaches three times as far on the price board. 8 s (12 on
+  Markets), from 3.6.
+- **The pulse's bulge sits on the head.** It was placed a share of the line's *length* along
+  while the head moves by candle *index*, so wherever the hops were unequal the swell lagged the
+  ball. The curve now answers "how far along at this point", and the two coincide.
+- A frame-loop test plays every Markets effect on a candle board; the supernova's first cut
+  called a helper it had not imported, the first frame threw, and the board froze on it — nothing
+  triggered a field effect on a price board before.
 - **Fireworks are a display, on both boards.** The effect only ever lit tiles — the ring of lit
   cubes was the picture on Block space, and on eight rows of candles it was a candle or two
   blinking. Now every shell is drawn: the rocket climbs an arc from the floor off to one side, a
