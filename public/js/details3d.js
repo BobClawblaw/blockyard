@@ -1707,8 +1707,8 @@ function drawSupernova(ctx, view, lw) {
     softStops(ctx, c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.08 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
   }
   // --- the breakout: the whole picture goes white and comes back
-  if (u >= 0.12 && u < 0.34) {
-    const t = (u - 0.12) / 0.22, f = t < 0.12 ? t / 0.12 : Math.pow(1 - (t - 0.12) / 0.88, 1.7);
+  if (u >= 0.12 && u < 0.4) {
+    const t = (u - 0.12) / 0.28, f = t < 0.1 ? t / 0.1 : Math.pow(1 - (t - 0.1) / 0.9, 1.5);
     // a soft flash round the star, not the whole frame -- and NOT SOLID (operator, 2026-09-15, via
     // his wife on the Kiosk: "far too much solid white"): a modest disc, at most half opaque at its
     // heart, thin by three shells out, and the white gas thrown with it at a third of the weight
@@ -1717,7 +1717,12 @@ function drawSupernova(ctx, view, lw) {
     // emission that it's lost much of its presence and intensity") -- now that the discs add up
     // honestly, the flash and the white gas can carry weight again without going solid
     disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.5 * f).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.26 * f).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.07 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
-    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, 0.32 * f, [255, 255, 255], grad, disc, 90, [200, 210, 240], null, 0.85, 1.25);
+    // MORE GAS OFF THE FLASH (operator, 2026-09-15: "Opening white flash needs more dispersing
+    // nebula gas"): two clouds thrown with it -- a dense one at the flash and a wider, thinner
+    // one racing ahead of it -- both flying out faster than the flash fades, so the white
+    // disperses into the dark rather than shrinking back into the star
+    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 3.2 * t), t, now, fx.seed + 999, 0.24 * f, [255, 255, 255], grad, disc, 110, [200, 210, 240], null, 0.9, 1.25);
+    gasCloud(ctx, c.x, c.y, R0 * (1.8 + 5 * t), t, now, fx.seed + 1999, 0.14 * Math.pow(f, 0.7), [240, 245, 255], grad, disc, 100, [180, 195, 235], null, 1.1, 1.3);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
     // taken out on 2026-09-15; the white-out alone is the breakout)
   }
