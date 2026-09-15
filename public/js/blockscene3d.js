@@ -1172,6 +1172,10 @@ export function fxAt(t, fx) {
             // `pull`: how hard the head drags this tile toward itself (the black hole; buildScene
             // shears the faces toward the head's screen point by it)
             pull: (hd.pull ?? 0) * reach, pullAt: hd.pull ? { x: hd.x, y: hd.y, z: hd.z ?? 0 } : null,
+            // the pull at the head's full size (rPeak): the orbit is laid out against this, so it
+            // does not unwind as the head shrinks; the current pull only says how far along the
+            // line from home to that orbit the tile sits
+            pullPeak: (hd.pull ?? 0) * (hd.rPeak ? g(Math.hypot(ddx, ddy) / Math.max(0.2, hd.rPeak)) : reach),
           };
         }
       }
@@ -1301,15 +1305,22 @@ export function buildScene(tiles, o = {}) {
       const pts = [...f.top, ...f.sides.flatMap((sd) => sd.points)];
       const uniq = [...new Set(pts)];
       const cx0 = uniq.reduce((a, p) => a + p.x, 0) / uniq.length, cy0 = uniq.reduce((a, p) => a + p.y, 0) / uniq.length;
+      // THE ORBIT IS LAID OUT AGAINST THE HOLE'S FULL SIZE, and the tile sits somewhere on the
+      // straight line between its home and that orbit by the CURRENT pull (operator, 2026-09-15:
+      // "Instead of the bars reversing into place, can they just reorient themselves into their
+      // original positions when the blackhole starts to disappear?"). While the hole grows the
+      // tile glides out to its orbit and turns with it; while it shrinks the pull falls and the
+      // tile glides straight home -- the orbit never unwinds.
+      const peak = Math.max(fxv.pullPeak ?? fxv.pull, 0.001), k0 = Math.min(1, fxv.pull / peak);
       const dx = cx0 - hp.x, dy = cy0 - hp.y, r0 = Math.hypot(dx, dy) || 1, a0 = Math.atan2(dy, dx);
-      const swing = fxv.pull * ((o.now ?? 0) * 0.0009 + 1.2);          // clockwise on screen, faster the deeper in
-      const r1 = r0 * (1 - 0.55 * fxv.pull), a1 = a0 + swing;
-      const cx1 = hp.x + Math.cos(a1) * r1, cy1 = hp.y + Math.sin(a1) * r1 * (1 - 0.6 * fxv.pull);   // flattened toward the disk
-      const sx = cx1 - cx0, sy = cy1 - cy0;
+      const swing = peak * ((o.now ?? 0) * 0.0009 + 1.2);              // clockwise on screen, faster the deeper in
+      const r1 = r0 * (1 - 0.55 * peak), a1 = a0 + swing;
+      const cx1 = hp.x + Math.cos(a1) * r1, cy1 = hp.y + Math.sin(a1) * r1 * (1 - 0.6 * peak);      // flattened toward the disk
+      const sx = (cx1 - cx0) * k0, sy = (cy1 - cy0) * k0;
       const tops = new Set([...f.top, ...f.sides.flatMap((sd) => [sd.points[0], sd.points[1]])]);
       for (const p of uniq) {
-        p.x += sx; p.y += sy;                                           // carried round the orbit
-        const k = tops.has(p) ? 0.55 * fxv.pull : 0.2 * fxv.pull;      // and leaning in
+        p.x += sx; p.y += sy;                                           // carried toward, and round, the orbit
+        const k = (tops.has(p) ? 0.55 : 0.2) * peak * k0;              // and leaning in
         p.x += (hp.x - p.x) * k; p.y += (hp.y - p.y) * k;
       }
     }

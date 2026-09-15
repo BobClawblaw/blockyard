@@ -318,7 +318,7 @@ function fxNow(st, t) {
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
     // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
     // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
-    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, scale: 0, pull: 1 }] : [];
+    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, rPeak: 4.8 * 1.5, scale: 0, pull: 1 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
