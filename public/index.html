@@ -1036,7 +1036,12 @@
     <!-- ========================================================== ADMIN -->
     <section class="page" data-page="admin">
       <div class="grid">
-        <div class="card w6">
+        <!-- TWO STACKS (2026-09-15, "same treatment on the admin page"): Users beside Node actions left
+             a hole under the short Users card; each stack packs its own. The two password fields
+             share a row. -->
+        <div class="ovcols adcols">
+          <div class="ovcol">
+            <div class="card">
           <h3>Users <span class="sp"></span><span class="src">scrypt-hashed, never shown</span></h3>
           <div class="scroll"><table class="t" id="adUsers"><thead><tr><th>user</th><th>role</th><th>created</th><th>last login</th><th></th></tr></thead><tbody></tbody></table></div>
           <div class="hr"></div>
@@ -1047,24 +1052,27 @@
           </div>
           <div class="note tiny" id="adGen"></div>
         </div>
-
-        <div class="card w6">
-          <h3>Node actions <span class="sp"></span><span class="src">off unless enabled</span></h3>
-          <div class="note tiny" id="adActions"></div>
-        </div>
-
-        <div class="card w6">
+            <div class="card">
           <h3>Audit log <span class="sp"></span><span class="src">credentials use, without credentials</span></h3>
           <div class="scroll lg"><table class="t" id="adAudit"><thead><tr><th>when</th><th>type</th><th>who</th><th>detail</th></tr></thead><tbody></tbody></table></div>
           <div class="note tiny faint mt-6" id="adAuditSize"></div>
         </div>
-
-        <div class="card w6">
+          </div>
+          <div class="ovcol">
+            <div class="card">
+          <h3>Node actions <span class="sp"></span><span class="src">off unless enabled</span></h3>
+          <div class="note tiny" id="adActions"></div>
+        </div>
+            <div class="card">
           <h3>Change own password <span class="sp"></span></h3>
-          <div class="field"><label>current password</label><input class="f w-full" type="password" id="pwCurrent" autocomplete="current-password"></div>
-          <div class="field"><label>new password</label><input class="f w-full" type="password" id="pwNew" autocomplete="new-password"></div>
+          <div class="ovpair">
+            <div class="field"><label>current password</label><input class="f w-full" type="password" id="pwCurrent" autocomplete="current-password"></div>
+            <div class="field"><label>new password</label><input class="f w-full" type="password" id="pwNew" autocomplete="new-password"></div>
+          </div>
           <button class="btn primary" id="btnPw">change password</button>
           <div class="note tiny faint mt-6">Changing it revokes every session, including this one.</div>
+        </div>
+          </div>
         </div>
       </div>
     </section>
