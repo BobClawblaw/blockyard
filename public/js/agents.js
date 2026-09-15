@@ -839,15 +839,34 @@ defineAgent('stormball', {
     // stunning"); half that on the price board (operator, 2026-09-14: "make the ball lightning half
     // the size it is now"), where it shares the view with the line
     const R = U * (view.axes?.line?.length > 1 ? 1.7 : 3.4);
-    // a jagged bolt between two screen points, `kink` pixels of wander, re-rolled each frame
-    const bolt = (p, q, kink, steps) => {
-      const pts = [p];
-      for (let i = 1; i < steps; i++) {
-        const f = i / steps, nx = -(q.y - p.y), ny = q.x - p.x, L = Math.hypot(nx, ny) || 1;
-        const off = (Math.random() - 0.5) * 2 * kink * Math.sin(Math.PI * f);
-        pts.push({ x: p.x + (q.x - p.x) * f + (nx / L) * off, y: p.y + (q.y - p.y) * f + (ny / L) * off });
-      }
-      pts.push(q);
+    // LIGHTNING THAT LOOKS LIKE LIGHTNING (operator, 2026-09-15: "the lightning ball tendrils on
+    // the markets page look too big and jagged. Is there a way to thin them up a bit, or make
+    // substantial visual improvements to the lightning arcs?"). The first bolt was nine points
+    // thrown 18% of the length to either side, re-rolled every frame, in strokes sized to the grid
+    // unit -- on the price board, whose unit is three times the block board's, that was a fat
+    // zigzag flailing at 60 Hz. Three changes:
+    //  * MIDPOINT DISPLACEMENT: the channel is split in half, the middle thrown to one side, and
+    //    each half split again four times over with the throw halving each level -- the shape of
+    //    a discharge, which wanders on the large scale and crackles on the small, never a zigzag;
+    //  * BRANCHES: one or two forks leave the channel partway, thinner and shorter, each a
+    //    smaller discharge of its own, dying out before they reach anything;
+    //  * HELD FOR A BEAT: the shape is rolled from the arc's seed and the clock in 60 ms steps, so
+    //    it holds for a few frames and then jumps -- a flicker, not a shiver -- and the strokes
+    //    are sized to the ball's own radius, so the price board's half-size ball throws half-width
+    //    bolts.
+    const beat = Math.floor((view.now ?? 0) / 60);
+    const rollFrom = (seed) => { let x = (seed ^ (beat * 2654435761)) >>> 0 || 1; return () => ((x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 4294967296); };
+    const displace = (pts, i, j, amp, depth, rnd) => {
+      if (depth === 0 || j - i < 2) return;
+      const m = (i + j) >> 1, a = pts[i], b = pts[j];
+      const nx = -(b.y - a.y), ny = b.x - a.x, L = Math.hypot(nx, ny) || 1;
+      const off = (rnd() - 0.5) * 2 * amp * L;
+      pts[m] = { x: (a.x + b.x) / 2 + (nx / L) * off, y: (a.y + b.y) / 2 + (ny / L) * off };
+      displace(pts, i, m, amp * 0.55, depth - 1, rnd); displace(pts, m, j, amp * 0.55, depth - 1, rnd);
+    };
+    const bolt = (p, q, amp, rnd, levels = 4) => {
+      const n = 1 << levels, pts = new Array(n + 1); pts[0] = p; pts[n] = q;
+      displace(pts, 0, n, amp, levels, rnd);
       return pts;
     };
     // the arcs first, so the sphere sits over the roots of its own lightning
@@ -855,25 +874,36 @@ defineAgent('stormball', {
       const end = project(arc.to.x, arc.to.y, arc.to.z, view);
       // a chained arc leaves the block the first one struck, not the ball
       const from = arc.from ? project(arc.from.x, arc.from.y, arc.from.z, view) : c;
-      const main = bolt(from, end, Math.hypot(end.x - from.x, end.y - from.y) * 0.18, 9);
+      const rnd = rollFrom(arc.seed);
+      const main = bolt(from, end, 0.11, rnd);
       // a chain (hop 1 or 2 from the block) is electric green, so it reads as the block discharging, not the ball
       const [halo, body, edge] = arc.chain ? ['20,200,110', '110,255,170', '215,255,235'] : ['30,120,255', '60,170,255', '140,220,255'];
-      const sz = arc.chain ? 0.85 : 1;
-      line(ctx, main, `rgba(${halo},${(0.3 * arc.strength).toFixed(3)})`, Math.max(lw * 8, U * 1.1) * sz);
-      line(ctx, main, `rgba(${body},${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw * 4, U * 0.45) * sz);
-      line(ctx, main, `rgba(${edge},${(0.95 * arc.strength).toFixed(3)})`, Math.max(lw * 2, U * 0.2) * sz);
-      line(ctx, main, `rgba(245,252,255,${arc.strength.toFixed(3)})`, Math.max(lw, U * 0.08) * sz);
-      // ...and a ring bursting from the block it lands on, the moment it lands
+      const sz = (arc.chain ? 0.85 : 1) * R;
+      const stroke = (pts, col, w, a) => line(ctx, pts, `rgba(${col},${a.toFixed(3)})`, Math.max(lw, w));
+      stroke(main, halo, sz * 0.30, 0.28 * arc.strength);
+      stroke(main, body, sz * 0.12, 0.6 * arc.strength);
+      stroke(main, edge, sz * 0.055, 0.95 * arc.strength);
+      stroke(main, '245,252,255', sz * 0.022, arc.strength);
+      // the branches: leave the channel a third to two thirds along, at 20-45 degrees, a quarter
+      // to a half of the remaining length, and fade toward their tips
+      const forks = 1 + (rnd() < 0.45 ? 1 : 0);
+      for (let f = 0; f < forks; f++) {
+        const k = Math.floor(main.length * (0.3 + 0.4 * rnd()));
+        const at = main[k], dx = end.x - at.x, dy = end.y - at.y;
+        const ang = (rnd() < 0.5 ? 1 : -1) * (0.35 + 0.45 * rnd()), len = 0.25 + 0.25 * rnd();
+        const tip = { x: at.x + (dx * Math.cos(ang) - dy * Math.sin(ang)) * len, y: at.y + (dx * Math.sin(ang) + dy * Math.cos(ang)) * len };
+        const br = bolt(at, tip, 0.14, rnd, 3);
+        stroke(br, body, sz * 0.06, 0.35 * arc.strength);
+        stroke(br, edge, sz * 0.028, 0.7 * arc.strength);
+        stroke(br, '245,252,255', sz * 0.012, 0.8 * arc.strength);
+      }
+      // ...and a ring bursting from the block a chain lands on, the moment it lands
       if (arc.chain && arc.age < 0.6) {
         const f = arc.age / 0.6;
-        ring(ctx, end.x, end.y, U * (0.4 + 2.2 * f), `rgba(150,255,190,${(0.9 * (1 - f)).toFixed(3)})`, Math.max(lw * 2, U * 0.12) * (1 - 0.5 * f));
-        ring(ctx, end.x, end.y, U * (0.2 + 1.4 * f), `rgba(235,255,245,${(0.8 * (1 - f)).toFixed(3)})`, Math.max(lw, U * 0.06));
+        ring(ctx, end.x, end.y, R * (0.12 + 0.65 * f), `rgba(150,255,190,${(0.9 * (1 - f)).toFixed(3)})`, Math.max(lw * 2, R * 0.035) * (1 - 0.5 * f));
+        ring(ctx, end.x, end.y, R * (0.06 + 0.4 * f), `rgba(235,255,245,${(0.8 * (1 - f)).toFixed(3)})`, Math.max(lw, R * 0.018));
       }
-      // a fork off the main channel, and a spark where it lands
-      const k = 3 + Math.floor(Math.random() * 4);
-      const fork = main[k], forkEnd = { x: fork.x + (Math.random() - 0.5) * U * 3, y: fork.y + (Math.random() - 0.5) * U * 3 };
-      line(ctx, bolt(fork, forkEnd, U * 0.5, 4), `rgba(130,215,255,${(0.6 * arc.strength).toFixed(3)})`, Math.max(lw, U * 0.08));
-      bloom(ctx, end.x, end.y, U * 2.2, [90, 200, 255], arc.strength);
+      bloom(ctx, end.x, end.y, R * 0.65, arc.chain ? [120, 255, 180] : [90, 200, 255], arc.strength);
     }
     // THE SPHERE IS ONE SMOOTH THING (operator, 2026-09-14: "needs a smooth gradient, not different
     // discs around it. It needs to be visually stunning. Consider adding nebula effects"). Radial
@@ -938,9 +968,9 @@ defineAgent('stormball', {
       const ang = Math.random() * Math.PI * 2, r0 = R * (0.35 + 0.5 * Math.random()), r1 = R * (1.05 + 0.55 * Math.random());
       const p = { x: c.x + Math.cos(ang) * r0, y: c.y + Math.sin(ang) * r0 };
       const q = { x: c.x + Math.cos(ang + (Math.random() - 0.5) * 0.9) * r1, y: c.y + Math.sin(ang + (Math.random() - 0.5) * 0.9) * r1 };
-      const pts = bolt(p, q, R * 0.22, 4);
-      line(ctx, pts, 'rgba(90,190,255,0.55)', Math.max(lw * 2.2, U * 0.12));
-      line(ctx, pts, 'rgba(230,248,255,0.95)', Math.max(lw, U * 0.04));
+      const pts = bolt(p, q, 0.16, rollFrom(i * 7919 + 17), 3);
+      line(ctx, pts, 'rgba(90,190,255,0.55)', Math.max(lw * 1.6, R * 0.035));
+      line(ctx, pts, 'rgba(230,248,255,0.95)', Math.max(lw, R * 0.012));
     }
   },
 });

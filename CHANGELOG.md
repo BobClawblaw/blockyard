@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Ball lightning's arcs are discharges, not zigzags.** Each bolt is built by midpoint
+  displacement (the channel split and thrown to one side, four levels deep, the throw halving each
+  level) with one or two thinner branches leaving it partway, its shape held for 60 ms at a time
+  so it flickers rather than shivers, and its strokes sized to the ball's own radius — so the
+  half-size ball on Markets throws half-width bolts. The first cut was nine points thrown 18% of
+  the length to either side, re-rolled every frame, in strokes sized to the grid unit, which on
+  the price board was a fat zigzag flailing at 60 Hz.
+
 ### Fixed
 
 - **A dead index worker fails the build instead of hanging it.** The worker pool listened for a
