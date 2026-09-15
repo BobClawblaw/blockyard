@@ -923,7 +923,7 @@ function drawFireworks(ctx, view, lw) {
     {
       const sr = R0 * (0.3 + 1.1 * (1 - Math.exp(-2.2 * ss))), rise = R0 * 0.3 * ss;
       const sa = 0.9 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
-      if (sa > 0.01) gasCloud(ctx, top.x, top.y - rise, sr, ss, now, fx.seed + sh.i * 977, sa, smokeRc, gradientOf, disc, 60, [50, 50, 58]);
+      if (sa > 0.01) gasCloud(ctx, top.x, top.y - rise, sr, ss, now, fx.seed + sh.i * 977, sa * 1.3, smokeRc, gradientOf, disc, 80, [50, 50, 58]);
     }
     if (ss > 0.15) {
       const em = (ss - 0.15) / 0.85;
@@ -1061,7 +1061,7 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
     const H = (q) => hash01(seed + 5000 + k * 37 + q);
     const rho = 0.35 + 0.65 * Math.sqrt(H(1));                          // toward the rim
     const th = H(2) * Math.PI * 2, ph = Math.acos(2 * H(3) - 1);         // even over the sphere
-    blobs.push({ x: rho * Math.sin(ph) * Math.cos(th), y: rho * Math.sin(ph) * Math.sin(th), z: rho * Math.cos(ph), s: 0.09 + 0.13 * H(4), w: H(5) * Math.PI * 2, k });
+    blobs.push({ x: rho * Math.sin(ph) * Math.cos(th), y: rho * Math.sin(ph) * Math.sin(th), z: rho * Math.cos(ph), s: 0.12 + 0.18 * H(4), w: H(5) * Math.PI * 2, k });
   }
   blobs.sort((a, b) => a.z - b.z);                                       // back to front
   for (const b of blobs) {
@@ -1072,7 +1072,7 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
     const heat = Math.max(0, Math.min(1, 0.5 + 0.55 * front - 0.45 * f));   // hotter in front and early
     const col = rc.map((v, i) => Math.round(dark[i] + (v - dark[i]) * heat));
     const core = col.map((v) => Math.round(v + (255 - v) * 0.5 * heat));
-    const a = bright * (0.17 + 0.2 * front) * (1 - 0.3 * f);
+    const a = bright * (0.26 + 0.26 * front) * (1 - 0.25 * f);   // more of it (operator, 2026-09-15: "More nebula and smoke, that's still too subtle")
     if (a < 0.004) continue;
     disc(x, y, r, grad(x, y, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]));
   }
@@ -1148,7 +1148,11 @@ function drawSupernova(ctx, view, lw) {
     const f = (u - 0.14) / 0.86;
     const shell = R0 * (0.5 + 4.2 * (1 - Math.exp(-1.3 * f)));           // the cloud's radius: slower than the first cut (operator: "the cloud dispersion is too fast")
     const bright = (f < 0.08 ? f / 0.08 : f < 0.62 ? 1 : Math.pow(1 - (f - 0.62) / 0.38, 1.3)) * gf;
-    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc, 150, [60, 30, 120]);
+    // the outskirts first: a wispier, fainter, larger cloud beyond the shell, then the shell itself
+    gasCloud(ctx, c.x, c.y, shell * 1.45, f, now, fx.seed + 31337, bright * 0.45, rc, grad, disc, 90, [60, 30, 120]);
+    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc, 260, [60, 30, 120]);
+    // and the interior glow: the cloud lit from within
+    disc(c.x, c.y, shell * 0.8, grad(c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.22 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
     // the shock band at the cloud's leading edge, soft, in the cloud's colour
     if (u < 0.6) {
       const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
@@ -1156,7 +1160,7 @@ function drawSupernova(ctx, view, lw) {
       band(r, R0 * (0.3 + 0.6 * (1 - fr)), rcs, 0.4 * (1 - fr) * gf);
     }
     // a wide pool of the cloud's colour on everything near
-    disc(c.x, c.y, shell * 1.6, grad(c.x, c.y, shell * 1.6, [[0, `rgba(${rcs},${(0.14 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    disc(c.x, c.y, shell * 1.9, grad(c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.2 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
   }
   // --- the breakout: the whole picture goes white and comes back
   if (u >= 0.12 && u < 0.34) {
