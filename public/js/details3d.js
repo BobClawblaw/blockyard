@@ -351,11 +351,14 @@ function fxNow(st, t) {
       // ON THE BLOCK BOARD IT HOVERS (operator, 2026-09-15: "Explore if we can have the black hole
       // high off the ground enough and test vs Block Display"): seven units above the tallest
       // cube, on a row a little off the middle, so the disk hangs over the board and the cubes
-      // beneath it are drawn UP into orbit rather than the disk being buried among them
+      // beneath it are drawn UP into orbit rather than the disk being buried among them.
+      // TWICE THAT HIGH since (operator, 2026-09-15: "make the black hole higher off the grid,
+      // double what height it is now"): the reach is measured across the board, not up, so the
+      // cubes under it are still caught -- they just rise further into the orbit
       if (f.alt == null) {
         const tops = cellTops(st.restTiles || [], st.gridW, st.gridH);
         let highest = 0; for (let i = 0; i < tops.length; i++) highest = Math.max(highest, tops[i]);
-        f.alt = highest + 7;
+        f.alt = (highest + 7) * 2;
       }
       hz = f.alt; lo = 0; hi = f.alt;
       hy = st.gridH * (0.4 + 0.2 * hash01(f.seed + 4));

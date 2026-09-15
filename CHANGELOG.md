@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- On Block space the black hole hovers twice as high off the grid: double its old height over the tallest cube, and the cubes beneath still rise to meet it in orbit
+
 ## [0.0.10] — 2026-09-15
 
 A point release, the day after 0.0.9, shaped by the first outside review of it on bitcointalk: the
@@ -18,7 +21,7 @@ whited out, a DOOM answer for the doubters, and the fixes of a day's use.
 - **Market polling is off by default** — a new checkbox, **Display settings → Markets & Price → Enable market polling**, shared by every screen. A fresh install makes no outbound connection but to the node: the Markets and Kiosk tabs say that polling is off and where the switch is, Overview's price line stays hidden and the explorer shows no dollar figures. Ticking it takes effect at once; unticking parks the feed at once. `BLOCKYARD_MARKETS=0` still removes the feed so that the checkbox cannot turn it on. Existing installs tick the box once.
 
 ### Changed
-- The black hole crosses the board: on Markets it opens a fifth of the way in on one side and runs a straight line through the chart to a fifth from the other, from one height to another, so the price line is seen bending round it as it passes and the candles' orbits ride along at a quarter of the old speed; it is on the Block space list too now, hovering at twice the height of seven units over the tallest cube as it crosses, the cubes beneath carried whole into orbit round it, shrinking away into it (no shearing)
+- The black hole crosses the board: on Markets it opens a fifth of the way in on one side and runs a straight line through the chart to a fifth from the other, from one height to another, so the price line is seen bending round it as it passes and the candles' orbits ride along at a quarter of the old speed; it is on the Block space list too now, hovering seven units over the tallest cube as it crosses, the cubes beneath carried whole into orbit round it, shrinking away into it (no shearing)
 - The scanner's cone is dimmer on both boards, a little over half of what it was
 - The supernova's violet stage comes sooner and heavier: the debris turns purple patch by patch from a tenth of the run, a violet heart and a wider violet cloud rise behind it, so the nebula is prominently purple as the pulsar starts to blink and holds its weight until four fifths of the run; the white plumes are drawn on a half-resolution layer to keep the frame cheap
 - The supernova's opening explosion is a white-hot flash, held for a moment and washing far out, that throws a hundred and twenty-eight plumes of white gas in every direction, each flying and growing on its own out to nine star radii and drifting on until the effect is nearly done
