@@ -302,7 +302,7 @@ const FX_ROW = Object.freeze({
   shockwave: Object.freeze({ label: 'Shockwave', hint: 'A hard ring that throws the blocks it passes into the air' }),
   nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
   firework: Object.freeze({ label: 'Fireworks', hint: 'Three bursts, each at its own moment and place' }),
-  flare: Object.freeze({ label: 'Solar flare', hint: 'One block goes supernova and lights its neighbourhood' }),
+  flare: Object.freeze({ label: 'Supernova', hint: 'One block goes supernova: a star swells and blows out in a white-out, a debris cloud of gas expands and cools white to blue to violet, a shockwave throws what it crosses, and a pulsar is left beating at the centre' }),
   wave: Object.freeze({ label: 'Wave', hint: 'Several crests rolling across the board, the blocks riding them' }),
   quake: Object.freeze({ label: 'Quake', hint: 'The board shakes, hardest at the start, and settles' }),
   rain: Object.freeze({ label: 'Code rain', hint: 'A drop falls down every column with a white head and a green tail' }),

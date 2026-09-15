@@ -43,7 +43,7 @@ All notable changes to this project are documented here. The format follows
   toward you, its far side lensed into a great arch over the top of the shadow and a smaller one beneath — the far half of the same disk, every point keeping its place along the disk and raised by an amount that grows with its radius, so the arch comes down onto the flat band at both sides — with the disk's gradient body and fibres,
   a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
   straightens and the candles come back. Thirty-three effects; fifteen on Markets.
-- **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
+- **The solar flare is Supernova (renamed), modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
   the star is a glint — halo, hot core, diffraction spikes — growing and blue-shifting from warm white to blue-white as it goes (`starGlint`, a new renderer); the whole picture whites out and comes back, with a
   no flare (its turning rays read as glints and went); the debris is a **volume of gas**
   (`gasCloud`: clumped, streaked, lumpy blobs — ellipses stretched along their own radial lines,

@@ -230,7 +230,7 @@ trimming one board's effects leaves the other's alone.
 | **Cascade**, **Twinkle**, **Sparkle** | the blocks light in fee-rate order; scattered flashes; a constellation, each block its own colour |
 | **Light cycles** | a TRON-style race in blue and orange from opposite edges, leaving light walls, until one crashes and de-rezzes |
 | **Lightning ball** | a pale plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
-| **Shockwave**, **Nova**, **Fireworks**, **Solar flare** | a hard ring that throws blocks into the air; an implosion then a brighter blast; a fireworks display; a supernova — a star swells white-hot and crackles, blows out in a flash and a lens flare, a shockwave rings out, plasma is flung on every side, and a ring nebula expands and cools gold → red → violet round a white dwarf, lighting everything near it as it goes |
+| **Shockwave**, **Nova**, **Fireworks**, **Supernova** | a hard ring that throws blocks into the air; an implosion then a brighter blast; a fireworks display; a supernova — a star swells white-hot and crackles, blows out in a flash and a lens flare, a shockwave rings out, plasma is flung on every side, and a ring nebula expands and cools gold → red → violet round a white dwarf, lighting everything near it as it goes |
 | **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
 | **Code rain**, **Radar**, **Vortex** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward |
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
@@ -249,7 +249,7 @@ but the two drawn on a price line (**Energy pulse**, **Pipe bulge**). The Market
 units deep and as wide as the hours, so everything there moves **along the hours, left or right,
 never toward you**, and lights the candles or the line. Its list is the **sixteen** that
 translate to a chart: **Ripple**, **Outline sweep**, **Tide**, **Cascade**, **Twinkle**, **Scan
-line**, **X-ray**, **Fireworks**, **Solar flare**, **Wave**, and the price line's own **Energy pulse**,
+line**, **X-ray**, **Fireworks**, **Supernova**, **Wave**, and the price line's own **Energy pulse**,
 **Pipe bulge**, **Breathe**, **Light saber**, **Black hole** and **Ball lightning** (a quarter of its
 Block space size there). Fronts run along the
 chart, rings start on the candle row, the candles light where they stand. Nothing on it waits
