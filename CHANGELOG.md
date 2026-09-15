@@ -24,6 +24,16 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
+- **The Markets board keeps its price fit across refreshes.** Every refresh re-fitted the range
+  from the new candles, so the whole chart re-scaled unanimated — and a refresh that arrived
+  during a long effect was parked until it ended, so the snap landed exactly as the black hole
+  let go. The last fit is kept while the data still sits inside it and fills at least two-thirds
+  of it; only data that leaves the range, or shrinks well inside it, re-fits.
+- **The searchlight and the tractor beam never follow each other**: they fly the same saucer, so
+  they share the no-repeat window.
+- The supernova's shockwave throws the candles a tenth of what it first did (the shaking is
+  nearly gone), and its opening white emission has its presence back now that the fills add up
+  honestly.
 - **A Kiosk test suite** (`test/kiosk.test.js`): every Markets and Block space effect plays
   through the frame loop on a Kiosk-sized panel; the supernova, the black hole and the fireworks
   are bounded by the board's width (`boundedRadius`) so no panel is covered; and `softStops`'

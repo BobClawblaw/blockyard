@@ -119,13 +119,23 @@ export function fitZ(aspect, gridW, cam = CAMERA_3D) {
   return Math.max(12, Math.min(160, Math.floor(z * 0.97)));
 }
 
-export function chart3d(ser, { hours = MAX_3D_HOURS, zMax = C3.zMax } = {}) {
+// `fit`: the price range the board was last drawn to ({ lo, hi }), from the caller's memory. A
+// STEADY FIT (operator, 2026-09-15: "when the black hole sequence finishes, it causes a strange
+// redraw of the entire market screen that snaps it into a new sized view"). A refresh arriving
+// during an effect is parked until the effect ends, and every refresh re-fitted the price range
+// from the new candles -- so the whole chart re-scaled, unanimated, at the moment the effect let
+// go. The last fit is kept while the data still sits inside it and fills at least two-thirds of
+// it; only data that leaves the range, or shrinks well inside it, re-fits.
+export function chart3d(ser, { hours = MAX_3D_HOURS, zMax = C3.zMax, fit = null } = {}) {
   const cs = (ser?.candles ?? []).slice(-hours).filter((k) => Number.isFinite(k.c) && Number.isFinite(k.o));
   if (!cs.length) return { tiles: [], gridW: C3.slot, gridH: C3.depth, axes: null, lo: null, hi: null };
   let lo = Infinity, hi = -Infinity, vmax = 1e-9;
   for (const k of cs) { lo = Math.min(lo, k.l ?? k.c); hi = Math.max(hi, k.h ?? k.c); vmax = Math.max(vmax, k.v ?? 0); }
   const pad = (hi - lo) * 0.04 || 1;
+  const rawLo = lo, rawHi = hi;
   lo -= pad; hi += pad;
+  if (fit && Number.isFinite(fit.lo) && Number.isFinite(fit.hi) && fit.hi > fit.lo
+    && rawLo >= fit.lo && rawHi <= fit.hi && (rawHi - rawLo) >= (fit.hi - fit.lo) * 0.66) { lo = fit.lo; hi = fit.hi; }
   const Z = (p) => C3.zBase + ((p - lo) / (hi - lo)) * zMax;
   const id = ser.base?.id ?? 'x';
   const name = `${ser.base?.name ?? ''} ${ser.base?.pair ?? ''}`.trim();
@@ -236,7 +246,9 @@ function drawBoard(id = 'mkBoard') {
   if (!canvas || !ser) return null;
   const hours = Math.min(MAX_3D_HOURS, ser.candles.length);
   const aspect = (canvas.clientHeight || 400) / Math.max(1, canvas.clientWidth || 1000);
-  const c3 = chart3d(ser, { zMax: fitZ(aspect, hours * C3.slot) });
+  const fitKey = `${ser.base?.id ?? 'x'}|${M.range}|${hours}`;
+  const c3 = chart3d(ser, { zMax: fitZ(aspect, hours * C3.slot), fit: M.fitKey === fitKey ? M.fit3d : null });
+  M.fitKey = fitKey; M.fit3d = c3.lo != null ? { lo: c3.lo, hi: c3.hi } : null;   // the fit the board was drawn to, kept for the next refresh
   const cam = { ...CAMERA_3D, oblique: { ...CAMERA_3D.oblique, headroom: C3.zBase + c3.zMax + 2 } };
   if (c3.tiles.length) board3d(canvas, c3.tiles, { ...cam, gridW: c3.gridW, gridH: c3.gridH, axes: c3.axes, ...marketsOptions(loadSettings()) });
   return { c3, ser };

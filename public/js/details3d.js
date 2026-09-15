@@ -184,6 +184,8 @@ export const FX_KINDS = Object.keys(FX_MS);
 // AN EFFECT'S SIZE ON A SMALL BOARD (2026-09-15, the Kiosk): a radius in grid units, capped at a
 // share of the board's width, so the same effect on a small panel never covers it
 export function boundedRadius(units, share, gridW) { return Math.min(units, share * gridW); }
+// effects that read as the same thing: never one right after the other
+const FX_KIN = { scan: ['tractor'], tractor: ['scan'] };
 export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan: 29200 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
@@ -385,6 +387,10 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
   // fix on the Markets list: a repeat at the tenth pick; after it: every effect plays once before
   // any comes round again.
   const blocked = new Set(recent.slice(Math.max(0, recent.length - window)));
+  // KINDS THAT LOOK ALIKE SHARE THE WINDOW (operator, 2026-09-15: "I just saw the UFO effect get
+  // triggered twice in a row on the block space" -- the scan's searchlight and the tractor beam
+  // fly the same saucer, so one after the other read as a repeat though the rule saw two kinds)
+  for (const k of [...blocked]) for (const kin of FX_KIN[k] ?? []) blocked.add(kin);
   let pool = kinds.filter((k) => !blocked.has(k));
   if (!pool.length) {
     // every kind is inside the window: the ones played least recently
@@ -1678,7 +1684,7 @@ function drawSupernova(ctx, view, lw) {
     // toward opaque however faint each is -- 320 blobs saturated, and 170 at a third still did --
     // so the cloud is ninety blobs at an eighth of the weight, which peaks near half opacity at the
     // centre and reads as gas the chart shows through
-    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright * 0.13, rc, grad, disc, 220, [60, 30, 120], (front, ff, H) => {
+    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright * 0.17, rc, grad, disc, 220, [60, 30, 120], (front, ff, H) => {
       const start = 0.18 + 0.55 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.28));   // when this patch turns violet
       const white = [225, 235, 255], violet = [170, 105, 255], deep = [95, 45, 170];   // blue-white, not solid white (2026-09-15)
       const c1 = white.map((v, i) => v + (violet[i] - v) * on);
@@ -1707,8 +1713,11 @@ function drawSupernova(ctx, view, lw) {
     // his wife on the Kiosk: "far too much solid white"): a modest disc, at most half opaque at its
     // heart, thin by three shells out, and the white gas thrown with it at a third of the weight
     const W = R0 * 4;
-    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.3 * f).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.15 * f).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.04 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
-    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, 0.12 * f, [255, 255, 255], grad, disc, 30, [200, 210, 240], null, 0.6);
+    // PRESENCE BACK (operator, 2026-09-15: "We've removed so much of the initial white nebula
+    // emission that it's lost much of its presence and intensity") -- now that the discs add up
+    // honestly, the flash and the white gas can carry weight again without going solid
+    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.5 * f).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.26 * f).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.07 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
+    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, 0.32 * f, [255, 255, 255], grad, disc, 90, [200, 210, 240], null, 0.85, 1.25);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
     // taken out on 2026-09-15; the white-out alone is the breakout)
   }

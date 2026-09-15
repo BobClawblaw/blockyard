@@ -494,3 +494,19 @@ test('a bottom-anchored board leaves a strip under its front edge for the hours'
     assert.ok(ph - f.ty >= 0.05 * ph, `${ph}: ${(ph - f.ty).toFixed(1)} px under the board`);
   }
 });
+
+test('the 3D board keeps its price fit across refreshes while the data stays inside it', () => {
+  // operator, 2026-09-15: "when the black hole sequence finishes, it causes a strange redraw of
+  // the entire market screen that snaps it into a new sized view" -- a parked refresh re-fitting
+  // the range at the effect's end
+  const mk = (lo, hi) => ({ base: { id: 'x', name: 'X', pair: 'BTC-USD' }, candles: Array.from({ length: 24 }, (_, i) => ({ t: i * 3600e3, o: lo + 1, c: hi - 1, h: hi, l: lo, v: 1 })) });
+  const first = chart3d(mk(100, 200));
+  assert.ok(first.lo < 100 && first.hi > 200, 'the first fit pads the data');
+  const same = chart3d(mk(105, 195), { fit: { lo: first.lo, hi: first.hi } });
+  assert.equal(same.lo, first.lo); assert.equal(same.hi, first.hi);
+  assert.equal(same.axes.z[0].z, first.axes.z[0].z, 'the levels stay where they were: no re-scale on a refresh that still fits');
+  const out = chart3d(mk(100, 230), { fit: { lo: first.lo, hi: first.hi } });
+  assert.ok(out.hi > 230, 'data that leaves the range re-fits');
+  const shrunk = chart3d(mk(140, 160), { fit: { lo: first.lo, hi: first.hi } });
+  assert.ok(shrunk.hi - shrunk.lo < (first.hi - first.lo) * 0.5, 'and data that shrinks well inside it re-fits too, so the chart does not stay zoomed out');
+});

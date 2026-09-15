@@ -1055,7 +1055,7 @@ export function fxAt(t, fx) {
         // (operator: "trigger their shaking sooner in the blast radius")
         const shake = passed > -5 && fx.u < 0.75 ? Math.max(0, Math.sin(fx.u * 70 + jitterOf(t.txid, 'sn' + fx.seed) * 6.28)) * Math.exp(-Math.max(0, passed) / 12) * (1 - (fx.u - 0.14) / 0.61) : 0;
         if (front > 0.02 || shake > 0.02) {
-          lift = Math.max(lift, 1.25 * A * front + 0.4 * A * shake);   // a quarter of the first cut (operator: "affects the candles too much", then "half as much still")
+          lift = Math.max(lift, 0.5 * A * front + 0.12 * A * shake);   // a tenth of the first cut (operator: "affects the candles too much", "half as much still", "we really need to turn down the block shaking")
           glow = Math.max(glow, A * front + 0.4 * A * shake);
           outline = Math.max(outline, A * front);
           if (front > w) colour = [255, 255, 255];

@@ -422,3 +422,19 @@ test('every Markets effect plays through the frame loop on a candle board withou
     globalThis.requestAnimationFrame = realRaf; globalThis.cancelAnimationFrame = realCaf; globalThis.performance = realPerf; globalThis.window = realWin; globalThis.matchMedia = realMM; globalThis.setTimeout = realST;
   }
 });
+
+test('the searchlight and the tractor beam never follow each other: they fly the same saucer', () => {
+  // operator, 2026-09-15: "I just saw the UFO effect get triggered twice in a row on the block space"
+  let seed = 7;
+  const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296);
+  const kinds = ['scan', 'tractor', 'ripple', 'nova'];
+  for (let run = 0; run < 30; run++) {
+    const st = {};
+    let prev = null;
+    for (let i = 0; i < 40; i++) {
+      const k = chooseIdleFx(kinds, st, i * 8000, rnd, 1);
+      assert.ok(!((prev === 'scan' && k === 'tractor') || (prev === 'tractor' && k === 'scan')), `${prev} then ${k}: the saucer twice running`);
+      prev = k;
+    }
+  }
+});
