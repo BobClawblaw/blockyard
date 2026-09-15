@@ -1095,8 +1095,52 @@ function drawBlackHole(ctx, view, lw) {
   const H = (k) => hash01(fx.seed + k);
   // --- the glow of the whole thing on the chart round it
   disc(c.x, c.y, outer * 1.3, grad(c.x, c.y, outer * 1.3, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]));
-  // --- the disk's FAR side, lensed over the top of the shadow (and, thinner, under it): drawn
-  // first so the near side and the shadow sit over it
+  // --- THE DISK IS GAS (operator, 2026-09-15: "use the gas cloud for the accretion disk. Only
+  // half the disc is drawn and clips through the galaxy spiral skybox"): the WHOLE ring, both
+  // halves, as blobs of glowing gas on Keplerian orbits in the disk's plane -- denser and hotter
+  // inside, each blob an ellipse stretched along its orbit, brighter on the approaching side --
+  // seen nearly edge-on and a little turned. The far half is drawn first and the shadow over it,
+  // the near half over the shadow; nothing has a hard edge, so it lies over the sky instead of
+  // cutting through it.
+  const toScreen = (rr, ang) => {
+    const px = rr * Math.cos(ang), py = rr * Math.sin(ang) * SQUASH;
+    return { x: c.x + px * Math.cos(TILT) - py * Math.sin(TILT), y: c.y + px * Math.sin(TILT) + py * Math.cos(TILT) };
+  };
+  const blobs = [];
+  for (let k = 0; k < 300; k++) {
+    const hk = (q) => hash01(fx.seed + 400 + k * 13 + q);
+    const rr = inner + (outer - inner) * Math.pow(hk(1), 1.6);          // denser inside
+    const omega = 0.0022 * Math.pow(inner / rr, 1.5);
+    const ang = (hk(2) * Math.PI * 2 + now * omega) % (Math.PI * 2);
+    const heat = 1 - (rr - inner) / (outer - inner);
+    const kind = hk(4);
+    const col = kind < 0.1 ? [90, 230, 150] : kind < 0.2 ? [255, 90, 90] : [255, Math.round(120 + 130 * heat), Math.round(40 + 120 * heat * heat)];
+    blobs.push({ rr, ang, heat, col, s: rs * (0.14 + 0.22 * hk(5)) * (0.6 + 0.4 * heat), far: Math.sin(ang) < 0, k });
+  }
+  const drawBlob = (b) => {
+    const p = toScreen(b.rr, b.ang), q = toScreen(b.rr, b.ang + 0.05);
+    const tang = Math.atan2(q.y - p.y, q.x - p.x);
+    const dop = doppler(b.ang);
+    const a = 0.34 * grow * (0.35 + 0.65 * b.heat) * Math.min(1.25, dop) / 1.25;
+    const core = b.col.map((v) => Math.round(v + (255 - v) * 0.45 * Math.min(1, dop) * b.heat));
+    const cs = b.col.join(','), ks = core.join(',');
+    if (canT) {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(tang); ctx.scale(2.6, 0.8);
+      ctx.fillStyle = grad(0, 0, b.s, [[0, `rgba(${ks},${a.toFixed(3)})`], [0.4, `rgba(${cs},${(a * 0.7).toFixed(3)})`], [1, `rgba(${cs},0)`]]);
+      ctx.beginPath(); ctx.arc(0, 0, b.s, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } else disc(p.x, p.y, b.s, grad(p.x, p.y, b.s, [[0, `rgba(${ks},${a.toFixed(3)})`], [1, `rgba(${cs},0)`]]));
+  };
+  const drawShadow = () => {
+    ctx.strokeStyle = `rgba(255,240,200,${(0.9 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.06);
+    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.08, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,200,120,${(0.5 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.16);
+    ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.12, 0, Math.PI * 2); ctx.stroke();
+    disc(c.x, c.y, rs * 1.12, grad(c.x, c.y, rs * 1.12, [[0, 'rgba(0,0,0,1)'], [0.86, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
+  };
+  // the far half, behind the hole
+  for (const b of blobs) if (b.far) drawBlob(b);
+  // the far side's lensed images: an arch of gas over the top of the shadow, a thinner one under
   const arch = (r0, r1, a0, a1, alpha, bright) => {
     for (let k = 0; k < 14; k++) {
       const t0 = a0 + ((a1 - a0) * k) / 14, t1 = a0 + ((a1 - a0) * (k + 1)) / 14, mid = (t0 + t1) / 2;
@@ -1106,38 +1150,22 @@ function drawBlackHole(ctx, view, lw) {
       ctx.beginPath(); ctx.arc(c.x, c.y, rr, t0, t1); ctx.stroke();
     }
   };
-  arch(rs * 1.05, rs * 2.1, Math.PI + 0.15, 2 * Math.PI - 0.15, 0.7 * grow, 1);      // over the top
-  arch(rs * 1.02, rs * 1.35, 0.25, Math.PI - 0.25, 0.45 * grow, 0.8);               // under, thinner: the second image
-  // --- the disk's NEAR side: an ellipse ring under the hole, hot inside, dark red out, streaked
-  // with gas spiralling in at Keplerian speed, in the chart's own colours
-  if (canT) {
-    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(TILT); ctx.scale(1, SQUASH);
-    // the body of the disk, near half only (angles 0..pi are the lower half on screen)
-    for (let k = 0; k < 18; k++) {
-      const r0 = inner + ((outer - inner) * k) / 18, r1 = inner + ((outer - inner) * (k + 1)) / 18, t = k / 18;
-      const heat = 1 - t;
-      for (let q = 0; q < 12; q++) {
-        const a0 = (Math.PI * q) / 12, a1 = (Math.PI * (q + 1)) / 12, dop = doppler((a0 + a1) / 2);
-        const R = Math.round(255), G = Math.round((120 + 120 * heat) * Math.min(1, dop)), B = Math.round(40 + 90 * heat * heat * Math.min(1, dop));
-        ctx.strokeStyle = `rgba(${R},${G},${B},${(0.55 * grow * (0.35 + 0.65 * heat) * Math.min(1.2, dop) / 1.2).toFixed(3)})`; ctx.lineWidth = (r1 - r0) * 1.05;
-        ctx.beginPath(); ctx.arc(0, 0, (r0 + r1) / 2, a0, a1); ctx.stroke();
-      }
-    }
-    // the streaks: gas spiralling in, each on its own orbit, faster inside; one in four in a
-    // candle's green or red -- the chart's own substance going down
-    for (let k = 0; k < 90; k++) {
-      const hk = (q) => hash01(fx.seed + 400 + k * 13 + q);
-      const rr = inner + (outer - inner) * Math.pow(hk(1), 0.7);
-      const omega = 0.0022 * Math.pow(inner / rr, 1.5);
-      const ang = (hk(2) * Math.PI * 2 + now * omega) % (Math.PI * 2);
-      if (ang > Math.PI) continue;                                       // the far half is the arch
-      const span = 0.18 + 0.5 * hk(3) * (rr / outer), dop = doppler(ang + span / 2);
-      const kind = hk(4), col = kind < 0.12 ? '90,230,150' : kind < 0.24 ? '255,90,90' : kind < 0.5 ? '255,235,170' : '255,190,90';
-      ctx.strokeStyle = `rgba(${col},${(0.5 * grow * Math.min(1, dop)).toFixed(3)})`; ctx.lineWidth = rs * (0.05 + 0.1 * hk(5));
-      ctx.beginPath(); ctx.arc(0, 0, rr, ang, Math.min(Math.PI, ang + span)); ctx.stroke();
-    }
-    ctx.restore();
+  arch(rs * 1.05, rs * 2.0, Math.PI + 0.15, 2 * Math.PI - 0.15, 0.4 * grow, 1);
+  arch(rs * 1.02, rs * 1.3, 0.25, Math.PI - 0.25, 0.25 * grow, 0.8);
+  // the arches as gas too, over the bands, so they have no hard edge
+  for (let k = 0; k < 70; k++) {
+    const hk = (q) => hash01(fx.seed + 2200 + k * 11 + q);
+    const up = hk(6) < 0.7, ang = up ? Math.PI + 0.1 + (Math.PI - 0.2) * hk(1) : 0.2 + (Math.PI - 0.4) * hk(1);
+    const rr = up ? rs * (1.1 + 0.9 * hk(2)) : rs * (1.05 + 0.25 * hk(2));
+    const drift = now * 0.0006 * (up ? 1 : -1);
+    const x = c.x + Math.cos(ang + drift) * rr, y = c.y + Math.sin(ang + drift) * rr;
+    const dop = doppler(ang + Math.PI), a = 0.3 * grow * Math.min(1, dop) * (up ? 1 : 0.6), sz = rs * (0.12 + 0.2 * hk(3));
+    if (canT) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang + drift + Math.PI / 2); ctx.scale(2.2, 0.8); ctx.fillStyle = grad(0, 0, sz, [[0, `rgba(255,235,180,${a.toFixed(3)})`], [0.5, `rgba(255,170,70,${(a * 0.6).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]); ctx.beginPath(); ctx.arc(0, 0, sz, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    else disc(x, y, sz, grad(x, y, sz, [[0, `rgba(255,235,180,${a.toFixed(3)})`], [1, 'rgba(255,120,40,0)']]));
   }
+  drawShadow();
+  // the near half, in front of the hole
+  for (const b of blobs) if (!b.far) drawBlob(b);
   // --- lensed starlight: short arcs of white round the horizon, the sky behind bent into rings
   for (let k = 0; k < 26; k++) {
     const hk = (q) => hash01(fx.seed + 800 + k * 7 + q);
@@ -1145,12 +1173,6 @@ function drawBlackHole(ctx, view, lw) {
     ctx.strokeStyle = `rgba(255,255,255,${(0.45 * grow * (0.4 + 0.6 * hk(5))).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, U * 0.03);
     ctx.beginPath(); ctx.arc(c.x, c.y, rr, a0, a0 + span); ctx.stroke();
   }
-  // --- the photon ring, and the shadow
-  ctx.strokeStyle = `rgba(255,240,200,${(0.9 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.06);
-  ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.08, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = `rgba(255,200,120,${(0.5 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.16);
-  ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.12, 0, Math.PI * 2); ctx.stroke();
-  disc(c.x, c.y, rs * 1.06, grad(c.x, c.y, rs * 1.06, [[0, 'rgba(0,0,0,1)'], [0.9, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
   ctx.lineWidth = lw;
 }
 
