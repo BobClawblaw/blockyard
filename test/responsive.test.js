@@ -28,7 +28,7 @@ test('the kiosk keeps two columns until 900 px, and fills main rather than assum
   // 2026-09-12: the stack threshold moved 1100 -> 900. At 1066x760 the one-column kiosk measured
   // 1730 px tall in a 760 px viewport; two columns fit that window with room to spare.
   const tight = css.slice(css.indexOf('@media (max-width: 1400px) and (min-width: 901px)'));
-  assert.match(tight, /\.kcol > \.kbf \{ height: 200px; \}/, 'between 1100 and 1400 it gives space back instead of stacking');
+  assert.match(tight, /\.kcol > \.kbf \{ height: 170px; \}/, 'between 1100 and 1400 it gives space back instead of stacking (170 since 2026-09-15, the tight flow)');
   const stack = css.slice(css.indexOf('@media (max-width: 1100px) {\n  .kiosk'));
   assert.ok(css.includes('@media (max-width: 900px)'), 'and stacks below 900 px, where two columns stop fitting');
 });
