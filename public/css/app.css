@@ -1521,10 +1521,10 @@ canvas.mkchart.mkdepth { height: min(46vh, 420px); min-height: 280px; }
 
 /* ---- explorer, round two (operator, 2026-09-11: "Surely we can make our display look at least as
    good as mempool. Do better. Make it beautiful") ---- */
-.xcard { font-family: var(--sans); gap: 14px; }
+.xcard { font-family: var(--sans); gap: 10px; }
 .xclip { position: fixed; left: -9999px; top: 0; opacity: 0; }
-.xhero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 8px 0 0; }
-.xhero h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: #f4f7fb; display: flex; align-items: center; gap: 10px; }
+.xhero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 2px 0 0; }
+.xhero h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; color: #f4f7fb; display: flex; align-items: center; gap: 10px; }
 .xhero .xh { font-variant-numeric: tabular-nums; }
 .xhero .xnav { font-size: 20px; line-height: 1; padding: 4px 11px 6px; border-radius: 8px; border: 1px solid #2a3442; color: #9fb0c0; text-decoration: none; }
 .xhero .xnav:hover { color: #fff; border-color: #4fd1ff; }
@@ -1590,14 +1590,17 @@ canvas.mkchart.mkdepth { height: min(46vh, 420px); min-height: 280px; }
 .xcard .xf-consolidation { background: #0f8a8a; }
 .xcard .xf-op_return { background: #59616f; }
 .xcard .xf-cb { background: #c28f00; }
-.xtablecard { background: #121923; border-radius: 12px; border: 1px solid #1d2733; padding: 4px 14px 8px; max-height: calc(100vh - 320px); min-height: 160px; overflow: auto; }
+.xtablecard { background: #121923; border-radius: 12px; border: 1px solid #1d2733; padding: 2px 12px 6px; max-height: calc(100vh - 292px); min-height: 160px; overflow: auto; }
 table.xtable { width: 100%; border-collapse: collapse; font-size: 14px; }
-table.xtable th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #7d8b99; font-weight: 600; padding: 12px 8px 10px; border-bottom: 1px solid #1d2733; position: sticky; top: 0; background: #121923; }
+table.xtable th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #7d8b99; font-weight: 600; padding: 9px 8px 8px; border-bottom: 1px solid #1d2733; position: sticky; top: 0; background: #121923; }
 table.xtable th.r, table.xtable td.r { text-align: right; }
-table.xtable td { padding: 11px 8px; border-bottom: 1px solid #19222e; font-variant-numeric: tabular-nums; color: #e6edf3; white-space: nowrap; }
+table.xtable td { padding: 8px 8px; border-bottom: 1px solid #19222e; font-variant-numeric: tabular-nums; color: #e6edf3; white-space: nowrap; }
 table.xtable tr:hover td { background: #16202c; }
 .xcard .xpager { margin-top: 4px; font-family: var(--sans); font-size: 14px; }
-.xblocks { display: flex; gap: 26px; overflow-x: auto; padding: 16px 12px 22px; }
+/* packed (operator, 2026-09-15: "same treatment on the explorer tab"): the strip's padding and the
+   scrollbar's band under it, the title's size, the table's row height, the card's gap -- 70px back
+   to the table, which reaches the window's bottom edge */
+.xblocks { display: flex; gap: 22px; overflow-x: auto; padding: 8px 8px 10px; scrollbar-width: thin; }
 .xblk { flex: 0 0 auto; width: 128px; text-decoration: none; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 9px; }
 .xblk-h { color: #4fd1ff; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; }
 .xblk-face { position: relative; width: 124px; height: 124px; box-sizing: border-box; padding: 10px 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; background: linear-gradient(180deg, #5b6b7d, #3a4757); transition: transform .18s ease, filter .18s ease; }
