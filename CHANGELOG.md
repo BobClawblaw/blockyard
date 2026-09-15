@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The supernova's violet stage comes sooner and heavier: the debris turns purple patch by patch from a tenth of the run, a violet heart and a wider violet cloud rise behind it, so the nebula is prominently purple as the pulsar starts to blink; the white plumes are drawn on a half-resolution layer to keep the frame cheap
 - The supernova's opening explosion is a white-hot flash, held for a moment and washing far out, that throws a hundred and twenty-eight plumes of white gas in every direction, each flying and growing on its own out to nine star radii and drifting on until the effect is nearly done
 
 ### Changed

@@ -1605,6 +1605,34 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
 //                             the shock band at its leading edge
 //   pulsar       0.45 - 1     the point pulsing at the centre, its blue nebula growing
 // Everything is a function of fx.u, the seed and the clock; the run fades in its last tenth.
+// a radial-gradient maker and a disc filler bound to a given context (gasCloud takes both)
+function gradFor(c) {
+  return (x, y, r, stops) => {
+    const g = typeof c.createRadialGradient === 'function' ? c.createRadialGradient(x, y, 0, x, y, r) : null;
+    if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    return g;
+  };
+}
+function discFor(c) { return (x, y, r, fill) => { c.fillStyle = fill; c.beginPath(); c.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); c.fill(); }; }
+// a half-size offscreen layer matching the board's canvas and transform, cleared for this frame;
+// null where there is no real canvas to make one from
+function plumeLayer(ctx, fx) {
+  const cv = ctx.canvas;
+  if (!cv || !cv.width || typeof ctx.getTransform !== 'function' || typeof ctx.drawImage !== 'function' || typeof document === 'undefined') return null;
+  const w = Math.ceil(cv.width / 2), h = Math.ceil(cv.height / 2);
+  let L = fx._plumes;
+  if (!L || L.canvas.width !== w || L.canvas.height !== h) {
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+    const c2 = canvas.getContext('2d');
+    if (!c2) return null;
+    L = fx._plumes = { canvas, ctx: c2 };
+  }
+  const m = ctx.getTransform();
+  L.ctx.setTransform(1, 0, 0, 1, 0, 0); L.ctx.clearRect(0, 0, w, h);
+  L.ctx.setTransform(m.a / 2, m.b / 2, m.c / 2, m.d / 2, m.e / 2, m.f / 2);
+  return L;
+}
 function drawSupernova(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'flare') return;
@@ -1685,15 +1713,21 @@ function drawSupernova(ctx, view, lw) {
     // so the cloud is ninety blobs at an eighth of the weight, which peaks near half opacity at the
     // centre and reads as gas the chart shows through
     gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright * 0.17, rc, grad, disc, 220, [60, 30, 120], (front, ff, H) => {
-      const start = 0.18 + 0.55 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.28));   // when this patch turns violet
+      // SOONER (operator, 2026-09-15: "we need more of the third stage purple and violet nebula
+      // becoming prominent as it starts the blink phase"): the patches turn violet between a tenth
+      // and four tenths of the run, so the cloud is mostly purple by the time the pulsar wakes
+      const start = 0.1 + 0.3 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.2));   // when this patch turns violet
       const white = [225, 235, 255], violet = [170, 105, 255], deep = [95, 45, 170];   // blue-white, not solid white (2026-09-15)
       const c1 = white.map((v, i) => v + (violet[i] - v) * on);
       const shade = 0.55 + 0.45 * front;
       return c1.map((v, i) => Math.round(deep[i] + (v - deep[i]) * shade));
     }, 0.85, 1.25);
-    if (f > 0.3) {
-      const inner = Math.min(1, (f - 0.3) / 0.4);
-      gasCloud(ctx, c.x, c.y, shell * 0.55, f, now, fx.seed + 777, bright * 0.22 * inner, [150, 80, 255], grad, disc, 80, [60, 25, 130], null, 0.85, 1.25);
+    if (f > 0.2) {
+      // the violet heart, sooner and heavier (the same request): rising from a fifth of the run,
+      // full by the blink, and a second wider violet cloud behind it that keeps growing
+      const inner = Math.min(1, (f - 0.2) / 0.18);
+      gasCloud(ctx, c.x, c.y, shell * 0.7, f, now, fx.seed + 777, bright * 0.3 * inner, [160, 90, 255], grad, disc, 90, [60, 25, 130], null, 0.9, 1.25);
+      gasCloud(ctx, c.x, c.y, shell * 1.05, f, now, fx.seed + 778, bright * 0.16 * inner, [175, 115, 255], grad, disc, 90, [70, 30, 140], null, 1.1, 1.3);
     }
     // and the interior glow: the cloud lit from within
     softStops(ctx, c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.05 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
@@ -1751,14 +1785,21 @@ function drawSupernova(ctx, view, lw) {
   // their flight and thinning slowly over the rest, still drifting at nine tenths of the effect
   if (u >= 0.12 && u < 0.9) {
     const t = (u - 0.12) / 0.78, g = t < 0.04 ? t / 0.04 : t < 0.2 ? 1 : Math.pow(1 - (t - 0.2) / 0.8, 0.7);
+    // AT HALF RESOLUTION: a hundred and twenty-eight clouds of soft gradient discs is the costliest
+    // thing any effect draws, so the plumes go onto a half-size layer (a quarter of the pixels to
+    // fill) and are blitted up -- gas is blurry to begin with, so nothing is lost; where there is
+    // no offscreen canvas (the tests' stub context) they draw straight onto the board
+    const layer = plumeLayer(ctx, fx), pc = layer ? layer.ctx : ctx;
+    const pgrad = layer ? gradFor(pc) : grad, pdisc = layer ? discFor(pc) : disc;
     for (let k = 0; k < 128; k++) {
       const H = (q) => hash01(fx.seed + 4400 + k * 19 + q);
       const ang = (k / 128) * Math.PI * 2 + (H(1) - 0.5) * 0.2, sp = 0.4 + 1.2 * H(2);
       const reach = R0 * (0.6 + 9 * t) * sp, ease = 1 - Math.exp(-2.2 * t);
       const px = c.x + Math.cos(ang) * reach * ease, py = c.y + Math.sin(ang) * 0.75 * reach * ease;
       const shell = R0 * (0.5 + 2.8 * t) * (0.7 + 0.6 * H(3));
-      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.07 * g * (1 - 0.3 * sp), [245, 248, 255], grad, disc, 24, [180, 195, 235], null, 1, 1.3);
+      gasCloud(pc, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.09 * g * (1 - 0.3 * sp), [245, 248, 255], pgrad, pdisc, 10, [180, 195, 235], null, 1.3, 1.3);
     }
+    if (layer) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layer.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); }
   }
   // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing
   if (u >= 0.45) {
