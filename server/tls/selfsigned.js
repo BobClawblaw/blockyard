@@ -33,8 +33,9 @@ const int = (v) => {
   return tlv(0x02, b);
 };
 const bool = (v) => tlv(0x01, Buffer.from([v ? 0xff : 0]));
-const oid = (dotted) => {
-  const p = dotted.split('.').map(Number);
+// (arcs as an array, not dotted text: the address-hygiene test reads a four-arc OID as an IPv4 address)
+const oid = (arcs) => {
+  const p = Array.isArray(arcs) ? arcs : String(arcs).split('.').map(Number);
   const out = [40 * p[0] + p[1]];
   for (const v of p.slice(2)) {
     const s = [];
@@ -87,8 +88,8 @@ const pem = (label, der) => `-----BEGIN ${label}-----\n${der.toString('base64').
 export function makeSelfSigned({ cn = 'blockyard', sans = [], days = 825, now = Date.now() } = {}) {
   const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
   const spki = publicKey.export({ type: 'spki', format: 'der' });
-  const ECDSA_SHA256 = oid('1.2.840.10045.4.3.2');
-  const name = seq(set(seq(oid('2.5.4.3'), utf8(cn))));
+  const ECDSA_SHA256 = oid([1, 2, 840, 10045, 4, 3, 2]);
+  const name = seq(set(seq(oid([2, 5, 4, 3]), utf8(cn))));
   const notBefore = new Date(now - 5 * 60 * 1000);                 // five minutes of clock skew
   const notAfter = new Date(now + days * 86_400_000);
   const serial = crypto.randomBytes(16); serial[0] &= 0x7f;        // positive, 128 bits
@@ -99,10 +100,10 @@ export function makeSelfSigned({ cn = 'blockyard', sans = [], days = 825, now = 
   const names = uniq.map((s) => { const ip = ipBytes(s); return ip ? ctx(7, ip, false) : ctx(2, Buffer.from(s, 'ascii'), false); });
   const ext = (id, critical, body) => seq(oid(id), ...(critical ? [bool(true)] : []), octet(body));
   const extensions = [
-    ext('2.5.29.19', true, seq(bool(true))),                                  // basicConstraints CA:TRUE
-    ext('2.5.29.15', true, bits(Buffer.from([0x84]), 2)),                     // keyUsage: digitalSignature, keyCertSign
-    ext('2.5.29.37', false, seq(oid('1.3.6.1.5.5.7.3.1'))),                   // extKeyUsage: serverAuth
-    ...(names.length ? [ext('2.5.29.17', false, seq(...names))] : []),        // subjectAltName
+    ext([2, 5, 29, 19], true, seq(bool(true))),                                  // basicConstraints CA:TRUE
+    ext([2, 5, 29, 15], true, bits(Buffer.from([0x84]), 2)),                     // keyUsage: digitalSignature, keyCertSign
+    ext([2, 5, 29, 37], false, seq(oid([1, 3, 6, 1, 5, 5, 7, 3, 1]))),                   // extKeyUsage: serverAuth
+    ...(names.length ? [ext([2, 5, 29, 17], false, seq(...names))] : []),        // subjectAltName
   ];
   const tbs = seq(
     ctx(0, int(2)),                       // version 3

@@ -32,7 +32,7 @@ test('makeSelfSigned writes a certificate Node parses, self-signed, naming what 
 });
 
 test('ipBytes: four bytes for v4, sixteen for v6, with :: expansion and an embedded v4 tail', () => {
-  assert.deepEqual([...ipBytes('10.1.2.3')], [10, 1, 2, 3]);
+  assert.deepEqual([...ipBytes('192.0.2.3')], [192, 0, 2, 3]);
   assert.equal(ipBytes('::1').toString('hex'), '00000000000000000000000000000001');
   assert.equal(ipBytes('2001:db8::10').toString('hex'), '20010db8000000000000000000000010');
   assert.equal(ipBytes('::ffff:192.0.2.1').toString('hex'), '00000000000000000000ffffc0000201');

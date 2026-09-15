@@ -737,6 +737,41 @@
     <!-- ========================================================= EVENTS -->
     <section class="page" data-page="mining">
       <div class="grid">
+        <!-- THE NETWORK OVER A WEEK AND A YEAR (operator, 2026-09-15, with mempool.space's mining
+             dashboard: "Why don't we have this view in our mining tab?" -- "Do it"; then its
+             adjustments table: "add this too"). Every figure is from this node: getblockstats for
+             the reward window, block headers for the periods and the daily hashrate samples, the
+             coinbases of the last week's blocks for the pools (collect/network.js). -->
+        <div class="ovcols mnnet">
+          <div class="ovcol">
+            <div class="card">
+              <h3>Reward stats <span class="sp"></span><span class="src" id="mnRewardsSrc">last 144 blocks · getblockstats</span></h3>
+              <div class="netstats" id="mnRewards"></div>
+            </div>
+            <div class="card">
+              <h3>Pools <span class="sp"></span><span class="src" id="mnPoolsWeekSrc">the last week's blocks, by coinbase</span></h3>
+              <div class="netstats" id="mnPoolsWeek"></div>
+              <div class="donutwrap"><canvas class="chart donut" id="mnPoolDonut"></canvas><div class="donutlegend" id="mnPoolLegend"></div></div>
+              <div class="note tiny faint" id="mnPoolsWeekNote"></div>
+            </div>
+          </div>
+          <div class="ovcol">
+            <div class="card">
+              <h3>Difficulty adjustment <span class="sp"></span><span class="src">this period, from its first block's time</span></h3>
+              <div class="netstats" id="mnAdjust"></div>
+            </div>
+            <div class="card">
+              <h3>Hashrate &amp; difficulty <span class="sp"></span><span class="src">a year, one sample a day · getnetworkhashps over the week</span></h3>
+              <div class="netstats" id="mnHashrate"></div>
+              <canvas class="chart tall" id="mnHashChart"></canvas>
+              <div class="note tiny faint">Each day's hashrate is the difficulty times 2³² over that day's mean block interval, from the block headers — an estimate, as every hashrate figure is; the steps are the difficulty.</div>
+            </div>
+            <div class="card">
+              <h3>Adjustments <span class="sp"></span><span class="src">each period's first block against the one before</span></h3>
+              <div id="mnAdjustments"></div>
+            </div>
+          </div>
+        </div>
         <!-- TWO INDEPENDENT STACKS (operator, 2026-09-11: "too much wasted space in this
              display. Crunch down the panel sizes to fit more info"). One grid coupled the rows:
              the square Mempool space viewer set the first row, so Block flow sat in a 591 px

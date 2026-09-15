@@ -822,6 +822,11 @@ The block under construction and who has been mining.
 
 | Panel | What it shows |
 |---|---|
+| **Reward stats** | The last 144 blocks: the miners' reward (subsidy plus fees), the average fees per block and the average fee per transaction, from `getblockstats`, rolled forward a block at a time. |
+| **Difficulty adjustment** | Blocks remaining in the current period and when it ends at the pace so far, the estimated change (the pace projected over the period against the ten-minute target, within the protocol's factor-of-four bounds), the previous change, and the next halving's height and date. |
+| **Pools** | The last week's blocks by pool, as a donut with its legend: luck (blocks found against the 1,008 the target spacing would give), the block count and how many pools. Every coinbase of the week is read from the node, eight every few seconds behind the live polls, and the note says how far that has got. |
+| **Hashrate & difficulty** | The week's hashrate from `getnetworkhashps` and the current difficulty, and a year's chart: one block header a day gives that day's mean interval, and difficulty × 2³² over it is the day's hashrate estimate (the thin line), with a seven-day mean over it and the difficulty's steps on the right axis. |
+| **Adjustments** | The last twelve periods: the first block's height, when, the difficulty and its change from the period before. |
 | **Block flow** | The same Block flow as on Overview. |
 | **Packages in the block being built** | The ancestor graph from `getrawmempool … depends`: a histogram of package sizes, then a table of the top packages with fees, weight, package fee rate, child and parent fee rates, and a small picture of the package's shape. Rows with a child paying at least twice its parent's rate are highlighted as child-pays-for-parent. If every transaction stands alone, the panel says so. That is a real reading, not a missing chart. |
 | **Feerate landscape** | The template's transactions bucketed by sat/vB, with green buckets well above the block's median and red ones below it. |

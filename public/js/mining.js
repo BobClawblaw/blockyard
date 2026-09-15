@@ -16,7 +16,7 @@
 // fees.chunk/chunkweight -- so the block being built is assembled from the mempool the
 // monitor already reads, and costs the node no call at all (server/collect/gbt.js).
 
-import { paint, COL } from './charts.js';
+import { paint, COL, lineChart } from './charts.js';
 import { blockTreemap, mempoolTreemap, rateColor as rateBucketColor } from './goggles.js';
 import { loadSettings, spaceOptions } from './settings.js';
 // 2026-09-10: the block and the pool now draw as lit solids on a square-packed
@@ -1084,9 +1084,143 @@ export function renderMining(s, state, h) {
   }
   feeLandscape(h.canvas('mnFeeLandscape'), a?.nextBlock ?? null, h.fmt);
   poolTable(document.getElementById('mnPools'), a, h.fmt);
+  networkPanels(s?.network ?? null, h);
   const el = document.getElementById('mnCoverage');
   if (el) el.innerHTML = coveragePanel(a, h);
   applyMiningStyles(document);
+}
+
+// THE NETWORK ROW (2026-09-15): reward stats, the difficulty period, a week of pools as a donut,
+// a year of hashrate, the adjustments table. Everything is from the snapshot's `network`, which
+// collect/network.js fills from the node alone; a figure it has not gathered yet is a dash and
+// the note says how far the week of coinbases has got.
+const DONUT_COLORS = ['#e8306a', '#8b3fd9', '#5b4fd6', '#3a7be0', '#2f9ee6', '#26b8c8', '#22b7a0', '#3cba6c', '#8bc34a', '#c9d02a', '#f0c419', '#f39c1f', '#ee7b2f', '#c7c9d1', '#8d93a1'];
+function stat(k, v, s = '', cls = '') {
+  return `<div class="ns"><span class="k">${k}</span><span class="v ${cls}">${v}</span>${s ? `<span class="s">${s}</span>` : ''}</div>`;
+}
+function signed(pct, dp = 2) {
+  if (pct == null || !Number.isFinite(pct)) return { text: '–', cls: '' };
+  return { text: `${pct >= 0 ? '▴ +' : '▾ '}${pct.toFixed(dp)}%`, cls: pct >= 0 ? 'up' : 'down' };
+}
+function shortDate(ms) {
+  if (!Number.isFinite(ms)) return '–';
+  return new Date(ms).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function inWords(sec) {
+  if (!Number.isFinite(sec)) return '–';
+  const d = sec / 86400;
+  if (d < 1) return `~${Math.max(1, Math.round(sec / 3600))} hours`;
+  if (d < 60) return `~${Math.round(d)} days`;
+  const y = Math.floor(d / 365.25), rest = Math.round(d - y * 365.25);
+  return y ? `~${y} year${y > 1 ? 's' : ''}, ${rest} days` : `~${Math.round(d)} days`;
+}
+function agoWords(ms, now = Date.now()) {
+  const d = (now - ms) / 86400000;
+  if (d < 1) return `${Math.max(1, Math.round(d * 24))} hours ago`;
+  if (d < 28) return `${Math.round(d)} days ago`;
+  return `${Math.round(d / 7)} weeks ago`;
+}
+function tera(d) { return d == null || !Number.isFinite(d) ? '–' : `${(d / 1e12).toFixed(2)}T`; }
+
+export function networkPanels(n, h) {
+  const F = h.fmt, esc = F.esc;
+  const put = (id, html) => { const el = document.getElementById(id); if (el && el.__html !== html) { el.innerHTML = html; el.__html = html; } };
+  if (!n) {
+    for (const id of ['mnRewards', 'mnAdjust', 'mnPoolsWeek', 'mnHashrate']) put(id, '<div class="note tiny faint">not in this snapshot yet — the node has not been asked</div>');
+    return;
+  }
+  // reward stats
+  const r = n.rewards ?? {};
+  put('mnRewards', r.blocks
+    ? stat('Miners reward', `${(r.minersRewardSat / 1e8).toFixed(2)}<small>BTC</small>`, `${r.blocks} blocks · #${r.from}–#${r.to}`)
+      + stat('Avg block fees', `${(r.avgBlockFeeSat / 1e8).toFixed(4)}<small>BTC/block</small>`)
+      + stat('Avg tx fee', `${r.avgTxFeeSat == null ? '–' : F.num(r.avgTxFeeSat)}<small>sats/tx</small>`, `${F.num(r.txs)} transactions`)
+    : '<div class="note tiny faint">reading the last 144 blocks…</div>');
+  const src = document.getElementById('mnRewardsSrc'); if (src) src.textContent = `last ${r.blocks || 144} blocks · getblockstats`;
+  // the difficulty period
+  const a = n.adjustment, hv = n.halving;
+  if (a) {
+    const est = signed(a.estimatePct), prev = signed(a.previousPct);
+    put('mnAdjust',
+      stat('Remaining', `${F.num(a.remaining)}<small>blocks</small>`, `in ${inWords(a.etaSec)} · ${a.into} of 2016 mined`)
+      + stat('Estimate', `<span class="${est.cls}">${est.text}</span>`, `previous: <span class="${prev.cls}">${prev.text}</span>`)
+      + stat('Next halving', shortDate(hv?.at), hv ? `#${F.num(hv.nextHeight)} · in ${inWords(hv.etaSec)}` : ''));
+  } else put('mnAdjust', '<div class="note tiny faint">reading the period\'s first block…</div>');
+  // pools over the week
+  const p = n.pools ?? {};
+  const luck = p.luckPct == null ? '–' : `${p.luckPct.toFixed(2)}%`;
+  put('mnPoolsWeek', stat('Pools luck', luck, p.blocks ? `${p.blocks} found · ${Math.round(p.expected)} expected` : '')
+    + stat('Blocks (1w)', p.blocks ? F.num(p.blocks) : '–')
+    + stat('Pools count', p.count ? String(p.count) : '–'));
+  const note = document.getElementById('mnPoolsWeekNote');
+  if (note) {
+    const left = p.todo ?? 0;
+    note.textContent = left > 0
+      ? `Filling in: ${F.num(p.filled ?? 0)} coinbases read so far, ${F.num(left)} to go (eight every few seconds, behind the live polls). Shares are of the blocks read so far.`
+      : p.blocks ? `${F.num(p.blocks)} blocks in the last seven days, every coinbase read from this node; a name appears only where the curated pool map or your alias file says so.` : '';
+  }
+  poolDonut(h.canvas('mnPoolDonut'), p.pools ?? [], F);
+  put('mnPoolLegend', (p.pools ?? []).slice(0, 14).map((x, i) => `<div><i class="sw${i % DONUT_COLORS.length}"></i><span title="${esc(x.name)}">${esc(x.name.length > 18 ? `${x.name.slice(0, 17)}…` : x.name)}</span><b>${x.sharePct.toFixed(1)}%</b></div>`).join('')
+    + ((p.pools ?? []).length > 14 ? `<div><i class="sw14"></i><span>${(p.pools.length - 14)} more</span><b>${p.pools.slice(14).reduce((s, x) => s + x.sharePct, 0).toFixed(1)}%</b></div>` : ''));
+  // hashrate and difficulty
+  const hr = n.hashrate ?? {};
+  put('mnHashrate', stat('Hashrate (1w)', hr.networkHashPs != null ? F.eh(hr.networkHashPs / 1e18) : '–', 'getnetworkhashps, 1008 blocks')
+    + stat('Difficulty', tera(n.difficulty), a ? `period from #${F.num(a.epochStart)}` : '')
+    + stat('Samples', hr.series?.length ? `${hr.series.length}<small>days</small>` : '–', 'one block header a day'));
+  const series = hr.series ?? [];
+  const canvas = h.canvas('mnHashChart');
+  if (canvas) {
+    if (series.length > 2) {
+      const pts = series.map((x) => ({ t: x.t, v: x.hashrate / 1e18 }));
+      // a seven-day rolling mean over the daily estimates, the way a hashrate chart is read
+      const dLo = Math.min(...series.map((x) => x.difficulty / 1e12)), dHi = Math.max(...series.map((x) => x.difficulty / 1e12));
+      const smooth = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - 6), i + 1); return { t: pts[i].t, v: w.reduce((s, q) => s + q.v, 0) / w.length }; });
+      lineChart(canvas, [
+        { label: 'hashrate, daily', points: pts, color: 'rgba(160,200,80,0.45)', width: 1 },
+        { label: 'hashrate, 7-day mean', points: smooth, color: '#f0c419', width: 2 },
+        { label: `difficulty ${dLo.toFixed(0)}T–${dHi.toFixed(0)}T`, points: series.map((x) => ({ t: x.t, v: x.difficulty / 1e12 })), color: '#e8306a', width: 2, axis: 'right' },
+      ], {
+        // short axis labels, so "1.30 ZH/s" is not cut to "30 ZH/s" in the margin; the difficulty's
+        // range is in its legend entry rather than on a right axis the margin cannot fit
+        fmtY: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)}Z` : `${v.toFixed(0)}E`), fmtRight: () => '', left: 40,
+        fmtX: (t) => new Date(t).toLocaleDateString('en-US', { month: 'short' }),
+        min: Math.min(...pts.map((q) => q.v)) * 0.85, max: Math.max(...pts.map((q) => q.v)) * 1.05, zeroBase: false,
+        rightMin: dLo * 0.97, rightMax: dHi * 1.03,
+      });
+    } else paint(canvas, { when: null, draw: () => {}, placeholder: 'reading a year of block headers…' });
+  }
+  // the adjustments table
+  const rows = n.adjustments ?? [];
+  put('mnAdjustments', rows.length
+    ? `<table class="t"><thead><tr><th>Height</th><th>Adjusted</th><th class="r">Difficulty</th><th class="r">Change</th></tr></thead><tbody>${rows.map((x) => { const c = signed(x.changePct); return `<tr><td>#${F.num(x.height)}</td><td>${agoWords(x.time * 1000)}</td><td class="r">${tera(x.difficulty)}</td><td class="r ${c.cls}">${c.text.replace(/^[▴▾] /, '')}</td></tr>`; }).join('')}</tbody></table>`
+    : '<div class="note tiny faint">reading the periods\' first blocks…</div>');
+}
+
+function poolDonut(canvas, pools, F) {
+  if (!canvas?.getContext) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = canvas.clientWidth || 260, h = canvas.clientHeight || 220;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const total = pools.reduce((s, p) => s + p.blocks, 0);
+  const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 6, r = R * 0.42;
+  if (!total) { ctx.fillStyle = COL.text; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('no blocks read yet', cx, cy); return; }
+  const shown = pools.slice(0, 14), rest = pools.slice(14).reduce((s, p) => s + p.blocks, 0);
+  const slices = rest ? [...shown, { name: 'other', blocks: rest }] : shown;
+  let a0 = -Math.PI / 2;
+  slices.forEach((p, i) => {
+    const a1 = a0 + (p.blocks / total) * Math.PI * 2;
+    ctx.beginPath(); ctx.arc(cx, cy, R, a0, a1); ctx.arc(cx, cy, r, a1, a0, true); ctx.closePath();
+    ctx.fillStyle = DONUT_COLORS[i % DONUT_COLORS.length]; ctx.fill();
+    ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 1; ctx.stroke();
+    a0 = a1;
+  });
+  ctx.fillStyle = COL.text; ctx.font = '600 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(`${F.num(total)}`, cx, cy - 7);
+  ctx.font = '10px system-ui, sans-serif'; ctx.fillStyle = '#7d8b99';
+  ctx.fillText('blocks', cx, cy + 8);
 }
 
 function coveragePanel(a, h) {

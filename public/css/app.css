@@ -1254,6 +1254,37 @@ canvas.chart.xs, .chart.xs { height: 86px }
    packages table (203 of 330 px). Stacks never stretch a card to a neighbour; the Detailed
    reference text folds away until asked for. */
 .mncols { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+/* the network row on Mining (2026-09-15): big figures in threes, a donut with its legend, the year chart */
+.netstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; padding: 4px 0 8px; }
+.netstats .ns { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.netstats .ns .k { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; color: var(--fg-faint); }
+.netstats .ns .v { font-size: 22px; font-weight: 650; color: var(--fg); font-variant-numeric: tabular-nums; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.netstats .ns .v small { font-size: 11px; font-weight: 400; color: var(--fg-dim); margin-left: 4px; }
+.netstats .ns .s { font-size: 11px; color: var(--fg-dim); font-family: var(--mono); }
+.netstats .up { color: var(--ok); } .netstats .down { color: var(--bad); }
+.donutwrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+.donutwrap canvas.donut { width: 100%; height: 220px; }
+.donutlegend { display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 11.5px; max-height: 230px; overflow: auto; }
+.donutlegend div { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.donutlegend i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+.donutlegend b { color: var(--fg); font-weight: 600; margin-left: auto; font-variant-numeric: tabular-nums; }
+.donutlegend i.sw0 { background: #e8306a; }
+.donutlegend i.sw1 { background: #8b3fd9; }
+.donutlegend i.sw2 { background: #5b4fd6; }
+.donutlegend i.sw3 { background: #3a7be0; }
+.donutlegend i.sw4 { background: #2f9ee6; }
+.donutlegend i.sw5 { background: #26b8c8; }
+.donutlegend i.sw6 { background: #22b7a0; }
+.donutlegend i.sw7 { background: #3cba6c; }
+.donutlegend i.sw8 { background: #8bc34a; }
+.donutlegend i.sw9 { background: #c9d02a; }
+.donutlegend i.sw10 { background: #f0c419; }
+.donutlegend i.sw11 { background: #f39c1f; }
+.donutlegend i.sw12 { background: #ee7b2f; }
+.donutlegend i.sw13 { background: #c7c9d1; }
+.donutlegend i.sw14 { background: #8d93a1; }
+canvas.chart.tall { height: 240px; }
+@media (max-width: 700px) { .netstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .donutwrap { grid-template-columns: minmax(0, 1fr); } }
 .mncols .card { grid-column: auto !important; }
 .mnpair { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: start; }
 .mndetailed > summary { list-style: none; cursor: pointer; }

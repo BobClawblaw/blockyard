@@ -295,6 +295,7 @@ Top-level keys:
 ```
 id label color online chain ibd tip sync progress warnings difficulty hashrateEstEh hashrateNote
 avgBlockGapSec sizeOnDisk pruned chainwork uptimeSec network mempool peers net attribution blocks
+network (the Mining tab's network row: rewards over 144 blocks, adjustment, halving, adjustments[], hashrate { networkHashPs, series[] }, pools { blocks, luckPct, pools[], filled, todo }; collect/network.js)
 fees mining utxo chaintxstats indexes tips deployments rpcInfo log health series app user seq
 ```
 

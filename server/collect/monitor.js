@@ -21,6 +21,7 @@ import { CounterRate } from '../store/ring.js';
 import { computeSync, stripFacts } from './sync.js';
 import { SHAPES, RULE_TO_SHAPE } from './logparse.js';
 import { decodeCoinbase, minerRow, ledgerApply, ledgerRows, aliasFor, matchPool } from './mining.js';
+import { NetworkStats } from './network.js';
 import { summarizeTemplate, packagesFromTemplate, blockEconomy, templateCells } from './nextblock.js';
 import { templateFromMempool, LOCAL_TEMPLATE_NOTE } from './gbt.js';
 import fs from 'node:fs';
@@ -93,6 +94,10 @@ export class NodeMonitor extends EventEmitter {
     };
     this.miningQueue = [];
     this.miningBusy = false;
+    // THE NETWORK OVER A WEEK AND A YEAR (2026-09-15; network.js): rewards, the difficulty
+    // period, hashrate samples, a week of pool shares -- refreshed from the mid tier
+    // (a thin handle on this.rpc -- the constructor's `rpc` argument is the lane TIMING block, not the client)
+    this.network = new NetworkStats({ rpc: { batch: (calls, opts) => this.rpc.batch(calls, opts) }, log: this.log, poolMap: () => this.mining.poolMap, aliases: () => this.mining.aliases });
     // THE BLOCK BEING BUILT, assembled here from the mempool (2026-09-13; operator, on how
     // mempool.space manages this against a base Core install: "do it"). It used to be one
     // getblocktemplate call costing this node 1.3-1.5 s of its single RPC thread and 1.79 MB,
@@ -515,6 +520,7 @@ export class NodeMonitor extends EventEmitter {
       this.state.peers.connections = ni.connections;
     }
     this.state.mining = unwrap(res[1]);
+    if (this.miningCfg.enabled && this.state.chainInfo) this.network.refresh(this.state.chainInfo).catch(() => {});
     const tips = unwrap(res[2]);
     if (Array.isArray(tips)) {
       this.state.tips = tips;
@@ -1996,6 +2002,7 @@ export class NodeMonitor extends EventEmitter {
         uploadMeasured: s.net.totalSent != null && s.net.totalSent > 0 && s.net.outBps != null,
       },
       attribution: this.miningView(),
+      network: this.network.view(),
       blocks: {
         count: blocks.length,
         // 40 in the live frame; /api/blocks?limit= serves up to 400 for the chart.
@@ -2185,6 +2192,7 @@ export class NodeMonitor extends EventEmitter {
 
   async stop() {
     this.stopped = true;
+    this.network?.stop();
     for (const t of this.tierTimers.values()) clearTimeout(t);
     if (this.logHealthTimer) clearInterval(this.logHealthTimer);
     if (this.tail) await this.tail.stop();

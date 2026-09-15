@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- **The Mining tab has the network row**: reward stats over the last 144 blocks, the difficulty period (blocks remaining, the estimated and the previous change, the next halving), a week of pools as a donut with luck and counts, a year of hashrate with the difficulty's steps, and the last twelve adjustments as a table — every figure from this node alone (`server/collect/network.js`: getblockstats for the reward window, block headers for the periods and a daily sample, the week's coinbases read in the background)
 - **HTTPS by default.** Every listener serves HTTPS; with no certificate named, the first start makes the monitor its own self-signed one under `<data>/tls/` — written without dependencies (`server/tls/selfsigned.js`, ECDSA P-256), naming the bound hosts, this machine's addresses and hostname — and remakes it near expiry or when a bound address is missing from it. `blockyard tls` remakes it by hand (`--san` to add names, `--print` to export it). Your own certificate still replaces it; `BLOCKYARD_TLS=0` serves plain HTTP behind a proxy. The installer's summary and port probe know both schemes.
 - The shareware game packages live under `games/`: DOOM's files moved from `doom_dos/` at the repository root to `games/doom_dos/`
 
