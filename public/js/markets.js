@@ -186,18 +186,18 @@ export function tableHtml(d, fmt, now = Date.now()) {
     const spreadBps = e.spread != null && e.last ? (e.spread / e.last) * 1e4 : null;
     return `<tr>
       <td class="w"><b>${fmt.esc(e.name)}</b></td>
-      <td class="faint">${fmt.esc(e.pair)}</td>
+      <td class="faint opt">${fmt.esc(e.pair)}</td>
       <td class="r">${money(e.last)}</td>
       <td class="r">${money(e.bid)}</td>
       <td class="r">${money(e.ask)}</td>
       <td class="r">${e.spread == null ? '–' : `${money(e.spread)} <span class="faint">${spreadBps < 0.1 ? '<0.1' : spreadBps.toFixed(1)} bp</span>`}</td>
       <td class="r ${ch > 0 ? 'xpos' : ch < 0 ? 'xneg' : ''}">${ch == null ? '–' : `${ch > 0 ? '+' : ''}${(ch * 100).toFixed(2)}%`}</td>
-      <td class="r">${money(e.low24, 0)} – ${money(e.high24, 0)}</td>
-      <td class="r">${e.vol24 == null ? '–' : `${fmt.num(Math.round(e.vol24))} <span class="faint">BTC</span>`}</td>
+      <td class="r opt">${money(e.low24, 0)} – ${money(e.high24, 0)}</td>
+      <td class="r opt">${e.vol24 == null ? '–' : `${fmt.num(Math.round(e.vol24))} <span class="faint">BTC</span>`}</td>
       <td class="r ${e.stale ? 'stale' : 'faint'}">${e.error ? `<span class="warn" title="${fmt.esc(e.error)}">${fmt.esc(e.error.slice(0, 40))}</span>` : e.at ? fmt.ago(e.at, now) : '–'}</td>
     </tr>`;
   }).join('');
-  return `<div class="scroll"><table class="t mktbl"><thead><tr><th>exchange</th><th>pair</th><th class="r">last</th><th class="r">bid</th><th class="r">ask</th><th class="r">spread</th><th class="r">24 h</th><th class="r">24 h low – high</th><th class="r">24 h volume</th><th class="r">updated</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="scroll"><table class="t mktbl"><thead><tr><th>exchange</th><th class="opt">pair</th><th class="r">last</th><th class="r">bid</th><th class="r">ask</th><th class="r">spread</th><th class="r">24 h</th><th class="r opt">24 h low – high</th><th class="r opt">24 h volume</th><th class="r">updated</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 // (legend3dHtml lived here: a 250px column of prose beside the board explaining that a green body

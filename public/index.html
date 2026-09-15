@@ -737,12 +737,22 @@
             <div class="treemapwrap mkboard"><canvas class="treemap" id="mkBoard"></canvas><div class="goggles-tip hidden"></div></div>
           </div>
           <canvas class="mkchart" id="mkChart"></canvas>
-          <div id="mkTable"></div>
+          <!-- THE TABLE AND THE BOOK SIDE BY SIDE (2026-09-15, "same treatment on the markets tab"):
+               stacked, the depth chart began 1,000px down and was never on the first screen; the
+               board now takes what the window leaves after this row, and the row is two columns
+               from 900px up. -->
+          <div class="mkbottom">
+            <div class="mkbottom-l">
+              <div id="mkTable"></div>
+              <div class="note tiny faint" id="mkNote"></div>
+            </div>
+            <div class="mkbottom-r">
           <h3 class="mksub">Order book depth <span class="faint">cumulative bids and asks against price · each exchange's book, their total, and the total as it stood · change bars on the right, log scale</span></h3>
           <div class="mkbar" id="mkDepthBar"></div>
           <canvas class="mkchart mkdepth" id="mkDepth"></canvas>
           <div class="note tiny faint" id="mkDepthNote"></div>
-          <div class="note tiny faint" id="mkNote"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

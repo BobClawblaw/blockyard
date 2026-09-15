@@ -305,7 +305,7 @@ canvas.chart.short { height: 84px; }
 .caveat.bad { background: #1c1214; border-color: #50242a; color: #f0a8ad; }
 /* Markets with polling off: the note at the top, the board / chart / depth panel folded away */
 .caveat.mkoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 12.5px; padding: 10px 12px; }
-.mkcard.mk-off .mklayout, .mkcard.mk-off .mkchart, .mkcard.mk-off .mksub, .mkcard.mk-off #mkDepthBar, .mkcard.mk-off #mkDepthNote { display: none; }
+.mkcard.mk-off .mklayout, .mkcard.mk-off .mkchart, .mkcard.mk-off .mksub, .mkcard.mk-off #mkDepthBar, .mkcard.mk-off #mkDepthNote, .mkcard.mk-off .mkbottom { display: none; }
 .caveat b { color: #fff; font-weight: 650; }
 
 /* status badges (used across every page, not just the sync strip) */
@@ -1530,9 +1530,21 @@ canvas.mkchart { width: 100%; height: min(54vh, 480px); min-height: 300px; displ
 .mksub { margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .05em; }
 .mksub .faint { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .treemapwrap.mkboard { height: min(40vh, 420px); min-height: 280px; }
-.treemapwrap.mkboard { height: min(60vh, 600px); min-height: 380px; }
+/* the board takes what the window leaves after the toolbar, the figures and the table-and-book row
+   beneath (2026-09-15): at 945px tall that is 385, at 1080 it is 520, never more than 600 */
+.treemapwrap.mkboard { height: min(600px, max(340px, calc(100vh - 578px))); min-height: 340px; }
+.mkbottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 16px; align-items: start; }
+.mkbottom-r .mksub { margin-top: 0; }
+@media (max-width: 900px) { .mkbottom { grid-template-columns: minmax(0, 1fr); } }
+/* sharing its row with the book, the table keeps every cell on one line and, under 1400px, drops
+   the pair (BTC-USD throughout; OKX's USDT is in the note) and its two widest columns (the 24 h
+   range and volume -- still in the Markets summary line and the Kiosk); the book's title loses its description at that width and its chart takes what is left */
+.mkbottom table.mktbl td, .mkbottom table.mktbl th { white-space: nowrap; }
+.mkbottom .scroll { max-height: none; overflow-x: auto; }
+@media (max-width: 1400px) { .mkbottom .mktbl .opt { display: none; } .mkbottom-r .mksub .faint { display: none; } }
 .mklab { font-size: 11px; color: var(--fg-faint); margin-right: 4px; align-self: center; }
-canvas.mkchart.mkdepth { height: min(46vh, 420px); min-height: 280px; }
+canvas.mkchart.mkdepth { height: min(420px, max(220px, calc(100vh - 725px))); min-height: 220px; }
+.mkbottom .note.tiny { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* the notes keep to one line beside each other; the full text is in the docs */
 
 /* ---- explorer, round two (operator, 2026-09-11: "Surely we can make our display look at least as
    good as mempool. Do better. Make it beautiful") ---- */

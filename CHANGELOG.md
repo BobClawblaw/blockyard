@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- Markets fits one screen: the board takes what the window leaves, and the exchange table and the order-book depth sit side by side beneath it (under 1400px the table drops the pair, 24 h range and volume columns — all still in the summary line and on the Kiosk — and the book's title its description) instead of the depth chart starting a thousand pixels down
 - Node & RPC packs the same way: two stacks (RPC etiquette with its figures in two columns, Data quality and Node connection; Poll cadence, self-telemetry beside the log tail, Panel sources and the RPC console) instead of grid rows that left holes beside the short cards
 - Chain & Sync packs the same way: one-line notes under the block-size and tip charts (the longer sentences are their tooltips), the transaction-rate figures as one wrapping line instead of a grid that overflowed a narrow card, values that keep to their line, and a shorter uptime label that stopped squeezing its neighbours — the first three rows sit level and the drill-down and indexes reach the first screen at 1093×945
 - A streak of stale drops of the full-pool poll is one story: one warning event when it starts, a counter on Node & RPC while it lasts, one event when the poll answers again with the count and the span. On a day the node answered slowly for thirteen hours, each drop had been its own event, 188 of the feed's 200 rows
