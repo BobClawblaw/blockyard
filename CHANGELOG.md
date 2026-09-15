@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The supernova's opening explosion throws sixteen plumes of white gas in every direction, each flying and growing on its own; the flash itself is dimmer so the Kiosk's panel never whites out
 
 ### Changed
 
