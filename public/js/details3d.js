@@ -1692,7 +1692,10 @@ function drawSupernova(ctx, view, lw) {
   if (u >= 0.14) {
     const f = (u - 0.14) / 0.86;
     const shell = R0 * (0.5 + 4.2 * (1 - Math.exp(-1.3 * f)));           // the cloud's radius: slower than the first cut (operator: "the cloud dispersion is too fast")
-    const bright = (f < 0.08 ? f / 0.08 : f < 0.62 ? 1 : Math.pow(1 - (f - 0.62) / 0.38, 1.3)) * gf;
+    // LINGERING (operator, 2026-09-15: "make the violet nebula linger longer into the blink
+    // phase"): the cloud holds full weight until four fifths of the run -- well into the pulsar's
+    // beat -- and only thins over the last fifth, so the purple stays round the blinking star
+    const bright = (f < 0.08 ? f / 0.08 : f < 0.8 ? 1 : Math.pow(1 - (f - 0.8) / 0.2, 1.2)) * gf;
     // THE MORPHING (operator, 2026-09-15: "as it shifts from blue to white initially, then the
     // purples and violets start appearing, as the blue clouds continue to disperse ahead of
     // everything else"): three clouds. The BLUE one is out in front, expanding fastest and
