@@ -1264,7 +1264,11 @@ canvas.chart.xs, .chart.xs { height: 86px }
 .netstats .ns .s .usd { display: block; color: var(--ok); font-size: 13px; font-weight: 600; }
 .netstats .usdnote { grid-column: 1 / -1; }
 .netstats .up { color: var(--ok); } .netstats .down { color: var(--bad); }
-canvas.chart.donut { width: 100%; height: 440px; }
+canvas.chart.donut { width: 100%; height: 380px; }
+.mnflow { grid-column: 1 / -1; }
+.mn3 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 1100px) { .mn3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 760px) { .mn3 { grid-template-columns: minmax(0, 1fr); } }
 .donutlegend { display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 11.5px; max-height: 230px; overflow: auto; }
 .donutlegend div { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .donutlegend i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
@@ -1284,7 +1288,7 @@ canvas.chart.donut { width: 100%; height: 440px; }
 .donutlegend i.sw12 { background: #ee7b2f; }
 .donutlegend i.sw13 { background: #c7c9d1; }
 .donutlegend i.sw14 { background: #8d93a1; }
-canvas.chart.tall { height: 240px; }
+canvas.chart.tall { height: 200px; }
 @media (max-width: 700px) { .netstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } canvas.chart.donut { height: 360px; } }
 .mncols .card { grid-column: auto !important; }
 .mnpair { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: start; }

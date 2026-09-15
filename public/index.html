@@ -742,24 +742,45 @@
              adjustments table: "add this too"). Every figure is from this node: getblockstats for
              the reward window, block headers for the periods and the daily hashrate samples, the
              coinbases of the last week's blocks for the pools (collect/network.js). -->
-        <div class="ovcols mnnet">
+        <!-- ONE SCREEN (operator, 2026-09-15: "remove the mempool space viewer from the mining tab.
+             Move Block flow up as the first thing along the top. Shuffle around and try to fit as
+             much as possible on one screen"): the flow across the top, then three stacks -- the
+             figures and the packages; the pool pie and the landscape; the year chart, the
+             adjustments, the window's pools and the attribution. The Mempool space viewer is on
+             Overview, Block space and Mempool already. -->
+        <div class="card mnflow">
+          <h3>Block flow <span class="sp"></span><span class="src">being assembled → <b>the current block</b> → history receding</span></h3>
+          <div id="mnFlow" class="flowwrap"></div>
+        </div>
+        <div class="mn3">
           <div class="ovcol">
             <div class="card">
               <h3>Reward stats <span class="sp"></span><span class="src" id="mnRewardsSrc">last 144 blocks · getblockstats</span></h3>
               <div class="netstats" id="mnRewards"></div>
             </div>
             <div class="card">
+              <h3>Difficulty adjustment <span class="sp"></span><span class="src">this period, from its first block's time</span></h3>
+              <div class="netstats" id="mnAdjust"></div>
+            </div>
+            <div class="card">
+              <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getrawmempool · depends</span></h3>
+              <div id="mnPackages"></div>
+            </div>
+          </div>
+          <div class="ovcol">
+            <div class="card">
               <h3>Pools <span class="sp"></span><span class="src" id="mnPoolsWeekSrc">the last week's blocks, by coinbase</span></h3>
               <div class="netstats" id="mnPoolsWeek"></div>
               <canvas class="chart donut" id="mnPoolDonut"></canvas>
               <div class="note tiny faint" id="mnPoolsWeekNote"></div>
             </div>
+            <div class="card">
+              <h3>Feerate landscape <span class="sp"></span><span class="src">the transactions selected for the next block</span></h3>
+              <canvas class="chart" id="mnFeeLandscape"></canvas>
+              <div class="note tiny faint">Buckets are sat/vB. Green means the bucket pays well above the block's own median, red below — the same shape a miner is looking at when it decides what to include.</div>
+            </div>
           </div>
           <div class="ovcol">
-            <div class="card">
-              <h3>Difficulty adjustment <span class="sp"></span><span class="src">this period, from its first block's time</span></h3>
-              <div class="netstats" id="mnAdjust"></div>
-            </div>
             <div class="card">
               <h3>Hashrate &amp; difficulty <span class="sp"></span><span class="src">a year, one sample a day · getnetworkhashps over the week</span></h3>
               <div class="netstats" id="mnHashrate"></div>
@@ -770,43 +791,9 @@
               <h3>Adjustments <span class="sp"></span><span class="src">each period's first block against the one before</span></h3>
               <div id="mnAdjustments"></div>
             </div>
-          </div>
-        </div>
-        <!-- TWO INDEPENDENT STACKS (operator, 2026-09-11: "too much wasted space in this
-             display. Crunch down the panel sizes to fit more info"). One grid coupled the rows:
-             the square Mempool space viewer set the first row, so Block flow sat in a 591 px
-             card using ~273, and the landscape was stretched to the packages table. Stacks never
-             stretch a card to its neighbour; the explanatory Detailed card folds away. -->
-        <div class="mncols">
-          <div class="ovcol">
-            <div class="card">
-              <h3>Block flow <span class="sp"></span><span class="src">being assembled → <b>the current block</b> → history receding</span></h3>
-              <div id="mnFlow" class="flowwrap"></div>
-            </div>
-            <div class="mnpair">
-              <div class="card">
-                <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getrawmempool · depends</span></h3>
-                <div id="mnPackages"></div>
-              </div>
-              <div class="card">
-                <h3>Feerate landscape <span class="sp"></span><span class="src">the transactions selected for the next block</span></h3>
-                <canvas class="chart" id="mnFeeLandscape"></canvas>
-                <div class="note tiny faint">Buckets are sat/vB. Green means the bucket pays well above the block's own median, red below — the same shape a miner is looking at when it decides what still fits.</div>
-              </div>
-            </div>
             <div class="card">
               <h3>Pools in this window <span class="sp"></span><span class="src">coinbase tags, grouped by curated label</span></h3>
               <div id="mnPools"></div>
-            </div>
-          </div>
-          <div class="ovcol">
-            <div class="card">
-              <h3>Mempool space <span class="sp"></span><span class="src">every rectangle is a waiting transaction: area = vbytes, colour = its feerate, richest first</span></h3>
-              <div class="treemapwrap sq">
-                <canvas class="treemap" id="gnMempoolTreemap"></canvas><div class="viewer-ctl"><div class="refresh-in" data-refresh></div><button type="button" class="refresh-now" data-refresh-now disabled>refresh now</button></div>
-                <div class="goggles-tip hidden"></div>
-              </div>
-              <div class="note tiny faint" id="gnMempoolNote"></div>
             </div>
             <div class="card">
               <h3>Attribution <span class="sp"></span><span class="src">what we read and from where</span></h3>

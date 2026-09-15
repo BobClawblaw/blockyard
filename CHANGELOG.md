@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Mining tab fits one screen: Block flow across the top, then three stacks (the figures and the packages; the pool pie and the feerate landscape; the year chart, the adjustments, the window's pools and the attribution). The Mempool space viewer left this page — it is on Overview, Block space and Mempool — and with it the full-pool poll the page used to ask for
 - The Mining tab's pool chart is a labelled pie: every pool named beside its slice and joined to it by a leader in the slice's colour, the small ones stacked, slices under half a percent gathered as "Other"
 - The Mining tab's reward stats carry dollar figures while market polling is on, from a new `/api/price` that answers the cached spot price and never starts the exchange polling itself
 - **The Mining tab has the network row**: reward stats over the last 144 blocks, the difficulty period (blocks remaining, the estimated and the previous change, the next halving), a week of pools as a donut with luck and counts, a year of hashrate with the difficulty's steps, and the last twelve adjustments as a table — every figure from this node alone (`server/collect/network.js`: getblockstats for the reward window, block headers for the periods and a daily sample, the week's coinbases read in the background)

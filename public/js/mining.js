@@ -1051,37 +1051,8 @@ export function renderMining(s, state, h) {
   h.nextBlock?.();
   blockFlow(document.getElementById('mnFlow'), flowArgs(s, state), h.fmt);
   packagesView(document.getElementById('mnPackages'), a?.nextBlock?.packages, h.fmt);
-  const nb = a?.nextBlock ?? null;
-  h.mempoolDetail?.();
-  const mp = state?.mempoolDist ?? s?.mempool ?? {};
-  drawPoolViewer(h.canvas('gnMempoolTreemap'), s, state);
-  const mnote = document.getElementById('gnMempoolNote');
-  if (mnote) {
-    const cells = mp.cells ?? [];
-    const tail = cells.find((c) => c.aggregate) ?? null;
-    const total = mp.totalVsize ?? 0;
-    const drawn = cells.length - (tail ? 1 : 0);
-    if (cells.length) {
-      const parts = [`${fmtNum(drawn, h)} drawn`];
-      if (tail) parts.push(`+ 1 aggregate of ${fmtNum(tail.aggregate, h)} smaller ones`);
-      if (mp.cellCount != null) parts.push(`= ${fmtNum(mp.cellCount, h)} transactions as at the poll`);
-      if (mp.fetchedAt != null) parts.push(`${Math.round((Date.now() - mp.fetchedAt) / 1000)}s ago`);
-      const fits = total <= 1_000_000
-        ? '<b>everything waiting fits in a single block</b>'
-        : 'the line sits where one block runs out and everything right of it waits';
-      mnote.innerHTML = `${parts.join(', ')}; ${fmtNum(total, h)} vB waiting. One block is 1,000,000 vB, so ${fits}.`
-        + ' Ordered by feerate, because that is the order a miner takes them; colour is what each transaction pays.'
-        + (mp.stale ? ' <span class="warn">Last poll failed; this picture may be old.</span>' : '');
-    } else if (mp.stale) {
-      mnote.innerHTML = '<span class="warn">Detail stale</span> — the last poll of the full pool failed. Anything drawn above is the previous reading.';
-    } else if (mp.count != null && mp.count > 0) {
-      mnote.innerHTML = `<span class="warn">Cells not loaded yet</span> — ${fmtNum(mp.count, h)} transactions are waiting; the full pool is polled on the 20 s tier and this page has not received it.`;
-    } else if (mp.count === 0) {
-      mnote.textContent = 'The mempool is empty: nothing is waiting, so there is nothing to draw.';
-    } else {
-      mnote.textContent = 'Nothing to draw yet — the full pool is polled on the 20 s tier, not every second.';
-    }
-  }
+  // (the Mempool space viewer left this page on 2026-09-15 -- it is on Overview, Block space and
+  // Mempool -- and with it the full-pool poll this page used to ask for)
   feeLandscape(h.canvas('mnFeeLandscape'), a?.nextBlock ?? null, h.fmt);
   poolTable(document.getElementById('mnPools'), a, h.fmt);
   networkPanels(s?.network ?? null, h);
@@ -1205,7 +1176,7 @@ export function networkPanels(n, h) {
     } else paint(canvas, { when: null, draw: () => {}, placeholder: 'reading a year of block headers…' });
   }
   // the adjustments table
-  const rows = n.adjustments ?? [];
+  const rows = (n.adjustments ?? []).slice(0, 6);   // six fit the screen; the server carries twelve
   put('mnAdjustments', rows.length
     ? `<table class="t"><thead><tr><th>Height</th><th>Adjusted</th><th class="r">Difficulty</th><th class="r">Change</th></tr></thead><tbody>${rows.map((x) => { const c = signed(x.changePct); return `<tr><td>#${F.num(x.height)}</td><td>${agoWords(x.time * 1000)}</td><td class="r">${tera(x.difficulty)}</td><td class="r ${c.cls}">${c.text.replace(/^[▴▾] /, '')}</td></tr>`; }).join('')}</tbody></table>`
     : '<div class="note tiny faint">reading the periods\' first blocks…</div>');

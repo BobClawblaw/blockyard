@@ -249,7 +249,7 @@ test('the train scrolls from the divider, with the assembled block left of it', 
     'blockFlow scrolled the row to the divider on first render');
 });
 
-test('the mempool note says something true in every state it can be handed', async () => {
+test('renderMining paints the flow, the packages and the pools, and no longer the pool viewer', async () => {
   // The canvas kit reads window/matchMedia the way a browser does; the drawing itself is
   // proxied into nothing, because this test is about the WORDS beside the picture.
   globalThis.window = { devicePixelRatio: 1, matchMedia: () => ({ matches: true }) };
@@ -276,15 +276,12 @@ test('the mempool note says something true in every state it can be handed', asy
     globalThis.document = doc;
     return notes;
   };
-  const withCells = mk({ cells: [{ vbytes: 500, rate: 12 }, { vbytes: 900, rate: 1, aggregate: 40 }], totalVsize: 1400, count: 42 });
-  assert.match(String(withCells.gnMempoolNote.innerHTML), /1 aggregate of 40/, 'aggregated tail is named');
-  assert.match(String(withCells.gnMempoolNote.innerHTML), /fits in a single block/, 'a pool smaller than a block is stated, not drawn with a phantom cut line');
-
-  const empty = mk({ cells: [], count: 0, totalVsize: 0 });
-  assert.match(String(empty.gnMempoolNote.textContent || empty.gnMempoolNote.innerHTML), /empty/i, 'an empty pool is stated plainly');
-
-  const failed = mk({ cells: [{ vbytes: 500, rate: 5 }], count: 9, totalVsize: 500, stale: true });
-  assert.match(String(failed.gnMempoolNote.innerHTML), /stale|failed/i, 'a failed poll is admitted rather than shown as current');
+  // the Mempool space viewer left the Mining page on 2026-09-15 (it is on Overview, Block space and
+  // Mempool): renderMining paints the flow, the packages and the pools without touching it
+  const painted = mk({ cells: [{ vbytes: 500, rate: 12 }, { vbytes: 900, rate: 1, aggregate: 40 }], totalVsize: 1400, count: 42 });
+  assert.equal(painted.gnMempoolNote, undefined, 'the viewer\'s note is never asked for');
+  assert.equal(painted.gnMempoolTreemap, undefined, 'nor its canvas');
+  assert.ok(painted.mnFlow && painted.mnPackages && painted.mnPools, 'the rest of the page is painted');
 });
 
 const FMT = { num: (n) => String(n ?? '-'), bytes: (n) => String(n ?? '-'), esc: (s) => String(s ?? ''), ago: () => '-', rate: (v) => String(v ?? '-'), satPerVb: (v) => String(v ?? '-'), ageSec: () => '-', pct: (n) => String(n ?? '-') };
