@@ -1135,11 +1135,22 @@ function drawScanCurtain(ctx, view, lw) {
     ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.closePath(); ctx.fill();
   };
   const seg = (a, b, col, w) => { const p = P(a), q = P(b); ctx.strokeStyle = col; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); };
-  const grad = (x, y, r, stops) => { const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null; if (!g || typeof g.addColorStop !== 'function') return stops[0][1]; for (const [o, c] of stops) g.addColorStop(o, c); return g; };
+  // SMOOTH BY LAYERING, NOT BY GRADIENT (operator, 2026-09-15: "gradient visible! We need smooth
+  // fills. no gradient shit!"). A radial gradient bands on this rasteriser -- the rings are
+  // plainly visible, and worst on a large fill like the beam's pool. Many nested flat discs do not
+  // band: each is a plain rgba fill and the SUM is the curve. Same doctrine as bloom() in
+  // agents.js, with far more steps because the pool is large.
+  const soft = (x, y, r, rgb, a) => {
+    const N = 18;
+    for (let i = N; i >= 1; i--) {
+      ctx.fillStyle = `rgba(${rgb},${(a / N).toFixed(4)})`;
+      ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r * (i / N)), 0, Math.PI * 2); ctx.fill();
+    }
+  };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
 
   // --- the volume: nested cone shells, widest and faintest first
-  for (const [f, a] of [[1, 0.035], [0.72, 0.045], [0.45, 0.055], [0.22, 0.07]]) {
+  for (const [f, a] of [[1, 0.018], [0.88, 0.019], [0.76, 0.021], [0.64, 0.023], [0.53, 0.026], [0.43, 0.029], [0.34, 0.033], [0.26, 0.038], [0.19, 0.044], [0.13, 0.05]]) {
     const fill = `rgba(120,220,255,${(a * amp).toFixed(3)})`;
     for (let i = 0; i < RING; i++) {
       tri(apex, ring((i / RING) * Math.PI * 2, f), ring(((i + 1) / RING) * Math.PI * 2, f), fill);
@@ -1154,7 +1165,8 @@ function drawScanCurtain(ctx, view, lw) {
   {
     const c = P({ x: mx, y: my, z: 0 });
     const r = U * Math.max(half, SPREAD) * 1.35;
-    disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, `rgba(235,250,255,${(0.42 * amp).toFixed(3)})`], [0.35, `rgba(150,225,255,${(0.2 * amp).toFixed(3)})`], [1, 'rgba(110,200,255,0)']]));
+    soft(c.x, c.y, r, '150,225,255', 1.5 * amp);
+    soft(c.x, c.y, r * 0.42, '225,248,255', 1.1 * amp);
   }
   // the rim of the pool, so the cone reads as landing on something
   for (let i = 0; i < RING; i++) {
@@ -1164,7 +1176,7 @@ function drawScanCurtain(ctx, view, lw) {
   // --- the source: a bright knot at the apex with a halo
   {
     const p = P(apex);
-    disc(p.x, p.y, U * 2.2, grad(p.x, p.y, U * 2.2, [[0, `rgba(255,255,255,${(0.85 * amp).toFixed(3)})`], [0.25, `rgba(180,240,255,${(0.4 * amp).toFixed(3)})`], [1, 'rgba(120,210,255,0)']]));
+    soft(p.x, p.y, U * 2.4, '170,235,255', 1.6 * amp);
     disc(p.x, p.y, U * 0.32, `rgba(255,255,255,${(0.95 * amp).toFixed(3)})`);
   }
 

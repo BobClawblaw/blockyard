@@ -358,6 +358,18 @@ test('THE SCAN IS A CONE, NOT A STACK OF SHEETS', () => {
     assert.ok(w > 20, `it is wide at the floor (${w.toFixed(0)}px)`);
     assert.ok(h > 40, `and tall from floor to apex (${h.toFixed(0)}px)`);
     assert.ok(w / h > 0.7 && w / h < 3, `and shaped like a beam rather than a needle (${w.toFixed(0)}x${h.toFixed(0)}, ratio ${(w / h).toFixed(2)})`);
+
+    // NO GRADIENTS IN THE BEAM (operator, 2026-09-15: "gradient visible! We need smooth fills. no
+    // gradient shit!"). createRadialGradient bands on this rasteriser -- visibly, and worst on a
+    // large fill like the pool. The house doctrine is nested flat rgba discs, as bloom() does in
+    // agents.js: each layer is a plain fill and the SUM is the curve. Asserted on the source,
+    // because a banded gradient is not something a recording canvas can see.
+    const coneSrc = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+    const fnStart = coneSrc.indexOf('function drawScanCurtain');
+    const fnEnd = coneSrc.indexOf('\n}\n', fnStart);
+    const body = coneSrc.slice(fnStart, fnEnd);
+    assert.ok(fnStart > 0 && fnEnd > fnStart, 'the beam painter is still findable');
+    assert.doesNotMatch(body, /createRadialGradient|createLinearGradient/, 'the beam uses layered flat fills, never a gradient');
   } finally {
     globalThis.requestAnimationFrame = prevRaf;
     globalThis.performance = prevPerf;
