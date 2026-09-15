@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- A held pool refresh waits a moment and a half after an idle effect ends, with the board whole and still, instead of lifting off on the effect's last frame
 - The black hole on Block space: the cubes it pulls are painted last, in the air, nearest the hole on top, so they no longer cut through the neighbours they pass over; each is carried to its own ring round the hole (one and a half to three reaches out) instead of hanging part-way home, and glides straight back from it as the hole lets go
 - The black hole lets go evenly: its hold used to fall with its shrinking reach, which released the outer cubes gently and the ones right under it all at once in the last frames (they popped home full size); the reach now holds through the release and the pull and the scale themselves fade over the last fifth, so every cube and candle glides home and grows back smoothly, arriving at zero speed by 0.97 of the run rather than a step on the last frame
 

@@ -191,6 +191,13 @@ export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
 const FX_DEFER_MAX = Math.max(...Object.values(FX_MS)) + 1000;
+// A BREATH BETWEEN AN EFFECT AND THE REFRESH IT HELD BACK (operator, 2026-09-15, of the black
+// hole: "snapping into place on last frame to drop in"): the parked layout took the stage on the
+// very frame the effect ended, so the board's cubes were seen arriving home and, in the same
+// instant, lifting off for the refresh -- one motion read as the other's last frame. The layout
+// now waits a moment and a half after the effect, with the board whole and still
+const FX_REST_MS = 1500;
+const fxResting = (st, t) => st.fxEndedAt != null && t - st.fxEndedAt < FX_REST_MS;
 // THE PULSE RIDES THE PRICE LINE (operator, 2026-09-12: "the energy pulse effect needs to run
 // across the yellow line, not through space on an invisible grid ... travel the yellow line from
 // one end to the other leaving a electric blue tint on the yellow line that starts fading back to
@@ -4148,7 +4155,7 @@ export function render3d(canvas, cells, options = {}) {
   // Nothing can overtake the parked layout: scheduleFx treats a pending render as `busy` and
   // re-arms its timer instead of starting another effect, so an effect cannot chain ahead of a
   // refresh that is already waiting.
-  const fxHolding = !!fxNow(st, now) && sig !== st.sig
+  const fxHolding = (!!fxNow(st, now) || fxResting(st, now)) && sig !== st.sig
     && (st.pendingAt == null || now - st.pendingAt < FX_DEFER_MAX);
   if (!unchanged && st.plan && !still && st.raf != null && (now < st.plan.settleAt || fxHolding)) {
     st.pending = { cells, options };
@@ -4268,7 +4275,7 @@ export function render3d(canvas, cells, options = {}) {
     // landed -- cutting the effect off exactly as before. It is also the live path: stars ship on
     // by default, so this is the branch a real board takes, and guarding only the entry above
     // would have looked correct and done nothing.
-    if (starsOn(opts) && frame.settled && st.pending && !fxNow(st, t)) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
+    if (starsOn(opts) && frame.settled && st.pending && !fxNow(st, t) && !fxResting(st, t)) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     // keep the loop alive while the choreography runs OR the camera is moving;
     // park otherwise, because repainting a still picture is a heater
     if (frame.settled && !st.dirty && !fxNow(st, t)) {
@@ -4276,13 +4283,18 @@ export function render3d(canvas, cells, options = {}) {
       // but ONCE, on the frame it arrives, or a running loop would re-arm the timer for ever
       if (!st.atRest) {
         const afterEffect = st.fx != null;   // an effect just ended -- or it has only now settled
+        if (afterEffect) st.fxEndedAt = t;   // the rest before a held refresh runs from here
         st.fx = null;
         st.atRest = true;
         scheduleFx(canvas, st, opts, !afterEffect);
       }
       if (!starsOn(opts) && !glowAnimating(st, t)) {
         st.raf = null;
-        if (st.pending) { const p = st.pending; st.pending = null; st.pendingAt = null; render3d(canvas, p.cells, p.options); return; }
+        if (st.pending) {
+          // the loop parks here (no stars to keep it running), so the rest is kept by a timer
+          if (fxResting(st, t)) { setTimeout(() => { if (st.pending && st.raf == null) { const p = st.pending; st.pending = null; st.pendingAt = null; render3d(canvas, p.cells, p.options); } }, FX_REST_MS - (t - st.fxEndedAt) + 20); return; }
+          const p = st.pending; st.pending = null; st.pendingAt = null; render3d(canvas, p.cells, p.options); return;
+        }
         return;
       }
       if (st.pending) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
