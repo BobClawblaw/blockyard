@@ -288,6 +288,77 @@ test('ball lightning crosses the price board a third slower than the block board
   assert.equal(MARKET_MS.stormball, 27500, '11 s on the block board, 27.5 s on the candles (a third slower, then 40% slower again)');
 });
 
+test('THE SCAN IS A CONE, NOT A STACK OF SHEETS', () => {
+  // (operator, 2026-09-15: "that leaning portion and the cross-hatching is not working. Can we make
+  // it a conical beam. instead, and do something volumetric effect?")
+  //
+  // The curtain was twenty-one PARALLEL flat quads with raster lines across them. Under the oblique
+  // camera parallel sheets project to parallelograms offset by a constant, so their translucent
+  // edges fall on near-parallel screen lines and read as a leaning lattice. No alpha tuning fixes
+  // that -- the geometry IS a grid.
+  //
+  // NOTHING IN THIS SUITE DREW THE SCAN, which is how that shipped green. This drives the real
+  // painter and holds the property that matters: the body is a fan of triangles CONVERGING on one
+  // apex. A cone has no parallel edges, and its density rises toward the axis because the geometry
+  // overlaps there -- the volume is real rather than painted on a flat face.
+  let raf = null, clock = 0;
+  const drawn = [];
+  let cur = null;
+  const ctx = new Proxy({ canvas: {} }, {
+    get(t, k) {
+      if (k === 'canvas') return t.canvas;
+      if (k === 'measureText') return () => ({ width: 10 });
+      if (k === 'createRadialGradient' || k === 'createLinearGradient') return () => ({ addColorStop() {} });
+      if (k === 'beginPath') return () => { cur = []; };
+      if (k === 'moveTo' || k === 'lineTo') return (x, y) => { if (cur) cur.push({ x, y }); };
+      if (k === 'arc') return (x, y, r) => { if (cur) cur.push({ x, y, r, arc: true }); };
+      if (k === 'closePath') return () => {};
+      if (k === 'fill') return () => { if (cur && cur.length) drawn.push(cur.slice()); cur = []; };
+      if (k === 'stroke') return () => { cur = []; };
+      return () => t.canvas;
+    },
+    set(t, k, v) { t[k] = v; return true; },
+  });
+  const prevRaf = globalThis.requestAnimationFrame, prevPerf = globalThis.performance;
+  globalThis.window = { devicePixelRatio: 1, matchMedia: () => ({ matches: false }) };
+  globalThis.matchMedia = () => ({ matches: false });
+  globalThis.performance = { now: () => clock };
+  globalThis.requestAnimationFrame = (fn) => { raf = fn; return 1; };
+  globalThis.cancelAnimationFrame = () => { raf = null; };
+  globalThis.document = globalThis.document ?? {};
+  try {
+    const canvas = { clientWidth: 900, clientHeight: 500, width: 0, height: 0, style: {}, getContext: () => ctx, addEventListener() {}, setPointerCapture() {} };
+    const line = [];
+    for (let i = 0; i < 40; i++) line.push({ x: i * 1.5, z: 2 + Math.sin(i / 5) * 3 });
+    const tiles = [];
+    for (let i = 0; i < 40; i++) tiles.push({ txid: `c${i}`, x: i * 1.5, y: 2, s: 1, tall: 2, color: '#33cc99' });
+    const opts = { axes: { y: 1, zTop: 34, z: [], x: [], line }, gridW: 60, gridH: 8, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } };
+    board3d(canvas, tiles, opts);
+    for (let i = 1; i <= 6; i++) { clock = i * 16; const fn = raf; raf = null; fn?.(clock); }
+    clock = 1000;
+    assert.equal(triggerIdle(canvas, 'scan'), true, 'the scan is triggerable');
+    drawn.length = 0;
+    clock = 3500;                                  // mid-sweep of the 6 s effect
+    const fn = raf; raf = null; fn?.(clock);
+
+    const tris = drawn.filter((p) => p.length === 3 && !p[0].arc);
+    assert.ok(tris.length > 100, `the cone body is drawn as many triangles (${tris.length})`);
+    // every triangle shares the apex: that is what makes it a cone rather than a fan of sheets
+    const counts = new Map();
+    for (const t of tris) for (const p of t) { const k = `${p.x.toFixed(1)},${p.y.toFixed(1)}`; counts.set(k, (counts.get(k) ?? 0) + 1); }
+    const [apexKey, n] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+    assert.ok(n >= tris.length * 0.9, `every triangle converges on one apex (${n} of ${tris.length})`);
+    // and it has real extent: wide where it lands, tall to its source
+    const ys = tris.flatMap((t) => t.map((p) => p.y)), xs = tris.flatMap((t) => t.map((p) => p.x));
+    const apexY = Number(apexKey.split(',')[1]);
+    assert.ok(Math.max(...xs) - Math.min(...xs) > 20, 'it is wide at the floor');
+    assert.ok(Math.max(...ys) - apexY > 40, 'and tall from floor to apex');
+  } finally {
+    globalThis.requestAnimationFrame = prevRaf;
+    globalThis.performance = prevPerf;
+  }
+});
+
 test('every Markets effect plays through the frame loop on a candle board without throwing', () => {
   // 2026-09-15: the supernova called a helper it had not imported; the first frame threw, the
   // loop died, and the board froze on that frame for the rest of the run. Nothing here triggered
