@@ -1712,7 +1712,15 @@ function drawSupernova(ctx, view, lw) {
     // THE FLASH ITSELF (operator, 2026-09-15: "It's missing the bright white flash!"): a bright,
     // brief one -- full white at the heart for an instant, gone in a third of the breakout -- so
     // it reads as a flash, not as a solid glow that sits on the Kiosk's panel
-    const fl = t < 0.06 ? t / 0.06 : Math.pow(Math.max(0, 1 - (t - 0.06) / 0.3), 2.2);
+    const fl = t < 0.04 ? t / 0.04 : t < 0.12 ? 1 : Math.pow(Math.max(0, 1 - (t - 0.12) / 0.3), 2);
+    // WHITE-HOT (operator, 2026-09-15: "We need to add the white-hot-flash to the explosion
+    // again"): the heart goes fully white and holds for a moment, and a wide veil of light
+    // washes twice as far out for the same instant -- bounded to the star's neighbourhood, so
+    // the Kiosk's panel flashes bright but never sits solid
+    if (fl > 0) {
+      const V = R0 * 8;
+      disc(c.x, c.y, V, grad(c.x, c.y, V, [[0, `rgba(255,255,252,${(0.45 * fl).toFixed(3)})`], [0.4, `rgba(255,252,246,${(0.18 * fl).toFixed(3)})`], [1, 'rgba(255,248,240,0)']]));
+    }
     // a soft flash round the star, not the whole frame -- and NOT SOLID (operator, 2026-09-15, via
     // his wife on the Kiosk: "far too much solid white"): a modest disc, at most half opaque at its
     // heart, thin by three shells out, and the white gas thrown with it at a third of the weight
@@ -1720,7 +1728,7 @@ function drawSupernova(ctx, view, lw) {
     // PRESENCE BACK (operator, 2026-09-15: "We've removed so much of the initial white nebula
     // emission that it's lost much of its presence and intensity") -- now that the discs add up
     // honestly, the flash and the white gas can carry weight again without going solid
-    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,253,248,${Math.min(1, 0.3 * f + 0.75 * fl).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.15 * f + 0.3 * fl).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.05 * f + 0.06 * fl).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
+    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,255,252,${Math.min(1, 0.3 * f + 1.0 * fl).toFixed(3)})`], [0.35, `rgba(255,252,244,${Math.min(1, 0.15 * f + 0.6 * fl).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.05 * f + 0.06 * fl).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
     // MORE GAS OFF THE FLASH (operator, 2026-09-15: "Opening white flash needs more dispersing
     // nebula gas"): two clouds thrown with it -- a dense one at the flash and a wider, thinner
     // one racing ahead of it -- both flying out faster than the flash fades, so the white
@@ -1737,15 +1745,18 @@ function drawSupernova(ctx, view, lw) {
   // longer ... Double the amount"): thirty-two plumes on their own clock, outliving the flash by
   // half again -- they reach nine star radii, keep flying after the flash has gone, and only
   // thin out slowly, so the white gas is still drifting outward when the blue debris rises
-  if (u >= 0.12 && u < 0.62) {
-    const t = (u - 0.12) / 0.5, g = t < 0.06 ? t / 0.06 : Math.pow(1 - (t - 0.06) / 0.94, 0.9);
-    for (let k = 0; k < 32; k++) {
+  // AND AGAIN (operator, 2026-09-15: "the white plumes still fade too fast, make them linger
+  // longer. Double the amount again"): sixty-four plumes, holding full for the first fifth of
+  // their flight and thinning slowly over the rest, still drifting at nine tenths of the effect
+  if (u >= 0.12 && u < 0.9) {
+    const t = (u - 0.12) / 0.78, g = t < 0.04 ? t / 0.04 : t < 0.2 ? 1 : Math.pow(1 - (t - 0.2) / 0.8, 0.7);
+    for (let k = 0; k < 64; k++) {
       const H = (q) => hash01(fx.seed + 4400 + k * 19 + q);
-      const ang = (k / 32) * Math.PI * 2 + (H(1) - 0.5) * 0.4, sp = 0.5 + 1.0 * H(2);
-      const reach = R0 * (0.6 + 9 * t) * sp, ease = 1 - Math.exp(-3 * t);
+      const ang = (k / 64) * Math.PI * 2 + (H(1) - 0.5) * 0.3, sp = 0.5 + 1.0 * H(2);
+      const reach = R0 * (0.6 + 9 * t) * sp, ease = 1 - Math.exp(-2.2 * t);
       const px = c.x + Math.cos(ang) * reach * ease, py = c.y + Math.sin(ang) * 0.75 * reach * ease;
-      const shell = R0 * (0.5 + 2.4 * t) * (0.7 + 0.6 * H(3));
-      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.1 * g * (1 - 0.3 * sp), [245, 248, 255], grad, disc, 36, [180, 195, 235], null, 1, 1.3);
+      const shell = R0 * (0.5 + 2.8 * t) * (0.7 + 0.6 * H(3));
+      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.08 * g * (1 - 0.3 * sp), [245, 248, 255], grad, disc, 32, [180, 195, 235], null, 1, 1.3);
     }
   }
   // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing
