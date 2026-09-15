@@ -13,7 +13,7 @@ All notable changes to this project are documented here. The format follows
   gradient puffs (no edges, so no circles); the head is a gradient sphere breathing on two sines,
   three warm wisps of nebula round it, filaments of discharge over its surface re-rolled on a
   60 ms beat, and every so often it spits sparks that arc under gravity and fade; the pipe swells
-  round it at the bulge effect's full size, and nowhere else — the whole-line swell that jumped
+  round it at three times the bulge effect's full size, and nowhere else — the whole-line swell that jumped
   fat at the start and thin at the end is gone. A haze of three ghost copies of the charged
   stretch shimmers off the wire, a soft warm light lies over it, and the candles under the head
   glow. Nothing in the pulse is blue any more, and a test holds it so.
