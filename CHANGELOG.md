@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Fireworks are drawn, on both boards.** The effect only ever lit tiles — the ring of lit cubes
+  was the picture on Block space, and on eight rows of candles it was a candle or two blinking.
+  Each shell is now a rocket streak up from the floor, a flash, and forty-four spark trails flung
+  out and falling under gravity, in the shell's own colour; on Markets they burst at the chart's
+  own heights.
+- **Ball lightning on Markets:** a quarter of its original size, a third slower (16.5 s), rides
+  up and down across most of the chart's height, throws nothing once off the board so the run
+  ends with it long gone, and every strike is a flash — the halo blazes, a white flash blooms
+  where it lands, a bead of light runs the channel, sparks spray and fall, two or three branches.
 - **Ball lightning's arcs are discharges, not zigzags.** Each bolt is built by midpoint
   displacement (the channel split and thrown to one side, four levels deep, the throw halving each
   level) with one or two thinner branches leaving it partway, its shape held for 60 ms at a time

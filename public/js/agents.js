@@ -721,11 +721,15 @@ defineAgent('stormball', {
     // range, so the candles it passes are beside it and the arcs strike what it comes near
     // (operator, 2026-09-14: "electrifying any elements it comes near")
     const line = st?.axes?.line;
-    let alt = highest + 3.5;
+    let alt = highest + 3.5, zPath = null;
     if (line?.length > 1) {
       let lo = Infinity, hi = -Infinity;
       for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
-      alt = lo + (hi - lo) * (0.35 + 0.5 * rnd());
+      alt = (lo + hi) / 2;
+      // UP AND DOWN THE WHOLE CHART (operator, 2026-09-15: "it's not moving up and down enough
+      // during transit. It should try to cover a lot of space"): the height is two sines over the
+      // run, the slow one swinging across most of the line's range, the quick one on top
+      zPath = { lo, hi, f: [1.2 + rnd() * 1.3, 3 + rnd() * 3], ph: [rnd() * Math.PI * 2, rnd() * Math.PI * 2] };
     }
     // across the board the long way round, far enough past both edges to start and end off-screen
     const leftToRight = rnd() < 0.5;
@@ -736,7 +740,7 @@ defineAgent('stormball', {
     // "have it fully moved off the display before you remove it"): the corona reaches 12 units
     // from the centre and the trail seven behind, and at 8 the run ended with the glow still
     // on the chart and cut off dead
-    const margin = st?.axes?.line?.length > 1 ? 16 : Math.max(W, H) * 0.55 + 6;
+    const margin = st?.axes?.line?.length > 1 ? 20 : Math.max(W, H) * 0.55 + 6;
     const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
     const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
     const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
@@ -759,12 +763,17 @@ defineAgent('stormball', {
         arcs.push(arc);
       }
     }
-    return { from, to, weave, alt, arcs, W, H, top };
+    return { from, to, weave, alt, zPath, arcs, W, H, top };
   },
   frame(a, u) {
     const at = (uu) => {
       const x = a.from.x + (a.to.x - a.from.x) * uu;
       const y = a.from.y + (a.to.y - a.from.y) * uu + a.weave.amp * Math.sin(uu * Math.PI * 2 * a.weave.cycles + a.weave.phase);
+      if (a.zPath) {
+        const { lo, hi, f, ph } = a.zPath;
+        const w = 0.5 + 0.38 * Math.sin(uu * Math.PI * 2 * f[0] + ph[0]) + 0.14 * Math.sin(uu * Math.PI * 2 * f[1] + ph[1]);
+        return { x, y, z: lo + (hi - lo) * Math.max(0, Math.min(1, w)) };
+      }
       return { x, y, z: a.alt + 0.6 * Math.sin(uu * 17) };
     };
     const ball = at(u);
@@ -795,10 +804,16 @@ defineAgent('stormball', {
       const age = (u - arc.u0) / arc.life;
       if (age < 0 || age > 2.2) continue;                         // alive, then an afterglow on the block
       const p = at(arc.u0);
+      // NO ARCS FROM OFF THE BOARD (2026-09-15: "make the lightning ball completely disappear off
+      // the viewport before killing it. Seeing it flash out at the end"): a ball past the edge
+      // could still reach a candle at the edge with an arc, so the last thing seen was a bolt
+      // from nowhere; while it is off the board nothing is drawn from it -- not even an arc it
+      // threw a moment before the edge -- and the run ends with it long gone
+      if (a.zPath && (ball.x < -1 || ball.x > a.W + 1)) continue;
       // the block the arc strikes: the tallest cell near where it is thrown, and none if the floor is bare
       const hit = strike(p.x + Math.cos(arc.ang) * arc.reach, p.y + Math.sin(arc.ang) * arc.reach);
       if (!hit) continue;
-      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6 });
+      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6, age });
       // THE BLOCK IT TOUCHES IS ELECTRIFIED: a hard blue flare that flickers while the arc lives and
       // dies away after it -- lit through fxAt's heads, so only the cubes actually struck light up
       const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
@@ -838,7 +853,8 @@ defineAgent('stormball', {
     // bigger than the first cut on the block board: it is the one thing there (operator: "visually
     // stunning"); half that on the price board (operator, 2026-09-14: "make the ball lightning half
     // the size it is now"), where it shares the view with the line
-    const R = U * (view.axes?.line?.length > 1 ? 1.7 : 3.4);
+    // ...then half again (2026-09-15: "the lightning ball is still too large. shrink it up by half again")
+    const R = U * (view.axes?.line?.length > 1 ? 0.85 : 3.4);
     // LIGHTNING THAT LOOKS LIKE LIGHTNING (operator, 2026-09-15: "the lightning ball tendrils on
     // the markets page look too big and jagged. Is there a way to thin them up a bit, or make
     // substantial visual improvements to the lightning arcs?"). The first bolt was nine points
@@ -880,13 +896,37 @@ defineAgent('stormball', {
       const [halo, body, edge] = arc.chain ? ['20,200,110', '110,255,170', '215,255,235'] : ['30,120,255', '60,170,255', '140,220,255'];
       const sz = (arc.chain ? 0.85 : 1) * R;
       const stroke = (pts, col, w, a) => line(ctx, pts, `rgba(${col},${a.toFixed(3)})`, Math.max(lw, w));
-      stroke(main, halo, sz * 0.30, 0.28 * arc.strength);
+      // THE FLASH (2026-09-15: "the lightning bolts still need much more visual flash and effects
+      // to them"): the first fifth of an arc's life is the strike -- the halo blazes at three
+      // times its weight and a white flash blooms where it lands -- then a bead of light runs the
+      // channel from root to tip, sparks spray from the strike point and fall away, and the whole
+      // thing settles to the steady glow. `age` is 0 at the strike and 1 at the end.
+      const age = arc.age ?? (1 - arc.strength) / 0.6;
+      const flash = Math.max(0, 1 - age / 0.2);
+      stroke(main, halo, sz * (0.30 + 0.25 * flash), (0.28 + 0.5 * flash) * arc.strength);
       stroke(main, body, sz * 0.12, 0.6 * arc.strength);
       stroke(main, edge, sz * 0.055, 0.95 * arc.strength);
-      stroke(main, '245,252,255', sz * 0.022, arc.strength);
-      // the branches: leave the channel a third to two thirds along, at 20-45 degrees, a quarter
-      // to a half of the remaining length, and fade toward their tips
-      const forks = 1 + (rnd() < 0.45 ? 1 : 0);
+      stroke(main, '245,252,255', sz * (0.022 + 0.02 * flash), arc.strength);
+      if (flash > 0) bloom(ctx, end.x, end.y, R * 1.6 * (1.2 - flash * 0.5), [255, 255, 255], 0.9 * flash);
+      // the bead: a bright knot of light running the channel in the first third of the arc's life
+      const run = Math.min(1, age / 0.35), bi = Math.min(main.length - 1, Math.floor(run * (main.length - 1)));
+      if (age < 0.5) bloom(ctx, main[bi].x, main[bi].y, sz * 0.22, [235, 250, 255], 0.9 * (1 - age));
+      // the sparks: a dozen short lines flung from the strike point, longer and fainter as they go,
+      // drifting down, gone by half the arc's life
+      if (age < 0.55) {
+        const srnd = rollFrom(arc.seed ^ 0x9e3779b9);
+        const life = age / 0.55;
+        for (let k = 0; k < 12; k++) {
+          const ang = srnd() * Math.PI * 2, spd = 0.6 + srnd() * 1.4, len = sz * (0.25 + 0.2 * srnd());
+          const dist = sz * 1.3 * spd * life, drop = sz * 1.2 * life * life;
+          const x1 = end.x + Math.cos(ang) * dist, y1 = end.y + Math.sin(ang) * dist + drop;
+          const x0 = x1 - Math.cos(ang) * len * (1 - life), y0 = y1 - Math.sin(ang) * len * (1 - life) - drop * 0.15;
+          line(ctx, [{ x: x0, y: y0 }, { x: x1, y: y1 }], `rgba(${edge},${(0.9 * (1 - life) * arc.strength).toFixed(3)})`, Math.max(lw, sz * 0.02));
+        }
+      }
+      // the branches: two or three leave the channel a third to two thirds along, at 20-45
+      // degrees, a quarter to a half of the remaining length, and fade toward their tips
+      const forks = 2 + (rnd() < 0.5 ? 1 : 0);
       for (let f = 0; f < forks; f++) {
         const k = Math.floor(main.length * (0.3 + 0.4 * rnd()));
         const at = main[k], dx = end.x - at.x, dy = end.y - at.y;

@@ -472,6 +472,14 @@ test('on the price board the light cycles ride in from the left and the right, a
   for (let seed = 1; seed <= 10; seed++) {
     const a = AGENTS.stormball.build({ st: { axes: { line } }, seed, W, H, tiles, tops: null, rnd: rng(seed) });
     assert.ok(a.alt > 5 && a.alt < 17, `seed ${seed}: it flies through the chart's height (${a.alt.toFixed(1)}), not at 3.5 over a bare floor`);
+    // ...and up and down most of it (operator, 2026-09-15: "It should try to cover a lot of space")
+    let zMin = Infinity, zMax = -Infinity;
+    for (let u = 0; u <= 1; u += 0.01) { const z = AGENTS.stormball.frame(a, u).stormball.at.z; zMin = Math.min(zMin, z); zMax = Math.max(zMax, z); }
+    const lineLo = Math.min(...line.map((p) => p.z)), lineHi = Math.max(...line.map((p) => p.z));
+    assert.ok(zMax - zMin > (lineHi - lineLo) * 0.55, `seed ${seed}: covers more than half the chart's height (${(zMax - zMin).toFixed(1)} of ${(lineHi - lineLo).toFixed(1)})`);
+    assert.ok(zMin >= lineLo - 1e-9 && zMax <= lineHi + 1e-9, 'and stays within it');
+    // and once off the board it throws nothing: the run ends with the ball gone, not with a bolt from nowhere
+    for (let u = 0; u <= 1; u += 0.005) { const f = AGENTS.stormball.frame(a, u); if (f.stormball.at.x < -1 || f.stormball.at.x > W + 1) assert.equal(f.stormball.arcs.length, 0, `seed ${seed}: no arcs from off the board at u=${u.toFixed(3)}`); }
     // and it has LEFT before the run ends (operator: "have it fully moved off the display before you
     // remove it"): the corona reaches 12 units from the centre, so both ends sit 16 past the edges
     assert.ok(Math.min(a.from.x, a.to.x) <= -16 && Math.max(a.from.x, a.to.x) >= W + 16, `seed ${seed}: in from and out past the edges by the corona's reach (${a.from.x}, ${a.to.x})`);

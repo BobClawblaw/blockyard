@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
-import { FX_KINDS, SPACE_FX, MARKET_FX, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
+import { FX_KINDS, SPACE_FX, MARKET_FX, MARKET_MS, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
 import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions, fxCadence } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
@@ -281,4 +281,9 @@ test('the no-repeat window holds from the very first pick: nothing repeats befor
       }
     }
   }
+});
+
+test('ball lightning crosses the price board a third slower than the block board', () => {
+  // operator, 2026-09-15: "cut the speed by 33% now that it's slower"
+  assert.equal(MARKET_MS.stormball, 16500, '11 s on the block board, 16.5 s on the candles');
 });

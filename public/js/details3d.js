@@ -162,6 +162,9 @@ const FX_MS = {
   // stormball replaced portal (2026-09-14); slow on purpose -- it drifts across the whole view
   boulderdash: 6400, stormball: 11000,};
 export const FX_KINDS = Object.keys(FX_MS);
+// the price board's own lengths, where they differ: ball lightning crosses it a third slower
+// (operator, 2026-09-15: "cut the speed by 33% now that it's slower")
+export const MARKET_MS = { stormball: 16500 };
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
@@ -258,7 +261,7 @@ function startFx(st, kind, now) {
     const tiles = st.restTiles || [];
     agent = spec.build({ st, seed, W, H, tiles, tops: cellTops(tiles, W, H), rnd: rng(seed) });
   }
-  st.fx = { kind, t0: now, ms: FX_MS[kind] ?? 4500, x: origin.x, y: origin.y, dx: d[0], dy: d[1], rank, seed, agent,
+  st.fx = { kind, t0: now, ms: (onPriceBoard(st) ? MARKET_MS[kind] : null) ?? FX_MS[kind] ?? 4500, x: origin.x, y: origin.y, dx: d[0], dy: d[1], rank, seed, agent,
     // `paths`/`crashes` stay on the record because drawCycles reads view.fx.cycles, which the
     // agent's frame() produces from them; nothing outside agents.js builds them any more.
     paths: agent?.paths ?? null, crashes: agent?.crashes ?? null };
@@ -760,6 +763,69 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0, pale = false) {
       ctx.fillStyle = `rgba(200,236,255,${(0.75 * g.tint * (1 - 0.5 * g.age)).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
     }
+  }
+  ctx.lineWidth = lw;
+}
+
+// FIREWORKS YOU CAN SEE (operator, 2026-09-15: "the fireworks effect doesn't work at all on the
+// market screen"). The effect only ever LIT tiles -- fxAt's ring passing over the cubes was the
+// picture on the block board, and on eight rows of candles two units apart a ring lights a
+// candle or two for a frame and nothing else. So each burst is drawn now, on both boards: a
+// rocket streak up from the floor, a flash at the top, and a shell of sparks flung out and
+// falling under gravity, each a short trail that dies out -- three shells, each its own colour,
+// at its own moment and place, as before. On the price board the shells burst at the chart's
+// own heights; on the block board a little above the tallest cubes.
+function drawFireworks(ctx, view, lw) {
+  const fx = view.fx;
+  if (!fx || fx.kind !== 'firework') return;
+  const U = view.unit ?? 8;
+  const P = (x, y, z) => project(x, y, z, view);
+  const line = view.axes?.line;
+  let zLo = 6, zHi = 12;
+  if (line?.length > 1) { zLo = Infinity; zHi = -Infinity; for (const p of line) { zLo = Math.min(zLo, p.z); zHi = Math.max(zHi, p.z); } }
+  const COLS = [[255, 170, 110], [140, 220, 255], [220, 160, 255]];
+  for (let i = 0; i < 3; i++) {
+    const t0 = 0.05 + 0.26 * i, life = 0.45;
+    const v = (fx.u - t0) / life;
+    if (!(v > 0 && v < 1)) continue;
+    const bx = hash01(fx.seed + i * 31 + 1) * fx.gridW, by = hash01(fx.seed + i * 31 + 2) * fx.gridH;
+    const zc = zLo + (zHi - zLo) * (0.35 + 0.55 * hash01(fx.seed + i * 31 + 3));
+    const col = COLS[i].join(',');
+    const top = P(bx, by, zc);
+    const RISE = 0.18;
+    if (v < RISE) {
+      // the rocket: a streak from the floor to where it will burst, with a bright head
+      const f = v / RISE, foot = P(bx, by, 0);
+      const head = { x: foot.x + (top.x - foot.x) * f, y: foot.y + (top.y - foot.y) * f };
+      const tail = { x: foot.x + (top.x - foot.x) * Math.max(0, f - 0.25), y: foot.y + (top.y - foot.y) * Math.max(0, f - 0.25) };
+      ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = Math.max(lw * 2, U * 0.12); ctx.beginPath(); ctx.moveTo(tail.x, tail.y); ctx.lineTo(head.x, head.y); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(head.x, head.y, Math.max(lw * 1.5, U * 0.14), 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    const s = (v - RISE) / (1 - RISE);              // 0 at the burst, 1 at the end
+    const R0 = U * (line ? 5.5 : 8);                 // how far the shell flies, in screen px
+    // the flash at the burst, gone in a tenth of the shell's life
+    if (s < 0.12) { const f = 1 - s / 0.12; ctx.fillStyle = `rgba(255,255,255,${(0.85 * f).toFixed(3)})`; ctx.beginPath(); ctx.arc(top.x, top.y, R0 * 0.35 * (1 - f * 0.5), 0, Math.PI * 2); ctx.fill(); }
+    // the shell: sparks flung out on a circle, slowing as they go, pulled down by gravity, each a
+    // short trail from where it was a moment ago, fading toward the end
+    const N = 44, fade = Math.pow(1 - s, 1.2), spread = 1 - Math.exp(-3.2 * s), gravity = R0 * 0.9 * s * s;
+    for (let k = 0; k < N; k++) {
+      const ang = (k / N) * Math.PI * 2 + hash01(fx.seed + i * 97 + k) * 0.2;
+      const len = R0 * (0.75 + 0.35 * hash01(fx.seed + i * 131 + k * 7));
+      const at = (sp, g) => ({ x: top.x + Math.cos(ang) * len * sp, y: top.y + Math.sin(ang) * len * sp + g });
+      const now = at(spread, gravity), back = at(Math.max(0, spread - 0.16), gravity * 0.75);
+      // a wide faint halo under a bright core, so the trail glows rather than scratches
+      ctx.strokeStyle = `rgba(${col},${(0.35 * fade).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 3, U * 0.22);
+      ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(now.x, now.y); ctx.stroke();
+      ctx.strokeStyle = `rgba(${col},${(0.95 * fade).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 1.5, U * 0.09);
+      ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(now.x, now.y); ctx.stroke();
+      // the head twinkles: every spark on its own beat
+      const tw = 0.6 + 0.4 * Math.sin((view.now ?? 0) * 0.02 + k * 1.7);
+      ctx.fillStyle = `rgba(255,255,255,${(0.95 * fade * tw).toFixed(3)})`; ctx.beginPath(); ctx.arc(now.x, now.y, Math.max(lw * 1.5, U * 0.09), 0, Math.PI * 2); ctx.fill();
+    }
+    // a soft glow round the whole shell while it is young, and a lingering ember at its heart
+    if (s < 0.6) { const f = 1 - s / 0.6; ctx.fillStyle = `rgba(${col},${(0.2 * f).toFixed(3)})`; ctx.beginPath(); ctx.arc(top.x, top.y + gravity * 0.5, R0 * spread * 1.1, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = `rgba(255,255,255,${(0.7 * fade).toFixed(3)})`; ctx.beginPath(); ctx.arc(top.x, top.y + gravity * 0.3, Math.max(lw * 2, U * 0.16) * fade, 0, Math.PI * 2); ctx.fill();
   }
   ctx.lineWidth = lw;
 }
@@ -2401,7 +2467,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // name and calls it with a hand-built view -- and the registry simply points at them.
   const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
   if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
-  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); }
+  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
