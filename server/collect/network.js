@@ -184,8 +184,8 @@ export class NetworkStats {
   async ensureRewards(tip) {
     const want = [];
     for (let h = tip; h > tip - this.rewardBlocks && h > 0; h--) if (!this.rewards.has(h)) want.push(h);
-    for (let i = 0; i < want.length; i += 24) {
-      const chunk = want.slice(i, i + 24);
+    for (let i = 0; i < want.length; i += 12) {   // twelve block reads a batch: a step the live polls can slip between
+      const chunk = want.slice(i, i + 12);
       const res = await this.rpc.batch(chunk.map((h) => ({ method: 'getblockstats', params: [h, ['height', 'time', 'totalfee', 'subsidy', 'txs']] })), { priority: 6, heavy: true });
       res.forEach((r, k) => { if (r?.ok && r.result) this.rewards.set(chunk[k], r.result); });
     }

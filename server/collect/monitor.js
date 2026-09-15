@@ -520,7 +520,9 @@ export class NodeMonitor extends EventEmitter {
       this.state.peers.connections = ni.connections;
     }
     this.state.mining = unwrap(res[1]);
-    if (this.miningCfg.enabled && this.state.chainInfo) this.network.refresh(this.state.chainInfo).catch(() => {});
+    // ...not in the first half minute: the boot's own backfills have the lane, and the network
+    // row's first gathering (144 block stats, 400 headers) can wait for the live polls to settle
+    if (this.miningCfg.enabled && this.state.chainInfo && Date.now() - this.startedAt > 30_000) this.network.refresh(this.state.chainInfo).catch(() => {});
     const tips = unwrap(res[2]);
     if (Array.isArray(tips)) {
       this.state.tips = tips;
