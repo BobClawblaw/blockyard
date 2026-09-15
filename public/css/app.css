@@ -849,6 +849,12 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
 /* the two distributions share a row inside the right column */
 .mprow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
 .mprow .card { grid-column: auto !important; }
+/* the same packing every tab got (2026-09-15: "same treatment on the mempool tab"): the page already
+   fit one screen with room over, so the room goes to the charts -- the four time series and the
+   scatter a fifth taller -- and the note cards under them sit tight to their one line */
+.page[data-page="mempool"] canvas.chart:not(.tall):not(.short):not(.meter) { height: 156px; }
+.page[data-page="mempool"] .mpusage { gap: 8px; }
+.page[data-page="mempool"] #mpAcceptCard .note, .page[data-page="mempool"] #mpOrphansCard .note { margin-top: 2px; }
 
 @media (max-width: 1100px) {
   .mpcols { grid-template-columns: minmax(0, 1fr); }
