@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- Chain & Sync packs the same way: one-line notes under the block-size and tip charts (the longer sentences are their tooltips), the transaction-rate figures as one wrapping line instead of a grid that overflowed a narrow card, values that keep to their line, and a shorter uptime label that stopped squeezing its neighbours — the first three rows sit level and the drill-down and indexes reach the first screen at 1093×945
 - A streak of stale drops of the full-pool poll is one story: one warning event when it starts, a counter on Node & RPC while it lasts, one event when the poll answers again with the count and the span. On a day the node answered slowly for thirteen hours, each drop had been its own event, 188 of the feed's 200 rows
 - The Events tab's feed reaches the window's bottom edge (it stopped a hundred pixels short)
 - The Network tab packs the same way: Throughput beside a stack of Upload and Traffic accounting (the accounting card no longer sits alone beside half a screen of nothing), the throughput chart taller, and the sources table taking the rest of the window

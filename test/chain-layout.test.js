@@ -19,7 +19,7 @@ test('charts three to a row, short, the flat tip chart last', () => {
 });
 
 test('long lists run in two columns', () => {
-  assert.ok(sec.includes('<dl class="kv two" id="chState">') && sec.includes('id="chTxStats"') && /class="kv two mt-6" id="chTxStats"/.test(sec));
+  assert.ok(sec.includes('<dl class="kv two" id="chState">') && sec.includes('id="chTxStats"') && /class="mksum mt-6 chtx" id="chTxStats"/.test(sec), 'the rate figures are one wrapping line since 2026-09-15 (a four-column grid overflowed a 330px card)');
   assert.match(css, /\.kv\.two \{ grid-template-columns: auto 1fr auto 1fr;/);
 });
 

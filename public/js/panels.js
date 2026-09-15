@@ -30,7 +30,7 @@ export function renderChain(s, state, h) {
     placeholder: 'no tip samples yet',
   });
   h.setText('chTipNote', s.tip?.headers != null && s.tip?.height != null
-    ? `Applied ${fmt.num(s.tip.height)} of ${fmt.num(s.tip.headers)} announced headers. Headers-first means this reaches 100% only when the last block lands.`
+    ? `<span title="Headers-first: this reaches 100% only when the last block lands">${fmt.num(s.tip.height)} of ${fmt.num(s.tip.headers)} announced headers applied</span>`
     : 'no header count reported yet');
 
   const gap = (b.gap ?? []).filter((p) => Number.isFinite(p.v));
@@ -55,10 +55,11 @@ export function renderChain(s, state, h) {
   // reads as "broken panel" unless the panel says otherwise: this figure sat empty
   // for a day because the request asked for statistics the endpoint has never had.
   const sizeRow = (s.blocks?.recent ?? [])[0] ?? null;
+  // one line (2026-09-15, the packing pass): the basis sentence is the note's title, the figures its text
   h.setText('chSizeNote', sizeRow?.sizeBasis
-    ? `<span class="mono">total_size</span> — ${sizeRow.sizeBasis}.`
+    ? `<span class="mono" title="${fmt.esc(sizeRow.sizeBasis)}">total_size</span>`
       + (sizeRow.medianTxSize != null && sizeRow.swtotalSize != null && sizeRow.size != null
-        ? ` This block: median tx ${fmt.bytes(sizeRow.medianTxSize, 0)}, witness ${fmt.bytes(sizeRow.swtotalSize, 0)} of ${fmt.bytes(sizeRow.size, 0)}.`
+        ? ` · this block: median tx ${fmt.bytes(sizeRow.medianTxSize, 0)}, witness ${fmt.bytes(sizeRow.swtotalSize, 0)} of ${fmt.bytes(sizeRow.size, 0)}`
         : '')
     : (sizeRow?.sizeMissing ?? 'no block stats collected yet — the monitor has not seen a new height since it started'));
   drawFromSeries(h, 'chFeeChart', b.fee, COL.ok, (v) => fmt.short(v), { fmtTip: (v) => `${fmt.sats(v)} sat` });
@@ -71,10 +72,13 @@ export function renderChain(s, state, h) {
     placeholder: 'getchaintxstats has not answered yet',
   });
   const cs = s.chaintxstats;
-  h.setText('chTxStats', cs ? `<dt>window</dt><dd>${fmt.num(cs.window_block_count ?? 0)} blocks</dd>
-    <dt>txs in window</dt><dd>${fmt.num(cs.window_tx_count ?? 0)}</dd>
-    <dt>all-time txs</dt><dd>${fmt.num(cs.txcount ?? 0)}</dd>
-    <dt>rate</dt><dd>${cs.txrate != null ? cs.txrate.toFixed(2) + ' tx/s' : '–'}</dd>` : '<dt>–</dt><dd>not yet fetched</dd>');
+  // ONE WRAPPING LINE (2026-09-15, the packing pass): as a four-column grid these overflowed a
+  // 330px card and as two columns they made the card the row's tallest
+  const item = (k, v) => `<span><span class="k">${k}</span><b>${v}</b></span>`;
+  h.setText('chTxStats', cs
+    ? item('window', `${fmt.num(cs.window_block_count ?? 0)} blocks`) + item('txs in window', fmt.num(cs.window_tx_count ?? 0))
+      + item('all-time txs', fmt.num(cs.txcount ?? 0)) + item('rate', cs.txrate != null ? `${cs.txrate.toFixed(2)} tx/s` : '–')
+    : '<span class="faint">not yet fetched</span>');
 
   h.setText('chState', kv([
     ['chain', s.chain ?? '–'],
@@ -89,7 +93,7 @@ export function renderChain(s, state, h) {
     ['pruned', s.pruned == null ? '–' : String(s.pruned)],
     ['chain work', s.chainwork ? fmt.hash(s.chainwork.replace(/^0+/, '') || '0', 6) : '–'],
     ['IBD', s.ibd == null ? '–' : String(s.ibd)],
-    ['monitor uptime', s.uptimeSec != null ? fmt.uptime(s.uptimeSec * 1000) : '–'],
+    ['uptime', s.uptimeSec != null ? fmt.uptime(s.uptimeSec * 1000) : '–'],
   ]));
 
   const u = s.utxo ?? {};
