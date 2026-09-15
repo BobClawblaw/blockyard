@@ -11,10 +11,10 @@ import { createSoundCard, Opl3, oplRateTimes } from '../public/js/soundcard.js';
 import { rebindKeys, withControls } from '../public/js/doomio.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DOOM = path.join(ROOT, 'doom_dos');
+const DOOM = path.join(ROOT, 'games', 'doom_dos');
 const haveDoom = fs.existsSync(path.join(DOOM, 'DOOM.EXE')) && fs.existsSync(path.join(DOOM, 'DOOM1.WAD'));
 // Not silently green without the files: the skip names what is missing.
-const needDoom = haveDoom ? {} : { skip: 'doom_dos/DOOM.EXE and DOOM1.WAD are not in this checkout' };
+const needDoom = haveDoom ? {} : { skip: 'games/doom_dos/DOOM.EXE and DOOM1.WAD are not in this checkout' };
 
 function doomFiles() {
   const out = {};

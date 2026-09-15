@@ -2,8 +2,9 @@
 // working as a diversion inside blockyard with zero dependancies").
 //
 // The DOOM Diversion runs the shareware DOOM.EXE in a PC emulated in the browser (public/js/x86.js,
-// dospc.js, soundcard.js), and the emulator needs the game's own files. They live in `doom_dos/` at
-// the repository root, where the operator put them -- not in public/, which is the app and is
+// dospc.js, soundcard.js), and the emulator needs the game's own files. They live in
+// `games/doom_dos/`, where the operator put them (the root's doom_dos/ until the games had a home of
+// their own) -- not in public/, which is the app and is
 // stamped with a build id computed over every file in it (4 MB of WAD in that digest, re-hashed
 // every two seconds of page loads, would be a cost paid by every page for one diversion).
 //
@@ -37,7 +38,7 @@ export async function serveDoom(req, res, urlPath, dir, { tls = false, hstsMs = 
   const headers = securityHeaders({ tls, hstsMs });
   if (!file) {
     res.writeHead(404, { ...headers, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(req.method === 'HEAD' ? undefined : `${m[1].toUpperCase()} is not in doom_dos/`);
+    res.end(req.method === 'HEAD' ? undefined : `${m[1].toUpperCase()} is not in games/doom_dos/`);
     return { status: 404 };
   }
   const st = await fsp.stat(file);

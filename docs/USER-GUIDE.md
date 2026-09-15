@@ -731,7 +731,7 @@ demos start, and **Esc** opens DOOM's menu: **New Game** from there.
 
 ### The files
 
-The game's files live on the server, in `doom_dos/` beside the application — the shareware
+The game's files live on the server, in `games/doom_dos/` beside the application — the shareware
 package the operator put there. Without `DOOM.EXE` and `DOOM1.WAD` in that directory the page
 says which file is missing instead of starting. Nothing is downloaded from anywhere else.
 

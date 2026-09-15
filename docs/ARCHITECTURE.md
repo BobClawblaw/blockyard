@@ -836,7 +836,7 @@ doomaudio.js (AudioWorklet) <--stereo PCM over a MessagePort--+
   stops, so nothing moves), and uses a ScriptProcessor when `audioWorklet` is unavailable — a
   plain-HTTP LAN address is not a secure context.
 
-The game files are served from `doom_dos/` at the repository root by `server/http/doom.js`
+The game files are served from `games/doom_dos/` by `server/http/doom.js`
 (`/doom/NAME`, 8.3 names of `.EXE`, `.WAD` and `.CFG` only, behind the session when accounts are
 on) rather than from `public/`, whose every file feeds the build id.
 

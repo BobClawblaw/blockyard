@@ -72,7 +72,7 @@ async function store(name, bytes) {
 async function fetchFile(name, required) {
   const r = await fetch(`/doom/${name}`, { credentials: 'same-origin' });
   if (!r.ok) {
-    if (required) throw new Error(`${name} is not installed: put the shareware DOOM files in doom_dos/ on the server (HTTP ${r.status})`);
+    if (required) throw new Error(`${name} is not installed: put the shareware DOOM files in games/doom_dos/ on the server (HTTP ${r.status})`);
     return null;
   }
   return new Uint8Array(await r.arrayBuffer());

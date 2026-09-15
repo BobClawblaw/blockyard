@@ -1,6 +1,6 @@
 // How fast the DOOM Diversion's emulated PC runs on this machine, headless (docs/MEASUREMENTS.md §32).
 //
-// Boots doom_dos/DOOM.EXE on a clock that counts instructions (30 million to the virtual second, a
+// Boots games/doom_dos/DOOM.EXE on a clock that counts instructions (30 million to the virtual second, a
 // fast 486), lets the title and demos run, and reports instructions a second of wall time and pages
 // flipped. No browser: the same x86.js and dospc.js the worker runs, on Node's V8.
 //
@@ -12,7 +12,7 @@ import { createPC } from '../public/js/dospc.js';
 import { createSoundCard } from '../public/js/soundcard.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DIR = path.join(ROOT, 'doom_dos');
+const DIR = path.join(ROOT, 'games', 'doom_dos');
 const total = Number(process.argv[2] ?? 400) * 1e6;
 
 if (!fs.existsSync(path.join(DIR, 'DOOM.EXE'))) {

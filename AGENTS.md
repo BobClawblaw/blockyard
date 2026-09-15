@@ -188,7 +188,7 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
   js/x86.js, dospc.js, soundcard.js, doomworker.js, doomaudio.js, doomio.js, doom.js
                      the DOOM Diversion: an i386 interpreter, the DOS/4GW PC, a Sound Blaster
                      Pro 2 + OPL3, the worker, the AudioWorklet, pure I/O helpers, the tab.
-                     The game files are doom_dos/ at the repo root, served by http/doom.js.
+                     The game files are games/doom_dos/, served by http/doom.js.
 scripts/doc-counts.js  derives the test count the docs quote (--check / --fix)
 test/                fixtures/log-samples.txt = frozen REAL log lines
 test/helpers/http.js   boots the REAL app in-process: N fake nodes, log sink, TLS.
@@ -301,10 +301,10 @@ Built on the `doom` branch. What will bite:
 - **The CPU was fuzzed against the host CPU** (78k instructions, 0 mismatches) with a C harness that
   is not in the repo (it needs gcc); `test/x86.test.js` holds a case per class. Re-fuzz after any
   change to flags, shifts, multiply or divide.
-- **`doom_dos/` is not in package.json `files`**, so an npm install has no game and the page says
+- **`games/` is not in package.json `files`**, so an npm install has no game and the page says
   which file is missing. Whether the shareware files ship is the operator's call.
 - Tests: `test/x86.test.js`, `test/doom-pc.test.js` (boots the real DOOM.EXE headless when
-  doom_dos/ is present, a named skip when not), `test/doom-io.test.js` (keys, config, text mode,
+  games/doom_dos/ is present, a named skip when not), `test/doom-io.test.js` (keys, config, text mode,
   the `/doom/` route).
 
 ## Current state (2026-09-14)

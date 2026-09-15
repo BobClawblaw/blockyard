@@ -119,10 +119,10 @@ test('committed text carries no overlay-network address and no unreviewed host a
     /^scripts\/fake-node\.js$/, /^docs\/MEASUREMENTS\.md$/,
     // Other parser fixtures quoting real peer lines (public bitcoin nodes, not hosts).
     /^test\/rpc-only\.test\.js$/, /^test\/shape-liveness\.test\.js$/, /^test\/node-series\.test\.js$/,
-    // The shareware DOOM package, byte for byte as id Software shipped it (2026-09-15): HELPME.TXT
+    // The shareware game packages under games/ (DOOM first), byte for byte as id Software shipped it (2026-09-15): HELPME.TXT
     // and the FAQ list the FTP mirrors of 1993 by address. Public archive hosts, not this network,
     // and the files cannot be edited without breaking "unmodified".
-    /^doom_dos\//,
+    /^games\//,
   ];
   // No `$` in these lookaheads: without /m it means end-of-string, which made
     // "0.0.0.0" fail to be excluded everywhere it appeared mid-line.

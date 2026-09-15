@@ -1,7 +1,7 @@
 // DOOM, the tab (operator, 2026-09-15: "I've added doom_dos to the project directory. Get DOOM
 // working as a diversion inside blockyard with zero dependancies").
 //
-// THE REAL ONE. Not a port and not a remake: the shareware DOOM.EXE v1.9 from doom_dos/, unmodified,
+// THE REAL ONE. Not a port and not a remake: the shareware DOOM.EXE v1.9 from games/doom_dos/, unmodified,
 // running on a PC this repository emulates -- an i386 (x86.js), DOS/4GW and the PC around it
 // (dospc.js), a Sound Blaster Pro 2 with its OPL3 (soundcard.js) -- inside a worker
 // (doomworker.js). This file is the monitor, the keyboard, the mouse and the speakers: it draws the

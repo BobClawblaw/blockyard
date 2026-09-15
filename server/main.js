@@ -53,7 +53,7 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     startedAt: Date.now(),
     publicDir: path.join(ROOT, 'public'),
     // the DOOM Diversion's game files, where the operator put them (http/doom.js)
-    doomDir: path.join(ROOT, 'doom_dos'),
+    doomDir: path.join(ROOT, 'games', 'doom_dos'),
     monitors: new Map(),
     stateSeq: 0,
     rssStart: process.memoryUsage().rss,

@@ -93,7 +93,7 @@ test('the server hands over the files in open mode, and wants a session when acc
       assert.equal((await fetch(`${base}/doom/DOOM1.WAD`, { headers: { 'If-None-Match': etag } })).status, 304, 'four megabytes are not sent twice');
       const missing = await fetch(`${base}/doom/DOOM.EXE`);
       assert.equal(missing.status, 404);
-      assert.match(await missing.text(), /DOOM\.EXE is not in doom_dos/, 'the page can tell the operator what to install');
+      assert.match(await missing.text(), /DOOM\.EXE is not in games\/doom_dos/, 'the page can tell the operator what to install');
       assert.equal((await fetch(`${base}/doom/..%2fpackage.json`)).status, 404, 'no path out of the directory');
     });
     await withApp({}, async ({ app, base, client }) => {
