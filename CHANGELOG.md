@@ -13,7 +13,7 @@ All notable changes to this project are documented here. The format follows
   gradient puffs (no edges, so no circles); the head is a gradient sphere breathing on two sines,
   three warm wisps of nebula round it, filaments of discharge over its surface re-rolled on a
   60 ms beat, and every so often it spits sparks that arc under gravity and fade; the pipe swells
-  round it at one and a half times the bulge effect's full size, and nowhere else — the whole-line swell that jumped
+  round it at twice the bulge effect's full size, and nowhere else — the whole-line swell that jumped
   fat at the start and thin at the end is gone. A haze of three ghost copies of the charged
   stretch shimmers off the wire, a soft warm light lies over it, and the candles under the head
   glow. Nothing in the pulse is blue any more, and a test holds it so.
@@ -30,7 +30,11 @@ All notable changes to this project are documented here. The format follows
   the chart, a shockwave ring races outward and thins, seventy-two filaments of plasma are flung
   on every side, a ring nebula (brighter at the rim than the middle) expands for the rest of the
   run and cools gold → red → violet, and the star is left as a white dwarf fading. Its light on
-  the candles cools with it and reaches three times as far on the price board. 8 s (12 on
+  the candles cools with it and reaches three times as far on the price board. Then made
+  violent: 220 filaments of ejecta in two waves with forty fragments of glowing debris tumbling
+  out under gravity, two shock fronts, a bigger and longer white-out, the remnant holding at full
+  for most of its life before it fades, and **the shockwave throws every candle it crosses** —
+  lifted hard and lit white as the front passes, shaking themselves out after. 12 s (18 on
   Markets), from 3.6.
 - **The pulse's bulge sits on the head.** It was placed a share of the line's *length* along
   while the head moves by candle *index*, so wherever the hops were unequal the swell lagged the

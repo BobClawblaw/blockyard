@@ -1011,7 +1011,24 @@ export function fxAt(t, fx) {
       const w = g(d / (1.2 + (thin ? 22 : 7) * bell)) * bell;
       const cool = Math.max(0, Math.min(1, (fx.u - 0.2) / 0.8));
       const col = fx.u < 0.2 ? [255, 250, 230] : cool < 0.5 ? [255, Math.round(200 - 110 * cool * 2), Math.round(90 - 20 * cool * 2)] : [Math.round(255 - 85 * (cool - 0.5) * 2), 90, Math.round(70 + 185 * (cool - 0.5) * 2)];
-      return w > 0.02 ? { glow: A * w, outline: 0.8 * A * w, lift: 1.4 * A * w, color: col } : FX_NONE;
+      // THE SHOCKWAVE THROWS WHAT IT CROSSES (operator, 2026-09-15: "Consider perturbing all the
+      // candles that are affected by the shockwave"): the ring drawn in drawSupernova (4.5 shell
+      // radii, out over u 0.14-0.6) runs through the tiles here too -- a tile it reaches is thrown
+      // up hard and lit white, and shakes itself out for a while after the front has passed
+      let lift = 1.4 * A * w, glow = A * w, outline = 0.8 * A * w, colour = col;
+      if (fx.u >= 0.14) {
+        const fr = Math.min(1, (fx.u - 0.14) / 0.46), ring = (thin ? 27 : 31) * (1 - Math.pow(1 - fr, 2.2));
+        const front = g((d - ring) / 1.8) * (1 - fr * 0.6);
+        const passed = ring - d;                              // > 0 once the front has gone by
+        const shake = passed > 0 && fx.u < 0.75 ? Math.max(0, Math.sin(fx.u * 70 + jitterOf(t.txid, 'sn' + fx.seed) * 6.28)) * Math.exp(-passed / 12) * (1 - (fx.u - 0.14) / 0.61) : 0;
+        if (front > 0.02 || shake > 0.02) {
+          lift = Math.max(lift, 5 * A * front + 1.6 * A * shake);
+          glow = Math.max(glow, A * front + 0.4 * A * shake);
+          outline = Math.max(outline, A * front);
+          if (front > w) colour = [255, 255, 255];
+        }
+      }
+      return glow > 0.02 || lift > 0.05 ? { glow: Math.min(1, glow), outline: Math.min(1, outline), lift, color: colour } : FX_NONE;
     }
     case 'wave': {
       // a swell rolling across the board: the cubes rise and fall with it, several crests at once
