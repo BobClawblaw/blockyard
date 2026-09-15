@@ -1093,11 +1093,11 @@ function drawBlackHole(ctx, view, lw) {
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const canT = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
   const TILT = -0.2, SQUASH = 0.3;                                       // the disk seen nearly edge-on, a little turned
-  const inner = rs * 1.4, outer = rs * 3.4;
+  const inner = rs * 1.4, outer = rs * 6.4;   // twice the reach (operator, 2026-09-15: "make the accretion discs twice as large")
   const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
   const H = (k) => hash01(fx.seed + k);
   // --- the glow of the whole thing on the chart round it
-  disc(c.x, c.y, outer * 1.3, grad(c.x, c.y, outer * 1.3, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]));
+  disc(c.x, c.y, outer * 1.15, grad(c.x, c.y, outer * 1.15, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]));
   // --- THE DISK IS GAS (operator, 2026-09-15: "use the gas cloud for the accretion disk. Only
   // half the disc is drawn and clips through the galaxy spiral skybox"): the WHOLE ring, both
   // halves, as blobs of glowing gas on Keplerian orbits in the disk's plane -- denser and hotter
@@ -1110,7 +1110,7 @@ function drawBlackHole(ctx, view, lw) {
     return { x: c.x + px * Math.cos(TILT) - py * Math.sin(TILT), y: c.y + px * Math.sin(TILT) + py * Math.cos(TILT) };
   };
   const blobs = [];
-  for (let k = 0; k < 300; k++) {
+  for (let k = 0; k < 480; k++) {
     const hk = (q) => hash01(fx.seed + 400 + k * 13 + q);
     const rr = inner + (outer - inner) * Math.pow(hk(1), 1.6);          // denser inside
     const omega = 0.0022 * Math.pow(inner / rr, 1.5);
@@ -1118,7 +1118,7 @@ function drawBlackHole(ctx, view, lw) {
     const heat = 1 - (rr - inner) / (outer - inner);
     const kind = hk(4);
     const col = kind < 0.1 ? [90, 230, 150] : kind < 0.2 ? [255, 90, 90] : [255, Math.round(120 + 130 * heat), Math.round(40 + 120 * heat * heat)];
-    blobs.push({ rr, ang, heat, col, s: rs * (0.14 + 0.22 * hk(5)) * (0.6 + 0.4 * heat), far: Math.sin(ang) < 0, k });
+    blobs.push({ rr, ang, heat, col, s: rs * (0.18 + 0.3 * hk(5)) * (0.6 + 0.4 * heat), far: Math.sin(ang) < 0, k });
   }
   const drawBlob = (b) => {
     const p = toScreen(b.rr, b.ang), q = toScreen(b.rr, b.ang + 0.05);
