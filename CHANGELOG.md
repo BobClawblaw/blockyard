@@ -17,6 +17,15 @@ All notable changes to this project are documented here. The format follows
 - **HTTPS by default.** Every listener serves HTTPS; with no certificate named, the first start makes the monitor its own self-signed one under `<data>/tls/` — written without dependencies (`server/tls/selfsigned.js`, ECDSA P-256), naming the bound hosts, this machine's addresses and hostname — and remakes it near expiry or when a bound address is missing from it. `blockyard tls` remakes it by hand (`--san` to add names, `--print` to export it). Your own certificate still replaces it; `BLOCKYARD_TLS=0` serves plain HTTP behind a proxy. The installer's summary and port probe know both schemes.
 - The shareware game packages live under `games/`: DOOM's files moved from `doom_dos/` at the repository root to `games/doom_dos/`
 
+### Added
+- **Quake, the fifth Diversion.** The shareware `QUAKE.EXE` v1.06 and `PAK0.PAK` from
+  `games/quake_dos/`, unmodified, on the same emulated PC as DOOM -- which now also plays the go32
+  stub and CWSDPMI for a DJGPP program: segment bases and 16-bit code in the CPU, a COFF loader, a
+  directory tree, DOS's system file table, the BIOS tick count. Demos, menus, savegames, sound
+  effects through the Sound Blaster, and the order screen on quit; about thirty frames a second
+  (`timedemo demo1`: 28.9). W A S D and mouse look on the first start, Quake's own bindings after.
+  The game files are served at `/games/<game>/<path>` (`server/http/games.js`), for DOOM too.
+
 ## [0.0.10] — 2026-09-15
 
 A point release, the day after 0.0.9, shaped by the first outside review of it on bitcointalk: the

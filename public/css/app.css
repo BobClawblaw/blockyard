@@ -1862,15 +1862,16 @@ body { font-variant-numeric: tabular-nums; }
 .tetscores td:first-child, .tetscores th:first-child { text-align: left; }
 .tetscores tr.now td { color: var(--accent); font-weight: 600; }
 @media (max-width: 900px) { .tetrust { grid-template-columns: 1fr; } }
-/* DOOM (doom.js): the monitor is a 4:3 box, as a VGA's 320x200 was on the CRT it was drawn for, sized
-   to the screen's height like the courts; the pixels stay pixels unless the smooth switch is on. */
-.doomcard { position: relative; background: #000; }
-.doomcard > h3 { color: var(--fg-dim); }
-.doomwrap { position: relative; height: min(calc(100vh - 210px), 720px); aspect-ratio: 4 / 3; max-width: 100%; margin: 0 auto; background: #000; }
-.doomwrap:fullscreen { height: 100vh; width: 100vw; max-width: none; aspect-ratio: auto; display: flex; align-items: center; justify-content: center; }
-.doomscreen { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
-.doomwrap:fullscreen .doomscreen { width: auto; height: 100%; aspect-ratio: 4 / 3; max-width: 100%; }
-.doomscreen.smooth { image-rendering: auto; }
-.doomagain { position: absolute; right: 12px; bottom: 12px; z-index: 3; }
-.doom .tetkeys code { font-family: var(--mono); font-size: 10.5px; }
-@media (max-width: 900px) { .doomwrap { height: auto; width: 100%; } }
+/* THE DOS GAMES (dosgame.js: DOOM and Quake): the monitor is a 4:3 box, as a VGA's 320x200 was on
+   the CRT it was drawn for, sized to the screen's height like the courts; the pixels stay pixels
+   unless the smooth switch is on. */
+.doscard { position: relative; background: #000; }
+.doscard > h3 { color: var(--fg-dim); }
+.doswrap { position: relative; height: min(calc(100vh - 210px), 720px); aspect-ratio: 4 / 3; max-width: 100%; margin: 0 auto; background: #000; }
+.doswrap:fullscreen { height: 100vh; width: 100vw; max-width: none; aspect-ratio: auto; display: flex; align-items: center; justify-content: center; }
+.dosscreen { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
+.doswrap:fullscreen .dosscreen { width: auto; height: 100%; aspect-ratio: 4 / 3; max-width: 100%; }
+.dosscreen.smooth { image-rendering: auto; }
+.dosagain { position: absolute; right: 12px; bottom: 12px; z-index: 3; }
+.dosgame .tetkeys code { font-family: var(--mono); font-size: 10.5px; }
+@media (max-width: 900px) { .doswrap { height: auto; width: 100%; } }

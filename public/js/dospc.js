@@ -27,7 +27,7 @@ const DOS_HEAP_SEG = 0x0200;            // DOS memory (INT 21h 48h / DPMI 0100) 
 const ROM_STUBS = 0xf0000;              // the "BIOS" handlers a chained vector returns to
 
 // selectors: flat code and data at 0, then the ones the start-up hands the program
-const SEL_CODE = 0x08, SEL_DATA = 0x10, SEL_PSP = 0x18, SEL_ENV = 0x20, SEL_CODE16 = 0x28, SEL_FIRST_FREE = 0x30;
+const SEL_CODE = 0x08, SEL_DATA = 0x10, SEL_PSP = 0x18, SEL_ENV = 0x20, SEL_CODE16 = 0x28, SEL_LOL = 0x30, SEL_FIRST_FREE = 0x38;
 
 const PIT_HZ = 1193182;
 
@@ -107,6 +107,38 @@ export function loadLE(buf, mem, delta = LOAD_DELTA) {
     fixups,
   };
 }
+// ------------------------------------------------------------------ the COFF loader
+/**
+ * A DJGPP v2 program: a go32 stub (an MZ executable that finds a DPMI host and loads the rest), then
+ * a COFF image. Returns the image's sections, entry point and the size its memory block must have,
+ * or null when `buf` is not one. Nothing is copied: DJGPP programs are position-independent of their
+ * block (every address is an offset from a selector based at it), so the caller loads them there.
+ */
+export function parseCoff(buf) {
+  if (buf.length < 0x40 || buf[0] !== 0x4d || buf[1] !== 0x5a) return null;
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.length);
+  const lastPage = dv.getUint16(2, true), pages = dv.getUint16(4, true);
+  const coff = lastPage ? (pages - 1) * 512 + lastPage : pages * 512;
+  if (coff + 20 > buf.length || dv.getUint16(coff, true) !== 0x14c) return null;
+  const nsec = dv.getUint16(coff + 2, true), optSize = dv.getUint16(coff + 16, true);
+  if (optSize < 28) return null;
+  const entry = dv.getUint32(coff + 20 + 16, true);
+  const sections = [];
+  let end = 0;
+  for (let i = 0; i < nsec; i++) {
+    const h = coff + 20 + optSize + i * 40;
+    const name = String.fromCharCode(...buf.subarray(h, h + 8)).replace(/\0.*$/, '');
+    const vaddr = dv.getUint32(h + 12, true), size = dv.getUint32(h + 16, true), fileOff = dv.getUint32(h + 20, true), flags = dv.getUint32(h + 36, true);
+    sections.push({ name, vaddr, size, fileOff: coff + fileOff, bss: (flags & 0x80) !== 0 });
+    end = Math.max(end, vaddr + size);
+  }
+  // the stub's own parameters live in its image: "go32stub" then the size, stack and transfer buffer
+  const at = String.fromCharCode(...buf.subarray(0, Math.min(coff, 0x800))).indexOf('go32stub');
+  const minstack = at >= 0 ? dv.getUint32(at + 0x14, true) : 0x40000;
+  const minkeep = at >= 0 ? dv.getUint16(at + 0x20, true) : 0x4000;
+  return { coff, entry, sections, size: (end + 0xfff) & ~0xfff, minstack, minkeep: minkeep || 0x4000 };
+}
+
 function objSelector(ob) {
   if (ob.flags & 0x2000) return ob.flags & 0x4 ? SEL_CODE : SEL_DATA;   // 32-bit objects are flat
   return SEL_CODE16;
@@ -130,8 +162,12 @@ for (let i = 0; i < 64; i++) DAC8[i] = Math.round((i * 255) / 63);
 export function createPC({ files = {}, args = '', now = () => 0, onWrite = null, onExit = null, sound = null, log = null } = {}) {
   const mem = new Uint8Array(MEM_SIZE);
   if (typeof sound === 'function') sound = sound(mem);    // a card built on this machine's memory
-  const selectors = new Map([[0, 0], [SEL_CODE, 0], [SEL_DATA, 0], [SEL_PSP, PSP_SEG * 16], [SEL_ENV, ENV_SEG * 16]]);
+  const selectors = new Map([[0, 0], [SEL_CODE, 0], [SEL_DATA, 0], [SEL_PSP, PSP_SEG * 16], [SEL_ENV, ENV_SEG * 16], [SEL_LOL, 0x500]]);
+  // where the running program's PSP is: 0100h for DOS/4GW, just below the transfer buffer for DJGPP
+  let pspSeg = PSP_SEG;
+  let realMode = 0;                       // inside a DPMI 0300 call: DOS answers with segments
   let nextSelector = SEL_FIRST_FREE;
+  const seg16 = new Set();                // selectors whose descriptor is 16-bit (D bit clear)
 
   // ---------------------------------------------------------------- VGA
   const vga = {
@@ -146,6 +182,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     misc: 0x63,
     frames: 0,                         // bumped on every CRTC start change: a page was flipped
     palSeq: 0,                         // bumped on every DAC write
+    writes: 0,                         // bumped on every write into the graphics window
   };
   vga.seq[2] = 0x0f; vga.seq[4] = 0x0e;
   const chain4 = () => (vga.seq[4] & 0x08) !== 0;
@@ -153,7 +190,8 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     const off = a - 0xa0000;
     // the text buffer at B8000 is plain memory in either mode; the graphics window is planes
     if (vga.mode !== 0x13 || off >= 0x10000) { if (a >= 0xb8000) mem[a] = v; return; }
-    if (chain4()) { vga.planes[off & 3][off >> 2] = v; return; }
+    if (chain4()) { vga.planes[off & 3][off >> 2] = v; vga.writes++; return; }
+    vga.writes++;
     const mask = vga.seq[2];
     if (mask & 1) vga.planes[0][off] = v;
     if (mask & 2) vga.planes[1][off] = v;
@@ -249,7 +287,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
   const pic = { mask: [0xb8, 0xff], isr: [0, 0], irr: [0, 0], readIsr: [false, false], init: [0, 0] };
   const pit = {
     reload: [65536, 65536, 65536], mode: [3, 3, 3], access: [3, 3, 3], lowNext: [true, true, true],
-    latch: [-1, -1, -1], readLow: [true, true, true], start: [0, 0, 0], nextIrq: 0, gate2: 0,
+    latch: [-1, -1, -1], readLow: [true, true, true], start: [0, 0, 0], nextIrq: 0, gate2: 0, tickBase: 0,
   };
   const kbd = { queue: [], data: 0, port61: 0 };
   function pitPeriodMs() { return (pit.reload[0] * 1000) / PIT_HZ; }
@@ -346,6 +384,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         else if (pit.lowNext[ch]) { pit.lowNext[ch] = false; pit.pending = v; return; }
         else { pit.lowNext[ch] = true; r = pit.pending | (v << 8); }
         pit.reload[ch] = r || 65536;
+        if (ch === 0) pit.tickBase += Math.floor(((now() - pit.start[0]) * PIT_HZ) / 1000 / 65536);
         pit.start[ch] = now();
         if (ch === 0) pit.nextIrq = now() + pitPeriodMs();
         if (ch === 2) sound?.speaker?.(pit.reload[2], kbd.port61);
@@ -423,18 +462,36 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
   }
 
   // ---------------------------------------------------------------- files
-  const dir = new Map();                // NAME -> Uint8Array
-  for (const [k, v] of Object.entries(files)) dir.set(k.toUpperCase(), v);
+  // PATHS, NOT JUST NAMES: the drive is the program's directory, and a file is its upper-case path
+  // under it ("ID1/PAK0.PAK"). DOOM keeps everything beside its executable; Quake keeps its data a
+  // directory down and makes more of them.
+  const dir = new Map();                // PATH -> Uint8Array
+  const dirs = new Set();               // directories made by the program, beside those files imply
+  for (const [k, v] of Object.entries(files)) dir.set(normPath(k), v);
   const handles = new Map();            // n -> { name, data, pos, dirty, size }
+  function normPath(raw) {
+    const parts = [];
+    for (const p of String(raw).replace(/^[a-zA-Z]:/, '').replace(/\\/g, '/').split('/')) {
+      if (!p || p === '.') continue;
+      if (p === '..') parts.pop(); else parts.push(p.toUpperCase());
+    }
+    return parts.join('/');
+  }
   function dosName(a) {
     let s = '';
     for (let i = 0; i < 128; i++) { const c = mem[a + i]; if (!c) break; s += String.fromCharCode(c); }
-    s = s.replace(/^[a-zA-Z]:/, '').replace(/^[\\/.]+/, '').replace(/.*[\\/]/, '');
-    return s.toUpperCase();
+    return normPath(s);
+  }
+  const parentOf = (path) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
+  function isDir(path) {
+    if (path === '' || dirs.has(path)) return true;
+    for (const k of dir.keys()) if (k.startsWith(`${path}/`)) return true;
+    return false;
   }
   function openHandle(name, data) {
     let h = 5;
     while (handles.has(h)) h++;
+    if (h >= SFT_ENTRIES) return -1;
     handles.set(h, { name, data, size: data.length, pos: 0, dirty: false });
     return h;
   }
@@ -449,6 +506,44 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     handles.delete(h);
     return true;
   }
+  // THE SYSTEM FILE TABLE. DOS keeps one entry per open file in its own memory, and a program that
+  // wants more than a handle can give -- DJGPP's fstat() wants the size, the date and a number to
+  // use as an inode -- asks INT 21h AH=52h for the "list of lists", follows its pointer to the SFT,
+  // and reads the entry the PSP's job file table names for the handle. So there is one, at 0050:0000
+  // below the PSP, kept in step with every open, read, write, seek and close (syncSft).
+  const LOL = 0x500, SFT = 0x510, SFT_ENTRIES = 20, SFT_SIZE = 0x3b;
+  function initSft() {
+    mem.fill(0, LOL, SFT + 6 + SFT_ENTRIES * SFT_SIZE);
+    mem[LOL + 4] = SFT - LOL; mem[LOL + 5] = 0; mem[LOL + 6] = (LOL >> 4) & 0xff; mem[LOL + 7] = LOL >> 12;
+    mem[SFT] = 0xff; mem[SFT + 1] = 0xff; mem[SFT + 2] = 0xff; mem[SFT + 3] = 0xff;   // no next table
+    mem[SFT + 4] = SFT_ENTRIES;
+    const psp = pspSeg * 16;
+    mem[psp + 0x32] = SFT_ENTRIES;
+    mem[psp + 0x34] = 0x18; mem[psp + 0x35] = 0; mem[psp + 0x36] = pspSeg & 0xff; mem[psp + 0x37] = pspSeg >> 8;
+    syncSft();
+  }
+  function syncSft() {
+    const psp = pspSeg * 16;
+    for (let h = 0; h < SFT_ENTRIES; h++) {
+      const e = SFT + 6 + h * SFT_SIZE, f = handles.get(h);
+      const put16 = (o, v) => { mem[e + o] = v; mem[e + o + 1] = v >> 8; };
+      const put32 = (o, v) => { mem[e + o] = v; mem[e + o + 1] = v >> 8; mem[e + o + 2] = v >> 16; mem[e + o + 3] = v >>> 24; };
+      if (h < 5) {                                         // the standard devices
+        mem[psp + 0x18 + h] = h;
+        put16(0, 1); put16(5, 0x80d3);
+        for (let i = 0; i < 11; i++) mem[e + 0x20 + i] = 'CON        '.charCodeAt(i);
+        continue;
+      }
+      if (!f) { mem[psp + 0x18 + h] = 0xff; put16(0, 0); continue; }
+      mem[psp + 0x18 + h] = h;
+      put16(0, 1); put16(2, f.mode ?? 2); mem[e + 4] = 0x20; put16(5, 0x02 | (f.dirty ? 0 : 0x40));
+      put16(0x0b, 2 + h); put16(0x0d, 0); put16(0x0f, 0x21); put32(0x11, f.size); put32(0x15, f.pos);
+      const base = f.name.slice(f.name.lastIndexOf('/') + 1), [stem, ext = ''] = base.split('.');
+      const fcb = stem.padEnd(8).slice(0, 8) + ext.padEnd(3).slice(0, 3);
+      for (let i = 0; i < 11; i++) mem[e + 0x20 + i] = fcb.charCodeAt(i);
+    }
+  }
+
   // find first / find next over the directory, matching DOS wildcards
   let findList = [];
   function wildcard(pat) {
@@ -456,13 +551,31 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     const rx = (p) => p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.?');
     return new RegExp(`^${rx(pn)}(\\.${rx(pe)})?$`, 'i');
   }
-  function fillDta(dta, name) {
-    const data = dir.get(name);
-    mem[dta + 0x15] = 0x20;
+  /** The entries of one directory matching a DOS pattern: files, and subdirectories when asked. */
+  function listDir(pattern, attrs) {
+    const parent = parentOf(pattern), rx = wildcard(pattern.slice(parent ? parent.length + 1 : 0) || '*.*');
+    const seen = new Map();
+    const consider = (path, isDirectory) => {
+      if (parentOf(path) !== parent) return;
+      const name = path.slice(parent ? parent.length + 1 : 0);
+      if (rx.test(name) && !seen.has(name)) seen.set(name, { name, isDirectory, size: isDirectory ? 0 : dir.get(path).length });
+    };
+    for (const k of dir.keys()) {
+      consider(k, false);
+      if (attrs & 0x10) {                                  // directories implied by the paths under them
+        let d = parentOf(k);
+        while (d && d !== parent) { consider(d, true); d = parentOf(d); }
+      }
+    }
+    if (attrs & 0x10) for (const d of dirs) consider(d, true);
+    return [...seen.values()];
+  }
+  function fillDta(dta, entry) {
+    mem[dta + 0x15] = entry.isDirectory ? 0x10 : 0x20;
     mem[dta + 0x16] = 0; mem[dta + 0x17] = 0; mem[dta + 0x18] = 0x21; mem[dta + 0x19] = 0x1f;
-    const n = data.length;
+    const n = entry.size;
     mem[dta + 0x1a] = n; mem[dta + 0x1b] = n >> 8; mem[dta + 0x1c] = n >> 16; mem[dta + 0x1d] = n >> 24;
-    for (let i = 0; i < 13; i++) mem[dta + 0x1e + i] = i < name.length ? name.charCodeAt(i) : 0;
+    for (let i = 0; i < 13; i++) mem[dta + 0x1e + i] = i < entry.name.length ? entry.name.charCodeAt(i) : 0;
   }
   let dta = PSP_SEG * 16 + 0x80;
 
@@ -489,6 +602,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     mem,
     vgaWrite, vgaRead, portIn, portOut,
     selectorBase: (sel) => selectors.get(sel & 0xfff8 | (sel & 0)) ?? selectors.get(sel) ?? 0,
+    selectorIs16: (sel) => seg16.has(sel & 0xfff8),
     vector: (n) => pmVectors[n] ?? romStub(n),
     softInt: (cpu, n) => {
       // a vector the program installed takes the call, unless it is the one the stub is making
@@ -515,7 +629,8 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
 
   function service(c, n) {
     switch (n) {
-      case 0x21: return dos(c);
+      case 0x21: { const r = dos(c); syncSft(); return r; }
+      case 0x20: exited = true; exitCode = 0; c.stop(); onExit?.(0); return true;
       case 0x31: return dpmi(c);
       case 0x10: return video(c);
       case 0x16: return biosKey(c);
@@ -529,7 +644,10 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x11: setAX(0x0027); return true;
       case 0x12: setAX(640); return true;
       case 0x15: fail(0x8600); return true;
-      case 0x2f: setAX(R[EAX] & 0xff00); return true;
+      case 0x2f:
+        if (u16(R[EAX]) === 0x1500) { R[EBX] &= ~0xffff; return true; }   // MSCDEX: no CD-ROM drives
+        setAX(R[EAX] & 0xff00);
+        return true;
       case 0x08: case 0x09: case 0x0a: case 0x0b: case 0x0c: case 0x0d: case 0x0e: case 0x0f:
       case 0x1c: case 0x23: case 0x24: case 0x1b: return true;
       case 0x70: case 0x71: case 0x72: case 0x73: case 0x74: case 0x75: case 0x76: case 0x77: return true;
@@ -556,17 +674,25 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x2c: { const d = new Date(); R[ECX] = (R[ECX] & ~0xffff) | (d.getHours() << 8) | d.getMinutes(); R[EDX] = (R[EDX] & ~0xffff) | (d.getSeconds() << 8) | Math.floor(d.getMilliseconds() / 10); return true; }
       case 0x2f: c.loadSeg(ES, SEL_DATA); R[EBX] = dta; return true;
       case 0x30: R[EAX] = 0x1606; R[EBX] = 0; R[ECX] = 0; return true;   // DOS 6.22, and no Phar Lap signature
-      case 0x33: if (al === 0) R[EDX] &= ~0xff; ok(); return true;
+      case 0x33:
+        if (al === 0) R[EDX] &= ~0xff;
+        // the true version, which DJGPP reads before it trusts the SFT's layout: DOS 6, in the HMA
+        if (al === 6) { R[EBX] = (R[EBX] & ~0xffff) | 0x0006; R[EDX] = (R[EDX] & ~0xffff) | 0x1000; }
+        ok();
+        return true;
       case 0x35: { const v = pmVectors[al] ?? romStub(al); c.loadSeg(ES, v.sel); R[EBX] = v.off; return true; }
       case 0x36: setAX(4); R[EBX] = (R[EBX] & ~0xffff) | 0x4000; R[ECX] = (R[ECX] & ~0xffff) | 512; R[EDX] = (R[EDX] & ~0xffff) | 0xffff; return true;
-      case 0x39: case 0x3b: ok(); return true;
-      case 0x3a: ok(); return true;
+      case 0x39: { const d = dosName(linDS(R[EDX])); if (dir.has(d) || isDir(d)) { fail(5); return true; } dirs.add(d); ok(); return true; }
+      case 0x3a: { const d = dosName(linDS(R[EDX])); if (!isDir(d)) { fail(3); return true; } dirs.delete(d); ok(); return true; }
+      case 0x3b: if (isDir(dosName(linDS(R[EDX])))) ok(); else fail(3); return true;
       case 0x3c: case 0x5b: {                     // create
         const name = dosName(linDS(R[EDX]));
         if (ah === 0x5b && dir.has(name)) { fail(80); return true; }
+        if (isDir(name) || !isDir(parentOf(name))) { fail(isDir(name) ? 5 : 3); return true; }
         const data = new Uint8Array(4096);
         const h = openHandle(name, data);
-        const f = handles.get(h); f.size = 0; f.dirty = true;
+        if (h < 0) { fail(4); return true; }
+        const f = handles.get(h); f.size = 0; f.dirty = true; f.mode = 2;
         dir.set(name, new Uint8Array(0));
         R[EAX] = h; ok();
         return true;
@@ -576,6 +702,8 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         const data = dir.get(name);
         if (!data) { fail(2); return true; }
         const h = openHandle(name, (al & 3) ? data.slice() : data);
+        if (h < 0) { fail(4); return true; }
+        handles.get(h).mode = al;
         R[EAX] = h; ok();
         return true;
       }
@@ -624,8 +752,9 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       }
       case 0x43: {
         const name = dosName(linDS(R[EDX]));
-        if (!dir.has(name)) { fail(2); return true; }
-        if (al === 0) R[ECX] = (R[ECX] & ~0xffff) | 0x20;
+        const directory = !dir.has(name) && isDir(name);
+        if (!dir.has(name) && !directory) { fail(2); return true; }
+        if (al === 0) R[ECX] = (R[ECX] & ~0xffff) | (directory ? 0x10 : 0x20);
         ok();
         return true;
       }
@@ -650,8 +779,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x49: case 0x4a: ok(); return true;
       case 0x4c: exited = true; exitCode = al; c.stop(); onExit?.(al); return true;
       case 0x4e: {
-        const rx = wildcard(dosName(linDS(R[EDX])) || '*.*');
-        findList = [...dir.keys()].filter((k) => rx.test(k));
+        findList = listDir(dosName(linDS(R[EDX])), u16(R[ECX]));
         if (!findList.length) { fail(18); return true; }
         fillDta(dta, findList.shift()); ok();
         return true;
@@ -665,7 +793,19 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         return true;
       }
       case 0x57: R[ECX] &= ~0xffff; R[EDX] = (R[EDX] & ~0xffff) | 0x21; ok(); return true;
-      case 0x62: R[EBX] = (R[EBX] & ~0xffff) | SEL_PSP; return true;
+      case 0x58: if (al === 0) setAX(0); ok(); return true;
+      case 0x59: setAX(0); R[EBX] &= ~0xffff; R[ECX] &= ~0xffff; return true;
+      case 0x60: {                                // canonical name: C:\ and the path
+        const out = `C:\\${dosName(linDS(R[ESI])).replace(/\//g, '\\')}\0`, a = linES(R[EDI]);
+        for (let i = 0; i < out.length; i++) mem[a + i] = out.charCodeAt(i);
+        ok();
+        return true;
+      }
+      case 0x67: case 0x68: case 0x6a: ok(); return true;
+      case 0x71: setAX(0x7100); cpu.setCF(true); return true;
+      case 0x5d: fail(1); return true;              // the swappable data area: not offered, which DOS 6 may also say   // no long file names: the answer programs expect
+      case 0x51: case 0x62: R[EBX] = (R[EBX] & ~0xffff) | (realMode ? pspSeg : SEL_PSP); return true;
+      case 0x52: c.loadSeg(ES, SEL_LOL); R[EBX] &= ~0xffff; return true;   // the list of lists (syncSft)
       case 0xff:
         // DOS/4GW's own presence check (DX = 0x78): answer "yes, DOS/4G", and hand over the
         // selector for the first megabyte in GS the way the extender does
@@ -698,7 +838,8 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x0003: setAX(8); ok(); return true;
       case 0x0006: { const b = selectors.get(u16(R[EBX])) ?? 0; R[ECX] = (R[ECX] & ~0xffff) | (b >>> 16); R[EDX] = (R[EDX] & ~0xffff) | (b & 0xffff); ok(); return true; }
       case 0x0007: selectors.set(u16(R[EBX]), ((u16(R[ECX]) << 16) | u16(R[EDX])) >>> 0); refreshSegs(c); ok(); return true;
-      case 0x0008: case 0x0009: ok(); return true;
+      case 0x0008: ok(); return true;
+      case 0x0009: if (u16(R[ECX]) & 0x4000) seg16.delete(u16(R[EBX]) & 0xfff8); else if (u16(R[ECX]) & 0x08) seg16.add(u16(R[EBX]) & 0xfff8); refreshSegs(c); ok(); return true;
       case 0x000a: { const sel = nextSelector; nextSelector += 8; selectors.set(sel, selectors.get(u16(R[EBX])) ?? 0); setAX(sel); ok(); return true; }
       case 0x000b: {
         const a = linES(R[EDI]), b = selectors.get(u16(R[EBX])) ?? 0;
@@ -709,6 +850,8 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x000c: {
         const a = linES(R[EDI]);
         selectors.set(u16(R[EBX]), (mem[a + 2] | (mem[a + 3] << 8) | (mem[a + 4] << 16) | (mem[a + 7] << 24)) >>> 0);
+        // a code descriptor with the D bit clear is 16-bit code
+        if ((mem[a + 5] & 0x08) && !(mem[a + 6] & 0x40)) seg16.add(u16(R[EBX]) & 0xfff8); else seg16.delete(u16(R[EBX]) & 0xfff8);
         refreshSegs(c); ok();
         return true;
       }
@@ -781,6 +924,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       }
       case 0x0902: R[EAX] = (R[EAX] & ~0xff) | (c.IF ? 1 : 0); return true;
       case 0x0a00: fail(0x8001); return true;
+      case 0x0507: case 0x0506: fail(0x8001); return true;       // DPMI 1.0 page attributes: a 0.9 host has none, and DJGPP expects that
       case 0x0e00: setAX(0x004d); ok(); return true;
       case 0x0e01: ok(); return true;
     }
@@ -804,13 +948,18 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     if (ax !== 0x0300) { note(`DPMI ${ax.toString(16)} (real-mode far call)`); ok(); return true; }
     const n = R[EBX] & 0xff;
     const saved = Array.from(R), savedSeg = Array.from(c.seg), savedFlags = c.flags;
-    R[EDI] = g32(0); R[ESI] = g32(4); R[EBP] = g32(8); R[EBX] = g32(16); R[EDX] = g32(20); R[ECX] = g32(24); R[EAX] = g32(28);
+    // real mode is 16-bit: a caller that fills the table through a union leaves stale upper halves,
+    // and a pointer in DS:DX must not carry them
+    R[EDI] = g16(0); R[ESI] = g16(4); R[EBP] = g16(8); R[EBX] = g16(16); R[EDX] = g16(20); R[ECX] = g16(24); R[EAX] = g16(28);
     // real-mode segments: selectors whose base is the segment times sixteen
     const rmSel = (segv, which) => { const sel = 0xf000 + which * 8; selectors.set(sel, segv * 16); c.loadSeg(which, sel); };
     rmSel(g16(0x22), ES); rmSel(g16(0x24), DS);
     c.flags = g16(0x20);
-    service(c, n);
+    realMode++;
+    try { service(c, n); } finally { realMode--; }
     const outFlags = c.flags;
+    // a service that returns a pointer in ES or DS (the list of lists, a vector) hands back a segment
+    p16(0x22, (c.segBase[ES] >>> 4) & 0xffff); p16(0x24, (c.segBase[DS] >>> 4) & 0xffff);
     p32(0, R[EDI]); p32(4, R[ESI]); p32(8, R[EBP]); p32(16, R[EBX]); p32(20, R[EDX]); p32(24, R[ECX]); p32(28, R[EAX]);
     p16(0x20, outFlags);
     for (let i = 0; i < 8; i++) R[i] = saved[i];
@@ -869,6 +1018,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         return true;
       case 0x11: case 0x12: if (ah === 0x12 && (R[EBX] & 0xff) === 0x10) R[EBX] = (R[EBX] & ~0xffff) | 0x0003; return true;
       case 0x1a: if (al === 0) { R[EAX] = (R[EAX] & ~0xff) | 0x1a; R[EBX] = (R[EBX] & ~0xffff) | 0x0008; } return true;
+      case 0x4f: setAX(0x0100); return true;      // VESA BIOS extensions: not here (AL != 4Fh), VGA modes only
     }
     note(`INT 10 AH=${ah.toString(16)}`);
     return true;
@@ -887,6 +1037,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
   function mouse(c) {
     const ax = u16(R[EAX]);
     switch (ax) {
+      case 0x0001: case 0x0002: case 0x0004: case 0x0007: case 0x0008: case 0x000f: case 0x001a: case 0x001d: return true;
       case 0x0000: case 0x0021:
         if (!mouseState.present) { setAX(0); return true; }
         setAX(0xffff); R[EBX] = (R[EBX] & ~0xffff) | 3; return true;
@@ -899,39 +1050,118 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         return true;
       }
     }
+    note(`INT 33 AX=${ax.toString(16)}`);
     return true;
   }
 
   // ---------------------------------------------------------------- start
+  function writeEnvironment(programPath) {
+    const env = ENV_SEG * 16;
+    const envText = 'PATH=C:\\\0COMSPEC=C:\\COMMAND.COM\0BLASTER=A220 I7 D1 T4\0\0';
+    let p = env;
+    for (const ch of envText) mem[p++] = ch.charCodeAt(0);
+    mem[p++] = 1; mem[p++] = 0;
+    for (const ch of `${programPath}\0`) mem[p++] = ch.charCodeAt(0);
+    return p - env;
+  }
+  function writeCommandTail(psp) {
+    const tail = args ? ` ${args}` : '';
+    mem[psp + 0x80] = Math.min(126, tail.length);
+    for (let i = 0; i < tail.length && i < 126; i++) mem[psp + 0x81 + i] = tail.charCodeAt(i);
+    mem[psp + 0x81 + Math.min(126, tail.length)] = 13;
+  }
+  function biosDataArea() {
+    // what a program might peek at: 80 columns, a colour card, the timer count (updateTimers)
+    mem[0x449] = 3; mem[0x44a] = 80; mem[0x463] = 0xd4; mem[0x464] = 0x03; mem[0x484] = 24;
+  }
+  const newSelector = (base) => { const sel = nextSelector; nextSelector += 8; selectors.set(sel, base >>> 0); return sel; };
+
+  /**
+   * Start a program: a DOS/4GW LE (DOOM) or a DJGPP COFF (Quake), told apart by what is in the file.
+   */
   function boot(exe) {
+    const coff = parseCoff(exe);
+    if (coff) return bootCoff(exe, coff);
     const img = loadLE(exe, mem, LOAD_DELTA);
     // PSP: the command tail at 80h, the environment's selector at 2Ch
     const psp = PSP_SEG * 16;
     mem[psp] = 0xcd; mem[psp + 1] = 0x20;
     mem[psp + 2] = 0x00; mem[psp + 3] = 0xa0;
     mem[psp + 0x2c] = SEL_ENV; mem[psp + 0x2d] = 0;
-    const tail = args ? ` ${args}` : '';
-    mem[psp + 0x80] = Math.min(126, tail.length);
-    for (let i = 0; i < tail.length && i < 126; i++) mem[psp + 0x81 + i] = tail.charCodeAt(i);
-    mem[psp + 0x81 + Math.min(126, tail.length)] = 13;
+    writeCommandTail(psp);
+    initSft();
     // the environment, then the program's own path after a count of one
-    const env = ENV_SEG * 16;
-    const envText = 'PATH=C:\\\0COMSPEC=C:\\COMMAND.COM\0BLASTER=A220 I7 D1 T3\0\0';
-    let p = env;
-    for (const ch of envText) mem[p++] = ch.charCodeAt(0);
-    mem[p++] = 1; mem[p++] = 0;
-    for (const ch of 'C:\\DOOM\\DOOM.EXE\0') mem[p++] = ch.charCodeAt(0);
+    writeEnvironment('C:\\DOOM\\DOOM.EXE');
     selectors.set(SEL_CODE16, img.objs.find((o) => !(o.flags & 0x2000))?.base ?? 0);
+    biosDataArea();
     R[ESP] = img.esp;
     cpu.loadSeg(CS, SEL_CODE); cpu.loadSeg(DS, SEL_DATA); cpu.loadSeg(SS, SEL_DATA);
     cpu.loadSeg(ES, SEL_PSP); cpu.loadSeg(FS, 0); cpu.loadSeg(GS, 0);
     cpu.eip = img.entry;
     cpu.flags = 0x202;
     setVideoMode(3);
-    // the BIOS data area a program might peek at: 80 columns, a colour card, the timer count
-    mem[0x449] = 3; mem[0x44a] = 80; mem[0x463] = 0xd4; mem[0x464] = 0x03; mem[0x484] = 24;
     pit.nextIrq = now() + pitPeriodMs();
     return img;
+  }
+
+  /**
+   * THE GO32 STUB, IMPERSONATED. The real stub is 16-bit code that finds a DPMI host (loading
+   * CWSDPMI.EXE if it must), switches to protected mode, allocates the program's memory block,
+   * reads the COFF sections into it and jumps to the entry with FS on a copy of its "stubinfo". The
+   * CPU here has no real mode, so this does what the stub leaves behind: the block with the sections
+   * in it, code and data selectors based at the block, a transfer buffer in conventional memory, and
+   * the stubinfo that crt0 reads -- and then CWSDPMI's part is played by this file's INT 31h.
+   */
+  function bootCoff(exe, img) {
+    const block = allocBlock(img.size);
+    for (const sec of img.sections) {
+      if (sec.bss) continue;
+      mem.set(exe.subarray(sec.fileOff, sec.fileOff + sec.size), block.base + sec.vaddr);
+    }
+    const csSel = newSelector(block.base), dsSel = newSelector(block.base);
+    // the transfer buffer DOS calls go through, and the PSP with the environment's real-mode segment
+    // the real stub is loaded at PSP+100h and its transfer buffer is inside it, and DJGPP's libc
+    // finds the PSP by subtracting 100h from the buffer's address: so the PSP sits right below it
+    pspSeg = dosAlloc(0x10 + ((img.minkeep + 15) >> 4));
+    selectors.set(SEL_PSP, pspSeg * 16);
+    dta = pspSeg * 16 + 0x80;
+    const tbSeg = pspSeg + 0x10;
+    const tbSel = newSelector(tbSeg * 16);
+    const psp = pspSeg * 16;
+    mem[psp] = 0xcd; mem[psp + 1] = 0x20; mem[psp + 2] = 0x00; mem[psp + 3] = 0xa0;
+    // a DPMI host swaps the environment's segment at PSP:2Ch for a selector on entry to protected
+    // mode, and DJGPP's libc reads it as one
+    mem[psp + 0x2c] = SEL_ENV; mem[psp + 0x2d] = 0;
+    writeCommandTail(psp);
+    initSft();
+    const envSize = writeEnvironment('C:\\QUAKE.EXE');
+    // stubinfo (djgpp stub.asm): magic, size, minstack, memory handle, initial size, minkeep, the
+    // transfer buffer's selector and segment, the PSP selector, the stub's CS, env size, names
+    const siSeg = dosAlloc(8), si = siSeg * 16;
+    const put32 = (o, v) => { mem[si + o] = v; mem[si + o + 1] = v >> 8; mem[si + o + 2] = v >> 16; mem[si + o + 3] = v >>> 24; };
+    const put16 = (o, v) => { mem[si + o] = v; mem[si + o + 1] = v >> 8; };
+    const putStr = (o, str, n) => { for (let i = 0; i < n; i++) mem[si + o + i] = i < str.length ? str.charCodeAt(i) : 0; };
+    putStr(0, 'go32stub, v 2.00', 16);
+    put32(0x10, 0x54); put32(0x14, img.minstack); put32(0x18, block.handle); put32(0x1c, img.size);
+    // the stub's own code selector: 16-bit, based where the stub (and so the transfer buffer) is.
+    // crt0's exit copies its last few instructions -- free the program's memory, INT 21h 4Ch -- into
+    // the buffer and jumps to them through this
+    const stubCs = newSelector(tbSeg * 16);
+    seg16.add(stubCs);
+    put16(0x20, img.minkeep); put16(0x22, tbSel); put16(0x24, tbSeg); put16(0x26, SEL_PSP); put16(0x28, stubCs);
+    put16(0x2a, envSize);
+    putStr(0x2c, 'QUAKE', 8); putStr(0x34, 'QUAKE.EXE', 16); putStr(0x44, 'CWSDPMI', 16);
+    const siSel = newSelector(si);
+    biosDataArea();
+    // registers as the stub hands over: a scratch stack below the video memory until crt0 makes its own
+    cpu.loadSeg(CS, csSel); cpu.loadSeg(DS, dsSel); cpu.loadSeg(ES, dsSel);
+    cpu.loadSeg(SS, SEL_DATA); cpu.loadSeg(FS, siSel); cpu.loadSeg(GS, 0);
+    R[ESP] = 0x9ff00;
+    cpu.eip = block.base + img.entry;
+    cpu.flags = 0x202;
+    setVideoMode(3);
+    pit.nextIrq = now() + pitPeriodMs();
+    return { ...img, base: block.base, kind: 'djgpp' };
   }
 
   // ---------------------------------------------------------------- running
@@ -954,6 +1184,12 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     return false;
   }
   function updateTimers(t) {
+    // THE BIOS TICK COUNT at 0040:006C, which the BIOS's own IRQ 0 handler keeps. Programs read it
+    // beside the timer's counter to tell the time finely (DJGPP's uclock), so it advances exactly
+    // when counter 0 wraps -- a wrap per 65,536 input clocks -- and is carried across reprogramming
+    const wraps = Math.floor(((t - pit.start[0]) * PIT_HZ) / 1000 / 65536);
+    const ticks = (pit.tickBase + wraps) >>> 0;
+    mem[0x46c] = ticks; mem[0x46d] = ticks >> 8; mem[0x46e] = ticks >> 16; mem[0x46f] = ticks >>> 24;
     const period = pitPeriodMs();
     if (t >= pit.nextIrq) {
       raiseIrq(0);

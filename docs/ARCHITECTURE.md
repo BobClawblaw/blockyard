@@ -663,7 +663,7 @@ loaded from the same origin. There is no build step and no framework.
 | `settings.js` | display settings: `DEFAULTS`, the `PANEL` rows of the settings dialog, `normalise()`, and the option builders (`spaceOptions`, `enabledEffects`, ...) the boards read; stored on the server (`/api/settings`) with a `localStorage` copy |
 | `about.js` | the About page (version, system and node info) |
 | `tetris.js` / `tetrust.js`, `breakout.js` / `blockout.js`, `arkanoid.js` / `blockanoid.js`, `tetsound.js` | the Diversions: pure game rules in the first file of each pair, the tab drawn on the 3D engine in the second, and Tetrust's sound |
-| `x86.js`, `dospc.js`, `soundcard.js`, `doomworker.js`, `doomaudio.js`, `doomio.js`, `doom.js` | the DOOM Diversion: an i386 interpreter, the DOS/4GW PC around it, a Sound Blaster Pro 2 with an OPL3, the worker the machine runs in, the AudioWorklet it plays through, the pure keyboard/config/text-mode helpers, and the tab (section 3.4) |
+| `x86.js`, `dospc.js`, `soundcard.js`, `dosworker.js`, `dosaudio.js`, `dosio.js`, `dosgame.js`, `doom.js`, `quake.js` | the DOS Diversions: an i386 interpreter, the PC around it (DOS/4GW for DOOM, the go32 stub and CWSDPMI for Quake), a Sound Blaster Pro 2 with an OPL3, the worker the machine runs in, the AudioWorklet it plays through, the pure keyboard/config/text-mode helpers, the shared tab, and each game's own few lines (section 3.4) |
 | `fmt.js` | formatters: decimal units (as the node prints them), `–` for anything absent |
 | `login.js` | the login page (a separate file because of the CSP) |
 
@@ -795,50 +795,64 @@ What this means for front-end code:
 
 ---
 
-### 3.4 The DOOM Diversion
+### 3.4 The DOS Diversions: DOOM and Quake
 
-The shareware `DOOM.EXE` v1.9 runs unmodified on a PC emulated in the browser. Nothing is ported
-and no dependency is used; every layer is this repository's own:
+The shareware `DOOM.EXE` v1.9 and `QUAKE.EXE` v1.06 run unmodified on a PC emulated in the browser.
+Nothing is ported and no dependency is used; every layer is this repository's own:
 
 ```
-doom.js (page)  --scancodes, mouse, run/pause-->  doomworker.js (Worker)
-      ^                                              |
-      |  frames (320x200 indices + palette),         |  createPC()      dospc.js
-      |  text-mode cells, stats                      |    createCpu()   x86.js
-      +----------------------------------------------+    soundcard.js  (SB Pro 2 + OPL3)
-doomaudio.js (AudioWorklet) <--stereo PCM over a MessagePort--+
+doom.js / quake.js -> dosgame.js (page)  --scancodes, mouse, run/pause-->  dosworker.js (Worker)
+      ^                                                                      |
+      |  frames (320x200 indices + palette), text-mode cells, stats          |  createPC()      dospc.js
+      +----------------------------------------------------------------------+    createCpu()   x86.js
+dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+    soundcard.js  (SB Pro 2 + OPL3)
 ```
 
-- **`x86.js`** is a user-mode i386 with a small x87, interpreted. No paging, rings or real mode:
-  a DOS/4GW program runs flat, and segment registers carry only a base. The page's CSP forbids
-  eval, so there is no JIT; speed comes from keeping every value an int32 (a `>>> 0` above 2^31
-  is a double and, in a closure variable, an allocation), lazy flags recorded in an `Int32Array`,
-  one try/catch around the loop rather than each instruction, and 32-bit fast paths for the
-  instructions a Watcom build is made of. About 95 million instructions a second in Node and in
-  a Chromium worker on this box; DOOM needs about a million a frame (MEASUREMENTS §32).
-- **`dospc.js`** is the machine. `loadLE` finds the LE executable inside the bound DOS/4GW stub,
-  loads it at +1 MB and applies its fixups; the extender itself never runs, because this file
-  answers what the extender would: INT 21h (files from an in-memory, case-insensitive directory;
-  written files handed to the host on close), INT 31h DPMI (descriptors, memory blocks,
-  protected-mode vectors), INT 10h/16h/33h, and the hardware a DOS game programs directly: the
-  8259s, the 8254, the keyboard controller, and a VGA with planar memory, unchained mode and CRTC
-  page flipping, which is how DOOM draws. The clock is injected (`now()`): wall time in the
-  worker, instruction count in tests, so a headless boot is the same run every time.
+- **`x86.js`** is a user-mode i386 with an x87, interpreted. No paging, rings or real mode: a DOS
+  extender's program runs in protected mode, and segment registers carry a base and a size. EIP is
+  kept linear and converted at the edges (a pushed return address, a loaded jump target) against
+  the code segment's base, ESP is an offset in SS: DOS/4GW's segments are all at 0, DJGPP's at the
+  program's memory block. A code segment whose descriptor is 16-bit decodes 16-bit (DJGPP's
+  start-up and exit run small 16-bit helpers in DOS memory). The page's CSP forbids eval, so there
+  is no JIT; speed comes from keeping every value an int32 (a `>>> 0` above 2^31 is a double and,
+  in a closure variable, an allocation), lazy flags recorded in an `Int32Array`, one try/catch
+  around the loop rather than each instruction, and 32-bit fast paths for the instructions
+  compilers emit most. The FPU keeps its stack in a Float64Array and converts operands through
+  typed-array views. About 90 million instructions a second on DOOM and 77 on Quake, in Node and in
+  a Chromium worker on this box (MEASUREMENTS §32, §33).
+- **`dospc.js`** is the machine, and it plays whichever DOS extender the program was bound to.
+  `boot()` tells them apart by the file: `loadLE` finds DOOM's LE executable inside the DOS/4GW
+  stub, loads it at +1 MB and applies its fixups; `parseCoff`/`bootCoff` find Quake's COFF image
+  behind the go32 stub and do what that stub leaves behind -- a memory block with the sections in
+  it, selectors based at it, a transfer buffer with the PSP right below it (DJGPP's libc finds the
+  PSP by subtracting 100h), and the "stubinfo" crt0 reads through FS. The extenders themselves never
+  run; this file answers INT 21h (files from an in-memory, case-insensitive directory tree, written
+  files handed to the host on close, and a real system file table, because DJGPP's `fstat` walks
+  it), INT 31h DPMI (descriptors with base and size, memory blocks, protected-mode vectors,
+  simulated real-mode interrupts), INT 10h/16h/33h, and the hardware a DOS game programs directly:
+  the 8259s, the 8254 (with the BIOS tick count kept in step with it, which DJGPP's `uclock` reads),
+  the keyboard controller, and a VGA with planar memory, unchained mode and CRTC page flipping (how
+  DOOM draws) as well as the linear window (how Quake does). The clock is injected (`now()`): wall
+  time in the worker, instruction count in tests, so a headless boot is the same run every time.
 - **`soundcard.js`** is a Sound Blaster Pro 2 at 220h/IRQ 7/DMA 1 — the DSP's command set and the
   8237 DMA controller it pulls samples through — and an OPL3 modelled as operators with
   documented envelope rates. `tick(t)` produces output for the machine time that passed and raises
   the end-of-block interrupt from inside the same loop.
-- **`doomworker.js`** runs the machine in ~10 ms slices, yielding between them so input arrives,
-  and sends a frame only when the CRTC start address or the palette changed. The frame buffer
-  bounces between the worker and the page so no frame allocates. Savegames and `default.cfg`
-  are kept in IndexedDB.
-- **`doom.js`** draws, captures input, pauses when the tab is not on screen (the worker's clock
-  stops, so nothing moves), and uses a ScriptProcessor when `audioWorklet` is unavailable — a
-  plain-HTTP LAN address is not a secure context.
+- **`dosworker.js`** takes a game's name, fetches its files (`dosio.js` `GAMES`), and runs the
+  machine in ~10 ms slices, yielding between them so input arrives. It sends a frame when the CRTC
+  start address or the palette changed, or once the linear window has been written and a slice has
+  passed without more writes (never half of Quake's copy). The frame buffer bounces between the
+  worker and the page so no frame allocates. Savegames and configs are kept in IndexedDB, one
+  database a game.
+- **`dosgame.js`** is a game's tab: it draws, captures input, pauses when the tab is not on screen
+  (the worker's clock stops, so nothing moves), and uses a ScriptProcessor when `audioWorklet` is
+  unavailable — a plain-HTTP LAN address is not a secure context. `doom.js` and `quake.js` give it
+  names, key lists and switches.
 
-The game files are served from `games/doom_dos/` by `server/http/doom.js`
-(`/doom/NAME`, 8.3 names of `.EXE`, `.WAD` and `.CFG` only, behind the session when accounts are
-on) rather than from `public/`, whose every file feeds the build id.
+The game files are served from `games/<game>_dos/` by `server/http/games.js`
+(`/games/<game>/<path>`: a game it names, at most one directory and 8.3 names of `.EXE`, `.WAD`,
+`.PAK` and `.CFG`, behind the session when accounts are on) rather than from `public/`, whose every
+file feeds the build id.
 
 ## 4. The 3D engine
 

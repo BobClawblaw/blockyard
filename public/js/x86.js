@@ -76,6 +76,15 @@ export function createCpu(bus) {
   let opEip = 0, os = S32, as32 = true, segOv = -1, rep = 0;
   let stop = false;
   let defBases = false;                 // DS or SS has a base other than 0
+  // CODE AND STACK BASES. EIP is kept LINEAR (fetch never adds a base); what the program sees -- a
+  // return address pushed, a jump target loaded -- is an offset from CS's base, converted at the
+  // edges. ESP is an offset from SS's base. Both are 0 under DOS/4GW; a DJGPP program's segments
+  // start at its memory block.
+  let csb = 0, ssb = 0;
+  let splitBases = false;               // DS and SS have different bases
+  // a 16-bit code segment (its descriptor's D bit clear) decodes with 16-bit operands and addresses
+  // unless a prefix says otherwise: DJGPP's start-up copies a small 16-bit helper into DOS memory
+  let cs16 = false;
 
   // ------------------------------------------------------------------ memory
   const rb = (a) => M[a & AMASK];
@@ -372,17 +381,18 @@ export function createCpu(bus) {
     const mod = mrm >> 6, rm = mrm & 7;
     let a;
     if (as32) {
-      let ss = false;
+      let baseReg = -1;
       if (rm === 4) {
         const sib = M[eip++], base = sib & 7, idx = (sib >> 3) & 7;
         a = idx === 4 ? 0 : R[idx] << (sib >> 6);
-        if (base === 5 && mod === 0) a = (a + f32()) | 0; else { a = (a + R[base]) | 0; ss = base === 4 || base === 5; }
+        if (base === 5 && mod === 0) a = (a + f32()) | 0; else { a = (a + R[base]) | 0; baseReg = base; }
       } else if (rm === 5 && mod === 0) a = f32();
-      else { a = R[rm]; ss = rm === 5; }
+      else { a = R[rm]; baseReg = rm; }
       if (mod === 1) a = (a + ((M[eip++] << 24) >> 24)) | 0; else if (mod === 2) a = (a + f32()) | 0;
       if (segOv >= 0) return (a + segBase[segOv]) | 0;
-      // a data segment with a base is rare (the C runtime's start-up reads its environment so)
-      if (defBases) a = (a + (ss ? segBase[SS] : segBase[DS])) | 0;
+      // DS and SS with a base: one addition when they share it (DJGPP's always do), and the stack's
+      // for an [esp]/[ebp] base only when they differ (the C runtime's start-up, for a moment)
+      if (defBases) a = (a + (splitBases && (baseReg === ESP || baseReg === EBP) ? segBase[SS] : segBase[DS])) | 0;
       return a;
     }
     switch (rm) {
@@ -418,15 +428,18 @@ export function createCpu(bus) {
   }
 
   // ------------------------------------------------------------------ stack
-  function push(v) { const sp = (R[ESP] - 4) | 0; R[ESP] = sp; wd(sp, v); }
-  function pop() { const sp = R[ESP]; R[ESP] = (sp + 4) | 0; return rd(sp); }
-  function pushS(s, v) { if (s === S16) { R[ESP] -= 2; ww(R[ESP], v); } else push(v); }
-  function popS(s) { if (s === S16) { const v = rw(R[ESP]); R[ESP] += 2; return v; } return pop(); }
+  function push(v) { const sp = (R[ESP] - 4) | 0; R[ESP] = sp; wd(sp + ssb, v); }
+  function pop() { const sp = R[ESP]; R[ESP] = (sp + 4) | 0; return rd(sp + ssb); }
+  function pushS(s, v) { if (s === S16) { R[ESP] -= 2; ww(R[ESP] + ssb, v); } else push(v); }
+  function popS(s) { if (s === S16) { const v = rw(R[ESP] + ssb); R[ESP] += 2; return v; } return pop(); }
 
   function loadSeg(i, sel) {
     seg[i] = sel & 0xffff;
     segBase[i] = bus.selectorBase(sel & 0xffff);
     defBases = segBase[DS] !== 0 || segBase[SS] !== 0;
+    csb = segBase[CS]; ssb = segBase[SS];
+    splitBases = segBase[DS] !== segBase[SS];
+    if (i === CS) cs16 = bus.selectorIs16?.(sel & 0xffff) === true;
   }
 
   // ------------------------------------------------------------------ interrupts
@@ -435,10 +448,10 @@ export function createCpu(bus) {
     if (!v) throw new CpuFault(`no handler for INT ${n.toString(16)}`, opEip);
     push(getFlags());
     push(seg[CS]);
-    push(retEip);
+    push((retEip - csb) | 0);
     flags &= ~0x300;                   // IF and TF off in the handler
     loadSeg(CS, v.sel);
-    eip = v.off >>> 0;
+    eip = (v.off + csb) >>> 0;
   }
   function softInt(n) {
     if (bus.softInt(api, n)) return;
@@ -533,16 +546,24 @@ export function createCpu(bus) {
   }
 
   // ------------------------------------------------------------------ the FPU
-  // A small x87: enough for a C runtime that probes for a coprocessor and prints the odd float.
-  const fpu = { st: new Float64Array(8), top: 0, cw: 0x37f, sw: 0, tag: 0xffff };
-  const fst = (i) => fpu.st[(fpu.top + i) & 7];
-  const fset = (i, v) => { fpu.st[(fpu.top + i) & 7] = v; };
-  function fpush(v) { fpu.top = (fpu.top - 1) & 7; fpu.st[fpu.top] = v; fpu.tag &= ~(3 << (fpu.top * 2)); }
-  function fpop() { const v = fpu.st[fpu.top]; fpu.tag |= 3 << (fpu.top * 2); fpu.top = (fpu.top + 1) & 7; return v; }
-  const fbuf = new DataView(new ArrayBuffer(8));
+  // An x87, in doubles. DOOM's C runtime only probes for one; Quake does its geometry, its lighting
+  // and a divide every sixteen pixels of every span in floating point, so this sits on the hot path
+  // too: the stack is a Float64Array indexed from `ftop`, and memory operands are converted through
+  // typed-array views of one scratch buffer rather than a DataView. Precision control is not modelled
+  // (every result is a double); rounding control is, because fist/fistp depend on it.
+  const ST = new Float64Array(8);
+  let ftop = 0, fcw = 0x37f, fsw = 0, ftag = 0xffff;
+  const scratch = new ArrayBuffer(8);
+  const sI32 = new Int32Array(scratch), sF32 = new Float32Array(scratch, 0, 1), sF64 = new Float64Array(scratch);
+  const K_F32 = 0, K_F64 = 1, K_I16 = 2, K_I32 = 3, K_I64 = 4, K_F80 = 5;
+  function fpush(v) { ftop = (ftop - 1) & 7; ST[ftop] = v; ftag &= ~(3 << (ftop * 2)); }
+  function fpop() { const v = ST[ftop]; ftag |= 3 << (ftop * 2); ftop = (ftop + 1) & 7; return v; }
   function fround(v) {
-    switch ((fpu.cw >> 10) & 3) {
-      case 0: { const r = Math.round(v); return (Math.abs(v % 1) === 0.5 && r % 2 !== 0) ? r - 1 : r; }
+    switch ((fcw >> 10) & 3) {
+      case 0: {
+        const r = Math.round(v);
+        return r - v === 0.5 && (r & 1) !== 0 ? r - 1 : r;      // ties to even: Math.round sends .5 up
+      }
       case 1: return Math.floor(v);
       case 2: return Math.ceil(v);
       default: return Math.trunc(v);
@@ -550,18 +571,18 @@ export function createCpu(bus) {
   }
   function fcompare(a, b) {
     let c;
-    if (Number.isNaN(a) || Number.isNaN(b)) c = 0x4500; else if (a > b) c = 0; else if (a < b) c = 0x100; else c = 0x4000;
-    fpu.sw = (fpu.sw & ~0x4700) | c;
+    if (a > b) c = 0; else if (a < b) c = 0x100; else if (a === b) c = 0x4000; else c = 0x4500;
+    fsw = (fsw & ~0x4700) | c;
   }
-  function fswWord() { return (fpu.sw & ~0x3800) | (fpu.top << 11); }
+  const fswWord = () => (fsw & ~0x3800) | (ftop << 11);
   function readReal(a, kind) {
     switch (kind) {
-      case 'f32': fbuf.setInt32(0, rd(a), true); return fbuf.getFloat32(0, true);
-      case 'f64': fbuf.setInt32(0, rd(a), true); fbuf.setInt32(4, rd(a + 4), true); return fbuf.getFloat64(0, true);
-      case 'i16': return (rw(a) << 16) >> 16;
-      case 'i32': return rd(a);
-      case 'i64': return rd(a + 4) * 4294967296 + (rd(a) >>> 0);
-      default: { // 80-bit extended
+      case K_F32: sI32[0] = rd(a); return sF32[0];
+      case K_F64: sI32[0] = rd(a); sI32[1] = rd(a + 4); return sF64[0];
+      case K_I16: return (rw(a) << 16) >> 16;
+      case K_I32: return rd(a);
+      case K_I64: return rd(a + 4) * 4294967296 + (rd(a) >>> 0);
+      default: {
         const lo = rd(a) >>> 0, hi = rd(a + 4) >>> 0, se = rw(a + 8);
         const e = se & 0x7fff, sgn = se & 0x8000 ? -1 : 1;
         if (e === 0 && lo === 0 && hi === 0) return sgn * 0;
@@ -572,11 +593,11 @@ export function createCpu(bus) {
   }
   function writeReal(a, kind, v) {
     switch (kind) {
-      case 'f32': fbuf.setFloat32(0, v, true); wd(a, fbuf.getInt32(0, true)); return;
-      case 'f64': fbuf.setFloat64(0, v, true); wd(a, fbuf.getInt32(0, true)); wd(a + 4, fbuf.getInt32(4, true)); return;
-      case 'i16': { const r = fround(v); ww(a, Number.isFinite(r) && r >= -32768 && r <= 32767 ? r : 0x8000); return; }
-      case 'i32': { const r = fround(v); wd(a, Number.isFinite(r) && r >= -2147483648 && r <= 2147483647 ? r : -0x80000000); return; }
-      case 'i64': {
+      case K_F32: sF32[0] = v; wd(a, sI32[0]); return;
+      case K_F64: sF64[0] = v; wd(a, sI32[0]); wd(a + 4, sI32[1]); return;
+      case K_I16: { const r = fround(v); ww(a, r >= -32768 && r <= 32767 ? r : 0x8000); return; }
+      case K_I32: { const r = fround(v); wd(a, r >= -2147483648 && r <= 2147483647 ? r : -0x80000000); return; }
+      case K_I64: {
         const r = fround(v);
         const b = Number.isFinite(r) && Math.abs(r) < 9.2e18 ? BigInt.asUintN(64, BigInt(r)) : 1n << 63n;
         wd(a, Number(b & 0xffffffffn)); wd(a + 4, Number(b >> 32n));
@@ -597,6 +618,7 @@ export function createCpu(bus) {
       }
     }
   }
+  // the D8/DC/DA/DE row's operation on (a, b): add, mul, -, -, sub (a-b), subr (b-a), div, divr
   function farith(sub, a, b) {
     switch (sub) {
       case 0: return a + b;
@@ -607,7 +629,7 @@ export function createCpu(bus) {
       default: return b / a;
     }
   }
-  const swapRev = (reg) => (reg === 4 ? 5 : reg === 5 ? 4 : reg === 6 ? 7 : reg === 7 ? 6 : reg);
+  const ROW_KIND = { 0xd8: K_F32, 0xdc: K_F64, 0xda: K_I32, 0xde: K_I16 };
   function fpuOp(op) {
     mrm = M[eip++];
     const reg = (mrm >> 3) & 7;
@@ -615,71 +637,89 @@ export function createCpu(bus) {
       const a = ea();
       switch (op) {
         case 0xd8: case 0xdc: case 0xda: case 0xde: {
-          const v = readReal(a, op === 0xd8 ? 'f32' : op === 0xdc ? 'f64' : op === 0xda ? 'i32' : 'i16');
-          if (reg === 2 || reg === 3) { fcompare(fst(0), v); if (reg === 3) fpop(); } else fset(0, farith(reg, fst(0), v));
+          const v = readReal(a, ROW_KIND[op]);
+          if (reg === 2 || reg === 3) { fcompare(ST[ftop], v); if (reg === 3) fpop(); } else ST[ftop] = farith(reg, ST[ftop], v);
           return;
         }
         case 0xd9:
           switch (reg) {
-            case 0: fpush(readReal(a, 'f32')); return;
-            case 2: writeReal(a, 'f32', fst(0)); return;
-            case 3: writeReal(a, 'f32', fpop()); return;
-            case 4: return;
-            case 5: fpu.cw = rw(a); return;
-            case 6: for (let i = 0; i < 28; i++) wb(a + i, 0); ww(a, fpu.cw); ww(a + 4, fswWord()); ww(a + 8, fpu.tag); return;
-            case 7: ww(a, fpu.cw); return;
+            case 0: fpush(readReal(a, K_F32)); return;
+            case 2: writeReal(a, K_F32, ST[ftop]); return;
+            case 3: writeReal(a, K_F32, fpop()); return;
+            case 4: fcw = rw(a) | 0x40; fsw = rw(a + 4); ftop = (fsw >> 11) & 7; ftag = rw(a + 8); return;   // FLDENV
+            case 5: fcw = rw(a); return;                                                                  // FLDCW
+            case 6: for (let i = 0; i < 28; i++) wb(a + i, 0); ww(a, fcw); ww(a + 4, fswWord()); ww(a + 8, ftag); return;
+            case 7: ww(a, fcw); return;                                                                   // FNSTCW
           }
           break;
         case 0xdb:
           switch (reg) {
-            case 0: fpush(readReal(a, 'i32')); return;
-            case 2: writeReal(a, 'i32', fst(0)); return;
-            case 3: writeReal(a, 'i32', fpop()); return;
-            case 5: fpush(readReal(a, 'f80')); return;
-            case 7: writeReal(a, 'f80', fpop()); return;
+            case 0: fpush(readReal(a, K_I32)); return;
+            case 1: { const v = fpop(); wd(a, Number.isFinite(v) && Math.abs(v) < 2147483648 ? Math.trunc(v) : -0x80000000); return; }
+            case 2: writeReal(a, K_I32, ST[ftop]); return;
+            case 3: writeReal(a, K_I32, fpop()); return;
+            case 5: fpush(readReal(a, K_F80)); return;
+            case 7: writeReal(a, K_F80, fpop()); return;
           }
           break;
         case 0xdd:
           switch (reg) {
-            case 0: fpush(readReal(a, 'f64')); return;
-            case 2: writeReal(a, 'f64', fst(0)); return;
-            case 3: writeReal(a, 'f64', fpop()); return;
-            case 4: return;
-            case 6: for (let i = 0; i < 94; i++) wb(a + i, 0); ww(a, fpu.cw); ww(a + 4, fswWord()); fpu.top = 0; fpu.tag = 0xffff; return;
+            case 0: fpush(readReal(a, K_F64)); return;
+            case 2: writeReal(a, K_F64, ST[ftop]); return;
+            case 3: writeReal(a, K_F64, fpop()); return;
+            case 4:                                                                                      // FRSTOR
+              fcw = rw(a); fsw = rw(a + 4); ftop = (fsw >> 11) & 7; ftag = rw(a + 8);
+              for (let i = 0; i < 8; i++) ST[(ftop + i) & 7] = readReal(a + 28 + i * 10, K_F80);
+              return;
+            case 6:                                                                                      // FNSAVE
+              for (let i = 0; i < 28; i++) wb(a + i, 0);
+              ww(a, fcw); ww(a + 4, fswWord()); ww(a + 8, ftag);
+              for (let i = 0; i < 8; i++) writeReal(a + 28 + i * 10, K_F80, ST[(ftop + i) & 7]);
+              fcw = 0x37f; fsw = 0; ftop = 0; ftag = 0xffff;
+              return;
             case 7: ww(a, fswWord()); return;
           }
           break;
         case 0xdf:
           switch (reg) {
-            case 0: fpush(readReal(a, 'i16')); return;
-            case 2: writeReal(a, 'i16', fst(0)); return;
-            case 3: writeReal(a, 'i16', fpop()); return;
-            case 5: fpush(readReal(a, 'i64')); return;
-            case 7: writeReal(a, 'i64', fpop()); return;
+            case 0: fpush(readReal(a, K_I16)); return;
+            case 2: writeReal(a, K_I16, ST[ftop]); return;
+            case 3: writeReal(a, K_I16, fpop()); return;
+            case 5: fpush(readReal(a, K_I64)); return;
+            case 7: writeReal(a, K_I64, fpop()); return;
           }
           break;
       }
       throw new CpuFault(`FPU ${op.toString(16)} /${reg}`, opEip);
     }
-    const i = mrm & 7;
+    const i = (ftop + (mrm & 7)) & 7;
     switch (op) {
-      case 0xd8: if (reg === 2 || reg === 3) { fcompare(fst(0), fst(i)); if (reg === 3) fpop(); } else fset(0, farith(reg, fst(0), fst(i))); return;
-      case 0xdc: if (reg === 2 || reg === 3) { fcompare(fst(0), fst(i)); if (reg === 3) fpop(); } else fset(i, farith(swapRev(reg), fst(i), fst(0))); return;
+      case 0xd8:
+        if (reg === 2 || reg === 3) { fcompare(ST[ftop], ST[i]); if (reg === 3) fpop(); } else ST[ftop] = farith(reg, ST[ftop], ST[i]);
+        return;
+      case 0xdc:
+        if (reg === 2 || reg === 3) { fcompare(ST[ftop], ST[i]); if (reg === 3) fpop(); return; }
+        ST[i] = farith(reg === 4 ? 5 : reg === 5 ? 4 : reg === 6 ? 7 : reg === 7 ? 6 : reg, ST[i], ST[ftop]);
+        return;
       case 0xde:
-        if (reg === 3 && i === 1) { fcompare(fst(0), fst(1)); fpop(); fpop(); return; }
-        fset(i, farith(swapRev(reg), fst(i), fst(0))); fpop();
+        if (mrm === 0xd9) { fcompare(ST[ftop], ST[(ftop + 1) & 7]); fpop(); fpop(); return; }       // FCOMPP
+        if (reg === 2 || reg === 3) { fcompare(ST[ftop], ST[i]); fpop(); return; }
+        ST[i] = farith(reg === 4 ? 5 : reg === 5 ? 4 : reg === 6 ? 7 : reg === 7 ? 6 : reg, ST[i], ST[ftop]);
+        fpop();
         return;
       case 0xd9:
-        if (reg === 0) { fpush(fst(i)); return; }
-        if (reg === 1) { const t = fst(0); fset(0, fst(i)); fset(i, t); return; }
+        if (reg === 0) { fpush(ST[i]); return; }                                                    // FLD ST(i)
+        if (reg === 1) { const t = ST[ftop]; ST[ftop] = ST[i]; ST[i] = t; return; }                  // FXCH
         switch (mrm) {
           case 0xd0: return;
-          case 0xe0: fset(0, -fst(0)); return;
-          case 0xe1: fset(0, Math.abs(fst(0))); return;
-          case 0xe4: fcompare(fst(0), 0); return;
+          case 0xe0: ST[ftop] = -ST[ftop]; return;
+          case 0xe1: ST[ftop] = Math.abs(ST[ftop]); return;
+          case 0xe4: fcompare(ST[ftop], 0); return;
           case 0xe5: {
-            const empty = ((fpu.tag >> (fpu.top * 2)) & 3) === 3;
-            fpu.sw = (fpu.sw & ~0x4700) | (empty ? 0x4100 : ((fst(0) < 0 ? 0x200 : 0) | (fst(0) === 0 ? 0x4000 : 0x400)));
+            const empty = ((ftag >> (ftop * 2)) & 3) === 3, v = ST[ftop];
+            const sign = v < 0 || Object.is(v, -0) ? 0x200 : 0;
+            const cls = empty ? 0x4100 : Number.isNaN(v) ? 0x100 : !Number.isFinite(v) ? 0x500 : v === 0 ? 0x4000 : 0x400;
+            fsw = (fsw & ~0x4700) | cls | sign;
             return;
           }
           case 0xe8: fpush(1); return;
@@ -689,39 +729,45 @@ export function createCpu(bus) {
           case 0xec: fpush(Math.log10(2)); return;
           case 0xed: fpush(Math.LN2); return;
           case 0xee: fpush(0); return;
-          case 0xf0: fset(0, Math.pow(2, fst(0)) - 1); return;
-          case 0xf1: { const x = fpop(); fset(0, fst(0) * Math.log2(x)); return; }
-          case 0xf2: fset(0, Math.tan(fst(0))); fpush(1); return;
-          case 0xf3: { const x = fpop(); fset(0, Math.atan2(fst(0), x)); return; }
-          case 0xf4: { const x = fst(0); const e = x === 0 ? 0 : Math.floor(Math.log2(Math.abs(x))); fset(0, e); fpush(x / Math.pow(2, e)); return; }
-          case 0xf5: case 0xf8: { const a = fst(0), b = fst(1); const q = Math.trunc(a / b); fset(0, a - q * b); fpu.sw &= ~0x4700; return; }
-          case 0xf6: fpu.top = (fpu.top - 1) & 7; return;
-          case 0xf7: fpu.top = (fpu.top + 1) & 7; return;
-          case 0xfa: fset(0, Math.sqrt(fst(0))); return;
-          case 0xfb: { const x = fst(0); fset(0, Math.sin(x)); fpush(Math.cos(x)); return; }
-          case 0xfc: fset(0, fround(fst(0))); return;
-          case 0xfd: fset(0, fst(0) * Math.pow(2, Math.trunc(fst(1)))); return;
-          case 0xfe: fset(0, Math.sin(fst(0))); return;
-          case 0xff: fset(0, Math.cos(fst(0))); return;
+          case 0xf0: ST[ftop] = Math.pow(2, ST[ftop]) - 1; return;
+          case 0xf1: { const x = fpop(); ST[ftop] = ST[ftop] * Math.log2(x); return; }
+          case 0xf2: ST[ftop] = Math.tan(ST[ftop]); fpush(1); return;
+          case 0xf3: { const x = fpop(); ST[ftop] = Math.atan2(ST[ftop], x); return; }
+          case 0xf4: { const x = ST[ftop]; const e = x === 0 ? 0 : Math.floor(Math.log2(Math.abs(x))); ST[ftop] = e; fpush(x / Math.pow(2, e)); return; }
+          case 0xf5: case 0xf8: {
+            const a = ST[ftop], b = ST[(ftop + 1) & 7];
+            const q = mrm === 0xf8 ? Math.trunc(a / b) : Math.round(a / b);
+            ST[ftop] = a - q * b;
+            fsw = (fsw & ~0x4700) | ((q & 1) ? 0x200 : 0) | ((q & 2) ? 0x4000 : 0) | ((q & 4) ? 0x100 : 0);
+            return;
+          }
+          case 0xf6: ftop = (ftop - 1) & 7; return;
+          case 0xf7: ftop = (ftop + 1) & 7; return;
+          case 0xfa: ST[ftop] = Math.sqrt(ST[ftop]); return;
+          case 0xfb: { const x = ST[ftop]; ST[ftop] = Math.sin(x); fpush(Math.cos(x)); return; }
+          case 0xfc: ST[ftop] = fround(ST[ftop]); return;
+          case 0xfd: ST[ftop] = ST[ftop] * Math.pow(2, Math.trunc(ST[(ftop + 1) & 7])); return;
+          case 0xfe: ST[ftop] = Math.sin(ST[ftop]); return;
+          case 0xff: ST[ftop] = Math.cos(ST[ftop]); return;
         }
         break;
       case 0xdd:
-        if (reg === 0) { fpu.tag |= 3 << (((fpu.top + i) & 7) * 2); return; }
-        if (reg === 2) { fset(i, fst(0)); return; }
-        if (reg === 3) { fset(i, fst(0)); fpop(); return; }
-        if (reg === 4 || reg === 5) { fcompare(fst(0), fst(i)); if (reg === 5) fpop(); return; }
+        if (reg === 0) { ftag |= 3 << (i * 2); return; }                                             // FFREE
+        if (reg === 2) { ST[i] = ST[ftop]; return; }                                                  // FST ST(i)
+        if (reg === 3) { ST[i] = ST[ftop]; fpop(); return; }                                          // FSTP ST(i)
+        if (reg === 4 || reg === 5) { fcompare(ST[ftop], ST[i]); if (reg === 5) fpop(); return; }     // FUCOM(P)
         break;
       case 0xdb:
-        if (mrm === 0xe2) { fpu.sw &= 0x7f00; return; }
-        if (mrm === 0xe3) { fpu.cw = 0x37f; fpu.sw = 0; fpu.top = 0; fpu.tag = 0xffff; return; }
+        if (mrm === 0xe2) { fsw &= 0x7f00; return; }
+        if (mrm === 0xe3) { fcw = 0x37f; fsw = 0; ftop = 0; ftag = 0xffff; return; }
         if (mrm === 0xe0 || mrm === 0xe1 || mrm === 0xe4) return;
         break;
       case 0xdf:
         if (mrm === 0xe0) { setR(S16, EAX, fswWord()); return; }
-        if (reg === 0) { fpu.tag |= 3 << (((fpu.top + i) & 7) * 2); fpop(); return; }
+        if (reg === 0) { ftag |= 3 << (i * 2); fpop(); return; }
         break;
       case 0xda:
-        if (mrm === 0xe9) { fcompare(fst(0), fst(1)); fpop(); fpop(); return; }
+        if (mrm === 0xe9) { fcompare(ST[ftop], ST[(ftop + 1) & 7]); fpop(); fpop(); return; }
         break;
     }
     throw new CpuFault(`FPU ${op.toString(16)} ${mrm.toString(16)}`, opEip);
@@ -732,11 +778,12 @@ export function createCpu(bus) {
     opEip = eip;
     let op = M[eip++];
     os = S32; as32 = true; segOv = -1; rep = 0;
+    if (cs16) { os = S16; as32 = false; }
     if (PREFIX[op] === 1) {
       for (;;) {
         switch (op) {
-          case 0x66: os = S16; break;
-          case 0x67: as32 = false; break;
+          case 0x66: os = cs16 ? S32 : S16; break;
+          case 0x67: as32 = cs16; break;
           case 0x26: segOv = ES; break;
           case 0x2e: segOv = CS; break;
           case 0x36: segOv = SS; break;
@@ -945,7 +992,7 @@ export function createCpu(bus) {
       }
       case 0x98: if (os === S32) R[EAX] = (R[EAX] << 16) >> 16; else setR(S16, EAX, (R[EAX] << 24) >> 24); return;
       case 0x99: if (os === S32) R[EDX] = R[EAX] >> 31; else setR(S16, EDX, (R[EAX] << 16) >> 31); return;
-      case 0x9a: { const off = os === S32 ? f32() : f16(); const sel = f16(); pushS(os, seg[CS]); pushS(os, eip); loadSeg(CS, sel); eip = off >>> 0; return; }
+      case 0x9a: { const off = os === S32 ? f32() : f16(); const sel = f16(); pushS(os, seg[CS]); pushS(os, eip - csb); loadSeg(CS, sel); eip = (off + csb) >>> 0; return; }
       case 0x9b: return;
       case 0x9c: pushS(os, getFlags() & 0xfcffff); return;
       case 0x9d: { const v = popS(os); setFlags(os === S16 ? (getFlags() & ~0xffff) | v : v); return; }
@@ -977,8 +1024,8 @@ export function createCpu(bus) {
         storeE(s, shift((mrm >> 3) & 7, v, cnt, s));
         return;
       }
-      case 0xc2: { const n = f16(); eip = popS(os) >>> 0; R[ESP] += n; return; }
-      case 0xc3: eip = os === S32 ? pop() >>> 0 : popS(S16); return;
+      case 0xc2: { const n = f16(); eip = (popS(os) + csb) >>> 0; R[ESP] += n; return; }
+      case 0xc3: eip = ((os === S32 ? pop() : popS(S16)) + csb) >>> 0; return;
       case 0xc4: case 0xc5: {
         mrm = M[eip++];
         const a = ea();
@@ -998,21 +1045,22 @@ export function createCpu(bus) {
         const size = f16(), level = M[eip++] & 31;
         pushS(os, getR(os, EBP));
         const frame = R[ESP];
-        for (let i = 1; i < level; i++) { R[EBP] -= os === S32 ? 4 : 2; pushS(os, os === S32 ? rd(R[EBP]) : rw(R[EBP])); }
+        for (let i = 1; i < level; i++) { R[EBP] -= os === S32 ? 4 : 2; pushS(os, os === S32 ? rd(R[EBP] + ssb) : rw(R[EBP] + ssb)); }
         if (level > 0) pushS(os, frame);
         setR(os, EBP, frame);
         R[ESP] -= size;
         return;
       }
       case 0xc9: R[ESP] = R[EBP]; setR(os, EBP, popS(os)); return;
-      case 0xca: { const n = f16(); eip = popS(os) >>> 0; loadSeg(CS, popS(os)); R[ESP] += n; return; }
-      case 0xcb: eip = popS(os) >>> 0; loadSeg(CS, popS(os)); return;
+      case 0xca: { const n = f16(); const off = popS(os); loadSeg(CS, popS(os)); eip = (off + csb) >>> 0; R[ESP] += n; return; }
+      case 0xcb: { const off = popS(os); loadSeg(CS, popS(os)); eip = (off + csb) >>> 0; return; }
       case 0xcc: softInt(3); return;
       case 0xcd: softInt(M[eip++]); return;
       case 0xce: if (getOF()) softInt(4); return;
       case 0xcf: {
-        eip = popS(os) >>> 0;
+        const off = popS(os);
         loadSeg(CS, popS(os));
+        eip = (off + csb) >>> 0;
         const f = popS(os);
         setFlags(os === S16 ? (getFlags() & ~0xffff) | f : f);
         return;
@@ -1039,12 +1087,12 @@ export function createCpu(bus) {
       case 0xe6: bus.portOut(M[eip++], S8, R[EAX] & 0xff); return;
       case 0xe7: bus.portOut(M[eip++], os, getR(os, EAX)); return;
       case 0xe8: {
-        if (os === S32) { const d = f32(); push(eip); eip = (eip + d) >>> 0; return; }
-        const d = (f16() << 16) >> 16; pushS(S16, eip); eip = (eip + d) >>> 0;
+        if (os === S32) { const d = f32(); push(eip - csb); eip = (eip + d) >>> 0; return; }
+        const d = (f16() << 16) >> 16; pushS(S16, eip - csb); eip = (eip + d) >>> 0;
         return;
       }
       case 0xe9: { const d = os === S32 ? f32() : (f16() << 16) >> 16; eip = (eip + d) >>> 0; return; }
-      case 0xea: { const off = os === S32 ? f32() : f16(); const sel = f16(); loadSeg(CS, sel); eip = off >>> 0; return; }
+      case 0xea: { const off = os === S32 ? f32() : f16(); const sel = f16(); loadSeg(CS, sel); eip = (off + csb) >>> 0; return; }
       case 0xeb: { const d = (M[eip++] << 24) >> 24; eip += d; return; }
       case 0xec: set8(0, bus.portIn(R[EDX] & 0xffff, S8)); return;
       case 0xed: setR(os, EAX, bus.portIn(R[EDX] & 0xffff, os)); return;
@@ -1072,10 +1120,10 @@ export function createCpu(bus) {
         switch ((mrm >> 3) & 7) {
           case 0: storeE(os, inc(loadE(os), os)); return;
           case 1: storeE(os, dec(loadE(os), os)); return;
-          case 2: { const t = loadE(os); pushS(os, eip); eip = t >>> 0; return; }
-          case 3: { const a = ea(); const off = os === S32 ? rd(a) >>> 0 : rw(a); const sel = rw(a + (os === S32 ? 4 : 2)); pushS(os, seg[CS]); pushS(os, eip); loadSeg(CS, sel); eip = off; return; }
-          case 4: eip = loadE(os) >>> 0; return;
-          case 5: { const a = ea(); const off = os === S32 ? rd(a) >>> 0 : rw(a); const sel = rw(a + (os === S32 ? 4 : 2)); loadSeg(CS, sel); eip = off; return; }
+          case 2: { const t = loadE(os); pushS(os, eip - csb); eip = (t + csb) >>> 0; return; }
+          case 3: { const a = ea(); const off = os === S32 ? rd(a) : rw(a); const sel = rw(a + (os === S32 ? 4 : 2)); pushS(os, seg[CS]); pushS(os, eip - csb); loadSeg(CS, sel); eip = (off + csb) >>> 0; return; }
+          case 4: eip = (loadE(os) + csb) >>> 0; return;
+          case 5: { const a = ea(); const off = os === S32 ? rd(a) : rw(a); const sel = rw(a + (os === S32 ? 4 : 2)); loadSeg(CS, sel); eip = (off + csb) >>> 0; return; }
           case 6: pushS(os, loadE(os)); return;
         }
         throw new CpuFault('FF /7', opEip);
@@ -1270,7 +1318,7 @@ export function createCpu(bus) {
     interrupt(n) { halted = false; interrupt(n, eip); },
     stop() { stop = true; },
     run, step,
-    fpu,
+    get fpu() { return { st: Array.from({ length: 8 }, (_, k) => ST[(ftop + k) & 7]), top: ftop, cw: fcw, sw: fswWord() }; },
   };
   return api;
 }

@@ -1,20 +1,36 @@
-// THE DOOM DIVERSION'S PC (public/js/dospc.js, soundcard.js): the executable loader, the hardware a
-// DOS game programs directly, and -- when the shareware files are present -- DOOM.EXE itself,
-// booted headless on a clock that counts instructions, so every run is the same run.
+// THE DOS DIVERSIONS' PC (public/js/dospc.js, soundcard.js): the executable loaders, the hardware a
+// DOS game programs directly, and -- when the shareware files are present -- DOOM.EXE and QUAKE.EXE
+// themselves, booted headless on a clock that counts instructions, so every run is the same run.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPC, loadLE, MEM_SIZE } from '../public/js/dospc.js';
+import { createPC, loadLE, parseCoff, MEM_SIZE } from '../public/js/dospc.js';
 import { createSoundCard, Opl3, oplRateTimes } from '../public/js/soundcard.js';
-import { rebindKeys, withControls } from '../public/js/doomio.js';
+import { rebindKeys, withControls } from '../public/js/dosio.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DOOM = path.join(ROOT, 'games', 'doom_dos');
 const haveDoom = fs.existsSync(path.join(DOOM, 'DOOM.EXE')) && fs.existsSync(path.join(DOOM, 'DOOM1.WAD'));
 // Not silently green without the files: the skip names what is missing.
 const needDoom = haveDoom ? {} : { skip: 'games/doom_dos/DOOM.EXE and DOOM1.WAD are not in this checkout' };
+
+const QUAKE = path.join(ROOT, 'games', 'quake_dos');
+const haveQuake = fs.existsSync(path.join(QUAKE, 'QUAKE.EXE')) && fs.existsSync(path.join(QUAKE, 'ID1', 'PAK0.PAK'));
+const needQuake = haveQuake ? {} : { skip: 'games/quake_dos/QUAKE.EXE and ID1/PAK0.PAK are not in this checkout' };
+function quakeFiles() {
+  const out = {};
+  const walk = (dir, pre) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith('.')) continue;
+      if (e.isDirectory()) walk(path.join(dir, e.name), `${pre}${e.name}/`);
+      else out[`${pre}${e.name}`] = new Uint8Array(fs.readFileSync(path.join(dir, e.name)));
+    }
+  };
+  walk(QUAKE, '');
+  return out;
+}
 
 function doomFiles() {
   const out = {};
@@ -71,7 +87,38 @@ test('DOOM.EXE boots: DOS/4GW is believed, the zone is allocated, the WAD is rea
   assert.equal(dv.getInt32(entries.key_strafeleft + 16, true), 30, 'and the scancode DOOM writes back to its config on quit');
 });
 
-// ------------------------------------------------------------------ the hardware, without DOOM
+// ------------------------------------------------------------------ with QUAKE.EXE
+test('QUAKE.EXE is a DJGPP COFF image behind a go32 stub, and parses as one', needQuake, () => {
+  const img = parseCoff(new Uint8Array(fs.readFileSync(path.join(QUAKE, 'QUAKE.EXE'))));
+  assert.ok(img, 'found');
+  assert.equal(img.coff, 0x800, 'the stub is 2048 bytes');
+  assert.equal(img.entry, 0x10a8);
+  assert.deepEqual(img.sections.map((x) => x.name), ['.text', '.data', '.bss']);
+  assert.equal(img.size, 0xdc000, 'text, data and bss, to a page');
+  assert.equal(img.minkeep, 0x4000, 'a 16 KB transfer buffer, as the stub asks');
+  assert.equal(loadLE === undefined, false);
+  assert.equal(parseCoff(new Uint8Array(fs.readFileSync(path.join(DOOM, 'DOOM.EXE')))), null, 'DOOM.EXE is not one: it goes to the LE loader');
+});
+
+test('QUAKE.EXE boots: the stub and CWSDPMI are believed, the PAK is read, the Sound Blaster found, frames drawn', needQuake, () => {
+  let pc;
+  const now = () => (pc ? pc.cpu.cycles : 0) / 30e6 * 1000;
+  pc = createPC({ files: quakeFiles(), now, args: '-nocdaudio', sound: (mem) => createSoundCard({ mem, rate: 11025 }) });
+  const info = pc.boot(new Uint8Array(fs.readFileSync(path.join(QUAKE, 'QUAKE.EXE'))));
+  assert.equal(info.kind, 'djgpp');
+  let n = 0;
+  while (pc.vga.writes < 64000 * 20 && n < 600e6 && !pc.exited) n += pc.run(5e6);
+  const out = String.fromCharCode(...pc.stdout);
+  assert.match(out, /malloc'd: \d+/, 'the heap, from most of what DPMI reported free');
+  assert.match(out, /Added packfile c:\/id1\/pak0\.pak \(339 files\)/, 'fstat through the SFT, then the whole PAK');
+  assert.match(out, /Playing shareware version/);
+  assert.equal(pc.vga.mode, 0x13);
+  assert.ok(pc.vga.writes >= 64000 * 20, `twenty screens copied to the VGA after ${n} instructions`);
+  assert.ok(new Set(pc.renderIndexed(new Uint8Array(64000))).size > 30, 'a picture, not a blank page');
+  assert.deepEqual([...pc.unhandled], [], 'no DOS, DPMI, BIOS or mouse call went unanswered');
+});
+
+// ------------------------------------------------------------------ the hardware, without the games
 function barePC() {
   const pc = createPC({ files: { 'A.TXT': new TextEncoder().encode('hello') } });
   return pc;
@@ -131,14 +178,14 @@ test('DOS files: open, read, seek, and a written file handed to the host when it
   const { cpu, mem } = pc;
   const name = (s, at) => mem.set([...new TextEncoder().encode(s), 0], at);
   const int21 = () => { mem.set([0xcd, 0x21, 0xf4], 0x2000); cpu.eip = 0x2000; cpu.run(2); };
-  name('C:\\DOOM\\a.txt', 0x4000);
+  name('C:\\a.txt', 0x4000);
   cpu.R[0] = 0x3d00; cpu.R[2] = 0x4000; int21();
   const h = cpu.R[0] & 0xffff;
   assert.ok(h >= 5, 'a handle past the standard five');
   cpu.R[0] = 0x4200; cpu.R[3] = h; cpu.R[1] = 0; cpu.R[2] = 6; int21();
   cpu.R[0] = 0x3f00; cpu.R[3] = h; cpu.R[1] = 5; cpu.R[2] = 0x5000; int21();
   assert.equal(cpu.R[0], 5);
-  assert.equal(new TextDecoder().decode(mem.subarray(0x5000, 0x5005)), 'world', 'case-insensitive, drive and directory ignored, after the seek');
+  assert.equal(new TextDecoder().decode(mem.subarray(0x5000, 0x5005)), 'world', 'case-insensitive, the drive is the game\'s directory, after the seek');
   name('DOOMSAV0.DSG', 0x4000);
   cpu.R[0] = 0x3c00; cpu.R[1] = 0; cpu.R[2] = 0x4000; int21();
   const w = cpu.R[0] & 0xffff;
@@ -147,6 +194,26 @@ test('DOS files: open, read, seek, and a written file handed to the host when it
   assert.deepEqual(written, [], 'nothing is handed over while the file is open');
   cpu.R[0] = 0x3e00; cpu.R[3] = w; int21();
   assert.deepEqual(written, [['DOOMSAV0.DSG', 'saved!']]);
+  // DIRECTORIES: Quake keeps its data in ID1\ and writes its config and saves there
+  pc.dir.set('ID1/PAK0.PAK', new TextEncoder().encode('PACK'));
+  name('.\\id1\\..\\ID1\\pak0.pak', 0x4000);
+  cpu.R[0] = 0x3d00; cpu.R[2] = 0x4000; int21();
+  assert.equal(cpu.flags & 1, 0, 'dot and dot-dot resolve, backslashes and case do not matter');
+  name('id1', 0x4000);
+  cpu.R[0] = 0x4300; cpu.R[2] = 0x4000; int21();
+  assert.equal(cpu.R[1] & 0xffff, 0x10, 'a directory a file implies reports itself as one');
+  name('ID1\\*.PAK', 0x4000);
+  cpu.R[0] = 0x1a00; cpu.R[2] = 0x6000; int21();
+  cpu.R[0] = 0x4e00; cpu.R[1] = 0; cpu.R[2] = 0x4000; int21();
+  assert.equal(new TextDecoder().decode(mem.subarray(0x601e, 0x601e + 8)), 'PAK0.PAK', 'find-first looks inside the directory');
+  name('SAVES\\S0.SAV', 0x4000);
+  cpu.R[0] = 0x3c00; cpu.R[1] = 0; cpu.R[2] = 0x4000; int21();
+  assert.equal(cpu.flags & 1, 1, 'no file is created in a directory that does not exist');
+  name('SAVES', 0x4000);
+  cpu.R[0] = 0x3900; cpu.R[2] = 0x4000; int21();
+  name('SAVES\\S0.SAV', 0x4000);
+  cpu.R[0] = 0x3c00; cpu.R[1] = 0; cpu.R[2] = 0x4000; int21();
+  assert.equal(cpu.flags & 1, 0, 'after mkdir it is');
   name('NOPE.WAD', 0x4000);
   cpu.R[0] = 0x3d00; cpu.R[2] = 0x4000; int21();
   assert.equal(cpu.flags & 1, 1, 'a missing file is a carry and an error code');

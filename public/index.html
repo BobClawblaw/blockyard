@@ -100,6 +100,7 @@
     <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
     <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
     <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
+    <button data-page="quake" role="menuitem" title="Quake: the shareware QUAKE.EXE on an emulated PC">Quake</button>
   </div>
 
   <!-- Display settings (settings.js). Hidden until the gear is pressed; the contents are
@@ -594,19 +595,19 @@
 
     <!-- DOOM (public/js/doom.js): the shareware DOOM.EXE v1.9 from games/doom_dos/, unmodified, on a PC this
          repository emulates -- x86.js the CPU, dospc.js DOS/4GW and the hardware, soundcard.js a
-         Sound Blaster Pro 2 -- running in a worker (doomworker.js). The canvas is the monitor. -->
+         Sound Blaster Pro 2 -- running in a worker (dosworker.js). The canvas is the monitor. -->
     <section class="page" data-page="doom">
-      <div class="tetrust doom" id="doom">
-        <div class="card doomcard">
+      <div class="tetrust dosgame" id="doom">
+        <div class="card doscard">
           <h3>DOOM <span class="sp"></span><span class="src">shareware v1.9 · Knee-Deep in the Dead · on an emulated 486</span></h3>
-          <div class="doomwrap" id="doomWrap">
-            <canvas class="doomscreen" id="doomScreen" width="320" height="200"></canvas>
+          <div class="doswrap" id="doomWrap">
+            <canvas class="dosscreen" id="doomScreen" width="320" height="200"></canvas>
             <div class="tetover" id="doomOver">
               <div class="tetmsg" id="doomMsg">DOOM</div>
               <div class="tetsub" id="doomSub"></div>
               <button type="button" class="btn primary" id="doomPlay">play</button>
             </div>
-            <button type="button" class="btn primary doomagain hidden" id="doomPlay2">play again</button>
+            <button type="button" class="btn primary dosagain hidden" id="doomPlay2">play again</button>
           </div>
         </div>
         <div class="card tethud">
@@ -624,6 +625,40 @@
           </div>
           <h3>About</h3>
           <div class="tetkeys">DOOM is id Software's (1993), from the shareware files in <code>games/doom_dos/</code> on this server. The PC under it is BlockYard's own: an i386, DOS/4GW, a VGA and a Sound Blaster written in JavaScript, with no dependencies. Savegames and settings stay in this browser.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- QUAKE (public/js/quake.js): the shareware QUAKE.EXE v1.06 from games/quake_dos/, unmodified, on the
+         same emulated PC as DOOM -- this time playing the go32 stub and CWSDPMI for a DJGPP program. -->
+    <section class="page" data-page="quake">
+      <div class="tetrust dosgame" id="quake">
+        <div class="card doscard">
+          <h3>Quake <span class="sp"></span><span class="src">shareware v1.06 · Dimension of the Doomed · on an emulated PC</span></h3>
+          <div class="doswrap" id="quakeWrap">
+            <canvas class="dosscreen" id="quakeScreen" width="320" height="200"></canvas>
+            <div class="tetover" id="quakeOver">
+              <div class="tetmsg" id="quakeMsg">Quake</div>
+              <div class="tetsub" id="quakeSub"></div>
+              <button type="button" class="btn primary" id="quakePlay">play</button>
+            </div>
+            <button type="button" class="btn primary dosagain hidden" id="quakePlay2">play again</button>
+          </div>
+        </div>
+        <div class="card tethud">
+          <h3>Machine</h3>
+          <div class="tetstats" id="quakeStatus"></div>
+          <h3>Keys</h3>
+          <div class="tetkeys" id="quakeKeys"></div>
+          <div class="tetkeys">click the screen to capture the mouse (Esc gives it back) · W A S D and mouse look to start with; rebind anything in Quake's own options menu</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="quakeSound" aria-pressed="false" title="the Sound Blaster: Quake's effects (its music was on the CD)">♫ sound</button>
+            <button type="button" class="tetsw" id="quakeSmooth" aria-pressed="false" title="smooth the 320x200 picture instead of showing its pixels">◌ smooth</button>
+            <button type="button" class="tetsw" id="quakeFull" title="the screen alone, full screen">⛶ full screen</button>
+          </div>
+          <h3>About</h3>
+          <div class="tetkeys">Quake is id Software's (1996), from the shareware files in <code>games/quake_dos/</code> on this server. The PC under it is BlockYard's own: an i386 with its FPU, a DPMI host, a VGA and a Sound Blaster written in JavaScript, with no dependencies. Savegames and settings stay in this browser.</div>
         </div>
       </div>
     </section>

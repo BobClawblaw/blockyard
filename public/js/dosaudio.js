@@ -1,12 +1,12 @@
-// THE DOOM SPEAKERS: an AudioWorklet that plays what the emulated Sound Blaster produced
-// (public/js/soundcard.js, running in doomworker.js). The worker sends interleaved stereo chunks
+// THE SPEAKERS of the DOS Diversions: an AudioWorklet that plays what the emulated Sound Blaster
+// produced (public/js/soundcard.js, running in dosworker.js). The worker sends interleaved stereo chunks
 // straight to this processor over a MessagePort; the page's thread never touches a sample.
 //
 // A queue with a ceiling: the machine's clock and the audio clock are both wall time, so they agree
 // on average, but a stall on either side leaves one ahead. Too little queued plays silence until the
 // next chunk; too much (over a quarter of a second) drops the oldest, so a hitch costs a click, not
 // a delay that grows for the rest of the game.
-class DoomSpeakers extends AudioWorkletProcessor {
+class DosSpeakers extends AudioWorkletProcessor {
   constructor() {
     super();
     this.chunks = [];
@@ -45,4 +45,4 @@ class DoomSpeakers extends AudioWorkletProcessor {
   }
 }
 
-registerProcessor('doom-speakers', DoomSpeakers);
+registerProcessor('dos-speakers', DosSpeakers);

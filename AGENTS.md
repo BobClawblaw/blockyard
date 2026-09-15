@@ -185,10 +185,11 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
   (page #space)      the viewer at window size + being-built and tip panels
                      (renderBlockSpace in mining.js)
   js/goggles.js      the 2D treemap maps (squarify) that the 3D viewer sits beside
-  js/x86.js, dospc.js, soundcard.js, doomworker.js, doomaudio.js, doomio.js, doom.js
-                     the DOOM Diversion: an i386 interpreter, the DOS/4GW PC, a Sound Blaster
-                     Pro 2 + OPL3, the worker, the AudioWorklet, pure I/O helpers, the tab.
-                     The game files are games/doom_dos/, served by http/doom.js.
+  js/x86.js, dospc.js, soundcard.js, dosworker.js, dosaudio.js, dosio.js, dosgame.js, doom.js, quake.js
+                     the DOS Diversions: an i386 interpreter, the PC (DOS/4GW for DOOM, go32 +
+                     CWSDPMI for Quake), a Sound Blaster Pro 2 + OPL3, the worker, the
+                     AudioWorklet, pure I/O helpers, the shared tab and each game's own.
+                     The game files are games/doom_dos/ and games/quake_dos/, served by http/games.js.
 scripts/doc-counts.js  derives the test count the docs quote (--check / --fix)
 test/                fixtures/log-samples.txt = frozen REAL log lines
 test/helpers/http.js   boots the REAL app in-process: N fake nodes, log sink, TLS.
@@ -281,7 +282,7 @@ Built on the `doom` branch. What will bite:
   an int32 (`| 0`, never `>>> 0` on a hot path: above 2^31 it is a double, and a double stored in a
   closure variable allocates), keep the lazy flags in their `Int32Array`, and do not put a
   try/catch back inside the instruction loop. Numbers in MEASUREMENTS §32; `node
-  scripts/doom-bench.js` re-measures.
+  scripts/dos-bench.js [doom|quake]` re-measures.
 - **The extender is not emulated, it is impersonated.** `dospc.js` loads the LE at +1 MB and answers
   INT 21h/31h itself. Things DOOM checks that are easy to miss: `INT 21h AX=FF00 DX=78h` must say
   DOS/4G; the environment is read through a selector with a base (so DS bases are honoured);
@@ -291,21 +292,50 @@ Built on the `doom` branch. What will bite:
   "new" when `vga.frames` (CRTC start writes) or `vga.palSeq` moves.
 - **Controls are rebound live, in DOOM's memory.** DOOM reads key bindings once, at start-up, into
   its defaults table (20-byte entries: name pointer, pointer to the live int, default,
-  scantranslate, the scancode it saves back). `rebindKeys` in `doomio.js` finds entries by name
+  scantranslate, the scancode it saves back). `rebindKeys` in `dosio.js` finds entries by name
   and writes both, so the WASD switch (the default) applies mid-game with no restart or refresh
   (operator: "have to refresh for settings to take effect").
 - **The sound card's `tick` batches** (at least 128 frames): called every 2,000 instructions it
   was re-preparing the synth 40,000 times a second.
 - **Audio in an insecure context.** On plain HTTP to a LAN address there is no `audioWorklet`;
-  `doom.js` falls back to a ScriptProcessor. Both paths take the same MessagePort stream.
+  `dosgame.js` falls back to a ScriptProcessor. Both paths take the same MessagePort stream.
 - **The CPU was fuzzed against the host CPU** (78k instructions, 0 mismatches) with a C harness that
   is not in the repo (it needs gcc); `test/x86.test.js` holds a case per class. Re-fuzz after any
   change to flags, shifts, multiply or divide.
 - **`games/` is not in package.json `files`**, so an npm install has no game and the page says
   which file is missing. Whether the shareware files ship is the operator's call.
-- Tests: `test/x86.test.js`, `test/doom-pc.test.js` (boots the real DOOM.EXE headless when
-  games/doom_dos/ is present, a named skip when not), `test/doom-io.test.js` (keys, config, text mode,
-  the `/doom/` route).
+- Tests: `test/x86.test.js`, `test/dos-pc.test.js` (boots the real DOOM.EXE and QUAKE.EXE headless
+  when games/ has them, a named skip when not), `test/dos-io.test.js` (keys, configs, text mode,
+  the `/games/` route).
+
+## Current state (2026-09-15, evening): Quake
+
+**Quake is the fifth Diversion** (operator: "yes, get Quake working as a diversion"), on the same PC,
+from `games/quake_dos/` (the operator's shareware copy). `QUAKE.EXE` v1.06 is a **DJGPP** program, not
+DOS/4GW, and that is most of what changed:
+
+- **Segment bases are real now.** DJGPP bases CS, DS and SS at its memory block (0x300000 here).
+  The CPU keeps EIP linear and converts pushed return addresses and loaded targets against CS's base;
+  ESP is an offset in SS. Lock-stepped DOOM for 15 M instructions before and after: identical.
+- **16-bit code segments.** crt0 copies a 16-bit helper into DOS memory (its sbrk trampoline) and its
+  exit runs 16-bit code in the transfer buffer through stubinfo's `cs_selector`; `selectorIs16`
+  comes from the descriptor's D bit (DPMI 0009/000C).
+- **The go32 stub is impersonated** (`bootCoff`): what crt0 reads is the stubinfo through FS, the
+  **PSP exactly 100h below the transfer buffer** (libc computes it that way), and the environment as
+  a **selector** at PSP:2Ch (a DPMI host swaps the segment for one).
+- **`fstat` walks DOS's SFT**: INT 21h AH=52h's list of lists, the PSP's job file table, and a real
+  system file table kept in step with every file call (`syncSft`), and it trusts the layout only
+  after **INT 21h AX=3306h** says DOS 5 or later. DOS calls arrive through DPMI 0300 and must
+  answer with segments (AH=62h returns the PSP *segment* there).
+- **Directories exist**: Quake reads `ID1/PAK0.PAK` and writes `ID1/CONFIG.CFG`; paths normalise
+  to upper case, `.`/`..` resolve, find-first looks inside a directory.
+- **Quake never flips pages**: it copies each frame into A0000h, so the worker shows the picture
+  once a slice passes with no writes (`vga.writes`), or it would send half a copy.
+- **The BIOS tick count at 0x46C** advances with PIT channel 0's wraps (DJGPP's `uclock`).
+- `-nocdaudio` always (no CD, or Quake waits at a warning); `ID1/AUTOEXEC.CFG` gives `+mlook` every
+  start and WASD binds only until Quake has written its own config.
+- **Speed**: `timedemo demo1` 28.9 fps at the emulator's own speed; ~77 MIPS (FPU-heavy). Adequate
+  (the operator's bar is 30 fps); a decoded-instruction cache is the next big step if it is ever not.
 
 ## Current state (2026-09-14)
 

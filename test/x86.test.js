@@ -248,3 +248,43 @@ test('the FPU: load, arithmetic, compare into AX, and an integer store that roun
   exec([0xd9, 0xe8, 0xd9, 0xee, 0xde, 0xd9, 0xdf, 0xe0], 4);
   assert.equal(cpu.R[EAX] & 0x4500, 0x100);
 });
+
+test('code and stack bases: calls push offsets, returns and jumps land at base + offset (DJGPP)', () => {
+  const { cpu, mem } = machine({ bases: { 0x30: 0x40000, 0x38: 0x40000 } });
+  cpu.loadSeg(CS, 0x30); cpu.loadSeg(DS, 0x38); cpu.loadSeg(0 /* ES */, 0x38); cpu.loadSeg(2 /* SS */, 0x38);
+  cpu.R[ESP] = 0x8000;
+  // at offset 0x1000: call +5 (to 0x100a) ; nop... ; at 0x100a: ret
+  mem.set([0xe8, 0x05, 0x00, 0x00, 0x00, 0x90, 0x90, 0x90, 0x90, 0x90, 0xc3], 0x41000);
+  cpu.eip = 0x41000;
+  cpu.run(1);
+  assert.equal(cpu.eip, 0x4100a, 'the call went to base + target');
+  assert.equal(cpu.R[ESP], 0x7ffc, 'ESP is an offset in SS');
+  assert.equal(cpu.rd(0x47ffc), 0x1005, 'and the return address pushed is an offset, at SS base + ESP');
+  cpu.run(1);
+  assert.equal(cpu.eip, 0x41005, 'ret came back to base + offset');
+  // jmp dword [0x2000] through a table holding an offset
+  mem.set([0x00, 0x30, 0x00, 0x00], 0x42000);
+  mem.set([0xff, 0x25, 0x00, 0x20, 0x00, 0x00], 0x41005);
+  cpu.run(1);
+  assert.equal(cpu.eip, 0x43000);
+});
+
+test('a 16-bit code segment decodes 16-bit, and 66h gives it 32-bit operands back', () => {
+  const { cpu, mem } = machine({ bases: { 0x40: 0x3000 } });
+  const m = { is16: new Set([0x40]) };
+  // re-create with a bus that knows the 16-bit selector
+  const mem2 = new Uint8Array(1 << 20);
+  const c2 = createCpu({ mem: mem2, vgaWrite() {}, vgaRead: () => 0, portIn: () => 0, portOut() {}, softInt: () => true, vector: () => null,
+    selectorBase: (sel) => (sel === 0x40 ? 0x3000 : 0), selectorIs16: (sel) => m.is16.has(sel) });
+  c2.loadSeg(CS, 0x40); c2.loadSeg(DS, 0x10); c2.loadSeg(2, 0x10);
+  c2.R[ESP] = 0x9000;
+  // mov ax, 0x1234 ; mov eax, 0x89abcdef (66h) ; retf with an 16-bit frame... just the moves
+  mem2.set([0xb8, 0x34, 0x12, 0x66, 0xb8, 0xef, 0xcd, 0xab, 0x89], 0x3000);
+  c2.eip = 0x3000;
+  c2.run(1);
+  assert.equal(c2.R[EAX] & 0xffff, 0x1234, 'B8 takes a word in a 16-bit segment');
+  assert.equal(c2.eip, 0x3003);
+  c2.run(1);
+  assert.equal(c2.R[EAX] >>> 0, 0x89abcdef, 'and a dword behind 66h');
+  void cpu; void mem;
+});

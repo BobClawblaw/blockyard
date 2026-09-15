@@ -1,13 +1,13 @@
-// THE DOOM DIVERSION between the browser and the PC: the keyboard's scancodes, the control schemes
-// laid over DOOM's config, text mode's character set, the palette -- and the server route that
-// hands the game its files (server/http/doom.js).
+// THE DOS DIVERSIONS between the browser and the PC: the keyboard's scancodes, the control schemes
+// laid over DOOM's config, Quake's first-run autoexec, text mode's character set, the palette -- and
+// the server route that hands the games their files (server/http/games.js).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scancodes, withControls, CONTROLS, DEFAULT_CONTROLS, CP437, CGA, textRuns, paletteLut } from '../public/js/doomio.js';
-import { DOOM_NAME, findDoomFile } from '../server/http/doom.js';
+import { scancodes, withControls, CONTROLS, DEFAULT_CONTROLS, CP437, CGA, textRuns, paletteLut, quakeAutoexec, GAMES } from '../public/js/dosio.js';
+import { GAME_PATH, GAME_DIRS, findGameFile } from '../server/http/games.js';
 import { withApp } from './helpers/http.js';
 
 const cfgText = (bytes) => String.fromCharCode(...bytes);
@@ -64,44 +64,67 @@ test('the palette: six-bit DAC values become full-scale pixels in an ImageData\'
   assert.equal(lut[0], 0xff000000, 'black, opaque');
 });
 
-test('the /doom/ route serves only 8.3 names of the game\'s three kinds', async () => {
-  for (const ok of ['/doom/DOOM1.WAD', '/doom/doom.exe', '/doom/DEFAULT.CFG', '/doom/DOOM.WAD']) assert.match(ok, DOOM_NAME);
-  for (const bad of ['/doom/../package.json', '/doom/.._DOOM1.WAD', '/doom/README.TXT', '/doom/sub/DOOM1.WAD', '/doom/DOOM1.WAD/x', '/doom/TOOLONGNAME.WAD', '/doom/%2e%2e%2fserver.js']) {
-    assert.doesNotMatch(bad, DOOM_NAME, bad);
+test('Quake gets W A S D and mouse look the first time, and only mouse look after its own config exists', () => {
+  const first = String.fromCharCode(...quakeAutoexec({ firstRun: true }));
+  assert.match(first, /^\+mlook$/m);
+  assert.match(first, /^bind "w" "\+forward"$/m);
+  assert.match(first, /^bind "d" "\+moveright"$/m);
+  const later = String.fromCharCode(...quakeAutoexec({ firstRun: false }));
+  assert.equal(later, '+mlook\n', 'the player\'s own bindings, saved by Quake on quit, are left alone');
+  assert.equal(GAMES.quake.exe, 'QUAKE.EXE');
+  assert.match(GAMES.quake.args, /-nocdaudio/, 'no CD: without it Quake waits at a warning for a key');
+  for (const [key, g] of Object.entries(GAMES)) assert.equal(g.dir, `games/${GAME_DIRS[key]}`, `${key}: the page and the server name the same directory`);
+});
+
+test('the /games/ route serves only a named game and a short DOS path of the kinds they read', async () => {
+  for (const ok of ['/games/doom/DOOM1.WAD', '/games/doom/doom.exe', '/games/quake/ID1/PAK0.PAK', '/games/quake/id1/config.cfg']) assert.match(ok, GAME_PATH);
+  for (const bad of ['/games/doom/../package.json', '/games/doom/.._DOOM1.WAD', '/games/doom/README.TXT', '/games/quake/A/B/PAK0.PAK', '/games/doom/DOOM1.WAD/x', '/games/doom/TOOLONGNAME.WAD', '/games/doom/%2e%2e%2fserver.js', '/games/quake/../doom_dos/DOOM.EXE']) {
+    assert.doesNotMatch(bad, GAME_PATH, bad);
   }
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-doom-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-games-'));
   try {
+    fs.mkdirSync(path.join(dir, 'ID1'));
+    fs.writeFileSync(path.join(dir, 'ID1', 'PAK0.PAK'), 'PACK');
     fs.writeFileSync(path.join(dir, 'DOOM1.WAD'), 'IWAD');
-    assert.equal(await findDoomFile(dir, 'doom1.wad'), path.join(dir, 'DOOM1.WAD'), 'DOS names are case-insensitive');
-    assert.equal(await findDoomFile(dir, 'DOOM.WAD'), null);
-    assert.equal(await findDoomFile(path.join(dir, 'missing'), 'DOOM1.WAD'), null, 'no directory is not an exception');
+    assert.equal(await findGameFile(dir, 'doom1.wad'), path.join(dir, 'DOOM1.WAD'), 'DOS names are case-insensitive');
+    assert.equal(await findGameFile(dir, 'id1/pak0.pak'), path.join(dir, 'ID1', 'PAK0.PAK'), 'and so are directories');
+    assert.equal(await findGameFile(dir, 'DOOM.WAD'), null);
+    assert.equal(await findGameFile(dir, 'DOOM1.WAD/X'), null, 'a file is not a directory');
+    assert.equal(await findGameFile(path.join(dir, 'missing'), 'DOOM1.WAD'), null, 'no directory is not an exception');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the server hands over the files in open mode, and wants a session when accounts are on', async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-doom-'));
-  fs.writeFileSync(path.join(dir, 'DOOM1.WAD'), Buffer.from('IWAD\x01\x00\x00\x00'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-games-'));
+  fs.mkdirSync(path.join(dir, 'doom_dos'));
+  fs.mkdirSync(path.join(dir, 'quake_dos', 'ID1'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'doom_dos', 'DOOM1.WAD'), Buffer.from('IWAD\x01\x00\x00\x00'));
+  fs.writeFileSync(path.join(dir, 'quake_dos', 'ID1', 'PAK0.PAK'), 'PACK');
   try {
     await withApp({ auth: false }, async ({ app, base }) => {
-      app.doomDir = dir;
-      const r = await fetch(`${base}/doom/doom1.wad`);
+      app.gamesDir = dir;
+      const r = await fetch(`${base}/games/doom/doom1.wad`);
       assert.equal(r.status, 200);
       assert.equal(r.headers.get('content-type'), 'application/octet-stream');
       assert.match(r.headers.get('content-security-policy') ?? '', /default-src 'self'/, 'the same policy as every other response');
       assert.equal(Buffer.from(await r.arrayBuffer()).toString('latin1'), 'IWAD\x01\x00\x00\x00');
       const etag = r.headers.get('etag');
-      assert.equal((await fetch(`${base}/doom/DOOM1.WAD`, { headers: { 'If-None-Match': etag } })).status, 304, 'four megabytes are not sent twice');
-      const missing = await fetch(`${base}/doom/DOOM.EXE`);
+      assert.equal((await fetch(`${base}/games/doom/DOOM1.WAD`, { headers: { 'If-None-Match': etag } })).status, 304, 'megabytes are not sent twice');
+      const pak = await fetch(`${base}/games/quake/id1/pak0.pak`);
+      assert.equal(pak.status, 200, 'one directory down, as Quake keeps its data');
+      assert.equal(await pak.text(), 'PACK');
+      const missing = await fetch(`${base}/games/doom/DOOM.EXE`);
       assert.equal(missing.status, 404);
       assert.match(await missing.text(), /DOOM\.EXE is not in games\/doom_dos/, 'the page can tell the operator what to install');
-      assert.equal((await fetch(`${base}/doom/..%2fpackage.json`)).status, 404, 'no path out of the directory');
+      assert.equal((await fetch(`${base}/games/heretic/HERETIC.EXE`)).status, 404, 'only the games this server names');
+      assert.equal((await fetch(`${base}/games/doom/..%2fpackage.json`)).status, 404, 'no path out of the directory');
     });
     await withApp({}, async ({ app, base, client }) => {
-      app.doomDir = dir;
-      assert.equal((await fetch(`${base}/doom/DOOM1.WAD`)).status, 401, 'accounts on: no session, no game');
+      app.gamesDir = dir;
+      assert.equal((await fetch(`${base}/games/doom/DOOM1.WAD`)).status, 401, 'accounts on: no session, no game');
       const { status } = await client.login();
       assert.equal(status, 200);
-      const r = await client.raw('/doom/DOOM1.WAD');
+      const r = await client.raw('/games/doom/DOOM1.WAD');
       assert.equal(r.status, 200, 'signed in, served');
       await r.arrayBuffer();
     });

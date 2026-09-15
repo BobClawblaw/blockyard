@@ -1,11 +1,40 @@
-// DOOM I/O: the pure pieces between a browser and the emulated PC (operator, 2026-09-15: "Get DOOM
-// working as a diversion inside blockyard with zero dependancies"). No DOM, no worker, no clock, so
-// every mapping here runs under node:test.
+// DOS I/O: the pure pieces between a browser and the emulated PC, for the DOOM and Quake Diversions
+// (operator, 2026-09-15: "Get DOOM working as a diversion inside blockyard with zero dependancies",
+// then "get Quake working as a diversion"). No DOM, no worker, no clock, so every mapping here runs
+// under node:test.
 //
+//   GAMES            each game's files, arguments and where its saves are kept
 //   scancodes()      a KeyboardEvent.code as the bytes a PC/AT keyboard puts on port 60h
-//   withControls()   the game's config with the page's control scheme laid over it
+//   withControls()   DOOM's config with the page's control scheme laid over it
+//   rebindKeys()     the same, into a running DOOM
+//   quakeAutoexec()  Quake's first-run WASD and mouse look
 //   CP437 / CGA      how text mode's bytes and attributes become characters and colours
 //   paletteLut()     the VGA DAC's 6-bit palette as 32-bit pixels for an ImageData
+
+// ------------------------------------------------------------------ the games
+/**
+ * What the worker fetches for each game, from /games/<name>/: the executable, the files it cannot
+ * start without, the ones it can, the command line, and the IndexedDB database its saves live in.
+ * Paths are DOS paths under the game's directory, upper case.
+ */
+export const GAMES = Object.freeze({
+  doom: Object.freeze({ exe: 'DOOM.EXE', required: ['DOOM1.WAD'], optional: ['DEFAULT.CFG'], config: 'DEFAULT.CFG', args: '', db: 'blockyard-doom', label: 'DOOM.EXE and DOOM1.WAD', dir: 'games/doom_dos' }),
+  // -nocdaudio: there is no CD in the drive, and without it Quake stops at a "press a key" warning
+  quake: Object.freeze({ exe: 'QUAKE.EXE', required: ['ID1/PAK0.PAK'], optional: ['ID1/CONFIG.CFG'], config: 'ID1/CONFIG.CFG', args: '-nocdaudio', db: 'blockyard-quake', label: 'QUAKE.EXE and ID1/PAK0.PAK', dir: 'games/quake_dos' }),
+});
+
+/**
+ * QUAKE'S AUTOEXEC.CFG, which it runs after its config on every start. Mouse look always -- Quake 1
+ * did not save it, and a browser game without it is a fight with the mouse -- and, the first time
+ * only (no config the game wrote itself yet), W A S D to move and Space to jump. After that the
+ * game's own saved bindings are the player's, and this does not overwrite them.
+ */
+export function quakeAutoexec({ firstRun }) {
+  const lines = ['+mlook'];
+  if (firstRun) lines.push('bind "w" "+forward"', 'bind "s" "+back"', 'bind "a" "+moveleft"', 'bind "d" "+moveright"', 'bind "SPACE" "+jump"', 'bind "MOUSE2" "+jump"');
+  const text = `${lines.join('\n')}\n`;
+  return Uint8Array.from(text, (c) => c.charCodeAt(0));
+}
 
 // ------------------------------------------------------------------ the keyboard
 // Scancode set 1: the make code; the break code is the same with bit 7 set. Keys that arrived with

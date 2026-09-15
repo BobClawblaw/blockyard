@@ -1,18 +1,19 @@
-// THE DOOM WORKER: the PC runs here, off the page's thread (operator, 2026-09-15: "Get DOOM working
-// as a diversion inside blockyard with zero dependancies").
+// THE DOS WORKER: the PC runs here, off the page's thread, for the DOOM and Quake Diversions
+// (operator, 2026-09-15: "Get DOOM working as a diversion inside blockyard with zero dependancies",
+// then "get Quake working as a diversion").
 //
 // A worker because the emulated 486 wants every millisecond it can get: on the page's own thread it
 // would share a 16 ms frame with the layout, the SSE feed and every other tab of the app, and the
 // game would stutter whenever the monitor redrew a chart. Here it runs in ~10 ms slices and yields
 // between them so key presses arrive; the page draws what it is sent.
 //
-// Messages in:  boot {rate}, run {on}, key {codes}, mouse {dx, dy, buttons}, audio {port}
+// Messages in:  boot {game, rate, controls}, run {on}, key {codes}, mouse {dx, dy, buttons}, audio {port}
 // Messages out: status {text}, frame {pixels, palette?}, text {cells, cursor}, stats {mips},
 //               saved {name}, exit {code, cells}, error {message}
 //               (and controls {scheme}: rebind the running game's keys)
 import { createPC } from './dospc.js';
 import { createSoundCard } from './soundcard.js';
-import { withControls, rebindKeys } from './doomio.js';
+import { withControls, rebindKeys, quakeAutoexec, GAMES } from './dosio.js';
 
 const SLICE_MS = 10;
 
@@ -20,8 +21,9 @@ let pc = null, card = null, audioPort = null;
 let running = false, scheduled = false;
 let clock = 0, lastWall = 0;               // machine time: wall time while running, frozen while not
 let lastFrameSeq = -1, lastPalSeq = -1, lastText = null;
-let pixels = new Uint8Array(64000);
-const keyEntries = {};                     // where DOOM's key settings live, once found        // bounced back by the page after each frame, to reuse
+let pixels = new Uint8Array(64000);        // bounced back by the page after each frame, to reuse
+let lastWrites = -1, seenWrites = -1;
+const keyEntries = {};                     // where DOOM's key settings live, once found
 const yieldChannel = new MessageChannel();
 yieldChannel.port1.onmessage = () => { scheduled = false; loop(); };
 
@@ -34,7 +36,7 @@ const now = () => (running ? clock + (performance.now() - lastWall) : clock);
 function db() {
   return new Promise((resolve) => {
     try {
-      const req = indexedDB.open('blockyard-doom', 1);
+      const req = indexedDB.open(game.db, 1);
       req.onupgradeneeded = () => req.result.createObjectStore('files');
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
@@ -69,32 +71,40 @@ async function store(name, bytes) {
 }
 
 // ------------------------------------------------------------------ boot
+let game = null;
 async function fetchFile(name, required) {
-  const r = await fetch(`/doom/${name}`, { credentials: 'same-origin' });
+  const r = await fetch(`/games/${game.key}/${name}`, { credentials: 'same-origin' });
   if (!r.ok) {
-    if (required) throw new Error(`${name} is not installed: put the shareware DOOM files in games/doom_dos/ on the server (HTTP ${r.status})`);
+    if (required) throw new Error(`${name} is not installed: put the shareware files in ${game.dir}/ on the server (HTTP ${r.status})`);
     return null;
   }
   return new Uint8Array(await r.arrayBuffer());
 }
 
-async function boot({ rate, controls }) {
-  post({ type: 'status', text: 'loading DOOM.EXE and DOOM1.WAD…' });
-  const [exe, wad, cfg, saved] = await Promise.all([fetchFile('DOOM.EXE', true), fetchFile('DOOM1.WAD', true), fetchFile('DEFAULT.CFG', false), loadSaved()]);
-  const files = { 'DOOM1.WAD': wad };
-  // the shipped config, then whatever the game wrote back on its last quit
-  const baseCfg = saved['DEFAULT.CFG'] ?? cfg;
-  if (baseCfg) files['DEFAULT.CFG'] = withControls(baseCfg, controls);
-  for (const [name, bytes] of Object.entries(saved)) if (name !== 'DEFAULT.CFG') files[name] = bytes;
+async function boot({ game: key = 'doom', rate, controls }) {
+  game = { key, ...GAMES[key] };
+  if (!GAMES[key]) throw new Error(`no game called ${key}`);
+  post({ type: 'status', text: `loading ${game.label}…` });
+  const names = [game.exe, ...game.required, ...game.optional];
+  const [saved, ...got] = await Promise.all([loadSaved(), ...names.map((n, i) => fetchFile(n, i <= game.required.length))]);
+  const fetched = Object.fromEntries(names.map((n, i) => [n, got[i]]));
+  const files = {};
+  for (const n of [...game.required, ...game.optional]) if (fetched[n]) files[n] = fetched[n];
+  // the game's saves and the config it wrote on its last quit, over the shipped ones
+  const firstRun = !saved[game.config];
+  for (const [name, bytes] of Object.entries(saved)) files[name] = bytes;
+  if (key === 'doom' && files[game.config]) files[game.config] = withControls(files[game.config], controls);
+  if (key === 'quake') files['ID1/AUTOEXEC.CFG'] = quakeAutoexec({ firstRun });
   pc = createPC({
     files,
+    args: game.args,
     now,
     sound: rate ? (mem) => (card = createSoundCard({ mem, rate })) : null,
     onWrite: (name, bytes) => { store(name, bytes); post({ type: 'saved', name, deleted: !bytes }); },
     onExit: (code) => { running = false; post({ type: 'exit', code, cells: pc.mem.slice(0xb8000, 0xb8000 + 4000) }); },
     log: (m) => post({ type: 'log', text: m }),
   });
-  pc.boot(exe);
+  pc.boot(fetched[game.exe]);
   post({ type: 'status', text: 'booted' });
 }
 
@@ -125,9 +135,16 @@ let mips = 0, lastStats = 0;
 function present() {
   if (pc.vga.mode === 0x13) {
     lastText = null;
-    if (pc.vga.frames === lastFrameSeq && pc.vga.palSeq === lastPalSeq) return;
+    // a new picture: a page flipped (DOOM), the palette changed, or the linear window was written
+    // (Quake copies each finished frame into A0000h and never flips)
+    // (Quake copies each finished frame into A0000h and never flips). A copy can straddle two slices,
+    // so writes are only shown once a slice has passed without any: never half a frame
+    const writing = pc.vga.writes !== seenWrites;
+    seenWrites = pc.vga.writes;
+    if (writing && pc.vga.frames === lastFrameSeq) return;
+    if (pc.vga.frames === lastFrameSeq && pc.vga.palSeq === lastPalSeq && pc.vga.writes === lastWrites) return;
     if (!pixels) return;                       // the page still has the last frame
-    lastFrameSeq = pc.vga.frames;
+    lastFrameSeq = pc.vga.frames; lastWrites = pc.vga.writes;
     const m = { type: 'frame', pixels: pc.renderIndexed(pixels) };
     if (pc.vga.palSeq !== lastPalSeq) { lastPalSeq = pc.vga.palSeq; m.palette = pc.vga.pal.slice(); }
     const buf = pixels.buffer;

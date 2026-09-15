@@ -1257,7 +1257,7 @@ the tip is a long gap and synced; no peer height at all waits two hours.
 
 Not the node: the i386 and the PC in `public/js/x86.js` and `dospc.js` running the shareware
 `DOOM.EXE` v1.9 (the Diversion). Taken on this box -- AMD Ryzen 9 9950X3D, Node v22.23.2, Chromium
-152 (snap, headless). Reproduce the headless figures with `node scripts/doom-bench.js`.
+152 (snap, headless). Reproduce the headless figures with `node scripts/dos-bench.js doom`.
 
 **Speed of the interpreter**, 400 M instructions of DOOM's title and demos on a clock of 30 M
 instructions to the virtual second:
@@ -1293,3 +1293,22 @@ is not in `npm test`; `test/x86.test.js` keeps a case from each class it covered
 
 **The music is in tune**: over 10 s of the title music, 178 notes keyed on, 96 of them within
 2.5 cents of equal temperament; the rest spread to +-50 cents, which is DMX's pitch bends.
+
+## 33. Quake on the same PC (2026-09-15)
+
+`QUAKE.EXE` v1.06 (DJGPP, go32 stub) on the emulated PC, this box, Node v22.23.2. Reproduce with
+`node scripts/dos-bench.js quake`.
+
+**Speed**: 77 M instructions a second headless with the Sound Blaster attached, 72-79 in a Chromium
+worker -- lower than DOOM's 90-105 because Quake's code is FPU-heavy (the x87 was 15% of the profile)
+and every memory operand adds a segment base (DJGPP's DS is at its memory block; `ea` was 13%).
+Moving the FPU stack to a Float64Array with typed-array operand conversion and one base addition
+when DS and SS share it took 74 to 76: the interpreter's dispatch is the rest.
+
+**Frame rate**: `+timedemo demo1` on a clock of 74 M instructions to the virtual second -- the
+emulator's own speed -- reported **969 frames in 33.5 seconds, 28.9 fps**, about 2.6 M instructions a
+frame. In the browser, a new game on the start map drew 26 frames a second. Period hardware for
+comparison: a Pentium 90 ran the same demo at 320x200 at roughly that rate.
+
+**Start-up**: graphics mode after 244 M instructions on a 30 M clock (Quake pages its 27 MB heap in
+and times its hardware), twenty screens drawn by 285 M; 2.8 s of wall time headless.

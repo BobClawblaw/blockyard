@@ -21,6 +21,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Blockout](#blockout)
 - [Blockanoid](#blockanoid)
 - [DOOM](#doom)
+- [Quake](#quake)
 - [Peers](#peers)
 - [Network](#network)
 - [Mining](#mining)
@@ -792,6 +793,58 @@ but can crackle when the machine is busy.
 
 ---
 
+## Quake
+
+The shareware episode of Quake, **Dimension of the Doomed**, under **Diversions**, beside DOOM and on
+the same emulated PC. Again the real thing: id Software's `QUAKE.EXE` v1.06 and `PAK0.PAK`,
+unmodified. Quake asked a lot more of a PC than DOOM did — a Pentium and a maths coprocessor — so it
+is the harder test of the machine, and it plays at roughly what a Pentium 90 managed in 1996: about
+thirty frames a second.
+
+Press **play**. The first start downloads the 18 MB PAK file from the server (after that the
+browser revalidates it rather than fetching it again), the console scrolls past, the demos start,
+and **Esc** opens Quake's menu: **Single Player → New Game**.
+
+### The files
+
+The game's files live on the server in `games/quake_dos/`: `QUAKE.EXE` and `ID1/PAK0.PAK` are the
+two it cannot start without. The page names a missing one instead of starting. Quake's CD music was
+never part of the shareware download, so there is none; the sound effects play through the Sound
+Blaster.
+
+### Playing
+
+**Click the screen to capture the mouse.** Quake starts with **mouse look** on and the keys a later
+game taught everyone:
+
+| Keys | |
+|---|---|
+| **W** **S** | walk |
+| **A** **D** | strafe |
+| mouse | look and turn |
+| left click or **Ctrl** | fire |
+| **Space** or right click | jump |
+| **Shift** (held) | run |
+| **1**–**8** | choose a weapon |
+| **Esc** | Quake's menu |
+| **~** | the console |
+| **F6** / **F9** | quicksave / quickload |
+
+Those are set the first time only. Change anything in Quake's own **Options → Customize controls**,
+and Quake saves your bindings when you quit; the page never overwrites them again.
+
+### Pausing, saving, quitting
+
+Exactly as DOOM: it **pauses when you look away** with the machine stopped dead, **savegames and
+Quake's config stay in this browser**, and **Quit** ends the program the way it ended in DOS, with
+id's order screen and a **play again** button.
+
+### The switches on the panel
+
+**♫ sound**, **◌ smooth** and **⛶ full screen**, as in DOOM.
+
+---
+
 ## Peers
 
 | Panel | What it shows |
@@ -947,6 +1000,7 @@ can bookmark it or send it to someone who can reach the same monitor:
 | Blockout | `#blockout` |
 | Blockanoid | `#blockanoid` |
 | DOOM | `#doom` |
+| Quake | `#quake` |
 | Peers | `#peers` |
 | Network | `#network` |
 | Mining | `#mining` |
