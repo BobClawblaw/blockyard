@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
-- The Mempool tab: already one screen after the global packing, so the room over goes to its time-series charts, a fifth taller, and the note cards under them sit tight to their line
+- The Mempool tab keeps its two columns down to 900px (it stacked from 1100, which put a 1093px window on one long column); The Mempool tab: already one screen after the global packing, so the room over goes to its time-series charts, a fifth taller, and the note cards under them sit tight to their line
 - The Kiosk packs the same way: tighter heads and gaps, the price panel's padding trimmed, the Block flow strip a quarter shorter with the tight flow, and the full-screen button in that strip's head instead of floating over its cards
 - The Mining tab's pie and year chart size themselves to the window's height, so the flow, the two figure cards and the two chart cards with their View more links fit one screen from about 900px tall
 - The Mining tab follows mempool.space's mining dashboard layout: two columns in its order (reward stats, difficulty adjustment; pools, hashrate; recent blocks, adjustments) under the block flow, our own panels beneath, and **View more »** on four cards opening that card full screen, with the whole week of pools as a table, the year's chart large, the whole attributed window of blocks and a year of adjustments

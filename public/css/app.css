@@ -856,10 +856,10 @@ canvas.treemap { width: 100%; height: 240px; display: block; background: var(--b
 .page[data-page="mempool"] .mpusage { gap: 8px; }
 .page[data-page="mempool"] #mpAcceptCard .note, .page[data-page="mempool"] #mpOrphansCard .note { margin-top: 2px; }
 
-@media (max-width: 1100px) {
-  .mpcols { grid-template-columns: minmax(0, 1fr); }
-  .mprow { grid-template-columns: minmax(0, 1fr); }
-}
+/* two columns down to 900px (it stacked from 1100, which put a 1093px window -- the operator's -- on one
+   long column); the two distributions share their row down to 760 */
+@media (max-width: 900px) { .mpcols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .mprow { grid-template-columns: minmax(0, 1fr); } }
 
 /* A LOG-DERIVED PANEL ON A MONITOR WITH NO LOG is one sentence, and it should not hold a 130px
    empty chart open underneath it. Measured: two such cards at 187px each, for two lines of text.
