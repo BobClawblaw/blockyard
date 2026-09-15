@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Events tab's feed reaches the window's bottom edge (it stopped a hundred pixels short)
 - The Network tab packs the same way: Throughput beside a stack of Upload and Traffic accounting (the accounting card no longer sits alone beside half a screen of nothing), the throughput chart taller, and the sources table taking the rest of the window
 - The Mining tab's pool pie folds its smallest pools into "Other" when its card is too short for every name, so no label runs off the bottom
 - The Peers tab packs the same way: a long onion or i2p address no longer makes the whole page scroll sideways (the address clips with an ellipsis and carries the full text as its title; a wide table scrolls inside its card), rows and service badges tighter, the top strip's cards at their own heights

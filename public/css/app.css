@@ -462,7 +462,7 @@ textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: ve
 .page[data-page="network"] #ntSources .scroll { max-height: max(200px, calc(100vh - 470px)); }
 .scroll.md { max-height: 250px; }
 .scroll.lg { max-height: 300px; }
-.feed.tall { max-height: calc(100vh - 260px); }
+.feed.tall { max-height: calc(100vh - 178px); }   /* to the window's bottom edge (2026-09-15: "same treatment on the events tab" -- it stopped 100px short) */
 canvas.chart.meter { height: 112px; }
 
 pre.pre-block { margin: 6px 0 0; white-space: pre-wrap; }
