@@ -164,7 +164,7 @@ const FX_MS = {
 export const FX_KINDS = Object.keys(FX_MS);
 // the price board's own lengths, where they differ: ball lightning crosses it a third slower
 // (operator, 2026-09-15: "cut the speed by 33% now that it's slower")
-export const MARKET_MS = { stormball: 16500, firework: 9000 };   // and a fireworks display of five shells needs the time
+export const MARKET_MS = { stormball: 16500, firework: 14000 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
@@ -786,7 +786,17 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0, pale = false) {
 //     to three), each its own colour, moment and place; the price board's burst at the chart's
 //     own heights. Deterministic in fx.seed, as every effect is, so it replays and can be tested;
 //     only the twinkle reads the clock.
-const SHELL_COLS = [[[255, 170, 110], [255, 235, 160]], [[140, 220, 255], [220, 245, 255]], [[220, 160, 255], [255, 200, 240]], [[130, 255, 190], [235, 255, 220]], [[255, 120, 150], [255, 210, 120]]];
+const SHELL_COLS = [[[255, 170, 110], [255, 235, 160]], [[140, 220, 255], [220, 245, 255]], [[220, 160, 255], [255, 200, 240]], [[130, 255, 190], [235, 255, 220]], [[255, 120, 150], [255, 210, 120]], [[255, 215, 90], [255, 250, 210]], [[120, 200, 255], [255, 140, 200]]];
+// THE SHELL KINDS, by turn: how the sparks fly. (operator, 2026-09-15: "Make more varied
+// explosions. More effects. Lensflare? Really think stunning to see.")
+//   peony          round, two colours
+//   chrysanthemum  long glittering trails that crackle white late
+//   willow         heavy droop under gravity, the longest trails
+//   ring           a hoop that keeps its shape as it falls
+//   crossette      a peony whose sparks each split four ways partway out
+//   strobe         the sparks blink in unison, white, on a beat
+//   pinwheel       every spark curls the same way -- a spiral opening out
+const SHELL_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe', 'pinwheel'];
 function drawFireworks(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'firework') return;
@@ -796,28 +806,40 @@ function drawFireworks(ctx, view, lw) {
   const price = line?.length > 1;
   let zLo = 6, zHi = 12;
   if (price) { zLo = Infinity; zHi = -Infinity; for (const p of line) { zLo = Math.min(zLo, p.z); zHi = Math.max(zHi, p.z); } }
-  const shells = price ? 5 : 3;
+  // THE SCHEDULE FITS THE RUN (2026-09-15: "The fireworks just disappear"): the fifth shell used
+  // to burst at 71% of the run with a 55% life, so the run ended with it mid-air and the whole
+  // thing was cut. Now the last shell's smoke is gone by u = 1, and the final tenth of the run
+  // fades everything left, so nothing is ever cut.
+  const shells = price ? 5 : 3, gap = price ? 0.13 : 0.2, life = price ? 0.27 : 0.33, SMOKE = 1.7;
+  const gf = Math.min(1, (1 - fx.u) / 0.1);                  // the run's own fade-out
   const gradientOf = (x, y, r, stops) => {
     const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
     if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
     for (const [o, col] of stops) g.addColorStop(o, col);
     return g;
   };
+  const linearOf = (x0, y0, x1, y1, stops) => {
+    const g = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(x0, y0, x1, y1) : null;
+    if (!g || typeof g.addColorStop !== 'function') return stops[Math.floor(stops.length / 2)][1];
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    return g;
+  };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const seg = (a, b, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
   const now = view.now ?? 0;
+  const cx0 = (view.boardW ?? 0) / 2, cy0 = -(view.boardH ?? 0) / 4;   // where the lens flare's ghosts run toward: the picture's middle, roughly
   for (let i = 0; i < shells; i++) {
     const H = (k) => hash01(fx.seed + i * 131 + k);
-    const t0 = 0.03 + (price ? 0.17 : 0.26) * i, life = price ? 0.55 : 0.5;
+    const t0 = 0.02 + gap * i;
     const v = (fx.u - t0) / life;
-    if (!(v > 0 && v < 1.7)) continue;                       // the smoke outlives the shell
-    const [col, col2] = SHELL_COLS[i % SHELL_COLS.length];
+    if (!(v > 0 && v < SMOKE)) continue;                     // the smoke outlives the shell
+    const [col, col2] = SHELL_COLS[(i + Math.floor(H(9) * 3)) % SHELL_COLS.length];
     const c1 = col.join(','), c2 = col2.join(',');
     const bx = 0.1 * fx.gridW + H(1) * 0.8 * fx.gridW, by = H(2) * fx.gridH;
     const zc = zLo + (zHi - zLo) * (0.4 + 0.55 * H(3));
     const top = P(bx, by, zc);
     const R0 = U * (price ? 6.5 : 8) * (0.85 + 0.3 * H(4));
-    const kind = i % 4;                                       // peony, chrysanthemum, willow, ring
+    const kind = SHELL_KINDS[(i + Math.floor(H(8) * 2)) % SHELL_KINDS.length];
     // --- the launch: a parabola from the floor, off to one side, to the burst point
     const RISE = 0.2;
     const drift = (H(5) < 0.5 ? -1 : 1) * (0.12 + 0.2 * H(6)) * fx.gridW;
@@ -825,25 +847,23 @@ function drawFireworks(ctx, view, lw) {
     if (v < RISE) {
       const f = v / RISE;
       const head = arc(f);
-      // the comet tail: the last stretch of the path, wide and faint under bright and thin
       const tail = [];
       for (let k = 0; k <= 8; k++) tail.push(arc(Math.max(0, f - (k / 8) * 0.22)));
       for (let k = 0; k < 8; k++) {
-        const a = 1 - k / 8;
+        const a = (1 - k / 8) * gf;
         seg(tail[k], tail[k + 1], `rgba(${c1},${(0.35 * a).toFixed(3)})`, U * 0.26 * a);
         seg(tail[k], tail[k + 1], `rgba(255,240,210,${(0.9 * a).toFixed(3)})`, U * 0.08 * a);
       }
-      // exhaust sparks: shed behind the rocket and falling
       for (let k = 0; k < 10; k++) {
         const age = ((f * 6 + k / 10) % 1), back = arc(Math.max(0, f - age * 0.18));
         const sx = back.x + (H(50 + k) - 0.5) * U * 0.8, sy = back.y + age * U * 1.6;
-        disc(sx, sy, U * 0.06 * (1 - age), `rgba(255,220,160,${(0.8 * (1 - age)).toFixed(3)})`);
+        disc(sx, sy, U * 0.06 * (1 - age), `rgba(255,220,160,${(0.8 * (1 - age) * gf).toFixed(3)})`);
       }
-      disc(head.x, head.y, U * 0.32, gradientOf(head.x, head.y, U * 0.32, [[0, 'rgba(255,255,255,1)'], [0.4, `rgba(${c2},0.9)`], [1, `rgba(${c1},0)`]]));
+      disc(head.x, head.y, U * 0.32, gradientOf(head.x, head.y, U * 0.32, [[0, `rgba(255,255,255,${gf.toFixed(3)})`], [0.4, `rgba(${c2},${(0.9 * gf).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
       continue;
     }
     const s = Math.min(1, (v - RISE) / (1 - RISE));          // 0 at the burst, 1 when the sparks are out
-    const ss = (v - RISE) / (1.7 - RISE);                     // the smoke's own clock, 0..1 over the longer life
+    const ss = (v - RISE) / (SMOKE - RISE);                   // the smoke's own clock, 0..1 over the longer life
     // --- the smoke: a nebula leaving the burst outward, growing, drifting up, going grey, fading
     const smoke = [Math.round(col[0] * 0.45 + 95), Math.round(col[1] * 0.45 + 95), Math.round(col[2] * 0.45 + 105)].join(',');
     for (let k = 0; k < 9; k++) {
@@ -851,58 +871,100 @@ function drawFireworks(ctx, view, lw) {
       const dist = R0 * 0.55 * sp * (1 - Math.exp(-2.2 * ss)), rise = R0 * 0.25 * ss;
       const x = top.x + Math.cos(ang) * dist, y = top.y + Math.sin(ang) * dist * 0.8 - rise;
       const r = R0 * (0.22 + 0.7 * ss) * (0.8 + 0.4 * H(90 + k));
-      const a = 0.22 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6));
+      const a = 0.22 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
       if (a < 0.005) continue;
       disc(x, y, r, gradientOf(x, y, r, [[0, `rgba(${smoke},${a.toFixed(3)})`], [0.45, `rgba(${smoke},${(a * 0.55).toFixed(3)})`], [1, `rgba(${smoke},0)`]]));
     }
-    if (v >= 1) continue;                                     // only the smoke is left
-    // --- the burst: a flash, and a shockwave ring racing out and thinning
+    // --- glitter rain: after the shell, tiny white points drifting down and twinkling, thinning out
+    if (ss > 0.2) {
+      const gl = (ss - 0.2) / 0.8;
+      for (let k = 0; k < 26; k++) {
+        const ang = H(300 + k) * Math.PI * 2, d = R0 * (0.3 + 0.8 * H(320 + k));
+        const x = top.x + Math.cos(ang) * d + Math.sin(now * 0.003 + k) * U * 0.3, y = top.y + Math.sin(ang) * d * 0.7 + R0 * (0.2 + 1.1 * gl) * (0.6 + 0.4 * H(340 + k));
+        const tw = Math.max(0, Math.sin(now * 0.025 + k * 2.3));
+        const a = 0.9 * tw * (1 - gl) * gf;
+        if (a > 0.02) disc(x, y, U * 0.05, `rgba(255,255,255,${a.toFixed(3)})`);
+      }
+    }
+    if (v >= 1) continue;                                     // only the smoke and the glitter are left
+    // --- the burst: a flash, a lens flare, and a shockwave ring racing out and thinning
     if (s < 0.14) {
-      const f = 1 - s / 0.14;
-      disc(top.x, top.y, R0 * 0.5 * (1.3 - f * 0.6), gradientOf(top.x, top.y, R0 * 0.5 * (1.3 - f * 0.6), [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.3, `rgba(${c2},${(0.7 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+      const f = (1 - s / 0.14) * gf;
+      const r = R0 * 0.5 * (1.3 - f * 0.6);
+      disc(top.x, top.y, r, gradientOf(top.x, top.y, r, [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.3, `rgba(${c2},${(0.7 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+    }
+    if (s < 0.35) {
+      // THE LENS FLARE: an anamorphic streak across the burst, four thin rays turning slowly,
+      // and a run of faint ghosts along the line from the burst toward the picture's middle
+      const f = Math.pow(1 - s / 0.35, 1.5) * gf;
+      const L = R0 * 2.6;
+      ctx.strokeStyle = linearOf(top.x - L, top.y, top.x + L, top.y, [[0, `rgba(${c2},0)`], [0.35, `rgba(${c2},${(0.35 * f).toFixed(3)})`], [0.5, `rgba(255,255,255,${(0.9 * f).toFixed(3)})`], [0.65, `rgba(${c2},${(0.35 * f).toFixed(3)})`], [1, `rgba(${c2},0)`]]);
+      ctx.lineWidth = Math.max(lw, U * 0.09); ctx.beginPath(); ctx.moveTo(top.x - L, top.y); ctx.lineTo(top.x + L, top.y); ctx.stroke();
+      ctx.lineWidth = Math.max(lw * 3, U * 0.3); ctx.strokeStyle = linearOf(top.x - L, top.y, top.x + L, top.y, [[0, `rgba(${c1},0)`], [0.5, `rgba(${c1},${(0.25 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]);
+      ctx.beginPath(); ctx.moveTo(top.x - L * 0.7, top.y); ctx.lineTo(top.x + L * 0.7, top.y); ctx.stroke();
+      const rays = 4, spin = now * 0.0004 + H(11) * Math.PI;
+      for (let k = 0; k < rays; k++) {
+        const ang = spin + (k / rays) * Math.PI, rl = R0 * (0.9 + 0.5 * H(12 + k));
+        const x0 = top.x - Math.cos(ang) * rl, y0 = top.y - Math.sin(ang) * rl, x1 = top.x + Math.cos(ang) * rl, y1 = top.y + Math.sin(ang) * rl;
+        ctx.strokeStyle = linearOf(x0, y0, x1, y1, [[0, 'rgba(255,255,255,0)'], [0.5, `rgba(255,255,255,${(0.5 * f).toFixed(3)})`], [1, 'rgba(255,255,255,0)']]);
+        ctx.lineWidth = Math.max(lw * 0.8, U * 0.03); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      }
+      for (let k = 1; k <= 5; k++) {
+        const t = k * 0.35, gx = top.x + (cx0 - top.x) * t, gy = top.y + (cy0 - top.y) * t;
+        const gr = R0 * (0.08 + 0.1 * H(20 + k)) * (0.6 + t), ga = 0.16 * f * (1 - k / 7);
+        disc(gx, gy, gr, gradientOf(gx, gy, gr, [[0, `rgba(${k % 2 ? c1 : c2},${(ga * 0.5).toFixed(3)})`], [0.7, `rgba(${k % 2 ? c1 : c2},${ga.toFixed(3)})`], [1, `rgba(${k % 2 ? c1 : c2},0)`]]));
+      }
     }
     if (s < 0.4) {
       const f = s / 0.4;
-      ctx.strokeStyle = `rgba(255,255,255,${(0.55 * (1 - f)).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.12 * (1 - f));
+      ctx.strokeStyle = `rgba(255,255,255,${(0.55 * (1 - f) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.12 * (1 - f));
       ctx.beginPath(); ctx.arc(top.x, top.y, R0 * 1.25 * f, 0, Math.PI * 2); ctx.stroke();
     }
     // --- the shell
-    const N = kind === 3 ? 60 : 84;
-    const fade = Math.pow(1 - s, kind === 2 ? 0.8 : 1.2);
-    const spread = kind === 3 ? Math.min(1, s * 3) : 1 - Math.exp(-3.4 * s);   // a ring keeps its shape; the rest slow as they fly
-    const gscale = kind === 2 ? 1.9 : kind === 3 ? 0.7 : 1;                    // willow droops
-    const pos = (k, sp, g) => {
-      const jitter = kind === 3 ? 0.03 : 0.25;
-      const ang = (k / N) * Math.PI * 2 + (H(100 + k) - 0.5) * jitter;
-      const len = R0 * (kind === 3 ? 0.9 : 0.6 + 0.5 * H(200 + k));
-      return { x: top.x + Math.cos(ang) * len * sp, y: top.y + Math.sin(ang) * len * sp * (kind === 3 ? 0.55 : 1) + R0 * 0.9 * gscale * g * g };
+    const N = kind === 'ring' ? 60 : kind === 'crossette' ? 36 : 84;
+    const fade = Math.pow(1 - s, kind === 'willow' ? 0.8 : 1.2) * gf;
+    const spreadAt = (sq) => (kind === 'ring' ? Math.min(1, sq * 3) : 1 - Math.exp(-3.4 * sq));
+    const gscale = kind === 'willow' ? 1.9 : kind === 'ring' ? 0.7 : 1;
+    const pos = (k, sq, scale) => {
+      const jitter = kind === 'ring' ? 0.03 : 0.25;
+      const curl = kind === 'pinwheel' ? 2.4 * sq : 0;                        // every spark curls the same way
+      const ang = (k / N) * Math.PI * 2 + (H(100 + k) - 0.5) * jitter + curl;
+      const len = R0 * (kind === 'ring' ? 0.9 : 0.6 + 0.5 * H(200 + k)) * scale;
+      const sp = spreadAt(sq);
+      return { x: top.x + Math.cos(ang) * len * sp, y: top.y + Math.sin(ang) * len * sp * (kind === 'ring' ? 0.55 : 1) + R0 * 0.9 * gscale * sq * sq };
     };
+    const blink = kind === 'strobe' ? (Math.sin(now * 0.03) > 0.2 ? 1 : 0.15) : 1;
     for (let k = 0; k < N; k++) {
-      const inner = k % 3 === 0;                              // every third spark in the second colour, and shorter
+      const inner = k % 3 === 0;
       const c = inner ? c2 : c1;
       const scale = inner ? 0.62 : 1;
-      // the trail: the last four positions, a curve, widest and faintest at the back
-      const steps = kind === 1 || kind === 2 ? 5 : 3, back = kind === 1 || kind === 2 ? 0.22 : 0.12;
+      const long = kind === 'chrysanthemum' || kind === 'willow';
+      const steps = long ? 5 : 3, back = long ? 0.22 : 0.12;
       let prev = null;
       for (let q = steps; q >= 0; q--) {
-        const sq = Math.max(0, s - (q / steps) * back);
-        const spq = kind === 3 ? Math.min(1, sq * 3) : 1 - Math.exp(-3.4 * sq);
-        const p = pos(k, spq * scale, sq);
+        const p = pos(k, Math.max(0, s - (q / steps) * back), scale);
         if (prev) {
-          const a = 1 - q / (steps + 1);
+          const a = (1 - q / (steps + 1)) * blink;
           seg(prev, p, `rgba(${c},${(0.28 * fade * a).toFixed(3)})`, U * 0.2 * a);
           seg(prev, p, `rgba(${c},${(0.95 * fade * a).toFixed(3)})`, U * 0.07 * a);
         }
         prev = p;
       }
-      // the head: white, twinkling on its own beat; chrysanthemums crackle -- a spark flares
-      // up white and big for a frame, at random, late in the shell's life
       const tw = 0.55 + 0.45 * Math.sin(now * 0.02 + k * 1.7);
-      const pop = kind === 1 && s > 0.3 && hash01(fx.seed + k * 7 + Math.floor(now / 50)) < 0.12;
-      disc(prev.x, prev.y, U * (pop ? 0.2 : 0.075) * scale, `rgba(255,255,255,${(fade * (pop ? 1 : 0.9 * tw)).toFixed(3)})`);
+      const pop = kind === 'chrysanthemum' && s > 0.3 && hash01(fx.seed + k * 7 + Math.floor(now / 50)) < 0.12;
+      disc(prev.x, prev.y, U * (pop ? 0.2 : 0.075) * scale, `rgba(255,255,255,${(fade * blink * (pop ? 1 : 0.9 * tw)).toFixed(3)})`);
+      // a crossette splits: past the middle of its flight each spark bursts four ways, short
+      if (kind === 'crossette' && s > 0.42) {
+        const s2 = (s - 0.42) / 0.58, f2 = Math.pow(1 - s2, 1.3) * gf;
+        for (let m = 0; m < 4; m++) {
+          const ang = (m / 4) * Math.PI * 2 + H(400 + k) * 1.5, d = R0 * 0.22 * (1 - Math.exp(-3 * s2));
+          const e = { x: prev.x + Math.cos(ang) * d, y: prev.y + Math.sin(ang) * d + R0 * 0.2 * s2 * s2 };
+          seg(prev, e, `rgba(${c2},${(0.8 * f2).toFixed(3)})`, U * 0.05);
+          disc(e.x, e.y, U * 0.06, `rgba(255,255,255,${(0.9 * f2).toFixed(3)})`);
+        }
+      }
     }
-    // a glow round the whole shell while it is young, and an ember at the heart
-    if (s < 0.5) { const f = 1 - s / 0.5; disc(top.x, top.y + R0 * 0.3 * s, R0 * spread * 1.1, gradientOf(top.x, top.y + R0 * 0.3 * s, R0 * spread * 1.1, [[0, `rgba(${c2},${(0.16 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]])); }
+    if (s < 0.5) { const f = (1 - s / 0.5) * gf; const r = R0 * spreadAt(s) * 1.1, y = top.y + R0 * 0.3 * s; disc(top.x, y, r, gradientOf(top.x, y, r, [[0, `rgba(${c2},${(0.16 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]])); }
     disc(top.x, top.y + R0 * 0.25 * s, U * 0.16 * fade, `rgba(255,255,255,${(0.7 * fade).toFixed(3)})`);
   }
   ctx.lineWidth = lw;

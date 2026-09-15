@@ -15,8 +15,12 @@ All notable changes to this project are documented here. The format follows
   of one of four kinds by turn — peony, chrysanthemum (long glittering trails that crackle white),
   willow (heavy droop, long trails), ring — sixty to ninety sparks each a curved trail, slowing,
   falling, twinkling; and a nebula of smoke that leaves the burst outward, drifting up, in the
-  shell's colour gone grey, fading as it disperses and lingering after the sparks. Five shells on
-  Markets over 9 s at the chart's own heights, three on Block space.
+  shell's colour gone grey, fading as it disperses and lingering after the sparks. Seven shell
+  kinds by turn — the four above plus crossette (each spark splits four ways), strobe (the
+  sparks blink in unison) and pinwheel (a spiral opening out) — a lens flare at every burst (an
+  anamorphic streak, four turning rays, a run of ghosts toward the picture's middle), glitter rain
+  after the shell, and the schedule fits the run with a fade at its end, so nothing is ever cut.
+  Five shells on Markets over 14 s at the chart's own heights, three on Block space.
 - **Ball lightning on Markets:** a quarter of its original size, a third slower (16.5 s), rides
   up and down across most of the chart's height, throws nothing once off the board so the run
   ends with it long gone, and every strike is a flash — the halo blazes, a white flash blooms

@@ -723,12 +723,16 @@ defineAgent('stormball', {
     const line = st?.axes?.line;
     let alt = highest + 3.5, zPath = null;
     if (line?.length > 1) {
-      let lo = Infinity, hi = -Infinity;
-      for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
-      alt = (lo + hi) / 2;
+      let hi = -Infinity;
+      for (const p of line) hi = Math.max(hi, p.z);
       // UP AND DOWN THE WHOLE CHART (operator, 2026-09-15: "it's not moving up and down enough
       // during transit. It should try to cover a lot of space"): the height is two sines over the
-      // run, the slow one swinging across most of the line's range, the quick one on top
+      // run, the slow one swinging across most of the range, the quick one on top. The range is
+      // the ground to the line's high -- not the line's own low, which sits above the volume band
+      // (operator, later: "The lightning ball really stays in the top 2/3's of the screen. It
+      // needs to seek the ground level more than it presently does before rising again")
+      const lo = 1;
+      alt = (lo + hi) / 2;
       zPath = { lo, hi, f: [1.2 + rnd() * 1.3, 3 + rnd() * 3], ph: [rnd() * Math.PI * 2, rnd() * Math.PI * 2] };
     }
     // across the board the long way round, far enough past both edges to start and end off-screen
@@ -771,7 +775,7 @@ defineAgent('stormball', {
       const y = a.from.y + (a.to.y - a.from.y) * uu + a.weave.amp * Math.sin(uu * Math.PI * 2 * a.weave.cycles + a.weave.phase);
       if (a.zPath) {
         const { lo, hi, f, ph } = a.zPath;
-        const w = 0.5 + 0.38 * Math.sin(uu * Math.PI * 2 * f[0] + ph[0]) + 0.14 * Math.sin(uu * Math.PI * 2 * f[1] + ph[1]);
+        const w = 0.5 + 0.44 * Math.sin(uu * Math.PI * 2 * f[0] + ph[0]) + 0.14 * Math.sin(uu * Math.PI * 2 * f[1] + ph[1]);
         return { x, y, z: lo + (hi - lo) * Math.max(0, Math.min(1, w)) };
       }
       return { x, y, z: a.alt + 0.6 * Math.sin(uu * 17) };
