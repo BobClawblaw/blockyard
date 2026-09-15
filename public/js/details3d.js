@@ -1144,7 +1144,9 @@ function drawBlackHole(ctx, view, lw) {
   // The second image under the hole is the same, mirrored, smaller and dimmer.
   const lift = (rr) => rs * (1.1 + 1.6 * (rr - inner) / (outer - inner));
   const farPt = (rr, ang, under) => {
-    const sx = Math.cos(ang) * rr * (under ? 0.78 : 1), sy = Math.abs(Math.sin(ang)) * (under ? rs * (1.05 + 0.45 * (rr - inner) / (outer - inner)) : lift(rr));
+    // the second image is a MIRROR, x as well as y: it turns with the band above it, not against
+    // (2026-09-15: "the two discs are spinning in opposite directions")
+    const sx = Math.cos(ang) * rr * (under ? -0.78 : 1), sy = Math.abs(Math.sin(ang)) * (under ? rs * (1.05 + 0.45 * (rr - inner) / (outer - inner)) : lift(rr));
     return { x: c.x + sx * Math.cos(TILT) - sy * (under ? 1 : -1) * Math.sin(TILT), y: c.y + sx * Math.sin(TILT) + (under ? sy : -sy) * Math.cos(TILT) };
   };
   // ONE SET OF STRIPS FOR THE WHOLE DISK (operator, 2026-09-15, of a hard line across the middle:
@@ -1158,23 +1160,31 @@ function drawBlackHole(ctx, view, lw) {
     // (2026-09-15: "still see harsh line bisecting" -- two fills sharing an edge draw that edge,
     // antialiased twice, however well their colours agree). 'under' is the second image alone.
     const under = mode === 'under';
-    const STRIPS = 40, dim = under ? 0.55 : 1;
+    const STRIPS = under ? 16 : 40, dim = under ? 0.55 : 1;
     const at = (rr, ang) => (under ? farPt(rr, ang, true) : ang <= Math.PI ? toScreen(rr, ang) : farPt(rr, ang, false));
-    const a0 = under ? Math.PI : 0, aSpan = under ? Math.PI : Math.PI * 2, N = under ? 36 : 72;
+    const a0 = under ? Math.PI : 0, aSpan = under ? Math.PI : Math.PI * 2, N = under ? 24 : 72;
+    // the second image FADES IN FROM THE MIDLINE (2026-09-15: "Still seeing the gradient" -- its
+    // top edge lay exactly on the disk's midline): it is drawn in sectors, each at an alpha that
+    // rises with |sin| from nothing at the line, so it has no edge there
+    const SECT = under ? N : 1;
     for (let k = 0; k < STRIPS; k++) {
       const t0 = k / STRIPS, t1 = (k + 1) / STRIPS, r0 = inner + (outer - inner) * t0, r1 = inner + (outer - inner) * t1, heat = 1 - (t0 + t1) / 2;
+      for (let sct = 0; sct < SECT; sct++) {
+      const s0 = a0 + (aSpan * sct) / SECT, s1 = a0 + (aSpan * (sct + 1)) / SECT, n = under ? 1 : N;
+      const fadeIn = under ? Math.pow(Math.abs(Math.sin((s0 + s1) / 2)), 0.8) : 1;
       ctx.beginPath();
-      for (let i = 0; i <= N; i++) { const ang = a0 + (aSpan * i) / N; const p = at(r1, ang); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
-      for (let i = N; i >= 0; i--) { const ang = a0 + (aSpan * i) / N; const p = at(r0, ang); ctx.lineTo(p.x, p.y); }
+      for (let i = 0; i <= n; i++) { const ang = s0 + ((s1 - s0) * i) / n; const p = at(r1, ang); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
+      for (let i = n; i >= 0; i--) { const ang = s0 + ((s1 - s0) * i) / n; const p = at(r0, ang); ctx.lineTo(p.x, p.y); }
       ctx.closePath();
       // bright, never brown: the rim stays a saturated orange rather than a dark red at low alpha
       const R = 255, G = Math.round(95 + 160 * Math.pow(heat, 0.7)), B = Math.round(25 + 200 * Math.pow(heat, 2.2));
-      const alpha = grow * dim * (0.55 + 0.42 * Math.pow(heat, 0.8));
+      const alpha = grow * dim * fadeIn * (0.55 + 0.42 * Math.pow(heat, 0.8));
       // the Doppler side across the strip: a linear gradient, bright left, dark right
       const dg = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(c.x - outer, 0, c.x + outer, 0) : null;
       if (dg && typeof dg.addColorStop === 'function') { dg.addColorStop(0, `rgba(${Math.min(255, R)},${Math.min(255, G + 50)},${Math.min(255, B + 70)},${alpha.toFixed(3)})`); dg.addColorStop(0.5, `rgba(${R},${G},${B},${(alpha * 0.85).toFixed(3)})`); dg.addColorStop(1, `rgba(${Math.round(R * 0.7)},${Math.round(G * 0.45)},${Math.round(B * 0.4)},${(alpha * 0.7).toFixed(3)})`); ctx.fillStyle = dg; }
       else ctx.fillStyle = `rgba(${R},${G},${B},${alpha.toFixed(3)})`;
       ctx.fill();
+      }
     }
   };
   const archStreaks = (under) => {
@@ -1184,7 +1194,8 @@ function drawBlackHole(ctx, view, lw) {
       if (Math.sin(mid) >= 0) continue;                                  // the far half only
       const dop = doppler(mid), heat = st.heat;
       const col = st.kind < 0.06 ? '120,240,170' : st.kind < 0.12 ? '255,110,110' : heat > 0.7 ? '255,250,225' : heat > 0.35 ? '255,215,120' : '255,120,50';
-      ctx.strokeStyle = `rgba(${col},${(0.7 * grow * (under ? 0.5 : 1) * st.bright * Math.min(1.2, dop) / 1.2 * (0.35 + 0.65 * heat)).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, st.w * (0.8 + 0.6 * heat) * 1.6);
+      const fadeIn = under ? Math.pow(Math.abs(Math.sin(mid)), 0.8) : 1;
+      ctx.strokeStyle = `rgba(${col},${(0.7 * grow * (under ? 0.5 : 1) * fadeIn * st.bright * Math.min(1.2, dop) / 1.2 * (0.35 + 0.65 * heat)).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, st.w * (0.8 + 0.6 * heat) * 1.6);
       ctx.beginPath();
       for (let i = 0; i <= 10; i++) { const t = i / 10, rr = st.r0 * (1 - 0.07 * t), ang = st.a0 + st.span * t; const p = farPt(rr, ang, under); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
       ctx.stroke();
