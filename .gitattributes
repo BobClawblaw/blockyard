@@ -4,3 +4,6 @@
 * text=auto eol=lf
 *.jpg binary
 *.png binary
+# The shareware DOOM package is kept byte for byte as id Software shipped it (CRLF text files
+# included): its terms allow it to be redistributed unmodified, so git must not normalise it.
+doom_dos/** binary
