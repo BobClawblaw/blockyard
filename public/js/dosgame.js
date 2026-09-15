@@ -348,11 +348,34 @@ export function createDosGame(spec) {
       if (G.gain) G.gain.gain.value = mute ? 0 : 1;
       drawHud();
     });
+    // FULL SCREEN, AND A WAY BACK (operator, 2026-09-15: "I can't exit fullscreen in the dos emulated
+    // games"). The keyboard lock on Escape is what lets a tap of Esc reach the game's own menu in
+    // full screen -- and it is also what takes away the browser's Esc-to-leave. So two ways out:
+    // an "exit full screen" button in the corner (drawn only while full screen), and HOLDING Esc
+    // for a second, which the page times itself rather than trusting the browser's own hold
+    // gesture (Chrome has one under keyboard lock; Firefox has no keyboard lock at all). Leaving
+    // unlocks the keyboard and lets the mouse go.
+    const leave = () => { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); };
     el('Full')?.addEventListener('click', () => {
       const wrap = el('Wrap');
       if (!wrap?.requestFullscreen) return;
+      if (!wrap.querySelector('.dosexit')) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn dosexit'; b.textContent = 'exit full screen'; b.title = 'or hold Esc for a second';
+        b.addEventListener('click', leave);
+        wrap.appendChild(b);
+      }
       wrap.requestFullscreen().then(() => navigator.keyboard?.lock?.(['Escape'])).catch(() => {});
     });
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) { navigator.keyboard?.unlock?.(); document.exitPointerLock?.(); }
+    });
+    let escHold = null;
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !document.fullscreenElement || e.repeat) return;
+      escHold = setTimeout(() => { escHold = null; leave(); }, 1000);
+    });
+    document.addEventListener('keyup', (e) => { if (e.key === 'Escape' && escHold) { clearTimeout(escHold); escHold = null; } });
   }
 
   /** The page's render hook, called by app.js whenever the app draws. */

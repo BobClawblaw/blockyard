@@ -765,7 +765,9 @@ in DOS, with a **play again** button.
 
 ### The switches on the panel
 
-**♫ sound**, **◌ smooth** and **⛶ full screen**, as in DOOM.
+**♫ sound**, **◌ smooth** and **⛶ full screen**, as in DOOM. In full screen a tap of **Esc** is the
+game's menu, not the browser's exit; leave with the **exit full screen** button in the top corner,
+or hold **Esc** for a second.
 
 ---
 
@@ -834,7 +836,7 @@ and a **play again** button.
 | **♫ sound** | The Sound Blaster, on or muted. |
 | **⌨ WASD** | W A S D and E (the default), or DOOM's own keys; applies immediately. |
 | **◌ smooth** | Smooths the 320×200 picture instead of showing its square pixels. |
-| **⛶ full screen** | The screen alone. In Chrome it also keeps **Esc** for DOOM's menu. |
+| **⛶ full screen** | The screen alone. In Chrome it also keeps **Esc** for DOOM's menu, so leave with the **exit full screen** button in the top corner, or hold **Esc** for a second. |
 
 The **Machine** panel says what the PC is doing: running or paused, how fast the emulated
 processor is going (in millions of instructions a second), how many frames reach the screen, and
@@ -901,7 +903,7 @@ id's order screen and a **play again** button.
 
 ### The switches on the panel
 
-**♫ sound**, **◌ smooth** and **⛶ full screen**, as in DOOM.
+**♫ sound**, **◌ smooth** and **⛶ full screen**, as in DOOM (and the same two ways out of full screen).
 
 ---
 

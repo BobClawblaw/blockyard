@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The DOS games have a way out of full screen: an **exit full screen** button in the top corner while full screen, and holding **Esc** for a second (a tap of Esc stays the game's menu, which is what the keyboard lock is for); leaving unlocks the keyboard and releases the mouse
 - Markets fits one screen: the board takes what the window leaves, and the exchange table and the order-book depth sit side by side beneath it (under 1400px the table drops the pair, 24 h range and volume columns — all still in the summary line and on the Kiosk — and the book's title its description) instead of the depth chart starting a thousand pixels down
 - Node & RPC packs the same way: two stacks (RPC etiquette with its figures in two columns, Data quality and Node connection; Poll cadence, self-telemetry beside the log tail, Panel sources and the RPC console) instead of grid rows that left holes beside the short cards
 - Chain & Sync packs the same way: one-line notes under the block-size and tip charts (the longer sentences are their tooltips), the transaction-rate figures as one wrapping line instead of a grid that overflowed a narrow card, values that keep to their line, and a shorter uptime label that stopped squeezing its neighbours — the first three rows sit level and the drill-down and indexes reach the first screen at 1093×945
