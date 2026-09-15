@@ -1157,47 +1157,51 @@ function drawBlackHole(ctx, view, lw) {
     ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.11, 0, Math.PI * 2); ctx.stroke();
     disc(c.x, c.y, rs * 1.1, grad(c.x, c.y, rs * 1.1, [[0, 'rgba(0,0,0,1)'], [0.88, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
   };
-  // --- the far half, behind the hole
-  body(Math.PI, Math.PI * 2);
-  drawStreaks(true);
-  // --- the far side's lensed image: a thin band hugging the shadow, thickest over the top,
-  // thinning smoothly round the sides into the second image under, one filled shape (2026-09-15:
-  // "extend around cleanly ... the gradient needs to be smooth")
-  const upness = (ang) => 0.5 - 0.5 * Math.sin(ang);
-  // the band's outer edge by angle: a great arch over the top (1.6 horizons thick), thin at the
-  // sides, a smaller arch under the bottom (0.45)
-  const bandR = (ang) => { const up = upness(ang), side = 1 - Math.abs(Math.sin(ang)); return rs * (1.08 + 0.1 + 1.5 * Math.pow(up, 2.2) * (1 - 0.6 * side * side) + 0.35 * Math.pow(1 - up, 2.2) * (1 - 0.6 * side * side)); };
-  {
-    const rIn = rs * 1.08, rMax = rs * 2.7;
-    const ringPath = () => {
+  // --- THE FAR HALF, LIFTED INTO THE ARCH (operator, 2026-09-15: "the disc above is not merging
+  // with the sides, and looks really bad" -- the arch was a circle drawn round the shadow while
+  // the disk is an ellipse in its own plane, two surfaces that met by accident). The arch IS the
+  // far half of the disk now: every point keeps its x on the disk (rr cos ang) and is raised over
+  // the top by an amount that grows with its radius -- 1.1 horizons at the inner edge, 2.7 at the
+  // outer -- so at the sides, where sin ang -> 0, the arch comes down exactly onto the flat band.
+  // The second image under the hole is the same, mirrored, smaller and dimmer.
+  const lift = (rr) => rs * (1.1 + 1.6 * (rr - inner) / (outer - inner));
+  const farPt = (rr, ang, under) => {
+    const sx = Math.cos(ang) * rr * (under ? 0.78 : 1), sy = Math.abs(Math.sin(ang)) * (under ? rs * (1.05 + 0.45 * (rr - inner) / (outer - inner)) : lift(rr));
+    return { x: c.x + sx * Math.cos(TILT) - sy * (under ? 1 : -1) * Math.sin(TILT), y: c.y + sx * Math.sin(TILT) + (under ? sy : -sy) * Math.cos(TILT) };
+  };
+  const archBody = (under) => {
+    const STRIPS = 40, dim = under ? 0.55 : 1;
+    for (let k = 0; k < STRIPS; k++) {
+      const t0 = k / STRIPS, t1 = (k + 1) / STRIPS, r0 = inner + (outer - inner) * t0, r1 = inner + (outer - inner) * t1, heat = 1 - (t0 + t1) / 2;
       ctx.beginPath();
-      for (let k = 0; k <= 240; k++) { const ang = (Math.PI * 2 * k) / 240, R = bandR(ang); const x = c.x + Math.cos(ang) * R, y = c.y + Math.sin(ang) * R; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      for (let i = 0; i <= 36; i++) { const ang = Math.PI + (Math.PI * i) / 36; const p = farPt(r1, ang, under); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
+      for (let i = 36; i >= 0; i--) { const ang = Math.PI + (Math.PI * i) / 36; const p = farPt(r0, ang, under); ctx.lineTo(p.x, p.y); }
       ctx.closePath();
-      ctx.moveTo(c.x + rIn, c.y); ctx.arc(c.x, c.y, rIn, 0, Math.PI * 2, true);
-      ctx.closePath();
-    };
-    ringPath();
-    ctx.fillStyle = grad(c.x, c.y, rMax, [[0, 'rgba(255,220,150,0)'], [rIn / rMax, `rgba(255,245,210,${(0.95 * grow).toFixed(3)})`], [(rIn + rs * 0.25) / rMax, `rgba(255,215,110,${(0.9 * grow).toFixed(3)})`], [(rIn + rs * 0.8) / rMax, `rgba(255,140,50,${(0.7 * grow).toFixed(3)})`], [(rIn + rs * 1.3) / rMax, `rgba(200,60,25,${(0.35 * grow).toFixed(3)})`], [1, 'rgba(120,20,10,0)']]);
-    ctx.fill('evenodd');
-    ringPath();
-    const dopGrad = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(c.x - rMax, c.y, c.x + rMax, c.y) : null;
-    if (dopGrad && typeof dopGrad.addColorStop === 'function') { dopGrad.addColorStop(0, `rgba(255,255,230,${(0.3 * grow).toFixed(3)})`); dopGrad.addColorStop(0.5, 'rgba(255,220,160,0)'); dopGrad.addColorStop(1, `rgba(120,40,20,${(0.25 * grow).toFixed(3)})`); ctx.fillStyle = dopGrad; }
-    else ctx.fillStyle = `rgba(255,230,180,${(0.15 * grow).toFixed(3)})`;
-    ctx.fill('evenodd');
-    // the arch's fibres: thin arcs round the shadow inside the band, streaming with the flow
-    ctx.lineCap = 'round';
-    for (let k = 0; k < 260; k++) {
-      const hk = (q) => hash01(fx.seed + 3100 + k * 7 + q);
-      const a0 = hk(1) * Math.PI * 2 + now * 0.0005, span = 0.15 + 0.5 * hk(2);
-      const mid = a0 + span / 2, R = bandR(mid), t = hk(3);
-      const rr = rIn + (R - rIn) * t;
-      if (R - rIn < rs * 0.16) continue;                                  // nothing where the band is a sliver
-      const heat = 1 - t, dop = doppler(mid + Math.PI);
-      const col = heat > 0.7 ? '255,250,225' : heat > 0.35 ? '255,215,120' : '255,120,50';
-      ctx.strokeStyle = `rgba(${col},${(0.6 * grow * (0.4 + 0.6 * hk(4)) * Math.min(1.2, dop) / 1.2).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, rs * (0.02 + 0.04 * hk(5)));
-      ctx.beginPath(); ctx.arc(c.x, c.y, rr, a0, a0 + span); ctx.stroke();
+      // bright, never brown: the rim stays a saturated orange rather than a dark red at low alpha
+      const R = 255, G = Math.round(95 + 160 * Math.pow(heat, 0.7)), B = Math.round(25 + 200 * Math.pow(heat, 2.2));
+      const alpha = grow * dim * (0.55 + 0.42 * Math.pow(heat, 0.8));
+      // the Doppler side across the strip: a linear gradient, bright left, dark right
+      const dg = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(c.x - outer, 0, c.x + outer, 0) : null;
+      if (dg && typeof dg.addColorStop === 'function') { dg.addColorStop(0, `rgba(${Math.min(255, R)},${Math.min(255, G + 50)},${Math.min(255, B + 70)},${alpha.toFixed(3)})`); dg.addColorStop(0.5, `rgba(${R},${G},${B},${(alpha * 0.85).toFixed(3)})`); dg.addColorStop(1, `rgba(${Math.round(R * 0.7)},${Math.round(G * 0.45)},${Math.round(B * 0.4)},${(alpha * 0.7).toFixed(3)})`); ctx.fillStyle = dg; }
+      else ctx.fillStyle = `rgba(${R},${G},${B},${alpha.toFixed(3)})`;
+      ctx.fill();
     }
-  }
+  };
+  const archStreaks = (under) => {
+    ctx.lineCap = 'round';
+    for (const st of streaks) {
+      const mid = st.a0 + st.span / 2;
+      if (Math.sin(mid) >= 0) continue;                                  // the far half only
+      const dop = doppler(mid), heat = st.heat;
+      const col = st.kind < 0.06 ? '120,240,170' : st.kind < 0.12 ? '255,110,110' : heat > 0.7 ? '255,250,225' : heat > 0.35 ? '255,215,120' : '255,120,50';
+      ctx.strokeStyle = `rgba(${col},${(0.7 * grow * (under ? 0.5 : 1) * st.bright * Math.min(1.2, dop) / 1.2 * (0.35 + 0.65 * heat)).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, st.w * (0.8 + 0.6 * heat) * 1.6);
+      ctx.beginPath();
+      for (let i = 0; i <= 10; i++) { const t = i / 10, rr = st.r0 * (1 - 0.07 * t), ang = st.a0 + st.span * t; const p = farPt(rr, ang, under); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
+      ctx.stroke();
+    }
+  };
+  archBody(true); archStreaks(true);                                    // the second image, under
+  archBody(false); archStreaks(false);                                  // the great arch, over
   drawShadow();
   // --- the near half, in front of the hole
   body(0, Math.PI);

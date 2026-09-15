@@ -32,7 +32,7 @@ All notable changes to this project are documented here. The format follows
   continuous band white-yellow at its inner edge through orange to a dark red rim crossing in
   front of the shadow, five hundred thin fibres spiralling inward over it sheared by the
   Keplerian flow (a few in the candles' green and red) — spirals in brighter on the side coming
-  toward you, its far side lensed into a great arch over the top of the shadow and a smaller one beneath, one continuous shape thinning to a sliver at the sides, filled with radial and linear gradients and streaked with fibres of its own,
+  toward you, its far side lensed into a great arch over the top of the shadow and a smaller one beneath — the far half of the same disk, every point keeping its place along the disk and raised by an amount that grows with its radius, so the arch comes down onto the flat band at both sides — with the disk's gradient body and fibres,
   a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
   straightens and the candles come back. Thirty-three effects; fifteen on Markets.
 - **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
