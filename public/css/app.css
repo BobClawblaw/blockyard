@@ -1269,7 +1269,11 @@ canvas.chart.xs, .chart.xs { height: 86px }
 .netstats .ns .s .usd { display: block; color: var(--ok); font-size: 13px; font-weight: 600; }
 .netstats .usdnote { grid-column: 1 / -1; }
 .netstats .up { color: var(--ok); } .netstats .down { color: var(--bad); }
-canvas.chart.donut { width: 100%; height: 380px; }
+/* THE PIE AND THE YEAR CHART TAKE WHAT THE WINDOW HAS (operator, 2026-09-15, of a 945px-tall
+   window: "This all needs to comfortably fit on one page. I can't even see the View More for pools
+   view"): their height follows the viewport so the flow, the two figure cards and the two chart
+   cards -- View more links included -- fit one screen from ~900px tall up, growing to 380/240 */
+canvas.chart.donut { width: 100%; height: clamp(220px, calc(100vh - 640px), 380px); }
 .card.mnflow { grid-column: 1 / -1 !important; }   /* !important: the 1280px rule forces every .card to span 6 */
 /* THINNER (operator, 2026-09-15: "The block flow can be thinner vertically for instance" -- then, of
    Overview, "same treatment"): .flowtight is the flow card on Mining and on Overview.
@@ -1344,7 +1348,7 @@ canvas.chart.donut { width: 100%; height: 380px; }
 .donutlegend i.sw12 { background: #ee7b2f; }
 .donutlegend i.sw13 { background: #c7c9d1; }
 .donutlegend i.sw14 { background: #8d93a1; }
-canvas.chart.tall { height: 200px; }
+canvas.chart.tall { height: clamp(150px, calc(100vh - 720px), 240px); }
 @media (max-width: 700px) { .netstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } canvas.chart.donut { height: 360px; } }
 .mncols .card { grid-column: auto !important; }
 .mnpair { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: start; }
