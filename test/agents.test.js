@@ -479,7 +479,7 @@ test('on the price board the light cycles ride in from the left and the right, a
     // the range is the GROUND to the line's high, not the line's own low (operator: "it needs to
     // seek the ground level more"), and each run covers more than half of it
     assert.ok(zMax - zMin > (lineHi - 1) * 0.55, `seed ${seed}: covers more than half the chart's height (${(zMax - zMin).toFixed(1)} of ${(lineHi - 1).toFixed(1)})`);
-    assert.ok(zMin >= 1 - 1e-9 && zMax <= lineHi + 1e-9, 'and stays between the ground and the line's high');
+    assert.ok(zMin >= 1 - 1e-9 && zMax <= lineHi + 1e-9, "and stays between the ground and the line's high");
     assert.ok(zMin < 1 + (lineHi - 1) * 0.25, `seed ${seed}: it comes down near the ground (lowest ${zMin.toFixed(1)})`);
     // and once off the board it throws nothing: the run ends with the ball gone, not with a bolt from nowhere
     for (let u = 0; u <= 1; u += 0.005) { const f = AGENTS.stormball.frame(a, u); if (f.stormball.at.x < -1 || f.stormball.at.x > W + 1) assert.equal(f.stormball.arcs.length, 0, `seed ${seed}: no arcs from off the board at u=${u.toFixed(3)}`); }
