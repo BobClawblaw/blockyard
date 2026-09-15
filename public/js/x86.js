@@ -91,19 +91,24 @@ export function createCpu(bus) {
   function rw(a) { a &= AMASK; return (a & 1) === 0 ? M16[a >> 1] : M[a] | (M[(a + 1) & AMASK] << 8); }
   function rd(a) { a &= AMASK; return (a & 3) === 0 ? M32[a >> 2] : (M[a] | (M[(a + 1) & AMASK] << 8) | (M[(a + 2) & AMASK] << 16) | (M[(a + 3) & AMASK] << 24)); }
   function rbx(a) { a &= AMASK; return (a - 0xa0000) >>> 0 < 0x20000 ? bus.vgaRead(a) : M[a]; }
+  // A WRITE TO CACHED CODE (see "the decoded-instruction cache"): the page's decoded instructions
+  // go, so a program that patches its own code -- Quake's span drawers do -- runs what it wrote
   function wb(a, v) {
     a &= AMASK;
     if ((a - 0xa0000) >>> 0 < 0x20000) { bus.vgaWrite(a, v & 0xff); return; }
+    if (codePage[a >>> 12] !== 0) touchCode(a, 1);
     M[a] = v;
   }
   function ww(a, v) {
     a &= AMASK;
     if ((a - 0x9ffff) >>> 0 < 0x20001) { wb(a, v); wb(a + 1, v >> 8); return; }
+    if ((codePage[a >>> 12] | codePage[((a + 1) & AMASK) >>> 12]) !== 0) touchCode(a, 2);
     if ((a & 1) === 0) M16[a >> 1] = v; else { M[a] = v; M[(a + 1) & AMASK] = v >> 8; }
   }
   function wd(a, v) {
     a &= AMASK;
     if ((a - 0x9fffd) >>> 0 < 0x20003) { wb(a, v); wb(a + 1, v >> 8); wb(a + 2, v >> 16); wb(a + 3, v >> 24); return; }
+    if ((codePage[a >>> 12] | codePage[((a + 3) & AMASK) >>> 12]) !== 0) touchCode(a, 4);
     if ((a & 3) === 0) M32[a >> 2] = v;
     else { M[a] = v; M[(a + 1) & AMASK] = v >> 8; M[(a + 2) & AMASK] = v >> 16; M[(a + 3) & AMASK] = v >> 24; }
   }
@@ -477,6 +482,7 @@ export function createCpu(bus) {
           let c = cntReg, si = R[ESI], di = R[EDI];
           const src = (si + srcBase) & AMASK, dst = (di + esb) & AMASK, len = c * n;
           if (d > 0 && len > 0 && plain(dst, len) && src + len <= M.length && (dst <= src || dst >= src + len)) {
+            invalidate(dst, len);
             M.copyWithin(dst, src, src + len);
             R[ESI] = si + len; R[EDI] = di + len; setCount(0);
             return;
@@ -494,6 +500,7 @@ export function createCpu(bus) {
           let c = cntReg, di = R[EDI];
           const dst = (di + esb) & AMASK, len = c * n;
           if (s === S8 && d > 0 && len > 0 && plain(dst, len)) {
+            invalidate(dst, len);
             M.fill(v, dst, dst + len); R[EDI] = di + len; setCount(0); return;
           }
           while (c > 0) { writeS(di + esb, v); di += d; c--; }
@@ -632,9 +639,13 @@ export function createCpu(bus) {
   const ROW_KIND = { 0xd8: K_F32, 0xdc: K_F64, 0xda: K_I32, 0xde: K_I16 };
   function fpuOp(op) {
     mrm = M[eip++];
+    fpuCore(op, mrm, mrm < 0xc0 ? ea() : 0);
+  }
+  // the x87 instruction `op` (D8-DF) with ModRM `m`; `a` is its operand's address for a memory form
+  function fpuCore(op, m, a) {
+    mrm = m;
     const reg = (mrm >> 3) & 7;
     if (mrm < 0xc0) {
-      const a = ea();
       switch (op) {
         case 0xd8: case 0xdc: case 0xda: case 0xde: {
           const v = readReal(a, ROW_KIND[op]);
@@ -1281,6 +1292,246 @@ export function createCpu(bus) {
     throw new CpuFault(`opcode 0f ${op.toString(16)}`, opEip);
   }
 
+  // ------------------------------------------------------------------ the decoded-instruction cache
+  // (operator, 2026-09-15: "What do you recommend to improve the in-browser speed for Quake?" -- this,
+  // and a smaller view). step() decodes an instruction from its bytes every time it runs, and in a
+  // loop that is most of the work. Here each instruction is decoded ONCE into three int32s -- a
+  // handler number with its registers packed beside it, a displacement, an immediate -- kept per 4 KB
+  // page in an Int32Array, and the loop dispatches on the handler number with one switch.
+  //
+  // NOT CLOSURES. The first cut decoded each instruction into its own closure, and ran SLOWER than
+  // the interpreter (Quake 77 -> 69 MIPS, DOOM 90 -> 68): a call site that meets a different closure
+  // every instruction is megamorphic in V8, and paying that per instruction cost more than decoding.
+  // A dense switch compiles to a jump table, and typed arrays allocate nothing.
+  //
+  // Only the forms compilers emit in bulk have a handler (mov, the ALU rows, lea, inc/dec, push/pop,
+  // jumps, calls, shifts, test, movzx/movsx, imul, setcc). Anything else -- a prefix, a string
+  // instruction, the FPU, an interrupt -- is marked to run through step(), so the cache is never less
+  // correct than the interpreter under it.
+  //
+  // CACHED CODE IS INVALIDATED ON WRITE: a page holding decoded instructions is marked, and a write
+  // into a marked page (wb/ww/wd, the string ops' block moves, the machine's own copies through
+  // invalidate()) drops that page's decodings. An instruction that runs over a page's end is not
+  // cached, so a page can always be dropped on its own. A 16-bit code segment bypasses the cache.
+  //
+  // word layout: bits 0-7 handler, 8-11 length, 12-14 g (the ModRM reg field, or an ALU/shift
+  // sub-operation), 15-17 e (the ModRM rm register), 18-21 base register (8 = none), 22-25 index
+  // register (8 = none), 26-27 scale, 28 the stack segment is the default (base ESP/EBP).
+  const H_STEP = 255;
+  let hid = 1;
+  const H = {};
+  for (const name of [
+    'ALU32_EG_R', 'ALU32_EG_M', 'ALU32_GE_R', 'ALU32_GE_M', 'ALU8_EG_R', 'ALU8_EG_M', 'ALU8_GE_R', 'ALU8_GE_M',
+    'ALU_AL', 'ALU_EAX', 'GRP32_R', 'GRP32_M', 'GRP8_R', 'GRP8_M',
+    'INC32', 'DEC32', 'PUSH32', 'POP32', 'PUSHI', 'JCC', 'JMP', 'CALL', 'RET', 'RETN', 'LEAVE',
+    'TEST32_R', 'TEST32_M', 'TEST8_R', 'TEST8_M',
+    'MOV8_EG_R', 'MOV8_EG_M', 'MOV32_EG_R', 'MOV32_EG_M', 'MOV8_GE_R', 'MOV8_GE_M', 'MOV32_GE_R', 'MOV32_GE_M',
+    'LEA', 'NOP', 'CWDE', 'CDQ', 'A0', 'A1', 'A2', 'A3', 'MOV8_IR', 'MOV32_IR', 'MOV8_IM', 'MOV32_IM', 'MOV32_IRM',
+    'SH32_R', 'SH32_M', 'SH8_R', 'SH8_M',
+    'TESTI8_R', 'TESTI8_M', 'TESTI32_R', 'TESTI32_M',
+    'INC32_M', 'DEC32_M', 'CALL_R', 'CALL_M', 'JMP_R', 'JMP_M', 'PUSH_M',
+    'SETCC_R', 'SETCC_M', 'IMUL_R', 'IMUL_M', 'IMULI_R', 'IMULI_M',
+    'MOVZX8_R', 'MOVZX8_M', 'MOVZX16_R', 'MOVZX16_M', 'MOVSX8_R', 'MOVSX8_M', 'MOVSX16_R', 'MOVSX16_M',
+    'FPU_R', 'FPU_M',
+  ]) H[name] = hid++;
+
+  const PAGES = M.length >>> 12;
+  const codePage = new Uint8Array(PAGES);
+  const pageTab = new Array(PAGES).fill(null);        // Int32Array(4096 * 3) per page, or null
+  function dropPage(p) { pageTab[p] = null; codePage[p] = 0; }
+  // A WRITE CLEARS ONLY WHAT IT HITS. DOOM's span drawer patches constants into its own instructions
+  // on every call, and dropping the whole page for that re-decoded the page thousands of times a
+  // second (DOOM ran slower with the cache than without it). A decoded instruction is at most 15
+  // bytes and never runs off its page, so the ones a write can touch start within 14 bytes before
+  // it on the same page.
+  function touchCode(a, len) {
+    const end = (a & AMASK) + len;
+    for (let x = a & AMASK; x < end;) {
+      const p = x >>> 12, pageEnd = Math.min(end, (p + 1) << 12);
+      const tab = pageTab[p];
+      if (tab !== null) {
+        const lo = Math.max(p << 12, x - 14);
+        for (let s = lo; s < pageEnd; s++) {
+          const k = (s & 4095) * 3, w = tab[k];
+          if (w !== 0 && (w & 255) !== H_STEP && s + ((w >>> 8) & 15) > x) tab[k] = 0;
+        }
+      }
+      x = pageEnd;
+    }
+  }
+  function invalidate(a, len) {
+    if (len > 256) {
+      const first = (a & AMASK) >>> 12, last = ((a + len - 1) & AMASK) >>> 12;
+      for (let p = first; p <= last; p++) if (codePage[p] !== 0) dropPage(p);
+      return;
+    }
+    const first = (a & AMASK) >>> 12, last = ((a + Math.max(1, len) - 1) & AMASK) >>> 12;
+    for (let p = first; p <= last; p++) if (codePage[p] !== 0) { touchCode(a, len); return; }
+  }
+
+  // ModRM operand at `at` (the byte after ModRM): the packed base/index/scale/stack bits, the
+  // displacement, and the bytes used
+  let dDisp = 0, dUsed = 0;
+  function decodeEA(m, at) {
+    const mod = m >> 6, rm = m & 7;
+    let used = 0, base = 8, idx = 8, scale = 0, disp = 0;
+    if (rm === 4) {
+      const sib = M[at]; used = 1;
+      const b = sib & 7, x = (sib >> 3) & 7;
+      scale = sib >> 6;
+      if (x !== 4) idx = x;
+      if (b === 5 && mod === 0) { disp = M[at + 1] | (M[at + 2] << 8) | (M[at + 3] << 16) | (M[at + 4] << 24); used += 4; }
+      else base = b;
+    } else if (rm === 5 && mod === 0) { disp = M[at] | (M[at + 1] << 8) | (M[at + 2] << 16) | (M[at + 3] << 24); used = 4; }
+    else base = rm;
+    if (mod === 1) { disp = (M[at + used] << 24) >> 24; used += 1; }
+    else if (mod === 2) { disp = M[at + used] | (M[at + used + 1] << 8) | (M[at + used + 2] << 16) | (M[at + used + 3] << 24); used += 4; }
+    dDisp = disp; dUsed = used;
+    return (base << 18) | (idx << 22) | (scale << 26) | (base === ESP || base === EBP ? 1 << 28 : 0);
+  }
+  function eaOf(w, disp) {
+    let x = disp;
+    const b = (w >>> 18) & 15;
+    if (b !== 8) x += R[b];
+    const i = (w >>> 22) & 15;
+    if (i !== 8) x += R[i] << ((w >>> 26) & 3);
+    return (x + segBase[(w & (1 << 28)) !== 0 ? SS : DS]) | 0;
+  }
+
+  // decode the instruction at linear `a` into tab[k..k+2]; returns the word (H_STEP for "use step()")
+  function decodeAt(tab, k, a) {
+    const op = M[a];
+    const i32at = (x) => M[x] | (M[x + 1] << 8) | (M[x + 2] << 16) | (M[x + 3] << 24);
+    let h = 0, len = 0, g = 0, e = 0, ea = 0, disp = 0, imm = 0;
+    const modrm = (at) => {
+      const m = M[at];
+      g = (m >> 3) & 7; e = m & 7;
+      if (m >= 0xc0) { dUsed = 0; return true; }
+      ea = decodeEA(m, at + 1); disp = dDisp;
+      return false;
+    };
+    if (op < 0x40 && (op & 7) < 6) {
+      const sub = op >> 3, form = op & 7;
+      if (form === 4) { h = H.ALU_AL; g = sub; imm = M[a + 1]; len = 2; }
+      else if (form === 5) { h = H.ALU_EAX; g = sub; imm = i32at(a + 1); len = 5; }
+      else {
+        const reg = modrm(a + 1);
+        imm = sub; len = 2 + dUsed;
+        h = [[H.ALU8_EG_M, H.ALU8_EG_R], [H.ALU32_EG_M, H.ALU32_EG_R], [H.ALU8_GE_M, H.ALU8_GE_R], [H.ALU32_GE_M, H.ALU32_GE_R]][form][reg ? 1 : 0];
+      }
+    } else {
+      switch (op) {
+        case 0x40: case 0x41: case 0x42: case 0x43: case 0x44: case 0x45: case 0x46: case 0x47: h = H.INC32; e = op & 7; len = 1; break;
+        case 0x48: case 0x49: case 0x4a: case 0x4b: case 0x4c: case 0x4d: case 0x4e: case 0x4f: h = H.DEC32; e = op & 7; len = 1; break;
+        case 0x50: case 0x51: case 0x52: case 0x53: case 0x54: case 0x55: case 0x56: case 0x57: h = H.PUSH32; e = op & 7; len = 1; break;
+        case 0x58: case 0x59: case 0x5a: case 0x5b: case 0x5c: case 0x5d: case 0x5e: case 0x5f: h = H.POP32; e = op & 7; len = 1; break;
+        case 0x68: h = H.PUSHI; imm = i32at(a + 1); len = 5; break;
+        case 0x6a: h = H.PUSHI; imm = (M[a + 1] << 24) >> 24; len = 2; break;
+        case 0x70: case 0x71: case 0x72: case 0x73: case 0x74: case 0x75: case 0x76: case 0x77:
+        case 0x78: case 0x79: case 0x7a: case 0x7b: case 0x7c: case 0x7d: case 0x7e: case 0x7f:
+          h = H.JCC; disp = op & 15; imm = (a + 2 + ((M[a + 1] << 24) >> 24)) | 0; len = 2; break;
+        case 0x80: case 0x81: case 0x83: {
+          const reg = modrm(a + 1);
+          const ia = a + 2 + dUsed;
+          if (op === 0x80) { h = reg ? H.GRP8_R : H.GRP8_M; imm = M[ia]; len = 3 + dUsed; }
+          else if (op === 0x83) { h = reg ? H.GRP32_R : H.GRP32_M; imm = (M[ia] << 24) >> 24; len = 3 + dUsed; }
+          else { h = reg ? H.GRP32_R : H.GRP32_M; imm = i32at(ia); len = 6 + dUsed; }
+          break;
+        }
+        case 0x84: case 0x85: { const reg = modrm(a + 1); h = op === 0x85 ? (reg ? H.TEST32_R : H.TEST32_M) : (reg ? H.TEST8_R : H.TEST8_M); len = 2 + dUsed; break; }
+        case 0x88: case 0x89: case 0x8a: case 0x8b: {
+          const reg = modrm(a + 1);
+          h = [[H.MOV8_EG_M, H.MOV8_EG_R], [H.MOV32_EG_M, H.MOV32_EG_R], [H.MOV8_GE_M, H.MOV8_GE_R], [H.MOV32_GE_M, H.MOV32_GE_R]][op - 0x88][reg ? 1 : 0];
+          len = 2 + dUsed;
+          break;
+        }
+        case 0x8d: if (modrm(a + 1)) return H_STEP; h = H.LEA; len = 2 + dUsed; break;
+        case 0x90: h = H.NOP; len = 1; break;
+        case 0x98: h = H.CWDE; len = 1; break;
+        case 0x99: h = H.CDQ; len = 1; break;
+        case 0xa0: case 0xa1: case 0xa2: case 0xa3: h = H.A0 + (op - 0xa0); imm = i32at(a + 1); len = 5; break;
+        case 0xb0: case 0xb1: case 0xb2: case 0xb3: case 0xb4: case 0xb5: case 0xb6: case 0xb7: h = H.MOV8_IR; e = op & 7; imm = M[a + 1]; len = 2; break;
+        case 0xb8: case 0xb9: case 0xba: case 0xbb: case 0xbc: case 0xbd: case 0xbe: case 0xbf: h = H.MOV32_IR; e = op & 7; imm = i32at(a + 1); len = 5; break;
+        case 0xc0: case 0xc1: case 0xd0: case 0xd1: case 0xd2: case 0xd3: {
+          const reg = modrm(a + 1);
+          if (g === 6) return H_STEP;
+          const s32 = (op & 1) === 1;
+          h = s32 ? (reg ? H.SH32_R : H.SH32_M) : (reg ? H.SH8_R : H.SH8_M);
+          if (op <= 0xc1) { imm = M[a + 2 + dUsed]; len = 3 + dUsed; }
+          else { imm = op <= 0xd1 ? 1 : -1; len = 2 + dUsed; }   // -1: the count is CL
+          break;
+        }
+        case 0xc2: h = H.RETN; imm = M[a + 1] | (M[a + 2] << 8); len = 3; break;
+        case 0xc3: h = H.RET; len = 1; break;
+        case 0xc6: case 0xc7: {
+          const reg = modrm(a + 1);
+          if (g !== 0) return H_STEP;
+          const ia = a + 2 + dUsed;
+          if (op === 0xc6) { h = reg ? H.MOV8_IR : H.MOV8_IM; imm = M[ia]; len = 3 + dUsed; }
+          else { h = reg ? H.MOV32_IRM : H.MOV32_IM; imm = i32at(ia); len = 6 + dUsed; }
+          break;
+        }
+        case 0xc9: h = H.LEAVE; len = 1; break;
+        case 0xe8: h = H.CALL; imm = (a + 5 + i32at(a + 1)) | 0; len = 5; break;
+        case 0xe9: h = H.JMP; imm = (a + 5 + i32at(a + 1)) | 0; len = 5; break;
+        case 0xeb: h = H.JMP; imm = (a + 2 + ((M[a + 1] << 24) >> 24)) | 0; len = 2; break;
+        case 0xf6: case 0xf7: {
+          const reg = modrm(a + 1);
+          if (g !== 0) return H_STEP;                            // TEST only; MUL/DIV and friends use step()
+          const ia = a + 2 + dUsed;
+          if (op === 0xf6) { h = reg ? H.TESTI8_R : H.TESTI8_M; imm = M[ia]; len = 3 + dUsed; }
+          else { h = reg ? H.TESTI32_R : H.TESTI32_M; imm = i32at(ia); len = 6 + dUsed; }
+          break;
+        }
+        case 0xff: {
+          const reg = modrm(a + 1);
+          len = 2 + dUsed;
+          switch (g) {
+            case 0: h = reg ? H.INC32 : H.INC32_M; break;
+            case 1: h = reg ? H.DEC32 : H.DEC32_M; break;
+            case 2: h = reg ? H.CALL_R : H.CALL_M; break;
+            case 4: h = reg ? H.JMP_R : H.JMP_M; break;
+            case 6: h = reg ? H.PUSH32 : H.PUSH_M; break;
+            default: return H_STEP;
+          }
+          break;
+        }
+        case 0x69: case 0x6b: {
+          const reg = modrm(a + 1);
+          const ia = a + 2 + dUsed;
+          h = reg ? H.IMULI_R : H.IMULI_M;
+          if (op === 0x6b) { imm = (M[ia] << 24) >> 24; len = 3 + dUsed; } else { imm = i32at(ia); len = 6 + dUsed; }
+          break;
+        }
+        case 0xd8: case 0xd9: case 0xda: case 0xdb: case 0xdc: case 0xdd: case 0xde: case 0xdf: {
+          // the FPU: decoded once, executed by the same x87 core step() uses
+          const reg = modrm(a + 1);
+          h = reg ? H.FPU_R : H.FPU_M; imm = op | (M[a + 1] << 8); len = 2 + dUsed;
+          break;
+        }
+        case 0x0f: {
+          const op2 = M[a + 1];
+          if (op2 >= 0x80 && op2 <= 0x8f) { h = H.JCC; disp = op2 & 15; imm = (a + 6 + i32at(a + 2)) | 0; len = 6; break; }
+          if (op2 >= 0x90 && op2 <= 0x9f) { const reg = modrm(a + 2); h = reg ? H.SETCC_R : H.SETCC_M; imm = op2 & 15; len = 3 + dUsed; break; }
+          switch (op2) {
+            case 0xaf: { const reg = modrm(a + 2); h = reg ? H.IMUL_R : H.IMUL_M; len = 3 + dUsed; break; }
+            case 0xb6: { const reg = modrm(a + 2); h = reg ? H.MOVZX8_R : H.MOVZX8_M; len = 3 + dUsed; break; }
+            case 0xb7: { const reg = modrm(a + 2); h = reg ? H.MOVZX16_R : H.MOVZX16_M; len = 3 + dUsed; break; }
+            case 0xbe: { const reg = modrm(a + 2); h = reg ? H.MOVSX8_R : H.MOVSX8_M; len = 3 + dUsed; break; }
+            case 0xbf: { const reg = modrm(a + 2); h = reg ? H.MOVSX16_R : H.MOVSX16_M; len = 3 + dUsed; break; }
+            default: return H_STEP;
+          }
+          break;
+        }
+        default: return H_STEP;
+      }
+    }
+    if (h === 0 || (a & 4095) + len > 4096) return H_STEP;
+    const w = h | (len << 8) | (g << 12) | (e << 15) | ea;
+    tab[k + 1] = disp; tab[k + 2] = imm;
+    return w;
+  }
+
   // ------------------------------------------------------------------ the loop
   /** Run up to `n` instructions (fewer if one halts). Returns the number executed. */
   function run(n) {
@@ -1288,10 +1539,119 @@ export function createCpu(bus) {
     let i = 0;
     while (i < n) {
       try {
+        // the page last dispatched from, kept across instructions: most run on from the one before.
+        // A cached handler never halts, never changes CS and never drops a page table (its writes go
+        // through wb/ww/wd, which only zero entries; whole tables are dropped by block copies and the
+        // machine, which run inside step()), so those checks are made only after step() ran.
+        let curP = -1, tab = null;
+        if (cs16) { i++; opEip = eip; step(); if (stop) n = i; continue; }
         while (i < n) {
           i++;
-          step();
-          if (stop) { n = i; break; }
+          const a = eip;
+          opEip = a;
+          const p = a >>> 12;
+          if (p !== curP) {
+            tab = pageTab[p];
+            if (tab === null) { tab = pageTab[p] = new Int32Array(4096 * 3); codePage[p] = 1; }
+            curP = p;
+          }
+          const k = (a & 4095) * 3;
+          let w = tab[k];
+          if (w === 0) { w = decodeAt(tab, k, a); tab[k] = w; }
+          const hnum = w & 255;
+          if (hnum === H_STEP) {
+            step();
+            if (stop) { n = i; break; }
+            if (cs16) break;
+            curP = -1;                          // step() may have loaded a page table afresh (a far jump, a block copy)
+            continue;
+          }
+          eip = a + ((w >>> 8) & 15);
+          const g = (w >>> 12) & 7, e = (w >>> 15) & 7;
+          switch (hnum) {
+            case 1: { const r = alu32(tab[k + 2], R[e], R[g]); if (tab[k + 2] !== 7) R[e] = r; break; }                      // ALU32_EG_R
+            case 2: { const ad = eaOf(w, tab[k + 1]); const sub = tab[k + 2]; const r = alu32(sub, rd(ad), R[g]); if (sub !== 7) wd(ad, r); break; }
+            case 3: { const r = alu32(tab[k + 2], R[g], R[e]); if (tab[k + 2] !== 7) R[g] = r; break; }
+            case 4: { const sub = tab[k + 2]; const r = alu32(sub, R[g], rd(eaOf(w, tab[k + 1]))); if (sub !== 7) R[g] = r; break; }
+            case 5: { const sub = tab[k + 2]; const r = arith(sub, get8(e), get8(g), S8); if (sub !== 7) set8(e, r); break; }
+            case 6: { const ad = eaOf(w, tab[k + 1]); const sub = tab[k + 2]; const r = arith(sub, rbx(ad), get8(g), S8); if (sub !== 7) wb(ad, r); break; }
+            case 7: { const sub = tab[k + 2]; const r = arith(sub, get8(g), get8(e), S8); if (sub !== 7) set8(g, r); break; }
+            case 8: { const sub = tab[k + 2]; const r = arith(sub, get8(g), rbx(eaOf(w, tab[k + 1])), S8); if (sub !== 7) set8(g, r); break; }
+            case 9: { const r = arith(g, R[EAX] & 0xff, tab[k + 2], S8); if (g !== 7) set8(0, r); break; }                  // ALU_AL
+            case 10: { const r = alu32(g, R[EAX], tab[k + 2]); if (g !== 7) R[EAX] = r; break; }                            // ALU_EAX
+            case 11: { const r = alu32(g, R[e], tab[k + 2]); if (g !== 7) R[e] = r; break; }                               // GRP32_R
+            case 12: { const ad = eaOf(w, tab[k + 1]); const r = alu32(g, rd(ad), tab[k + 2]); if (g !== 7) wd(ad, r); break; }
+            case 13: { const r = arith(g, get8(e), tab[k + 2], S8); if (g !== 7) set8(e, r); break; }                       // GRP8_R
+            case 14: { const ad = eaOf(w, tab[k + 1]); const r = arith(g, rbx(ad), tab[k + 2], S8); if (g !== 7) wb(ad, r); break; }
+            case 15: R[e] = inc(R[e], S32); break;                                                                          // INC32
+            case 16: R[e] = dec(R[e], S32); break;
+            case 17: push(R[e]); break;                                                                                     // PUSH32
+            case 18: R[e] = pop(); break;
+            case 19: push(tab[k + 2]); break;                                                                               // PUSHI
+            case 20: if (cond(tab[k + 1])) eip = tab[k + 2] >>> 0; break;                                                   // JCC
+            case 21: eip = tab[k + 2] >>> 0; break;                                                                         // JMP
+            case 22: push((eip - csb) | 0); eip = tab[k + 2] >>> 0; break;                                                 // CALL
+            case 23: eip = (pop() + csb) >>> 0; break;                                                                      // RET
+            case 24: eip = (pop() + csb) >>> 0; R[ESP] += tab[k + 2]; break;                                                // RETN
+            case 25: R[ESP] = R[EBP]; R[EBP] = pop(); break;                                                                // LEAVE
+            case 26: logicFlags(R[e] & R[g], S32); break;                                                                   // TEST32_R
+            case 27: logicFlags(rd(eaOf(w, tab[k + 1])) & R[g], S32); break;
+            case 28: logicFlags(get8(e) & get8(g), S8); break;
+            case 29: logicFlags(rbx(eaOf(w, tab[k + 1])) & get8(g), S8); break;
+            case 30: set8(e, get8(g)); break;                                                                               // MOV8_EG_R
+            case 31: wb(eaOf(w, tab[k + 1]), get8(g)); break;
+            case 32: R[e] = R[g]; break;                                                                                    // MOV32_EG_R
+            case 33: wd(eaOf(w, tab[k + 1]), R[g]); break;
+            case 34: set8(g, get8(e)); break;                                                                               // MOV8_GE_R
+            case 35: set8(g, rbx(eaOf(w, tab[k + 1]))); break;
+            case 36: R[g] = R[e]; break;                                                                                    // MOV32_GE_R
+            case 37: R[g] = rd(eaOf(w, tab[k + 1])); break;
+            case 38: R[g] = (eaOf(w, tab[k + 1]) - segBase[(w & (1 << 28)) !== 0 ? SS : DS]) | 0; break;                  // LEA
+            case 39: break;                                                                                                 // NOP
+            case 40: R[EAX] = (R[EAX] << 16) >> 16; break;                                                                  // CWDE
+            case 41: R[EDX] = R[EAX] >> 31; break;                                                                          // CDQ
+            case 42: set8(0, rbx((tab[k + 2] + segBase[DS]) | 0)); break;                                                   // A0
+            case 43: R[EAX] = rd((tab[k + 2] + segBase[DS]) | 0); break;                                                    // A1
+            case 44: wb((tab[k + 2] + segBase[DS]) | 0, R[EAX] & 0xff); break;                                              // A2
+            case 45: wd((tab[k + 2] + segBase[DS]) | 0, R[EAX]); break;                                                     // A3
+            case 46: set8(e, tab[k + 2]); break;                                                                            // MOV8_IR
+            case 47: R[e] = tab[k + 2]; break;                                                                              // MOV32_IR
+            case 48: wb(eaOf(w, tab[k + 1]), tab[k + 2]); break;                                                           // MOV8_IM
+            case 49: wd(eaOf(w, tab[k + 1]), tab[k + 2]); break;                                                           // MOV32_IM
+            case 50: R[e] = tab[k + 2]; break;                                                                              // MOV32_IRM
+            case 51: { const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) R[e] = shift(g, R[e], c, S32); break; }
+            case 52: { const ad = eaOf(w, tab[k + 1]); const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) wd(ad, shift(g, rd(ad), c, S32)); break; }
+            case 53: { const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) set8(e, shift(g, get8(e), c, S8)); break; }
+            case 54: { const ad = eaOf(w, tab[k + 1]); const c = tab[k + 2] < 0 ? R[ECX] & 0xff : tab[k + 2]; if ((c & 31) !== 0) wb(ad, shift(g, rbx(ad), c, S8)); break; }
+            case 55: logicFlags(get8(e) & tab[k + 2], S8); break;                                                           // TESTI8_R
+            case 56: logicFlags(rbx(eaOf(w, tab[k + 1])) & tab[k + 2], S8); break;
+            case 57: logicFlags(R[e] & tab[k + 2], S32); break;
+            case 58: logicFlags(rd(eaOf(w, tab[k + 1])) & tab[k + 2], S32); break;
+            case 59: { const ad = eaOf(w, tab[k + 1]); wd(ad, inc(rd(ad), S32)); break; }                                   // INC32_M
+            case 60: { const ad = eaOf(w, tab[k + 1]); wd(ad, dec(rd(ad), S32)); break; }
+            case 61: { const t = R[e]; push((eip - csb) | 0); eip = (t + csb) >>> 0; break; }                              // CALL_R
+            case 62: { const t = rd(eaOf(w, tab[k + 1])); push((eip - csb) | 0); eip = (t + csb) >>> 0; break; }
+            case 63: eip = (R[e] + csb) >>> 0; break;                                                                       // JMP_R
+            case 64: eip = (rd(eaOf(w, tab[k + 1])) + csb) >>> 0; break;
+            case 65: push(rd(eaOf(w, tab[k + 1]))); break;                                                                  // PUSH_M
+            case 66: set8(e, cond(tab[k + 2]) ? 1 : 0); break;                                                             // SETCC_R
+            case 67: wb(eaOf(w, tab[k + 1]), cond(tab[k + 2]) ? 1 : 0); break;
+            case 68: imul2(S32, g, R[g], R[e]); break;                                                                      // IMUL_R
+            case 69: imul2(S32, g, R[g], rd(eaOf(w, tab[k + 1]))); break;
+            case 70: imul2(S32, g, R[e], tab[k + 2]); break;                                                                // IMULI_R
+            case 71: imul2(S32, g, rd(eaOf(w, tab[k + 1])), tab[k + 2]); break;
+            case 72: R[g] = get8(e); break;                                                                                 // MOVZX8_R
+            case 73: R[g] = rbx(eaOf(w, tab[k + 1])); break;
+            case 74: R[g] = R[e] & 0xffff; break;                                                                           // MOVZX16_R
+            case 75: R[g] = rw(eaOf(w, tab[k + 1])); break;
+            case 76: R[g] = (get8(e) << 24) >> 24; break;                                                                   // MOVSX8_R
+            case 77: R[g] = (rbx(eaOf(w, tab[k + 1])) << 24) >> 24; break;
+            case 78: R[g] = (R[e] << 16) >> 16; break;                                                                      // MOVSX16_R
+            case 79: R[g] = (rw(eaOf(w, tab[k + 1])) << 16) >> 16; break;
+            case 80: { const x = tab[k + 2]; fpuCore(x & 255, x >>> 8, 0); break; }                                           // FPU_R
+            case 81: { const x = tab[k + 2]; fpuCore(x & 255, x >>> 8, eaOf(w, tab[k + 1])); break; }                        // FPU_M
+            default: throw new CpuFault(`cache handler ${hnum}`, a);
+          }
         }
       } catch (e) {
         if (e instanceof DivFault) { eip = opEip; interrupt(0, opEip); continue; }
@@ -1303,6 +1663,9 @@ export function createCpu(bus) {
     cycles += i;
     return i;
   }
+
+  /** One instruction through the interpreter alone (tests, and the lock-step against the cache). */
+  function stepUncached() { opEip = eip; step(); cycles++; }
 
   const api = {
     R, seg, segBase, M,
@@ -1317,7 +1680,9 @@ export function createCpu(bus) {
     loadSeg, push, pop, rb, rw, rd, wb, ww, wd,
     interrupt(n) { halted = false; interrupt(n, eip); },
     stop() { stop = true; },
-    run, step,
+    run, step: stepUncached,
+    /** The machine wrote memory behind the CPU's back: drop any decoded code in that range. */
+    invalidate,
     get fpu() { return { st: Array.from({ length: 8 }, (_, k) => ST[(ftop + k) & 7]), top: ftop, cw: fcw, sw: fswWord() }; },
   };
   return api;

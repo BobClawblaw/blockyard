@@ -15,6 +15,6 @@ export const renderQuake = createDosGame({
   idleText: 'The shareware episode, Dimension of the Doomed: the real QUAKE.EXE v1.06 running on a PC this monitor emulates. Click the screen to use the mouse.',
   loadingText: 'loading the shareware episode (18 MB)…',
   saveName: /\.SAV$/i,
-  keysText: () => 'W S walk · A D strafe · mouse to look · left click fire · Space or right click jump · Shift run · 1–8 weapons · Esc menu · ~ console · F6 quicksave · F9 quickload',
+  keysText: () => 'W S walk · A D strafe · mouse to look · left click fire · Space or right click jump · Shift run · 1–8 weapons · − = smaller or bigger view (smaller runs faster) · Esc menu · ~ console · F6 quicksave · F9 quickload',
   switches: [],
 });

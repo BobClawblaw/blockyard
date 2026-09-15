@@ -32,6 +32,11 @@ export const GAMES = Object.freeze({
 export function quakeAutoexec({ firstRun }) {
   const lines = ['+mlook'];
   if (firstRun) lines.push('bind "w" "+forward"', 'bind "s" "+back"', 'bind "a" "+moveleft"', 'bind "d" "+moveright"', 'bind "SPACE" "+jump"', 'bind "MOUSE2" "+jump"');
+  // A SMALLER VIEW, the first time (operator, 2026-09-15: "we need to render it in a smaller window,
+  // so it runs faster"): Quake draws 3D only inside its view, and measured on this PC's emulator
+  // timedemo demo1 went 29.7 fps at viewsize 100, 32.5 at 80, 40.5 at 60. 80 keeps the status bar
+  // and a border; - and = change it in the game, and Quake saves the choice with its config.
+  if (firstRun) lines.push('viewsize 80');
   const text = `${lines.join('\n')}\n`;
   return Uint8Array.from(text, (c) => c.charCodeAt(0));
 }

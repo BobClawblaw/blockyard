@@ -334,8 +334,23 @@ DOS/4GW, and that is most of what changed:
 - **The BIOS tick count at 0x46C** advances with PIT channel 0's wraps (DJGPP's `uclock`).
 - `-nocdaudio` always (no CD, or Quake waits at a warning); `ID1/AUTOEXEC.CFG` gives `+mlook` every
   start and WASD binds only until Quake has written its own config.
-- **Speed**: `timedemo demo1` 28.9 fps at the emulator's own speed; ~77 MIPS (FPU-heavy). Adequate
-  (the operator's bar is 30 fps); a decoded-instruction cache is the next big step if it is ever not.
+- **Speed**: `timedemo demo1` 28.9 fps at the emulator's own speed on the first cut (~77 MIPS); 40.9
+  at full view and 44.7 at the default `viewsize 80` after the decoded-instruction cache below.
+
+**The decoded-instruction cache** (operator: "1 and 2" -- a smaller view and the cache). `x86.js`
+`run()` decodes each instruction once into an Int32Array per page and dispatches on a switch; what it
+does not specialise goes through `step()`. What will bite:
+
+- **Anything that writes memory behind the CPU must call `cpu.invalidate(addr, len)`.** The CPU's own
+  writes do (wb/ww/wd, the string ops' block moves); `dospc.js` does after a DOS read, a DPMI block
+  resize and a block allocation; **tests that `mem.set` new instructions over old ones must too**, or
+  they run the previous instruction's decoding.
+- **Invalidation is by overlap, not by page.** Dropping the whole page on a write made DOOM *slower*
+  with the cache than without: its span drawer patches its own immediates every call.
+- **Closures were tried and are slower** (megamorphic call per instruction): Quake 77 -> 69 MIPS.
+- **Checked**: lock-stepped against the uncached interpreter -- DOOM 400 M, Quake 1.5 G instructions,
+  registers and flags every 10,000, memory identical at the end -- and the native fuzzer re-run through
+  `run(1)` (118k instructions, 0 mismatches). `cpu.step()` in the API is the interpreter alone.
 
 ## Current state (2026-09-14)
 

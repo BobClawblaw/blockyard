@@ -437,6 +437,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         const b = { base: at, size, handle: nextHandle++ };
         blocks.splice(i, 0, b);
         mem.fill(0, at, at + size);
+        cpu.invalidate(at, size);
         return b;
       }
       if (i < blocks.length) at = blocks[i].base + blocks[i].size;
@@ -720,6 +721,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         if (!f) { fail(6); return true; }
         const k = Math.max(0, Math.min(n, f.size - f.pos));
         mem.set(f.data.subarray(f.pos, f.pos + k), a);
+        cpu.invalidate(a, k);
         f.pos += k; R[EAX] = k; ok();
         return true;
       }
@@ -909,6 +911,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         const nb = allocBlock(want);
         if (!nb) { blocks.splice(i, 0, old); fail(0x8013); return true; }
         mem.copyWithin(nb.base, old.base, old.base + old.size);
+        cpu.invalidate(nb.base, old.size);
         setBXCX(nb.base); setSIDI(nb.handle); ok();
         return true;
       }

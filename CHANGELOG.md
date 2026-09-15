@@ -32,6 +32,13 @@ All notable changes to this project are documented here. The format follows
   (`timedemo demo1`: 28.9). W A S D and mouse look on the first start, Quake's own bindings after.
   The game files are served at `/games/<game>/<path>` (`server/http/games.js`), for DOOM too.
 
+### Changed
+- **The emulated PC is a third faster.** Each instruction is decoded once and cached rather than
+  decoded every time it runs (writes into cached code clear what they overlap, because both games
+  patch their own drawing code): Quake 77 -> 108 million instructions a second, DOOM 90 -> 110, and
+  Quake's `timedemo demo1` 29.7 -> 40.9 fps. **Quake starts with a smaller view** (`viewsize 80`,
+  44.7 fps); **−** and **=** change it and Quake keeps the choice.
+
 ## [0.0.10] — 2026-09-15
 
 A point release, the day after 0.0.9, shaped by the first outside review of it on bitcointalk: the

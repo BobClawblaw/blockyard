@@ -129,14 +129,14 @@ test('the VGA: chained mode 13h is a byte per pixel; unchained writes go through
   const { cpu } = pc;
   cpu.R[0] = 0x13;
   // int 10h with AX=0013h goes through the machine
-  pc.mem.set([0xcd, 0x10, 0xf4], 0x2000);
+  pc.mem.set([0xcd, 0x10, 0xf4], 0x2000); cpu.invalidate(0x2000, 16);
   cpu.eip = 0x2000; cpu.run(2);
   assert.equal(pc.vga.mode, 0x13);
   cpu.wb(0xa0000 + 321, 7);
   let f = pc.renderIndexed(new Uint8Array(64000));
   assert.equal(f[321], 7, 'chained: offset is pixel');
   // unchain (sequencer memory mode bit 3 off), map mask plane 1, CRTC offset 40, start page 0x4000
-  const out = (p, v) => { pc.mem.set([0xb0, v, 0x66, 0xba, p & 0xff, p >> 8, 0xee, 0xf4], 0x2000); cpu.eip = 0x2000; cpu.run(3); };
+  const out = (p, v) => { pc.mem.set([0xb0, v, 0x66, 0xba, p & 0xff, p >> 8, 0xee, 0xf4], 0x2000); cpu.invalidate(0x2000, 16); cpu.eip = 0x2000; cpu.run(3); };
   out(0x3c4, 4); out(0x3c5, 0x06);
   out(0x3c4, 2); out(0x3c5, 0x02);
   out(0x3d4, 0x13); out(0x3d5, 40);
@@ -166,7 +166,7 @@ test('the timer interrupts at the rate the program sets, and the PIC holds IRQ0 
   for (let i = 0; i < 10; i++) { t += 1.0; pc.run(100); }
   assert.equal(mem[0x500], 1, 'one interrupt in service and never acknowledged blocks the next');
   // now a handler that acknowledges: inc ; mov al,20h ; out 20h,al ; iret
-  mem.set([0xff, 0x05, 0x00, 0x05, 0x00, 0x00, 0xb0, 0x20, 0xe6, 0x20, 0xcf], 0x3000);
+  mem.set([0xff, 0x05, 0x00, 0x05, 0x00, 0x00, 0xb0, 0x20, 0xe6, 0x20, 0xcf], 0x3000); cpu.invalidate(0x3000, 16);
   pc.pic.isr[0] = 0;
   for (let i = 0; i < 10; i++) { t += 1.0; pc.run(100); }
   assert.ok(mem[0x500] >= 9 && mem[0x500] <= 12, `about one a millisecond at 1000 Hz, got ${mem[0x500] - 1} in 10 ms`);
@@ -177,7 +177,7 @@ test('DOS files: open, read, seek, and a written file handed to the host when it
   const pc = createPC({ files: { 'A.TXT': new TextEncoder().encode('hello world') }, onWrite: (n, b) => written.push([n, b && new TextDecoder().decode(b)]) });
   const { cpu, mem } = pc;
   const name = (s, at) => mem.set([...new TextEncoder().encode(s), 0], at);
-  const int21 = () => { mem.set([0xcd, 0x21, 0xf4], 0x2000); cpu.eip = 0x2000; cpu.run(2); };
+  const int21 = () => { mem.set([0xcd, 0x21, 0xf4], 0x2000); cpu.invalidate(0x2000, 16); cpu.eip = 0x2000; cpu.run(2); };
   name('C:\\a.txt', 0x4000);
   cpu.R[0] = 0x3d00; cpu.R[2] = 0x4000; int21();
   const h = cpu.R[0] & 0xffff;
@@ -223,7 +223,7 @@ test('DOS files: open, read, seek, and a written file handed to the host when it
 test('DPMI memory: blocks are allocated, reported, freed and reused', () => {
   const pc = createPC();
   const { cpu, mem } = pc;
-  const int31 = () => { mem.set([0xcd, 0x31, 0xf4], 0x2000); cpu.eip = 0x2000; cpu.run(2); };
+  const int31 = () => { mem.set([0xcd, 0x31, 0xf4], 0x2000); cpu.invalidate(0x2000, 16); cpu.eip = 0x2000; cpu.run(2); };
   cpu.R[0] = 0x0500; cpu.R[7] = 0x6000; int31();
   const free0 = mem[0x6000] | (mem[0x6001] << 8) | (mem[0x6002] << 16) | (mem[0x6003] << 24);
   assert.ok(free0 > 20 * 1024 * 1024, 'most of 32 MB is free before the program asks');

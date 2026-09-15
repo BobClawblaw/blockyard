@@ -818,8 +818,15 @@ dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+   
   in a closure variable, an allocation), lazy flags recorded in an `Int32Array`, one try/catch
   around the loop rather than each instruction, and 32-bit fast paths for the instructions
   compilers emit most. The FPU keeps its stack in a Float64Array and converts operands through
-  typed-array views. About 90 million instructions a second on DOOM and 77 on Quake, in Node and in
-  a Chromium worker on this box (MEASUREMENTS §32, §33).
+  typed-array views. **Decoded instructions are cached**: each is decoded once into three int32s
+  (a handler number with its registers packed beside it, a displacement, an immediate) in an
+  Int32Array per 4 KB page, and `run()` dispatches on the handler number with one switch; the forms
+  it does not specialise run through `step()`. Not closures -- a closure per instruction made every
+  call megamorphic and ran slower than the interpreter. Writes into a page holding decoded code
+  clear only the instructions they overlap (DOOM and Quake both patch constants into their own span
+  drawers on every call), and the machine calls `cpu.invalidate()` after it writes memory directly.
+  About 110 million instructions a second on DOOM and 108 on Quake headless, 100-133 in a Chromium
+  worker on this box (MEASUREMENTS §32-34).
 - **`dospc.js`** is the machine, and it plays whichever DOS extender the program was bound to.
   `boot()` tells them apart by the file: `loadLE` finds DOOM's LE executable inside the DOS/4GW
   stub, loads it at +1 MB and applies its fixups; `parseCoff`/`bootCoff` find Quake's COFF image

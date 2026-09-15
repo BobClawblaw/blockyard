@@ -1312,3 +1312,36 @@ comparison: a Pentium 90 ran the same demo at 320x200 at roughly that rate.
 
 **Start-up**: graphics mode after 244 M instructions on a 30 M clock (Quake pages its 27 MB heap in
 and times its hardware), twenty screens drawn by 285 M; 2.8 s of wall time headless.
+
+## 34. The decoded-instruction cache, and Quake's view size (2026-09-15)
+
+This box, Node v22.23.2, `node scripts/dos-bench.js doom 400` / `quake 1500` (M instructions a
+second, headless, Sound Blaster attached):
+
+| build | DOOM | Quake |
+|---|---|---|
+| before (the interpreter, §32-33) | 90 | 77 |
+| a closure per decoded instruction | 68 | 69 |
+| int32 decodings in a typed array per page, one switch; a write drops the whole page | 83 | 90 |
+| ...a write clears only the instructions it overlaps (DOOM patches its span drawer each call) | 100 | 90 |
+| ...the FPU decoded too, and the loop keeps the current page between instructions | 107 | 104 |
+| ...no page check after a cached handler | **111** | **108** |
+
+The page-drop row is the one to remember: 217,660 whole-page drops in 300 M instructions of DOOM,
+every one from `mov [eax],ebx` into the constants of its own span routine at 0x12bdaf.
+
+**Quake's view size**, `+viewsize N +timedemo demo1` (969 frames), on a clock set to the emulator's
+speed:
+
+| viewsize | before the cache (76 M clock) | after (105 M clock) |
+|---|---|---|
+| 100 | 29.7 fps | 40.9 fps |
+| 80 (the new default) | 32.5 | 44.7 |
+| 60 | 40.5 | -- |
+
+In a Chromium worker: Quake 99-106 MIPS and 40-42 frames a second in a new game at `viewsize 80`
+(26 before), DOOM 133 MIPS at its 35 fps cap.
+
+**Checked, not assumed**: both games lock-stepped against the uncached interpreter (DOOM 400 M, Quake
+1.5 G instructions; registers and flags compared every 10,000; memory identical at the end), and the
+native fuzzer re-run through `run(1)` over 118k instructions with no mismatch.

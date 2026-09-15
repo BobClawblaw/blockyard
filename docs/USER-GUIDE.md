@@ -798,8 +798,8 @@ but can crackle when the machine is busy.
 The shareware episode of Quake, **Dimension of the Doomed**, under **Diversions**, beside DOOM and on
 the same emulated PC. Again the real thing: id Software's `QUAKE.EXE` v1.06 and `PAK0.PAK`,
 unmodified. Quake asked a lot more of a PC than DOOM did — a Pentium and a maths coprocessor — so it
-is the harder test of the machine, and it plays at roughly what a Pentium 90 managed in 1996: about
-thirty frames a second.
+is the harder test of the machine. It plays at about **forty frames a second** — better than the
+Pentium 90 it was written for managed in 1996.
 
 Press **play**. The first start downloads the 18 MB PAK file from the server (after that the
 browser revalidates it rather than fetching it again), the console scrolls past, the demos start,
@@ -827,11 +827,18 @@ game taught everyone:
 | **Shift** (held) | run |
 | **1**–**8** | choose a weapon |
 | **Esc** | Quake's menu |
+| **−** / **=** | a smaller or bigger view |
 | **~** | the console |
 | **F6** / **F9** | quicksave / quickload |
 
 Those are set the first time only. Change anything in Quake's own **Options → Customize controls**,
 and Quake saves your bindings when you quit; the page never overwrites them again.
+
+**A smaller view runs faster.** Quake starts with its view a little inside the screen, a border
+round it. Quake only draws the 3D world inside that view, so **−** makes it smaller and faster and
+**=** makes it bigger, up to the whole width; Quake keeps your choice. Measured on this machine's
+emulator, the benchmark demo runs at 41 frames a second at full size, 45 at the starting size, and
+more again below that.
 
 ### Pausing, saving, quitting
 

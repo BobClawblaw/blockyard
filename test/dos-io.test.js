@@ -69,6 +69,7 @@ test('Quake gets W A S D and mouse look the first time, and only mouse look afte
   assert.match(first, /^\+mlook$/m);
   assert.match(first, /^bind "w" "\+forward"$/m);
   assert.match(first, /^bind "d" "\+moveright"$/m);
+  assert.match(first, /^viewsize 80$/m, 'a smaller view to start with: it is the cheapest frame rate there is');
   const later = String.fromCharCode(...quakeAutoexec({ firstRun: false }));
   assert.equal(later, '+mlook\n', 'the player\'s own bindings, saved by Quake on quit, are left alone');
   assert.equal(GAMES.quake.exe, 'QUAKE.EXE');

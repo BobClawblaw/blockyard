@@ -29,7 +29,7 @@ function machine({ vectors = {}, bases = {}, softInt = () => true } = {}) {
   });
   cpu.loadSeg(CS, 8); cpu.loadSeg(DS, 16); cpu.loadSeg(ES, 16);
   cpu.R[ESP] = 0x80000;
-  const exec = (bytes, n = 1, at = 0x1000) => { mem.set(bytes, at); cpu.eip = at; cpu.run(n); return cpu; };
+  const exec = (bytes, n = 1, at = 0x1000) => { mem.set(bytes, at); cpu.invalidate(at, bytes.length); cpu.eip = at; cpu.run(n); return cpu; };
   return { cpu, mem, exec, ports, vga };
 }
 const u = (v) => v >>> 0;
@@ -63,6 +63,7 @@ test('CMP then Jcc: unsigned below and signed less disagree about 0xffffffff', (
   const { cpu, exec, mem } = machine();
   // cmp eax, 1 ; jb +2 ; mov bl,1 ; jl +2 ; mov cl,1 ; nop
   mem.set([0x83, 0xf8, 0x01, 0x72, 0x02, 0xb3, 0x01, 0x7c, 0x02, 0xb1, 0x01, 0x90], 0x1000);
+  cpu.invalidate(0x1000, 12);
   cpu.R[EAX] = -1; cpu.R[EBX] = 0; cpu.R[ECX] = 0;
   cpu.eip = 0x1000; cpu.run(5);
   assert.equal(cpu.R[EBX] & 0xff, 1, '0xffffffff is not below 1 unsigned: the jb falls through');
@@ -265,6 +266,7 @@ test('code and stack bases: calls push offsets, returns and jumps land at base +
   // jmp dword [0x2000] through a table holding an offset
   mem.set([0x00, 0x30, 0x00, 0x00], 0x42000);
   mem.set([0xff, 0x25, 0x00, 0x20, 0x00, 0x00], 0x41005);
+  cpu.invalidate(0x41000, 16);
   cpu.run(1);
   assert.equal(cpu.eip, 0x43000);
 });
