@@ -1138,7 +1138,13 @@ async function boot() {
       const bulk = g.bulk
         ? `<div class="cfgbulk"><button type="button" class="btn" data-cfgall="${g.group}">all on</button><button type="button" class="btn" data-cfgnone="${g.group}">all off</button></div>`
         : '';
-      return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${bulk}${g.rows.map((r) => {
+      // THE SWITCH ROWS IN TWO COLUMNS, HINT AS THE TOOLTIP (2026-09-15, "same treatment on the
+      // settings panel"): on the two effects tabs, thirty-odd switches with a line of hint each ran
+      // to 2,600px of scrolling; as compact rows two across, with the hint on hover, the whole tab
+      // is a screen. The sliders above them keep their hints in view.
+      const compact = !!g.bulk;
+      let open = false;
+      const rowsHtml = g.rows.map((r) => {
       const v = s[g.group][r.key];
       const id = `cfg-${g.group}-${r.key}`;
       const ctl = r.kind === 'toggle'
@@ -1148,8 +1154,16 @@ async function boot() {
           : r.kind === 'colour'
             ? `<input type="color" id="${id}" data-cfg="${g.group}.${r.key}" value="${v}">`
             : `<span class="cfgrange"><input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${formatRangeValue(r.step, v)}</span></span>`;
-      return `<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
-      }).join('')}</div>`;
+      if (compact && r.kind === 'toggle') {
+        const start = open ? '' : '<div class="cfgrows2">';
+        open = true;
+        return `${start}<div class="cfgrow compact" title="${String(r.hint).replace(/"/g, '&quot;')}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span></div>`;
+      }
+      const close = open ? '</div>' : '';
+      open = false;
+      return `${close}<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
+      }).join('') + (open ? '</div>' : '');
+      return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${bulk}${rowsHtml}</div>`;
     }).join('');
   };
   const openSettings = (open) => {
