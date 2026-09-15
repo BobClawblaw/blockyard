@@ -957,7 +957,7 @@ export function fxAt(t, fx) {
       return { glow: A * w, outline: 0.8 * A * w, lift: 0, color: [255, 255, 255] };
     }
     case 'scan': {
-      const w = g((along() - fxFront(fx)) / 1.6);
+      const w = g((along() - fxFront(fx)) / 3.2);   // the curtain's own width (2026-09-15)
       return { glow: 0.9 * A * w, outline: 0.7 * A * w, lift: 0, color: [150, 230, 255] };
     }
     case 'xray': {
