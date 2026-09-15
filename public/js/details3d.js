@@ -1030,15 +1030,19 @@ function drawFireworks(ctx, view, lw) {
 }
 
 // A SUPERNOVA (operator, 2026-09-15: "build the supernova" -- the solar flare only ever lit a cube
-// and its neighbours, and on a chart of candles that was one candle blinking). Drawn on both
-// boards over the lit tiles, on the same star fxAt lights (fxHash(seed + 7, 8)):
-//   ignition     0    - 0.12  the star swells white-hot, crackle filaments rising over it
-//   detonation   0.12 - 0.18  a white-out flash, and a lens flare the width of the chart
-//   shockwave    0.14 - 0.6   a ring racing outward, thinning, lighting what it crosses
-//   ejecta       0.14 - 1     filaments of plasma flung out on every side, slowing, fading
-//   remnant      0.2  - 1     a ring nebula -- brighter at the rim than the middle, as they are --
-//                             expanding for the rest of the run and cooling gold -> red -> violet
-//   aftermath    0.18 - 1     the star's core as a white dwarf, fading over the run
+// and its neighbours, and on a chart of candles that was one candle blinking). MODELLED ON NASA
+// GODDARD'S ANIMATION (svs.gsfc.nasa.gov/20413, the operator's reference, 2026-09-15: "Look at
+// this video of the explosive supernova. Model something similar"): a star, a blinding flash
+// that whites out the whole picture, a turbulent debris cloud of knots and filaments expanding
+// and reddening as it dims, and, as the cloud thins, a PULSAR -- a point of light pulsing at the
+// centre inside a small blue pulsar-wind nebula that grows. Drawn on both boards, on the same
+// star fxAt lights (fxHash(seed + 7, 8)), whose shockwave throws the candles it crosses:
+//   ignition     0    - 0.12  the star swells white-hot, crackle rising over it
+//   breakout     0.12 - 0.3   the white-out: the whole picture goes white and comes back
+//   debris       0.14 - 1     the cloud: sixty knots on a boiling shell, filaments between them,
+//                             hot white-gold at first, orange, then deep red; the shock band at
+//                             its leading edge, the line inside it warped; debris tumbling out
+//   pulsar       0.45 - 1     the point pulsing at the centre, its blue nebula growing
 // Everything is a function of fx.u, the seed and the clock; the run fades in its last tenth.
 function drawSupernova(ctx, view, lw) {
   const fx = view.fx;
@@ -1061,10 +1065,10 @@ function drawSupernova(ctx, view, lw) {
     return g;
   };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
-  // the remnant's colour cools with the run: gold, then red, then violet
-  const cool = Math.max(0, Math.min(1, (u - 0.2) / 0.8));
   const mixc = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
-  const rc = cool < 0.5 ? mixc([255, 200, 90], [255, 90, 70], cool * 2) : mixc([255, 90, 70], [170, 90, 255], (cool - 0.5) * 2);
+  // the cloud's colour with the run: white-gold, orange, then deep red
+  const cool = Math.max(0, Math.min(1, (u - 0.14) / 0.86));
+  const rc = cool < 0.35 ? mixc([255, 235, 190], [255, 150, 60], cool / 0.35) : mixc([255, 150, 60], [190, 50, 40], (cool - 0.35) / 0.65);
   const rcs = rc.join(',');
   // --- ignition
   if (u < 0.14) {
@@ -1081,19 +1085,7 @@ function drawSupernova(ctx, view, lw) {
       ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * r0, c.y + Math.sin(ang) * r0); ctx.lineTo(mid.x, mid.y); ctx.lineTo(c.x + Math.cos(ang) * r1, c.y + Math.sin(ang) * r1); ctx.stroke();
     }
   }
-  // --- detonation: the white-out, and a flare the width of the chart
-  if (u >= 0.12 && u < 0.32) {
-    const f = Math.pow(1 - (u - 0.12) / 0.2, 1.4);
-    disc(c.x, c.y, R0 * 3.2, grad(c.x, c.y, R0 * 3.2, [[0, `rgba(255,255,255,${(0.98 * f).toFixed(3)})`], [0.3, `rgba(255,250,235,${(0.7 * f).toFixed(3)})`], [0.6, `rgba(255,220,170,${(0.3 * f).toFixed(3)})`], [1, 'rgba(255,200,140,0)']]));
-    lensFlare(ctx, c.x, c.y, R0 * 11, [255, 230, 170], f, view, lw);
-  }
-  // --- the shockwave: THICK, SOFT BANDS, not thin circles (operator, 2026-09-15: "The
-  // circles/shockwaves look too 'thin'. Consider a transparency or warping effect within the
-  // blast radius"): each front is a band as wide as a shell radius with soft edges -- a gradient
-  // from nothing through the colour to nothing across its width -- with a translucent dome of
-  // hot air inside it, and the price line WARPED where the front passes: the stretch of line
-  // inside the blast is drawn again pushed outward from the centre, as through a lens, the push
-  // strongest at the front and easing behind it
+  // --- the debris cloud: knots on a boiling shell, filaments between them, expanding and slowing
   const band = (r, w, col, a) => {
     if (r <= 0 || a <= 0.003) return;
     const R = r + w;
@@ -1116,71 +1108,48 @@ function drawSupernova(ctx, view, lw) {
       ctx.stroke();
     }
   };
-  if (u >= 0.14 && u < 0.6) {
-    const f = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - f, 2.2));
-    // the dome of hot air inside the front: faint, brighter toward the rim
-    disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(255,240,220,0)'], [0.7, `rgba(255,240,220,${(0.06 * (1 - f) * gf).toFixed(3)})`], [1, `rgba(255,255,255,${(0.18 * (1 - f) * gf).toFixed(3)})`]]));
-    band(r, R0 * (0.25 + 0.55 * (1 - f)), rcs, 0.55 * (1 - f) * gf);
-    warp(r, (1 - f) * gf);
-    const f2 = Math.max(0, (u - 0.2) / 0.5), r2 = R0 * 3.2 * (1 - Math.pow(1 - f2, 2));
-    if (f2 > 0) band(r2, R0 * (0.2 + 0.4 * (1 - f2)), '255,230,180', 0.4 * (1 - f2) * gf);
-  }
-  // VIOLENT, AND NOT THIN (operator, 2026-09-15: "more violent and explosive", then "The thin
-  // fireworks ejecta is not working for me"): the blast is a FIREBALL -- a lumpy sphere of one
-  // gradient, white through orange to a dark red rim, its edge boiling on the clock, swelling
-  // fast and thinning as it grows -- with a dozen tongues of plasma licking out of it, tapered
-  // wedges that lengthen as they fly; forty glowing fragments of debris tumbling out under
-  // gravity with trails; and behind them sixty thick streaks, the fast ejecta, white-hot at the
-  // front. The fading over the run stays as it was (operator: "perfect").
-  if (u >= 0.12) {
-    const f = (u - 0.12) / 0.88, swell = 1 - Math.exp(-3.2 * f);
-    const rf = R0 * (0.4 + 3.4 * swell), fa = Math.pow(1 - f, 0.9) * gf;
-    if (fa > 0.01) {
-      ctx.beginPath();
-      for (let i = 0; i <= 48; i++) {
-        const th = (i / 48) * Math.PI * 2;
-        const boil = 1 + 0.16 * Math.sin(th * 4 + now * 0.004) + 0.1 * Math.sin(th * 7 - now * 0.006 + 2) + 0.06 * Math.sin(th * 11 + now * 0.01);
-        const rr = rf * boil, x = c.x + Math.cos(th) * rr, y = c.y + Math.sin(th) * rr * 0.9;
-        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-      }
-      ctx.closePath();
-      ctx.fillStyle = grad(c.x, c.y, rf * 1.15, [[0, `rgba(255,255,255,${(0.85 * fa).toFixed(3)})`], [0.25, `rgba(255,235,180,${(0.7 * fa).toFixed(3)})`], [0.5, `rgba(255,160,70,${(0.45 * fa).toFixed(3)})`], [0.8, `rgba(200,60,40,${(0.2 * fa).toFixed(3)})`], [1, 'rgba(120,20,30,0)']]);
-      ctx.fill();
-      // the tongues
-      for (let k = 0; k < 12; k++) {
-        const H = (q) => hash01(fx.seed + 7000 + k * 19 + q);
-        const ang = (k / 12) * Math.PI * 2 + (H(1) - 0.5) * 0.5, len = rf * (1.3 + 0.7 * H(2)), wb = rf * (0.18 + 0.12 * H(3));
-        const wag = Math.sin(now * 0.003 + k) * 0.08;
-        const dir = { x: Math.cos(ang + wag), y: Math.sin(ang + wag) }, nrm = { x: -dir.y, y: dir.x };
-        const tip = { x: c.x + dir.x * len, y: c.y + dir.y * len };
-        ctx.beginPath();
-        ctx.moveTo(c.x + nrm.x * wb, c.y + nrm.y * wb);
-        ctx.quadraticCurveTo(c.x + dir.x * len * 0.55 + nrm.x * wb * 0.7, c.y + dir.y * len * 0.55 + nrm.y * wb * 0.7, tip.x, tip.y);
-        ctx.quadraticCurveTo(c.x + dir.x * len * 0.55 - nrm.x * wb * 0.7, c.y + dir.y * len * 0.55 - nrm.y * wb * 0.7, c.x - nrm.x * wb, c.y - nrm.y * wb);
-        ctx.closePath();
-        ctx.fillStyle = grad(c.x, c.y, len, [[0, `rgba(255,240,200,${(0.7 * fa).toFixed(3)})`], [0.5, `rgba(255,150,60,${(0.4 * fa).toFixed(3)})`], [1, 'rgba(200,60,40,0)']]);
-        ctx.fill();
-      }
-    }
-  }
   if (u >= 0.14) {
     const f = (u - 0.14) / 0.86;
-    for (let k = 0; k < 60; k++) {
-      const H = (q) => hash01(fx.seed + k * 17 + q);
-      const spread = 1 - Math.exp(-3.6 * f);
-      const ang = (k / 60) * Math.PI * 2 + (H(1) - 0.5) * 0.14, len = R0 * (3 + 2.5 * H(2));
-      const tip = len * spread, tail = Math.max(0, tip - len * (0.16 + 0.16 * H(3)) * (1 - f * 0.5));
-      const col = k % 3 === 0 ? '200,140,255' : k % 3 === 1 ? '255,190,100' : '255,240,200';
-      const a = Math.pow(1 - f, 1.4) * gf;
-      if (a < 0.02) continue;
-      ctx.strokeStyle = `rgba(${col},${(0.45 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.28 * (1 - f * 0.5));
-      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * tail, c.y + Math.sin(ang) * tail); ctx.lineTo(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip); ctx.stroke();
-      ctx.strokeStyle = `rgba(255,255,255,${(0.9 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.1 * (1 - f * 0.5));
-      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * (tail + (tip - tail) * 0.6), c.y + Math.sin(ang) * (tail + (tip - tail) * 0.6)); ctx.lineTo(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip); ctx.stroke();
+    const shell = R0 * (0.5 + 4 * (1 - Math.exp(-2.6 * f)));            // the cloud's radius: fast, then slowing
+    // brightness: full while the cloud is young, holding, then away over the last third
+    const bright = (f < 0.08 ? f / 0.08 : f < 0.62 ? 1 : Math.pow(1 - (f - 0.62) / 0.38, 1.3)) * gf;
+    const KNOTS = 60;
+    const knot = (k) => {
+      const H = (q) => hash01(fx.seed + k * 29 + q);
+      const ang = (k / KNOTS) * Math.PI * 2 + (H(1) - 0.5) * 0.25;
+      // the shell boils: each knot rides its own radius that wanders on the clock
+      const rad = shell * (0.72 + 0.4 * H(2)) * (1 + 0.06 * Math.sin(now * 0.0016 + k * 1.3) + 0.04 * Math.sin(now * 0.0031 + k * 0.7));
+      return { x: c.x + Math.cos(ang) * rad, y: c.y + Math.sin(ang) * rad * 0.82, r: shell * (0.16 + 0.16 * H(3)), hot: H(4) < 0.18, H };
+    };
+    const knots = []; for (let k = 0; k < KNOTS; k++) knots.push(knot(k));
+    // the interior: a dim haze of the colour, thinner in the middle as the shell moves out
+    disc(c.x, c.y, shell, grad(c.x, c.y, shell, [[0, `rgba(${rcs},${(0.05 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.12 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    // the filaments: wisps between neighbouring knots and from each knot inward, curved, faint
+    ctx.lineCap = 'round';
+    for (let k = 0; k < KNOTS; k++) {
+      const a = knots[k], b = knots[(k + 1) % KNOTS], H = a.H;
+      const mid = { x: (a.x + b.x) / 2 + (H(5) - 0.5) * shell * 0.25, y: (a.y + b.y) / 2 + (H(6) - 0.5) * shell * 0.25 };
+      const col = a.hot ? '140,200,255' : rcs;
+      ctx.strokeStyle = `rgba(${col},${(0.5 * bright).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.16 * (1 - f * 0.4));
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(mid.x, mid.y, b.x, b.y); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${(0.35 * bright * (a.hot ? 1.5 : 1)).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, U * 0.05);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(mid.x, mid.y, b.x, b.y); ctx.stroke();
+      if (k % 2 === 0) {
+        const inx = c.x + (a.x - c.x) * (0.35 + 0.3 * H(7)), iny = c.y + (a.y - c.y) * (0.35 + 0.3 * H(7));
+        const m2 = { x: (a.x + inx) / 2 + (H(8) - 0.5) * shell * 0.2, y: (a.y + iny) / 2 + (H(9) - 0.5) * shell * 0.2 };
+        ctx.strokeStyle = `rgba(${col},${(0.3 * bright).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.1 * (1 - f * 0.4));
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(m2.x, m2.y, inx, iny); ctx.stroke();
+      }
     }
+    // the knots: gradient blobs, a few of them shock-heated blue-white
+    for (const kn of knots) {
+      const col = kn.hot ? '150,205,255' : rcs, core = kn.hot ? '235,245,255' : mixc(rc, [255, 255, 255], 0.5).join(',');
+      disc(kn.x, kn.y, kn.r, grad(kn.x, kn.y, kn.r, [[0, `rgba(${core},${(0.55 * bright).toFixed(3)})`], [0.45, `rgba(${col},${(0.4 * bright).toFixed(3)})`], [1, `rgba(${col},0)`]]));
+    }
+    // debris tumbling out ahead of the cloud, glowing, under gravity
     for (let k = 0; k < 40; k++) {
       const H = (q) => hash01(fx.seed + 9000 + k * 13 + q);
-      const ang = H(1) * Math.PI * 2, sp = R0 * (2.2 + 3 * H(2)), ease = 1 - Math.exp(-2.4 * f);
+      const ang = H(1) * Math.PI * 2, sp = R0 * (3 + 3 * H(2)), ease = 1 - Math.exp(-2.4 * f);
       const x = c.x + Math.cos(ang) * sp * ease, y = c.y + Math.sin(ang) * sp * ease + R0 * 1.4 * f * f;
       const px = c.x + Math.cos(ang) * sp * Math.max(0, ease - 0.08), py = c.y + Math.sin(ang) * sp * Math.max(0, ease - 0.08) + R0 * 1.4 * Math.max(0, f - 0.05) ** 2;
       const a = Math.pow(1 - f, 1.2) * gf, tw = 0.6 + 0.4 * Math.sin(now * 0.03 + k * 2.1);
@@ -1189,32 +1158,45 @@ function drawSupernova(ctx, view, lw) {
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x, y); ctx.stroke();
       disc(x, y, U * (0.1 + 0.14 * H(3)) * (1 - 0.4 * f), grad(x, y, U * 0.24, [[0, `rgba(255,255,255,${(a * tw).toFixed(3)})`], [0.5, `rgba(255,200,110,${(0.8 * a * tw).toFixed(3)})`], [1, 'rgba(255,140,60,0)']]));
     }
-  }
-  // --- the remnant: a ring nebula expanding for the rest of the run, cooling as it goes
-  if (u >= 0.2) {
-    const f = (u - 0.2) / 0.8, ring = R0 * (0.4 + 2.4 * (1 - Math.exp(-2 * f)));
-    // LINGERS (operator: "make the supernova remnant linger longer before fading"): in over the
-    // first 15% of its life, full until 60%, then away over the last 40%
-    const a0 = 0.3 * (f < 0.15 ? f / 0.15 : f < 0.6 ? 1 : Math.pow(1 - (f - 0.6) / 0.4, 1.3)) * gf;
-    // the shell: lobes on the ring, each a gradient blob, brighter than the middle
-    for (let k = 0; k < 26; k++) {
-      const H = (q) => hash01(fx.seed + k * 23 + q);
-      const ang = (k / 26) * Math.PI * 2 + (H(1) - 0.5) * 0.3, rad = ring * (0.92 + 0.16 * H(2));
-      const wob = Math.sin(now * 0.0012 + k) * ring * 0.04;
-      const x = c.x + Math.cos(ang) * rad + wob, y = c.y + Math.sin(ang) * rad * 0.8 - wob;
-      const r = ring * (0.28 + 0.2 * H(3)) * (0.7 + 0.6 * f);
-      const lobe = mixc(rc, [255, 255, 255], 0.25 * H(4)).join(',');
-      disc(x, y, r, grad(x, y, r, [[0, `rgba(${lobe},${a0.toFixed(3)})`], [0.5, `rgba(${rcs},${(a0 * 0.5).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    // the shock band at the cloud's leading edge, and the price line warped through it
+    if (u < 0.6) {
+      const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
+      disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(255,240,220,0)'], [0.7, `rgba(255,240,220,${(0.06 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(255,255,255,${(0.18 * (1 - fr) * gf).toFixed(3)})`]]));
+      band(r, R0 * (0.25 + 0.55 * (1 - fr)), rcs, 0.55 * (1 - fr) * gf);
+      warp(r, (1 - fr) * gf);
     }
-    // the interior: thin and dark, a faint haze of the colour
-    disc(c.x, c.y, ring * 0.9, grad(c.x, c.y, ring * 0.9, [[0, `rgba(${rcs},${(a0 * 0.12).toFixed(3)})`], [0.7, `rgba(${rcs},${(a0 * 0.2).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
-    // the light on everything near: a wide pool of the remnant's colour
-    disc(c.x, c.y, ring * 1.6, grad(c.x, c.y, ring * 1.6, [[0, `rgba(${rcs},${(a0 * 0.5).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    // a wide pool of the cloud's colour on everything near
+    disc(c.x, c.y, shell * 1.6, grad(c.x, c.y, shell * 1.6, [[0, `rgba(${rcs},${(0.14 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
   }
-  // --- the aftermath: the white dwarf
-  if (u >= 0.18) {
-    const f = (u - 0.18) / 0.82, a = Math.pow(1 - f, 0.8) * gf, tw = 0.8 + 0.2 * Math.sin(now * 0.03);
-    disc(c.x, c.y, R0 * 0.35 * (1 - 0.6 * f), grad(c.x, c.y, R0 * 0.35 * (1 - 0.6 * f), [[0, `rgba(255,255,255,${(a * tw).toFixed(3)})`], [0.4, `rgba(220,235,255,${(0.6 * a).toFixed(3)})`], [1, 'rgba(180,200,255,0)']]));
+  // --- the breakout: the whole picture goes white and comes back
+  if (u >= 0.12 && u < 0.34) {
+    const t = (u - 0.12) / 0.22, f = t < 0.12 ? t / 0.12 : Math.pow(1 - (t - 0.12) / 0.88, 1.7);
+    const W = Math.max(view.boardW ?? 2000, 2000) * 1.5;
+    ctx.fillStyle = `rgba(255,252,245,${(0.92 * f).toFixed(3)})`; ctx.fillRect(c.x - W, c.y - W, 2 * W, 2 * W);
+    disc(c.x, c.y, R0 * 3.5, grad(c.x, c.y, R0 * 3.5, [[0, `rgba(255,255,255,${f.toFixed(3)})`], [0.5, `rgba(255,245,220,${(0.5 * f).toFixed(3)})`], [1, 'rgba(255,220,170,0)']]));
+    lensFlare(ctx, c.x, c.y, R0 * 11, [255, 230, 170], f, view, lw);
+  }
+  // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing
+  if (u >= 0.45) {
+    const f = (u - 0.45) / 0.55, on = Math.min(1, f / 0.1) * gf;
+    const period = 380, ph = ((now % period) / period), pulse = Math.pow(Math.max(0, 1 - Math.abs(ph - 0.5) * 6), 2);   // a sharp beat, twice a second and a bit
+    const neb = R0 * (0.25 + 1.1 * f);
+    disc(c.x, c.y, neb, grad(c.x, c.y, neb, [[0, `rgba(160,210,255,${(0.3 * on).toFixed(3)})`], [0.5, `rgba(110,170,255,${(0.14 * on).toFixed(3)})`], [1, 'rgba(80,130,255,0)']]));
+    // the wind nebula's own knots, turning
+    for (let k = 0; k < 8; k++) {
+      const ang = now * 0.0006 + (k / 8) * Math.PI * 2, rr = neb * 0.6;
+      disc(c.x + Math.cos(ang) * rr, c.y + Math.sin(ang) * rr * 0.8, neb * 0.3, grad(c.x + Math.cos(ang) * rr, c.y + Math.sin(ang) * rr * 0.8, neb * 0.3, [[0, `rgba(200,230,255,${(0.14 * on).toFixed(3)})`], [1, 'rgba(120,180,255,0)']]));
+    }
+    const rp = R0 * (0.12 + 0.25 * pulse);
+    disc(c.x, c.y, rp * 2.4, grad(c.x, c.y, rp * 2.4, [[0, `rgba(255,255,255,${((0.5 + 0.5 * pulse) * on).toFixed(3)})`], [0.3, `rgba(200,235,255,${(0.55 * pulse * on).toFixed(3)})`], [1, 'rgba(140,200,255,0)']]));
+    disc(c.x, c.y, rp * 0.5, `rgba(255,255,255,${on.toFixed(3)})`);
+    // the beam: two thin rays sweeping round with the beat
+    const sweep = now * 0.004;
+    for (const side of [0, Math.PI]) {
+      const ang = sweep + side, L = neb * (0.8 + 0.8 * pulse);
+      ctx.strokeStyle = `rgba(220,240,255,${(0.35 * pulse * on).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.04);
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(c.x + Math.cos(ang) * L, c.y + Math.sin(ang) * L); ctx.stroke();
+    }
   }
   ctx.lineWidth = lw;
 }

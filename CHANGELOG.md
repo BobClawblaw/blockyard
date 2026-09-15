@@ -24,7 +24,14 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
-- **The solar flare is a supernova.** It only ever lit a cube and its neighbours, which on a chart
+- **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
+  the star swells white-hot with crackle rising over it; the whole picture whites out and comes
+  back, with a lens flare the width of the chart; a debris cloud of sixty knots on a boiling shell
+  with filaments between them expands and slows, white-gold, then orange, then deep red, a few
+  knots shock-heated blue, debris tumbling out ahead of it, a soft shock band at its leading edge
+  throwing the candles it crosses and warping the price line through it; and as the cloud dims a
+  **pulsar** appears — a point pulsing at the centre, two thin beams sweeping round, inside a blue
+  pulsar-wind nebula that grows. 12 s (18 on Markets), the remnant lingering. First cut: It only ever lit a cube and its neighbours, which on a chart
   of candles was one candle blinking. Now, on both boards over the same lit tile: the star swells
   white-hot with crackle rising over it, blows out in a white flash and a lens flare the width of
   the chart, a shockwave ring races outward and thins, seventy-two filaments of plasma are flung
