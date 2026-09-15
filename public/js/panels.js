@@ -476,7 +476,7 @@ export function renderNode(s, state, h) {
   h.setText('ndRpc', kv([
     ['endpoint', rpc.url ?? '–'],
     ['cookie source', rpc.cookieSource ? fmt.hash(rpc.cookieSource, 14) : '–'],
-    ['in flight', '1 (by design)'],
+    ['in flight', '1'],   // one request at a time is the design (the note under the chart says so); '(by design)' was cut off in the two-column list
     ['calls (60 s window)', String(rpc.ratePerSec ?? 0) + '/s'],
     ['total calls', fmt.num(rpc.calls)],
     ['batches', fmt.num(rpc.batches)],
