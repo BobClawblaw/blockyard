@@ -25,13 +25,15 @@ All notable changes to this project are documented here. The format follows
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
 - **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
-  the star swells white-hot with crackle rising over it; the whole picture whites out and comes
-  back, with a lens flare the width of the chart; a debris cloud of sixty knots on a boiling shell
-  with filaments between them expands and slows, white-gold, then orange, then deep red, a few
-  knots shock-heated blue, debris tumbling out ahead of it, a soft shock band at its leading edge
-  throwing the candles it crosses and warping the price line through it; and as the cloud dims a
-  **pulsar** appears — a point pulsing at the centre, two thin beams sweeping round, inside a blue
-  pulsar-wind nebula that grows. 12 s (18 on Markets), the remnant lingering. First cut: It only ever lit a cube and its neighbours, which on a chart
+  the star swells white-hot and breathes; the whole picture whites out and comes back, with a
+  lens flare the width of the chart; the debris is a **volume of gas** (`gasCloud`: a sphere of
+  150 soft blobs, denser toward the rim so the limb is bright, carried outward by the expansion
+  in proportion to their own radius, the front ones hotter and paler, boiling slowly on the
+  clock, cooling white-gold → orange → deep red as it dims — no lines anywhere), a soft shock band
+  at its leading edge throwing the candles it crosses and shaking them as it approaches; and as
+  the cloud dims a **pulsar** appears — a point beating seven times a second at the centre, two
+  thin beams sweeping round, inside a blue pulsar-wind nebula that grows. 12 s (18 on Markets),
+  the remnant lingering. First cut: It only ever lit a cube and its neighbours, which on a chart
   of candles was one candle blinking. Now, on both boards over the same lit tile: the star swells
   white-hot with crackle rising over it, blows out in a white flash and a lens flare the width of
   the chart, a shockwave ring races outward and thins, seventy-two filaments of plasma are flung
