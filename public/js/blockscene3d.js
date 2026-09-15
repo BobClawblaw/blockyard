@@ -1311,9 +1311,15 @@ export function buildScene(tiles, o = {}) {
       // original positions when the blackhole starts to disappear?"). While the hole grows the
       // tile glides out to its orbit and turns with it; while it shrinks the pull falls and the
       // tile glides straight home -- the orbit never unwinds.
-      const peak = Math.max(fxv.pullPeak ?? fxv.pull, 0.001), k0 = Math.min(1, fxv.pull / peak);
+      // STEADILY (operator, 2026-09-15: "The bars don't cleanly leave or return ... They sorta get
+      // ripped off, and snapped back into place"): the capture and the release are eased with a
+      // smoothstep, and the orbit is KEPLERIAN -- its angular speed goes with the square of the
+      // pull, so a bar far out barely turns and one close in whips round -- where before every
+      // bar's target swept a wide circle at one speed and a bar just being caught was yanked after
+      // it. The angle's starting offset is small for the same reason.
+      const peak = Math.max(fxv.pullPeak ?? fxv.pull, 0.001), kl = Math.min(1, fxv.pull / peak), k0 = kl * kl * (3 - 2 * kl);
       const dx = cx0 - hp.x, dy = cy0 - hp.y, r0 = Math.hypot(dx, dy) || 1, a0 = Math.atan2(dy, dx);
-      const swing = peak * ((o.now ?? 0) * 0.0009 + 1.2);              // clockwise on screen, faster the deeper in
+      const swing = peak * peak * (o.now ?? 0) * 0.0014 + 0.5 * peak;   // clockwise on screen, Keplerian
       const r1 = r0 * (1 - 0.55 * peak), a1 = a0 + swing;
       const cx1 = hp.x + Math.cos(a1) * r1, cy1 = hp.y + Math.sin(a1) * r1 * (1 - 0.6 * peak);      // flattened toward the disk
       const sx = (cx1 - cx0) * k0, sy = (cy1 - cy0) * k0;
