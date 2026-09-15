@@ -1149,13 +1149,13 @@ function drawSupernova(ctx, view, lw) {
   const cool = Math.max(0, Math.min(1, (u - 0.14) / 0.86));
   const rc = cool < 0.3 ? mixc([255, 255, 255], [150, 195, 255], cool / 0.3) : mixc([150, 195, 255], [175, 110, 255], (cool - 0.3) / 0.7);
   const rcs = rc.join(',');
-  // --- ignition: the star, blue-shifting as it goes (operator: "The star is blue-shifted before
-  // it blows up"): a glint -- halo, core, diffraction spikes -- that grows and turns from warm
-  // white to blue-white over the run-up, breathing, never flashing
+  // --- ignition: a white nebula, not a ball (operator, 2026-09-15: "Don't use a white ball visual
+  // at the beginning of the animation. Use white nebula effects"): a small cloud of white gas
+  // gathering and brightening round the star, blue-shifting as the blast nears
   if (u < 0.14) {
     const f = Math.min(1, u / 0.12), ease = f * f;
-    const col = [Math.round(255 - 95 * ease), Math.round(245 - 40 * ease), 255];
-    starGlint(ctx, c.x, c.y, R0 * (0.12 + 0.55 * ease), col, 0.35 + 0.65 * ease, now, lw);
+    const col = [Math.round(255 - 70 * ease), Math.round(255 - 30 * ease), 255];
+    gasCloud(ctx, c.x, c.y, R0 * (0.35 + 0.9 * ease), 0.2, now, fx.seed + 555, 0.25 + 0.75 * ease, col, grad, disc, 70, [120, 150, 230]);
   }
   // --- THE DEBRIS CLOUD AS A VOLUME OF GAS (operator, 2026-09-15: "Overall it needs to look
   // more like the NASA video. I don't think the ejecta/fireworks is working well ... The thin
@@ -1213,7 +1213,8 @@ function drawSupernova(ctx, view, lw) {
     const t = (u - 0.12) / 0.22, f = t < 0.12 ? t / 0.12 : Math.pow(1 - (t - 0.12) / 0.88, 1.7);
     const W = Math.max(view.boardW ?? 2000, 2000) * 1.5;
     ctx.fillStyle = `rgba(255,252,245,${(0.92 * f).toFixed(3)})`; ctx.fillRect(c.x - W, c.y - W, 2 * W, 2 * W);
-    disc(c.x, c.y, R0 * 3.5, grad(c.x, c.y, R0 * 3.5, [[0, `rgba(255,255,255,${f.toFixed(3)})`], [0.5, `rgba(255,245,220,${(0.5 * f).toFixed(3)})`], [1, 'rgba(255,220,170,0)']]));
+    // the burst itself is white gas, not a ball: a cloud thrown out with the flash
+    gasCloud(ctx, c.x, c.y, R0 * (1.2 + 2.5 * t), t, now, fx.seed + 999, f, [255, 255, 255], grad, disc, 90, [200, 210, 240]);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
     // taken out on 2026-09-15; the white-out alone is the breakout)
   }
