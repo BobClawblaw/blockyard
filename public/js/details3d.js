@@ -313,12 +313,12 @@ function fxNow(st, t) {
     let lo = Infinity, hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
     const hz = Math.max(lo, Math.min(hi, near.z));
     const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
-    const rs = 2.4 * grow;                                             // the horizon, in grid units
+    const rs = 4.8 * grow;                                             // the horizon, in grid units (doubled 2026-09-15: "double the size of the hole")
     out.blackhole = { x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, rs, grow, lo, hi };
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
     // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
     // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
-    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, color: [255, 160, 60], alpha: grow, r: rs * 2.2, scale: 0 }] : [];
+    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, scale: 0, pull: 1 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
@@ -1093,7 +1093,7 @@ function drawBlackHole(ctx, view, lw) {
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const canT = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
   const TILT = -0.2, SQUASH = 0.3;                                       // the disk seen nearly edge-on, a little turned
-  const inner = rs * 1.7, outer = rs * 5.2;
+  const inner = rs * 1.4, outer = rs * 3.4;
   const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
   const H = (k) => hash01(fx.seed + k);
   // --- the glow of the whole thing on the chart round it

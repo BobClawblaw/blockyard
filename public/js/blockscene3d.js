@@ -1169,6 +1169,9 @@ export function fxAt(t, fx) {
             glow: 0.85 * w, outline: 0.8 * w, lift: (hd.lift ?? 0) * w, color: hd.color,
             hide: (hd.hide ?? 0) > 0 && reach > 0.45 ? 1 : 0,
             scale: hd.scale == null ? 1 : 1 - (1 - hd.scale) * reach,
+            // `pull`: how hard the head drags this tile toward itself (the black hole; buildScene
+            // shears the faces toward the head's screen point by it)
+            pull: (hd.pull ?? 0) * reach, pullAt: hd.pull ? { x: hd.x, y: hd.y, z: hd.z ?? 0 } : null,
           };
         }
       }
@@ -1283,6 +1286,18 @@ export function buildScene(tiles, o = {}) {
     const shaped = sc < 0.999 ? { ...t, tall: Math.max(0.04, cubeHeight(t) * sc) } : t;
     // NEON is a flat cube: no facets, no crown -- solid faces and the tubes on their edges
     const f = tileFaces(fxv.lift > 0.001 ? { ...shaped, fxz: fxv.lift } : shaped, o, t.s >= facetMin && o.neon !== true);
+    // SPAGHETTIFIED (operator, 2026-09-15: "the candles need to stretch and bend toward the hole
+    // before they shrink"): a tile within a pulling head's reach has its faces sheared toward the
+    // head's point on screen -- the top corners dragged hard, the base corners a little -- so it
+    // leans and lengthens toward the hole before the scale takes it. Each corner object is moved
+    // once, however many faces share it.
+    if (fxv.pull > 0.001 && fxv.pullAt) {
+      const hp = project(fxv.pullAt.x, fxv.pullAt.y, fxv.pullAt.z, o);
+      const moved = new Set();
+      const drag = (p, k) => { if (moved.has(p)) return; moved.add(p); p.x += (hp.x - p.x) * k; p.y += (hp.y - p.y) * k; };
+      for (const p of f.top) drag(p, 0.85 * fxv.pull);
+      for (const sd of f.sides) { drag(sd.points[0], 0.85 * fxv.pull); drag(sd.points[1], 0.85 * fxv.pull); drag(sd.points[2], 0.3 * fxv.pull); drag(sd.points[3], 0.3 * fxv.pull); }
+    }
     const a = t.alpha ?? 1;
     const airborne = (t.z ?? 0) > 0.02;
     const out = airborne && !o.oblique ? air : ground;
