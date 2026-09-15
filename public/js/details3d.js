@@ -1095,94 +1095,67 @@ function drawScanCurtain(ctx, view, lw) {
   const ends = curtainEnds(fx, 0);
   if (!ends) return;
   const [A, B] = ends;
-
-  // A CONE, NOT A STACK OF SHEETS (operator, 2026-09-15: "that leaning portion and the
-  // cross-hatching is not working. Can we make it a conical beam. instead, and do something
-  // volumetric effect?").
-  //
-  // WHY THE OLD ONE HATCHED. The curtain was twenty-one PARALLEL flat quads (k = -10..10, each
-  // offset k*0.5 along the sweep) with fourteen raster lines drawn across them. Under the oblique
-  // camera parallel sheets project to parallelograms offset by a constant, so their translucent
-  // edges land on near-parallel screen lines and read as a lattice -- a leaning cross-hatch. No
-  // amount of alpha tuning fixes that; the geometry itself is a grid.
-  //
-  // A cone has no parallel edges. Its body is a fan of triangles that all converge on the apex,
-  // so overlap -- and therefore density -- rises smoothly toward the axis on its own. That is the
-  // volumetric part: nothing is faked with a gradient across a flat face, the light is thick where
-  // the geometry is thick. Three nested shells give the falloff depth, a bright pool marks where
-  // it lands, and motes drift inside the volume rather than on a sheet.
-  const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-  const half = Math.hypot(B.x - A.x, B.y - A.y) / 2;      // reach along the front line
-  const ax = -fx.dy, ay = fx.dx;                          // unit vector ALONG the front
-  const sx = fx.dx, sy = fx.dy;                           // unit vector along the SWEEP
-  const apex = { x: mx, y: my, z: top * 1.5 };
-  const SPREAD = 5.5;                                      // the beam's half-width across the sweep
-  const RING = 44;
-  // a point on the base ellipse: `f` scales the shell, `th` runs around it
-  const ring = (th, f) => ({
-    x: mx + Math.cos(th) * half * f * ax + Math.sin(th) * SPREAD * f * sx,
-    y: my + Math.cos(th) * half * f * ay + Math.sin(th) * SPREAD * f * sy,
-    z: 0,
-  });
-  const tri = (a, b, c, fill) => {
-    const p0 = P(a), p1 = P(b), p2 = P(c);
-    ctx.fillStyle = fill;
-    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.closePath(); ctx.fill();
-  };
+  const along = (q, k) => ({ x: q.x + fx.dx * k, y: q.y + fx.dy * k, z: q.z });   // a step along the sweep
+  const lift = (q, z) => ({ x: q.x, y: q.y, z });
+  const quad = (a0, b0, a1, b1, fill) => { const p0 = P(a0), p1 = P(b0), p2 = P(b1), p3 = P(a1); ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.closePath(); ctx.fill(); };
   const seg = (a, b, col, w) => { const p = P(a), q = P(b); ctx.strokeStyle = col; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); };
   const grad = (x, y, r, stops) => { const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null; if (!g || typeof g.addColorStop !== 'function') return stops[0][1]; for (const [o, c] of stops) g.addColorStop(o, c); return g; };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
-
-  // --- the volume: nested cone shells, widest and faintest first
-  for (const [f, a] of [[1, 0.035], [0.72, 0.045], [0.45, 0.055], [0.22, 0.07]]) {
-    const fill = `rgba(120,220,255,${(a * amp).toFixed(3)})`;
-    for (let i = 0; i < RING; i++) {
-      tri(apex, ring((i / RING) * Math.PI * 2, f), ring(((i + 1) / RING) * Math.PI * 2, f), fill);
-    }
+  // --- the phosphor tail: sheets behind the front, greener and fainter as they fall back
+  for (let k = 1; k <= 7; k++) {
+    const off = -k * 0.9, f = 1 - k / 8;
+    quad(along(A, off), along(B, off), lift(along(A, off), top * 0.35 * f), lift(along(B, off), top * 0.35 * f), `rgba(90,255,190,${(0.045 * f * amp).toFixed(3)})`);
   }
-  // the hot axis: a thin cone down the middle, and the shaft itself
-  for (let i = 0; i < RING; i++) {
-    tri(apex, ring((i / RING) * Math.PI * 2, 0.08), ring(((i + 1) / RING) * Math.PI * 2, 0.08), `rgba(235,250,255,${(0.10 * amp).toFixed(3)})`);
+  // --- the curtain: soft faces either side of a hard core, stacked sheets with a gaussian across the thickness
+  // (on the price board the sheet stands on the board's eight-unit depth, which the low camera
+  // shows as a narrow strip, so the faces reach 2.5 units either side of the core and are bright)
+  // ...and wider again (operator, 2026-09-15: "The scan curtain is too thin, make it wider"): the
+  // faces reach five units either side of the core, the core itself is a unit thick
+  // A BROAD BEAM (operator, 2026-09-15: "Reach more blocks with the scanner effect. The beam is
+  // too thin and looks bad"): the body is a translucent slab ten units wide with a gaussian
+  // across it, the core a two-unit band, and every face of the sweep is bright enough to read
+  // as a volume of light rather than a sheet
+  quad(along(A, -5), along(B, -5), lift(along(A, 5), top), lift(along(B, 5), top), `rgba(90,200,255,${(0.1 * amp).toFixed(3)})`);
+  for (let k = -10; k <= 10; k++) {
+    if (k === 0) continue;
+    const off = k * 0.5, f = Math.exp(-(k * k) / 30);
+    quad(along(A, off), along(B, off), lift(along(A, off), top), lift(along(B, off), top), `rgba(120,220,255,${(0.075 * f * amp).toFixed(3)})`);
   }
-
-  // --- where it lands: a pool on the floor, brightest at the axis
-  {
-    const c = P({ x: mx, y: my, z: 0 });
-    const r = U * Math.max(half, SPREAD) * 0.9;
-    disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, `rgba(235,250,255,${(0.42 * amp).toFixed(3)})`], [0.35, `rgba(150,225,255,${(0.2 * amp).toFixed(3)})`], [1, 'rgba(110,200,255,0)']]));
+  quad(along(A, -1), along(B, -1), lift(along(A, 1), top), lift(along(B, 1), top), `rgba(200,240,255,${(0.28 * amp).toFixed(3)})`);
+  quad(along(A, -0.35), along(B, -0.35), lift(along(A, 0.35), top), lift(along(B, 0.35), top), `rgba(255,255,255,${(0.32 * amp).toFixed(3)})`);
+  // the haze inside it: soft blobs strung along the sheet, taller than wide
+  for (let k = 0; k < 9; k++) {
+    const t = (k + 0.5) / 9, q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: top * (0.25 + 0.5 * hash01(fx.seed + k * 7)) };
+    const p = P(q), r = U * (3 + 2.5 * hash01(fx.seed + k * 13 + 3));
+    disc(p.x, p.y, r, grad(p.x, p.y, r, [[0, `rgba(170,230,255,${(0.16 * amp).toFixed(3)})`], [1, 'rgba(120,200,255,0)']]));
   }
-  // the rim of the pool, so the cone reads as landing on something
-  for (let i = 0; i < RING; i++) {
-    seg(ring((i / RING) * Math.PI * 2, 1), ring(((i + 1) / RING) * Math.PI * 2, 1), `rgba(170,235,255,${(0.28 * amp).toFixed(3)})`, U * 0.05);
+  // --- the raster: thin lines across the sheet, rippling down it
+  const ROWS = 14;
+  for (let k = 0; k < ROWS; k++) {
+    const ph = ((k / ROWS) + now * 0.00025) % 1, z = top * ph;
+    const flick = 0.5 + 0.5 * Math.sin(now * 0.02 + k * 2.1);
+    seg(along(lift(A, z), -5), along(lift(B, z), 5), `rgba(200,245,255,${(0.35 * flick * amp).toFixed(3)})`, U * 0.04);
   }
-
-  // --- the source: a bright knot at the apex with a halo
-  {
-    const p = P(apex);
-    disc(p.x, p.y, U * 2.2, grad(p.x, p.y, U * 2.2, [[0, `rgba(255,255,255,${(0.85 * amp).toFixed(3)})`], [0.25, `rgba(180,240,255,${(0.4 * amp).toFixed(3)})`], [1, 'rgba(120,210,255,0)']]));
-    disc(p.x, p.y, U * 0.32, `rgba(255,255,255,${(0.95 * amp).toFixed(3)})`);
+  // --- the core, the bar it hangs from, and the foot
+  seg(lift(A, 0), lift(B, 0), `rgba(120,220,255,${(0.4 * amp).toFixed(3)})`, U * 1.6);
+  seg(lift(A, 0), lift(B, 0), `rgba(255,255,255,${(0.9 * amp).toFixed(3)})`, U * 0.09);
+  seg(lift(A, top), lift(B, top), `rgba(120,220,255,${(0.5 * amp).toFixed(3)})`, U * 1.3);
+  seg(lift(A, top), lift(B, top), `rgba(255,255,255,${(0.95 * amp).toFixed(3)})`, U * 0.07);
+  for (const q of [lift(A, top), lift(B, top), A, B]) { const p = P(q); disc(p.x, p.y, U * 1.4, grad(p.x, p.y, U * 1.4, [[0, `rgba(255,255,255,${(0.7 * amp).toFixed(3)})`], [0.3, `rgba(160,230,255,${(0.35 * amp).toFixed(3)})`], [1, 'rgba(120,200,255,0)']])); }
+  // --- motes in the beam, drifting up, and sparks thrown from the foot
+  for (let k = 0; k < 22; k++) {
+    const H = (q) => hash01(fx.seed + 500 + k * 11 + q);
+    const t = H(1), z = ((H(2) + now * 0.00008 * (0.5 + H(3))) % 1) * top;
+    const q = { x: A.x + (B.x - A.x) * t + (H(4) - 0.5) * 0.4 * fx.dx, y: A.y + (B.y - A.y) * t + (H(4) - 0.5) * 0.4 * fx.dy, z };
+    const p = P(q), tw = 0.5 + 0.5 * Math.sin(now * 0.01 + k);
+    disc(p.x, p.y, U * 0.05, `rgba(230,250,255,${(0.8 * tw * amp).toFixed(3)})`);
   }
-
-  // --- motes INSIDE the volume: placed by angle and depth, so they sit in the cone rather than
-  // on a face. Each drifts up the shaft and is reseeded by its own hash, never by Math.random.
-  for (let k = 0; k < 30; k++) {
-    const H = (q) => hash01(fx.seed + 700 + k * 13 + q);
-    const climb = ((H(1) + now * 0.00007 * (0.5 + H(2))) % 1);       // 0 at the floor, 1 at the apex
-    const th = H(3) * Math.PI * 2, rad = Math.sqrt(H(4)) * (1 - climb);
-    const b = ring(th, rad);
-    const q = { x: b.x + (apex.x - b.x) * climb, y: b.y + (apex.y - b.y) * climb, z: apex.z * climb };
-    const p = P(q), tw = 0.5 + 0.5 * Math.sin(now * 0.008 + k * 1.7);
-    disc(p.x, p.y, U * 0.06 * (1 - 0.5 * climb), `rgba(230,250,255,${(0.75 * tw * (1 - climb) * amp).toFixed(3)})`);
-  }
-
-  // --- sparks thrown from where it lands, as before: the beam is doing something to the board
   const STEP = 160, LIFE = 900, kNow = Math.floor(now / STEP);
   for (let k = kNow - Math.ceil(LIFE / STEP); k <= kNow; k++) {
     if (hash01(fx.seed + k * 5) > 0.5) continue;
     const age = (now - k * STEP) / LIFE;
     if (age < 0 || age >= 1) continue;
-    const t = hash01(fx.seed + k * 5 + 1);
-    const q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: 0 };
+    const t = hash01(fx.seed + k * 5 + 1), q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: 0 };
     const p = P(q), rise = U * 2.2 * age * (1 - age) * 4, drift = (hash01(fx.seed + k * 5 + 2) - 0.5) * U * 1.2 * age;
     disc(p.x + drift, p.y - rise, U * 0.07 * (1 - age), `rgba(255,255,255,${(0.9 * (1 - age) * amp).toFixed(3)})`);
   }
