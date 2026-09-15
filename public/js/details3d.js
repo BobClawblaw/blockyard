@@ -1098,7 +1098,10 @@ function drawBlackHole(ctx, view, lw) {
   // fades to nothing; FIBROUS -- hundreds of thin streaks spiralling inward over it, sheared by
   // the Keplerian flow, brightest on the approaching side; the shadow in the middle with a thin
   // photon ring, a gap, and the far side's thin lensed arch hugging it over the top.
-  const TILT = -0.12, SQUASH = 0.55;
+  // ...then the Interstellar view (operator, with a second still: "need it to look more like this"):
+  // the disk nearly edge-on, a thin band crossing in front of the shadow, the far side thrown
+  // into a great arch over the top and a smaller one beneath
+  const TILT = 0.04, SQUASH = 0.17;
   const inner = rs * 1.5, outer = rs * 6.4;
   const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
   const H = (k) => hash01(fx.seed + k);
@@ -1161,23 +1164,39 @@ function drawBlackHole(ctx, view, lw) {
   // thinning smoothly round the sides into the second image under, one filled shape (2026-09-15:
   // "extend around cleanly ... the gradient needs to be smooth")
   const upness = (ang) => 0.5 - 0.5 * Math.sin(ang);
+  // the band's outer edge by angle: a great arch over the top (1.6 horizons thick), thin at the
+  // sides, a smaller arch under the bottom (0.45)
+  const bandR = (ang) => { const up = upness(ang), side = 1 - Math.abs(Math.sin(ang)); return rs * (1.08 + 0.1 + 1.5 * Math.pow(up, 2.2) * (1 - 0.6 * side * side) + 0.35 * Math.pow(1 - up, 2.2) * (1 - 0.6 * side * side)); };
   {
-    const rIn = rs * 1.12, rMax = rs * 1.62;
+    const rIn = rs * 1.08, rMax = rs * 2.7;
     const ringPath = () => {
       ctx.beginPath();
-      for (let k = 0; k <= 180; k++) { const ang = (Math.PI * 2 * k) / 180, R = rs * (1.12 + 0.12 + 0.38 * upness(ang)); const x = c.x + Math.cos(ang) * R, y = c.y + Math.sin(ang) * R; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      for (let k = 0; k <= 240; k++) { const ang = (Math.PI * 2 * k) / 240, R = bandR(ang); const x = c.x + Math.cos(ang) * R, y = c.y + Math.sin(ang) * R; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
       ctx.closePath();
       ctx.moveTo(c.x + rIn, c.y); ctx.arc(c.x, c.y, rIn, 0, Math.PI * 2, true);
       ctx.closePath();
     };
     ringPath();
-    ctx.fillStyle = grad(c.x, c.y, rMax, [[0, 'rgba(255,220,150,0)'], [rIn / rMax, `rgba(255,240,200,${(0.8 * grow).toFixed(3)})`], [(rIn + rs * 0.2) / rMax, `rgba(255,170,70,${(0.5 * grow).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]);
+    ctx.fillStyle = grad(c.x, c.y, rMax, [[0, 'rgba(255,220,150,0)'], [rIn / rMax, `rgba(255,245,210,${(0.95 * grow).toFixed(3)})`], [(rIn + rs * 0.25) / rMax, `rgba(255,215,110,${(0.9 * grow).toFixed(3)})`], [(rIn + rs * 0.8) / rMax, `rgba(255,140,50,${(0.7 * grow).toFixed(3)})`], [(rIn + rs * 1.3) / rMax, `rgba(200,60,25,${(0.35 * grow).toFixed(3)})`], [1, 'rgba(120,20,10,0)']]);
     ctx.fill('evenodd');
     ringPath();
     const dopGrad = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(c.x - rMax, c.y, c.x + rMax, c.y) : null;
-    if (dopGrad && typeof dopGrad.addColorStop === 'function') { dopGrad.addColorStop(0, `rgba(255,255,230,${(0.4 * grow).toFixed(3)})`); dopGrad.addColorStop(0.5, 'rgba(255,220,160,0)'); dopGrad.addColorStop(1, `rgba(120,40,20,${(0.3 * grow).toFixed(3)})`); ctx.fillStyle = dopGrad; }
+    if (dopGrad && typeof dopGrad.addColorStop === 'function') { dopGrad.addColorStop(0, `rgba(255,255,230,${(0.3 * grow).toFixed(3)})`); dopGrad.addColorStop(0.5, 'rgba(255,220,160,0)'); dopGrad.addColorStop(1, `rgba(120,40,20,${(0.25 * grow).toFixed(3)})`); ctx.fillStyle = dopGrad; }
     else ctx.fillStyle = `rgba(255,230,180,${(0.15 * grow).toFixed(3)})`;
     ctx.fill('evenodd');
+    // the arch's fibres: thin arcs round the shadow inside the band, streaming with the flow
+    ctx.lineCap = 'round';
+    for (let k = 0; k < 260; k++) {
+      const hk = (q) => hash01(fx.seed + 3100 + k * 7 + q);
+      const a0 = hk(1) * Math.PI * 2 + now * 0.0005, span = 0.15 + 0.5 * hk(2);
+      const mid = a0 + span / 2, R = bandR(mid), t = hk(3);
+      const rr = rIn + (R - rIn) * t;
+      if (R - rIn < rs * 0.16) continue;                                  // nothing where the band is a sliver
+      const heat = 1 - t, dop = doppler(mid + Math.PI);
+      const col = heat > 0.7 ? '255,250,225' : heat > 0.35 ? '255,215,120' : '255,120,50';
+      ctx.strokeStyle = `rgba(${col},${(0.6 * grow * (0.4 + 0.6 * hk(4)) * Math.min(1.2, dop) / 1.2).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, rs * (0.02 + 0.04 * hk(5)));
+      ctx.beginPath(); ctx.arc(c.x, c.y, rr, a0, a0 + span); ctx.stroke();
+    }
   }
   drawShadow();
   // --- the near half, in front of the hole
