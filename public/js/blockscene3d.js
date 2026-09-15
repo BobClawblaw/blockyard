@@ -957,8 +957,10 @@ export function fxAt(t, fx) {
       return { glow: A * w, outline: 0.8 * A * w, lift: 0, color: [255, 255, 255] };
     }
     case 'scan': {
-      const w = g((along() - fxFront(fx)) / 3.2);   // the curtain's own width (2026-09-15)
-      return { glow: 0.9 * A * w, outline: 0.7 * A * w, lift: 0, color: [150, 230, 255] };
+      // the beam's own width -- ten units, so a whole swath of blocks is lit as it passes
+      // (2026-09-15: "Reach more blocks with the scanner effect")
+      const w = g((along() - fxFront(fx)) / 5.5);
+      return { glow: 0.95 * A * w, outline: 0.75 * A * w, lift: 0.4 * A * w, color: [160, 235, 255] };
     }
     case 'xray': {
       // X-RAY (2026-09-15, operator: "Add xray as additional choosable effect"): a front sweeps the

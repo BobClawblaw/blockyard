@@ -1111,17 +1111,22 @@ function drawScanCurtain(ctx, view, lw) {
   // shows as a narrow strip, so the faces reach 2.5 units either side of the core and are bright)
   // ...and wider again (operator, 2026-09-15: "The scan curtain is too thin, make it wider"): the
   // faces reach five units either side of the core, the core itself is a unit thick
-  for (let k = -8; k <= 8; k++) {
+  // A BROAD BEAM (operator, 2026-09-15: "Reach more blocks with the scanner effect. The beam is
+  // too thin and looks bad"): the body is a translucent slab ten units wide with a gaussian
+  // across it, the core a two-unit band, and every face of the sweep is bright enough to read
+  // as a volume of light rather than a sheet
+  quad(along(A, -5), along(B, -5), lift(along(A, 5), top), lift(along(B, 5), top), `rgba(90,200,255,${(0.1 * amp).toFixed(3)})`);
+  for (let k = -10; k <= 10; k++) {
     if (k === 0) continue;
-    const off = k * 0.62, f = Math.exp(-(k * k) / 16);
-    quad(along(A, off), along(B, off), lift(along(A, off), top), lift(along(B, off), top), `rgba(110,215,255,${(0.07 * f * amp).toFixed(3)})`);
+    const off = k * 0.5, f = Math.exp(-(k * k) / 30);
+    quad(along(A, off), along(B, off), lift(along(A, off), top), lift(along(B, off), top), `rgba(120,220,255,${(0.075 * f * amp).toFixed(3)})`);
   }
-  quad(along(A, -0.5), along(B, -0.5), lift(along(A, 0.5), top), lift(along(B, 0.5), top), `rgba(200,240,255,${(0.3 * amp).toFixed(3)})`);
-  quad(along(A, -0.18), along(B, -0.18), lift(along(A, 0.18), top), lift(along(B, 0.18), top), `rgba(255,255,255,${(0.3 * amp).toFixed(3)})`);
+  quad(along(A, -1), along(B, -1), lift(along(A, 1), top), lift(along(B, 1), top), `rgba(200,240,255,${(0.28 * amp).toFixed(3)})`);
+  quad(along(A, -0.35), along(B, -0.35), lift(along(A, 0.35), top), lift(along(B, 0.35), top), `rgba(255,255,255,${(0.32 * amp).toFixed(3)})`);
   // the haze inside it: soft blobs strung along the sheet, taller than wide
   for (let k = 0; k < 9; k++) {
     const t = (k + 0.5) / 9, q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: top * (0.25 + 0.5 * hash01(fx.seed + k * 7)) };
-    const p = P(q), r = U * (1.6 + 1.2 * hash01(fx.seed + k * 13 + 3));
+    const p = P(q), r = U * (3 + 2.5 * hash01(fx.seed + k * 13 + 3));
     disc(p.x, p.y, r, grad(p.x, p.y, r, [[0, `rgba(170,230,255,${(0.16 * amp).toFixed(3)})`], [1, 'rgba(120,200,255,0)']]));
   }
   // --- the raster: thin lines across the sheet, rippling down it
@@ -1129,12 +1134,12 @@ function drawScanCurtain(ctx, view, lw) {
   for (let k = 0; k < ROWS; k++) {
     const ph = ((k / ROWS) + now * 0.00025) % 1, z = top * ph;
     const flick = 0.5 + 0.5 * Math.sin(now * 0.02 + k * 2.1);
-    seg(along(lift(A, z), -2.5), along(lift(B, z), 2.5), `rgba(200,245,255,${(0.35 * flick * amp).toFixed(3)})`, U * 0.04);
+    seg(along(lift(A, z), -5), along(lift(B, z), 5), `rgba(200,245,255,${(0.35 * flick * amp).toFixed(3)})`, U * 0.04);
   }
   // --- the core, the bar it hangs from, and the foot
-  seg(lift(A, 0), lift(B, 0), `rgba(120,220,255,${(0.4 * amp).toFixed(3)})`, U * 0.9);
+  seg(lift(A, 0), lift(B, 0), `rgba(120,220,255,${(0.4 * amp).toFixed(3)})`, U * 1.6);
   seg(lift(A, 0), lift(B, 0), `rgba(255,255,255,${(0.9 * amp).toFixed(3)})`, U * 0.09);
-  seg(lift(A, top), lift(B, top), `rgba(120,220,255,${(0.5 * amp).toFixed(3)})`, U * 0.7);
+  seg(lift(A, top), lift(B, top), `rgba(120,220,255,${(0.5 * amp).toFixed(3)})`, U * 1.3);
   seg(lift(A, top), lift(B, top), `rgba(255,255,255,${(0.95 * amp).toFixed(3)})`, U * 0.07);
   for (const q of [lift(A, top), lift(B, top), A, B]) { const p = P(q); disc(p.x, p.y, U * 1.4, grad(p.x, p.y, U * 1.4, [[0, `rgba(255,255,255,${(0.7 * amp).toFixed(3)})`], [0.3, `rgba(160,230,255,${(0.35 * amp).toFixed(3)})`], [1, 'rgba(120,200,255,0)']])); }
   // --- motes in the beam, drifting up, and sparks thrown from the foot
