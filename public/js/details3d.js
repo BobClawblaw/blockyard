@@ -1049,36 +1049,62 @@ function starGlint(ctx, x, y, size, col, f, now, lw) {
   ctx.fillStyle = `rgba(255,255,255,${(f * tw).toFixed(3)})`; ctx.beginPath(); ctx.arc(x, y, size * 0.45, 0, Math.PI * 2); ctx.fill();
 }
 
-// A VOLUME OF GAS (for the supernova's debris; 2026-09-15). `n` blobs with fixed places in the
-// unit sphere -- radius biased toward the rim, so the limb reads brighter, the way a shell does
-// when seen through -- projected with the sphere's depth kept: the blobs are drawn back to
-// front, the back ones darker and redder, the front ones paler and hotter. The whole thing
-// expands homologously (every blob's distance in proportion to its own), grows, boils slowly on
-// the clock, and cools from `rc` toward dark red as `f` runs 0..1. No strokes: gradients only.
-function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25]) {
+// A VOLUME OF GAS (for the supernova's debris, the fireworks' smoke, the pulsar's wind; 2026-09-15).
+// `n` blobs with fixed places in the unit sphere -- radius biased toward the rim, so the limb reads
+// brighter, the way a shell does when seen through -- projected with the sphere's depth kept: the
+// blobs are drawn back to front, the back ones darker, the front ones paler and hotter. The whole
+// thing expands homologously (every blob's distance in proportion to its own), grows, boils
+// slowly on the clock, and cools from `rc` toward `dark` as `f` runs 0..1. No strokes: gradients.
+// ORGANIC, NOT CIRCULAR (operator, 2026-09-15: "Everything is too circular RN. It needs to look
+// more organic like the video"): the blobs gather in CLUMPS rather than spreading evenly, each is
+// an ELLIPSE stretched along its own radial line (a streak of gas blown outward) and turned to
+// it, and the sphere's silhouette is LUMPY -- every blob's radius carries a low-order wobble by
+// its direction, so the cloud has lobes and bays rather than an outline. `colorAt(front, f, H)`,
+// if given, decides each blob's colour from its depth, the run and its own hashes.
+function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25], colorAt = null) {
   const blobs = [];
+  const clumps = Math.max(4, Math.round(n / 14));
+  const cdir = [];
+  for (let q = 0; q < clumps; q++) { const H = (k) => hash01(seed + 900 + q * 17 + k); cdir.push({ th: H(1) * Math.PI * 2, ph: Math.acos(2 * H(2) - 1), w: 0.35 + 0.5 * H(3) }); }
+  const lumpA = hash01(seed + 77) * Math.PI * 2, lumpB = hash01(seed + 78) * Math.PI * 2;
   for (let k = 0; k < n; k++) {
     const H = (q) => hash01(seed + 5000 + k * 37 + q);
-    const rho = 0.35 + 0.65 * Math.sqrt(H(1));                          // toward the rim
-    const th = H(2) * Math.PI * 2, ph = Math.acos(2 * H(3) - 1);         // even over the sphere
-    blobs.push({ x: rho * Math.sin(ph) * Math.cos(th), y: rho * Math.sin(ph) * Math.sin(th), z: rho * Math.cos(ph), s: 0.12 + 0.18 * H(4), w: H(5) * Math.PI * 2, k });
+    const cl = cdir[Math.floor(H(6) * clumps)];
+    // a gaussian-ish scatter round the clump's direction, wider for some clumps
+    const th = cl.th + (H(2) + H(7) - 1) * cl.w * 1.6, ph = Math.max(0.05, Math.min(Math.PI - 0.05, cl.ph + (H(3) + H(8) - 1) * cl.w * 1.2));
+    const lump = 1 + 0.22 * Math.sin(3 * th + lumpA) * Math.sin(2 * ph + lumpB) + 0.14 * Math.sin(5 * th - lumpB) + 0.1 * Math.cos(4 * ph + lumpA);
+    const rho = (0.3 + 0.7 * Math.sqrt(H(1))) * lump;
+    blobs.push({ x: rho * Math.sin(ph) * Math.cos(th), y: rho * Math.sin(ph) * Math.sin(th), z: rho * Math.cos(ph), s: 0.16 + 0.2 * H(4), w: H(5) * Math.PI * 2, stretch: 1.3 + 1.1 * H(9), H, k });
   }
   blobs.sort((a, b) => a.z - b.z);                                       // back to front
+  const canTransform = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
   for (const b of blobs) {
     const wob = 0.035 * Math.sin(now * 0.0013 + b.w) + 0.02 * Math.sin(now * 0.0029 + b.k);
     const x = cx + (b.x + wob) * shell, y = cy + (b.y - wob * 0.6) * shell * 0.85;
     const r = shell * b.s * (0.8 + 0.7 * f);
     const front = (b.z + 1) / 2;                                         // 0 at the back, 1 at the front
-    const heat = Math.max(0, Math.min(1, 0.5 + 0.55 * front - 0.45 * f));   // hotter in front and early
-    const col = rc.map((v, i) => Math.round(dark[i] + (v - dark[i]) * heat));
-    const core = col.map((v) => Math.round(v + (255 - v) * 0.5 * heat));
-    const a = bright * (0.26 + 0.26 * front) * (1 - 0.25 * f);   // more of it (operator, 2026-09-15: "More nebula and smoke, that's still too subtle")
+    let col, core;
+    if (colorAt) { col = colorAt(front, f, b.H); core = col.map((v) => Math.round(v + (255 - v) * 0.45)); }
+    else {
+      const heat = Math.max(0, Math.min(1, 0.5 + 0.55 * front - 0.45 * f));
+      col = rc.map((v, i) => Math.round(dark[i] + (v - dark[i]) * heat));
+      core = col.map((v) => Math.round(v + (255 - v) * 0.5 * heat));
+    }
+    const a = bright * (0.32 + 0.3 * front) * (1 - 0.25 * f);
     if (a < 0.004) continue;
-    disc(x, y, r, grad(x, y, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]));
+    const fill = (rr) => grad(0, 0, rr, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
+    if (canTransform) {
+      const ang = Math.atan2(y - cy, x - cx);                            // stretched along its own radial line
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(b.stretch, 1 / Math.sqrt(b.stretch));
+      ctx.fillStyle = grad(0, 0, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
+      ctx.beginPath(); ctx.arc(0, 0, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } else disc(x, y, r, grad(x, y, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]));
+    void fill;
   }
   // the limb: a soft brightening at the sphere's edge
   const R = shell * 1.02;
-  disc(cx, cy, R, grad(cx, cy, R, [[0, `rgba(${rc.join(',')},0)`], [0.78, `rgba(${rc.join(',')},0)`], [0.92, `rgba(${rc.join(',')},${(0.18 * bright).toFixed(3)})`], [1, `rgba(${rc.join(',')},0)`]]));
+  disc(cx, cy, R, grad(cx, cy, R, [[0, `rgba(${rc.join(',')},0)`], [0.78, `rgba(${rc.join(',')},0)`], [0.92, `rgba(${rc.join(',')},${(0.16 * bright).toFixed(3)})`], [1, `rgba(${rc.join(',')},0)`]]));
 }
 
 // A SUPERNOVA (operator, 2026-09-15: "build the supernova" -- the solar flare only ever lit a cube
@@ -1090,7 +1116,7 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
 // centre inside a small blue pulsar-wind nebula that grows. Drawn on both boards, on the same
 // star fxAt lights (fxHash(seed + 7, 8)), whose shockwave throws the candles it crosses:
 //   ignition     0    - 0.12  the star swells white-hot, crackle rising over it
-//   breakout     0.12 - 0.3   the white-out: the whole picture goes white and comes back
+//   breakout     0.12 - 0.34  the white-out: the whole picture goes white and comes back (no flare)
 //   debris       0.14 - 1     the cloud: a volume of gas (gasCloud), a sphere of soft blobs
 //                             carried out by the expansion, white-gold, orange, then deep red,
 //                             the shock band at its leading edge
@@ -1148,9 +1174,29 @@ function drawSupernova(ctx, view, lw) {
     const f = (u - 0.14) / 0.86;
     const shell = R0 * (0.5 + 4.2 * (1 - Math.exp(-1.3 * f)));           // the cloud's radius: slower than the first cut (operator: "the cloud dispersion is too fast")
     const bright = (f < 0.08 ? f / 0.08 : f < 0.62 ? 1 : Math.pow(1 - (f - 0.62) / 0.38, 1.3)) * gf;
-    // the outskirts first: a wispier, fainter, larger cloud beyond the shell, then the shell itself
-    gasCloud(ctx, c.x, c.y, shell * 1.45, f, now, fx.seed + 31337, bright * 0.45, rc, grad, disc, 90, [60, 30, 120]);
-    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc, 260, [60, 30, 120]);
+    // THE MORPHING (operator, 2026-09-15: "as it shifts from blue to white initially, then the
+    // purples and violets start appearing, as the blue clouds continue to disperse ahead of
+    // everything else"): three clouds. The BLUE one is out in front, expanding fastest and
+    // thinning first; the MAIN one behind it is white at the start, and violet grows into it
+    // patch by patch, each blob turning on its own schedule, until the whole is purple; the
+    // INNER one is the deep violet heart that shows as the others thin.
+    const blueShell = R0 * (0.6 + 6 * (1 - Math.exp(-1.9 * f)));
+    const blueBright = bright * 0.7 * Math.pow(1 - f, 1.6);
+    gasCloud(ctx, c.x, c.y, blueShell, f, now, fx.seed + 31337, blueBright, [150, 195, 255], grad, disc, 130, [70, 110, 220], (front, ff, H) => {
+      const t = Math.min(1, ff / 0.5);
+      return [Math.round(215 - 65 * t), Math.round(235 - 40 * t), 255].map((v, i) => Math.round(v * (0.75 + 0.25 * front) + (i === 2 ? 0 : 0)));
+    });
+    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc, 320, [60, 30, 120], (front, ff, H) => {
+      const start = 0.18 + 0.55 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.28));   // when this patch turns violet
+      const white = [255, 255, 255], violet = [170, 105, 255], deep = [95, 45, 170];
+      const c1 = white.map((v, i) => v + (violet[i] - v) * on);
+      const shade = 0.55 + 0.45 * front;
+      return c1.map((v, i) => Math.round(deep[i] + (v - deep[i]) * shade));
+    });
+    if (f > 0.3) {
+      const inner = Math.min(1, (f - 0.3) / 0.4);
+      gasCloud(ctx, c.x, c.y, shell * 0.55, f, now, fx.seed + 777, bright * 0.8 * inner, [150, 80, 255], grad, disc, 90, [60, 25, 130]);
+    }
     // and the interior glow: the cloud lit from within
     disc(c.x, c.y, shell * 0.8, grad(c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.22 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
     // the shock band at the cloud's leading edge, soft, in the cloud's colour
@@ -1168,7 +1214,8 @@ function drawSupernova(ctx, view, lw) {
     const W = Math.max(view.boardW ?? 2000, 2000) * 1.5;
     ctx.fillStyle = `rgba(255,252,245,${(0.92 * f).toFixed(3)})`; ctx.fillRect(c.x - W, c.y - W, 2 * W, 2 * W);
     disc(c.x, c.y, R0 * 3.5, grad(c.x, c.y, R0 * 3.5, [[0, `rgba(255,255,255,${f.toFixed(3)})`], [0.5, `rgba(255,245,220,${(0.5 * f).toFixed(3)})`], [1, 'rgba(255,220,170,0)']]));
-    lensFlare(ctx, c.x, c.y, R0 * 11, [200, 220, 255], f, view, lw);
+    // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
+    // taken out on 2026-09-15; the white-out alone is the breakout)
   }
   // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing
   if (u >= 0.45) {
