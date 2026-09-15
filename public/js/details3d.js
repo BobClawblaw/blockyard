@@ -1709,6 +1709,10 @@ function drawSupernova(ctx, view, lw) {
   // --- the breakout: the whole picture goes white and comes back
   if (u >= 0.12 && u < 0.4) {
     const t = (u - 0.12) / 0.28, f = t < 0.1 ? t / 0.1 : Math.pow(1 - (t - 0.1) / 0.9, 1.5);
+    // THE FLASH ITSELF (operator, 2026-09-15: "It's missing the bright white flash!"): a bright,
+    // brief one -- full white at the heart for an instant, gone in a third of the breakout -- so
+    // it reads as a flash, not as a solid glow that sits on the Kiosk's panel
+    const fl = t < 0.06 ? t / 0.06 : Math.pow(Math.max(0, 1 - (t - 0.06) / 0.3), 2.2);
     // a soft flash round the star, not the whole frame -- and NOT SOLID (operator, 2026-09-15, via
     // his wife on the Kiosk: "far too much solid white"): a modest disc, at most half opaque at its
     // heart, thin by three shells out, and the white gas thrown with it at a third of the weight
@@ -1716,26 +1720,33 @@ function drawSupernova(ctx, view, lw) {
     // PRESENCE BACK (operator, 2026-09-15: "We've removed so much of the initial white nebula
     // emission that it's lost much of its presence and intensity") -- now that the discs add up
     // honestly, the flash and the white gas can carry weight again without going solid
-    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,252,245,${(0.38 * f).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.18 * f).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.05 * f).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
+    disc(c.x, c.y, W, grad(c.x, c.y, W, [[0, `rgba(255,253,248,${Math.min(1, 0.3 * f + 0.75 * fl).toFixed(3)})`], [0.35, `rgba(255,250,240,${(0.15 * f + 0.3 * fl).toFixed(3)})`], [0.7, `rgba(255,248,235,${(0.05 * f + 0.06 * fl).toFixed(3)})`], [1, 'rgba(255,245,230,0)']]));
     // MORE GAS OFF THE FLASH (operator, 2026-09-15: "Opening white flash needs more dispersing
     // nebula gas"): two clouds thrown with it -- a dense one at the flash and a wider, thinner
     // one racing ahead of it -- both flying out faster than the flash fades, so the white
     // disperses into the dark rather than shrinking back into the star
     // A BURST OF PLUMES, not two clouds (operator, 2026-09-15: "need much more than two clouds of
-    // white gas in the initial explosion"): the dense cloud at the flash, and sixteen plumes of
-    // white gas thrown from it in every direction, each its own cloud flying outward on its own
-    // speed and growing as it goes, the fast ones out ahead and thinning first
-    gasCloud(ctx, c.x, c.y, R0 * (1.0 + 2.2 * t), t, now, fx.seed + 999, 0.15 * f, [255, 255, 255], grad, disc, 80, [200, 210, 240], null, 0.9, 1.25);
-    for (let k = 0; k < 16; k++) {
-      const H = (q) => hash01(fx.seed + 4400 + k * 19 + q);
-      const ang = (k / 16) * Math.PI * 2 + (H(1) - 0.5) * 0.5, sp = 0.6 + 0.9 * H(2);
-      const reach = R0 * (0.6 + 5.5 * t) * sp, ease = 1 - Math.exp(-4 * t);
-      const px = c.x + Math.cos(ang) * reach * ease, py = c.y + Math.sin(ang) * 0.75 * reach * ease;
-      const shell = R0 * (0.5 + 1.8 * t) * (0.7 + 0.6 * H(3));
-      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.11 * f * (1 - 0.35 * sp), [245, 248, 255], grad, disc, 40, [180, 195, 235], null, 1, 1.3);
-    }
+    // white gas in the initial explosion"): the dense cloud at the flash, and the plumes of
+    // white gas thrown from it in every direction (below), each its own cloud flying outward on
+    // its own speed and growing as it goes, the fast ones out ahead and thinning first
+    gasCloud(ctx, c.x, c.y, R0 * (1.0 + 2.2 * t), t, now, fx.seed + 999, 0.1 * f, [255, 255, 255], grad, disc, 80, [200, 210, 240], null, 0.9, 1.25);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
     // taken out on 2026-09-15; the white-out alone is the breakout)
+  }
+  // FURTHER AND LONGER (operator, 2026-09-15: "the plumes need to disperse further out and linger
+  // longer ... Double the amount"): thirty-two plumes on their own clock, outliving the flash by
+  // half again -- they reach nine star radii, keep flying after the flash has gone, and only
+  // thin out slowly, so the white gas is still drifting outward when the blue debris rises
+  if (u >= 0.12 && u < 0.62) {
+    const t = (u - 0.12) / 0.5, g = t < 0.06 ? t / 0.06 : Math.pow(1 - (t - 0.06) / 0.94, 0.9);
+    for (let k = 0; k < 32; k++) {
+      const H = (q) => hash01(fx.seed + 4400 + k * 19 + q);
+      const ang = (k / 32) * Math.PI * 2 + (H(1) - 0.5) * 0.4, sp = 0.5 + 1.0 * H(2);
+      const reach = R0 * (0.6 + 9 * t) * sp, ease = 1 - Math.exp(-3 * t);
+      const px = c.x + Math.cos(ang) * reach * ease, py = c.y + Math.sin(ang) * 0.75 * reach * ease;
+      const shell = R0 * (0.5 + 2.4 * t) * (0.7 + 0.6 * H(3));
+      gasCloud(ctx, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.1 * g * (1 - 0.3 * sp), [245, 248, 255], grad, disc, 36, [180, 195, 235], null, 1, 1.3);
+    }
   }
   // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing
   if (u >= 0.45) {
