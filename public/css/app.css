@@ -1371,7 +1371,7 @@ canvas.chart.tall { height: clamp(150px, calc(100vh - 720px), 240px); }
 
 /* THE PEERS PAGE: one strip, then the table (see index.html). Every row that follows is a
    peer, so the table starts under ~150 px of summary instead of ~780. */
-.prtop { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 12px; align-items: stretch; }
+.prtop { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); gap: 12px; align-items: start; }
 .prtop .card { grid-column: auto !important; padding: 9px 12px; }
 .prsum { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 18px; align-items: center; align-content: start; }
 .prsum > h3 { grid-column: 1 / -1; }
@@ -1381,6 +1381,14 @@ canvas.chart.tall { height: clamp(150px, calc(100vh - 720px), 240px); }
 .prpeers .note { margin: 0 0 6px; }
 table.peertbl th { white-space: nowrap; }
 table.peertbl td { padding: 3px 7px; white-space: nowrap; }
+/* the same packing every tab got (2026-09-15: "same treatment on the peers tab"): a long onion or i2p
+   address made the table wider than the window and the whole PAGE scrolled sideways; the address
+   cell now clips with an ellipsis (the full address is its title) and a table still wider than its
+   card scrolls inside the card. The service badges sit lower and the rows tighter. */
+#prTable { overflow-x: auto; max-width: 100%; }
+table.peertbl td.addr { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
+table.peertbl td .badge { padding: 0 5px; font-size: 9.5px; line-height: 15px; }
+table.peertbl td { padding: 2px 7px; }
 @media (max-width: 860px) { .prtop { grid-template-columns: minmax(0, 1fr); } }
 
 /* THE CHAIN & SYNC PAGE, THREE ACROSS (see index.html). Page-scoped, and it beats the site-wide

@@ -348,7 +348,7 @@ export function peerTableHtml(rows, fmt, { now = Date.now(), tip = null } = {}) 
   const faint = (s) => ` <span class="faint">${fmt.esc(s)}</span>`;
   const body = sorted.map((p) => `<tr>
     <td>${p.inbound ? '<span class="badge muted">in</span>' : '<span class="badge">out</span>'}</td>
-    <td>${fmt.esc(p.addr ?? '–')}${p.network ? faint(p.network) : ''}</td>
+    <td class="addr" title="${fmt.esc(p.addr ?? '')}">${fmt.esc(p.addr ?? '–')}${p.network ? faint(p.network) : ''}</td>
     <td class="w">${fmt.esc(ua(p.subver))}${p.version ? faint(String(p.version)) : ''}${svc(p).map((t) => ` <span class="badge muted">${t}</span>`).join('')}</td>
     <td class="r">${Number.isFinite(p.conntime) ? fmt.uptime((now / 1000 - p.conntime) * 1000) : '–'}</td>
     <td class="r">${since(p.lastrecv)}</td>
