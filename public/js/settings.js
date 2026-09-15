@@ -444,6 +444,15 @@ export const PANEL = Object.freeze([
           + 'Markets and Kiosk say so and the explorer shows no dollar figures. On, the server asks only while someone is looking, '
           + 'and stops ten minutes after the last look. Shared by every screen of this monitor',
       }),
+      // right under the polling switch it depends on (operator, 2026-09-15: "Move price line on Overview
+      // underneath Enable Market Polling")
+      Object.freeze({
+        key: 'overviewSummary', label: 'Price line on Overview', kind: 'toggle',
+        hint: 'Median, spread, 24 h volume and how many books reported, at the top of Overview. '
+          + 'It needs market polling (above); with that on, leaving this on means this monitor contacts '
+          + 'five exchanges whenever Overview is open, not only on Markets and Kiosk. '
+          + 'Switch it off and the landing page talks to nothing but your node.',
+      }),
       Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
       Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'The idle effects while the board rests (which of them is the Market effects tab) and the flight when the candles refresh. Off draws the board and leaves it alone' }),
       Object.freeze({
@@ -453,13 +462,6 @@ export const PANEL = Object.freeze([
       Object.freeze({
         key: 'range', label: 'Range', kind: 'choice', hint: 'How many hours the chart covers when the page opens',
         options: Object.freeze([['24', '24 hours'], ['48', '48 hours'], ['168', '7 days']]),
-      }),
-      Object.freeze({
-        key: 'overviewSummary', label: 'Price line on Overview', kind: 'toggle',
-        hint: 'Median, spread, 24 h volume and how many books reported, at the top of Overview. '
-          + 'It needs market polling (above); with that on, leaving this on means this monitor contacts '
-          + 'five exchanges whenever Overview is open, not only on Markets and Kiosk. '
-          + 'Switch it off and the landing page talks to nothing but your node.',
       }),
       Object.freeze({
         key: 'priceView', label: 'Price view', kind: 'choice', hint: 'Which one the Markets page draws. Only one at a time — they show the same hours, and two tall panels of it filled the screen',
