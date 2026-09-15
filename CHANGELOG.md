@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Mining tab follows mempool.space's mining dashboard layout: two columns in its order (reward stats, difficulty adjustment; pools, hashrate; recent blocks, adjustments) under the block flow, our own panels beneath, and **View more »** on four cards opening that card full screen, with the whole week of pools as a table, the year's chart large, the whole attributed window of blocks and a year of adjustments
 - Every tab packs the same way: the card padding and heading spacing that Mining, Overview and Block space got are the default now, and a short card beside a tall one keeps its own height instead of being stretched to match (Chain & Sync's drill-down card had a thousand pixels of nothing under its input; Node & RPC's poll cadence and connection cards hundreds)
 - Block space packs the same way: the card tighter and the board sized so the whole page, note included, fits the viewport without a scroll
 - The Mining tab's packages table no longer bleeds into the neighbouring card at a middling window width: a table wider than its stack scrolls inside its card, and the three stacks become two below 1400px, where each would be under 450px

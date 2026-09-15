@@ -1056,6 +1056,9 @@ export function renderMining(s, state, h) {
   feeLandscape(h.canvas('mnFeeLandscape'), a?.nextBlock ?? null, h.fmt);
   poolTable(document.getElementById('mnPools'), a, h.fmt);
   networkPanels(s?.network ?? null, h);
+  const recent = document.getElementById('mnRecent');
+  if (recent) { const html = recentBlocksHtml(a, h.fmt, { limit: 8 }); if (recent.__html !== html) { recent.innerHTML = html; recent.__html = html; } }
+  renderExpand(s, h);
   const el = document.getElementById('mnCoverage');
   if (el) el.innerHTML = coveragePanel(a, h);
   applyMiningStyles(document);
@@ -1104,7 +1107,110 @@ function askPrice(h) {
 }
 const usd = (v) => (v == null || !Number.isFinite(v) ? '' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
+// RECENT BLOCKS, as mempool.space lists them (height, pool, reward, fees): the attributed window
+// the ledger already carries, the reward being the height's subsidy plus the block's fees
+const SATS = 100_000_000;
+export function subsidyAt(height) {
+  if (!Number.isFinite(height) || height < 0) return null;
+  const halvings = Math.floor(height / 210_000);
+  if (halvings >= 64) return 0;
+  let sat = 50 * SATS;
+  for (let i = 0; i < halvings; i++) sat = Math.floor(sat / 2);
+  return sat;
+}
+export function recentBlocksHtml(a, F, { limit = 8, now = Date.now() } = {}) {
+  const rows = (a?.recent ?? []).slice(0, limit);
+  if (!rows.length) return '<div class="note tiny faint">no blocks attributed yet</div>';
+  const esc = F.esc;
+  return `<table class="t"><thead><tr><th>Height</th><th>Pool</th><th>Mined</th><th class="r">Reward</th><th class="r">Fees</th></tr></thead><tbody>${rows.map((r) => {
+    const name = r.poolLabel ?? r.poolName ?? r.poolKey ?? '–';
+    const sub = subsidyAt(r.height), reward = sub != null && r.totalfee != null ? sub + r.totalfee : null;
+    return `<tr><td><a href="#explorer/block/${r.height}">#${F.num(r.height)}</a></td><td title="${esc(r.tagText ?? '')}">${esc(String(name).length > 22 ? `${String(name).slice(0, 21)}…` : name)}</td><td>${r.at ? F.ago(r.at, now) : '–'}</td><td class="r">${reward != null ? `${(reward / SATS).toFixed(3)} BTC` : '–'}</td><td class="r">${r.totalfee != null ? `${(r.totalfee / SATS).toFixed(4)} BTC` : '–'}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+// "VIEW MORE »" (operator, 2026-09-15, of mempool.space: "the 'View more >>' that open up a panel
+// to see a full screen view of just that panel"): one of four cards, full screen, drawn from the
+// same snapshot every frame while open. Esc, the scrim or the button close it.
+const EXPAND = { kind: null, s: null, h: null };
+const EXPAND_TITLE = { pools: ['Pools', 'the last week’s blocks, by coinbase'], hashrate: ['Hashrate & difficulty', 'a year, one sample a day'], blocks: ['Recent blocks', 'the attributed window, newest first'], adjustments: ['Adjustments', 'each period’s first block against the one before'] };
+export function openExpand(kind) {
+  const wrap = document.getElementById('expandWrap');
+  if (!wrap || !EXPAND_TITLE[kind]) return;
+  EXPAND.kind = kind;
+  const [t, src] = EXPAND_TITLE[kind];
+  const title = document.getElementById('expandTitle'), s = document.getElementById('expandSrc'), body = document.getElementById('expandBody');
+  if (title) title.textContent = t;
+  if (s) s.textContent = src;
+  if (body) {
+    body.innerHTML = kind === 'pools' ? '<div class="netstats" id="xpStats"></div><canvas class="chart donut" id="xpDonut"></canvas><div id="xpTable"></div>'
+      : kind === 'hashrate' ? '<div class="netstats" id="xpStats"></div><canvas class="chart big" id="xpChart"></canvas>'
+      : '<div id="xpTable"></div>';
+  }
+  wrap.classList.remove('hidden');
+  if (EXPAND.s && EXPAND.h) renderExpand(EXPAND.s, EXPAND.h);
+}
+export function closeExpand() {
+  EXPAND.kind = null;
+  document.getElementById('expandWrap')?.classList.add('hidden');
+}
+let expandBound = false;
+function bindExpand() {
+  if (expandBound || typeof document === 'undefined' || typeof document.addEventListener !== 'function' || !document.getElementById('expandWrap')) return;
+  expandBound = true;
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest?.('[data-expand]');
+    if (a) { e.preventDefault(); openExpand(a.dataset.expand); }
+  });
+  document.getElementById('expandClose')?.addEventListener('click', closeExpand);
+  document.getElementById('expandScrim')?.addEventListener('click', closeExpand);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && EXPAND.kind) closeExpand(); });
+}
+export function renderExpand(s, h) {
+  EXPAND.s = s; EXPAND.h = h;
+  if (!EXPAND.kind) return;
+  const n = s?.network ?? null, F = h.fmt;
+  const put = (id, html) => { const el = document.getElementById(id); if (el && el.__html !== html) { el.innerHTML = html; el.__html = html; } };
+  if (EXPAND.kind === 'pools') {
+    const p = n?.pools ?? {};
+    put('xpStats', stat('Pools luck', p.luckPct == null ? '–' : `${p.luckPct.toFixed(2)}%`, p.blocks ? `${p.blocks} found · ${Math.round(p.expected)} expected` : '') + stat('Blocks (1w)', p.blocks ? F.num(p.blocks) : '–') + stat('Pools count', p.count ? String(p.count) : '–'));
+    poolDonut(h.canvas('xpDonut'), p.pools ?? [], F);
+    put('xpTable', (p.pools ?? []).length ? `<table class="t"><thead><tr><th>Pool</th><th class="r">Blocks</th><th class="r">Share</th><th>Labelled</th></tr></thead><tbody>${p.pools.map((x) => `<tr><td>${F.esc(x.name)}</td><td class="r">${F.num(x.blocks)}</td><td class="r">${x.sharePct.toFixed(2)}%</td><td>${x.labelled ? 'curated map' : '<span class="faint">coinbase text</span>'}</td></tr>`).join('')}</tbody></table>` : '');
+  } else if (EXPAND.kind === 'hashrate') {
+    const hr = n?.hashrate ?? {}, a = n?.adjustment;
+    put('xpStats', stat('Hashrate (1w)', hr.networkHashPs != null ? F.eh(hr.networkHashPs / 1e18) : '–', 'getnetworkhashps, 1008 blocks') + stat('Difficulty', tera(n?.difficulty), a ? `period from #${F.num(a.epochStart)}` : '') + stat('Samples', hr.series?.length ? `${hr.series.length}<small>days</small>` : '–', 'one block header a day'));
+    hashrateChart(h.canvas('xpChart'), hr.series ?? [], F);
+  } else if (EXPAND.kind === 'blocks') {
+    put('xpTable', recentBlocksHtml(s?.attribution, F, { limit: 200 }));
+  } else if (EXPAND.kind === 'adjustments') {
+    put('xpTable', adjustmentsHtml(n?.adjustments ?? [], F));
+  }
+}
+function adjustmentsHtml(rows, F) {
+  if (!rows.length) return '<div class="note tiny faint">reading the periods\' first blocks…</div>';
+  return `<table class="t"><thead><tr><th>Height</th><th>Adjusted</th><th class="r">Difficulty</th><th class="r">Change</th></tr></thead><tbody>${rows.map((x) => { const c = signed(x.changePct); return `<tr><td>#${F.num(x.height)}</td><td>${agoWords(x.time * 1000)}</td><td class="r">${tera(x.difficulty)}</td><td class="r ${c.cls}">${c.text.replace(/^[▴▾] /, '')}</td></tr>`; }).join('')}</tbody></table>`;
+}
+function hashrateChart(canvas, series, F) {
+  if (!canvas) return;
+  if (series.length > 2) {
+    const pts = series.map((x) => ({ t: x.t, v: x.hashrate / 1e18 }));
+    const dLo = Math.min(...series.map((x) => x.difficulty / 1e12)), dHi = Math.max(...series.map((x) => x.difficulty / 1e12));
+    const smooth = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - 6), i + 1); return { t: pts[i].t, v: w.reduce((s, q) => s + q.v, 0) / w.length }; });
+    lineChart(canvas, [
+      { label: 'hashrate, daily', points: pts, color: 'rgba(160,200,80,0.45)', width: 1 },
+      { label: 'hashrate, 7-day mean', points: smooth, color: '#f0c419', width: 2 },
+      { label: `difficulty ${dLo.toFixed(0)}T–${dHi.toFixed(0)}T`, points: series.map((x) => ({ t: x.t, v: x.difficulty / 1e12 })), color: '#e8306a', width: 2, axis: 'right' },
+    ], {
+      fmtY: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)}Z` : `${v.toFixed(0)}E`), fmtRight: () => '', left: 40,
+      fmtX: (t) => new Date(t).toLocaleDateString('en-US', { month: 'short' }),
+      min: Math.min(...pts.map((q) => q.v)) * 0.85, max: Math.max(...pts.map((q) => q.v)) * 1.05, zeroBase: false,
+      rightMin: dLo * 0.97, rightMax: dHi * 1.03,
+    });
+  } else paint(canvas, { when: null, draw: () => {}, placeholder: 'reading a year of block headers…' });
+}
+
 export function networkPanels(n, h) {
+  bindExpand();
   const F = h.fmt, esc = F.esc;
   askPrice(h);
   const put = (id, html) => { const el = document.getElementById(id); if (el && el.__html !== html) { el.innerHTML = html; el.__html = html; } };
@@ -1153,33 +1259,9 @@ export function networkPanels(n, h) {
   put('mnHashrate', stat('Hashrate (1w)', hr.networkHashPs != null ? F.eh(hr.networkHashPs / 1e18) : '–', 'getnetworkhashps, 1008 blocks')
     + stat('Difficulty', tera(n.difficulty), a ? `period from #${F.num(a.epochStart)}` : '')
     + stat('Samples', hr.series?.length ? `${hr.series.length}<small>days</small>` : '–', 'one block header a day'));
-  const series = hr.series ?? [];
-  const canvas = h.canvas('mnHashChart');
-  if (canvas) {
-    if (series.length > 2) {
-      const pts = series.map((x) => ({ t: x.t, v: x.hashrate / 1e18 }));
-      // a seven-day rolling mean over the daily estimates, the way a hashrate chart is read
-      const dLo = Math.min(...series.map((x) => x.difficulty / 1e12)), dHi = Math.max(...series.map((x) => x.difficulty / 1e12));
-      const smooth = pts.map((_, i) => { const w = pts.slice(Math.max(0, i - 6), i + 1); return { t: pts[i].t, v: w.reduce((s, q) => s + q.v, 0) / w.length }; });
-      lineChart(canvas, [
-        { label: 'hashrate, daily', points: pts, color: 'rgba(160,200,80,0.45)', width: 1 },
-        { label: 'hashrate, 7-day mean', points: smooth, color: '#f0c419', width: 2 },
-        { label: `difficulty ${dLo.toFixed(0)}T–${dHi.toFixed(0)}T`, points: series.map((x) => ({ t: x.t, v: x.difficulty / 1e12 })), color: '#e8306a', width: 2, axis: 'right' },
-      ], {
-        // short axis labels, so "1.30 ZH/s" is not cut to "30 ZH/s" in the margin; the difficulty's
-        // range is in its legend entry rather than on a right axis the margin cannot fit
-        fmtY: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)}Z` : `${v.toFixed(0)}E`), fmtRight: () => '', left: 40,
-        fmtX: (t) => new Date(t).toLocaleDateString('en-US', { month: 'short' }),
-        min: Math.min(...pts.map((q) => q.v)) * 0.85, max: Math.max(...pts.map((q) => q.v)) * 1.05, zeroBase: false,
-        rightMin: dLo * 0.97, rightMax: dHi * 1.03,
-      });
-    } else paint(canvas, { when: null, draw: () => {}, placeholder: 'reading a year of block headers…' });
-  }
+  hashrateChart(h.canvas('mnHashChart'), hr.series ?? [], F);
   // the adjustments table
-  const rows = (n.adjustments ?? []).slice(0, 6);   // six fit the screen; the server carries twelve
-  put('mnAdjustments', rows.length
-    ? `<table class="t"><thead><tr><th>Height</th><th>Adjusted</th><th class="r">Difficulty</th><th class="r">Change</th></tr></thead><tbody>${rows.map((x) => { const c = signed(x.changePct); return `<tr><td>#${F.num(x.height)}</td><td>${agoWords(x.time * 1000)}</td><td class="r">${tera(x.difficulty)}</td><td class="r ${c.cls}">${c.text.replace(/^[▴▾] /, '')}</td></tr>`; }).join('')}</tbody></table>`
-    : '<div class="note tiny faint">reading the periods\' first blocks…</div>');
+  put('mnAdjustments', adjustmentsHtml((n.adjustments ?? []).slice(0, 6), F));   // six on the card; every period the server carries under View more
 }
 
 function poolDonut(canvas, pools, F) {

@@ -871,7 +871,7 @@ Peer identity is not guessed from another source.
 
 ## Mining
 
-The block under construction and who has been mining, on one screen: Block flow across the top, then three stacks.
+The block under construction and who has been mining. The layout follows mempool.space's mining dashboard: Block flow across the top, then two columns — reward stats and the difficulty adjustment, the pools and the hashrate, recent blocks and the adjustments — and our own panels beneath. **View more »** on the pools, hashrate, recent blocks and adjustments cards opens that card full screen (Esc, the close button or a click outside shuts it).
 
 | Panel | What it shows |
 |---|---|
@@ -879,7 +879,8 @@ The block under construction and who has been mining, on one screen: Block flow 
 | **Difficulty adjustment** | Blocks remaining in the current period and when it ends at the pace so far, the estimated change (the pace projected over the period against the ten-minute target, within the protocol's factor-of-four bounds), the previous change, and the next halving's height and date. |
 | **Pools** | The last week's blocks by pool, as a donut with its legend: luck (blocks found against the 1,008 the target spacing would give), the block count and how many pools. Every coinbase of the week is read from the node, eight every few seconds behind the live polls, and the note says how far that has got. |
 | **Hashrate & difficulty** | The week's hashrate from `getnetworkhashps` and the current difficulty, and a year's chart: one block header a day gives that day's mean interval, and difficulty × 2³² over it is the day's hashrate estimate (the thin line), with a seven-day mean over it and the difficulty's steps on the right axis. |
-| **Adjustments** | The last twelve periods: the first block's height, when, the difficulty and its change from the period before. |
+| **Recent blocks** | The attributed window newest first: height (a link to the explorer), pool, when it was mined, the reward (the height's subsidy plus its fees) and the fees. Eight on the card, the whole window under View more. |
+| **Adjustments** | The last periods: the first block's height, when, the difficulty and its change from the period before. Six on the card, a year under View more. |
 | **Block flow** | The same Block flow as on Overview. |
 | **Packages in the block being built** | The ancestor graph from `getrawmempool … depends`: a histogram of package sizes, then a table of the top packages with fees, weight, package fee rate, child and parent fee rates, and a small picture of the package's shape. Rows with a child paying at least twice its parent's rate are highlighted as child-pays-for-parent. If every transaction stands alone, the panel says so. That is a real reading, not a missing chart. |
 | **Feerate landscape** | The template's transactions bucketed by sat/vB, with green buckets well above the block's median and red ones below it. |

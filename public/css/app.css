@@ -1301,6 +1301,24 @@ canvas.chart.donut { width: 100%; height: 380px; }
 .page[data-page="mining"] .netstats { padding: 2px 0 4px; gap: 6px 12px; }
 .page[data-page="mining"] .netstats .ns .v { font-size: 20px; }
 .mn3 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+/* mempool.space's two columns (2026-09-15), and our own panels in two beneath */
+.mn2, .mnextra { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.mn2 .card, .mnextra .card { grid-column: auto !important; }   /* the page grid's span rules do not apply inside these two-column grids */
+.mn2 .card { display: flex; flex-direction: column; }
+.mn2 .card > .viewmore { margin-top: auto; }
+.viewmore { display: block; text-align: center; padding: 8px 0 2px; color: var(--accent, #4fb3ff); text-decoration: none; font-size: 13px; }
+.viewmore:hover { text-decoration: underline; }
+@media (max-width: 900px) { .mn2, .mnextra { grid-template-columns: minmax(0, 1fr); } }
+/* the full-screen card */
+.expandwrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: stretch; justify-content: center; padding: 14px; }
+.expandwrap.hidden { display: none; }
+.expand { position: relative; width: min(1500px, 100%); display: flex; flex-direction: column; overflow: hidden; }
+.expand > h3 { flex: 0 0 auto; }
+.expand .expandbody { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.expand canvas.chart.donut { flex: 0 0 auto; height: 58vh; width: 100%; }   /* a definite height: a flex-grown canvas resized itself every frame */
+.expand canvas.chart.big { flex: 0 0 auto; height: 72vh; width: 100%; }
+.expand .netstats .ns .v { font-size: 26px; }
+.expand table.t { font-size: 13px; }
 /* three stacks only where each gets 450px or more (operator, 2026-09-15, of an 1146px window
    where the packages table ran into the landscape and the pie was a coin): two below 1400 */
 @media (max-width: 1400px) { .mn3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }

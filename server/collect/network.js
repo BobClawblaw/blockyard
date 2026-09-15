@@ -287,7 +287,7 @@ export class NetworkStats {
       difficulty: this.difficulty,
       adjustment: est,
       halving: tip != null ? halvingInfo(tip, { now }) : null,
-      adjustments: adjustments([...this.epochs.values()].filter((e) => e.height % EPOCH === 0)).slice(0, 12),
+      adjustments: adjustments([...this.epochs.values()].filter((e) => e.height % EPOCH === 0)).slice(0, 27),   // a year and a period; the card shows six, View more all
       hashrate: { networkHashPs: this.networkHashPs, windowBlocks: DAY_BLOCKS * this.windowDays, series },
       pools: { ...shares, filled: this.pools.size, todo: this.poolTodo.length, filling: this.poolFilling, floor: windowFloor },
     };

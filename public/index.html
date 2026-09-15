@@ -105,6 +105,15 @@
 
   <!-- Display settings (settings.js). Hidden until the gear is pressed; the contents are
        rendered from settings.js PANEL, so a value and its control cannot drift apart. -->
+  <!-- "View more »" on the Mining tab's cards (2026-09-15): the same card, full screen, drawn by
+       mining.js renderExpand while it is open; Esc, the scrim or the close button shut it. -->
+  <div class="expandwrap hidden" id="expandWrap" role="dialog" aria-modal="true" aria-labelledby="expandTitle">
+    <div class="cfgscrim" id="expandScrim"></div>
+    <section class="expand card">
+      <h3><span id="expandTitle">…</span> <span class="sp"></span><span class="src" id="expandSrc"></span> <button type="button" class="btn" id="expandClose" aria-label="Close">close</button></h3>
+      <div class="expandbody" id="expandBody"></div>
+    </section>
+  </div>
   <div class="cfgwrap hidden" id="settingsWrap">
     <div class="cfgscrim" id="settingsScrim"></div>
     <section class="cfg" id="settingsPanel" role="dialog" aria-modal="true" aria-labelledby="cfgTitle">
@@ -783,58 +792,72 @@
              figures and the packages; the pool pie and the landscape; the year chart, the
              adjustments, the window's pools and the attribution. The Mempool space viewer is on
              Overview, Block space and Mempool already. -->
+        <!-- THE DEFAULT LAYOUT OF mempool.space's MINING DASHBOARD (operator, 2026-09-15: "look at the
+             source code for mempool space app, and try to implement this default layout at the very
+             least. Notice the 'View more >>' that open up a panel to see a full screen view of just
+             that panel"). Its mining-dashboard.component.html is two columns: reward stats |
+             difficulty adjustment; pool ranking | hashrate chart, each with "View more »"; recent
+             blocks | adjustments. The same six cards here in the same order, the block flow across
+             the top as before, and "View more »" opens the card full-screen (#expandWrap). Every
+             figure is from this node (collect/network.js); our own panels follow beneath. -->
         <div class="card mnflow flowtight">
           <h3>Block flow <span class="sp"></span><span class="src">being assembled → <b>the current block</b> → history receding</span></h3>
           <div id="mnFlow" class="flowwrap"></div>
         </div>
-        <div class="mn3">
-          <div class="ovcol">
-            <div class="card">
-              <h3>Reward stats <span class="sp"></span><span class="src" id="mnRewardsSrc">last 144 blocks · getblockstats</span></h3>
-              <div class="netstats" id="mnRewards"></div>
-            </div>
-            <div class="card">
-              <h3>Difficulty adjustment <span class="sp"></span><span class="src">this period, from its first block's time</span></h3>
-              <div class="netstats" id="mnAdjust"></div>
-            </div>
-            <div class="card">
-              <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getrawmempool · depends</span></h3>
-              <div id="mnPackages"></div>
-            </div>
+        <div class="mn2">
+          <div class="card">
+            <h3>Reward stats <span class="sp"></span><span class="src" id="mnRewardsSrc">last 144 blocks · getblockstats</span></h3>
+            <div class="netstats" id="mnRewards"></div>
           </div>
-          <div class="ovcol">
-            <div class="card">
-              <h3>Pools <span class="sp"></span><span class="src" id="mnPoolsWeekSrc">the last week's blocks, by coinbase</span></h3>
-              <div class="netstats" id="mnPoolsWeek"></div>
-              <canvas class="chart donut" id="mnPoolDonut"></canvas>
-              <div class="note tiny faint" id="mnPoolsWeekNote"></div>
-            </div>
-            <div class="card">
-              <h3>Feerate landscape <span class="sp"></span><span class="src">the transactions selected for the next block</span></h3>
-              <canvas class="chart" id="mnFeeLandscape"></canvas>
-              <div class="note tiny faint">Buckets are sat/vB. Green means the bucket pays well above the block's own median, red below — the same shape a miner is looking at when it decides what to include.</div>
-            </div>
+          <div class="card">
+            <h3>Difficulty adjustment <span class="sp"></span><span class="src">this period, from its first block's time</span></h3>
+            <div class="netstats" id="mnAdjust"></div>
           </div>
-          <div class="ovcol">
-            <div class="card">
-              <h3>Hashrate &amp; difficulty <span class="sp"></span><span class="src">a year, one sample a day · getnetworkhashps over the week</span></h3>
-              <div class="netstats" id="mnHashrate"></div>
-              <canvas class="chart tall" id="mnHashChart"></canvas>
-              <div class="note tiny faint">Each day's hashrate is the difficulty times 2³² over that day's mean block interval, from the block headers — an estimate, as every hashrate figure is; the steps are the difficulty.</div>
-            </div>
-            <div class="card">
-              <h3>Adjustments <span class="sp"></span><span class="src">each period's first block against the one before</span></h3>
-              <div id="mnAdjustments"></div>
-            </div>
-            <div class="card">
-              <h3>Pools in this window <span class="sp"></span><span class="src">coinbase tags, grouped by curated label</span></h3>
-              <div id="mnPools"></div>
-            </div>
-            <div class="card">
-              <h3>Attribution <span class="sp"></span><span class="src">what we read and from where</span></h3>
-              <div id="mnCoverage"></div>
-            </div>
-            <details class="card mndetailed">
+          <div class="card">
+            <h3>Pools <span class="sp"></span><span class="src" id="mnPoolsWeekSrc">the last week's blocks, by coinbase</span></h3>
+            <div class="netstats" id="mnPoolsWeek"></div>
+            <canvas class="chart donut" id="mnPoolDonut"></canvas>
+            <div class="note tiny faint" id="mnPoolsWeekNote"></div>
+            <a class="viewmore" href="#mining" data-expand="pools">View more »</a>
+          </div>
+          <div class="card">
+            <h3>Hashrate &amp; difficulty <span class="sp"></span><span class="src">a year, one sample a day · getnetworkhashps over the week</span></h3>
+            <div class="netstats" id="mnHashrate"></div>
+            <canvas class="chart tall" id="mnHashChart"></canvas>
+            <div class="note tiny faint">Each day's hashrate is the difficulty times 2³² over that day's mean block interval, from the block headers — an estimate, as every hashrate figure is; the steps are the difficulty.</div>
+            <a class="viewmore" href="#mining" data-expand="hashrate">View more »</a>
+          </div>
+          <div class="card">
+            <h3>Recent blocks <span class="sp"></span><span class="src">height, pool, reward, fees · the attributed window</span></h3>
+            <div id="mnRecent"></div>
+            <a class="viewmore" href="#mining" data-expand="blocks">View more »</a>
+          </div>
+          <div class="card">
+            <h3>Adjustments <span class="sp"></span><span class="src">each period's first block against the one before</span></h3>
+            <div id="mnAdjustments"></div>
+            <a class="viewmore" href="#mining" data-expand="adjustments">View more »</a>
+          </div>
+        </div>
+        <!-- our own: the block being built and the attribution behind the pools -->
+        <div class="mnextra">
+          <div class="card">
+            <h3>Packages in the block being built <span class="sp"></span><span class="src">ancestor graph from getrawmempool · depends</span></h3>
+            <div id="mnPackages"></div>
+          </div>
+          <div class="card">
+            <h3>Feerate landscape <span class="sp"></span><span class="src">the transactions selected for the next block</span></h3>
+            <canvas class="chart" id="mnFeeLandscape"></canvas>
+            <div class="note tiny faint">Buckets are sat/vB. Green means the bucket pays well above the block's own median, red below — the same shape a miner is looking at when it decides what to include.</div>
+          </div>
+          <div class="card">
+            <h3>Pools in this window <span class="sp"></span><span class="src">coinbase tags, grouped by curated label</span></h3>
+            <div id="mnPools"></div>
+          </div>
+          <div class="card">
+            <h3>Attribution <span class="sp"></span><span class="src">what we read and from where</span></h3>
+            <div id="mnCoverage"></div>
+          </div>
+          <details class="card mndetailed">
               <summary><h3>Detailed <span class="sp"></span><span class="src">what this node can and cannot answer</span></h3></summary>
               <div class="kv">
                 <dt>fee deployment by miner</dt><dd>above, per mined block</dd>
@@ -852,7 +875,6 @@
                   view above is built from <span class="mono">getrawmempool … depends</span>, which is RPC.</dd>
               </div>
             </details>
-          </div>
         </div>
       </div>
     </section>
