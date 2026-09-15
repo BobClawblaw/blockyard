@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The fireworks are off by default on both boards, kept for special occasions: tick the switch to put them in the rotation
 - The black hole is a Markets effect only again: it hovered over Block space for a day and its cubes never came home cleanly enough, so it was taken off that board's list
 - A held pool refresh waits a moment and a half after an idle effect ends, with the board whole and still, instead of lifting off on the effect's last frame
 - Whatever a head pulls is painted last, nearest the head on top, so a pulled candle never cuts through the neighbours it passes over

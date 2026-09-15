@@ -30,7 +30,9 @@ test('there are at least twenty-five effects, and every one has a switch of its 
   assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge', 'breathe', 'saber', 'blackhole'], 'the block board lacks only the five that are the price board\'s own (the black hole hovered over it for a day, 2026-09-15, and was taken off again)');
   for (const group of ['effects', 'marketEffects']) {
     assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);
-    assert.ok(switches(group).every((k) => DEFAULTS[group][k] === true), `${group}: all on, they were asked for`);
+    // all on, they were asked for -- but the fireworks, kept for occasions (2026-09-15), ship off
+    assert.ok(switches(group).every((k) => DEFAULTS[group][k] === (k !== 'firework')), `${group}: all on but the fireworks`);
+    assert.equal(DEFAULTS[group].firework, false, `${group}: the fireworks are off until ticked`);
     assert.equal(PANEL.find((g) => g.group === group).bulk, true, `${group}: the tab has all on / all off`);
     const slider = PANEL.find((g) => g.group === group).rows.find((r) => r.key === 'noRepeat');
     assert.equal(slider.max, switches(group).length, `${group}: the no-repeat slider tops out at the list's length (${slider.max})`);
@@ -87,10 +89,10 @@ test('an effect is the same picture every time it replays: no Math.random in the
 
 test('the switches reach the scheduler: the enabled list is what the boards are given', () => {
   const all = spaceOptions({});
-  assert.deepEqual(all.fxKinds, SPACE_FX, 'everything on by default');
+  assert.deepEqual(all.fxKinds, SPACE_FX.filter((k) => k !== 'firework'), 'everything on by default but the fireworks, kept for occasions');
   const few = spaceOptions({ effects: Object.fromEntries(FX_KINDS.map((k) => [k, k === 'ripple' || k === 'nova'])) });
   assert.deepEqual(few.fxKinds, ['ripple', 'nova'], 'only what is left on, in list order');
-  assert.deepEqual(marketsOptions({}).fxKinds, MARKET_FX, 'the price board is given its own list');
+  assert.deepEqual(marketsOptions({}).fxKinds, MARKET_FX.filter((k) => k !== 'firework'), 'the price board is given its own list, fireworks off there too');
   assert.equal(marketsOptions({}).fxNoRepeat, 12, 'and its own window');
   // THE LISTS ARE INDEPENDENT: the block board's switches say nothing about the price board's
   const split = { effects: Object.fromEntries(SPACE_FX.map((k) => [k, false])), marketEffects: { noRepeat: 3, ...Object.fromEntries(MARKET_FX.map((k) => [k, k === 'pulse' || k === 'wave'])) } };

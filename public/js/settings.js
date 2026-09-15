@@ -172,7 +172,10 @@ export const DEFAULTS = Object.freeze({
   effects: Object.freeze({
     ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true, xray: true,
     lightcycle: true, ball: true,
-    shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
+    // FIREWORKS ARE KEPT FOR OCCASIONS (operator, 2026-09-15: "make it disabled by default. I want
+    // to re-use that one for special occasions in the future, and don't want it in the rotation
+    // unless user selects it"): off on both boards until someone ticks it
+    shockwave: true, nova: true, firework: false, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true,
     // the agents: something happening on the board, rather than a pattern over it
     centipede: true, tractor: true, missile: true, boulderdash: true, stormball: true,
@@ -202,7 +205,8 @@ export const DEFAULTS = Object.freeze({
     breathe: true,        // the line breathes between the wire and the pulse's heat
     saber: true,          // the line ignites as a light saber
     blackhole: true,      // the chart collapses into a black hole
-    firework: true, flare: true, wave: true, stormball: true,
+    firework: false,      // kept for occasions, off until ticked (see the block board's list)
+    flare: true, wave: true, stormball: true,
     noRepeat: 12,
     // no firstAfter here: the candle board does not land (operator, 2026-09-14: "there is no
     // 'landing' for the markets display"); after a refresh its first effect keeps the cadence below
@@ -305,7 +309,7 @@ const FX_ROW = Object.freeze({
   blackhole: Object.freeze({ label: 'Black hole', hint: 'A point of darkness opens on the price line and grows, then drifts slowly across the chart from one side to the other: the line bends round it, the candles nearest are swallowed into orbit, and an accretion disk of the chart\u2019s own colours spirals in round the shadow -- brighter on the side coming toward you, its far side arched over the top -- until it lets everything go' }),
   shockwave: Object.freeze({ label: 'Shockwave', hint: 'A hard ring that throws the blocks it passes into the air' }),
   nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
-  firework: Object.freeze({ label: 'Fireworks', hint: 'Three bursts, each at its own moment and place' }),
+  firework: Object.freeze({ label: 'Fireworks', hint: 'A display of up to ten shells, each at its own moment and place, with its smoke. Off by default -- kept for special occasions; tick it to put it in the rotation' }),
   flare: Object.freeze({ label: 'Supernova', hint: 'One block goes supernova: a star swells and blows out in a white-out, a debris cloud of gas expands and cools white to blue to violet, a shockwave throws what it crosses, and a pulsar is left beating at the centre' }),
   wave: Object.freeze({ label: 'Wave', hint: 'Several crests rolling across the board, the blocks riding them' }),
   quake: Object.freeze({ label: 'Quake', hint: 'The board shakes, hardest at the start, and settles' }),
