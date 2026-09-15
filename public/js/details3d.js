@@ -363,7 +363,13 @@ function fxNow(st, t) {
       hz = f.alt; lo = 0; hi = f.alt;
       hy = st.gridH * (0.4 + 0.2 * hash01(f.seed + 4));
     }
-    const growIn = u < 0.22 ? Math.pow(u / 0.22, 1.6) : 1, growOut = u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
+    // ...AND ALL THE WAY HOME BEFORE THE END (operator, 2026-09-15: "still snapping into place on
+    // last frame to drop in"): the release curve reached zero only at u = 1, so on the last frame
+    // a cube was still a few pixels off home at nine tenths size, and the effect's end put it
+    // there in one step. It is a smoothstep now, done by 0.97 -- zero speed as it arrives -- and
+    // the last three hundredths draw nothing at all
+    const growIn = u < 0.22 ? Math.pow(u / 0.22, 1.6) : 1;
+    const growOut = u <= 0.82 ? 1 : u >= 0.97 ? 0 : (() => { const t = 1 - (u - 0.82) / 0.15; return t * t * (3 - 2 * t); })();
     const grow = growIn * growOut;
     const rs = boundedRadius(2.3, 0.047, st.gridW) * grow;                 // the horizon, in grid units (4.8 on 2026-09-15 -- "double the size" -- then 3.4: "obscuring too much" -- then 2.3: "shrink up the black hole by 33%"), and never more than 4.7% of the board
     out.blackhole = { x: hx, y: hy, z: hz, rs, grow, lo, hi };
