@@ -150,7 +150,7 @@ const FX_MS = {
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
   breathe: 9000,                               // the price line breathes: three slow swells between the wire and the pulse's heat
   saber: 8000,                                 // the price line ignites as a light saber, hums, and retracts
-  shockwave: 4200, nova: 5200, firework: 5600, flare: 12000, wave: 6000, quake: 3200,   // flare 3600 -> 8000 -> 12000 (2026-09-15: it is a supernova now, and the remnant lingers)
+  shockwave: 4200, nova: 5200, firework: 5600, flare: 16000, wave: 6000, quake: 3200,   // flare 3600 -> 8000 -> 16000 (2026-09-15: it is a supernova now, and the cloud disperses slowly)
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
   // Longer than the fields, because something that travels needs time to be watched -- a field
@@ -167,7 +167,7 @@ export const FX_KINDS = Object.keys(FX_MS);
 // the price board's own lengths, where they differ: ball lightning crosses it at a third of the
 // block board's speed -- 11 s there; a third slower (16.5 s, operator 2026-09-15: "cut the speed
 // by 33% now that it's slower"), then 40% slower again (27.5 s: "Slow it down movement by 40%")
-export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 18000 };   // and a fireworks display of five shells, each with its smoke, needs the time
+export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
@@ -1026,6 +1026,29 @@ function drawFireworks(ctx, view, lw) {
   ctx.lineWidth = lw;
 }
 
+// A STAR'S GLINT (for the supernova's progenitor; 2026-09-15, operator: "The flashing dot as a
+// supernova looks bad. The star is blue-shifted before it blows up. Can we have a better glint
+// effect there?"). A soft halo, a hot core, four long diffraction spikes and two shorter
+// diagonals, each a gradient fading to its tip, all of it twinkling on the clock; `col` is the
+// star's colour and `f` its strength. Gradients only.
+function starGlint(ctx, x, y, size, col, f, now, lw) {
+  if (f <= 0.003) return;
+  const c = col.join(','), tw = 0.85 + 0.15 * Math.sin(now * 0.017) * Math.sin(now * 0.031 + 1);
+  const grad = (r, stops) => { const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null; if (!g || typeof g.addColorStop !== 'function') return stops[0][1]; for (const [o, cc] of stops) g.addColorStop(o, cc); return g; };
+  const lin = (x0, y0, x1, y1, stops) => { const g = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(x0, y0, x1, y1) : null; if (!g || typeof g.addColorStop !== 'function') return stops[1][1]; for (const [o, cc] of stops) g.addColorStop(o, cc); return g; };
+  ctx.fillStyle = grad(size * 3, [[0, `rgba(255,255,255,${(0.9 * f * tw).toFixed(3)})`], [0.12, `rgba(${c},${(0.7 * f * tw).toFixed(3)})`], [0.4, `rgba(${c},${(0.18 * f).toFixed(3)})`], [1, `rgba(${c},0)`]]);
+  ctx.beginPath(); ctx.arc(x, y, size * 3, 0, Math.PI * 2); ctx.fill();
+  const spikes = [[0, 1, 0.09], [Math.PI / 2, 1, 0.09], [Math.PI / 4, 0.45, 0.05], [-Math.PI / 4, 0.45, 0.05]];
+  for (const [ang, len, w] of spikes) {
+    const L = size * 9 * len * tw, x0 = x - Math.cos(ang) * L, y0 = y - Math.sin(ang) * L, x1 = x + Math.cos(ang) * L, y1 = y + Math.sin(ang) * L;
+    ctx.strokeStyle = lin(x0, y0, x1, y1, [[0, `rgba(${c},0)`], [0.5, `rgba(255,255,255,${(0.85 * f * tw).toFixed(3)})`], [1, `rgba(${c},0)`]]);
+    ctx.lineWidth = Math.max(lw * 0.8, size * w); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    ctx.strokeStyle = lin(x0, y0, x1, y1, [[0, `rgba(${c},0)`], [0.5, `rgba(${c},${(0.4 * f).toFixed(3)})`], [1, `rgba(${c},0)`]]);
+    ctx.lineWidth = Math.max(lw * 2, size * w * 3.5); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  }
+  ctx.fillStyle = `rgba(255,255,255,${(f * tw).toFixed(3)})`; ctx.beginPath(); ctx.arc(x, y, size * 0.45, 0, Math.PI * 2); ctx.fill();
+}
+
 // A VOLUME OF GAS (for the supernova's debris; 2026-09-15). `n` blobs with fixed places in the
 // unit sphere -- radius biased toward the rim, so the limb reads brighter, the way a shell does
 // when seen through -- projected with the sphere's depth kept: the blobs are drawn back to
@@ -1095,17 +1118,18 @@ function drawSupernova(ctx, view, lw) {
   };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const mixc = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
-  // the cloud's colour with the run: white-gold, orange, then deep red
+  // the cloud's colour with the run, as in the reference (operator: "the cloud is white at the
+  // start, shifting towards blue, then purple/violet"): white, blue, then violet
   const cool = Math.max(0, Math.min(1, (u - 0.14) / 0.86));
-  const rc = cool < 0.35 ? mixc([255, 235, 190], [255, 150, 60], cool / 0.35) : mixc([255, 150, 60], [190, 50, 40], (cool - 0.35) / 0.65);
+  const rc = cool < 0.3 ? mixc([255, 255, 255], [150, 195, 255], cool / 0.3) : mixc([150, 195, 255], [175, 110, 255], (cool - 0.3) / 0.7);
   const rcs = rc.join(',');
-  // --- ignition: the star swells and brightens, cleanly (operator, 2026-09-15: "The electric
-  // crackle buildup does not look good" -- the filaments are gone; the swell and a breath are all)
+  // --- ignition: the star, blue-shifting as it goes (operator: "The star is blue-shifted before
+  // it blows up"): a glint -- halo, core, diffraction spikes -- that grows and turns from warm
+  // white to blue-white over the run-up, breathing, never flashing
   if (u < 0.14) {
-    const f = u / 0.12, ease = Math.min(1, f * f);
-    const r = R0 * (0.12 + 0.6 * ease), breath = 1 + 0.06 * Math.sin(now * 0.02) + 0.04 * Math.sin(now * 0.047);
-    disc(c.x, c.y, r * 3 * breath, grad(c.x, c.y, r * 3 * breath, [[0, `rgba(255,255,255,${(0.95 * ease).toFixed(3)})`], [0.2, `rgba(255,245,210,${(0.8 * ease).toFixed(3)})`], [0.5, `rgba(255,190,90,${(0.35 * ease).toFixed(3)})`], [1, 'rgba(255,140,40,0)']]));
-    disc(c.x, c.y, r * 0.5, `rgba(255,255,255,${ease.toFixed(3)})`);
+    const f = Math.min(1, u / 0.12), ease = f * f;
+    const col = [Math.round(255 - 95 * ease), Math.round(245 - 40 * ease), 255];
+    starGlint(ctx, c.x, c.y, R0 * (0.12 + 0.55 * ease), col, 0.35 + 0.65 * ease, now, lw);
   }
   // --- THE DEBRIS CLOUD AS A VOLUME OF GAS (operator, 2026-09-15: "Overall it needs to look
   // more like the NASA video. I don't think the ejecta/fireworks is working well ... The thin
@@ -1118,17 +1142,17 @@ function drawSupernova(ctx, view, lw) {
   const band = (r, w, col, a) => {
     if (r <= 0 || a <= 0.003) return;
     const R = r + w;
-    disc(c.x, c.y, R, grad(c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(255,235,205,${(a * 0.8).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]));
+    disc(c.x, c.y, R, grad(c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(240,245,255,${(a * 0.8).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]));
   };
   if (u >= 0.14) {
     const f = (u - 0.14) / 0.86;
-    const shell = R0 * (0.5 + 4 * (1 - Math.exp(-2.6 * f)));            // the cloud's radius: fast, then slowing
+    const shell = R0 * (0.5 + 4.2 * (1 - Math.exp(-1.3 * f)));           // the cloud's radius: slower than the first cut (operator: "the cloud dispersion is too fast")
     const bright = (f < 0.08 ? f / 0.08 : f < 0.62 ? 1 : Math.pow(1 - (f - 0.62) / 0.38, 1.3)) * gf;
-    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc);
+    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright, rc, grad, disc, 150, [60, 30, 120]);
     // the shock band at the cloud's leading edge, soft, in the cloud's colour
     if (u < 0.6) {
       const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
-      disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(255,240,220,0)'], [0.7, `rgba(255,240,220,${(0.05 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(255,235,205,${(0.14 * (1 - fr) * gf).toFixed(3)})`]]));
+      disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(235,240,255,0)'], [0.7, `rgba(235,240,255,${(0.05 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(240,245,255,${(0.14 * (1 - fr) * gf).toFixed(3)})`]]));
       band(r, R0 * (0.3 + 0.6 * (1 - fr)), rcs, 0.4 * (1 - fr) * gf);
     }
     // a wide pool of the cloud's colour on everything near
@@ -1140,7 +1164,7 @@ function drawSupernova(ctx, view, lw) {
     const W = Math.max(view.boardW ?? 2000, 2000) * 1.5;
     ctx.fillStyle = `rgba(255,252,245,${(0.92 * f).toFixed(3)})`; ctx.fillRect(c.x - W, c.y - W, 2 * W, 2 * W);
     disc(c.x, c.y, R0 * 3.5, grad(c.x, c.y, R0 * 3.5, [[0, `rgba(255,255,255,${f.toFixed(3)})`], [0.5, `rgba(255,245,220,${(0.5 * f).toFixed(3)})`], [1, 'rgba(255,220,170,0)']]));
-    lensFlare(ctx, c.x, c.y, R0 * 11, [255, 230, 170], f, view, lw);
+    lensFlare(ctx, c.x, c.y, R0 * 11, [200, 220, 255], f, view, lw);
   }
   // --- the pulsar: as the cloud dims, a point pulsing at the centre, its blue nebula growing
   if (u >= 0.45) {

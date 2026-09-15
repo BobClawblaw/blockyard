@@ -1010,7 +1010,8 @@ export function fxAt(t, fx) {
       const thin = fx.gridH <= 12;
       const w = g(d / (1.2 + (thin ? 22 : 7) * bell)) * bell;
       const cool = Math.max(0, Math.min(1, (fx.u - 0.2) / 0.8));
-      const col = fx.u < 0.2 ? [255, 250, 230] : cool < 0.5 ? [255, Math.round(200 - 110 * cool * 2), Math.round(90 - 20 * cool * 2)] : [Math.round(255 - 85 * (cool - 0.5) * 2), 90, Math.round(70 + 185 * (cool - 0.5) * 2)];
+      // white at the blast, then blue, then violet, as the cloud goes (details3d drawSupernova)
+      const col = cool < 0.3 ? [Math.round(255 - 105 * cool / 0.3), Math.round(255 - 60 * cool / 0.3), 255] : [Math.round(150 + 25 * (cool - 0.3) / 0.7), Math.round(195 - 85 * (cool - 0.3) / 0.7), 255];
       // THE SHOCKWAVE THROWS WHAT IT CROSSES (operator, 2026-09-15: "Consider perturbing all the
       // candles that are affected by the shockwave"): the ring drawn in drawSupernova (4.5 shell
       // radii, out over u 0.14-0.6) runs through the tiles here too -- a tile it reaches is thrown
