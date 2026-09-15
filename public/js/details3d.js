@@ -145,7 +145,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // and one toggle in settings.js (the `effects` and `marketEffects` groups), and the lists are checked against each other
 // by a test, so an effect cannot ship without a switch or a switch without an effect.
 const FX_MS = {
-  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 6000,   // scan 4200 -> 6000 (2026-09-15: a light curtain, a stately pass)
+  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 8400,   // scan 4200 -> 6000 -> 8400: the sweep now starts and ends off-panel, so the span grew and the duration follows it (below)
   xray: 6500,                                  // the board goes x-ray behind a sweeping front, and develops back
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
@@ -169,7 +169,14 @@ export const FX_KINDS = Object.keys(FX_MS);
 // the price board's own lengths, where they differ: ball lightning crosses it at a third of the
 // block board's speed -- 11 s there; a third slower (16.5 s, operator 2026-09-15: "cut the speed
 // by 33% now that it's slower"), then 40% slower again (27.5 s: "Slow it down movement by 40%")
-export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000 };   // and a fireworks display of five shells, each with its smoke, needs the time
+// THE DURATION FOLLOWS THE SPAN, or widening the travel speeds up the picture (operator,
+// 2026-09-15: "why does it transit the market view so quick? I didn't ask for that"). When the
+// sweep was made to start and end beyond the panel, the distance grew but the clock did not, so
+// the part you actually watch -- the crossing of the board -- got 1.52x faster on Markets and
+// 1.40x on Block space. These restore the crossing to the speed it had: measured, 9145 ms and
+// 8400 ms for the two boards. Markets needs the longer one because its panel is wide and its board
+// is shallow, so proportionally more of the journey happens off-screen.
+export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan: 9150 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
