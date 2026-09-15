@@ -1211,6 +1211,9 @@ export function fxAt(t, fx) {
             lean: hd.lean ?? 1,
             // `shrink`: scale the footprint with the height, so the cube stays a cube as it goes
             shrink: hd.shrink ? 1 : 0,
+            // `orbitR`: the head's reach in grid units -- buildScene lays the block board's orbits
+            // out at a fixed distance round the hole from it, rather than part-way home
+            orbitR: hd.r ?? 0,
           };
         }
       }
@@ -1276,6 +1279,12 @@ export function buildScene(tiles, o = {}) {
   const ground = [];
   const air = [];
   const shadows = [];
+  // IN THE AIR, PAINTED LAST (operator, 2026-09-15, of the black hole on the block board: "There
+  // are too many collision errors happening"): a cube pulled off the board toward the hole was
+  // still painted in the board's own order, so it cut through the neighbours it was passing over.
+  // Its faces are moved to the end of the frame instead, the least-pulled first, so the ones
+  // nearest the hole are on top of everything
+  const pulled = new Map();
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const note = (p) => {
     if (p.x < minX) minX = p.x;
@@ -1334,6 +1343,7 @@ export function buildScene(tiles, o = {}) {
     // leans and lengthens toward the hole before the scale takes it. Each corner object is moved
     // once, however many faces share it.
     if (fxv.pull > 0.001 && fxv.pullAt) {
+      pulled.set(String(t.txid), fxv.pull);
       // ...AND ORBITS (operator, 2026-09-15: "The chart bars need to cleanly orbit the disc"): the
       // tile is swept round the hole along the disk's flow as it is drawn in -- its centre swings
       // about the hole by an angle that grows with the pull and the clock, on a radius that
@@ -1365,7 +1375,12 @@ export function buildScene(tiles, o = {}) {
       // calm it down by at least half to start" -- then "slow the spin ... by another half. Want it
       // smoother and calmer"): 0.00035 a millisecond at full pull, a quarter of the 0.0014 it was
       const swing = peak * peak * (o.now ?? 0) * 0.00035 + 0.5 * peak;   // clockwise on screen, Keplerian
-      const r1 = r0 * (1 - 0.55 * peak), a1 = a0 + swing;
+      // ROUND THE HOLE, on the block board (operator, 2026-09-15: "the blocks don't look right"):
+      // part-way home from a hole twenty units up left the cubes hanging in the middle distance;
+      // each is carried instead to its own ring round the hole, one and a half to three reaches
+      // out in screen pixels, and glides straight back from it as the pull falls
+      const ring = fxv.lean === 0 && fxv.orbitR > 0 && o.unit ? fxv.orbitR * o.unit * (1.5 + 1.5 * fxHash(Math.round(t.x * 31 + t.y * 7 + 3))) : null;
+      const r1 = ring != null ? r0 + (ring - r0) * peak : r0 * (1 - 0.55 * peak), a1 = a0 + swing;
       const cx1 = hp.x + Math.cos(a1) * r1, cy1 = hp.y + Math.sin(a1) * r1 * (1 - 0.6 * peak);      // flattened toward the disk
       const sx = (cx1 - cx0) * k0, sy = (cy1 - cy0) * k0;
       const tops = new Set([...f.top, ...f.sides.flatMap((sd) => [sd.points[0], sd.points[1]])]);
@@ -1757,7 +1772,13 @@ export function buildScene(tiles, o = {}) {
       if (o.oblique && !viewerLit && zt < 1.5) shadows.push(...restingShadowOps(t, o, 1 - zt / 1.5));
     }
   }
-  const ops = o.oblique ? [...shadows, ...ground] : [...ground, ...shadows, ...air];
+  let ops = o.oblique ? [...shadows, ...ground] : [...ground, ...shadows, ...air];
+  if (pulled.size) {
+    const rest = [], lifted = [];
+    ops.forEach((op, i) => (pulled.has(String(op.txid)) ? lifted : rest).push({ op, i }));
+    lifted.sort((p, q) => (pulled.get(String(p.op.txid)) - pulled.get(String(q.op.txid))) || (p.i - q.i));
+    ops = [...rest.map((e) => e.op), ...lifted.map((e) => e.op)];
+  }
   return { ops, bounds: ops.length ? { minX, maxX, minY, maxY } : null, count: ordered.length };
 }
 
