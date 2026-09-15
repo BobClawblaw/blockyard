@@ -145,7 +145,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // and one toggle in settings.js (the `effects` and `marketEffects` groups), and the lists are checked against each other
 // by a test, so an effect cannot ship without a switch or a switch without an effect.
 const FX_MS = {
-  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 8400,   // scan 4200 -> 6000 -> 8400: the sweep now starts and ends off-panel, so the span grew and the duration follows it (below)
+  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 16800,   // 8400 -> 16800: top-down it pans OUT AND BACK, so two traversals at the same unhurried speed   // scan 4200 -> 6000 -> 8400: the sweep now starts and ends off-panel, so the span grew and the duration follows it (below)
   xray: 6500,                                  // the board goes x-ray behind a sweeping front, and develops back
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
@@ -1131,12 +1131,25 @@ function scanFlare(ctx, pts, axes, view, lw) {
     ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke();
   }
 }
+// THE BEAM'S ALTITUDE AND WIDTH, decided once. fxAt lights the swath while buildScene runs, and
+// drawScanCurtain draws the cone afterwards; if each worked its own numbers out they would drift
+// apart and the lit blocks would not be the ones under the light.
+function scanBeamGeom(view) {
+  const price = (view.axes?.line?.length ?? 0) > 1;
+  const top = price ? (view.axes?.zTop ?? 34) : 9;
+  const line = view.axes?.line ?? [];
+  const peak = line.length > 1 ? line.reduce((h, q) => Math.max(h, q.z ?? 0), 0) : top * 0.8;
+  const clearance = Math.max(2.5, top * 0.1);
+  const z = Math.max(peak + 1, Math.min(peak + clearance, top * 0.95));
+  const spread = price ? Math.max(3, Math.min(11, z * 0.32)) : Math.max(2, Math.min(5, z * 0.45));
+  return { price, top, z, spread };
+}
+
 function drawScanCurtain(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'scan') return;
   const U = view.unit ?? 8, now = view.now ?? 0;
-  const price = (view.axes?.line?.length ?? 0) > 1;
-  const top = price ? (view.axes?.zTop ?? 34) : 9;
+  const { price, top } = scanBeamGeom(view);
   const P = (q) => project(q.x, q.y, q.z, view);
   // NO FADE WHILE IT IS IN SIGHT (operator, 2026-09-15: "it still fades in and out ... with the
   // effects properly transitioning before being killed"). fx.amp is the shared envelope every
@@ -1194,16 +1207,8 @@ function drawScanCurtain(ctx, view, lw) {
   // flies through the high candles; too high and it leaves the frame. It wants a clearance over the
   // line AND a hard ceiling under the chart's top, so it rides above the price wherever the price
   // happens to be and never reaches the edge.
-  const peak = (view.axes?.line ?? []).reduce((h, q) => Math.max(h, q.z ?? 0), 0);
-  const clearance = Math.max(2.5, top * 0.1);              // the tolerance it keeps over the line
-  // the ceiling must never push it BELOW the line it is meant to fly over, so a floor of one unit
-  // above the peak wins if a chart ever comes that close to its own top
-  const apex = { x: mx, y: my, z: Math.max(peak + 1, Math.min(peak + clearance, top * 0.95)) };
-  // THE WIDTH FOLLOWS THE HEIGHT, or the shape changes with the price. A fixed half-width made a
-  // proper cone when the craft flew high and a flat fan when it flew low -- measured 110x34 on a
-  // low chart, which is a fan, not a beam. Tying it to the altitude keeps the same cone whatever
-  // the line is doing underneath.
-  const SPREAD = Math.max(3, Math.min(11, apex.z * 0.32));
+  const apex = { x: mx, y: my, z: scanBeamGeom(view).z };
+  const SPREAD = scanBeamGeom(view).spread;
   const RING = 44;
   // a point on the base ellipse: `f` scales the shell, `th` runs around it
   const ring = (th, f) => ({
@@ -4030,6 +4035,14 @@ export function render3d(canvas, cells, options = {}) {
     if (view.fx && view.viewRect) {
       const r = view.viewRect;
       view.fx.margin = Math.max(0 - r.x0, r.x1 - st.gridW, 0 - r.y0, r.y1 - st.gridH, 4) + 3;
+      // the scan's beam: its half-width, so fxAt lights exactly the swath the cone covers, and
+      // whether it PANS -- a searchlight sweeping out and back, which is the top-down board's
+      // motion; the price chart keeps its single pass along the hours
+      if (view.fx.kind === 'scan') {
+        const g = scanBeamGeom(view);
+        view.fx.beamR = g.spread;
+        view.fx.pan = !g.price;
+      }
     }
     const frame = frameAt(st.plan, t, view);
     paintFrame(ctx, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);

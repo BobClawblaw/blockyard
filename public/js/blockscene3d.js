@@ -919,7 +919,13 @@ export function fxFront(fx) {
   // and puts it on `fx.margin`; four is the fallback for a caller with no panel (tests).
   const m = fx.margin ?? 4;
   const lo = Math.min(...qs) - m, hi = Math.max(...qs) + m;
-  return lo + fx.u * (hi - lo);
+  // A SEARCHLIGHT PANS (operator, 2026-09-15: "the scanner needs to be more like a search light,
+  // slowly panning back and forth"). A single linear pass is a scanner; sweeping out and back is a
+  // light being AIMED, which is what reads as something looking for things. `pan` is set for the
+  // top-down board only -- on the price chart the camera is low and one pass along the hours is
+  // the right motion.
+  const t = fx.pan ? 1 - Math.abs(((fx.u * 2) % 2) - 1) : fx.u;
+  return lo + t * (hi - lo);
 }
 
 // a deterministic 0..1 from an integer: where a firework bursts, which cube flares. Hashed, not
@@ -965,8 +971,13 @@ export function fxAt(t, fx) {
     case 'scan': {
       // the beam's own width -- ten units, so a whole swath of blocks is lit as it passes
       // (2026-09-15: "Reach more blocks with the scanner effect")
-      const w = g((along() - fxFront(fx)) / 5.5);
-      return { glow: 0.95 * A * w, outline: 0.75 * A * w, lift: 0.4 * A * w, color: [160, 235, 255] };
+      // THE LIGHT IS THE POINT (operator, 2026-09-15: "We really need to make it much more obvious
+      // somehow that the blocks are being illuminated"). The swath tracks the beam's own half-width
+      // (fx.beamR, set with the cone) so light and geometry cannot disagree, and it hits harder:
+      // a near-white glow, a bright outline and real lift, so a struck cube stands up out of the
+      // board rather than merely brightening.
+      const w = g((along() - fxFront(fx)) / (fx.beamR ?? 5.5));
+      return { glow: Math.min(1, 1.6 * A * w), outline: Math.min(1, 1.2 * A * w), lift: 1.4 * A * w, color: [225, 248, 255] };
     }
     case 'xray': {
       // X-RAY (2026-09-15, operator: "Add xray as additional choosable effect"): a front sweeps the
