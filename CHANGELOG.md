@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 - The black hole on Block space: the cubes it pulls are painted last, in the air, nearest the hole on top, so they no longer cut through the neighbours they pass over; each is carried to its own ring round the hole (one and a half to three reaches out) instead of hanging part-way home, and glides straight back from it as the hole lets go
+- The black hole lets go evenly: its hold used to fall with its shrinking reach, which released the outer cubes gently and the ones right under it all at once in the last frames (they popped home full size); the reach now holds through the release and the pull and the scale themselves fade over the last fifth, so every cube and candle glides home and grows back smoothly
 
 ### Changed
 - On Block space the black hole hovers twice as high off the grid: double its old height over the tallest cube, and the cubes beneath still rise to meet it in orbit

@@ -1195,13 +1195,17 @@ export function fxAt(t, fx) {
           // the very fade that meant it was working. Measured: 0 cubes hidden over a whole run.
           // So the physical effect uses PROXIMITY alone and the visual effect keeps using w.
           const reach = g(Math.hypot(ddx, ddy) / Math.max(0.2, hd.r ?? 0.8));
+          // `release` (1 unless the head says otherwise): the head letting go of everything it
+          // holds, evenly -- the pull and the scale fade by it, so a tile under the head glides
+          // home over the head's whole release rather than when its reach finally passes it
+          const rel = hd.release ?? 1;
           best = {
             glow: 0.85 * w, outline: 0.8 * w, lift: (hd.lift ?? 0) * w, color: hd.color,
             hide: (hd.hide ?? 0) > 0 && reach > 0.45 ? 1 : 0,
-            scale: hd.scale == null ? 1 : 1 - (1 - hd.scale) * reach,
+            scale: hd.scale == null ? 1 : 1 - (1 - hd.scale) * reach * rel,
             // `pull`: how hard the head drags this tile toward itself (the black hole; buildScene
             // shears the faces toward the head's screen point by it)
-            pull: (hd.pull ?? 0) * reach, pullAt: hd.pull ? { x: hd.x, y: hd.y, z: hd.z ?? 0 } : null,
+            pull: (hd.pull ?? 0) * reach * rel, pullAt: hd.pull ? { x: hd.x, y: hd.y, z: hd.z ?? 0 } : null,
             // the pull at the head's full size (rPeak): the orbit is laid out against this, so it
             // does not unwind as the head shrinks; the current pull only says how far along the
             // line from home to that orbit the tile sits

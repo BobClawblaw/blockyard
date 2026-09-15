@@ -363,7 +363,8 @@ function fxNow(st, t) {
       hz = f.alt; lo = 0; hi = f.alt;
       hy = st.gridH * (0.4 + 0.2 * hash01(f.seed + 4));
     }
-    const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
+    const growIn = u < 0.22 ? Math.pow(u / 0.22, 1.6) : 1, growOut = u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
+    const grow = growIn * growOut;
     const rs = boundedRadius(2.3, 0.047, st.gridW) * grow;                 // the horizon, in grid units (4.8 on 2026-09-15 -- "double the size" -- then 3.4: "obscuring too much" -- then 2.3: "shrink up the black hole by 33%"), and never more than 4.7% of the board
     out.blackhole = { x: hx, y: hy, z: hz, rs, grow, lo, hi };
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
@@ -381,7 +382,14 @@ function fxNow(st, t) {
     // ...and `shrink` on the block board: the scale alone flattens a cube into a plate (it is a
     // height override), and a plate sliding toward the hole was the "shearing"; shrunk in
     // footprint as well it stays a cube, a smaller one, all the way in
-    out.heads = grow > 0.02 ? [{ x: hx, y: hy, z: hz, color: [255, 160, 60], alpha: grow, r: rs * reach, rPeak: boundedRadius(2.3, 0.047, st.gridW) * reach, scale: 0, pull: 1, lean: line ? 1 : 0, shrink: !line }] : [];
+    // LET GO SMOOTHLY (operator, 2026-09-15: "The boxes are snapping into view when they come to
+    // rest on the board"): the release used to come from the head's reach shrinking with the
+    // hole, which let go of the outer cubes gently and the ones right under it all at once in the
+    // last frames -- they stayed on their rings at nothing, then popped home full size. The reach
+    // now holds its full size through the release and `release` (growOut) fades the pull and the
+    // scale themselves, so every cube glides home and grows back over the whole last fifth
+    const R = boundedRadius(2.3, 0.047, st.gridW) * reach;
+    out.heads = grow > 0.02 ? [{ x: hx, y: hy, z: hz, color: [255, 160, 60], alpha: grow, r: R * growIn, rPeak: R, scale: 0, pull: 1, release: growOut, lean: line ? 1 : 0, shrink: !line }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
