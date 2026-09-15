@@ -218,14 +218,15 @@ both modes move to their new places rather than disappearing and reappearing.
 
 While the board is at rest, one effect plays every seven to thirteen seconds — the first
 about a second after the board lands — and never one that has played within the last twelve
-(**No repeats within**, 0 up to the length of that board's list). There are **33**, and each has its own switch. **Each board
+(**No repeats within**, 0 up to the length of that board's list). There are **34**, and each has its own switch. **Each board
 has its own list**: the Block space board's switches are the **Space effects** tab, the
 Markets board's are the **Market effects** tab, and each tab has its own no-repeat window, so
 trimming one board's effects leaves the other's alone.
 
 | | |
 |---|---|
-| **Ripple**, **Outline sweep**, **Scan line**, **Tide** | fronts crossing the board: a spreading ring, traced edges, a tight line, a swell that lifts the cubes it passes under |
+| **Ripple**, **Outline sweep**, **Scan line**, **Tide** | fronts crossing the board: a spreading ring, traced edges, a curtain of light standing floor to top — a white core with soft cyan faces, raster rippling down it, a bar it hangs from, a glowing foot with a phosphor tail, motes in the beam — and a swell that lifts the cubes it passes under |
+| **X-ray** | a front sweeps the board and everything behind it goes x-ray — bodies to glass, edges and a raster lit — then develops back to solid |
 | **Cascade**, **Twinkle**, **Sparkle** | the blocks light in fee-rate order; scattered flashes; a constellation, each block its own colour |
 | **Light cycles** | a TRON-style race in blue and orange from opposite edges, leaving light walls, until one crashes and de-rezzes |
 | **Lightning ball** | a pale plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
@@ -246,9 +247,9 @@ They are decoration only: they carry no data, they never play during a refresh, 
 are switched off entirely under `prefers-reduced-motion`. The Block space list is every effect
 but the two drawn on a price line (**Energy pulse**, **Pipe bulge**). The Markets board is eight
 units deep and as wide as the hours, so everything there moves **along the hours, left or right,
-never toward you**, and lights the candles or the line. Its list is the **fifteen** that
+never toward you**, and lights the candles or the line. Its list is the **sixteen** that
 translate to a chart: **Ripple**, **Outline sweep**, **Tide**, **Cascade**, **Twinkle**, **Scan
-line**, **Fireworks**, **Solar flare**, **Wave**, and the price line's own **Energy pulse**,
+line**, **X-ray**, **Fireworks**, **Solar flare**, **Wave**, and the price line's own **Energy pulse**,
 **Pipe bulge**, **Breathe**, **Light saber**, **Black hole** and **Ball lightning** (a quarter of its
 Block space size there). Fronts run along the
 chart, rings start on the candle row, the candles light where they stand. Nothing on it waits
@@ -948,7 +949,7 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 
 One tab per board. **Space effects** is a switch for each of the **28** idle effects the Block
 space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
-switch for each of the **15** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
+switch for each of the **16** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
 **No repeats within**: how many other effects must play before one can play again (12 by
 default; 0 allows a repeat straight away).
 

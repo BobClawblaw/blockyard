@@ -166,7 +166,7 @@ export const DEFAULTS = Object.freeze({
   // for, and the board picks among whatever is left on (scheduleFx). Turn them all off and the
   // board simply rests, which `idleFx` also does in one click.
   effects: Object.freeze({
-    ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
+    ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true, xray: true,
     lightcycle: true, ball: true,
     shockwave: true, nova: true, firework: true, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true,
@@ -192,7 +192,7 @@ export const DEFAULTS = Object.freeze({
   // should ship with ... Many of the effects don't translate over to the market chart"). Its own
   // no-repeat window too. All on, twelve.
   marketEffects: Object.freeze({
-    ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
+    ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true, xray: true,
     pulse: true,          // the surge that runs the price line
     bulge: true,          // a sphere rolls through the pipe and it swells round it
     breathe: true,        // the line breathes between the wire and the pulse's heat
@@ -290,7 +290,8 @@ const FX_ROW = Object.freeze({
   tide: Object.freeze({ label: 'Tide', hint: 'A swell that lifts the blocks it passes under' }),
   cascade: Object.freeze({ label: 'Cascade', hint: 'The blocks light in feerate order, richest first' }),
   twinkle: Object.freeze({ label: 'Twinkle', hint: 'Scattered blocks flash white, each on its own beat' }),
-  scan: Object.freeze({ label: 'Scan line', hint: 'A tight line crossing the board, edge to edge' }),
+  scan: Object.freeze({ label: 'Scan line', hint: 'A curtain of light standing on the board, floor to top, sweeping across: a white core, soft cyan faces, raster rippling down it, a bar it hangs from, a glowing foot with a phosphor tail, motes in the beam' }),
+  xray: Object.freeze({ label: 'X-ray', hint: 'A front sweeps the board and everything behind it goes x-ray -- bodies to glass, edges and a raster lit -- then develops back to solid' }),
   lightcycle: Object.freeze({ label: 'Light cycles', hint: 'Two riders from opposite edges, leaving light walls, until one crashes' }),
   ball: Object.freeze({ label: 'Lightning ball', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
   pulse: Object.freeze({ label: 'Energy pulse', hint: 'The surge that runs the price line on Markets, blue behind the head' }),
@@ -509,7 +510,7 @@ export const PANEL = Object.freeze([
     note: 'What the Block space board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The Markets board has a list of its own, on the next tab.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'lightcycle', 'ball', 'shockwave', 'nova',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'lightcycle', 'ball', 'shockwave', 'nova',
       'firework', 'flare', 'wave', 'quake', 'rain', 'sparkle', 'checker', 'radar', 'vortex', 'powerup',
       'combo', 'aurora', 'plasma', 'centipede', 'tractor', 'missile', 'boulderdash', 'stormball',
     ]),
@@ -517,10 +518,10 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'marketEffects',
     title: 'Market effects',
-    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the fifteen that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
+    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the sixteen that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball',
     ], MARKET_HINT, { landing: false, top: 300 }),
   }),
   Object.freeze({

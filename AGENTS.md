@@ -315,7 +315,7 @@ Core (`BLOCKYARD_NODE=main node scripts/shots.mjs`); a fresh browser profile def
 node in the config, which on this box is the slow Umbrel -- the first pass photographed an empty
 board.
 
-**Effects.** Thirty-three, with a no-repeat window (12) per board; two lists (`effects` for Block
+**Effects.** Thirty-four, with a no-repeat window (12) per board; two lists (`effects` for Block
 space, `marketEffects` for Markets), nothing rare -- the pulse and the bulge are ordinary picks
 on the Markets list since 2026-09-14. The bulge is a ball that fits the line: exactly
 the tube at both ends, an arced skin, the core magnified through it, gravity along the pipe.

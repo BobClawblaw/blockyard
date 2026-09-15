@@ -26,7 +26,7 @@ test('there are at least twenty-five effects, and every one has a switch of its 
   assert.deepEqual([...new Set([...SPACE_FX, ...MARKET_FX])].sort(), [...FX_KINDS].sort(), 'between them, every effect has a switch');
   assert.ok(MARKET_FX.every((k) => SPACE_FX.includes(k) || ['pulse', 'bulge', 'breathe', 'saber', 'blackhole'].includes(k)), 'the price board offers nothing the block board lacks but the five of its own');
   assert.ok(SPACE_FX.length >= 25, 'twenty-five or more on the block board');
-  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14) plus the three of 2026-09-15, in FX_KINDS order');
+  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14) plus the four of 2026-09-15, in FX_KINDS order');
   assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge', 'breathe', 'saber', 'blackhole'], 'the block board lacks only the five that are the price board\'s own');
   for (const group of ['effects', 'marketEffects']) {
     assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);

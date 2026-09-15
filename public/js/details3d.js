@@ -145,7 +145,8 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // and one toggle in settings.js (the `effects` and `marketEffects` groups), and the lists are checked against each other
 // by a test, so an effect cannot ship without a switch or a switch without an effect.
 const FX_MS = {
-  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
+  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 6000,   // scan 4200 -> 6000 (2026-09-15: a light curtain, a stately pass)
+  xray: 6500,                                  // the board goes x-ray behind a sweeping front, and develops back
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
   breathe: 9000,                               // the price line breathes: three slow swells between the wire and the pulse's heat
@@ -216,7 +217,7 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // where they stand (cascade, twinkle, the flare), or is the price line's own (pulse, bulge, ball
 // lightning). The rest -- riders and walkers, the field patterns, anything that falls down the
 // depth or turns in place, anything that moves a tile -- stays on the block board.
-const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball']);
+const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
 const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber', 'blackhole']);
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
@@ -1044,6 +1045,116 @@ function drawFireworks(ctx, view, lw) {
   ctx.lineWidth = lw;
 }
 
+// THE SCAN IS A LIGHT CURTAIN (operator, 2026-09-15: "Suggest a way to drastically improve the
+// visuals on the scan line effect. Again, create new render tools" -- then "do it"). The front
+// was a tight line on the floor that lit each tile for a frame. Now it is a vertical SHEET of
+// light standing on the board, floor to the chart's top, sweeping across: a hard white core
+// with soft cyan falloff on both faces, faint raster lines rippling down it on the clock, a bar
+// of light along its top edge it hangs from with glints at the ends, a glowing foot on the floor
+// with a green-cyan phosphor tail fading behind it, motes drifting in the beam, sparks thrown up
+// from the foot, and a thin volumetric haze inside its thickness. The tiles keep lighting through
+// fxAt as before, and the price line flares white where the curtain crosses it (scanFlare).
+function curtainEnds(fx, z) {
+  // the front is the set of board points with x*dx + y*dy = p; its ends are where that line
+  // leaves the board, at height z
+  const n = fx.gridW, rows = fx.gridH, p = fxFront(fx);
+  const c0x = n / 2 + (p - (n / 2) * fx.dx - (rows / 2) * fx.dy) * fx.dx;
+  const c0y = rows / 2 + (p - (n / 2) * fx.dx - (rows / 2) * fx.dy) * fx.dy;
+  const L = Math.hypot(n, rows);
+  let a = null, b = null;
+  for (let i = -60; i <= 60; i++) {
+    const gx = c0x - fx.dy * (L * i) / 60, gy = c0y + fx.dx * (L * i) / 60;
+    if (gx >= -0.01 && gx <= n + 0.01 && gy >= -0.01 && gy <= rows + 0.01) { if (!a) a = { x: gx, y: gy, z }; b = { x: gx, y: gy, z }; }
+  }
+  return a && b && (a.x !== b.x || a.y !== b.y) ? [a, b] : null;
+}
+// THE LINE UNDER THE CURTAIN: the stretch the scan is crossing flares white and rings out
+// either side, so the wire reads as struck by the sheet of light as it passes
+function scanFlare(ctx, pts, axes, view, lw) {
+  const fx = view.fx, line = axes.line ?? [];
+  if (!fx || fx.dx === 0 || line.length !== pts.length) return;
+  const xf = fxFront(fx) * fx.dx;                                       // the front's x on the board (dy is 0 on the price board)
+  for (let i = 0; i < pts.length - 1; i++) {
+    const mx = (line[i].x + line[i + 1].x) / 2, d = Math.abs(mx - xf);
+    const k = Math.exp(-(d * d) / 6);
+    if (k < 0.03) continue;
+    ctx.strokeStyle = `rgba(160,230,255,${(0.6 * k).toFixed(3)})`; ctx.lineWidth = lw * 14 * k;
+    ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${(0.95 * k).toFixed(3)})`; ctx.lineWidth = lw * 4;
+    ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke();
+  }
+}
+function drawScanCurtain(ctx, view, lw) {
+  const fx = view.fx;
+  if (!fx || fx.kind !== 'scan') return;
+  const U = view.unit ?? 8, now = view.now ?? 0;
+  const price = (view.axes?.line?.length ?? 0) > 1;
+  const top = price ? (view.axes?.zTop ?? 34) : 9;
+  const P = (q) => project(q.x, q.y, q.z, view);
+  const amp = fx.amp ?? 1;
+  const ends = curtainEnds(fx, 0);
+  if (!ends) return;
+  const [A, B] = ends;
+  const along = (q, k) => ({ x: q.x + fx.dx * k, y: q.y + fx.dy * k, z: q.z });   // a step along the sweep
+  const lift = (q, z) => ({ x: q.x, y: q.y, z });
+  const quad = (a0, b0, a1, b1, fill) => { const p0 = P(a0), p1 = P(b0), p2 = P(b1), p3 = P(a1); ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.closePath(); ctx.fill(); };
+  const seg = (a, b, col, w) => { const p = P(a), q = P(b); ctx.strokeStyle = col; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke(); };
+  const grad = (x, y, r, stops) => { const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null; if (!g || typeof g.addColorStop !== 'function') return stops[0][1]; for (const [o, c] of stops) g.addColorStop(o, c); return g; };
+  const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
+  // --- the phosphor tail: sheets behind the front, greener and fainter as they fall back
+  for (let k = 1; k <= 7; k++) {
+    const off = -k * 0.9, f = 1 - k / 8;
+    quad(along(A, off), along(B, off), lift(along(A, off), top * 0.35 * f), lift(along(B, off), top * 0.35 * f), `rgba(90,255,190,${(0.045 * f * amp).toFixed(3)})`);
+  }
+  // --- the curtain: soft faces either side of a hard core, stacked sheets with a gaussian across the thickness
+  // (on the price board the sheet stands on the board's eight-unit depth, which the low camera
+  // shows as a narrow strip, so the faces reach 2.5 units either side of the core and are bright)
+  for (let k = -6; k <= 6; k++) {
+    if (k === 0) continue;
+    const off = k * 0.42, f = Math.exp(-(k * k) / 9);
+    quad(along(A, off), along(B, off), lift(along(A, off), top), lift(along(B, off), top), `rgba(110,215,255,${(0.075 * f * amp).toFixed(3)})`);
+  }
+  quad(along(A, -0.12), along(B, -0.12), lift(along(A, 0.12), top), lift(along(B, 0.12), top), `rgba(200,240,255,${(0.32 * amp).toFixed(3)})`);
+  quad(A, B, lift(A, top), lift(B, top), `rgba(255,255,255,${(0.28 * amp).toFixed(3)})`);
+  // the haze inside it: soft blobs strung along the sheet, taller than wide
+  for (let k = 0; k < 9; k++) {
+    const t = (k + 0.5) / 9, q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: top * (0.25 + 0.5 * hash01(fx.seed + k * 7)) };
+    const p = P(q), r = U * (1.6 + 1.2 * hash01(fx.seed + k * 13 + 3));
+    disc(p.x, p.y, r, grad(p.x, p.y, r, [[0, `rgba(170,230,255,${(0.16 * amp).toFixed(3)})`], [1, 'rgba(120,200,255,0)']]));
+  }
+  // --- the raster: thin lines across the sheet, rippling down it
+  const ROWS = 14;
+  for (let k = 0; k < ROWS; k++) {
+    const ph = ((k / ROWS) + now * 0.00025) % 1, z = top * ph;
+    const flick = 0.5 + 0.5 * Math.sin(now * 0.02 + k * 2.1);
+    seg(along(lift(A, z), -1.2), along(lift(B, z), 1.2), `rgba(200,245,255,${(0.35 * flick * amp).toFixed(3)})`, U * 0.04);
+  }
+  // --- the core, the bar it hangs from, and the foot
+  seg(lift(A, 0), lift(B, 0), `rgba(120,220,255,${(0.4 * amp).toFixed(3)})`, U * 0.4);
+  seg(lift(A, 0), lift(B, 0), `rgba(255,255,255,${(0.9 * amp).toFixed(3)})`, U * 0.09);
+  seg(lift(A, top), lift(B, top), `rgba(120,220,255,${(0.5 * amp).toFixed(3)})`, U * 0.3);
+  seg(lift(A, top), lift(B, top), `rgba(255,255,255,${(0.95 * amp).toFixed(3)})`, U * 0.07);
+  for (const q of [lift(A, top), lift(B, top), A, B]) { const p = P(q); disc(p.x, p.y, U * 1.4, grad(p.x, p.y, U * 1.4, [[0, `rgba(255,255,255,${(0.7 * amp).toFixed(3)})`], [0.3, `rgba(160,230,255,${(0.35 * amp).toFixed(3)})`], [1, 'rgba(120,200,255,0)']])); }
+  // --- motes in the beam, drifting up, and sparks thrown from the foot
+  for (let k = 0; k < 22; k++) {
+    const H = (q) => hash01(fx.seed + 500 + k * 11 + q);
+    const t = H(1), z = ((H(2) + now * 0.00008 * (0.5 + H(3))) % 1) * top;
+    const q = { x: A.x + (B.x - A.x) * t + (H(4) - 0.5) * 0.4 * fx.dx, y: A.y + (B.y - A.y) * t + (H(4) - 0.5) * 0.4 * fx.dy, z };
+    const p = P(q), tw = 0.5 + 0.5 * Math.sin(now * 0.01 + k);
+    disc(p.x, p.y, U * 0.05, `rgba(230,250,255,${(0.8 * tw * amp).toFixed(3)})`);
+  }
+  const STEP = 160, LIFE = 900, kNow = Math.floor(now / STEP);
+  for (let k = kNow - Math.ceil(LIFE / STEP); k <= kNow; k++) {
+    if (hash01(fx.seed + k * 5) > 0.5) continue;
+    const age = (now - k * STEP) / LIFE;
+    if (age < 0 || age >= 1) continue;
+    const t = hash01(fx.seed + k * 5 + 1), q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: 0 };
+    const p = P(q), rise = U * 2.2 * age * (1 - age) * 4, drift = (hash01(fx.seed + k * 5 + 2) - 0.5) * U * 1.2 * age;
+    disc(p.x + drift, p.y - rise, U * 0.07 * (1 - age), `rgba(255,255,255,${(0.9 * (1 - age) * amp).toFixed(3)})`);
+  }
+  ctx.lineWidth = lw;
+}
+
 // THE BLACK HOLE (operator, 2026-09-15: "Simulate the price chart turning into a black hole",
 // reference svs.gsfc.nasa.gov/14576 -- NASA's visualisation: an orange accretion disk of hot gas
 // spiralling in, brighter on the side coming toward us, a photon ring inside it, the far side of
@@ -1666,7 +1777,7 @@ function drawGrid(ctx, view, opts, n, blockRows, rows = n) {
     polyline(pts, 16, `rgba(80,255,190,${(0.12 * fx.amp).toFixed(3)})`);
     polyline(pts, 3, `rgba(180,255,230,${(0.45 * fx.amp).toFixed(3)})`);
   }
-  if (fx && (fx.kind === 'outline' || fx.kind === 'scan' || fx.kind === 'tide')) {
+  if (fx && (fx.kind === 'outline' || fx.kind === 'tide')) {   // the scan draws its own foot (drawScanCurtain)
     // the front itself, drawn across the floor where it is
     const p = fxFront(fx);
     const L = Math.hypot(n, rows);
@@ -2238,6 +2349,12 @@ function priceLine(ctx, view, axes) {
     return;
   }
   if (view.fx?.kind === 'saber') { drawSaberLine(ctx, pts, lw, view.fx, view, GLOW, CORE); done(); return; }
+  if (view.fx?.kind === 'scan') {
+    for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    scanFlare(ctx, pts, axes, view, lw);
+    done();
+    return;
+  }
   if (view.fx?.kind === 'bulge') {
     for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
     drawBulge(ctx, pts, lw, view.fx.u, [...GLOW, ...CORE], view.fx.ms);
@@ -3305,7 +3422,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // name and calls it with a hand-built view -- and the registry simply points at them.
   const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
   if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
-  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); drawBlackHole(ctx, view, ctx.lineWidth); }
+  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); drawBlackHole(ctx, view, ctx.lineWidth); drawScanCurtain(ctx, view, ctx.lineWidth); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 

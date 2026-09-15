@@ -24,6 +24,14 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
+- **The scan line is a light curtain.** A vertical sheet of light standing on the board, floor
+  to the chart's top, sweeping across: a hard white core with soft cyan faces, raster lines
+  rippling down it, a bar of light it hangs from with glints at the ends, a glowing foot with a
+  green-cyan phosphor tail, motes drifting in the beam, sparks from the foot, a haze in its
+  thickness; the price line flares white where it crosses. 6 s, from 4.2.
+- **X-ray**, a new effect on both boards: a front sweeps the board and everything behind it goes
+  x-ray — bodies dimmed to glass, every edge lit, a raster of thin lines across each face — then
+  develops back to solid a few units on. Thirty-four effects; sixteen on Markets.
 - **Black hole**, a new Markets effect (modelled on NASA's visualisation, svs.gsfc.nasa.gov/14576):
   a point of darkness opens on the price line and grows to a horizon nearly five units across over 26 s; the line bends round it as
   through a lens (`lensPoints`, the Einstein-radius push), the candles it reaches stretch and lean

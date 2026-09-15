@@ -958,7 +958,18 @@ export function fxAt(t, fx) {
     }
     case 'scan': {
       const w = g((along() - fxFront(fx)) / 1.6);
-      return { glow: 0.8 * A * w, outline: 0.5 * A * w, lift: 0, color: [120, 220, 255] };
+      return { glow: 0.9 * A * w, outline: 0.7 * A * w, lift: 0, color: [150, 230, 255] };
+    }
+    case 'xray': {
+      // X-RAY (2026-09-15, operator: "Add xray as additional choosable effect"): a front sweeps the
+      // board and behind it every tile goes x-ray -- its body dims to glass and its edges and a
+      // raster across its faces light up (buildScene's xray treatment) -- then develops back to
+      // solid over a few units, the front itself a bright edge
+      const d = fxFront(fx) - along();                                // > 0 once the front has passed
+      const edge = g(d / 1.2);
+      const back = d > 0 && d < 9 ? (d < 5 ? 1 : 1 - (d - 5) / 4) : 0;
+      const xray = Math.max(edge, back) * A;
+      return xray > 0.02 ? { glow: 0.5 * A * edge, outline: A * Math.max(edge, 0.8 * back), lift: 0, color: [190, 240, 255], xray } : FX_NONE;
     }
     case 'ball': {
       // "illuminating everything it comes near": brightest right under the ball, gone ~5 units off
@@ -1330,7 +1341,9 @@ export function buildScene(tiles, o = {}) {
         p.x += (hp.x - p.x) * k; p.y += (hp.y - p.y) * k;
       }
     }
-    const a = t.alpha ?? 1;
+    // an x-rayed tile's body is glass: most of its alpha goes, and its edges come back below
+    const xray = fxv.xray ?? 0;
+    const a = (t.alpha ?? 1) * (1 - 0.72 * xray);
     const airborne = (t.z ?? 0) > 0.02;
     const out = airborne && !o.oblique ? air : ground;
     // A tile that just locked flashes brighter for a moment -- the Tetris
@@ -1643,6 +1656,23 @@ export function buildScene(tiles, o = {}) {
     // a tint at the top's weight (0.5) was there in the pixels and nowhere to the eye (measured:
     // the scan's peak moved a candle's face by a 0.26 cyan wash). At 0.85 it reads as struck.
     if (pulse > 0.03 && o.axes) for (const side of f.sides) out.push({ txid: t.txid, face: 'glow', points: side.points, fill: `rgba(${fxv.color.join(',')},${round3(0.85 * pulse * a)})` });
+    // THE X-RAY TREATMENT: bright edges round every face, and a raster of thin lines across the top
+    // and the sides, so the tile reads as a wireframe scan of itself
+    if (xray > 0.02) {
+      const xc = `rgba(200,245,255,${round3(0.95 * xray)})`;
+      out.push({ txid: t.txid, face: 'outline', points: f.top, fill: 'rgba(0,0,0,0)', stroke: xc, lw: 1.2, always: true });
+      for (const side of f.sides) out.push({ txid: t.txid, face: 'outline', points: side.points, fill: 'rgba(0,0,0,0)', stroke: xc, lw: 1.2, always: true });
+      const raster = (poly) => {
+        const [p0, p1, p2, p3] = poly;                                 // p0->p1 and p3->p2 are the edges the lines run between
+        for (let i = 1; i <= 3; i++) {
+          const u = i / 4;
+          const a0 = { x: p0.x + (p3.x - p0.x) * u, y: p0.y + (p3.y - p0.y) * u }, b0 = { x: p1.x + (p2.x - p1.x) * u, y: p1.y + (p2.y - p1.y) * u };
+          out.push({ txid: t.txid, face: 'outline', points: [a0, b0], fill: 'rgba(0,0,0,0)', stroke: `rgba(160,230,255,${round3(0.45 * xray)})`, lw: 0.8, always: true });
+        }
+      };
+      raster(f.top);
+      for (const side of f.sides) raster(side.points);
+    }
     if (fxv.outline > 0.03) {
       const col = fxv.color.join(',');
       out.push({ txid: t.txid, face: 'outline', points: f.top, fill: 'rgba(0,0,0,0)', stroke: `rgba(${col},${round3(0.95 * fxv.outline * a)})`, lw: 1 + 4 * fxv.outline });
