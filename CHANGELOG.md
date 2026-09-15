@@ -8,6 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **The energy pulse is heat, not blue, and the pipe swells round its head.** Behind the head the
+  tube goes white-hot through hot gold and cools back to the wire; the cloud, the crackle and the
+  motes are warm; the head is a bulge in the pipe (the bulge effect's stretched skin and
+  fish-eyed core, at a smaller radius) with a white-hot core, not a blue dot. Nothing in the
+  pulse is blue any more, and a test holds it so.
+- **Two new Markets effects on the price line: Breathe** (three slow swells from the plain wire
+  to the pulse's white heat and back) and **Light saber** (the line ignites from its left end,
+  blue, green, red or purple by the run, hums with a breathing glow and a shimmering core, spits
+  sparks, and retracts to the hilt). Thirty-two effects; the Markets list is fourteen.
+- **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
+  passes and every strike lights where it lands, on the candles and on the board; on Markets it
+  throws a fifth fewer arcs again and a quarter fewer chains, second and third.
 - **Fireworks are a display, on both boards.** The effect only ever lit tiles — the ring of lit
   cubes was the picture on Block space, and on eight rows of candles it was a candle or two
   blinking. Now every shell is drawn: the rocket climbs an arc from the floor off to one side, a

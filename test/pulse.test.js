@@ -76,7 +76,7 @@ test('a board with a price line draws it plain yellow at rest', () => {
   assert.equal(h.stops.length, 0, 'the resting line is flat colour, not a gradient waiting to be tinted');
 });
 
-test('triggering the pulse tints the line electric blue behind the head', () => {
+test('triggering the pulse heats the line white-gold behind the head, and nothing goes blue', () => {
   const h = harness();
   board3d(h.canvas, TILES, { axes: AXES, gridW: 8, gridH: 8, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } });
   for (let i = 1; i <= 6; i++) h.step(i * 16);
@@ -100,7 +100,12 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   const cols = h.stops.map(([, c]) => c).map((c) => String(c).match(/rgba\((\d+),(\d+),(\d+),/))
     .filter(Boolean).map((m) => m.slice(1, 4).map(Number));
   assert.ok(cols.length >= 6, `the gradient carries stops (${cols.length})`);
-  assert.ok(cols.some(([r, , b]) => b > r), `a stop behind the head is blue (${cols.map((c) => c.join('/')).slice(0, 8).join(' ')})`);
+  // NO BLUE (operator, 2026-09-15: "I don't like the blue shift/tint it's adding on everything"): the
+  // surge is heat -- a stop behind the head is white-hot, and no stop anywhere is blue-dominant
+  assert.ok(cols.some(([r, g, b]) => r >= 250 && g >= 245 && b >= 200), `a stop behind the head is white-hot (${cols.map((c) => c.join('/')).slice(0, 8).join(' ')})`);
+  assert.equal(cols.some(([r, , b]) => b > r), false, 'and nothing in the tube is blue');
+  const blueFill = after.filter((o) => /^set:(fillStyle|strokeStyle)=rgba\((\d+),(\d+),(\d+)/.test(o)).map((o) => o.match(/rgba\((\d+),(\d+),(\d+)/)).filter((m) => Number(m[3]) > Number(m[2]) && Number(m[3]) > Number(m[1]) + 20);   // blue-DOMINANT: the green candles have more green than blue
+  assert.equal(blueFill.length, 0, `nothing painted during the pulse is blue (${blueFill.slice(0, 3).map((m) => m[0]).join(' ')})`);
   assert.ok(cols.some(([r, , b]) => r > b), 'and a stop ahead of it is still yellow: the tint is a tail, not the whole line');
   // and the curve itself: a pipe, not a polyline of forty pieces
   assert.ok(after.includes('bezierCurveTo'), 'the line is a curve through the closes, not straight hops');
@@ -114,35 +119,35 @@ test('triggering the pulse tints the line electric blue behind the head', () => 
   // and so asserted that every bright fill ON THE WHOLE BOARD was blue -- the green cubes, the red
   // ones and the deck plates included. It failed for that reason while the head was already
   // correct. A probe must measure the thing it is named after.
-  const beadCore = after.filter((o) => o.startsWith('set:fillStyle=rgba(80,220,255')
+  const beadCore = after.filter((o) => o.startsWith('set:fillStyle=rgba(255,232,150')
     || o.startsWith('set:fillStyle=rgba(150,240,255'));
-  assert.ok(beadCore.length >= 2, `the head bead is drawn, hot centre and all (${beadCore.length})`);
+  assert.ok(beadCore.length >= 1, `the head bead is drawn, hot centre and all (${beadCore.length})`);
   // and the property behind the literals, so this still bites if the mix is retuned: every disc of
   // the head is blue-dominant, none of them white
-  for (const [r, g, b] of [[0, 150, 255], [40, 190, 255], [80, 220, 255], [150, 240, 255]]) {
-    assert.ok(b > r, `the head's discs are blue, not white (${r}/${g}/${b})`);
+  for (const [r, g, b] of [[255, 150, 40], [255, 195, 80], [255, 232, 150], [255, 252, 225]]) {
+    assert.ok(r > b, `the head's discs are warm, not blue (${r}/${g}/${b})`);
     assert.ok(after.some((o) => o.startsWith(`set:fillStyle=rgba(${r},${g},${b}`)), `disc ${r}/${g}/${b} is painted`);
   }
   assert.equal(after.some((o) => o.startsWith('set:fillStyle=rgba(255,255,255,1)')), false,
     'and nothing in the head is painted pure white any more');
   // The shimmer stays: a thin white-blue core flickering over the charged stretch.
-  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(210,240,255')), 'a shimmering core over the blue');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(255,250,225')), 'a shimmering core over the heat');
   // Removed on 2026-09-12 and restored the same day at the operator's request, so these are back
   // to asserting their presence. (The nebula behind them keeps the span emitter it gained in
   // between -- that is what stopped the trail reading as concentric rings, and it stays.)
   // 2026-09-13 (operator: "the lightning still looks terrible") the crackle became directional and
   // tapered -- it leaves the wire near-perpendicular and is drawn in three passes, a wide dim halo,
   // the arc, and a hot thin core -- so the single flat stroke colour it used to have is gone.
-  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(185,230,255')), 'crackling branches off the wire');
-  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(90,170,255')), 'each branch has a halo under it');
-  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(245,252,255')), 'and a hot core that stops short, so it tapers to a point');
-  const motes = after.filter((o) => o.startsWith('set:fillStyle=rgba(200,236,255')).length;
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(255,225,150')), 'crackling branches off the wire');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(255,170,60')), 'each branch has a halo under it');
+  assert.ok(after.some((o) => o.startsWith('set:strokeStyle=rgba(255,255,240')), 'and a hot core that stops short, so it tapers to a point');
+  const motes = after.filter((o) => o.startsWith('set:fillStyle=rgba(255,235,190')).length;
   assert.ok(motes >= 7, `motes stream off the charged stretch (${motes})`);
   // and the blue nebula behind it all (operator: "a blue nebula behind the energy pulse that starts
   // expanding and fading out to black", then "make the nebula an emitter; still seeing concentric
   // circles") -- emitted over the whole charged span rather than per segment, and drawn before the
   // tube, so it sits BEHIND the wire
-  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(48,110,255'));
+  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(255,185,70'));
   // the tube is a gradient now, not a flat rgba -- the probe follows the mechanism, but the
   // property it pins is unchanged: the cloud is painted BEFORE the wire, so it sits behind it
   const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=gradient('));
@@ -161,9 +166,9 @@ test('THE HEAD CARRIES ITS OWN CRACKLE, and still does past the end of the line'
   // crackles on the wire, AND it keeps crackling where there is no wire, which is the half that
   // was broken. The head's bolts carry their own literals, distinct from the wire's forks, so a
   // pass here cannot be the wire's crackle being counted by mistake.
-  const HALO = 'set:strokeStyle=rgba(70,190,255';
-  const ARC = 'set:strokeStyle=rgba(160,235,255';
-  const CORE = 'set:strokeStyle=rgba(250,255,255';
+  const HALO = 'set:strokeStyle=rgba(255,170,60';
+  const ARC = 'set:strokeStyle=rgba(255,225,150';
+  const CORE = 'set:strokeStyle=rgba(255,255,245';
   const h = harness();
   board3d(h.canvas, TILES, { axes: AXES, gridW: 8, gridH: 8, space: true, stars: false, idleFx: true, transition: { rise: 0, travel: 1, drop: 0 } });
   for (let i = 1; i <= 6; i++) h.step(i * 16);
@@ -179,7 +184,7 @@ test('THE HEAD CARRIES ITS OWN CRACKLE, and still does past the end of the line'
   // and the overrun has it gone by ~6,190. 5,200 ms in is off the wire with roughly two thirds of
   // its fade left -- exactly where the old head was four discs and nothing else.
   const offEnd = (() => { const b = h.ops.length; h.step(6200); return h.ops.slice(b); })();
-  assert.ok(offEnd.some((o) => o.startsWith('set:fillStyle=rgba(80,220,255')), 'the head is still out there past the line');
+  assert.ok(offEnd.some((o) => o.startsWith('set:fillStyle=rgba(255,232,150')), 'the head is still out there past the line');
   assert.ok(offEnd.some((o) => o.startsWith(ARC)), 'and it is STILL crackling where there is no wire to crackle on');
   assert.ok(offEnd.some((o) => o.startsWith(CORE)), 'core and all');
 });

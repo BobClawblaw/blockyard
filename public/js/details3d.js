@@ -148,6 +148,8 @@ const FX_MS = {
   ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 4200,
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
+  breathe: 9000,                               // the price line breathes: three slow swells between the wire and the pulse's heat
+  saber: 8000,                                 // the price line ignites as a light saber, hums, and retracts
   shockwave: 4200, nova: 5200, firework: 5600, flare: 3600, wave: 6000, quake: 3200,
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
@@ -213,9 +215,9 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // where they stand (cascade, twinkle, the flare), or is the price line's own (pulse, bulge, ball
 // lightning). The rest -- riders and walkers, the field patterns, anything that falls down the
 // depth or turns in place, anything that moves a tile -- stays on the block board.
-const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball']);
+const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'firework', 'flare', 'wave', 'stormball']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
-const LINE_ONLY = new Set(['pulse', 'bulge']);
+const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber']);
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
 // list ... the Block Space effects specific to that panel, and settings specific to market panel"):
 // settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
@@ -1511,7 +1513,9 @@ function curveByLength(pts, samples = 400) {
     let lo = 0, hi = samples;
     while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (table[mid].len < L) lo = mid; else hi = mid; }
     const a = table[lo], b = table[hi], f = b.len > a.len ? (L - a.len) / (b.len - a.len) : 0;
-    return curveAt(pts, a.s + (b.s - a.s) * f);
+    // never exactly 1: curveAt's last segment is pts[n-1]..pts[n], and s = 1 would ask for pts[n+1]
+    // (the pulse's head bulge sits at the very end of the line once the head has run off it)
+    return curveAt(pts, Math.min(0.999999, a.s + (b.s - a.s) * f));
   };
   return { total, at, travel: bulgeTravel(table) };
 }
@@ -1520,11 +1524,15 @@ function drawBulge(ctx, pts, lw0, u, layers, ms = FX_MS.bulge) {
   const lw = Number.isFinite(lw0) && lw0 > 0 ? lw0 : 1;         // a canvas that will not say: one pixel
   const { t } = bulgeAt(u, ms);
   const coreR = (lw * 5.5) / 2;
-  const Rfull = coreR * BULGE_BALL;
   const curve = curveByLength(pts);
   // the ball's centre travels the whole line, quicker downhill and slower up (bulgeTravel); the ball
   // is as big as fits between it and the nearer end
-  const centre = curve.travel(t);
+  drawBulgeAt(ctx, pts, lw, curve.travel(t), coreR * BULGE_BALL, layers, curve);
+}
+/** The swell itself, at `centre` along the curve with a full radius of `Rfull`: the pulse's head borrows it. */
+function drawBulgeAt(ctx, pts, lw0, centre, Rfull, layers, curve = curveByLength(pts)) {
+  const lw = Number.isFinite(lw0) && lw0 > 0 ? lw0 : 1;         // a canvas that will not say: one pixel
+  const coreR = (lw * 5.5) / 2;
   const R = bulgeFit(Math.min(centre, curve.total - centre), Rfull, coreR);
   const amp = (R - coreR) / (Rfull - coreR || 1);
   if (amp < 0.002) return;
@@ -1620,6 +1628,74 @@ function electrifyLine(ctx, pts, view, lw) {
   }
 }
 
+
+// A LIGHT SABER (operator, 2026-09-15: "add another markets effect that really rips off a star wars
+// light saber visual somehow"). The price line is the blade. It IGNITES from the left end -- the
+// blade extends along the line with a flash at the hilt and a bright tip -- HUMS for most of the
+// run (the glow breathes on two fast sines, the core shimmers, and now and then a spark spits off
+// the blade), and RETRACTS to the hilt. One of four colours a run, hashed from the seed: blue,
+// green, red, purple. The unlit rest of the line stays as the faint wire. Nothing here is the
+// price line's resting look, which is the steady neon glow (markets.test.js keeps it so).
+const SABER_COLS = [[80, 170, 255], [90, 255, 130], [255, 70, 70], [200, 100, 255]];
+function drawSaberLine(ctx, pts, lw, fx, view, GLOW, CORE) {
+  const u = fx.u, now = view.now ?? 0;
+  const col = SABER_COLS[Math.floor(hash01(fx.seed + 7) * SABER_COLS.length)];
+  const c = col.join(',');
+  const pale = col.map((v) => Math.round(v + (255 - v) * 0.55)).join(',');
+  const IGN = 0.14, RET = 0.86;
+  const ease = (t) => 1 - Math.pow(1 - t, 3);
+  const ext = u < IGN ? ease(u / IGN) : u > RET ? 1 - ease((u - RET) / (1 - RET)) : 1;
+  // the faint wire under it all
+  const stroke = (w, colour, path) => { ctx.strokeStyle = colour; ctx.lineWidth = lw * w; ctx.beginPath(); path(); ctx.stroke(); };
+  const wire = () => traceCurve(ctx, pts);
+  for (const [w, cc, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${cc[0]},${cc[1]},${cc[2]},${(a * 0.3).toFixed(3)})`, wire);
+  if (ext <= 0.002) return;
+  // the lit part: the curve up to `ext` of its length
+  const curve = curveByLength(pts);
+  const len = curve.total * ext;
+  const N = Math.max(2, Math.ceil(64 * ext));
+  const blade = [];
+  for (let k = 0; k <= N; k++) blade.push(curve.at((len * k) / N));
+  const along = () => { ctx.moveTo(blade[0].x, blade[0].y); for (let k = 1; k < blade.length; k++) ctx.lineTo(blade[k].x, blade[k].y); };
+  // the hum: the glow breathes on two fast sines, never still
+  const hum = 1 + 0.06 * Math.sin(now * 0.05) + 0.035 * Math.sin(now * 0.131 + 1);
+  const bright = 0.9 + 0.1 * Math.sin(now * 0.021);
+  stroke(34 * hum, `rgba(${c},${(0.10 * bright).toFixed(3)})`, along);
+  stroke(20 * hum, `rgba(${c},${(0.22 * bright).toFixed(3)})`, along);
+  stroke(11 * hum, `rgba(${c},${(0.55 * bright).toFixed(3)})`, along);
+  stroke(6.5, `rgba(${pale},0.9)`, along);
+  stroke(3.2, `rgba(255,255,255,${(0.95 * bright).toFixed(3)})`, along);
+  // the core shimmers: a thin white thread whose brightness runs along the blade
+  for (let k = 0; k < blade.length - 1; k++) {
+    const f = 0.5 + 0.5 * Math.sin(now * 0.03 + k * 0.9);
+    ctx.strokeStyle = `rgba(255,255,255,${(0.35 * f).toFixed(3)})`; ctx.lineWidth = lw * 1.4;
+    ctx.beginPath(); ctx.moveTo(blade[k].x, blade[k].y); ctx.lineTo(blade[k + 1].x, blade[k + 1].y); ctx.stroke();
+  }
+  // the tip: a bright point with the colour's bloom round it
+  const tip = blade[blade.length - 1];
+  for (const [r, colour, a] of [[9, c, 0.25], [5, pale, 0.7], [2.4, '255,255,255', 1]]) {
+    ctx.fillStyle = `rgba(${colour},${a})`; ctx.beginPath(); ctx.arc(tip.x, tip.y, lw * r, 0, Math.PI * 2); ctx.fill();
+  }
+  // the hilt flashes at ignition and again as the blade comes home
+  const flash = u < IGN ? 1 - u / IGN : u > RET ? (u - RET) / (1 - RET) : 0;
+  if (flash > 0) {
+    const h = blade[0];
+    for (const [r, colour, a] of [[26, c, 0.18], [14, pale, 0.45], [6, '255,255,255', 0.9]]) {
+      ctx.fillStyle = `rgba(${colour},${(a * flash).toFixed(3)})`; ctx.beginPath(); ctx.arc(h.x, h.y, lw * r * (0.6 + 0.4 * flash), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // now and then a spark spits off the blade: a few short lines from one point, gone in a beat
+  const beat = Math.floor(now / 90);
+  if (ext >= 1 && hash01(fx.seed + beat) < 0.3) {
+    const at = curve.at(curve.total * hash01(fx.seed + beat * 3 + 1));
+    const srnd = (k) => hash01(fx.seed + beat * 7 + k);
+    for (let k = 0; k < 6; k++) {
+      const ang = srnd(k) * Math.PI * 2, r = lw * (6 + 12 * srnd(k + 20));
+      ctx.strokeStyle = `rgba(${pale},${(0.8 * (0.5 + 0.5 * srnd(k + 40))).toFixed(3)})`; ctx.lineWidth = lw * 1.2;
+      ctx.beginPath(); ctx.moveTo(at.x, at.y); ctx.lineTo(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r); ctx.stroke();
+    }
+  }
+}
 function priceLine(ctx, view, axes) {
   const pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
@@ -1659,6 +1735,22 @@ function priceLine(ctx, view, axes) {
   const CORE = [[5.5, [255, 236, 70], 0.78, 'core'], [3, [255, 246, 150], 1, 'core'], [1.3, [255, 255, 240], 1, 'core']];
   const fx = view.fx && view.fx.kind === 'pulse' ? view.fx : null;
   const done = () => { ctx.lineWidth = lw; ctx.lineJoin = join; ctx.lineCap = cap; };
+  const HOT = [255, 255, 215];                               // the flash: whiter than the wire
+  // THE LINE BREATHES (operator, 2026-09-15: "an effect for the markets page that makes the line
+  // breathe in-and-out between those two extents"): three slow swells over the run, each easing
+  // the tube from the plain wire to the pulse's heat -- wider, whiter, brighter -- and back.
+  if (view.fx?.kind === 'breathe') {
+    const bre = 0.5 - 0.5 * Math.cos(view.fx.u * Math.PI * 2 * 3);
+    const env = Math.sin(Math.PI * view.fx.u);               // in from nothing and out to nothing over the run
+    const k = bre * env;
+    for (const [w, c, a] of [...GLOW, ...CORE]) {
+      const mix = (j) => Math.round(c[j] + (HOT[j] - c[j]) * 0.8 * k);
+      stroke(w * (1 + 0.9 * k), `rgba(${mix(0)},${mix(1)},${mix(2)},${Math.min(1, a * (1 + 0.6 * k))})`);
+    }
+    done();
+    return;
+  }
+  if (view.fx?.kind === 'saber') { drawSaberLine(ctx, pts, lw, view.fx, view, GLOW, CORE); done(); return; }
   if (view.fx?.kind === 'bulge') {
     for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
     drawBulge(ctx, pts, lw, view.fx.u, [...GLOW, ...CORE], view.fx.ms);
@@ -1679,9 +1771,13 @@ function priceLine(ctx, view, axes) {
   // surround reads as pure blue instead of the washed periwinkle it was. The tail's shape is
   // untouched -- every pass still blends wire-yellow through these to HOT at the overshoot; only
   // how blue "blue" is has changed.
-  const BLUE = [120, 225, 255];                              // the core: electric neon
-  const DEEP = [0, 120, 255];                                // the bloom: pure saturated blue
-  const HOT = [255, 255, 215];                               // the flash: whiter than the wire
+  // NO BLUE (operator, 2026-09-15: "during the energy pulse, I don't like the blue shift/tint it's
+  // adding on everything. Get rid of that, and add a bulge effect around the energy pulse"). The
+  // surge is heat now: behind the head the tube goes white-hot through hot gold and cools back to
+  // the wire, the cloud behind it is warm, the crackle and the motes are gold and white, and the
+  // head is a swell in the pipe (drawBulgeAt) with a white-hot core, not a blue dot.
+  const BLUE = [255, 255, 235];                              // the core behind the head: white-hot
+  const DEEP = [255, 205, 90];                               // the bloom behind the head: hot gold
   // THE NEBULA BEHIND THE SURGE (operator, 2026-09-12: "like a blue nebula behind the energy pulse
   // that starts expanding and fading out to black"). Drawn FIRST, so it sits behind the wire: soft
   // nested discs on every charged segment, their radius growing with that stretch's age and their
@@ -1723,14 +1819,14 @@ function priceLine(ctx, view, axes) {
     const a1 = hash01(k * 31 + 101) * Math.PI * 2;
     const spread = lw * (3 + 38 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
     const rad = lw * (5 + 19 * hash01(k * 13 + 67)) * (1 + 0.7 * age);
-    const al = 0.13 * tint * (1 - 0.5 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
+    const al = 0.09 * tint * (1 - 0.5 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
     const px = mx + Math.cos(a1) * spread, py = my + Math.sin(a1) * spread;
-    ctx.fillStyle = `rgba(48,110,255,${al.toFixed(3)})`;
+    ctx.fillStyle = `rgba(255,185,70,${al.toFixed(3)})`;
     ctx.beginPath();
     ctx.arc(px, py, rad, 0, Math.PI * 2);
     ctx.fill();
     if (k % 2 === 0) {
-      ctx.fillStyle = `rgba(120,180,255,${(al * 0.7).toFixed(3)})`;
+      ctx.fillStyle = `rgba(255,230,160,${(al * 0.7).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(px, py, rad * 0.5, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -1757,7 +1853,7 @@ function priceLine(ctx, view, axes) {
     // the charged stretch is FAT: a pulse is a thing travelling the line, not a colour on it.
     // One width for the whole stroke now, so it swells while the head is on the line.
     const onLine = headAt >= 0 && headAt <= 1 + PULSE_TAIL;
-    ctx.lineWidth = lw * w * (1 + (onLine ? 0.9 : 0));
+    ctx.lineWidth = lw * w * (1 + (onLine ? 0.35 : 0));
     const at = (passed) => {
       const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
       const past = passed - PULSE_TAIL * 0.55;
@@ -1786,7 +1882,17 @@ function priceLine(ctx, view, axes) {
     if (path) ctx.stroke(path);
     else { ctx.beginPath(); traceCurve(ctx, pts); ctx.stroke(); }
   }
-  // SHIMMER on the charged stretch: a thin white-blue core whose brightness flickers per segment
+  // THE BULGE AT THE HEAD: the pipe swells round the surge as it passes, the same stretched skin
+  // and fish-eyed core as the bulge effect, at a smaller radius, in the heat's own colours
+  {
+    const headFrac = Math.max(0, Math.min(1, headAt));
+    const curve = curveByLength(pts);
+    const coreR = (lw * 5.5) / 2;
+    const hotLayers = [...GLOW, ...CORE].map(([w, c, a, kind]) => [w, c.map((v, j) => Math.round(v + (HOT[j] - v) * 0.75)), a, kind]);
+    const fadeIn = headAt < 0 ? 0 : headAt > 1 ? Math.max(0, 1 - (headAt - 1) / 0.2) : 1;
+    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.total * headFrac, (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + 1.6 * fadeIn), hotLayers, curve);
+  }
+  // SHIMMER on the charged stretch: a thin white-gold core whose brightness flickers per segment
   // on the frame clock, scaled by that segment's tint so it dies out exactly as the blue does.
   //
   // These were removed on 2026-09-12 ("the particle effects ... looks terrible ... get rid of the
@@ -1802,7 +1908,7 @@ function priceLine(ctx, view, axes) {
     if (tint < 0.08) continue;
     const p = pts[i], q = pts[i + 1];
     const flick = 0.55 + 0.45 * Math.abs(Math.sin(now * 0.023 + i * 1.7) * Math.sin(now * 0.041 + i * 0.9));
-    ctx.strokeStyle = `rgba(210,240,255,${(0.9 * tint * flick).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(255,250,225,${(0.9 * tint * flick).toFixed(3)})`;
     ctx.lineWidth = lw * 2.4;
     ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
 
@@ -1840,9 +1946,9 @@ function priceLine(ctx, view, axes) {
         for (let m = 1; m <= upto; m++) ctx.lineTo(pl[m].x, pl[m].y);
         ctx.stroke();
       };
-      arc(legs, 2.4, `rgba(90,170,255,${(0.3 * tint).toFixed(3)})`);
-      arc(legs, 0.95, `rgba(185,230,255,${(0.92 * tint).toFixed(3)})`);
-      arc(Math.max(1, legs - 1), 0.5, `rgba(245,252,255,${(0.95 * tint).toFixed(3)})`);
+      arc(legs, 2.4, `rgba(255,170,60,${(0.3 * tint).toFixed(3)})`);
+      arc(legs, 0.95, `rgba(255,225,150,${(0.92 * tint).toFixed(3)})`);
+      arc(Math.max(1, legs - 1), 0.5, `rgba(255,255,240,${(0.95 * tint).toFixed(3)})`);
     }
     // PARTICLES: a spray of motes streaming off the charged wire, each on its own heading,
     // spreading wider and fading as its stretch of the line ages. Placed by a HASH of segment and
@@ -1857,7 +1963,7 @@ function priceLine(ctx, view, axes) {
       const ang = hash01(i * 17 + k * 13 + 101) * Math.PI * 2;
       const dist = lw * (4 + 62 * age) * (0.6 + 0.4 * hash01(i + k * 3 + 7));
       const r = lw * (0.6 + 1.3 * hash01(i * 5 + k + 41)) * (1 - 0.45 * age);
-      ctx.fillStyle = `rgba(200,236,255,${(0.75 * tint * (1 - 0.5 * age)).toFixed(3)})`;
+      ctx.fillStyle = `rgba(255,235,190,${(0.75 * tint * (1 - 0.5 * age)).toFixed(3)})`;
       ctx.beginPath(); ctx.arc(bx + Math.cos(ang) * dist, by + Math.sin(ang) * dist, r, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -1877,7 +1983,7 @@ function priceLine(ctx, view, axes) {
       const r = lw * (0.6 + 1.3 * hash01(m * 7 + 19));
       const a = 0.7 * hp.fade * (1 - back / (PULSE_TAIL * 0.6));
       if (a <= 0.01) continue;
-      ctx.fillStyle = `rgba(200,236,255,${a.toFixed(3)})`;
+      ctx.fillStyle = `rgba(255,235,190,${a.toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(hp.x + Math.cos(ang) * spread, hp.y + Math.sin(ang) * spread, r, 0, Math.PI * 2);
       ctx.fill();
@@ -1907,7 +2013,7 @@ function priceLine(ctx, view, axes) {
       // ball with a blue halo, which is exactly what was reported. Every layer is blue-dominant
       // now, the hot centre included -- it is the brightest, palest blue rather than white, so the
       // head still reads as the hottest point on the line without going colourless.
-      for (const [r, c0, a0] of [[28, '0,150,255', 0.20], [15, '40,190,255', 0.48], [7, '80,220,255', 0.95], [3, '150,240,255', 1]]) {
+      for (const [r, c0, a0] of [[28, '255,150,40', 0.20], [15, '255,195,80', 0.48], [7, '255,232,150', 0.95], [3, '255,252,225', 1]]) {
         ctx.fillStyle = `rgba(${c0},${(a0 * f).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(hp.x, hp.y, lw * r * (0.55 + 0.45 * f), 0, Math.PI * 2); ctx.fill();
       }
@@ -1944,9 +2050,9 @@ function priceLine(ctx, view, axes) {
           for (let m = 1; m <= upto; m++) ctx.lineTo(bp[m].x, bp[m].y);
           ctx.stroke();
         };
-        bolt(legs, 2.4, `rgba(70,190,255,${(0.32 * f).toFixed(3)})`);
-        bolt(legs, 0.95, `rgba(160,235,255,${(0.9 * f).toFixed(3)})`);
-        bolt(Math.max(1, legs - 1), 0.5, `rgba(250,255,255,${(0.95 * f).toFixed(3)})`);
+        bolt(legs, 2.4, `rgba(255,170,60,${(0.32 * f).toFixed(3)})`);
+        bolt(legs, 0.95, `rgba(255,225,150,${(0.9 * f).toFixed(3)})`);
+        bolt(Math.max(1, legs - 1), 0.5, `rgba(255,255,245,${(0.95 * f).toFixed(3)})`);
       }
     }
   }

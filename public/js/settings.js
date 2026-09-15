@@ -195,6 +195,8 @@ export const DEFAULTS = Object.freeze({
     ripple: true, outline: true, tide: true, cascade: true, twinkle: true, scan: true,
     pulse: true,          // the surge that runs the price line
     bulge: true,          // a sphere rolls through the pipe and it swells round it
+    breathe: true,        // the line breathes between the wire and the pulse's heat
+    saber: true,          // the line ignites as a light saber
     firework: true, flare: true, wave: true, stormball: true,
     noRepeat: 12,
     // no firstAfter here: the candle board does not land (operator, 2026-09-14: "there is no
@@ -292,6 +294,8 @@ const FX_ROW = Object.freeze({
   ball: Object.freeze({ label: 'Lightning ball', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
   pulse: Object.freeze({ label: 'Energy pulse', hint: 'The surge that runs the price line on Markets, blue behind the head' }),
   bulge: Object.freeze({ label: 'Pipe bulge', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
+  breathe: Object.freeze({ label: 'Breathe', hint: 'The price line breathes: three slow swells from the plain wire to the pulse\u2019s white heat and back' }),
+  saber: Object.freeze({ label: 'Light saber', hint: 'The price line ignites from its left end as a light saber -- blue, green, red or purple -- hums, spits sparks, and retracts' }),
   shockwave: Object.freeze({ label: 'Shockwave', hint: 'A hard ring that throws the blocks it passes into the air' }),
   nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
   firework: Object.freeze({ label: 'Fireworks', hint: 'Three bursts, each at its own moment and place' }),
@@ -316,7 +320,7 @@ const FX_ROW = Object.freeze({
 // where an effect reads differently on the price board, the price board's hint
 const MARKET_HINT = Object.freeze({
   twinkle: 'Scattered candles flash white, each on its own beat',
-  pulse: 'The surge that runs the price line, blue behind the head',
+  pulse: 'The surge that runs the price line: the tube swells round the head and goes white-hot behind it',
   bulge: 'A glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes',
   stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle often throws a green arc on to another, and that one sometimes on to a third',
   cascade: 'The candles light in order, tallest first',
@@ -511,10 +515,10 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'marketEffects',
     title: 'Market effects',
-    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the twelve that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
+    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the fourteen that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'firework', 'flare', 'wave', 'stormball',
     ], MARKET_HINT, { landing: false, top: 300 }),
   }),
   Object.freeze({

@@ -782,7 +782,8 @@ defineAgent('stormball', {
     // often on the price board (operator, 2026-09-15: "Tone down chance of emitting lightning by
     // 50%"), where the run is also slower, so per second it is quieter still
     const arcs = [];
-    const every = line?.length > 1 ? 2 : 1;
+    // ...and a fifth quieter again ("Reduce ball lighting electricity chance by 20%")
+    const every = line?.length > 1 ? 2.5 : 1;
     for (let u = 0.03; u < 0.97; u += (0.016 + 0.035 * rnd()) * every) {
       const n = 1 + Math.floor(rnd() * 4);
       for (let k = 0; k < n; k++) {
@@ -796,9 +797,10 @@ defineAgent('stormball', {
         // the arcs carry a chain -- its own direction and reach from the block the first lands on,
         // to a different block -- and half of those chain once more from the second block to a
         // third. Decided here, so a replay throws the same chains.
-        if (rnd() < 0.5) {
+        // ...then a quarter fewer of each (2026-09-15: "decrease secondary and third arcing by 25%")
+        if (rnd() < 0.375) {
           arc.chain = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
-          if (rnd() < 0.5) arc.chain.next = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
+          if (rnd() < 0.375) arc.chain.next = { ang: rnd() * Math.PI * 2, reach: 2.5 + 6 * rnd(), seed: Math.floor(rnd() * 1e9) };
         }
         arcs.push(arc);
       }
@@ -839,7 +841,11 @@ defineAgent('stormball', {
       return hit;
     };
     const live = [];
-    const heads = [{ x: ball.x, y: ball.y, color: [70, 180, 255], alpha: 0.7, r: 4.5 }];
+    // LIGHT EMITTERS (operator, 2026-09-15: "The lightning ball needs to illuminate anything it
+    // comes near with an electric hazy white effect. Need the lightning strikes to emit lights").
+    // `heads` is how an agent lights the board (fxAt): the ball is a wide hazy white source now,
+    // not a blue tint, and every strike is a source of its own where it lands
+    const heads = [{ x: ball.x, y: ball.y, color: [225, 240, 255], alpha: 0.95, r: 6.5 }];
     for (const arc of a.arcs) {
       const age = (u - arc.u0) / arc.life;
       if (age < 0 || age > 2.2) continue;                         // alive, then an afterglow on the block
@@ -858,7 +864,7 @@ defineAgent('stormball', {
       // dies away after it -- lit through fxAt's heads, so only the cubes actually struck light up
       const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
       const glow = age <= 1 ? flicker : Math.max(0, 1 - (age - 1) / 1.2) * 0.7;
-      heads.push({ x: hit.x, y: hit.y, color: [60, 190, 255], alpha: Math.min(1, glow * 1.25), r: 1.2 });
+      heads.push({ x: hit.x, y: hit.y, color: [230, 245, 255], alpha: Math.min(1, glow * 1.25), r: 2.4 });
       // ...and the chain, if this arc carries one: from the struck block to another. ITS OWN
       // EVENT, not a bend in the first (2026-09-14: "I'm not seeing secondary arcs" -- they were
       // there in a third of the arc frames, drawn in the first arc's colour from the first arc's
@@ -878,7 +884,7 @@ defineAgent('stormball', {
         if (!to) break;
         if (age2 <= 1) live.push({ from, to, seed: link.seed, strength: Math.min(1, 1.2 * (1 - age2 * 0.5)), chain: hop, age: age2 });
         const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + link.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
-        heads.push({ x: to.x, y: to.y, color: [120, 255, 170], alpha: Math.min(1, glow2 * 1.25), r: 1.2 });
+        heads.push({ x: to.x, y: to.y, color: [200, 255, 225], alpha: Math.min(1, glow2 * 1.25), r: 2.2 });
         struck.push(to); from = to; link = link.next; hop++;
       }
     }
@@ -925,6 +931,14 @@ defineAgent('stormball', {
       displace(pts, 0, n, amp, levels, rnd);
       return pts;
     };
+    // THE HAZE: a wide, soft, white light round the ball, over the board, so what it passes reads
+    // as lit by it and not only tinted -- and the same, smaller, wherever an arc lands
+    {
+      const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R * 5) : null;
+      if (g && typeof g.addColorStop === 'function') { g.addColorStop(0, 'rgba(235,245,255,0.30)'); g.addColorStop(0.35, 'rgba(225,240,255,0.14)'); g.addColorStop(1, 'rgba(220,235,255,0)'); ctx.fillStyle = g; }
+      else ctx.fillStyle = 'rgba(235,245,255,0.08)';
+      ctx.beginPath(); ctx.arc(c.x, c.y, R * 5, 0, Math.PI * 2); ctx.fill();
+    }
     // the arcs first, so the sphere sits over the roots of its own lightning
     for (const arc of s.arcs) {
       const end = project(arc.to.x, arc.to.y, arc.to.z, view);
@@ -948,6 +962,8 @@ defineAgent('stormball', {
       stroke(main, edge, sz * 0.055, 0.95 * arc.strength);
       stroke(main, '245,252,255', sz * (0.022 + 0.02 * flash), arc.strength);
       if (flash > 0) bloom(ctx, end.x, end.y, R * 1.6 * (1.2 - flash * 0.5), [255, 255, 255], 0.9 * flash);
+      // the landing lights its surroundings: a hazy white pool that outlives the flash
+      if (age < 0.8) bloom(ctx, end.x, end.y, R * 2.6, [230, 242, 255], 0.35 * (1 - age / 0.8) * arc.strength);
       // the occasional strike flares: an anamorphic streak through the landing, four turning
       // rays, and a run of ghosts off toward the picture's middle, over the first third of the arc
       if (arc.flare && age < 0.35) lensFlare(ctx, end.x, end.y, R * 2.2, arc.chain ? [110, 255, 170] : [140, 220, 255], Math.pow(1 - age / 0.35, 1.5), view, lw);

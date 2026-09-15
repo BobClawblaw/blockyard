@@ -24,10 +24,10 @@ test('there are at least twenty-five effects, and every one has a switch of its 
   assert.deepEqual(switches('marketEffects'), MARKET_FX, 'the price board switches are exactly MARKET_FX, in order');
   assert.deepEqual(panelRows('marketEffects'), MARKET_FX, 'and its tab lists exactly those');
   assert.deepEqual([...new Set([...SPACE_FX, ...MARKET_FX])].sort(), [...FX_KINDS].sort(), 'between them, every effect has a switch');
-  assert.ok(MARKET_FX.every((k) => SPACE_FX.includes(k) || k === 'pulse' || k === 'bulge'), 'the price board offers nothing the block board lacks but the two line effects');
+  assert.ok(MARKET_FX.every((k) => SPACE_FX.includes(k) || ['pulse', 'bulge', 'breathe', 'saber'].includes(k)), 'the price board offers nothing the block board lacks but the four line effects');
   assert.ok(SPACE_FX.length >= 25, 'twenty-five or more on the block board');
-  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'firework', 'flare', 'wave', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14), in FX_KINDS order');
-  assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge'], 'the block board lacks only the two drawn on a price line');
+  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'firework', 'flare', 'wave', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14) plus the two line effects of 2026-09-15, in FX_KINDS order');
+  assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge', 'breathe', 'saber'], 'the block board lacks only the four drawn on a price line');
   for (const group of ['effects', 'marketEffects']) {
     assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);
     assert.ok(switches(group).every((k) => DEFAULTS[group][k] === true), `${group}: all on, they were asked for`);
@@ -52,7 +52,7 @@ test('every effect lights something at some point in its run, and nothing before
     heads: [{ x: 20 * u, y: 10, color: [80, 220, 255], alpha: 1 }],
   });
   for (const kind of FX_KINDS) {
-    if (kind === 'pulse' || kind === 'bulge') continue;   // drawn on the price line, not on cubes
+    if (kind === 'pulse' || kind === 'bulge' || kind === 'breathe' || kind === 'saber') continue;   // drawn on the price line, not on cubes
     let lit = 0, worst = 0;
     for (let u = 0.02; u < 1; u += 0.02) {
       const fx = fxFor(kind, u);
