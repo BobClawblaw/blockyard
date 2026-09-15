@@ -18,7 +18,7 @@ import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
-import { AGENTS, isAgent, rng, lensFlare, saucer } from './agents.js';
+import { AGENTS, isAgent, rng, lensFlare, saucerAbove } from './agents.js';
 
 const STATE = new WeakMap();
 
@@ -879,7 +879,14 @@ const SHELL_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 's
 //
 // Takes the same `stops` a radial gradient would, so a conversion is mechanical and the colours
 // are unchanged: it walks outward-in, interpolating the stop list, painting N flat rings.
-function softStops(ctx, x, y, r, stops, N = 20) {
+function softStops(ctx, x, y, r, stops, N = 0) {
+  // THE STEP MUST LAND UNDER A PIXEL, or the cure is the disease (operator, 2026-09-15: "What is
+  // with the gradient garbage?" -- of fills I had already converted). Twenty flat discs over a
+  // 300px radius is a 15px step: concentric rings, which is exactly the banding a gradient makes,
+  // only coarser. The layer count therefore comes from the RADIUS, not from a constant: about one
+  // ring per 1.2px, floored so a small sprite is not wasteful and capped so a huge nebula cannot
+  // cost thousands of fills.
+  if (!N) N = Math.max(16, Math.min(220, Math.round(Math.abs(r) / 1.2)));
   const at = (t) => {
     let a = stops[0], b = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) if (t >= stops[i][0] && t <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
@@ -1120,9 +1127,17 @@ function drawScanCurtain(ctx, view, lw) {
   const top = price ? (view.axes?.zTop ?? 34) : 9;
   const P = (q) => project(q.x, q.y, q.z, view);
   const amp = fx.amp ?? 1;
+  // IT MUST LEAVE THE VIEWPORT, NOT BLINK OUT AT THE EDGE (operator, 2026-09-15: "it disappears at
+  // the edge of the screen. Have it move entirely off the viewport before you delete it").
+  // curtainEnds returns null the moment the front stops crossing the board, so everything below --
+  // the craft included -- simply stopped being drawn while it was still in frame. The craft's
+  // position comes from the front itself now, which fxFront carries four units past each edge, so
+  // the saucer flies in from off-board and out the far side under its own power.
+  const fp = fxFront(fx);
+  const fcx = fx.gridW / 2 + (fp - (fx.gridW / 2) * fx.dx - (fx.gridH / 2) * fx.dy) * fx.dx;
+  const fcy = fx.gridH / 2 + (fp - (fx.gridW / 2) * fx.dx - (fx.gridH / 2) * fx.dy) * fx.dy;
   const ends = curtainEnds(fx, 0);
-  if (!ends) return;
-  const [A, B] = ends;
+  const [A, B] = ends ?? [{ x: fcx, y: fcy, z: 0 }, { x: fcx, y: fcy, z: 0 }];
 
   // A CONE, NOT A STACK OF SHEETS (operator, 2026-09-15: "that leaning portion and the
   // cross-hatching is not working. Can we make it a conical beam. instead, and do something
@@ -1139,7 +1154,7 @@ function drawScanCurtain(ctx, view, lw) {
   // volumetric part: nothing is faked with a gradient across a flat face, the light is thick where
   // the geometry is thick. Three nested shells give the falloff depth, a bright pool marks where
   // it lands, and motes drift inside the volume rather than on a sheet.
-  const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
+  const mx = fcx, my = fcy;                                 // the front's own centre, on or off the board
   const half = Math.hypot(B.x - A.x, B.y - A.y) / 2;      // reach along the front line
   const ax = -fx.dy, ay = fx.dx;                          // unit vector ALONG the front
   const sx = fx.dx, sy = fx.dy;                           // unit vector along the SWEEP
@@ -1148,7 +1163,12 @@ function drawScanCurtain(ctx, view, lw) {
   // 49px wide by 147px tall: a needle, not a beam. A spotlight reads as a spotlight when its height
   // and the width where it lands are comparable, so the apex sits just under the chart's own top
   // and the pool is wide enough to look like something landed in it.
-  const apex = { x: mx, y: my, z: top * 0.9 };
+  // ABOVE THE PEAK, not level with it (operator, 2026-09-15: "It needs to fly a bit higher than
+  // the price line peak"). `top` is the chart's axis ceiling, which the line can come close to --
+  // a craft at 0.9 of it flies through the high candles. So the ceiling is the taller of the axis
+  // top and the line's own highest point, and the saucer clears it by 15%.
+  const peak = (view.axes?.line ?? []).reduce((h, q) => Math.max(h, q.z ?? 0), 0);
+  const apex = { x: mx, y: my, z: Math.max(top, peak) * 1.15 };
   const SPREAD = 9;                                        // the beam's half-width along the sweep
   const RING = 44;
   // a point on the base ellipse: `f` scales the shell, `th` runs around it
@@ -1168,8 +1188,9 @@ function drawScanCurtain(ctx, view, lw) {
   // plainly visible, and worst on a large fill like the beam's pool. Many nested flat discs do not
   // band: each is a plain rgba fill and the SUM is the curve. Same doctrine as bloom() in
   // agents.js, with far more steps because the pool is large.
+  // one ring per ~1.2px, same rule as softStops: a fixed count bands on a large pool
   const soft = (x, y, r, rgb, a) => {
-    const N = 18;
+    const N = Math.max(16, Math.min(220, Math.round(Math.abs(r) / 1.2)));
     for (let i = N; i >= 1; i--) {
       ctx.fillStyle = `rgba(${rgb},${(a / N).toFixed(4)})`;
       ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r * (i / N)), 0, Math.PI * 2); ctx.fill();
@@ -1177,27 +1198,30 @@ function drawScanCurtain(ctx, view, lw) {
   };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
 
+  // off the board there is nothing to light, so the beam is not drawn -- but the craft still is,
+  // which is what carries it out of the viewport
+  const onBoard = !!ends;
   // --- the volume: nested cone shells, widest and faintest first
-  for (const [f, a] of [[1, 0.018], [0.88, 0.019], [0.76, 0.021], [0.64, 0.023], [0.53, 0.026], [0.43, 0.029], [0.34, 0.033], [0.26, 0.038], [0.19, 0.044], [0.13, 0.05]]) {
+  if (onBoard) for (const [f, a] of [[1, 0.018], [0.88, 0.019], [0.76, 0.021], [0.64, 0.023], [0.53, 0.026], [0.43, 0.029], [0.34, 0.033], [0.26, 0.038], [0.19, 0.044], [0.13, 0.05]]) {
     const fill = `rgba(120,220,255,${(a * amp).toFixed(3)})`;
     for (let i = 0; i < RING; i++) {
       tri(apex, ring((i / RING) * Math.PI * 2, f), ring(((i + 1) / RING) * Math.PI * 2, f), fill);
     }
   }
   // the hot axis: a thin cone down the middle, and the shaft itself
-  for (let i = 0; i < RING; i++) {
+  if (onBoard) for (let i = 0; i < RING; i++) {
     tri(apex, ring((i / RING) * Math.PI * 2, 0.08), ring(((i + 1) / RING) * Math.PI * 2, 0.08), `rgba(235,250,255,${(0.10 * amp).toFixed(3)})`);
   }
 
   // --- where it lands: a pool on the floor, brightest at the axis
-  {
+  if (onBoard) {
     const c = P({ x: mx, y: my, z: 0 });
     const r = U * Math.max(half, SPREAD) * 1.35;
     soft(c.x, c.y, r, '150,225,255', 1.5 * amp);
     soft(c.x, c.y, r * 0.42, '225,248,255', 1.1 * amp);
   }
   // the rim of the pool, so the cone reads as landing on something
-  for (let i = 0; i < RING; i++) {
+  if (onBoard) for (let i = 0; i < RING; i++) {
     seg(ring((i / RING) * Math.PI * 2, 1), ring(((i + 1) / RING) * Math.PI * 2, 1), `rgba(170,235,255,${(0.28 * amp).toFixed(3)})`, U * 0.05);
   }
 
@@ -1210,7 +1234,11 @@ function drawScanCurtain(ctx, view, lw) {
   {
     const p = P(apex);
     soft(p.x, p.y, U * 2.6, '150,220,255', 0.9 * amp);      // the glow it sits in
-    saucer(ctx, p.x, p.y, U * 1.7, amp);
+    // TOP-DOWN (operator, 2026-09-15: "We need a top-down rendering of the UFO for this scene").
+    // The board's camera looks DOWN, so a dome-and-rim craft drawn edge-on is a smear; from above
+    // a saucer is concentric, and `squash` is the camera's own depth foreshortening so its circles
+    // are the ellipses everything else on the board is drawn in.
+    saucerAbove(ctx, p.x, p.y, U * 1.9, amp, view.oblique?.dy ?? 1, now * 0.0009);
   }
 
   // --- motes INSIDE the volume: placed by angle and depth, so they sit in the cone rather than

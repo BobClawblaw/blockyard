@@ -277,6 +277,41 @@ function bloom(ctx, x, y, r, rgb, a = 1) {
  *
  * `r` is in PIXELS: callers size it from view.unit, never from lw (see bloom).
  */
+/**
+ * THE SAUCER SEEN FROM ABOVE (operator, 2026-09-15: "We need a top-down rendering of the UFO for
+ * this scene"). The side-on craft below is right where the camera looks along the board; on the
+ * block board it looks down, and a dome-and-rim drawn edge-on there is just a blue smear -- which
+ * is what the screenshot showed.
+ *
+ * From above a saucer is concentric: hull, inner ring, canopy, and running lights spaced around
+ * the rim. `squash` is the camera's depth foreshortening (oblique.dy), so the circles come out as
+ * the same ellipses the board itself is drawn in.
+ */
+export function saucerAbove(ctx, cx, cy, r, a = 1, squash = 1, phase = 0) {
+  const ell = (rr, fill) => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    for (let i = 0; i <= 28; i++) {
+      const th = (i / 28) * Math.PI * 2;
+      const x = cx + Math.cos(th) * rr, y = cy + Math.sin(th) * rr * squash;
+      if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+  };
+  ell(r, `rgba(70,110,170,${(0.85 * a).toFixed(3)})`);            // the hull, dark against the glow
+  ell(r * 0.74, `rgba(120,180,255,${(0.9 * a).toFixed(3)})`);     // the lit ring
+  ell(r * 0.40, `rgba(205,235,255,${(0.95 * a).toFixed(3)})`);    // the canopy
+  ell(r * 0.18, `rgba(255,255,255,${(0.95 * a).toFixed(3)})`);    // its highlight
+  // running lights: spaced round the rim, turning slowly so it reads as a craft and not a target
+  for (let i = 0; i < 8; i++) {
+    const th = phase + (i / 8) * Math.PI * 2;
+    const x = cx + Math.cos(th) * r * 0.88, y = cy + Math.sin(th) * r * 0.88 * squash;
+    const tw = 0.55 + 0.45 * Math.sin(phase * 3 + i * 1.9);
+    ctx.fillStyle = `rgba(255,255,255,${(0.9 * tw * a).toFixed(3)})`;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(0.6, r * 0.075), 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 export function saucer(ctx, cx, cy, r, a = 1) {
   const dome = [];
   for (let i = 0; i <= 20; i++) { const ang = Math.PI + (i / 20) * Math.PI; dome.push({ x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r * 0.42 }); }
