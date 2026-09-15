@@ -855,7 +855,7 @@ const SHELL_COLS = [[[255, 170, 110], [255, 235, 160]], [[140, 220, 255], [220, 
 // its own moment in the first half of the run and lives long enough to overlap the next.
 export const FIREWORK_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe', 'pinwheel'];
 export function fireworkShells(seed, gridW, gridH, price, zLo, zHi) {
-  const count = price ? 10 : 5, life = price ? 0.28 : 0.33, SMOKE = 1.7;
+  const count = price ? 10 : 5, life = price ? 0.28 : 0.33, SMOKE = 1.35;
   const out = [];
   for (let i = 0; i < count; i++) {
     const H = (k) => hash01(seed + i * 131 + k);
@@ -988,8 +988,11 @@ function drawFireworks(ctx, view, lw) {
     // the burst, drifting up, going from the shell's colour toward grey as it disperses
     {
       const sr = R0 * (0.3 + 1.1 * (1 - Math.exp(-2.2 * ss))), rise = R0 * 0.3 * ss;
-      const sa = 0.9 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
-      if (sa > 0.01) gasCloud(ctx, top.x, top.y - rise, sr, ss, now, fx.seed + sh.i * 977, sa * 1.3, smokeRc, gradientOf, disc, 80, [50, 50, 58]);
+      // TONED DOWN (operator, 2026-09-15: "the fireworks nebulas are too prominent. they need to be
+      // toned down by half at least. Too opaque for too long"): half the alpha, a steeper fade,
+      // fewer blobs, and the smoke lives 1.35 shell-lives rather than 1.7
+      const sa = 0.45 * Math.pow(1 - ss, 2.2) * (0.4 + 0.6 * Math.min(1, ss * 6)) * gf;
+      if (sa > 0.01) gasCloud(ctx, top.x, top.y - rise, sr, ss, now, fx.seed + sh.i * 977, sa * 1.1, smokeRc, gradientOf, disc, 60, [50, 50, 58]);
     }
     if (ss > 0.15) {
       const em = (ss - 0.15) / 0.85;
