@@ -181,7 +181,7 @@ export const FX_KINDS = Object.keys(FX_MS);
 // travel change, which turns out not to have been slow enough either -- restoring a speed is not
 // the same as it being right. 14600 makes the on-screen crossing 8451 ms against 5297, i.e. 60%
 // slower, which clears the "at least 50%" asked for.
-export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan: 14600 };   // and a fireworks display of five shells, each with its smoke, needs the time
+export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan: 29200 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
@@ -1272,7 +1272,8 @@ function drawScanCurtain(ctx, view, lw) {
   // ship rather than two unrelated light sources.
   {
     const p = P(apex);
-    soft(p.x, p.y, U * 2.6, '150,220,255', 0.9 * amp);      // the glow it sits in
+    // (no glow round the craft: operator, 2026-09-15, "remove the light around the UFO. We have
+    // enough lights for that effect")
     // TOP-DOWN (operator, 2026-09-15: "We need a top-down rendering of the UFO for this scene").
     // The board's camera looks DOWN, so a dome-and-rim craft drawn edge-on is a smear; from above
     // a saucer is concentric, and `squash` is the camera's own depth foreshortening so its circles
@@ -1282,7 +1283,9 @@ function drawScanCurtain(ctx, view, lw) {
 
   // --- motes INSIDE the volume: placed by angle and depth, so they sit in the cone rather than
   // on a face. Each drifts up the shaft and is reseeded by its own hash, never by Math.random.
-  for (let k = 0; k < 30; k++) {
+  // ...and only while the beam is on the board (operator, 2026-09-15: "I don't like how the
+  // particles are kept when the scanner is off"): off it, the craft flies alone
+  if (onBoard) for (let k = 0; k < 30; k++) {
     const H = (q) => hash01(fx.seed + 700 + k * 13 + q);
     const climb = ((H(1) + now * 0.00007 * (0.5 + H(2))) % 1);       // 0 at the floor, 1 at the apex
     const th = H(3) * Math.PI * 2, rad = Math.sqrt(H(4)) * (1 - climb);
@@ -1294,7 +1297,7 @@ function drawScanCurtain(ctx, view, lw) {
 
   // --- sparks thrown from where it lands, as before: the beam is doing something to the board
   const STEP = 160, LIFE = 900, kNow = Math.floor(now / STEP);
-  for (let k = kNow - Math.ceil(LIFE / STEP); k <= kNow; k++) {
+  if (onBoard) for (let k = kNow - Math.ceil(LIFE / STEP); k <= kNow; k++) {
     if (hash01(fx.seed + k * 5) > 0.5) continue;
     const age = (now - k * STEP) / LIFE;
     if (age < 0 || age >= 1) continue;
