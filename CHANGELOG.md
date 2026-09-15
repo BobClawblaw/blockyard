@@ -24,6 +24,14 @@ All notable changes to this project are documented here. The format follows
 - **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
   passes and every strike lights where it lands, on the candles and on the board; on Markets it
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
+- **Black hole**, a new Markets effect (modelled on NASA's visualisation, svs.gsfc.nasa.gov/14576):
+  a point of darkness opens on the price line and grows over 26 s; the line bends round it as
+  through a lens (`lensPoints`, the Einstein-radius push), the candles it reaches are swallowed
+  (a head that hides), and an accretion disk in the chart's own colours — gold, and the candles'
+  green and red — spirals in at Keplerian speed round the shadow, brighter on the side coming
+  toward you, its far side lensed into an arch over the top and a thinner one under the bottom,
+  a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
+  straightens and the candles come back. Thirty-three effects; fifteen on Markets.
 - **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
   the star is a glint — halo, hot core, diffraction spikes — growing and blue-shifting from warm white to blue-white as it goes (`starGlint`, a new renderer); the whole picture whites out and comes back, with a
   no flare (its turning rays read as glints and went); the debris is a **volume of gas**

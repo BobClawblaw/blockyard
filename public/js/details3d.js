@@ -150,6 +150,7 @@ const FX_MS = {
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
   breathe: 9000,                               // the price line breathes: three slow swells between the wire and the pulse's heat
   saber: 8000,                                 // the price line ignites as a light saber, hums, and retracts
+  blackhole: 26000,                            // the chart collapses into a black hole and is let go again
   shockwave: 4200, nova: 5200, firework: 5600, flare: 16000, wave: 6000, quake: 3200,   // flare 3600 -> 8000 -> 16000 (2026-09-15: it is a supernova now, and the cloud disperses slowly)
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
@@ -215,9 +216,9 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // where they stand (cascade, twinkle, the flare), or is the price line's own (pulse, bulge, ball
 // lightning). The rest -- riders and walkers, the field patterns, anything that falls down the
 // depth or turns in place, anything that moves a tile -- stays on the block board.
-const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'firework', 'flare', 'wave', 'stormball']);
+const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
-const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber']);
+const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber', 'blackhole']);
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
 // list ... the Block Space effects specific to that panel, and settings specific to market panel"):
 // settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
@@ -301,6 +302,20 @@ function fxNow(st, t) {
       heads.push({ x: sh.bx, y: sh.by, color: sh.cols[0], alpha: Math.pow(Math.max(0, 1 - s2), 1.2) * (v < 0.28 ? 1 : 0.85), r: (price ? 7 : 8) * sh.size * (0.5 + 0.9 * spread) });
     }
     out.heads = heads;
+  }
+  // THE BLACK HOLE (2026-09-15): where it sits on the chart, how big its horizon is this frame,
+  // and -- through a head that HIDES -- which candles it has swallowed; the tiles near it glow the
+  // disk's orange. Everything the renderer needs rides on `out.blackhole`.
+  if (f.kind === 'blackhole' && st.axes?.line?.length > 1) {
+    const line = st.axes.line;
+    const hx = st.gridW * (0.38 + 0.24 * hash01(f.seed + 3));
+    let near = line[0]; for (const p of line) if (Math.abs(p.x - hx) < Math.abs(near.x - hx)) near = p;
+    let lo = Infinity, hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
+    const hz = Math.max(lo, Math.min(hi, near.z));
+    const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
+    const rs = 2.4 * grow;                                             // the horizon, in grid units
+    out.blackhole = { x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, rs, grow, lo, hi };
+    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, color: [255, 160, 60], alpha: grow, r: rs * 1.9, hide: 1 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
@@ -1023,6 +1038,119 @@ function drawFireworks(ctx, view, lw) {
     }
     disc(top.x, top.y + R0 * 0.25 * s, U * 0.16 * fade, `rgba(255,255,255,${(0.7 * fade).toFixed(3)})`);
   }
+  ctx.lineWidth = lw;
+}
+
+// THE BLACK HOLE (operator, 2026-09-15: "Simulate the price chart turning into a black hole",
+// reference svs.gsfc.nasa.gov/14576 -- NASA's visualisation: an orange accretion disk of hot gas
+// spiralling in, brighter on the side coming toward us, a photon ring inside it, the far side of
+// the disk lensed into an arch over the top of the shadow and a thinner one under it, the sky
+// behind bent into arcs). On the chart:
+//   collapse   0    - 0.22  a point of darkness opens on the price line; the line bends round it
+//                            (lensPoints) and the candles nearest are swallowed (fxNow's head hides
+//                            them) as the horizon grows
+//   accretion  0.22 - 0.82  the disk: the chart's own colours -- gold, and the candles' green and
+//                            red -- spiralling in, Keplerian (faster inside), Doppler-bright on
+//                            the approaching side; the far side arched over and under the shadow;
+//                            the photon ring; lensed starlight in arcs round the horizon; the
+//                            shadow, black, soft-edged
+//   release    0.82 - 1     the hole shrinks to nothing, the disk spins away, the line straightens
+//                            and the candles come back
+// Screen-space, gradients and strokes under transforms, no clip or composite modes.
+function holeOnScreen(view) {
+  const b = view.fx?.blackhole;
+  if (!b) return null;
+  const c = project(b.x, b.y, b.z, view);
+  const U = view.unit ?? 8;
+  return { c, U, rs: b.rs * U, grow: b.grow };
+}
+function lensPoints(pts, view) {
+  const h = holeOnScreen(view);
+  if (!h || h.rs <= 0.5) return pts;
+  const rE = h.rs * 1.9;
+  return pts.map((p) => {
+    const dx = p.x - h.c.x, dy = p.y - h.c.y, r = Math.hypot(dx, dy) || 1e-6;
+    const r2 = Math.sqrt(r * r + rE * rE);
+    return { x: h.c.x + (dx / r) * r2, y: h.c.y + (dy / r) * r2 };
+  });
+}
+function drawBlackHole(ctx, view, lw) {
+  const fx = view.fx;
+  if (!fx || fx.kind !== 'blackhole') return;
+  const h = holeOnScreen(view);
+  if (!h || h.rs <= 0.5) return;
+  const { c, U, rs, grow } = h;
+  const now = view.now ?? 0;
+  const grad = (x, y, r, stops) => {
+    const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
+    if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    return g;
+  };
+  const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
+  const canT = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
+  const TILT = -0.2, SQUASH = 0.3;                                       // the disk seen nearly edge-on, a little turned
+  const inner = rs * 1.7, outer = rs * 5.2;
+  const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
+  const H = (k) => hash01(fx.seed + k);
+  // --- the glow of the whole thing on the chart round it
+  disc(c.x, c.y, outer * 1.3, grad(c.x, c.y, outer * 1.3, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]));
+  // --- the disk's FAR side, lensed over the top of the shadow (and, thinner, under it): drawn
+  // first so the near side and the shadow sit over it
+  const arch = (r0, r1, a0, a1, alpha, bright) => {
+    for (let k = 0; k < 14; k++) {
+      const t0 = a0 + ((a1 - a0) * k) / 14, t1 = a0 + ((a1 - a0) * (k + 1)) / 14, mid = (t0 + t1) / 2;
+      const rr = (r0 + r1) / 2, w = r1 - r0;
+      const dop = doppler(mid + Math.PI) * bright;
+      ctx.strokeStyle = `rgba(255,${Math.round(150 + 60 * dop)},${Math.round(50 + 40 * dop)},${(alpha * dop).toFixed(3)})`; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.arc(c.x, c.y, rr, t0, t1); ctx.stroke();
+    }
+  };
+  arch(rs * 1.05, rs * 2.1, Math.PI + 0.15, 2 * Math.PI - 0.15, 0.7 * grow, 1);      // over the top
+  arch(rs * 1.02, rs * 1.35, 0.25, Math.PI - 0.25, 0.45 * grow, 0.8);               // under, thinner: the second image
+  // --- the disk's NEAR side: an ellipse ring under the hole, hot inside, dark red out, streaked
+  // with gas spiralling in at Keplerian speed, in the chart's own colours
+  if (canT) {
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(TILT); ctx.scale(1, SQUASH);
+    // the body of the disk, near half only (angles 0..pi are the lower half on screen)
+    for (let k = 0; k < 18; k++) {
+      const r0 = inner + ((outer - inner) * k) / 18, r1 = inner + ((outer - inner) * (k + 1)) / 18, t = k / 18;
+      const heat = 1 - t;
+      for (let q = 0; q < 12; q++) {
+        const a0 = (Math.PI * q) / 12, a1 = (Math.PI * (q + 1)) / 12, dop = doppler((a0 + a1) / 2);
+        const R = Math.round(255), G = Math.round((120 + 120 * heat) * Math.min(1, dop)), B = Math.round(40 + 90 * heat * heat * Math.min(1, dop));
+        ctx.strokeStyle = `rgba(${R},${G},${B},${(0.55 * grow * (0.35 + 0.65 * heat) * Math.min(1.2, dop) / 1.2).toFixed(3)})`; ctx.lineWidth = (r1 - r0) * 1.05;
+        ctx.beginPath(); ctx.arc(0, 0, (r0 + r1) / 2, a0, a1); ctx.stroke();
+      }
+    }
+    // the streaks: gas spiralling in, each on its own orbit, faster inside; one in four in a
+    // candle's green or red -- the chart's own substance going down
+    for (let k = 0; k < 90; k++) {
+      const hk = (q) => hash01(fx.seed + 400 + k * 13 + q);
+      const rr = inner + (outer - inner) * Math.pow(hk(1), 0.7);
+      const omega = 0.0022 * Math.pow(inner / rr, 1.5);
+      const ang = (hk(2) * Math.PI * 2 + now * omega) % (Math.PI * 2);
+      if (ang > Math.PI) continue;                                       // the far half is the arch
+      const span = 0.18 + 0.5 * hk(3) * (rr / outer), dop = doppler(ang + span / 2);
+      const kind = hk(4), col = kind < 0.12 ? '90,230,150' : kind < 0.24 ? '255,90,90' : kind < 0.5 ? '255,235,170' : '255,190,90';
+      ctx.strokeStyle = `rgba(${col},${(0.5 * grow * Math.min(1, dop)).toFixed(3)})`; ctx.lineWidth = rs * (0.05 + 0.1 * hk(5));
+      ctx.beginPath(); ctx.arc(0, 0, rr, ang, Math.min(Math.PI, ang + span)); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // --- lensed starlight: short arcs of white round the horizon, the sky behind bent into rings
+  for (let k = 0; k < 26; k++) {
+    const hk = (q) => hash01(fx.seed + 800 + k * 7 + q);
+    const rr = rs * (1.15 + 1.6 * hk(1)), a0 = hk(2) * Math.PI * 2 + now * 0.00008 * (hk(3) - 0.5), span = 0.08 + 0.35 * hk(4);
+    ctx.strokeStyle = `rgba(255,255,255,${(0.45 * grow * (0.4 + 0.6 * hk(5))).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, U * 0.03);
+    ctx.beginPath(); ctx.arc(c.x, c.y, rr, a0, a0 + span); ctx.stroke();
+  }
+  // --- the photon ring, and the shadow
+  ctx.strokeStyle = `rgba(255,240,200,${(0.9 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw, rs * 0.06);
+  ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.08, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = `rgba(255,200,120,${(0.5 * grow).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, rs * 0.16);
+  ctx.beginPath(); ctx.arc(c.x, c.y, rs * 1.12, 0, Math.PI * 2); ctx.stroke();
+  disc(c.x, c.y, rs * 1.06, grad(c.x, c.y, rs * 1.06, [[0, 'rgba(0,0,0,1)'], [0.9, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
   ctx.lineWidth = lw;
 }
 
@@ -1978,8 +2106,13 @@ function drawSaberLine(ctx, pts, lw, fx, view, GLOW, CORE) {
   }
 }
 function priceLine(ctx, view, axes) {
-  const pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
+  let pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
+  // THE LINE BENDS ROUND THE BLACK HOLE (2026-09-15): every point is pushed out from the hole's
+  // centre the way a lens pushes a background image -- r' = sqrt(r^2 + rE^2), the Einstein
+  // radius rE growing with the hole -- so the chart warps into an arc round the shadow, and
+  // the stretch inside the horizon is drawn under the shadow, which covers it
+  if (view.fx?.kind === 'blackhole' && view.fx.blackhole) pts = lensPoints(pts, view);
   const lw = ctx.lineWidth;
   const join = ctx.lineJoin, cap = ctx.lineCap;
   ctx.lineJoin = 'round';
@@ -3099,7 +3232,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // name and calls it with a hand-built view -- and the registry simply points at them.
   const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
   if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
-  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); }
+  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); drawBlackHole(ctx, view, ctx.lineWidth); }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 

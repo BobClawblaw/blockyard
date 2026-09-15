@@ -218,7 +218,7 @@ both modes move to their new places rather than disappearing and reappearing.
 
 While the board is at rest, one effect plays every seven to thirteen seconds — the first
 about a second after the board lands — and never one that has played within the last twelve
-(**No repeats within**, 0 up to the length of that board's list). There are **32**, and each has its own switch. **Each board
+(**No repeats within**, 0 up to the length of that board's list). There are **33**, and each has its own switch. **Each board
 has its own list**: the Block space board's switches are the **Space effects** tab, the
 Markets board's are the **Market effects** tab, and each tab has its own no-repeat window, so
 trimming one board's effects leaves the other's alone.
@@ -239,17 +239,18 @@ trimming one board's effects leaves the other's alone.
 | **Energy pulse** | the surge that runs the neon price line on Markets: the pipe swells round its head and goes white-hot behind it, cooling back to the wire through hot gold, with a warm cloud, crackle and motes — nothing blue |
 | **Breathe** | on Markets: the price line breathes, three slow swells from the plain wire to the pulse's white heat and back |
 | **Light saber** | on Markets: the price line ignites from its left end as a light saber — blue, green, red or purple by the run — hums, spits sparks, and retracts |
+| **Black hole** | on Markets: a point of darkness opens on the price line and grows; the line bends round it as through a lens, the candles nearest are swallowed, and an accretion disk in the chart's own colours spirals in round the shadow — brighter on the side coming toward you, its far side arched over the top and under the bottom, a photon ring hugging the horizon, starlight bent into arcs — until it shrinks away and lets everything go |
 | **Pipe bulge** | on Markets: a ball forced through the price line, the tube swelling around it with a stretched skin; it enters at the line's start at the tube's own size, leaves at its end, and runs quicker downhill than up |
 
 They are decoration only: they carry no data, they never play during a refresh, and they
 are switched off entirely under `prefers-reduced-motion`. The Block space list is every effect
 but the two drawn on a price line (**Energy pulse**, **Pipe bulge**). The Markets board is eight
 units deep and as wide as the hours, so everything there moves **along the hours, left or right,
-never toward you**, and lights the candles or the line. Its list is the **fourteen** that
+never toward you**, and lights the candles or the line. Its list is the **fifteen** that
 translate to a chart: **Ripple**, **Outline sweep**, **Tide**, **Cascade**, **Twinkle**, **Scan
 line**, **Fireworks**, **Solar flare**, **Wave**, and the price line's own **Energy pulse**,
-**Pipe bulge**, **Breathe**, **Light saber** and **Ball lightning** (a quarter of its Block space
-size there). Fronts run along the
+**Pipe bulge**, **Breathe**, **Light saber**, **Black hole** and **Ball lightning** (a quarter of its
+Block space size there). Fronts run along the
 chart, rings start on the candle row, the candles light where they stand. Nothing on it waits
 its turn: the pulse, the bulge and ball lightning are picks like any other, and how often you
 see one is the length of the list you leave switched on.
@@ -947,7 +948,7 @@ space, Markets and Tetrust alike. Whether a given board shows it stays that boar
 
 One tab per board. **Space effects** is a switch for each of the **28** idle effects the Block
 space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
-switch for each of the **14** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
+switch for each of the **15** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
 **No repeats within**: how many other effects must play before one can play again (12 by
 default; 0 allows a repeat straight away).
 

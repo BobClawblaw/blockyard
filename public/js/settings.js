@@ -197,6 +197,7 @@ export const DEFAULTS = Object.freeze({
     bulge: true,          // a sphere rolls through the pipe and it swells round it
     breathe: true,        // the line breathes between the wire and the pulse's heat
     saber: true,          // the line ignites as a light saber
+    blackhole: true,      // the chart collapses into a black hole
     firework: true, flare: true, wave: true, stormball: true,
     noRepeat: 12,
     // no firstAfter here: the candle board does not land (operator, 2026-09-14: "there is no
@@ -296,6 +297,7 @@ const FX_ROW = Object.freeze({
   bulge: Object.freeze({ label: 'Pipe bulge', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
   breathe: Object.freeze({ label: 'Breathe', hint: 'The price line breathes: three slow swells from the plain wire to the pulse\u2019s white heat and back' }),
   saber: Object.freeze({ label: 'Light saber', hint: 'The price line ignites from its left end as a light saber -- blue, green, red or purple -- hums, spits sparks, and retracts' }),
+  blackhole: Object.freeze({ label: 'Black hole', hint: 'A point of darkness opens on the price line and grows: the line bends round it, the candles nearest are swallowed, and an accretion disk of the chart\u2019s own colours spirals in round the shadow -- brighter on the side coming toward you, its far side arched over the top -- until it lets everything go' }),
   shockwave: Object.freeze({ label: 'Shockwave', hint: 'A hard ring that throws the blocks it passes into the air' }),
   nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
   firework: Object.freeze({ label: 'Fireworks', hint: 'Three bursts, each at its own moment and place' }),
@@ -515,10 +517,10 @@ export const PANEL = Object.freeze([
   Object.freeze({
     group: 'marketEffects',
     title: 'Market effects',
-    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the fourteen that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
+    note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the fifteen that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'firework', 'flare', 'wave', 'stormball',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball',
     ], MARKET_HINT, { landing: false, top: 300 }),
   }),
   Object.freeze({
