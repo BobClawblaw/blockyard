@@ -1022,7 +1022,7 @@ export function fxAt(t, fx) {
         const passed = ring - d;                              // > 0 once the front has gone by
         const shake = passed > 0 && fx.u < 0.75 ? Math.max(0, Math.sin(fx.u * 70 + jitterOf(t.txid, 'sn' + fx.seed) * 6.28)) * Math.exp(-passed / 12) * (1 - (fx.u - 0.14) / 0.61) : 0;
         if (front > 0.02 || shake > 0.02) {
-          lift = Math.max(lift, 5 * A * front + 1.6 * A * shake);
+          lift = Math.max(lift, 2.5 * A * front + 0.8 * A * shake);   // half the first cut (operator: "affects the candles too much")
           glow = Math.max(glow, A * front + 0.4 * A * shake);
           outline = Math.max(outline, A * front);
           if (front > w) colour = [255, 255, 255];

@@ -1087,38 +1087,96 @@ function drawSupernova(ctx, view, lw) {
     disc(c.x, c.y, R0 * 3.2, grad(c.x, c.y, R0 * 3.2, [[0, `rgba(255,255,255,${(0.98 * f).toFixed(3)})`], [0.3, `rgba(255,250,235,${(0.7 * f).toFixed(3)})`], [0.6, `rgba(255,220,170,${(0.3 * f).toFixed(3)})`], [1, 'rgba(255,200,140,0)']]));
     lensFlare(ctx, c.x, c.y, R0 * 11, [255, 230, 170], f, view, lw);
   }
-  // --- the shockwave
+  // --- the shockwave: THICK, SOFT BANDS, not thin circles (operator, 2026-09-15: "The
+  // circles/shockwaves look too 'thin'. Consider a transparency or warping effect within the
+  // blast radius"): each front is a band as wide as a shell radius with soft edges -- a gradient
+  // from nothing through the colour to nothing across its width -- with a translucent dome of
+  // hot air inside it, and the price line WARPED where the front passes: the stretch of line
+  // inside the blast is drawn again pushed outward from the centre, as through a lens, the push
+  // strongest at the front and easing behind it
+  const band = (r, w, col, a) => {
+    if (r <= 0 || a <= 0.003) return;
+    const R = r + w;
+    disc(c.x, c.y, R, grad(c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(255,255,255,${(a * 0.9).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]));
+  };
+  const warp = (r, strength) => {
+    if (!price || strength <= 0.01) return;
+    const ptsL = line.map((p) => project(p.x, view.axes.y ?? 0, p.z, view));
+    for (const push of [1, 0.5]) {
+      ctx.strokeStyle = `rgba(255,250,230,${(0.35 * strength / push).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.12);
+      ctx.beginPath();
+      let open = false;
+      for (const p of ptsL) {
+        const dx = p.x - c.x, dy = p.y - c.y, d = Math.hypot(dx, dy) || 1;
+        if (d > r * 1.05) { open = false; continue; }
+        const k = Math.max(0, 1 - Math.abs(d - r) / (r * 0.6)) * strength * R0 * 0.45 * push;
+        const x = p.x + (dx / d) * k, y = p.y + (dy / d) * k;
+        if (open) ctx.lineTo(x, y); else { ctx.moveTo(x, y); open = true; }
+      }
+      ctx.stroke();
+    }
+  };
   if (u >= 0.14 && u < 0.6) {
     const f = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - f, 2.2));
-    ctx.strokeStyle = `rgba(255,255,255,${(0.85 * (1 - f) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.3 * (1 - f) + lw);
-    ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = `rgba(${rcs},${(0.45 * (1 - f) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.9 * (1 - f));
-    ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.95, 0, Math.PI * 2); ctx.stroke();
-    // a second front a beat behind the first, slower, wider, the colour of the blast
+    // the dome of hot air inside the front: faint, brighter toward the rim
+    disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(255,240,220,0)'], [0.7, `rgba(255,240,220,${(0.06 * (1 - f) * gf).toFixed(3)})`], [1, `rgba(255,255,255,${(0.18 * (1 - f) * gf).toFixed(3)})`]]));
+    band(r, R0 * (0.25 + 0.55 * (1 - f)), rcs, 0.55 * (1 - f) * gf);
+    warp(r, (1 - f) * gf);
     const f2 = Math.max(0, (u - 0.2) / 0.5), r2 = R0 * 3.2 * (1 - Math.pow(1 - f2, 2));
-    if (f2 > 0) { ctx.strokeStyle = `rgba(255,230,180,${(0.5 * (1 - f2) * gf).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.7 * (1 - f2)); ctx.beginPath(); ctx.arc(c.x, c.y, r2, 0, Math.PI * 2); ctx.stroke(); }
+    if (f2 > 0) band(r2, R0 * (0.2 + 0.4 * (1 - f2)), '255,230,180', 0.4 * (1 - f2) * gf);
   }
-  // --- the ejecta: filaments flung out, slowing and fading, gold and violet by turns
-  // VIOLENT (operator, 2026-09-15: "There is not enough ejecta produced. it needs to be more
-  // violent and explosive"): two hundred and twenty filaments in two waves -- a fast wave that is
-  // out in a second, thick and white-hot at the front, and a slower heavier wave behind it -- and
-  // forty glowing fragments of debris tumbling out under gravity with trails
+  // VIOLENT, AND NOT THIN (operator, 2026-09-15: "more violent and explosive", then "The thin
+  // fireworks ejecta is not working for me"): the blast is a FIREBALL -- a lumpy sphere of one
+  // gradient, white through orange to a dark red rim, its edge boiling on the clock, swelling
+  // fast and thinning as it grows -- with a dozen tongues of plasma licking out of it, tapered
+  // wedges that lengthen as they fly; forty glowing fragments of debris tumbling out under
+  // gravity with trails; and behind them sixty thick streaks, the fast ejecta, white-hot at the
+  // front. The fading over the run stays as it was (operator: "perfect").
+  if (u >= 0.12) {
+    const f = (u - 0.12) / 0.88, swell = 1 - Math.exp(-3.2 * f);
+    const rf = R0 * (0.4 + 3.4 * swell), fa = Math.pow(1 - f, 0.9) * gf;
+    if (fa > 0.01) {
+      ctx.beginPath();
+      for (let i = 0; i <= 48; i++) {
+        const th = (i / 48) * Math.PI * 2;
+        const boil = 1 + 0.16 * Math.sin(th * 4 + now * 0.004) + 0.1 * Math.sin(th * 7 - now * 0.006 + 2) + 0.06 * Math.sin(th * 11 + now * 0.01);
+        const rr = rf * boil, x = c.x + Math.cos(th) * rr, y = c.y + Math.sin(th) * rr * 0.9;
+        if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = grad(c.x, c.y, rf * 1.15, [[0, `rgba(255,255,255,${(0.85 * fa).toFixed(3)})`], [0.25, `rgba(255,235,180,${(0.7 * fa).toFixed(3)})`], [0.5, `rgba(255,160,70,${(0.45 * fa).toFixed(3)})`], [0.8, `rgba(200,60,40,${(0.2 * fa).toFixed(3)})`], [1, 'rgba(120,20,30,0)']]);
+      ctx.fill();
+      // the tongues
+      for (let k = 0; k < 12; k++) {
+        const H = (q) => hash01(fx.seed + 7000 + k * 19 + q);
+        const ang = (k / 12) * Math.PI * 2 + (H(1) - 0.5) * 0.5, len = rf * (1.3 + 0.7 * H(2)), wb = rf * (0.18 + 0.12 * H(3));
+        const wag = Math.sin(now * 0.003 + k) * 0.08;
+        const dir = { x: Math.cos(ang + wag), y: Math.sin(ang + wag) }, nrm = { x: -dir.y, y: dir.x };
+        const tip = { x: c.x + dir.x * len, y: c.y + dir.y * len };
+        ctx.beginPath();
+        ctx.moveTo(c.x + nrm.x * wb, c.y + nrm.y * wb);
+        ctx.quadraticCurveTo(c.x + dir.x * len * 0.55 + nrm.x * wb * 0.7, c.y + dir.y * len * 0.55 + nrm.y * wb * 0.7, tip.x, tip.y);
+        ctx.quadraticCurveTo(c.x + dir.x * len * 0.55 - nrm.x * wb * 0.7, c.y + dir.y * len * 0.55 - nrm.y * wb * 0.7, c.x - nrm.x * wb, c.y - nrm.y * wb);
+        ctx.closePath();
+        ctx.fillStyle = grad(c.x, c.y, len, [[0, `rgba(255,240,200,${(0.7 * fa).toFixed(3)})`], [0.5, `rgba(255,150,60,${(0.4 * fa).toFixed(3)})`], [1, 'rgba(200,60,40,0)']]);
+        ctx.fill();
+      }
+    }
+  }
   if (u >= 0.14) {
     const f = (u - 0.14) / 0.86;
-    for (let k = 0; k < 220; k++) {
+    for (let k = 0; k < 60; k++) {
       const H = (q) => hash01(fx.seed + k * 17 + q);
-      const fast = k % 2 === 0;
-      const spread = 1 - Math.exp(-(fast ? 4.2 : 2.2) * f);
-      const ang = (k / 220) * Math.PI * 2 + (H(1) - 0.5) * 0.1, len = R0 * (fast ? 3 + 2.5 * H(2) : 1.6 + 2 * H(2));
-      const tip = len * spread, tail = Math.max(0, tip - len * (0.14 + 0.14 * H(3)) * (1 - f * 0.5));
+      const spread = 1 - Math.exp(-3.6 * f);
+      const ang = (k / 60) * Math.PI * 2 + (H(1) - 0.5) * 0.14, len = R0 * (3 + 2.5 * H(2));
+      const tip = len * spread, tail = Math.max(0, tip - len * (0.16 + 0.16 * H(3)) * (1 - f * 0.5));
       const col = k % 3 === 0 ? '200,140,255' : k % 3 === 1 ? '255,190,100' : '255,240,200';
-      const a = Math.pow(1 - f, fast ? 1.6 : 1.1) * gf;
+      const a = Math.pow(1 - f, 1.4) * gf;
       if (a < 0.02) continue;
-      ctx.strokeStyle = `rgba(${col},${(0.35 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 1.5, U * 0.14 * (1 - f * 0.5));
+      ctx.strokeStyle = `rgba(${col},${(0.45 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 2, U * 0.28 * (1 - f * 0.5));
       ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * tail, c.y + Math.sin(ang) * tail); ctx.lineTo(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip); ctx.stroke();
-      ctx.strokeStyle = `rgba(${col},${(0.9 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 0.8, U * 0.05 * (1 - f * 0.5));
-      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * tail, c.y + Math.sin(ang) * tail); ctx.lineTo(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip); ctx.stroke();
-      disc(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip, Math.max(lw, U * (fast ? 0.07 : 0.05)), `rgba(255,255,255,${(0.95 * a).toFixed(3)})`);
+      ctx.strokeStyle = `rgba(255,255,255,${(0.9 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.1 * (1 - f * 0.5));
+      ctx.beginPath(); ctx.moveTo(c.x + Math.cos(ang) * (tail + (tip - tail) * 0.6), c.y + Math.sin(ang) * (tail + (tip - tail) * 0.6)); ctx.lineTo(c.x + Math.cos(ang) * tip, c.y + Math.sin(ang) * tip); ctx.stroke();
     }
     for (let k = 0; k < 40; k++) {
       const H = (q) => hash01(fx.seed + 9000 + k * 13 + q);
@@ -1127,9 +1185,9 @@ function drawSupernova(ctx, view, lw) {
       const px = c.x + Math.cos(ang) * sp * Math.max(0, ease - 0.08), py = c.y + Math.sin(ang) * sp * Math.max(0, ease - 0.08) + R0 * 1.4 * Math.max(0, f - 0.05) ** 2;
       const a = Math.pow(1 - f, 1.2) * gf, tw = 0.6 + 0.4 * Math.sin(now * 0.03 + k * 2.1);
       if (a < 0.02) continue;
-      ctx.strokeStyle = `rgba(255,200,120,${(0.6 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.06);
+      ctx.strokeStyle = `rgba(255,200,120,${(0.6 * a).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 1.5, U * 0.1);
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x, y); ctx.stroke();
-      disc(x, y, U * (0.08 + 0.1 * H(3)) * (1 - 0.4 * f), grad(x, y, U * 0.18, [[0, `rgba(255,255,255,${(a * tw).toFixed(3)})`], [0.5, `rgba(255,200,110,${(0.8 * a * tw).toFixed(3)})`], [1, 'rgba(255,140,60,0)']]));
+      disc(x, y, U * (0.1 + 0.14 * H(3)) * (1 - 0.4 * f), grad(x, y, U * 0.24, [[0, `rgba(255,255,255,${(a * tw).toFixed(3)})`], [0.5, `rgba(255,200,110,${(0.8 * a * tw).toFixed(3)})`], [1, 'rgba(255,140,60,0)']]));
     }
   }
   // --- the remnant: a ring nebula expanding for the rest of the run, cooling as it goes
