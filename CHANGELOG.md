@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- Block space packs the same way: the card tighter and the board sized so the whole page, note included, fits the viewport without a scroll
 - The Mining tab's packages table no longer bleeds into the neighbouring card at a middling window width: a table wider than its stack scrolls inside its card, and the three stacks become two below 1400px, where each would be under 450px
 - Overview gets the same packing: the block flow card a quarter shorter, cards and headings tighter, and the Block space board capped to the viewport (it set the whole right column's height and stretched Last blocks and the events to match), so the events are on the first screen
 - The Mining tab's block flow card is a fifth shorter (no dead height under the blocks: the legend row goes, the paddings tighten) and the page's cards and figures pack tighter; the reward window is exactly 144 blocks
