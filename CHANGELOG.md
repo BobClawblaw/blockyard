@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Diversions pages take the window: the wells of Tetrust, Blockout and Blockanoid grow to the window's height (they stopped at 600px), and the DOS screen is always 4:3 and as large as the window allows either way — at a 1093px window the 320×200 picture had been drawn squashed into a 761×720 box
 - The DOS games have a way out of full screen: an **exit full screen** button in the top corner while full screen, and holding **Esc** for a second (a tap of Esc stays the game's menu, which is what the keyboard lock is for); leaving unlocks the keyboard and releases the mouse
 - Markets fits one screen: the board takes what the window leaves, and the exchange table and the order-book depth sit side by side beneath it (under 1400px the table drops the pair, 24 h range and volume columns — all still in the summary line and on the Kiosk — and the book's title its description) instead of the depth chart starting a thousand pixels down
 - Node & RPC packs the same way: two stacks (RPC etiquette with its figures in two columns, Data quality and Node connection; Poll cadence, self-telemetry beside the log tail, Panel sources and the RPC console) instead of grid rows that left holes beside the short cards

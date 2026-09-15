@@ -1856,7 +1856,11 @@ body { font-variant-numeric: tabular-nums; }
    absolutely beautiful leveraging our framework"). The well is a board3d in a tall
    frame; the HUD sits beside it. No inline styles anywhere: the overlay is a class.
    ========================================================================== */
-.tetrust { display: grid; grid-template-columns: auto 290px; justify-content: center; gap: 14px; align-items: start; }
+.tetrust { display: grid; grid-template-columns: auto 270px; justify-content: center; gap: 12px; align-items: start; }
+/* the DOS pages give the screen the whole first column (an `auto` column sized it to nothing once the
+   wrap's width became a min() of its container) */
+.tetrust.dosgame { grid-template-columns: minmax(0, 1fr) 270px; justify-content: stretch; }
+.tetrust.dosgame > .doscard { min-width: 0; }   /* 270, not 290: the well and the DOS screen get the width (2026-09-15) */
 /* .card carries grid-column: span 4 for the page's twelve-column layout; inside this two-column
    grid that span forced four tracks and stacked the HUD under the well (measured: both cards
    "span 4" in a 72/290/72/72 px grid). The other multi-column panels reset it the same way. */
@@ -1864,7 +1868,9 @@ body { font-variant-numeric: tabular-nums; }
 /* SIZED TO THE SCREEN, not the card (operator: "the playfield needs to be shrunk so it fits on a
    single screen with room. it's way too large now"): the well's HEIGHT comes from the viewport,
    and its width follows from the 10x20 shape -- about 330px wide on a 1000px-tall window. */
-.tetcard .treemapwrap.tetwell { position: relative; z-index: 1; height: min(calc(100vh - 230px), 600px); width: auto; aspect-ratio: 11 / 21; margin: 0 auto; }
+/* the well takes the window's height (operator, 2026-09-15: "same treatment on the diversions games
+   pages" -- it stopped at 600px with a fifth of the window dark beneath) */
+.tetcard .treemapwrap.tetwell { position: relative; z-index: 1; height: min(calc(100vh - 170px), 820px); width: auto; aspect-ratio: 11 / 21; margin: 0 auto; }
 /* Blockout's court is 16 x 24 rather than 10 x 20, so it is wider than the Tetris well; the rest
    of the furniture (the sky canvas, the overlay, the HUD) is shared with it. */
 .tetcard .treemapwrap.tetwell.bowell { aspect-ratio: 17 / 25; }
@@ -1925,7 +1931,10 @@ body { font-variant-numeric: tabular-nums; }
    unless the smooth switch is on. */
 .doscard { position: relative; background: #000; }
 .doscard > h3 { color: var(--fg-dim); }
-.doswrap { position: relative; height: min(calc(100vh - 210px), 720px); aspect-ratio: 4 / 3; max-width: 100%; margin: 0 auto; background: #000; }
+/* the DOS screen is ALWAYS 4:3 and as big as the window allows either way (2026-09-15): sized by
+   height alone, a 1093px window capped its width and the 320x200 picture was drawn squashed into
+   a 761x720 box */
+.doswrap { position: relative; width: min(100%, calc((100vh - 160px) * 4 / 3), 1067px); height: auto; aspect-ratio: 4 / 3; margin: 0 auto; background: #000; }
 .doswrap:fullscreen { height: 100vh; width: 100vw; max-width: none; aspect-ratio: auto; display: flex; align-items: center; justify-content: center; }
 .dosscreen { width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: crosshair; }
 .doswrap:fullscreen .dosscreen { width: auto; height: 100%; aspect-ratio: 4 / 3; max-width: 100%; }
