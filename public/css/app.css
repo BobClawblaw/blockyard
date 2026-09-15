@@ -458,6 +458,8 @@ textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: ve
 .minw-200 { min-width: 200px; }
 
 .scroll.sm { max-height: 220px; }
+/* the Network tab's sources table takes what the window has left under the two stacks (2026-09-15) */
+.page[data-page="network"] #ntSources .scroll { max-height: max(200px, calc(100vh - 470px)); }
 .scroll.md { max-height: 250px; }
 .scroll.lg { max-height: 300px; }
 .feed.tall { max-height: calc(100vh - 260px); }
