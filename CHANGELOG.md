@@ -32,7 +32,7 @@ All notable changes to this project are documented here. The format follows
   the chart's own colours — gold, and the candles' green and red — three hundred blobs on
   Keplerian orbits in the disk's plane, the whole ring, its far half behind the shadow and its
   near half across it, spirals in brighter on the side coming
-  toward you, its far side lensed into an arch over the top and a thinner one under the bottom,
+  toward you, its far side lensed into one continuous band round the shadow — thick over the top where the arch is, thinning smoothly round the sides into the second image under the bottom — filled with radial and linear gradients so nothing steps or ends,
   a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
   straightens and the candles come back. Thirty-three effects; fifteen on Markets.
 - **The solar flare is a supernova, modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):

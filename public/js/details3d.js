@@ -1143,26 +1143,46 @@ function drawBlackHole(ctx, view, lw) {
   };
   // the far half, behind the hole
   for (const b of blobs) if (b.far) drawBlob(b);
-  // the far side's lensed images: an arch of gas over the top of the shadow, a thinner one under
-  const arch = (r0, r1, a0, a1, alpha, bright) => {
-    for (let k = 0; k < 14; k++) {
-      const t0 = a0 + ((a1 - a0) * k) / 14, t1 = a0 + ((a1 - a0) * (k + 1)) / 14, mid = (t0 + t1) / 2;
-      const rr = (r0 + r1) / 2, w = r1 - r0;
-      const dop = doppler(mid + Math.PI) * bright;
-      ctx.strokeStyle = `rgba(255,${Math.round(150 + 60 * dop)},${Math.round(50 + 40 * dop)},${(alpha * dop).toFixed(3)})`; ctx.lineWidth = w;
-      ctx.beginPath(); ctx.arc(c.x, c.y, rr, t0, t1); ctx.stroke();
-    }
-  };
-  arch(rs * 1.05, rs * 2.0, Math.PI + 0.15, 2 * Math.PI - 0.15, 0.4 * grow, 1);
-  arch(rs * 1.02, rs * 1.3, 0.25, Math.PI - 0.25, 0.25 * grow, 0.8);
-  // the arches as gas too, over the bands, so they have no hard edge
-  for (let k = 0; k < 70; k++) {
+  // the far side's lensed image: ONE CONTINUOUS RING round the shadow -- thick over the top,
+  // where the arch is, thinning smoothly round the sides into the second image under the bottom
+  // and back, never ending (operator, 2026-09-15, of the arch stopping short on one side: "That
+  // needs to not happen and extend around cleanly")
+  const upness = (ang) => 0.5 - 0.5 * Math.sin(ang);                   // 1 over the top (sin < 0 is up on screen), 0 under
+  // ONE SMOOTH BAND (operator, 2026-09-15: "notice the gradient as well. That needs to be
+  // smooth"): the ring was 48 stroked arcs stepping in width, a stair with spokes. It is one
+  // filled shape now -- an inner circle and an outer edge that varies smoothly with the angle,
+  // 180 vertices -- filled twice: with a radial gradient from hot at the horizon to nothing at
+  // the outer edge, and with a linear gradient across it for the Doppler side, bright on the
+  // left where the gas comes toward us and dark on the right.
+  {
+    const rIn = rs * 1.03, rMax = rs * (1.03 + 1.0);
+    const ringPath = () => {
+      ctx.beginPath();
+      for (let k = 0; k <= 180; k++) { const ang = (Math.PI * 2 * k) / 180, R = rs * (1.03 + 0.22 + 0.78 * upness(ang)); const x = c.x + Math.cos(ang) * R, y = c.y + Math.sin(ang) * R; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+      ctx.closePath();
+      ctx.moveTo(c.x + rIn, c.y); ctx.arc(c.x, c.y, rIn, 0, Math.PI * 2, true);
+      ctx.closePath();
+    };
+    ringPath();
+    ctx.fillStyle = grad(c.x, c.y, rMax, [[0, 'rgba(255,220,150,0)'], [rIn / rMax, `rgba(255,225,160,${(0.55 * grow).toFixed(3)})`], [(rIn + rs * 0.35) / rMax, `rgba(255,170,70,${(0.38 * grow).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]);
+    ctx.fill('evenodd');
+    ringPath();
+    const dopGrad = typeof ctx.createLinearGradient === 'function' ? ctx.createLinearGradient(c.x - rMax, c.y, c.x + rMax, c.y) : null;
+    if (dopGrad && typeof dopGrad.addColorStop === 'function') {
+      dopGrad.addColorStop(0, `rgba(255,245,215,${(0.42 * grow).toFixed(3)})`); dopGrad.addColorStop(0.5, `rgba(255,220,160,${(0.12 * grow).toFixed(3)})`); dopGrad.addColorStop(1, `rgba(120,40,20,${(0.25 * grow).toFixed(3)})`);
+      ctx.fillStyle = dopGrad;
+    } else ctx.fillStyle = `rgba(255,230,180,${(0.15 * grow).toFixed(3)})`;
+    ctx.fill('evenodd');
+  }
+  // the ring as gas too, over the band, so it has no hard edge -- gathered where it is thick
+  for (let k = 0; k < 110; k++) {
     const hk = (q) => hash01(fx.seed + 2200 + k * 11 + q);
-    const up = hk(6) < 0.7, ang = up ? Math.PI + 0.1 + (Math.PI - 0.2) * hk(1) : 0.2 + (Math.PI - 0.4) * hk(1);
-    const rr = up ? rs * (1.1 + 0.9 * hk(2)) : rs * (1.05 + 0.25 * hk(2));
-    const drift = now * 0.0006 * (up ? 1 : -1);
+    const ang = hk(1) * Math.PI * 2, up = upness(ang);
+    if (hk(6) > 0.3 + 0.7 * up) continue;                                // fewer where the ring is thin
+    const rr = rs * (1.05 + (0.15 + 0.85 * up) * hk(2));
+    const drift = now * 0.0006;
     const x = c.x + Math.cos(ang + drift) * rr, y = c.y + Math.sin(ang + drift) * rr;
-    const dop = doppler(ang + Math.PI), a = 0.3 * grow * Math.min(1, dop) * (up ? 1 : 0.6), sz = rs * (0.12 + 0.2 * hk(3));
+    const dop = doppler(ang + Math.PI), a = 0.3 * grow * Math.min(1, dop) * (0.5 + 0.5 * up), sz = rs * (0.1 + 0.18 * hk(3)) * (0.6 + 0.4 * up);
     if (canT) { ctx.save(); ctx.translate(x, y); ctx.rotate(ang + drift + Math.PI / 2); ctx.scale(2.2, 0.8); ctx.fillStyle = grad(0, 0, sz, [[0, `rgba(255,235,180,${a.toFixed(3)})`], [0.5, `rgba(255,170,70,${(a * 0.6).toFixed(3)})`], [1, 'rgba(255,120,40,0)']]); ctx.beginPath(); ctx.arc(0, 0, sz, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     else disc(x, y, sz, grad(x, y, sz, [[0, `rgba(255,235,180,${a.toFixed(3)})`], [1, 'rgba(255,120,40,0)']]));
   }
