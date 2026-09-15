@@ -337,7 +337,12 @@ function fxNow(st, t) {
     // move from one side to the other"): from a fifth of the way in on one side to a fifth from
     // the other, the way the front effects go (f.dx), easing in and out so it is still while it
     // opens and while it closes; the candles' orbits ride along with it
-    const travel = u < 0.1 ? 0 : u > 0.9 ? 1 : (() => { const t = (u - 0.1) / 0.8; return t * t * (3 - 2 * t); })();
+    // ...AND IT STOPS BEFORE IT LETS GO (operator, 2026-09-15: "the front faces of the lowest
+    // blocks just snap into place instead of dropping"): the crossing ran to 0.9 while the release
+    // began at 0.82, so a cube was let go not by the release curve but by the hole moving out of
+    // reach of it -- dropped in a few frames as the hole passed. The crossing is done by 0.8 now,
+    // and the release is the only thing that lets anything go
+    const travel = u < 0.1 ? 0 : u > 0.8 ? 1 : (() => { const t = (u - 0.1) / 0.7; return t * t * (3 - 2 * t); })();
     const dir = (f.dx || 0) !== 0 ? Math.sign(f.dx) : hash01(f.seed + 5) < 0.5 ? 1 : -1;
     const xa = st.gridW * (dir > 0 ? 0.18 : 0.82), xb = st.gridW * (dir > 0 ? 0.82 : 0.18);
     const hx = xa + (xb - xa) * travel;
@@ -4155,8 +4160,12 @@ export function render3d(canvas, cells, options = {}) {
   // Nothing can overtake the parked layout: scheduleFx treats a pending render as `busy` and
   // re-arms its timer instead of starting another effect, so an effect cannot chain ahead of a
   // refresh that is already waiting.
+  // the cap runs from the later of the parking and the effect's own start: a layout parked
+  // before an effect was forced (triggerIdle) must still wait that effect out, not lift off
+  // under it because the clock started early
+  const heldSince = st.pendingAt == null ? null : Math.max(st.pendingAt, st.fx?.t0 ?? 0);
   const fxHolding = (!!fxNow(st, now) || fxResting(st, now)) && sig !== st.sig
-    && (st.pendingAt == null || now - st.pendingAt < FX_DEFER_MAX);
+    && (heldSince == null || now - heldSince < FX_DEFER_MAX);
   if (!unchanged && st.plan && !still && st.raf != null && (now < st.plan.settleAt || fxHolding)) {
     st.pending = { cells, options };
     st.pendingAt ??= now;
