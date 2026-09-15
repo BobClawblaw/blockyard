@@ -717,6 +717,9 @@ rather than the look, flipping them reaches the game you are playing, not just t
 
 ## DOOM
 
+If anyone asks *"well, can it run DOOM?"*, the answer is an emphatic **"Naturally. What sort of AI
+slop generator do you take me for?"**
+
 The shareware episode of DOOM, **Knee-Deep in the Dead**, under **Diversions**. Not a remake: it is
 id Software's own `DOOM.EXE` v1.9 and `DOOM1.WAD`, unmodified, running on a 486 PC that BlockYard
 emulates in your browser — the processor, DOS and its memory extender, the VGA card and a Sound

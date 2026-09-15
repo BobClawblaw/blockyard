@@ -236,7 +236,7 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // depth or turns in place, anything that moves a tile -- stays on the block board.
 const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball']);
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
-const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber', 'blackhole']);
+const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber']);   // the black hole left this set on 2026-09-15: it hovers over the block board too
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
 // list ... the Block Space effects specific to that panel, and settings specific to market panel"):
 // settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
@@ -324,19 +324,45 @@ function fxNow(st, t) {
   // THE BLACK HOLE (2026-09-15): where it sits on the chart, how big its horizon is this frame,
   // and -- through a head that HIDES -- which candles it has swallowed; the tiles near it glow the
   // disk's orange. Everything the renderer needs rides on `out.blackhole`.
-  if (f.kind === 'blackhole' && st.axes?.line?.length > 1) {
-    const line = st.axes.line;
-    const hx = st.gridW * (0.38 + 0.24 * hash01(f.seed + 3));
-    let near = line[0]; for (const p of line) if (Math.abs(p.x - hx) < Math.abs(near.x - hx)) near = p;
-    let lo = Infinity, hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
-    const hz = Math.max(lo, Math.min(hi, near.z));
+  if (f.kind === 'blackhole') {
+    const line = st.axes?.line?.length > 1 ? st.axes.line : null;
+    // IT CROSSES (operator, 2026-09-15: "get the black hole effect on the market display to slowly
+    // move from one side to the other"): from a fifth of the way in on one side to a fifth from
+    // the other, the way the front effects go (f.dx), easing in and out so it is still while it
+    // opens and while it closes; the candles' orbits ride along with it
+    const travel = u < 0.1 ? 0 : u > 0.9 ? 1 : (() => { const t = (u - 0.1) / 0.8; return t * t * (3 - 2 * t); })();
+    const dir = (f.dx || 0) !== 0 ? Math.sign(f.dx) : hash01(f.seed + 5) < 0.5 ? 1 : -1;
+    const xa = st.gridW * (dir > 0 ? 0.18 : 0.82), xb = st.gridW * (dir > 0 ? 0.82 : 0.18);
+    const hx = xa + (xb - xa) * travel;
+    let hy, hz, lo = 0, hi = 0;
+    if (line) {
+      let near = line[0]; for (const p of line) if (Math.abs(p.x - hx) < Math.abs(near.x - hx)) near = p;
+      lo = Infinity; hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); }
+      hz = Math.max(lo, Math.min(hi, near.z));
+      hy = st.axes.y ?? st.gridH / 2;
+    } else {
+      // ON THE BLOCK BOARD IT HOVERS (operator, 2026-09-15: "Explore if we can have the black hole
+      // high off the ground enough and test vs Block Display"): seven units above the tallest
+      // cube, on a row a little off the middle, so the disk hangs over the board and the cubes
+      // beneath it are drawn UP into orbit rather than the disk being buried among them
+      if (f.alt == null) {
+        const tops = cellTops(st.restTiles || [], st.gridW, st.gridH);
+        let highest = 0; for (let i = 0; i < tops.length; i++) highest = Math.max(highest, tops[i]);
+        f.alt = highest + 7;
+      }
+      hz = f.alt; lo = 0; hi = f.alt;
+      hy = st.gridH * (0.4 + 0.2 * hash01(f.seed + 4));
+    }
     const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
     const rs = boundedRadius(2.3, 0.047, st.gridW) * grow;                 // the horizon, in grid units (4.8 on 2026-09-15 -- "double the size" -- then 3.4: "obscuring too much" -- then 2.3: "shrink up the black hole by 33%"), and never more than 4.7% of the board
-    out.blackhole = { x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, rs, grow, lo, hi };
+    out.blackhole = { x: hx, y: hy, z: hz, rs, grow, lo, hi };
     // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
     // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
     // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
-    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, color: [255, 160, 60], alpha: grow, r: rs * 1.5, rPeak: boundedRadius(2.3, 0.047, st.gridW) * 1.5, scale: 0, pull: 1 }] : [];
+    // the head reaches wider on the block board (2.2 horizons against 1.5), where the cubes are
+    // small and many and a narrow reach caught almost none of them from three units up
+    const reach = line ? 1.5 : 2.2;
+    out.heads = grow > 0.02 ? [{ x: hx, y: hy, z: hz, color: [255, 160, 60], alpha: grow, r: rs * reach, rPeak: boundedRadius(2.3, 0.047, st.gridW) * reach, scale: 0, pull: 1 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
