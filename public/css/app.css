@@ -1266,29 +1266,35 @@ canvas.chart.xs, .chart.xs { height: 86px }
 .netstats .up { color: var(--ok); } .netstats .down { color: var(--bad); }
 canvas.chart.donut { width: 100%; height: 380px; }
 .card.mnflow { grid-column: 1 / -1 !important; }   /* !important: the 1280px rule forces every .card to span 6 */
-/* THINNER ON MINING (operator, 2026-09-15: "The block flow can be thinner vertically for instance"):
+/* THINNER (operator, 2026-09-15: "The block flow can be thinner vertically for instance" -- then, of
+   Overview, "same treatment"): .flowtight is the flow card on Mining and on Overview.
    the same cards, narrower and without the being-built card's badge and queue lines, which the
    packages panel beneath already says in full */
-.mnflow .bcard { width: 160px; }
-.mnflow .bcard.next, .mnflow .bcard.next.empty { width: 188px; }
-.mnflow .bcard.tip { flex-basis: 160px; }
-.mnflow .bcard .chips, .mnflow .bcard.next .note.tiny { display: none; }
-.mnflow .bgrid span, .mnflow .brows span { font-size: 9.5px; }
-.mnflow .flowwrap { padding-bottom: 0; }
-.mnflow .flow { padding: 2px 2px 0; }
+.flowtight .bcard { width: 160px; }
+.flowtight .bcard.next, .flowtight .bcard.next.empty { width: 188px; }
+.flowtight .bcard.tip { flex-basis: 160px; }
+.flowtight .bcard .chips, .flowtight .bcard.next .note.tiny { display: none; }
+.flowtight .bgrid span, .flowtight .brows span { font-size: 9.5px; }
+.flowtight .flowwrap { padding-bottom: 0; }
+.flowtight .flow { padding: 2px 2px 0; }
 /* ...and no dead height (operator: "Too much empty space under the blocks to the panel border"):
    measured 254px for a card whose blocks are 161 -- the legend row under the flow, the rail's
    margin, the card's and the blocks' own padding. The legend goes on this page, the rest tightens. */
-.card.mnflow { padding: 8px 11px 7px; }
+.card.flowtight { padding: 8px 11px 7px; }
 .mnflow h3 { margin-bottom: 5px; }
-.mnflow .rail { margin-bottom: 3px; }
-.mnflow .tiplegend { display: none; }
-.mnflow .bcard { padding-top: 6px; padding-bottom: 6px; }
-.mnflow .bcard .bwhen { margin-top: 2px; margin-bottom: 3px; }
-.mnflow .bcard .bplaque { margin-top: 4px; }
-/* the whole Mining page packs tighter, the same way */
-.page[data-page="mining"] .mn3 .card { padding: 9px 11px 8px; }
-.page[data-page="mining"] .mn3 h3 { margin-bottom: 6px; }
+.flowtight .rail { margin-bottom: 3px; }
+.flowtight .tiplegend { display: none; }
+.flowtight .bcard { padding-top: 6px; padding-bottom: 6px; }
+.flowtight .bcard .bwhen { margin-top: 2px; margin-bottom: 3px; }
+.flowtight .bcard .bplaque { margin-top: 4px; }
+/* the whole Mining page packs tighter, the same way -- and Overview with it ("same treatment on overview") */
+.page[data-page="mining"] .mn3 .card, .page[data-page="overview"] .card { padding: 9px 11px 8px; }
+.page[data-page="mining"] .mn3 h3, .page[data-page="overview"] .card > h3 { margin-bottom: 6px; }
+.page[data-page="overview"] .metric .v { font-size: 22px; }
+/* the Block space square set the right column's height (745px of a 773px column at 1600 wide) and
+   stretched Last blocks and the events to match; capped to the viewport, the board draws wider
+   than tall, as it does on the Kiosk, and the page fits far more of itself on one screen */
+.page[data-page="overview"] .treemapwrap.sq { max-height: max(360px, calc(100vh - 340px)); }
 .page[data-page="mining"] .netstats { padding: 2px 0 4px; gap: 6px 12px; }
 .page[data-page="mining"] .netstats .ns .v { font-size: 20px; }
 .mn3 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }

@@ -16,7 +16,7 @@ const mining = html.slice(at, html.indexOf('</section>', at));
 test('the block flow first, then three independent stacks, and no pool viewer', () => {
   const flowAt = mining.indexOf('id="mnFlow"'), threeAt = mining.indexOf('<div class="mn3">');
   assert.ok(flowAt > 0 && threeAt > flowAt, 'Block flow comes before the three stacks');
-  assert.match(mining.slice(0, threeAt), /class="card mnflow"/, 'and spans the width');
+  assert.match(mining.slice(0, threeAt), /class="card mnflow[^"]*"/, 'and spans the width');
   const cols = mining.split('<div class="ovcol">').slice(1);
   assert.equal(cols.length, 3, 'three stacks');
   for (const id of ['mnRewards', 'mnAdjust', 'mnPackages']) assert.ok(cols[0].includes(`id="${id}"`), `${id} in the first stack`);
