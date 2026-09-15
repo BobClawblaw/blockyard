@@ -8,11 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- **The energy pulse is heat, not blue, and the pipe swells round its head.** Behind the head the
-  tube goes white-hot through hot gold and cools back to the wire; the cloud, the crackle and the
-  motes are warm; the head is a bulge in the pipe (the bulge effect's stretched skin and
-  fish-eyed core, at a smaller radius) with a white-hot core, not a blue dot. Nothing in the
-  pulse is blue any more, and a test holds it so.
+- **The energy pulse is heat, not blue, and its head is a crackling ball of plasma.** Behind the
+  head the tube goes white-hot through hot gold and cools back to the wire under a mist of
+  gradient puffs (no edges, so no circles); the head is a gradient sphere breathing on two sines,
+  three warm wisps of nebula round it, filaments of discharge over its surface re-rolled on a
+  60 ms beat, and every so often it spits sparks that arc under gravity and fade; the pipe swells
+  round it at the bulge effect's full size, and nowhere else — the whole-line swell that jumped
+  fat at the start and thin at the end is gone. A haze of three ghost copies of the charged
+  stretch shimmers off the wire, a soft warm light lies over it, and the candles under the head
+  glow. Nothing in the pulse is blue any more, and a test holds it so.
 - **Two new Markets effects on the price line: Breathe** (three slow swells from the plain wire
   to the pulse's white heat and back) and **Light saber** (the line ignites from its left end,
   blue, green, red or purple by the run, hums with a breathing glow and a shimmering core, spits

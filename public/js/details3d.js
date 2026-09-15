@@ -287,6 +287,16 @@ function fxNow(st, t) {
     const reach = Math.hypot(Math.max(f.x, st.gridW - f.x), Math.max(f.y, st.gridH - f.y));
     Object.assign(out, { x: f.x, y: f.y, r: reach * (1 - Math.pow(1 - u, 2)), w: 2.2 + 2.4 * u });
   }
+  // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
+  // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
+  // heads branch, as the agents do)
+  if (f.kind === 'pulse' && st.axes?.line?.length > 1) {
+    const line = st.axes.line, headAt = u / PULSE_TRAVEL;
+    const k = Math.max(0, Math.min(1, headAt)) * (line.length - 1), i = Math.min(line.length - 2, Math.floor(k)), fr = k - i;
+    const x = line[i].x + (line[i + 1].x - line[i].x) * fr;
+    const fade = headAt <= 1 ? 1 : Math.max(0, 1 - (headAt - 1) / 0.34);
+    out.heads = [{ x, y: st.axes.y ?? st.gridH / 2, color: [255, 225, 150], alpha: fade, r: 3.2 }];
+  }
   // AN AGENT'S FRAME comes from its own spec (agents.js). Everything it publishes lands on the
   // frame object: `heads` (how it lights the cubes -- fxAt's heads branch), plus whatever its
   // draw reads, such as `cycles` for the light walls or `ball` for the plasma ball.
@@ -1799,37 +1809,32 @@ function priceLine(ctx, view, axes) {
   // large"). Puffs spread about half as far from the line (4 + 78 * age line-widths -> 3 + 38), are
   // a bit over half the radius and grow less with age, and sit at three-quarters of the alpha, so the
   // cloud hugs the wire instead of billowing over the chart. Fewer of them, since each covers less.
-  const PUFFS = 160;
-  for (let k = 0; k < PUFFS; k++) {
+  // THE MIST, NOT A PATH OF CIRCLES (operator, 2026-09-15: "the energy pulse effect trail looks
+  // really bad. it looks like a path of circles rather than emissive nebula/mist"). The cloud was
+  // 160 flat discs, and flat discs of one alpha have edges the eye joins into circles however they
+  // are scattered. Each puff is a radial gradient now -- bright at its heart, gone at its rim, so
+  // no puff has an edge -- larger, fewer, and laid so they overlap into one glowing haze behind
+  // the head that thins and cools down the tail. Hashed, so it holds its shape frame to frame.
+  const MIST = 54;
+  for (let k = 0; k < MIST; k++) {
     const u = hash01(k * 7 + 13);                         // how far back down the tail it sits
     const at = headAt - u * PULSE_TAIL;
     if (at < 0) continue;
-    // PAST THE END IT FADES, IT DOES NOT VANISH (operator: "The nebula effects should also fade out
-    // instead of just disappearing"). This was `at > 1 -> continue`, so the cloud was culled the
-    // instant its stretch ran off the last candle and the whole trail blinked out together.
     const off = at > 1 ? (at - 1) / 0.34 : 0;
     if (off >= 1) continue;
-    const edge = 1 - off;
-    const tint = Math.pow(1 - u, 1.4) * edge;
-    const age = u;
-    // positioned along the same flight the head takes, so the cloud follows it off the end
-    // instead of piling up on the last candle
+    const tint = Math.pow(1 - u, 1.3) * (1 - off);
     const hp = headPoint(pts, at, 0.34);
     if (!hp) continue;
-    const mx = hp.x, my = hp.y;
     const a1 = hash01(k * 31 + 101) * Math.PI * 2;
-    const spread = lw * (3 + 38 * age) * (0.2 + 0.8 * hash01(k * 17 + 5));
-    const rad = lw * (5 + 19 * hash01(k * 13 + 67)) * (1 + 0.7 * age);
-    const al = 0.09 * tint * (1 - 0.5 * age) * (0.45 + 0.55 * hash01(k * 5 + 29));
-    const px = mx + Math.cos(a1) * spread, py = my + Math.sin(a1) * spread;
-    ctx.fillStyle = `rgba(255,185,70,${al.toFixed(3)})`;
-    ctx.beginPath();
-    ctx.arc(px, py, rad, 0, Math.PI * 2);
-    ctx.fill();
-    if (k % 2 === 0) {
-      ctx.fillStyle = `rgba(255,230,160,${(al * 0.7).toFixed(3)})`;
-      ctx.beginPath(); ctx.arc(px, py, rad * 0.5, 0, Math.PI * 2); ctx.fill();
-    }
+    const spread = lw * (2 + 22 * u) * (0.2 + 0.8 * hash01(k * 17 + 5));
+    const rad = lw * (9 + 16 * hash01(k * 13 + 67)) * (1 + 0.9 * u);
+    const al = 0.16 * tint * (0.5 + 0.5 * hash01(k * 5 + 29));
+    const px = hp.x + Math.cos(a1) * spread, py = hp.y + Math.sin(a1) * spread;
+    const warm = u < 0.35 ? '255,236,170' : '255,185,70';
+    ctx.fillStyle = gradientOr(ctx, () => ctx.createRadialGradient(px, py, 0, px, py, rad),
+      [[0, `rgba(${warm},${al.toFixed(3)})`], [0.4, `rgba(255,185,70,${(al * 0.55).toFixed(3)})`], [1, 'rgba(255,150,40,0)']],
+      `rgba(255,185,70,${(al * 0.5).toFixed(3)})`);
+    ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
   }
   // THE TUBE, AS ONE STROKE PER LAYER WITH A GRADIENT ALONG IT.
   //
@@ -1851,10 +1856,13 @@ function priceLine(ctx, view, axes) {
   const tailStop = clamp01(headAt - PULSE_TAIL);
   for (const [w, c, a, kind] of [...GLOW, ...CORE]) {
     const B = kind === 'glow' ? DEEP : BLUE;
-    // the charged stretch is FAT: a pulse is a thing travelling the line, not a colour on it.
-    // One width for the whole stroke now, so it swells while the head is on the line.
-    const onLine = headAt >= 0 && headAt <= 1 + PULSE_TAIL;
-    ctx.lineWidth = lw * w * (1 + (onLine ? 0.35 : 0));
+    // NO WHOLE-LINE SWELL (operator, 2026-09-15: "the energy pulse effect makes the yellow line
+    // entirely grow at the start of the animation, and instantly snap back into the prior size.
+    // I want the energy pulse effect growing the thickness of the yellow line in an arced radius
+    // around it"). One stroke has one width, so a swell here was the whole wire jumping fat at
+    // the start and thin at the end; the swell is the head's bulge (drawBulgeAt), round the head
+    // and nowhere else, and the wire keeps its width.
+    ctx.lineWidth = lw * w;
     const at = (passed) => {
       const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
       const past = passed - PULSE_TAIL * 0.55;
@@ -1891,7 +1899,35 @@ function priceLine(ctx, view, axes) {
     const coreR = (lw * 5.5) / 2;
     const hotLayers = [...GLOW, ...CORE].map(([w, c, a, kind]) => [w, c.map((v, j) => Math.round(v + (HOT[j] - v) * 0.75)), a, kind]);
     const fadeIn = headAt < 0 ? 0 : headAt > 1 ? Math.max(0, 1 - (headAt - 1) / 0.2) : 1;
-    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.total * headFrac, (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + 1.6 * fadeIn), hotLayers, curve);
+    // PROMINENT (operator, 2026-09-15: "the bulging effect is not prominent enough ... It needs a
+    // lot more vibrance, presence, and effect"): the swell is the bulge effect's own full size now
+    if (fadeIn > 0) drawBulgeAt(ctx, pts, lw, curve.total * headFrac, (Number.isFinite(coreR) && coreR > 0 ? coreR : 2.75) * (1 + (BULGE_BALL - 1) * fadeIn), hotLayers, curve);
+  }
+  // THE HAZE (operator, 2026-09-15: "haze effects of some sort for the energy blurring and
+  // interfering with the affected areas"): three ghost copies of the charged stretch, each thrown
+  // off the wire by a slow wave that runs along it and drifts with the clock, faint and warm, so
+  // the wire seems to shimmer through hot air -- and a wide soft light over the whole stretch
+  {
+    const now0 = view.now ?? 0;
+    const i0 = Math.max(0, Math.floor((headAt - PULSE_TAIL) * n)), i1 = Math.min(n, Math.ceil(Math.min(1, headAt) * n));
+    if (i1 - i0 >= 1) {
+      for (let g = 0; g < 3; g++) {
+        ctx.strokeStyle = `rgba(255,220,140,${(0.10 + 0.04 * g).toFixed(3)})`; ctx.lineWidth = lw * (7 - 2 * g);
+        ctx.beginPath();
+        for (let i = i0; i <= i1; i++) {
+          const passed = headAt - i / n;
+          const tint = passed >= 0 && passed < PULSE_TAIL ? Math.pow(1 - passed / PULSE_TAIL, 1.4) : 0;
+          const wob = lw * (3.5 + 2 * g) * tint * Math.sin(now0 * (0.004 + 0.0015 * g) + i * 0.9 + g * 2.1);
+          const p = pts[i];
+          if (i === i0) ctx.moveTo(p.x, p.y + wob); else ctx.lineTo(p.x, p.y + wob);
+        }
+        ctx.stroke();
+      }
+      // the light over the affected area: a wide soft warm glow along the charged stretch
+      const mid = pts[Math.floor((i0 + i1) / 2)], span = Math.hypot(pts[i1].x - pts[i0].x, pts[i1].y - pts[i0].y) * 0.7 + lw * 20;
+      ctx.fillStyle = gradientOr(ctx, () => ctx.createRadialGradient(mid.x, mid.y, 0, mid.x, mid.y, span), [[0, 'rgba(255,225,160,0.14)'], [0.5, 'rgba(255,200,110,0.06)'], [1, 'rgba(255,180,80,0)']], 'rgba(255,215,140,0.04)');
+      ctx.beginPath(); ctx.arc(mid.x, mid.y, span, 0, Math.PI * 2); ctx.fill();
+    }
   }
   // SHIMMER on the charged stretch: a thin white-gold core whose brightness flickers per segment
   // on the frame clock, scaled by that segment's tint so it dies out exactly as the blue does.
@@ -2014,9 +2050,83 @@ function priceLine(ctx, view, axes) {
       // ball with a blue halo, which is exactly what was reported. Every layer is blue-dominant
       // now, the hot centre included -- it is the brightest, palest blue rather than white, so the
       // head still reads as the hottest point on the line without going colourless.
-      for (const [r, c0, a0] of [[28, '255,150,40', 0.20], [15, '255,195,80', 0.48], [7, '255,232,150', 0.95], [3, '255,252,225', 1]]) {
+      // AN UNSTABLE, CRACKLING BALL OF PLASMA (operator, 2026-09-15: "It needs a lot more vibrance,
+      // presence, and effect. An unstable crackling ball of plasma"): a sphere of one gradient,
+      // white-hot heart through gold to a rim that is not quite there, breathing on two quick
+      // sines; three warm wisps of nebula wobbling round it; filaments of discharge skittering over
+      // its surface, re-rolled on a 60 ms beat; and every so often it SPITS -- a few sparks thrown
+      // up and out that arc under gravity, slow, and fade (their flights are pure functions of the
+      // clock and the moment they were spat, so nothing is kept between frames).
+      const nowH = view.now ?? 0;
+      const breathe = 1 + 0.08 * Math.sin(nowH * 0.011) + 0.05 * Math.sin(nowH * 0.023 + 1);
+      const RB = lw * 16 * (0.6 + 0.4 * f) * breathe;
+      const wispsH = [['255,170,60', 0.34, 1.0], ['255,120,80', 0.26, -0.7], ['255,230,150', 0.22, 0.5]];
+      wispsH.forEach(([wc, wa, spin], k) => {
+        const t = nowH * 0.0011;
+        const wx = hp.x + Math.cos(t * spin * 0.6 + k * 2.1) * RB * 0.5, wy = hp.y + Math.sin(t * spin * 0.45 + k * 1.3) * RB * 0.4;
+        const base = RB * (1.7 + 0.4 * k);
+        ctx.beginPath();
+        for (let i = 0; i <= 36; i++) {
+          const th = (i / 36) * Math.PI * 2;
+          const wob = 1 + 0.26 * Math.sin(th * 3 + t * spin * 3 + k) + 0.15 * Math.sin(th * 5 - t * 2.4 * spin + k * 3);
+          const rr = base * wob, x = wx + Math.cos(th) * rr, y = wy + Math.sin(th) * rr;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = gradientOr(ctx, () => ctx.createRadialGradient(wx, wy, 0, wx, wy, base * 1.4), [[0, `rgba(${wc},${(wa * f).toFixed(3)})`], [0.4, `rgba(${wc},${(wa * 0.6 * f).toFixed(3)})`], [1, `rgba(${wc},0)`]], `rgba(${wc},${(wa * 0.3 * f).toFixed(3)})`);
+        ctx.fill();
+      });
+      ctx.fillStyle = gradientOr(ctx, () => ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, RB * 1.35), [
+        [0, `rgba(255,255,255,${f.toFixed(3)})`], [0.16, `rgba(255,250,225,${f.toFixed(3)})`], [0.38, `rgba(255,232,150,${(0.95 * f).toFixed(3)})`],
+        [0.6, `rgba(255,190,80,${(0.8 * f).toFixed(3)})`], [0.82, `rgba(255,140,50,${(0.4 * f).toFixed(3)})`], [1, 'rgba(255,120,40,0)'],
+      ], `rgba(255,232,150,${(0.95 * f).toFixed(3)})`);
+      ctx.beginPath(); ctx.arc(hp.x, hp.y, RB * 1.35, 0, Math.PI * 2); ctx.fill();
+      // the discs the tests know the head by: its hot centre and its white point, over the sphere
+      for (const [r, c0, a0] of [[7, '255,232,150', 0.95], [3, '255,252,225', 1]]) {
         ctx.fillStyle = `rgba(${c0},${(a0 * f).toFixed(3)})`;
         ctx.beginPath(); ctx.arc(hp.x, hp.y, lw * r * (0.55 + 0.45 * f), 0, Math.PI * 2); ctx.fill();
+      }
+      // the crackle over its surface: short filaments between two points on and just off the ball
+      {
+        const beat = Math.floor(nowH / 60);
+        let x = ((fx.seed ?? 1) ^ (beat * 2654435761)) >>> 0 || 1;
+        const rr = () => ((x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 4294967296);
+        for (let i = 0; i < 12; i++) {
+          const ang = rr() * Math.PI * 2, r0 = RB * (0.35 + 0.5 * rr()), r1 = RB * (1.05 + 0.6 * rr());
+          const p = { x: hp.x + Math.cos(ang) * r0, y: hp.y + Math.sin(ang) * r0 };
+          const q = { x: hp.x + Math.cos(ang + (rr() - 0.5) * 0.9) * r1, y: hp.y + Math.sin(ang + (rr() - 0.5) * 0.9) * r1 };
+          const mid = { x: (p.x + q.x) / 2 + (rr() - 0.5) * RB * 0.35, y: (p.y + q.y) / 2 + (rr() - 0.5) * RB * 0.35 };
+          for (const [w, col] of [[2.2, `rgba(255,170,60,${(0.55 * f).toFixed(3)})`], [0.9, `rgba(255,250,225,${(0.95 * f).toFixed(3)})`]]) {
+            ctx.strokeStyle = col; ctx.lineWidth = lw * w; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(mid.x, mid.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+          }
+        }
+      }
+      // THE SPIT: every 140 ms there is a one-in-three chance the ball throws three sparks; each
+      // flight is (birth, angle, speed) and the clock, so it is drawn from those alone
+      {
+        const STEP = 140, LIFE = 1500;
+        const t0 = nowH - (fx.u ?? 0) * (fx.ms ?? FX_MS.pulse);
+        const kNow = Math.floor(nowH / STEP);
+        for (let k = kNow - Math.ceil(LIFE / STEP); k <= kNow; k++) {
+          if (hash01((fx.seed ?? 1) + k * 3) > 0.33) continue;
+          const born = k * STEP, age = (nowH - born) / LIFE;
+          if (age < 0 || age >= 1) continue;
+          const uk = (born - t0) / (fx.ms ?? FX_MS.pulse);
+          const bp = headPoint(pts, uk / PULSE_TRAVEL, OVERRUN);
+          if (!bp) continue;
+          for (let m = 0; m < 3; m++) {
+            const hh = (q) => hash01((fx.seed ?? 1) + k * 31 + m * 7 + q);
+            const ang = -Math.PI / 2 + (hh(1) - 0.5) * 2.2, sp = lw * (14 + 16 * hh(2));
+            const ease = 1 - Math.exp(-3 * age);
+            const sx = bp.x + Math.cos(ang) * sp * ease * 2.2, sy = bp.y + Math.sin(ang) * sp * ease * 2.2 + lw * 34 * age * age;
+            const px = bp.x + Math.cos(ang) * sp * Math.max(0, ease - 0.12) * 2.2, py = bp.y + Math.sin(ang) * sp * Math.max(0, ease - 0.12) * 2.2 + lw * 34 * Math.max(0, age - 0.08) ** 2;
+            const al = (1 - age) * f;
+            ctx.strokeStyle = `rgba(255,200,100,${(0.7 * al).toFixed(3)})`; ctx.lineWidth = lw * 1.6;
+            ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(sx, sy); ctx.stroke();
+            ctx.fillStyle = `rgba(255,250,225,${(0.95 * al).toFixed(3)})`;
+            ctx.beginPath(); ctx.arc(sx, sy, lw * 1.3 * (1 - 0.5 * age), 0, Math.PI * 2); ctx.fill();
+          }
+        }
       }
       // THE HEAD CRACKLES (operator, 2026-09-13: "Did you copy the energy crackle from the grid
       // effect, and add to the head of the energy ball travelling along the yellow price line?").

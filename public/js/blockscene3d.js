@@ -1125,6 +1125,7 @@ export function fxAt(t, fx) {
       const col = [Math.round(140 + 115 * ph), Math.round(90 + 140 * (1 - ph)), Math.round(190 + 60 * ph)];
       return { glow: 0.85 * A * w, outline: 0.2 * A * w, lift: 0, color: col };
     }
+    case 'pulse':        // the price line's surge lights the candles under its head (details3d fxNow)
     case 'lightcycle':
     case 'packets':
     case 'centipede':

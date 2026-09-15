@@ -124,7 +124,8 @@ test('triggering the pulse heats the line white-gold behind the head, and nothin
   assert.ok(beadCore.length >= 1, `the head bead is drawn, hot centre and all (${beadCore.length})`);
   // and the property behind the literals, so this still bites if the mix is retuned: every disc of
   // the head is blue-dominant, none of them white
-  for (const [r, g, b] of [[255, 150, 40], [255, 195, 80], [255, 232, 150], [255, 252, 225]]) {
+  // the head is a gradient sphere now, with its hot centre and white point as discs over it
+  for (const [r, g, b] of [[255, 232, 150], [255, 252, 225]]) {
     assert.ok(r > b, `the head's discs are warm, not blue (${r}/${g}/${b})`);
     assert.ok(after.some((o) => o.startsWith(`set:fillStyle=rgba(${r},${g},${b}`)), `disc ${r}/${g}/${b} is painted`);
   }
@@ -147,7 +148,11 @@ test('triggering the pulse heats the line white-gold behind the head, and nothin
   // expanding and fading out to black", then "make the nebula an emitter; still seeing concentric
   // circles") -- emitted over the whole charged span rather than per segment, and drawn before the
   // tube, so it sits BEHIND the wire
-  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(255,185,70'));
+  // the cloud is a MIST of radial gradients now (2026-09-15: "a path of circles rather than emissive
+  // nebula/mist"): the recorder sees each puff as a gradient fill, and its stops are the warm colours
+  // (this recorder makes linear gradients only; a radial one falls back to its flat warm colour, which
+  // is what the puff paints here -- the same warm gold either way)
+  const firstCloud = after.findIndex((o) => o.startsWith('set:fillStyle=rgba(255,185,70') || o.startsWith('set:fillStyle=rgba(255,236,170'));
   // the tube is a gradient now, not a flat rgba -- the probe follows the mechanism, but the
   // property it pins is unchanged: the cloud is painted BEFORE the wire, so it sits behind it
   const firstTube = after.findIndex((o) => o.startsWith('set:strokeStyle=gradient('));
