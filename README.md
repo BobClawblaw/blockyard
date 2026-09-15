@@ -140,9 +140,10 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.0.9** — the initial release, and pre-release software: the word is meant literally.
-Published 2026-09-14: on [npm](https://www.npmjs.com/package/blockyard) as `blockyard`, as a
-[GitHub release](https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.9), and announced on
+Version **0.0.10** — a point release the day after the initial 0.0.9, and pre-release software:
+the word is meant literally. Published 2026-09-15: on [npm](https://www.npmjs.com/package/blockyard)
+as `blockyard`, as a [GitHub release](https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.10),
+and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
 The test suite is
