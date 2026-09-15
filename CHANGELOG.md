@@ -5,15 +5,6 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
-- The fireworks are off by default on both boards, kept for special occasions: tick the switch to put them in the rotation
-- The black hole is a Markets effect only again: it hovered over Block space for a day and its cubes never came home cleanly enough, so it was taken off that board's list
-- A held pool refresh waits a moment and a half after an idle effect ends, with the board whole and still, instead of lifting off on the effect's last frame
-- Whatever a head pulls is painted last, nearest the head on top, so a pulled candle never cuts through the neighbours it passes over
-- The black hole finishes its crossing before it lets go, so a candle is released by the release curve alone and never dropped in a few frames as the hole moves out of reach of it
-- The black hole lets go evenly: its hold used to fall with its shrinking reach, which released the outer candles gently and the ones right under it all at once in the last frames (they popped home full size); the reach now holds through the release and the pull and the scale themselves fade over the last fifth, so every candle glides home and grows back smoothly, arriving at zero speed by 0.97 of the run rather than a step on the last frame
-
-### Changed
-- On Block space the black hole hovers twice as high off the grid: double its old height over the tallest cube, and the cubes beneath still rise to meet it in orbit
 
 ## [0.0.10] — 2026-09-15
 
@@ -27,6 +18,14 @@ whited out, a DOOM answer for the doubters, and the fixes of a day's use.
 - **Market polling is off by default** — a new checkbox, **Display settings → Markets & Price → Enable market polling**, shared by every screen. A fresh install makes no outbound connection but to the node: the Markets and Kiosk tabs say that polling is off and where the switch is, Overview's price line stays hidden and the explorer shows no dollar figures. Ticking it takes effect at once; unticking parks the feed at once. `BLOCKYARD_MARKETS=0` still removes the feed so that the checkbox cannot turn it on. Existing installs tick the box once.
 
 ### Changed
+- The fireworks are off by default on both boards, kept for special occasions: tick the switch to put them in the rotation
+- The black hole is a Markets effect only again: it hovered over Block space for a day and its cubes never came home cleanly enough, so it was taken off that board's list
+- A held pool refresh waits a moment and a half after an idle effect ends, with the board whole and still, instead of lifting off on the effect's last frame
+- Whatever a head pulls is painted last, nearest the head on top, so a pulled candle never cuts through the neighbours it passes over
+- The black hole finishes its crossing before it lets go, so a candle is released by the release curve alone and never dropped in a few frames as the hole moves out of reach of it
+- The black hole lets go evenly: its hold used to fall with its shrinking reach, which released the outer candles gently and the ones right under it all at once in the last frames (they popped home full size); the reach now holds through the release and the pull and the scale themselves fade over the last fifth, so every candle glides home and grows back smoothly, arriving at zero speed by 0.97 of the run rather than a step on the last frame
+### Changed
+- On Block space the black hole hovers twice as high off the grid: double its old height over the tallest cube, and the cubes beneath still rise to meet it in orbit
 - The black hole crosses the board: on Markets it opens a fifth of the way in on one side and runs a straight line through the chart to a fifth from the other, from one height to another, so the price line is seen bending round it as it passes and the candles' orbits ride along at a quarter of the old speed
 - The scanner's cone is dimmer on both boards, a little over half of what it was
 - The supernova's violet stage comes sooner and heavier: the debris turns purple patch by patch from a tenth of the run, a violet heart and a wider violet cloud rise behind it, so the nebula is prominently purple as the pulsar starts to blink and holds its weight until four fifths of the run; the white plumes are drawn on a half-resolution layer to keep the frame cheap
