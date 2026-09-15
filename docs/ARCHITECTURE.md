@@ -795,25 +795,31 @@ What this means for front-end code:
 
 ---
 
-### 3.4 The DOS Diversions: DOOM and Quake
+### 3.4 The DOS Diversions: Wolfenstein 3D, DOOM and Quake
 
-The shareware `DOOM.EXE` v1.9 and `QUAKE.EXE` v1.06 run unmodified on a PC emulated in the browser.
+The shareware `WOLF3D.EXE` v1.4, `DOOM.EXE` v1.9 and `QUAKE.EXE` v1.06 run unmodified on a PC emulated in
+the browser.
 Nothing is ported and no dependency is used; every layer is this repository's own:
 
 ```
-doom.js / quake.js -> dosgame.js (page)  --scancodes, mouse, run/pause-->  dosworker.js (Worker)
+wolf3d.js / doom.js / quake.js -> dosgame.js (page)  --scancodes, mouse, run/pause-->  dosworker.js (Worker)
       ^                                                                      |
       |  frames (320x200 indices + palette), text-mode cells, stats          |  createPC()      dospc.js
       +----------------------------------------------------------------------+    createCpu()   x86.js
 dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+    soundcard.js  (SB Pro 2 + OPL3)
 ```
 
-- **`x86.js`** is a user-mode i386 with an x87, interpreted. No paging, rings or real mode: a DOS
-  extender's program runs in protected mode, and segment registers carry a base and a size. EIP is
+- **`x86.js`** is a user-mode i386 with an x87, interpreted. No paging or rings: a DOS extender's
+  program runs in protected mode, and segment registers carry a base and a size. EIP is
   kept linear and converted at the edges (a pushed return address, a loaded jump target) against
   the code segment's base, ESP is an offset in SS: DOS/4GW's segments are all at 0, DJGPP's at the
   program's memory block. A code segment whose descriptor is 16-bit decodes 16-bit (DJGPP's
-  start-up and exit run small 16-bit helpers in DOS memory). The page's CSP forbids eval, so there
+  start-up and exit run small 16-bit helpers in DOS memory). **Real mode** is a switch
+  (`cpu.realMode`) for Wolfenstein 3D: a segment's base is its value times sixteen, code is 16-bit,
+  the stack pointer is SP and wraps inside its segment, the string instructions count with SI, DI
+  and CX, and an interrupt pushes a 16-bit frame and goes through the vector table at 0:0. Real-mode
+  code runs through `step()` rather than the decoded cache: it needs about a third of the speed it
+  gets. The page's CSP forbids eval, so there
   is no JIT; speed comes from keeping every value an int32 (a `>>> 0` above 2^31 is a double and,
   in a closure variable, an allocation), lazy flags recorded in an `Int32Array`, one try/catch
   around the loop rather than each instruction, and 32-bit fast paths for the instructions
@@ -832,7 +838,12 @@ dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+   
   Quake headless on one core and 115-118 in a Chromium worker; Quake's timedemo 52.5 fps of wall time
   (MEASUREMENTS §32-35).
 - **`dospc.js`** is the machine, and it plays whichever DOS extender the program was bound to.
-  `boot()` tells them apart by the file: `loadLE` finds DOOM's LE executable inside the DOS/4GW
+  `boot()` tells them apart by the file: an EXE with neither an LE nor a COFF image inside is a
+  plain DOS program, and `bootMZ` loads it as DOS did -- a PSP, the image after it with its segment
+  relocations applied, the rest of conventional memory its block, the vector table filled with
+  pointers at stubs the machine answers (a program that installs its own handler gets it called),
+  and DOS's allocator behind INT 21h 48h/49h/4Ah, which Wolfenstein 3D uses to shrink itself and
+  claim the rest. `loadLE` finds DOOM's LE executable inside the DOS/4GW
   stub, loads it at +1 MB and applies its fixups; `parseCoff`/`bootCoff` find Quake's COFF image
   behind the go32 stub and do what that stub leaves behind -- a memory block with the sections in
   it, selectors based at it, a transfer buffer with the PSP right below it (DJGPP's libc finds the
@@ -842,8 +853,9 @@ dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+   
   it), INT 31h DPMI (descriptors with base and size, memory blocks, protected-mode vectors,
   simulated real-mode interrupts), INT 10h/16h/33h, and the hardware a DOS game programs directly:
   the 8259s, the 8254 (with the BIOS tick count kept in step with it, which DJGPP's `uclock` reads),
-  the keyboard controller, and a VGA with planar memory, unchained mode and CRTC page flipping (how
-  DOOM draws) as well as the linear window (how Quake does). The clock is injected (`now()`): wall
+  the keyboard controller, and a VGA with planar memory, unchained mode, write mode 1's latched copy
+  (Wolfenstein 3D and DOOM copy between pages with it) and CRTC page flipping (how DOOM and
+  Wolfenstein 3D draw) as well as the linear window (how Quake does). The clock is injected (`now()`): wall
   time in the worker, instruction count in tests, so a headless boot is the same run every time.
 - **`soundcard.js`** is a Sound Blaster Pro 2 at 220h/IRQ 7/DMA 1 — the DSP's command set and the
   8237 DMA controller it pulls samples through — and an OPL3 modelled as operators with
@@ -858,11 +870,11 @@ dosaudio.js (AudioWorklet) <--stereo PCM over a MessagePort-----------------+   
 - **`dosgame.js`** is a game's tab: it draws, captures input, pauses when the tab is not on screen
   (the worker's clock stops, so nothing moves), and uses a ScriptProcessor when `audioWorklet` is
   unavailable — a plain-HTTP LAN address is not a secure context. `doom.js` and `quake.js` give it
-  names, key lists and switches.
+  names, key lists and switches, and so does `wolf3d.js`.
 
 The game files are served from `games/<game>_dos/` by `server/http/games.js`
 (`/games/<game>/<path>`: a game it names, at most one directory and 8.3 names of `.EXE`, `.WAD`,
-`.PAK` and `.CFG`, behind the session when accounts are on) rather than from `public/`, whose every
+`.PAK`, `.CFG` and `.WL1`, behind the session when accounts are on) rather than from `public/`, whose every
 file feeds the build id.
 
 ## 4. The 3D engine

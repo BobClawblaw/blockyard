@@ -3,7 +3,7 @@
 // then "get Quake working as a diversion"). No DOM, no worker, no clock, so every mapping here runs
 // under node:test.
 //
-//   GAMES            each game's files, arguments and where its saves are kept
+//   GAMES            each game's files, arguments and where its saves are kept (Wolfenstein 3D, DOOM, Quake)
 //   scancodes()      a KeyboardEvent.code as the bytes a PC/AT keyboard puts on port 60h
 //   withControls()   DOOM's config with the page's control scheme laid over it
 //   rebindKeys()     the same, into a running DOOM
@@ -18,6 +18,8 @@
  * Paths are DOS paths under the game's directory, upper case.
  */
 export const GAMES = Object.freeze({
+  // a real-mode program: the data files are the .WL1s, CONFIG.WL1 its settings and high scores
+  wolf3d: Object.freeze({ exe: 'WOLF3D.EXE', required: ['AUDIOHED.WL1', 'AUDIOT.WL1', 'GAMEMAPS.WL1', 'MAPHEAD.WL1', 'VGADICT.WL1', 'VGAGRAPH.WL1', 'VGAHEAD.WL1', 'VSWAP.WL1'], optional: ['CONFIG.WL1'], config: 'CONFIG.WL1', args: '', db: 'blockyard-wolf3d', label: 'WOLF3D.EXE and its data files', dir: 'games/wolf3d_dos' }),
   doom: Object.freeze({ exe: 'DOOM.EXE', required: ['DOOM1.WAD'], optional: ['DEFAULT.CFG'], config: 'DEFAULT.CFG', args: '', db: 'blockyard-doom', label: 'DOOM.EXE and DOOM1.WAD', dir: 'games/doom_dos' }),
   // -nocdaudio: there is no CD in the drive, and without it Quake stops at a "press a key" warning
   quake: Object.freeze({ exe: 'QUAKE.EXE', required: ['ID1/PAK0.PAK'], optional: ['ID1/CONFIG.CFG'], config: 'ID1/CONFIG.CFG', args: '-nocdaudio', db: 'blockyard-quake', label: 'QUAKE.EXE and ID1/PAK0.PAK', dir: 'games/quake_dos' }),

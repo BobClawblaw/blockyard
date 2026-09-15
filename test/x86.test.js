@@ -290,3 +290,35 @@ test('a 16-bit code segment decodes 16-bit, and 66h gives it 32-bit operands bac
   assert.equal(c2.R[EAX] >>> 0, 0x89abcdef, 'and a dword behind 66h');
   void cpu; void mem;
 });
+
+test('real mode: a segment is its value times sixteen, SP wraps inside 64 KB, and INT pushes a 16-bit frame', () => {
+  const { cpu, exec, mem } = machine({ softInt: (c, n) => n !== 0x60, vectors: { 0x60: { sel: 0x200, off: 0x10 } } });
+  cpu.realMode = true;
+  cpu.loadSeg(CS, 0x100); cpu.loadSeg(2, 0x300);         // CS 100h is linear 1000h; SS 300h is 3000h
+  cpu.R[ESP] = 0x00050004;
+  mem[0x2010] = 0xcf;                                   // the handler at 200:10 is a bare IRET
+  cpu.flags = 0x202 | CF;
+  exec([0xcd, 0x60], 1);
+  assert.equal(cpu.eip, 0x2010, 'through the vector, CS:IP = 200:10');
+  assert.equal(u(cpu.R[ESP]), 0x0005fffe, 'three words from SP 4 wrap to FFFEh, the upper half untouched');
+  assert.equal(mem[0x3002] | (mem[0x3003] << 8), 0x0203, 'FLAGS first');
+  assert.equal(mem[0x3000] | (mem[0x3001] << 8), 0x100, 'then CS');
+  assert.equal(mem[0x3000 + 0xfffe] | (mem[0x3000 + 0xffff] << 8), 0x0002, 'then IP, at the top of the segment');
+  cpu.run(1);
+  assert.equal(cpu.eip, 0x1002, 'IRET is back after the INT');
+  assert.equal(u(cpu.R[ESP]), 0x00050004);
+  assert.equal(cpu.flags & CF, CF);
+});
+
+test('real mode: string instructions address with SI, DI and CX, which wrap at 64 KB', () => {
+  const { cpu, exec, mem } = machine();
+  cpu.realMode = true;
+  cpu.loadSeg(CS, 0x100); cpu.loadSeg(DS, 0x400); cpu.loadSeg(ES, 0x400);
+  mem[0x4000 + 0xffff] = 0xaa; mem[0x4000] = 0xbb;
+  cpu.R[ESI] = 0x7770ffff | 0; cpu.R[EDI] = 0x10; cpu.R[ECX] = 0x00010002;
+  exec([0xf3, 0xa4]);                                   // rep movsb
+  assert.deepEqual([mem[0x4010], mem[0x4011]], [0xaa, 0xbb], 'the second byte comes from DS:0000, not DS:10000');
+  assert.equal(u(cpu.R[ESI]), 0x77700001, 'SI wrapped, the upper half kept');
+  assert.equal(u(cpu.R[EDI]), 0x12);
+  assert.equal(u(cpu.R[ECX]), 0x00010000, 'CX counted down, not ECX');
+});

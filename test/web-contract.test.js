@@ -43,16 +43,16 @@ test('the pages navigable from the nav all exist as sections', () => {
   // (`<button type="button" data-page="about" class="brand">`, the About link) slipped past while
   // its section was seen, reporting a drift that did not exist. Matching data-page anywhere in the
   // tag makes this catch MORE buttons, not fewer.
-  const navPages = [...html.matchAll(/<button[^>]*\sdata-page="([a-z]+)"/g)].map((m) => m[1]);
-  const sections = [...html.matchAll(/<section class="page[^"]*" data-page="([a-z]+)"/g)].map((m) => m[1]);
+  const navPages = [...html.matchAll(/<button[^>]*\sdata-page="([a-z0-9]+)"/g)].map((m) => m[1]);
+  const sections = [...html.matchAll(/<section class="page[^"]*" data-page="([a-z0-9]+)"/g)].map((m) => m[1]);
   assert.deepEqual(navPages.sort(), sections.sort(), 'nav and page sections drifted apart');
 });
 
 test('app.js renders a case for every page, and panels.js exports it', () => {
   const app = read('js/app.js');
   const panels = read('js/panels.js');
-  const cases = [...app.matchAll(/case '([a-z]+)':/g)].map((m) => m[1]);
-  const sections = [...html.matchAll(/data-page="([a-z]+)"/g)].map((m) => m[1]);
+  const cases = [...app.matchAll(/case '([a-z0-9]+)':/g)].map((m) => m[1]);
+  const sections = [...html.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]);
   for (const s of new Set(sections)) assert.ok(cases.includes(s), `no render case for page "${s}"`);
   for (const fn of ['renderChain', 'renderMempool', 'renderPeers', 'renderNetwork', 'renderLogs', 'renderNode', 'renderAdmin', 'ensureLogsLoaded']) {
     assert.match(panels, new RegExp(`export (async )?function ${fn}\\b`), `panels.js does not export ${fn}`);

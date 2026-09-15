@@ -99,6 +99,7 @@
     <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
     <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
     <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
+    <button data-page="wolf3d" role="menuitem" title="Wolfenstein 3D: the shareware WOLF3D.EXE on an emulated PC">Wolfenstein 3D</button>
     <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
     <button data-page="quake" role="menuitem" title="Quake: the shareware QUAKE.EXE on an emulated PC">Quake</button>
   </div>
@@ -599,6 +600,40 @@
           </div>
           <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
           <table class="tetscores" id="tetScores"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- WOLFENSTEIN 3D (public/js/wolf3d.js): the shareware WOLF3D.EXE v1.4 from games/wolf3d_dos/,
+         unmodified, on the same emulated PC -- this time in real mode, as a 16-bit DOS program. -->
+    <section class="page" data-page="wolf3d">
+      <div class="tetrust dosgame" id="wolf3d">
+        <div class="card doscard">
+          <h3>Wolfenstein 3D <span class="sp"></span><span class="src">shareware v1.4 · Escape from Wolfenstein · on an emulated PC</span></h3>
+          <div class="doswrap" id="wolfWrap">
+            <canvas class="dosscreen" id="wolfScreen" width="320" height="200"></canvas>
+            <div class="tetover" id="wolfOver">
+              <div class="tetmsg" id="wolfMsg">Wolfenstein 3D</div>
+              <div class="tetsub" id="wolfSub"></div>
+              <button type="button" class="btn primary" id="wolfPlay">play</button>
+            </div>
+            <button type="button" class="btn primary dosagain hidden" id="wolfPlay2">play again</button>
+          </div>
+        </div>
+        <div class="card tethud">
+          <h3>Machine</h3>
+          <div class="tetstats" id="wolfStatus"></div>
+          <h3>Keys</h3>
+          <div class="tetkeys" id="wolfKeys"></div>
+          <div class="tetkeys">click the screen to capture the mouse (Esc gives it back): moving it turns, forward and back walk, left click fires</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="wolfSound" aria-pressed="false" title="the Sound Blaster: AdLib music and digitised effects">♫ sound</button>
+            <button type="button" class="tetsw" id="wolfSmooth" aria-pressed="false" title="smooth the 320x200 picture instead of showing its pixels">◌ smooth</button>
+            <button type="button" class="tetsw" id="wolfFull" title="the screen alone, full screen">⛶ full screen</button>
+          </div>
+          <h3>About</h3>
+          <div class="tetkeys">Wolfenstein 3D is id Software's (1992, published by Apogee), from the shareware files in <code>games/wolf3d_dos/</code> on this server. The PC under it is BlockYard's own, here running in real mode: a 16-bit DOS program with a VGA and a Sound Blaster, written in JavaScript with no dependencies. Savegames and settings stay in this browser.</div>
         </div>
       </div>
     </section>

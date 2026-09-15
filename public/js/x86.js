@@ -433,24 +433,44 @@ export function createCpu(bus) {
   }
 
   // ------------------------------------------------------------------ stack
-  function push(v) { const sp = (R[ESP] - 4) | 0; R[ESP] = sp; wd(sp + ssb, v); }
-  function pop() { const sp = R[ESP]; R[ESP] = (sp + 4) | 0; return rd(sp + ssb); }
-  function pushS(s, v) { if (s === S16) { R[ESP] -= 2; ww(R[ESP] + ssb, v); } else push(v); }
-  function popS(s) { if (s === S16) { const v = rw(R[ESP] + ssb); R[ESP] += 2; return v; } return pop(); }
+  // the stack pointer moves by 2 or 4; in real mode it is SP, wrapping inside its 64 KB segment
+  function spMove(by) {
+    const sp = realMode ? (R[ESP] & ~0xffff) | ((R[ESP] + by) & 0xffff) : (R[ESP] + by) | 0;
+    R[ESP] = sp;
+    return realMode ? sp & 0xffff : sp;
+  }
+  function push(v) { if (realMode) { wd(spMove(-4) + ssb, v); return; } const sp = (R[ESP] - 4) | 0; R[ESP] = sp; wd(sp + ssb, v); }
+  function pop() { if (realMode) { const at = R[ESP] & 0xffff; spMove(4); return rd(at + ssb); } const sp = R[ESP]; R[ESP] = (sp + 4) | 0; return rd(sp + ssb); }
+  function pushS(s, v) { if (s === S16) { ww(spMove(-2) + ssb, v); } else push(v); }
+  function popS(s) { if (s === S16) { const at = realMode ? R[ESP] & 0xffff : R[ESP]; const v = rw(at + ssb); spMove(2); return v; } return pop(); }
 
+  // REAL MODE (operator, 2026-09-15: "I added wolf3d_dos - Add that one next"): Wolfenstein 3D is a
+  // 16-bit real-mode program, so a segment register holds a segment and its base is that times
+  // sixteen, code is 16-bit, the stack pointer is SP, and an interrupt goes through the vector table
+  // at 0:0 (the machine's `vector`) with a 16-bit frame.
+  let realMode = false;
   function loadSeg(i, sel) {
     seg[i] = sel & 0xffff;
-    segBase[i] = bus.selectorBase(sel & 0xffff);
+    segBase[i] = realMode ? (sel & 0xffff) << 4 : bus.selectorBase(sel & 0xffff);
     defBases = segBase[DS] !== 0 || segBase[SS] !== 0;
     csb = segBase[CS]; ssb = segBase[SS];
     splitBases = segBase[DS] !== segBase[SS];
-    if (i === CS) cs16 = bus.selectorIs16?.(sel & 0xffff) === true;
+    if (i === CS) cs16 = realMode || bus.selectorIs16?.(sel & 0xffff) === true;
   }
 
   // ------------------------------------------------------------------ interrupts
   function interrupt(n, retEip) {
     const v = bus.vector(n);
     if (!v) throw new CpuFault(`no handler for INT ${n.toString(16)}`, opEip);
+    if (realMode) {
+      pushS(S16, getFlags() & 0xffff);
+      pushS(S16, seg[CS]);
+      pushS(S16, (retEip - csb) & 0xffff);
+      flags &= ~0x300;
+      loadSeg(CS, v.sel);
+      eip = (v.off + csb) >>> 0;
+      return;
+    }
     push(getFlags());
     push(seg[CS]);
     push((retEip - csb) | 0);
@@ -465,6 +485,7 @@ export function createCpu(bus) {
 
   // ------------------------------------------------------------------ string ops
   function stringOp(op) {
+    if (!as32) { stringOp16(op); return; }
     const s = op & 1 ? os : S8;
     const n = s === S32 ? 4 : s === S16 ? 2 : 1;
     const d = (flags & 0x400) ? -n : n;
@@ -550,6 +571,48 @@ export function createCpu(bus) {
         if (rep) setCount(0);
       }
     }
+  }
+
+  // the string instructions with 16-bit addressing: SI, DI and CX are 16-bit and wrap, as a real-mode
+  // program's pointers do
+  function stringOp16(op) {
+    const s = op & 1 ? os : S8;
+    const n = s === S32 ? 4 : s === S16 ? 2 : 1;
+    const d = (flags & 0x400) ? -n : n;
+    const srcBase = segOv >= 0 ? segBase[segOv] : segBase[DS];
+    const esb = segBase[ES];
+    const readS = (a) => (s === S32 ? rd(a) : s === S16 ? rw(a) : rbx(a));
+    const writeS = (a, v) => { if (s === S32) wd(a, v); else if (s === S16) ww(a, v); else wb(a, v); };
+    let si = R[ESI] & 0xffff, di = R[EDI] & 0xffff, c = rep ? R[ECX] & 0xffff : 1;
+    const done = () => {
+      R[ESI] = (R[ESI] & ~0xffff) | (si & 0xffff); R[EDI] = (R[EDI] & ~0xffff) | (di & 0xffff);
+      if (rep) R[ECX] = (R[ECX] & ~0xffff) | (c & 0xffff);
+    };
+    switch (op) {
+      case 0xa4: case 0xa5: while (c > 0) { writeS(di + esb, readS(si + srcBase)); si = (si + d) & 0xffff; di = (di + d) & 0xffff; c--; } break;
+      case 0xaa: case 0xab: { const v = getR(s, EAX); while (c > 0) { writeS(di + esb, v); di = (di + d) & 0xffff; c--; } break; }
+      case 0xac: case 0xad: while (c > 0) { setR(s, EAX, readS(si + srcBase)); si = (si + d) & 0xffff; c--; } break;
+      case 0xa6: case 0xa7:
+        while (c > 0) {
+          arith(7, readS(si + srcBase), readS(di + esb), s);
+          si = (si + d) & 0xffff; di = (di + d) & 0xffff; c--;
+          if (rep && (rep === 0xf3) !== (getZF() === 1)) break;
+        }
+        break;
+      case 0xae: case 0xaf: {
+        const v = getR(s, EAX);
+        while (c > 0) {
+          arith(7, v, readS(di + esb), s);
+          di = (di + d) & 0xffff; c--;
+          if (rep && (rep === 0xf3) !== (getZF() === 1)) break;
+        }
+        break;
+      }
+      case 0x6c: case 0x6d: while (c > 0) { writeS(di + esb, bus.portIn(R[EDX] & 0xffff, s)); di = (di + d) & 0xffff; c--; } break;
+      default: while (c > 0) { bus.portOut(R[EDX] & 0xffff, s, readS(si + srcBase)); si = (si + d) & 0xffff; c--; } break;
+    }
+    if (!rep) c = 0;
+    done();
   }
 
   // ------------------------------------------------------------------ the FPU
@@ -1899,6 +1962,8 @@ export function createCpu(bus) {
     get cycles() { return cycles; }, set cycles(v) { cycles = v; },
     get flags() { return getFlags(); }, set flags(v) { setFlags(v); },
     get IF() { return (flags & 0x200) !== 0; },
+    get realMode() { return realMode; },
+    set realMode(v) { realMode = !!v; for (let i = 0; i < 6; i++) loadSeg(i, seg[i]); },
     setCF(c) { setCFbit(c ? 1 : 0); },
     setZF(z) { zfSet(z ? 1 : 0); },
     loadSeg, push, pop, rb, rw, rd, wb, ww, wd,

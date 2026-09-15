@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPC, loadLE, parseCoff, MEM_SIZE } from '../public/js/dospc.js';
+import { createPC, loadLE, parseCoff, hasLE, MEM_SIZE } from '../public/js/dospc.js';
 import { createSoundCard, Opl3, oplRateTimes } from '../public/js/soundcard.js';
 import { rebindKeys, withControls } from '../public/js/dosio.js';
 
@@ -19,6 +19,14 @@ const needDoom = haveDoom ? {} : { skip: 'games/doom_dos/DOOM.EXE and DOOM1.WAD 
 const QUAKE = path.join(ROOT, 'games', 'quake_dos');
 const haveQuake = fs.existsSync(path.join(QUAKE, 'QUAKE.EXE')) && fs.existsSync(path.join(QUAKE, 'ID1', 'PAK0.PAK'));
 const needQuake = haveQuake ? {} : { skip: 'games/quake_dos/QUAKE.EXE and ID1/PAK0.PAK are not in this checkout' };
+const WOLF = path.join(ROOT, 'games', 'wolf3d_dos');
+const haveWolf = fs.existsSync(path.join(WOLF, 'WOLF3D.EXE')) && fs.existsSync(path.join(WOLF, 'VSWAP.WL1'));
+const needWolf = haveWolf ? {} : { skip: 'games/wolf3d_dos/WOLF3D.EXE and its .WL1 files are not in this checkout' };
+function wolfFiles() {
+  const out = {};
+  for (const f of fs.readdirSync(WOLF)) if (!f.startsWith('.')) out[f] = new Uint8Array(fs.readFileSync(path.join(WOLF, f)));
+  return out;
+}
 function quakeFiles() {
   const out = {};
   const walk = (dir, pre) => {
@@ -118,6 +126,23 @@ test('QUAKE.EXE boots: the stub and CWSDPMI are believed, the PAK is read, the S
   assert.deepEqual([...pc.unhandled], [], 'no DOS, DPMI, BIOS or mouse call went unanswered');
 });
 
+test('WOLF3D.EXE boots in real mode: it unpacks itself, finds the memory, the Sound Blaster and the AdLib, and draws', needWolf, () => {
+  let pc;
+  const now = () => (pc ? pc.cpu.cycles : 0) / 20e6 * 1000;
+  let card;
+  pc = createPC({ files: wolfFiles(), now, programName: 'WOLF3D.EXE', sound: (mem) => (card = createSoundCard({ mem, rate: 11025 })) });
+  const info = pc.boot(new Uint8Array(fs.readFileSync(path.join(WOLF, 'WOLF3D.EXE'))));
+  assert.equal(info.kind, 'mz', 'no LE and no COFF: a plain DOS program');
+  assert.equal(pc.cpu.realMode, true);
+  let n = 0;
+  while (n < 80e6 && !pc.exited) n += pc.run(5e6);
+  assert.equal(pc.exited, false, 'still running: no "not enough memory" and no quit');
+  assert.equal(pc.vga.mode, 0x13);
+  assert.ok(new Set(pc.renderIndexed(new Uint8Array(64000))).size > 30, 'the sign-on screen, not a blank page');
+  assert.ok(card.opl, 'the sound card it was given');
+  assert.deepEqual([...pc.unhandled], [], 'no DOS, BIOS or mouse call went unanswered');
+});
+
 // ------------------------------------------------------------------ the hardware, without the games
 function barePC() {
   const pc = createPC({ files: { 'A.TXT': new TextEncoder().encode('hello') } });
@@ -145,6 +170,49 @@ test('the VGA: chained mode 13h is a byte per pixel; unchained writes go through
   f = pc.renderIndexed(new Uint8Array(64000));
   assert.equal(f[3 * 320 + 9], 9, 'a planar page, displayed from the CRTC start address');
   assert.ok(pc.vga.frames > 0, 'moving the start address is a page flip');
+});
+
+test('VGA write mode 1 copies the bytes the last read latched, in every plane the map mask allows', () => {
+  const pc = barePC();
+  const { cpu } = pc;
+  cpu.R[0] = 0x13;
+  pc.mem.set([0xcd, 0x10, 0xf4], 0x2000); cpu.invalidate(0x2000, 16);
+  cpu.eip = 0x2000; cpu.run(2);
+  const out = (p, v) => { pc.mem.set([0xb0, v, 0x66, 0xba, p & 0xff, p >> 8, 0xee, 0xf4], 0x2000); cpu.invalidate(0x2000, 16); cpu.eip = 0x2000; cpu.run(3); };
+  out(0x3c4, 4); out(0x3c5, 0x06);                     // unchained
+  out(0x3c4, 2); out(0x3c5, 0x0f);                     // all four planes
+  cpu.wb(0xa0005, 0x33);
+  out(0x3c4, 2); out(0x3c5, 0x02); cpu.wb(0xa0005, 0x44); // plane 1 differs
+  pc.mem.set([0xa0, 0x05, 0x00, 0x0a, 0x00, 0xf4], 0x2000); cpu.invalidate(0x2000, 16); cpu.eip = 0x2000; cpu.run(2); // mov al, [0A0005h]: the read latches all four planes
+  out(0x3c4, 2); out(0x3c5, 0x0b);                     // planes 0, 1 and 3
+  out(0x3ce, 5); out(0x3cf, 0x01);                     // write mode 1
+  cpu.wb(0xa0009, 0x00);                                 // the value written does not matter
+  assert.deepEqual([0, 1, 2, 3].map((pl) => pc.vga.planes[pl][9]), [0x33, 0x44, 0, 0x33], 'plane 2 was masked off');
+});
+
+test('real-mode DOS memory: a program shrinks its block, allocates above it, and relocations point at where it loaded', () => {
+  // a tiny MZ: mov ax, <its own segment> ; mov ds, ax ; shrink to 100h paragraphs ; allocate 1000h ;
+  // store the new segment at DS:0 ; exit
+  const code = [0xb8, 0x00, 0x00, 0x8e, 0xd8, 0xb4, 0x4a, 0xbb, 0x00, 0x01, 0xcd, 0x21,
+    0xb4, 0x48, 0xbb, 0x00, 0x10, 0xcd, 0x21, 0xa3, 0x00, 0x00, 0xb8, 0x00, 0x4c, 0xcd, 0x21];
+  const exe = new Uint8Array(0x20 + code.length);
+  const w = (at, v) => { exe[at] = v & 0xff; exe[at + 1] = v >> 8; };
+  exe[0] = 0x4d; exe[1] = 0x5a;
+  w(2, exe.length); w(4, 1); w(6, 1); w(8, 2);         // bytes in the last page, pages, relocations, header paragraphs
+  w(0x0a, 0x10); w(0x0c, 0xffff);                       // min and max extra: as much as there is
+  w(0x0e, 0); w(0x10, 0x100); w(0x14, 0); w(0x16, 0); w(0x18, 0x1c);
+  w(0x1c, 1); w(0x1e, 0);                                // the relocation: the word at 0:1
+  exe.set(code, 0x20);
+  assert.equal(hasLE(exe), false);
+  const pc = createPC();
+  const info = pc.boot(exe);
+  assert.equal(info.kind, 'mz');
+  assert.equal(info.loadSeg, info.psp + 0x10, 'the image follows its 256-byte PSP');
+  const base = info.loadSeg << 4;
+  assert.equal(pc.mem[base + 1] | (pc.mem[base + 2] << 8), info.loadSeg, 'the relocated word holds the load segment');
+  pc.run(100);
+  assert.equal(pc.exited, true);
+  assert.equal(pc.mem[base] | (pc.mem[base + 1] << 8), info.psp + 0x100, 'first fit, right after the shrunken block');
 });
 
 test('the timer interrupts at the rate the program sets, and the PIC holds IRQ0 until EOI', () => {

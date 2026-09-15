@@ -36,6 +36,17 @@ const PIT_HZ = 1193182;
  * Find the LE image in a bound DOS/4GW executable, copy its pages into `mem` at `delta` above the
  * addresses it was linked for, and apply its fixups. Returns the objects, entry point and stack.
  */
+/** Whether a file carries an LE image behind its MZ stub (a DOS/4GW program). */
+export function hasLE(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.length);
+  for (let i = 0; i + 0x40 < buf.length; i++) {
+    if (buf[i] !== 0x4d || buf[i + 1] !== 0x5a) continue;
+    const l = dv.getUint32(i + 0x3c, true);
+    if (i + l + 2 < buf.length && buf[i + l] === 0x4c && buf[i + l + 1] === 0x45) return true;
+  }
+  return false;
+}
+
 export function loadLE(buf, mem, delta = LOAD_DELTA) {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.length);
   let stub = -1;
@@ -159,7 +170,7 @@ for (let i = 0; i < 64; i++) DAC8[i] = Math.round((i * 255) / 63);
  *   onExit(code): the program ended
  *   sound: (mem) => a card with portIn/portOut/tick (soundcard.js), or null for no sound hardware
  */
-export function createPC({ files = {}, args = '', now = () => 0, onWrite = null, onExit = null, sound = null, log = null } = {}) {
+export function createPC({ files = {}, args = '', now = () => 0, onWrite = null, onExit = null, sound = null, log = null, programName = 'GAME.EXE' } = {}) {
   const mem = new Uint8Array(MEM_SIZE);
   if (typeof sound === 'function') sound = sound(mem);    // a card built on this machine's memory
   const selectors = new Map([[0, 0], [SEL_CODE, 0], [SEL_DATA, 0], [SEL_PSP, PSP_SEG * 16], [SEL_ENV, ENV_SEG * 16], [SEL_LOL, 0x500]]);
@@ -183,6 +194,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     frames: 0,                         // bumped on every CRTC start change: a page was flipped
     palSeq: 0,                         // bumped on every DAC write
     writes: 0,                         // bumped on every write into the graphics window
+    latch: new Uint8Array(4),          // the byte of each plane the last read left (write mode 1)
   };
   vga.seq[2] = 0x0f; vga.seq[4] = 0x0e;
   const chain4 = () => (vga.seq[4] & 0x08) !== 0;
@@ -193,6 +205,12 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     if (chain4()) { vga.planes[off & 3][off >> 2] = v; vga.writes++; return; }
     vga.writes++;
     const mask = vga.seq[2];
+    // WRITE MODE 1 copies the bytes the last read latched from every plane, whatever is written:
+    // Wolfenstein 3D copies between its pages with it (a read from one, a write to the other)
+    if ((vga.gc[5] & 3) === 1) {
+      for (let pl = 0; pl < 4; pl++) if (mask & (1 << pl)) vga.planes[pl][off] = vga.latch[pl];
+      return;
+    }
     if (mask & 1) vga.planes[0][off] = v;
     if (mask & 2) vga.planes[1][off] = v;
     if (mask & 4) vga.planes[2][off] = v;
@@ -203,6 +221,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     const off = a - 0xa0000;
     if (off >= 0x10000) return 0;
     if (chain4()) return vga.planes[off & 3][off >> 2];
+    for (let pl = 0; pl < 4; pl++) vga.latch[pl] = vga.planes[pl][off];
     return vga.planes[vga.gc[4] & 3][off];
   }
   function setVideoMode(m) {
@@ -453,13 +472,44 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     }
     return { free, largest };
   }
-  // DOS conventional memory: a bump pointer over segments, with the size kept per block
-  const dosBlocks = new Map();
-  let dosNext = DOS_HEAP_SEG;
+  // DOS CONVENTIONAL MEMORY: blocks of paragraphs, first fit, that can be freed and resized in
+  // place. A bump pointer did for the extenders, which ask once; a real-mode Borland program is
+  // handed all of memory at start, gives most back with AH=4Ah, and grows its heap by resizing its
+  // own block again.
+  const DOS_TOP = 0x9f00;
+  const dosBlocks = [];                  // { seg, paras }, sorted by segment
+  function dosFreeAfter(i) {
+    const end = i + 1 < dosBlocks.length ? dosBlocks[i + 1].seg : DOS_TOP;
+    return end - (dosBlocks[i].seg + dosBlocks[i].paras);
+  }
+  function dosLargest() {
+    let at = DOS_HEAP_SEG, best = 0;
+    for (const b of dosBlocks) { best = Math.max(best, b.seg - at); at = b.seg + b.paras; }
+    return Math.max(best, DOS_TOP - at);
+  }
   function dosAlloc(paras) {
-    if (dosNext + paras > 0x9f00) return -1;
-    const s = dosNext; dosNext += paras; dosBlocks.set(s, paras);
-    return s;
+    let at = DOS_HEAP_SEG;
+    for (let i = 0; i <= dosBlocks.length; i++) {
+      const limit = i < dosBlocks.length ? dosBlocks[i].seg : DOS_TOP;
+      if (limit - at >= paras) { dosBlocks.splice(i, 0, { seg: at, paras }); return at; }
+      if (i < dosBlocks.length) at = dosBlocks[i].seg + dosBlocks[i].paras;
+    }
+    return -1;
+  }
+  function dosFree(seg) {
+    const i = dosBlocks.findIndex((b) => b.seg === seg);
+    if (i < 0) return false;
+    dosBlocks.splice(i, 1);
+    return true;
+  }
+  /** Resize the block at `seg` in place: true, or the largest size it could have. */
+  function dosResize(seg, paras) {
+    const i = dosBlocks.findIndex((b) => b.seg === seg);
+    if (i < 0) return -1;
+    const most = dosBlocks[i].paras + dosFreeAfter(i);
+    if (paras > most) return most;
+    dosBlocks[i].paras = paras;
+    return true;
   }
 
   // ---------------------------------------------------------------- files
@@ -604,10 +654,16 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     vgaWrite, vgaRead, portIn, portOut,
     selectorBase: (sel) => selectors.get(sel & 0xfff8 | (sel & 0)) ?? selectors.get(sel) ?? 0,
     selectorIs16: (sel) => seg16.has(sel & 0xfff8),
-    vector: (n) => pmVectors[n] ?? romStub(n),
+    // real mode: the vector table at 0:0, as DOS and the BIOS leave it (each entry a ROM stub until
+    // the program sets its own); protected mode: the vectors set through DPMI
+    vector: (n) => (cpu.realMode ? { sel: mem[n * 4 + 2] | (mem[n * 4 + 3] << 8), off: mem[n * 4] | (mem[n * 4 + 1] << 8) } : pmVectors[n] ?? romStub(n)),
     softInt: (cpu, n) => {
       // a vector the program installed takes the call, unless it is the one the stub is making
-      if (pmVectors[n] && !(cpu.eip - 2 === ROM_STUBS + n * 16)) return false;
+      const fromStub = cpu.eip - 2 === ROM_STUBS + n * 16;
+      if (cpu.realMode) {
+        const off = mem[n * 4] | (mem[n * 4 + 1] << 8), segv = mem[n * 4 + 2] | (mem[n * 4 + 3] << 8);
+        if (!(segv === 0xf000 && off === n * 16) && !fromStub) return false;
+      } else if (pmVectors[n] && !fromStub) return false;
       return service(cpu, n);
     },
   };
@@ -670,7 +726,10 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x0e: R[EAX] = (R[EAX] & ~0xff) | 26; return true;
       case 0x19: R[EAX] &= ~0xff | 2; R[EAX] = (R[EAX] & ~0xff) | 2; return true;
       case 0x1a: dta = linDS(R[EDX]); return true;
-      case 0x25: pmVectors[al] = { sel: c.seg[DS], off: R[EDX] >>> 0 }; return true;
+      case 0x25:
+        if (c.realMode) { mem[al * 4] = R[EDX]; mem[al * 4 + 1] = R[EDX] >> 8; mem[al * 4 + 2] = c.seg[DS]; mem[al * 4 + 3] = c.seg[DS] >> 8; return true; }
+        pmVectors[al] = { sel: c.seg[DS], off: R[EDX] >>> 0 };
+        return true;
       case 0x2a: { const d = new Date(); R[ECX] = (R[ECX] & ~0xffff) | d.getFullYear(); R[EDX] = (R[EDX] & ~0xffff) | ((d.getMonth() + 1) << 8) | d.getDate(); R[EAX] = (R[EAX] & ~0xff) | d.getDay(); return true; }
       case 0x2c: { const d = new Date(); R[ECX] = (R[ECX] & ~0xffff) | (d.getHours() << 8) | d.getMinutes(); R[EDX] = (R[EDX] & ~0xffff) | (d.getSeconds() << 8) | Math.floor(d.getMilliseconds() / 10); return true; }
       case 0x2f: c.loadSeg(ES, SEL_DATA); R[EBX] = dta; return true;
@@ -681,7 +740,11 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
         if (al === 6) { R[EBX] = (R[EBX] & ~0xffff) | 0x0006; R[EDX] = (R[EDX] & ~0xffff) | 0x1000; }
         ok();
         return true;
-      case 0x35: { const v = pmVectors[al] ?? romStub(al); c.loadSeg(ES, v.sel); R[EBX] = v.off; return true; }
+      case 0x35: {
+        if (c.realMode) { c.loadSeg(ES, mem[al * 4 + 2] | (mem[al * 4 + 3] << 8)); R[EBX] = (R[EBX] & ~0xffff) | mem[al * 4] | (mem[al * 4 + 1] << 8); return true; }
+        const v = pmVectors[al] ?? romStub(al); c.loadSeg(ES, v.sel); R[EBX] = v.off;
+        return true;
+      }
       case 0x36: setAX(4); R[EBX] = (R[EBX] & ~0xffff) | 0x4000; R[ECX] = (R[ECX] & ~0xffff) | 512; R[EDX] = (R[EDX] & ~0xffff) | 0xffff; return true;
       case 0x39: { const d = dosName(linDS(R[EDX])); if (dir.has(d) || isDir(d)) { fail(5); return true; } dirs.add(d); ok(); return true; }
       case 0x3a: { const d = dosName(linDS(R[EDX])); if (!isDir(d)) { fail(3); return true; } dirs.delete(d); ok(); return true; }
@@ -774,11 +837,17 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x48: {
         const paras = u16(R[EBX]);
         const s = dosAlloc(paras);
-        if (s < 0) { fail(8); R[EBX] = (R[EBX] & ~0xffff) | (0x9f00 - dosNext); return true; }
+        if (s < 0) { fail(8); R[EBX] = (R[EBX] & ~0xffff) | dosLargest(); return true; }
         R[EAX] = s; ok();
         return true;
       }
-      case 0x49: case 0x4a: ok(); return true;
+      case 0x49: if (dosFree(c.seg[ES] & 0xffff) || !c.realMode) ok(); else fail(9); return true;
+      case 0x4a: {
+        if (!c.realMode) { ok(); return true; }
+        const r = dosResize(c.seg[ES] & 0xffff, u16(R[EBX]));
+        if (r === true) ok(); else if (r < 0) fail(9); else { fail(8); R[EBX] = (R[EBX] & ~0xffff) | r; }
+        return true;
+      }
       case 0x4c: exited = true; exitCode = al; c.stop(); onExit?.(al); return true;
       case 0x4e: {
         findList = listDir(dosName(linDS(R[EDX])), u16(R[ECX]));
@@ -806,7 +875,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       case 0x67: case 0x68: case 0x6a: ok(); return true;
       case 0x71: setAX(0x7100); cpu.setCF(true); return true;
       case 0x5d: fail(1); return true;              // the swappable data area: not offered, which DOS 6 may also say   // no long file names: the answer programs expect
-      case 0x51: case 0x62: R[EBX] = (R[EBX] & ~0xffff) | (realMode ? pspSeg : SEL_PSP); return true;
+      case 0x51: case 0x62: R[EBX] = (R[EBX] & ~0xffff) | (realMode || c.realMode ? pspSeg : SEL_PSP); return true;
       case 0x52: c.loadSeg(ES, SEL_LOL); R[EBX] &= ~0xffff; return true;   // the list of lists (syncSft)
       case 0xff:
         // DOS/4GW's own presence check (DX = 0x78): answer "yes, DOS/4G", and hand over the
@@ -859,7 +928,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
       }
       case 0x0100: {
         const s = dosAlloc(u16(R[EBX]));
-        if (s < 0) { fail(8); R[EBX] = (R[EBX] & ~0xffff) | (0x9f00 - dosNext); return true; }
+        if (s < 0) { fail(8); R[EBX] = (R[EBX] & ~0xffff) | dosLargest(); return true; }
         const sel = nextSelector; nextSelector += 8; selectors.set(sel, s * 16);
         setAX(s); R[EDX] = (R[EDX] & ~0xffff) | sel; ok();
         return true;
@@ -1085,6 +1154,7 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
   function boot(exe) {
     const coff = parseCoff(exe);
     if (coff) return bootCoff(exe, coff);
+    if (!hasLE(exe)) return bootMZ(exe);
     const img = loadLE(exe, mem, LOAD_DELTA);
     // PSP: the command tail at 80h, the environment's selector at 2Ch
     const psp = PSP_SEG * 16;
@@ -1105,6 +1175,56 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     setVideoMode(3);
     pit.nextIrq = now() + pitPeriodMs();
     return img;
+  }
+
+  /**
+   * A REAL-MODE PROGRAM (Wolfenstein 3D): what DOS's own EXEC does. The program gets the largest free
+   * block of conventional memory with its PSP at the front, the image is copied in after the PSP and
+   * its segment relocations fixed up, DS and ES point at the PSP, and the CPU starts in real mode at
+   * the header's CS:IP with its SS:SP. The vector table at 0:0 points every interrupt at the ROM
+   * stubs until the program hooks one.
+   */
+  function bootMZ(exe) {
+    const dv = new DataView(exe.buffer, exe.byteOffset, exe.length);
+    const u = (o) => dv.getUint16(o, true);
+    const lastPage = u(2), pages = u(4);
+    const fileSize = lastPage ? (pages - 1) * 512 + lastPage : pages * 512;
+    const hdr = u(8) * 16;
+    const image = exe.subarray(hdr, Math.min(exe.length, fileSize));
+    const imageParas = (image.length + 15) >> 4;
+    const want = Math.min(dosLargest(), Math.max(0x10 + imageParas + u(0x0a), Math.min(0xffff, 0x10 + imageParas + u(0x0c))));
+    pspSeg = dosAlloc(want);
+    if (pspSeg < 0) throw new Error('not enough conventional memory for this program');
+    const loadSeg = pspSeg + 0x10;
+    mem.set(image, loadSeg * 16);
+    for (let i = 0; i < u(6); i++) {
+      const e = u(0x18) + i * 4;
+      const at = (u(e + 2) + loadSeg) * 16 + u(e);
+      const v = (mem[at] | (mem[at + 1] << 8)) + loadSeg;
+      mem[at] = v; mem[at + 1] = v >> 8;
+    }
+    const psp = pspSeg * 16;
+    mem.fill(0, psp, psp + 0x100);
+    mem[psp] = 0xcd; mem[psp + 1] = 0x20;
+    const top = pspSeg + want;
+    mem[psp + 2] = top; mem[psp + 3] = top >> 8;
+    mem[psp + 0x2c] = ENV_SEG & 0xff; mem[psp + 0x2d] = ENV_SEG >> 8;
+    selectors.set(SEL_PSP, psp);
+    dta = psp + 0x80;
+    writeCommandTail(psp);
+    initSft();
+    writeEnvironment(`C:\\${programName}`);
+    for (let n = 0; n < 256; n++) { mem[n * 4] = n * 16; mem[n * 4 + 1] = (n * 16) >> 8; mem[n * 4 + 2] = 0x00; mem[n * 4 + 3] = 0xf0; }
+    biosDataArea();
+    cpu.realMode = true;
+    cpu.loadSeg(CS, u(0x16) + loadSeg); cpu.loadSeg(SS, u(0x0e) + loadSeg);
+    cpu.loadSeg(DS, pspSeg); cpu.loadSeg(ES, pspSeg); cpu.loadSeg(FS, 0); cpu.loadSeg(GS, 0);
+    R[ESP] = u(0x10);
+    cpu.eip = (u(0x16) + loadSeg) * 16 + u(0x14);
+    cpu.flags = 0x202;
+    setVideoMode(3);
+    pit.nextIrq = now() + pitPeriodMs();
+    return { kind: 'mz', loadSeg, psp: pspSeg };
   }
 
   /**

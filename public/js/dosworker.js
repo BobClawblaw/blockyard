@@ -99,6 +99,7 @@ async function boot({ game: key = 'doom', rate, controls }) {
   pc = createPC({
     files,
     args: game.args,
+    programName: game.exe,
     now,
     sound: rate ? (mem) => (card = createSoundCard({ mem, rate })) : null,
     onWrite: (name, bytes) => { store(name, bytes); post({ type: 'saved', name, deleted: !bytes }); },

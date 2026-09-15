@@ -10,7 +10,8 @@
 //
 // Served under /games/<game>/<path>, and only that: a game this file names, and a DOS path of at
 // most one directory and an 8.3 name of a kind the games read (an executable, a WAD, a PAK, a
-// config). No dots but the one in each name, so there is no path to traverse; the lookup is
+// config, Wolfenstein 3D's .WL1 data). No dots but the one in each name, so there is no path to
+// traverse; the lookup is
 // case-insensitive because DOS names are, and the files on disk are upper-case while a browser asks
 // for whatever it was told.
 import fsp from 'node:fs/promises';
@@ -18,9 +19,9 @@ import path from 'node:path';
 import { securityHeaders } from './static.js';
 
 /** Each game's directory under the games root. */
-export const GAME_DIRS = Object.freeze({ doom: 'doom_dos', quake: 'quake_dos' });
+export const GAME_DIRS = Object.freeze({ wolf3d: 'wolf3d_dos', doom: 'doom_dos', quake: 'quake_dos' });
 
-export const GAME_PATH = /^\/games\/([a-z]+)\/((?:[A-Za-z0-9_-]{1,8}\/)?[A-Za-z0-9_-]{1,8}\.(?:wad|exe|cfg|pak))$/i;
+export const GAME_PATH = /^\/games\/([a-z0-9]+)\/((?:[A-Za-z0-9_-]{1,8}\/)?[A-Za-z0-9_-]{1,8}\.(?:wad|exe|cfg|pak|wl1))$/i;
 
 /** The file under `dir` at the DOS path `rel` ("ID1/PAK0.PAK"), matching each part ignoring case, or null. */
 export async function findGameFile(dir, rel) {

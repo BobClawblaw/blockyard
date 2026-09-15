@@ -20,6 +20,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Tetrust](#tetrust)
 - [Blockout](#blockout)
 - [Blockanoid](#blockanoid)
+- [Wolfenstein 3D](#wolfenstein-3d)
 - [DOOM](#doom)
 - [Quake](#quake)
 - [Peers](#peers)
@@ -716,6 +717,58 @@ rather than the look, flipping them reaches the game you are playing, not just t
 
 ---
 
+## Wolfenstein 3D
+
+The shareware episode of Wolfenstein 3D, **Escape from Wolfenstein**, under **Diversions**, first of
+the three DOS games. It is id Software's own `WOLF3D.EXE` v1.4 and its `.WL1` data files, unmodified,
+on the same PC BlockYard emulates for DOOM and Quake. Where those two were 32-bit programs, Wolfenstein
+3D is a 16-bit **real-mode** DOS program from 1992, so here the emulated processor runs the way a PC
+started up: segments and offsets, DOS's own memory, the interrupt table at the bottom of memory. AdLib
+music plays on the sound card's OPL and the digitised effects ("Achtung!") on its DSP. It draws at 70
+frames a second, the VGA's refresh rate, with plenty of machine to spare.
+
+Press **play**. The sign-on screen shows what the game found (memory, mouse, Sound Blaster); press a
+key, the title and the demos follow, and **Enter** or **Esc** brings up the menu: **New Game**, pick
+the episode and how tough you are.
+
+### The files
+
+The game's files live on the server in `games/wolf3d_dos/`: `WOLF3D.EXE`, and the eight `.WL1` files
+it cannot start without (`AUDIOHED`, `AUDIOT`, `GAMEMAPS`, `MAPHEAD`, `VGADICT`, `VGAGRAPH`,
+`VGAHEAD`, `VSWAP`). `CONFIG.WL1`, its settings and high scores, is optional. The page names a missing
+file instead of starting.
+
+### Playing
+
+**Click the screen to capture the mouse**: moving it forward and back walks, left and right turns,
+the left button fires. **Esc** gives the mouse back. The keys are the game's own:
+
+| Keys | |
+|---|---|
+| **↑** **↓** | walk |
+| **←** **→** | turn |
+| **Alt** + **←** **→** | strafe |
+| **Ctrl** or left click | fire |
+| **Space** | open doors, push walls |
+| **Shift** (held) | run |
+| **1**–**4** | knife, pistol, machine gun, chain gun |
+| **Esc** | the menu |
+| **F8** / **F9** | quick save / quick load |
+
+Rebind them under **Change View** and **Control** in the game's own menu; it keeps what you choose.
+
+### Pausing, saving, quitting
+
+Exactly as DOOM: it **pauses when you look away** with the machine stopped dead, **savegames, the
+settings and the high scores stay in this browser**, and **Quit** ends the program the way it ended
+in DOS, with a **play again** button.
+
+### The switches on the panel
+
+**♫ sound**, **◌ smooth** and **⛶ full screen**, as in DOOM.
+
+---
+
 ## DOOM
 
 If anyone asks *"well, can it run DOOM?"*, the answer is an emphatic **"Naturally. What sort of AI
@@ -795,7 +848,7 @@ but can crackle when the machine is busy.
 
 ## Quake
 
-The shareware episode of Quake, **Dimension of the Doomed**, under **Diversions**, beside DOOM and on
+The shareware episode of Quake, **Dimension of the Doomed**, under **Diversions**, after DOOM and on
 the same emulated PC. Again the real thing: id Software's `QUAKE.EXE` v1.06 and `PAK0.PAK`,
 unmodified. Quake asked a lot more of a PC than DOOM did — a Pentium and a maths coprocessor — so it
 is the harder test of the machine. It plays at **forty to fifty frames a second** — better than the

@@ -1381,3 +1381,21 @@ screen, once the worker looked for a finished frame every 50,000 instructions in
 
 Checked: DOOM 400 M and Quake 1.5 G instructions lock-stepped identical to `oracle4` (memory equal),
 and the native fuzzer through `run(1)`, 78k instructions, no mismatch.
+
+## 36. Wolfenstein 3D in real mode (2026-09-15)
+
+`WOLF3D.EXE` v1.4 (LZEXE-packed, Borland C, real mode) on the emulated PC, this box, Node v22.23.2,
+pinned to one core. It unpacks itself and reaches the sign-on screen in 1.0 s of wall time (60 M
+instructions on a 20 M clock).
+
+**Speed**: in a game, turning on the first map, **65 M instructions a second** headless (twice the same
+reading) and 68-69 in a Chromium worker. Real-mode code runs through the uncached `step()`, so this is
+the plain interpreter's speed; the game needs about **285 k instructions a frame**, so its 70 frames a
+second (the VGA's refresh, which it waits for) take 20 M a second -- a third of what is there, and the
+browser shows 70 frames a second.
+
+**DOOM and Quake unchanged**: best of three against a copy of the previous build (`oracle5`), DOOM
+timedemo 93.3 vs 93.0 M a second, Quake 126.3 vs 127.7. Quake lock-stepped identical for 600 M
+instructions, memory equal. DOOM lock-steps identical to 175 M and then differs, by design: at 173 M it
+copies between VGA pages in write mode 1, which the previous build wrote as plain data, and reads the
+planes back.

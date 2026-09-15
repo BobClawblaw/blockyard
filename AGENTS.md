@@ -185,11 +185,11 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
   (page #space)      the viewer at window size + being-built and tip panels
                      (renderBlockSpace in mining.js)
   js/goggles.js      the 2D treemap maps (squarify) that the 3D viewer sits beside
-  js/x86.js, dospc.js, soundcard.js, dosworker.js, dosaudio.js, dosio.js, dosgame.js, doom.js, quake.js
-                     the DOS Diversions: an i386 interpreter, the PC (DOS/4GW for DOOM, go32 +
-                     CWSDPMI for Quake), a Sound Blaster Pro 2 + OPL3, the worker, the
+  js/x86.js, dospc.js, soundcard.js, dosworker.js, dosaudio.js, dosio.js, dosgame.js, wolf3d.js, doom.js, quake.js
+                     the DOS Diversions: an i386 interpreter, the PC (real-mode DOS for Wolf3D,
+                     DOS/4GW for DOOM, go32 + CWSDPMI for Quake), a Sound Blaster Pro 2 + OPL3, the worker, the
                      AudioWorklet, pure I/O helpers, the shared tab and each game's own.
-                     The game files are games/doom_dos/ and games/quake_dos/, served by http/games.js.
+                     The game files are games/wolf3d_dos/, doom_dos/ and quake_dos/, served by http/games.js.
 scripts/doc-counts.js  derives the test count the docs quote (--check / --fix)
 test/                fixtures/log-samples.txt = frozen REAL log lines
 test/helpers/http.js   boots the REAL app in-process: N fake nodes, log sink, TLS.
@@ -304,9 +304,33 @@ Built on the `doom` branch. What will bite:
   change to flags, shifts, multiply or divide.
 - **`games/` is not in package.json `files`**, so an npm install has no game and the page says
   which file is missing. Whether the shareware files ship is the operator's call.
-- Tests: `test/x86.test.js`, `test/dos-pc.test.js` (boots the real DOOM.EXE and QUAKE.EXE headless
+- Tests: `test/x86.test.js`, `test/dos-pc.test.js` (boots the real WOLF3D.EXE, DOOM.EXE and QUAKE.EXE headless
   when games/ has them, a named skip when not), `test/dos-io.test.js` (keys, configs, text mode,
   the `/games/` route).
+
+## Current state (2026-09-15, late evening): Wolfenstein 3D
+
+**Wolfenstein 3D is a Diversion, before DOOM and Quake in the menu** (operator: "I added wolf3d_dos -
+Add that one next, but add it before DOOM and Quake in the Diversions list"), from `games/wolf3d_dos/`.
+`WOLF3D.EXE` v1.4 is a **real-mode** Borland program packed with LZEXE, so the machine grew real mode:
+
+- **`cpu.realMode`** switches segment bases to value x 16, CS to 16-bit, SP to a 16-bit pointer that
+  wraps (the upper half of ESP kept), 16-bit string ops (`stringOp16`), and 16-bit interrupt frames
+  through `bus.vector`, which reads the IVT at 0:0 in real mode. **Real-mode code is not cached**
+  (`cs16` goes through `step()`): 65 MIPS against the ~20 the game needs at 70 fps. Cache it only if a
+  heavier real-mode program turns up.
+- **`bootMZ`** (dospc.js) when `boot()` finds no LE and no COFF: DOS memory manager (`dosAlloc`,
+  `dosResize`, first fit under 9F00h), PSP with the top of memory at [2] and the environment segment at
+  2Ch, relocations, the IVT filled with F000:n*16. **`bus.softInt` defers to the program** when the
+  IVT entry no longer points at the machine's stub (Wolf3D hooks INT 9 and the timer); INT 21h 25h/35h
+  read and write the IVT. 49h/4Ah have real semantics only in real mode (DOS/4GW and DJGPP never
+  relied on them).
+- **VGA write mode 1** and the read latch: Wolf3D copies between pages with it, and so does DOOM at
+  one point (lock-step against the old build differs from 173 M for that reason, MEASUREMENTS §36).
+- **Page ids may have digits now** (`wolf3d`): the nav and web-contract tests matched `[a-z]+` and
+  silently skipped it, and so did the `/games/` route's regex.
+- `createPC({ programName })` names the program in the environment (argv[0]); dosworker passes
+  `game.exe`.
 
 ## Current state (2026-09-15, evening): Quake
 
@@ -609,7 +633,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 928 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 934 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

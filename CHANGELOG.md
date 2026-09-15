@@ -24,6 +24,13 @@ All notable changes to this project are documented here. The format follows
 - The shareware game packages live under `games/`: DOOM's files moved from `doom_dos/` at the repository root to `games/doom_dos/`
 
 ### Added
+- **Wolfenstein 3D, first of the DOS Diversions.** The shareware `WOLF3D.EXE` v1.4 and its `.WL1`
+  files from `games/wolf3d_dos/`, unmodified, on the same emulated PC -- which now also runs a
+  16-bit real-mode DOS program: real mode in the CPU (segments times sixteen, a wrapping SP, 16-bit
+  string instructions and interrupt frames), a plain MZ loader with its relocations, DOS's memory
+  allocator, the interrupt vector table, and VGA write mode 1. Menus, demos, AdLib music, digitised
+  sound effects, savegames and high scores kept in the browser, at its full 70 frames a second. It
+  sits before DOOM and Quake in the Diversions menu.
 - **Quake, the fifth Diversion.** The shareware `QUAKE.EXE` v1.06 and `PAK0.PAK` from
   `games/quake_dos/`, unmodified, on the same emulated PC as DOOM -- which now also plays the go32
   stub and CWSDPMI for a DJGPP program: segment bases and 16-bit code in the CPU, a COFF loader, a

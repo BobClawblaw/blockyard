@@ -78,8 +78,8 @@ test('Quake gets W A S D and mouse look the first time, and only mouse look afte
 });
 
 test('the /games/ route serves only a named game and a short DOS path of the kinds they read', async () => {
-  for (const ok of ['/games/doom/DOOM1.WAD', '/games/doom/doom.exe', '/games/quake/ID1/PAK0.PAK', '/games/quake/id1/config.cfg']) assert.match(ok, GAME_PATH);
-  for (const bad of ['/games/doom/../package.json', '/games/doom/.._DOOM1.WAD', '/games/doom/README.TXT', '/games/quake/A/B/PAK0.PAK', '/games/doom/DOOM1.WAD/x', '/games/doom/TOOLONGNAME.WAD', '/games/doom/%2e%2e%2fserver.js', '/games/quake/../doom_dos/DOOM.EXE']) {
+  for (const ok of ['/games/doom/DOOM1.WAD', '/games/doom/doom.exe', '/games/quake/ID1/PAK0.PAK', '/games/quake/id1/config.cfg', '/games/wolf3d/VSWAP.WL1', '/games/wolf3d/wolf3d.exe']) assert.match(ok, GAME_PATH);
+  for (const bad of ['/games/doom/../package.json', '/games/doom/.._DOOM1.WAD', '/games/doom/README.TXT', '/games/quake/A/B/PAK0.PAK', '/games/doom/DOOM1.WAD/x', '/games/doom/TOOLONGNAME.WAD', '/games/doom/%2e%2e%2fserver.js', '/games/quake/../doom_dos/DOOM.EXE', '/games/wolf3d/VSWAP.WL2']) {
     assert.doesNotMatch(bad, GAME_PATH, bad);
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-games-'));
@@ -130,4 +130,12 @@ test('the server hands over the files in open mode, and wants a session when acc
       await r.arrayBuffer();
     });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Wolfenstein 3D is a game of its own: its directory, its .WL1 files, and its savegames in their own database', () => {
+  assert.equal(GAME_DIRS.wolf3d, 'wolf3d_dos');
+  assert.equal(GAMES.wolf3d.exe, 'WOLF3D.EXE');
+  assert.ok(GAMES.wolf3d.required.includes('VSWAP.WL1') && GAMES.wolf3d.required.includes('GAMEMAPS.WL1'));
+  assert.equal(GAMES.wolf3d.config, 'CONFIG.WL1');
+  assert.equal(new Set(Object.values(GAMES).map((g) => g.db)).size, Object.keys(GAMES).length, 'no two games share saves');
 });
