@@ -1197,9 +1197,25 @@ function poolDonut(canvas, pools, F) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   const total = pools.reduce((s, p) => s + p.blocks, 0);
-  const font = w < 520 ? 11 : 12.5, LH = font + 4;
   const cx = w / 2, cy = h / 2;
-  const R = Math.max(40, Math.min(h / 2 - 14, w * 0.27)), r = R * 0.28;
+  // THE PIE FITS ITS LABELS (operator, 2026-09-15, of a 975px window: "surely it could look better
+  // at this sizing"): the radius is what is left after the widest label on each side and its
+  // leader, measured, so no name is ever cut at the card's edge; where that leaves too small a
+  // pie the names are shortened and the font drops a size first
+  const gap = 34;
+  const nameOf = (p, max) => (p.other ? p.name : p.name.length > max ? `${p.name.slice(0, max - 1)}…` : p.name);
+  const preview = pools.map((p) => ({ ...p, other: false }));
+  let font = 12.5, maxName = 16, R = 0, withPct = true;
+  for (const [f, m, pc] of [[12.5, 16, true], [11.5, 13, true], [11, 14, false]]) {
+    font = f; maxName = m; withPct = pc;
+    ctx.font = `${f}px system-ui, sans-serif`;
+    const widths = preview.map((p) => ctx.measureText(nameOf(p, m)).width + (pc ? ctx.measureText(' 100.0%').width : 0) + 8);
+    const widest = widths.length ? Math.max(...widths) : 0;
+    R = Math.min(h / 2 - 14, cx - gap - widest - 6);
+    if (R >= 90 || f === 11) break;   // the last step drops the shares (the reference has none) for a bigger pie
+  }
+  R = Math.max(50, R);
+  const LH = font + 4, r = R * 0.28;
   if (!total) { ctx.fillStyle = COL.text; ctx.font = `${font}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.fillText('no blocks read yet', cx, cy); return; }
   // slices: the named ones, and the rest under half a percent as one
   const small = pools.filter((p) => (p.blocks / total) * 100 < 0.5);
@@ -1229,23 +1245,24 @@ function poolDonut(canvas, pools, F) {
     for (let k = 0; k < list.length; k++) if (list[k].y < LH / 2) list[k].y = LH / 2; else if (k && list[k].y < list[k - 1].y + LH) list[k].y = list[k - 1].y + LH;
     return list;
   };
-  const gap = 34;
   ctx.font = `${font}px system-ui, sans-serif`; ctx.textBaseline = 'middle'; ctx.lineWidth = 1.5;
   for (const dir of [1, -1]) {
     const labelX = cx + dir * (R + gap), edgeX = cx + dir * (R + gap - 8);
     ctx.textAlign = dir > 0 ? 'left' : 'right';
     for (const l of side(dir)) {
-      const name = l.s.p.name.length > 16 && !l.s.p.other ? `${l.s.p.name.slice(0, 15)}…` : l.s.p.name;
+      const name = nameOf(l.s.p, maxName);
       ctx.strokeStyle = l.s.color;
       ctx.beginPath(); ctx.moveTo(l.ax, l.ay); ctx.lineTo(edgeX, l.y); ctx.lineTo(labelX - dir * 3, l.y); ctx.stroke();
       ctx.fillStyle = '#c7c9d1';
       ctx.fillText(name, labelX, l.y);
       // the share, faint, after the name on the right side and before it on the left
-      const pct = `${(l.s.p.blocks / total * 100).toFixed(1)}%`;
-      ctx.fillStyle = '#7d8b99'; ctx.font = `${font - 1.5}px ${'var(--mono), monospace'}`;
-      const nameW = ctx.measureText(name).width;
-      if (dir > 0) ctx.fillText(pct, labelX + nameW + 8, l.y); else ctx.fillText(pct, labelX - nameW - 8, l.y);
-      ctx.font = `${font}px system-ui, sans-serif`;
+      if (withPct) {
+        const pct = `${(l.s.p.blocks / total * 100).toFixed(1)}%`;
+        ctx.fillStyle = '#7d8b99'; ctx.font = `${font - 1.5}px ${'var(--mono), monospace'}`;
+        const nameW = ctx.measureText(name).width;
+        if (dir > 0) ctx.fillText(pct, labelX + nameW + 8, l.y); else ctx.fillText(pct, labelX - nameW - 8, l.y);
+        ctx.font = `${font}px system-ui, sans-serif`;
+      }
     }
   }
   ctx.textAlign = 'center';

@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- The Mining tab at a narrow window: the block flow spans the width at every size and is thinner (narrower cards, the being-built card's badge and queue lines left to the packages panel), and the pool pie sizes itself from its measured labels — shorter names, then no share figures — so no name is cut at the card's edge
 - The Mining tab fits one screen: Block flow across the top, then three stacks (the figures and the packages; the pool pie and the feerate landscape; the year chart, the adjustments, the window's pools and the attribution). The Mempool space viewer left this page — it is on Overview, Block space and Mempool — and with it the full-pool poll the page used to ask for
 - The Mining tab's pool chart is a labelled pie: every pool named beside its slice and joined to it by a leader in the slice's colour, the small ones stacked, slices under half a percent gathered as "Other"
 - The Mining tab's reward stats carry dollar figures while market polling is on, from a new `/api/price` that answers the cached spot price and never starts the exchange polling itself
