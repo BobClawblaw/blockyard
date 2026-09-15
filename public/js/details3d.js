@@ -164,7 +164,7 @@ const FX_MS = {
 export const FX_KINDS = Object.keys(FX_MS);
 // the price board's own lengths, where they differ: ball lightning crosses it a third slower
 // (operator, 2026-09-15: "cut the speed by 33% now that it's slower")
-export const MARKET_MS = { stormball: 16500 };
+export const MARKET_MS = { stormball: 16500, firework: 9000 };   // and a fireworks display of five shells needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
@@ -767,65 +767,143 @@ function chargeTrail(ctx, segs, lw, now, seedBase = 0, pale = false) {
   ctx.lineWidth = lw;
 }
 
-// FIREWORKS YOU CAN SEE (operator, 2026-09-15: "the fireworks effect doesn't work at all on the
-// market screen"). The effect only ever LIT tiles -- fxAt's ring passing over the cubes was the
-// picture on the block board, and on eight rows of candles two units apart a ring lights a
-// candle or two for a frame and nothing else. So each burst is drawn now, on both boards: a
-// rocket streak up from the floor, a flash at the top, and a shell of sparks flung out and
-// falling under gravity, each a short trail that dies out -- three shells, each its own colour,
-// at its own moment and place, as before. On the price board the shells burst at the chart's
-// own heights; on the block board a little above the tallest cubes.
+// A FIREWORKS DISPLAY (operator, 2026-09-15: "the fireworks effect doesn't work at all on the
+// market screen", then "Make the fireworks much more impressive with further effects. Make them
+// Arc. instead of just going straight up. Add the nebula smoke effect that fades out as it
+// disperses ... Make a visually stunning fireworks display for the markets page"). The effect
+// only ever LIT tiles -- fxAt's ring over the cubes was the picture on the block board, and on
+// eight rows of candles it was a candle blinking. Every shell is drawn now, on both boards:
+//   * the LAUNCH is an arc, not a line: the rocket leaves the floor to one side and climbs a
+//     parabola to its burst point, a comet with a glowing tail and exhaust sparks falling behind;
+//   * the BURST is a white flash and a shockwave ring racing out and thinning;
+//   * the SHELL is one of four kinds by turn -- peony (round, two colours), chrysanthemum (long
+//     glittering trails that crackle white late), willow (heavy droop under gravity, long
+//     trails), ring (a hoop that keeps its shape as it falls) -- sixty to ninety sparks, each a
+//     curved trail of the last few positions, slowing and pulled down, twinkling, fading;
+//   * the SMOKE is a nebula: soft gradient blobs that leave the burst outward, growing, drifting
+//     up, in the shell's colour gone grey, and fade as they disperse -- on after the sparks;
+//   * five shells on the price board (three on the block board, where the lighting ring keeps
+//     to three), each its own colour, moment and place; the price board's burst at the chart's
+//     own heights. Deterministic in fx.seed, as every effect is, so it replays and can be tested;
+//     only the twinkle reads the clock.
+const SHELL_COLS = [[[255, 170, 110], [255, 235, 160]], [[140, 220, 255], [220, 245, 255]], [[220, 160, 255], [255, 200, 240]], [[130, 255, 190], [235, 255, 220]], [[255, 120, 150], [255, 210, 120]]];
 function drawFireworks(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'firework') return;
   const U = view.unit ?? 8;
   const P = (x, y, z) => project(x, y, z, view);
   const line = view.axes?.line;
+  const price = line?.length > 1;
   let zLo = 6, zHi = 12;
-  if (line?.length > 1) { zLo = Infinity; zHi = -Infinity; for (const p of line) { zLo = Math.min(zLo, p.z); zHi = Math.max(zHi, p.z); } }
-  const COLS = [[255, 170, 110], [140, 220, 255], [220, 160, 255]];
-  for (let i = 0; i < 3; i++) {
-    const t0 = 0.05 + 0.26 * i, life = 0.45;
+  if (price) { zLo = Infinity; zHi = -Infinity; for (const p of line) { zLo = Math.min(zLo, p.z); zHi = Math.max(zHi, p.z); } }
+  const shells = price ? 5 : 3;
+  const gradientOf = (x, y, r, stops) => {
+    const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
+    if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
+    for (const [o, col] of stops) g.addColorStop(o, col);
+    return g;
+  };
+  const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
+  const seg = (a, b, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(lw * 0.8, w); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+  const now = view.now ?? 0;
+  for (let i = 0; i < shells; i++) {
+    const H = (k) => hash01(fx.seed + i * 131 + k);
+    const t0 = 0.03 + (price ? 0.17 : 0.26) * i, life = price ? 0.55 : 0.5;
     const v = (fx.u - t0) / life;
-    if (!(v > 0 && v < 1)) continue;
-    const bx = hash01(fx.seed + i * 31 + 1) * fx.gridW, by = hash01(fx.seed + i * 31 + 2) * fx.gridH;
-    const zc = zLo + (zHi - zLo) * (0.35 + 0.55 * hash01(fx.seed + i * 31 + 3));
-    const col = COLS[i].join(',');
+    if (!(v > 0 && v < 1.7)) continue;                       // the smoke outlives the shell
+    const [col, col2] = SHELL_COLS[i % SHELL_COLS.length];
+    const c1 = col.join(','), c2 = col2.join(',');
+    const bx = 0.1 * fx.gridW + H(1) * 0.8 * fx.gridW, by = H(2) * fx.gridH;
+    const zc = zLo + (zHi - zLo) * (0.4 + 0.55 * H(3));
     const top = P(bx, by, zc);
-    const RISE = 0.18;
+    const R0 = U * (price ? 6.5 : 8) * (0.85 + 0.3 * H(4));
+    const kind = i % 4;                                       // peony, chrysanthemum, willow, ring
+    // --- the launch: a parabola from the floor, off to one side, to the burst point
+    const RISE = 0.2;
+    const drift = (H(5) < 0.5 ? -1 : 1) * (0.12 + 0.2 * H(6)) * fx.gridW;
+    const arc = (f) => P(bx - drift * (1 - f), by, zc * (1 - (1 - f) * (1 - f)));   // decelerating climb
     if (v < RISE) {
-      // the rocket: a streak from the floor to where it will burst, with a bright head
-      const f = v / RISE, foot = P(bx, by, 0);
-      const head = { x: foot.x + (top.x - foot.x) * f, y: foot.y + (top.y - foot.y) * f };
-      const tail = { x: foot.x + (top.x - foot.x) * Math.max(0, f - 0.25), y: foot.y + (top.y - foot.y) * Math.max(0, f - 0.25) };
-      ctx.strokeStyle = `rgba(${col},0.55)`; ctx.lineWidth = Math.max(lw * 2, U * 0.12); ctx.beginPath(); ctx.moveTo(tail.x, tail.y); ctx.lineTo(head.x, head.y); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.arc(head.x, head.y, Math.max(lw * 1.5, U * 0.14), 0, Math.PI * 2); ctx.fill();
+      const f = v / RISE;
+      const head = arc(f);
+      // the comet tail: the last stretch of the path, wide and faint under bright and thin
+      const tail = [];
+      for (let k = 0; k <= 8; k++) tail.push(arc(Math.max(0, f - (k / 8) * 0.22)));
+      for (let k = 0; k < 8; k++) {
+        const a = 1 - k / 8;
+        seg(tail[k], tail[k + 1], `rgba(${c1},${(0.35 * a).toFixed(3)})`, U * 0.26 * a);
+        seg(tail[k], tail[k + 1], `rgba(255,240,210,${(0.9 * a).toFixed(3)})`, U * 0.08 * a);
+      }
+      // exhaust sparks: shed behind the rocket and falling
+      for (let k = 0; k < 10; k++) {
+        const age = ((f * 6 + k / 10) % 1), back = arc(Math.max(0, f - age * 0.18));
+        const sx = back.x + (H(50 + k) - 0.5) * U * 0.8, sy = back.y + age * U * 1.6;
+        disc(sx, sy, U * 0.06 * (1 - age), `rgba(255,220,160,${(0.8 * (1 - age)).toFixed(3)})`);
+      }
+      disc(head.x, head.y, U * 0.32, gradientOf(head.x, head.y, U * 0.32, [[0, 'rgba(255,255,255,1)'], [0.4, `rgba(${c2},0.9)`], [1, `rgba(${c1},0)`]]));
       continue;
     }
-    const s = (v - RISE) / (1 - RISE);              // 0 at the burst, 1 at the end
-    const R0 = U * (line ? 5.5 : 8);                 // how far the shell flies, in screen px
-    // the flash at the burst, gone in a tenth of the shell's life
-    if (s < 0.12) { const f = 1 - s / 0.12; ctx.fillStyle = `rgba(255,255,255,${(0.85 * f).toFixed(3)})`; ctx.beginPath(); ctx.arc(top.x, top.y, R0 * 0.35 * (1 - f * 0.5), 0, Math.PI * 2); ctx.fill(); }
-    // the shell: sparks flung out on a circle, slowing as they go, pulled down by gravity, each a
-    // short trail from where it was a moment ago, fading toward the end
-    const N = 44, fade = Math.pow(1 - s, 1.2), spread = 1 - Math.exp(-3.2 * s), gravity = R0 * 0.9 * s * s;
-    for (let k = 0; k < N; k++) {
-      const ang = (k / N) * Math.PI * 2 + hash01(fx.seed + i * 97 + k) * 0.2;
-      const len = R0 * (0.75 + 0.35 * hash01(fx.seed + i * 131 + k * 7));
-      const at = (sp, g) => ({ x: top.x + Math.cos(ang) * len * sp, y: top.y + Math.sin(ang) * len * sp + g });
-      const now = at(spread, gravity), back = at(Math.max(0, spread - 0.16), gravity * 0.75);
-      // a wide faint halo under a bright core, so the trail glows rather than scratches
-      ctx.strokeStyle = `rgba(${col},${(0.35 * fade).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 3, U * 0.22);
-      ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(now.x, now.y); ctx.stroke();
-      ctx.strokeStyle = `rgba(${col},${(0.95 * fade).toFixed(3)})`; ctx.lineWidth = Math.max(lw * 1.5, U * 0.09);
-      ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(now.x, now.y); ctx.stroke();
-      // the head twinkles: every spark on its own beat
-      const tw = 0.6 + 0.4 * Math.sin((view.now ?? 0) * 0.02 + k * 1.7);
-      ctx.fillStyle = `rgba(255,255,255,${(0.95 * fade * tw).toFixed(3)})`; ctx.beginPath(); ctx.arc(now.x, now.y, Math.max(lw * 1.5, U * 0.09), 0, Math.PI * 2); ctx.fill();
+    const s = Math.min(1, (v - RISE) / (1 - RISE));          // 0 at the burst, 1 when the sparks are out
+    const ss = (v - RISE) / (1.7 - RISE);                     // the smoke's own clock, 0..1 over the longer life
+    // --- the smoke: a nebula leaving the burst outward, growing, drifting up, going grey, fading
+    const smoke = [Math.round(col[0] * 0.45 + 95), Math.round(col[1] * 0.45 + 95), Math.round(col[2] * 0.45 + 105)].join(',');
+    for (let k = 0; k < 9; k++) {
+      const ang = (k / 9) * Math.PI * 2 + H(70 + k) * 0.7, sp = 0.5 + 0.7 * H(80 + k);
+      const dist = R0 * 0.55 * sp * (1 - Math.exp(-2.2 * ss)), rise = R0 * 0.25 * ss;
+      const x = top.x + Math.cos(ang) * dist, y = top.y + Math.sin(ang) * dist * 0.8 - rise;
+      const r = R0 * (0.22 + 0.7 * ss) * (0.8 + 0.4 * H(90 + k));
+      const a = 0.22 * Math.pow(1 - ss, 1.4) * (0.4 + 0.6 * Math.min(1, ss * 6));
+      if (a < 0.005) continue;
+      disc(x, y, r, gradientOf(x, y, r, [[0, `rgba(${smoke},${a.toFixed(3)})`], [0.45, `rgba(${smoke},${(a * 0.55).toFixed(3)})`], [1, `rgba(${smoke},0)`]]));
     }
-    // a soft glow round the whole shell while it is young, and a lingering ember at its heart
-    if (s < 0.6) { const f = 1 - s / 0.6; ctx.fillStyle = `rgba(${col},${(0.2 * f).toFixed(3)})`; ctx.beginPath(); ctx.arc(top.x, top.y + gravity * 0.5, R0 * spread * 1.1, 0, Math.PI * 2); ctx.fill(); }
-    ctx.fillStyle = `rgba(255,255,255,${(0.7 * fade).toFixed(3)})`; ctx.beginPath(); ctx.arc(top.x, top.y + gravity * 0.3, Math.max(lw * 2, U * 0.16) * fade, 0, Math.PI * 2); ctx.fill();
+    if (v >= 1) continue;                                     // only the smoke is left
+    // --- the burst: a flash, and a shockwave ring racing out and thinning
+    if (s < 0.14) {
+      const f = 1 - s / 0.14;
+      disc(top.x, top.y, R0 * 0.5 * (1.3 - f * 0.6), gradientOf(top.x, top.y, R0 * 0.5 * (1.3 - f * 0.6), [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.3, `rgba(${c2},${(0.7 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+    }
+    if (s < 0.4) {
+      const f = s / 0.4;
+      ctx.strokeStyle = `rgba(255,255,255,${(0.55 * (1 - f)).toFixed(3)})`; ctx.lineWidth = Math.max(lw, U * 0.12 * (1 - f));
+      ctx.beginPath(); ctx.arc(top.x, top.y, R0 * 1.25 * f, 0, Math.PI * 2); ctx.stroke();
+    }
+    // --- the shell
+    const N = kind === 3 ? 60 : 84;
+    const fade = Math.pow(1 - s, kind === 2 ? 0.8 : 1.2);
+    const spread = kind === 3 ? Math.min(1, s * 3) : 1 - Math.exp(-3.4 * s);   // a ring keeps its shape; the rest slow as they fly
+    const gscale = kind === 2 ? 1.9 : kind === 3 ? 0.7 : 1;                    // willow droops
+    const pos = (k, sp, g) => {
+      const jitter = kind === 3 ? 0.03 : 0.25;
+      const ang = (k / N) * Math.PI * 2 + (H(100 + k) - 0.5) * jitter;
+      const len = R0 * (kind === 3 ? 0.9 : 0.6 + 0.5 * H(200 + k));
+      return { x: top.x + Math.cos(ang) * len * sp, y: top.y + Math.sin(ang) * len * sp * (kind === 3 ? 0.55 : 1) + R0 * 0.9 * gscale * g * g };
+    };
+    for (let k = 0; k < N; k++) {
+      const inner = k % 3 === 0;                              // every third spark in the second colour, and shorter
+      const c = inner ? c2 : c1;
+      const scale = inner ? 0.62 : 1;
+      // the trail: the last four positions, a curve, widest and faintest at the back
+      const steps = kind === 1 || kind === 2 ? 5 : 3, back = kind === 1 || kind === 2 ? 0.22 : 0.12;
+      let prev = null;
+      for (let q = steps; q >= 0; q--) {
+        const sq = Math.max(0, s - (q / steps) * back);
+        const spq = kind === 3 ? Math.min(1, sq * 3) : 1 - Math.exp(-3.4 * sq);
+        const p = pos(k, spq * scale, sq);
+        if (prev) {
+          const a = 1 - q / (steps + 1);
+          seg(prev, p, `rgba(${c},${(0.28 * fade * a).toFixed(3)})`, U * 0.2 * a);
+          seg(prev, p, `rgba(${c},${(0.95 * fade * a).toFixed(3)})`, U * 0.07 * a);
+        }
+        prev = p;
+      }
+      // the head: white, twinkling on its own beat; chrysanthemums crackle -- a spark flares
+      // up white and big for a frame, at random, late in the shell's life
+      const tw = 0.55 + 0.45 * Math.sin(now * 0.02 + k * 1.7);
+      const pop = kind === 1 && s > 0.3 && hash01(fx.seed + k * 7 + Math.floor(now / 50)) < 0.12;
+      disc(prev.x, prev.y, U * (pop ? 0.2 : 0.075) * scale, `rgba(255,255,255,${(fade * (pop ? 1 : 0.9 * tw)).toFixed(3)})`);
+    }
+    // a glow round the whole shell while it is young, and an ember at the heart
+    if (s < 0.5) { const f = 1 - s / 0.5; disc(top.x, top.y + R0 * 0.3 * s, R0 * spread * 1.1, gradientOf(top.x, top.y + R0 * 0.3 * s, R0 * spread * 1.1, [[0, `rgba(${c2},${(0.16 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]])); }
+    disc(top.x, top.y + R0 * 0.25 * s, U * 0.16 * fade, `rgba(255,255,255,${(0.7 * fade).toFixed(3)})`);
   }
   ctx.lineWidth = lw;
 }
