@@ -269,6 +269,26 @@ function bloom(ctx, x, y, r, rgb, a = 1) {
 }
 
 /**
+ * THE SAUCER, drawn at a point on screen -- shared, because two effects fly the same craft
+ * (operator, 2026-09-15: "The top-down view in block space coming from a sphere does not look
+ * good. Can we re-purpose the UFO"). The scan beam used to hang from a glowing ball, which from
+ * directly above is just a bright blob; a craft reads as a source even top-down, because its rim
+ * and its dome give it an orientation a sphere does not have.
+ *
+ * `r` is in PIXELS: callers size it from view.unit, never from lw (see bloom).
+ */
+export function saucer(ctx, cx, cy, r, a = 1) {
+  const dome = [];
+  for (let i = 0; i <= 20; i++) { const ang = Math.PI + (i / 20) * Math.PI; dome.push({ x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r * 0.42 }); }
+  poly(ctx, dome, `rgba(120,180,255,${(0.9 * a).toFixed(3)})`);
+  poly(ctx, [
+    { x: cx - r, y: cy }, { x: cx + r, y: cy },
+    { x: cx + r * 0.7, y: cy + r * 0.25 }, { x: cx - r * 0.7, y: cy + r * 0.25 },
+  ], `rgba(200,230,255,${(0.95 * a).toFixed(3)})`);
+  bloom(ctx, cx, cy + r * 0.2, r * 0.8, [180, 230, 255], 0.5 * a);
+}
+
+/**
  * A lens flare at a bright point: an anamorphic streak in the colour, a white core, four thin
  * rays turning slowly, and a run of faint ghosts along the line toward the picture's middle.
  * `f` is 1 at full and 0 gone. Gradients only, no composite modes (the canvas rules).
@@ -534,16 +554,8 @@ defineAgent('tractor', {
         { x: base.x + w1 * 0.45, y: base.y }, { x: base.x - w1 * 0.45, y: base.y },
       ], `rgba(220,245,255,${(0.3 * t.beam).toFixed(3)})`);
     }
-    // the saucer: a flattened dome with a lit rim
-    const r = U * 1.6;
-    const dome = [];
-    for (let i = 0; i <= 20; i++) { const ang = Math.PI + (i / 20) * Math.PI; dome.push({ x: c.x + Math.cos(ang) * r, y: c.y + Math.sin(ang) * r * 0.42 }); }
-    poly(ctx, dome, 'rgba(120,180,255,0.9)');
-    poly(ctx, [
-      { x: c.x - r, y: c.y }, { x: c.x + r, y: c.y },
-      { x: c.x + r * 0.7, y: c.y + r * 0.25 }, { x: c.x - r * 0.7, y: c.y + r * 0.25 },
-    ], 'rgba(200,230,255,0.95)');
-    bloom(ctx, c.x, c.y + r * 0.2, r * 0.8, [180, 230, 255], 0.5);
+    // the saucer, shared with the scan beam's source (saucer() above)
+    saucer(ctx, c.x, c.y, U * 1.6);
     void lw;
   },
 });

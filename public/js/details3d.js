@@ -18,7 +18,7 @@ import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
-import { AGENTS, isAgent, rng, lensFlare } from './agents.js';
+import { AGENTS, isAgent, rng, lensFlare, saucer } from './agents.js';
 
 const STATE = new WeakMap();
 
@@ -871,6 +871,32 @@ export function fireworkShells(seed, gridW, gridH, price, zLo, zHi) {
 //   strobe         the sparks blink in unison, white, on a beat
 //   pinwheel       every spark curls the same way -- a spiral opening out
 const SHELL_KINDS = ['peony', 'chrysanthemum', 'willow', 'ring', 'crossette', 'strobe', 'pinwheel'];
+// SMOOTH BY LAYERING, NOT BY GRADIENT (operator, 2026-09-15: "gradient visible! We need smooth
+// fills. no gradient shit!" -- then, of the block board: "what is still with the gradient fill
+// shit?!"). createRadialGradient bands on this rasteriser: the rings are plainly visible, and
+// worst on exactly the large soft blobs the effects are made of. Nested flat discs do not band --
+// each is a plain rgba fill and the SUM is the curve.
+//
+// Takes the same `stops` a radial gradient would, so a conversion is mechanical and the colours
+// are unchanged: it walks outward-in, interpolating the stop list, painting N flat rings.
+function softStops(ctx, x, y, r, stops, N = 20) {
+  const at = (t) => {
+    let a = stops[0], b = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) if (t >= stops[i][0] && t <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+    const span = b[0] - a[0], k = span > 1e-6 ? (t - a[0]) / span : 0;
+    const pa = String(a[1]).match(/rgba?\(([^)]+)\)/), pb = String(b[1]).match(/rgba?\(([^)]+)\)/);
+    if (!pa || !pb) return String(a[1]);
+    const va = pa[1].split(',').map(Number), vb = pb[1].split(',').map(Number);
+    const m = (i, d) => (va[i] ?? d) + (((vb[i] ?? d) - (va[i] ?? d)) * k);
+    return `rgba(${Math.round(m(0, 0))},${Math.round(m(1, 0))},${Math.round(m(2, 0))},${m(3, 1).toFixed(4)})`;
+  };
+  for (let i = N; i >= 1; i--) {
+    const t = i / N;
+    ctx.fillStyle = at(t);
+    ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r * t), 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 function drawFireworks(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'firework') return;
@@ -882,6 +908,8 @@ function drawFireworks(ctx, view, lw) {
   // to well above the cubes on the block board
   const zLo = 1, zHi = price ? (view.axes?.zTop ?? 34) : 16;
   const gf = Math.min(1, (1 - fx.u) / 0.1);                  // the run's own fade-out
+  // still a real gradient maker, because gasCloud() takes one as a callback and uses it for the
+  // smoke puffs; every FILL in this function is layered flat discs now (softStops)
   const gradientOf = (x, y, r, stops) => {
     const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
     if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
@@ -924,7 +952,7 @@ function drawFireworks(ctx, view, lw) {
         const sx = back.x + (H(50 + k) - 0.5) * U * 0.8, sy = back.y + age * U * 1.6;
         disc(sx, sy, U * 0.06 * (1 - age), `rgba(255,220,160,${(0.8 * (1 - age) * gf).toFixed(3)})`);
       }
-      disc(head.x, head.y, U * 0.32, gradientOf(head.x, head.y, U * 0.32, [[0, `rgba(255,255,255,${gf.toFixed(3)})`], [0.4, `rgba(${c2},${(0.9 * gf).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+      softStops(ctx, head.x, head.y, U * 0.32, [[0, `rgba(255,255,255,${gf.toFixed(3)})`], [0.4, `rgba(${c2},${(0.9 * gf).toFixed(3)})`], [1, `rgba(${c1},0)`]]);
       continue;
     }
     const s = Math.min(1, (v - RISE) / (1 - RISE));          // 0 at the burst, 1 when the sparks are out
@@ -952,7 +980,7 @@ function drawFireworks(ctx, view, lw) {
         const flick = 0.5 + 0.5 * Math.sin(now * 0.02 + k * 2.3);
         const a = (1 - em) * gf;
         if (a > 0.02) {
-          disc(x, y, U * 0.11 * (1 - 0.5 * em), gradientOf(x, y, U * 0.11, [[0, `rgba(255,255,255,${(0.9 * a * flick).toFixed(3)})`], [0.5, `rgba(${c2},${(0.7 * a * flick).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+          softStops(ctx, x, y, U * 0.11 * (1 - 0.5 * em), [[0, `rgba(255,255,255,${(0.9 * a * flick).toFixed(3)})`], [0.5, `rgba(${c2},${(0.7 * a * flick).toFixed(3)})`], [1, `rgba(${c1},0)`]]);
           if (k % 3 === 0) disc(x + U * 0.2, y + U * 0.5 * em, U * 0.03, `rgba(${smokeCol},${(0.6 * a).toFixed(3)})`);   // ash
         }
       }
@@ -962,7 +990,7 @@ function drawFireworks(ctx, view, lw) {
     if (s < 0.14) {
       const f = (1 - s / 0.14) * gf;
       const r = R0 * 0.5 * (1.3 - f * 0.6);
-      disc(top.x, top.y, r, gradientOf(top.x, top.y, r, [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.3, `rgba(${c2},${(0.7 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+      softStops(ctx, top.x, top.y, r, [[0, `rgba(255,255,255,${(0.95 * f).toFixed(3)})`], [0.3, `rgba(${c2},${(0.7 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]);
     }
     if (s < 0.35) {
       const f = Math.pow(1 - s / 0.35, 1.5) * gf;
@@ -981,7 +1009,7 @@ function drawFireworks(ctx, view, lw) {
       for (let k = 1; k <= 5; k++) {
         const t = k * 0.35, gx = top.x + (cx0 - top.x) * t, gy = top.y + (cy0 - top.y) * t;
         const gr = R0 * (0.08 + 0.1 * H(20 + k)) * (0.6 + t), ga = 0.16 * f * (1 - k / 7);
-        disc(gx, gy, gr, gradientOf(gx, gy, gr, [[0, `rgba(${k % 2 ? c1 : c2},${(ga * 0.5).toFixed(3)})`], [0.7, `rgba(${k % 2 ? c1 : c2},${ga.toFixed(3)})`], [1, `rgba(${k % 2 ? c1 : c2},0)`]]));
+        softStops(ctx, gx, gy, gr, [[0, `rgba(${k % 2 ? c1 : c2},${(ga * 0.5).toFixed(3)})`], [0.7, `rgba(${k % 2 ? c1 : c2},${ga.toFixed(3)})`], [1, `rgba(${k % 2 ? c1 : c2},0)`]]);
       }
     }
     if (s < 0.4) {
@@ -995,7 +1023,7 @@ function drawFireworks(ctx, view, lw) {
     // (the candles under it glow in the colour too, through fxNow's heads)
     {
       const f = Math.pow(1 - s, 1.3) * gf, r = R0 * 2.4;
-      disc(top.x, top.y + R0 * 0.2 * s, r, gradientOf(top.x, top.y + R0 * 0.2 * s, r, [[0, `rgba(${c1},${(0.32 * f).toFixed(3)})`], [0.4, `rgba(${c1},${(0.14 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]));
+      softStops(ctx, top.x, top.y + R0 * 0.2 * s, r, [[0, `rgba(${c1},${(0.32 * f).toFixed(3)})`], [0.4, `rgba(${c1},${(0.14 * f).toFixed(3)})`], [1, `rgba(${c1},0)`]]);
     }
     // --- the shell
     const N = kind === 'ring' ? 60 : kind === 'crossette' ? 36 : 84;
@@ -1173,11 +1201,16 @@ function drawScanCurtain(ctx, view, lw) {
     seg(ring((i / RING) * Math.PI * 2, 1), ring(((i + 1) / RING) * Math.PI * 2, 1), `rgba(170,235,255,${(0.28 * amp).toFixed(3)})`, U * 0.05);
   }
 
-  // --- the source: a bright knot at the apex with a halo
+  // --- the source: the UFO, flying the beam (operator, 2026-09-15: "The top-down view in block
+  // space coming from a sphere does not look good. Can we re-purpose the UFO"). A glowing ball
+  // seen from directly above is just a blob -- it has no orientation, so top-down it reads as a
+  // smudge where the light starts. The saucer has a rim and a dome, so it stays a craft at any
+  // camera angle. Same craft the tractor beam flies (agents.js saucer()), so the board has one
+  // ship rather than two unrelated light sources.
   {
     const p = P(apex);
-    soft(p.x, p.y, U * 2.4, '170,235,255', 1.6 * amp);
-    disc(p.x, p.y, U * 0.32, `rgba(255,255,255,${(0.95 * amp).toFixed(3)})`);
+    soft(p.x, p.y, U * 2.6, '150,220,255', 0.9 * amp);      // the glow it sits in
+    saucer(ctx, p.x, p.y, U * 1.7, amp);
   }
 
   // --- motes INSIDE the volume: placed by angle and depth, so they sit in the cone rather than
@@ -1246,12 +1279,6 @@ function drawBlackHole(ctx, view, lw) {
   if (!h || h.rs <= 0.5) return;
   const { c, U, rs, grow } = h;
   const now = view.now ?? 0;
-  const grad = (x, y, r, stops) => {
-    const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
-    if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
-    for (const [o, col] of stops) g.addColorStop(o, col);
-    return g;
-  };
   const disc = (x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill(); };
   const canT = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
   // THE LOOK OF THE REFERENCE (operator, 2026-09-15, with NASA's still of the disk: "Is there any
@@ -1267,7 +1294,7 @@ function drawBlackHole(ctx, view, lw) {
   const inner = rs * 1.5, outer = rs * 6.4;
   const doppler = (ang) => 0.55 + 0.75 * Math.max(0, Math.cos(ang - Math.PI));   // the left side comes toward us: brightest at ang = pi
   const H = (k) => hash01(fx.seed + k);
-  disc(c.x, c.y, outer * 1.15, grad(c.x, c.y, outer * 1.15, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]));
+  softStops(ctx, c.x, c.y, outer * 1.15, [[0, `rgba(255,170,70,${(0.22 * grow).toFixed(3)})`], [0.5, `rgba(255,130,50,${(0.08 * grow).toFixed(3)})`], [1, 'rgba(255,100,40,0)']]);
   const toScreen = (rr, ang) => {
     const px = rr * Math.cos(ang), py = rr * Math.sin(ang) * SQUASH;
     return { x: c.x + px * Math.cos(TILT) - py * Math.sin(TILT), y: c.y + px * Math.sin(TILT) + py * Math.cos(TILT) };
@@ -1371,7 +1398,7 @@ function drawBlackHole(ctx, view, lw) {
   archBody('under'); archStreaks(true);                                 // the second image, under
   // the shadow, then the whole disk over it -- the far half is lifted clear of the shadow, the
   // near half crosses in front of it -- then the fibres, then the photon ring over everything
-  disc(c.x, c.y, rs * 1.1, grad(c.x, c.y, rs * 1.1, [[0, 'rgba(0,0,0,1)'], [0.88, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]));
+  softStops(ctx, c.x, c.y, rs * 1.1, [[0, 'rgba(0,0,0,1)'], [0.88, 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,0)']]);
   archBody('ring');
   archStreaks(false);
   drawStreaks(false);
@@ -1462,12 +1489,12 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
       ctx.fillStyle = grad(0, 0, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
       ctx.beginPath(); ctx.arc(0, 0, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-    } else disc(x, y, r, grad(x, y, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]));
+    } else softStops(ctx, x, y, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
     void fill;
   }
   // the limb: a soft brightening at the sphere's edge
   const R = shell * 1.02;
-  disc(cx, cy, R, grad(cx, cy, R, [[0, `rgba(${rc.join(',')},0)`], [0.78, `rgba(${rc.join(',')},0)`], [0.92, `rgba(${rc.join(',')},${(0.16 * bright).toFixed(3)})`], [1, `rgba(${rc.join(',')},0)`]]));
+  softStops(ctx, cx, cy, R, [[0, `rgba(${rc.join(',')},0)`], [0.78, `rgba(${rc.join(',')},0)`], [0.92, `rgba(${rc.join(',')},${(0.16 * bright).toFixed(3)})`], [1, `rgba(${rc.join(',')},0)`]]);
 }
 
 // A SUPERNOVA (operator, 2026-09-15: "build the supernova" -- the solar flare only ever lit a cube
@@ -1499,6 +1526,8 @@ function drawSupernova(ctx, view, lw) {
   const c = project(sx, sy, sz, view);
   const R0 = U * (price ? 6 : 7);
   const gf = Math.min(1, (1 - u) / 0.1);
+  // still a real gradient maker, because gasCloud() takes one as a callback for its puffs; every
+  // FILL drawn directly by this function is layered flat discs now (softStops)
   const grad = (x, y, r, stops) => {
     const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(x, y, 0, x, y, r) : null;
     if (!g || typeof g.addColorStop !== 'function') return stops[0][1];
@@ -1531,7 +1560,7 @@ function drawSupernova(ctx, view, lw) {
   const band = (r, w, col, a) => {
     if (r <= 0 || a <= 0.003) return;
     const R = r + w;
-    disc(c.x, c.y, R, grad(c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(240,245,255,${(a * 0.8).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]));
+    softStops(ctx, c.x, c.y, R, [[0, `rgba(${col},0)`], [Math.max(0, (r - w) / R), `rgba(${col},0)`], [Math.max(0, (r - w * 0.35) / R), `rgba(${col},${a.toFixed(3)})`], [r / R, `rgba(240,245,255,${(a * 0.8).toFixed(3)})`], [Math.min(1, (r + w * 0.5) / R), `rgba(${col},${(a * 0.6).toFixed(3)})`], [1, `rgba(${col},0)`]]);
   };
   if (u >= 0.14) {
     const f = (u - 0.14) / 0.86;
@@ -1561,15 +1590,15 @@ function drawSupernova(ctx, view, lw) {
       gasCloud(ctx, c.x, c.y, shell * 0.55, f, now, fx.seed + 777, bright * 0.8 * inner, [150, 80, 255], grad, disc, 90, [60, 25, 130]);
     }
     // and the interior glow: the cloud lit from within
-    disc(c.x, c.y, shell * 0.8, grad(c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.22 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    softStops(ctx, c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.22 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
     // the shock band at the cloud's leading edge, soft, in the cloud's colour
     if (u < 0.6) {
       const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
-      disc(c.x, c.y, r, grad(c.x, c.y, r, [[0, 'rgba(235,240,255,0)'], [0.7, `rgba(235,240,255,${(0.05 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(240,245,255,${(0.14 * (1 - fr) * gf).toFixed(3)})`]]));
+      softStops(ctx, c.x, c.y, r, [[0, 'rgba(235,240,255,0)'], [0.7, `rgba(235,240,255,${(0.05 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(240,245,255,${(0.14 * (1 - fr) * gf).toFixed(3)})`]]);
       band(r, R0 * (0.3 + 0.6 * (1 - fr)), rcs, 0.4 * (1 - fr) * gf);
     }
     // a wide pool of the cloud's colour on everything near
-    disc(c.x, c.y, shell * 1.9, grad(c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.2 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]));
+    softStops(ctx, c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.2 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
   }
   // --- the breakout: the whole picture goes white and comes back
   if (u >= 0.12 && u < 0.34) {
@@ -1589,10 +1618,10 @@ function drawSupernova(ctx, view, lw) {
     // THE WIND NEBULA IS A GAS CLOUD TOO (operator, 2026-09-15: "The pulsar nebula needs the gas
     // cloud too"): a small blue-white sphere of blobs blown outward from the pulsar, growing with
     // it, lit from the centre, the pulsar's beat showing in its brightness
-    disc(c.x, c.y, neb, grad(c.x, c.y, neb, [[0, `rgba(190,225,255,${(0.28 * on).toFixed(3)})`], [0.5, `rgba(120,175,255,${(0.12 * on).toFixed(3)})`], [1, 'rgba(80,130,255,0)']]));
+    softStops(ctx, c.x, c.y, neb, [[0, `rgba(190,225,255,${(0.28 * on).toFixed(3)})`], [0.5, `rgba(120,175,255,${(0.12 * on).toFixed(3)})`], [1, 'rgba(80,130,255,0)']]);
     gasCloud(ctx, c.x, c.y, neb, f, now, fx.seed + 4242, on * (0.75 + 0.25 * pulse), [170, 215, 255], grad, disc, 70, [40, 70, 170]);
     const rp = R0 * (0.12 + 0.25 * pulse);
-    disc(c.x, c.y, rp * 2.4, grad(c.x, c.y, rp * 2.4, [[0, `rgba(255,255,255,${((0.5 + 0.5 * pulse) * on).toFixed(3)})`], [0.3, `rgba(200,235,255,${(0.55 * pulse * on).toFixed(3)})`], [1, 'rgba(140,200,255,0)']]));
+    softStops(ctx, c.x, c.y, rp * 2.4, [[0, `rgba(255,255,255,${((0.5 + 0.5 * pulse) * on).toFixed(3)})`], [0.3, `rgba(200,235,255,${(0.55 * pulse * on).toFixed(3)})`], [1, 'rgba(140,200,255,0)']]);
     disc(c.x, c.y, rp * 0.5, `rgba(255,255,255,${on.toFixed(3)})`);
     // the beam: two thin rays sweeping round with the beat
     const sweep = now * 0.004;
@@ -1649,17 +1678,16 @@ function drawBall(ctx, view, lw) {
   // thin so the ball is light on the board rather than a shadow over it.
   const flick = 0.85 + 0.15 * Math.random();
   const R = 4.2 * U;
-  const g = typeof ctx.createRadialGradient === 'function' ? ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R) : null;
-  if (g && typeof g.addColorStop === 'function') {
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.1, 'rgba(240,250,255,1)');
-    g.addColorStop(0.22, 'rgba(200,236,255,0.85)');
-    g.addColorStop(0.4, `rgba(170,220,255,${(0.32 * flick).toFixed(3)})`);
-    g.addColorStop(0.68, `rgba(160,205,255,${(0.1 * flick).toFixed(3)})`);
-    g.addColorStop(1, 'rgba(160,200,255,0)');
-    ctx.fillStyle = g;
-  } else ctx.fillStyle = 'rgba(220,240,255,0.5)';
-  ctx.beginPath(); ctx.arc(c.x, c.y, R, 0, Math.PI * 2); ctx.fill();
+  // layered flat discs, not a radial gradient: this is the biggest soft blob on the board and it
+  // banded visibly (operator, 2026-09-15: "what is still with the gradient fill shit?!")
+  softStops(ctx, c.x, c.y, R, [
+    [0, 'rgba(255,255,255,1)'],
+    [0.1, 'rgba(240,250,255,1)'],
+    [0.22, 'rgba(200,236,255,0.85)'],
+    [0.4, `rgba(170,220,255,${(0.32 * flick).toFixed(3)})`],
+    [0.68, `rgba(160,205,255,${(0.1 * flick).toFixed(3)})`],
+    [1, 'rgba(160,200,255,0)'],
+  ], 26);
   const z0 = b.z - 0.9;
   const bolts = 4 + ((Math.random() * 4) | 0);
   for (let i = 0; i < bolts; i++) {
