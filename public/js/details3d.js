@@ -1169,13 +1169,21 @@ function drawBlackHole(ctx, view, lw) {
     const sx = Math.cos(ang) * rr * (under ? 0.78 : 1), sy = Math.abs(Math.sin(ang)) * (under ? rs * (1.05 + 0.45 * (rr - inner) / (outer - inner)) : lift(rr));
     return { x: c.x + sx * Math.cos(TILT) - sy * (under ? 1 : -1) * Math.sin(TILT), y: c.y + sx * Math.sin(TILT) + (under ? sy : -sy) * Math.cos(TILT) };
   };
-  const archBody = (under) => {
+  // ONE SET OF STRIPS FOR THE WHOLE DISK (operator, 2026-09-15, of a hard line across the middle:
+  // "that harsh line does not work"): the near half was a radial gradient in the disk's plane
+  // and the arch forty colour strips, and where they met at the midline the two disagreed. The
+  // near half is the same strips now, laid on the flat ellipse, so the colour at any radius is
+  // the same on both sides of the line and there is no line.
+  const archBody = (mode) => {
+    const under = mode === 'under', near = mode === 'near';
     const STRIPS = 40, dim = under ? 0.55 : 1;
+    const at = (rr, ang) => (near ? toScreen(rr, ang) : farPt(rr, ang, under));
+    const a0 = near ? 0 : Math.PI;
     for (let k = 0; k < STRIPS; k++) {
       const t0 = k / STRIPS, t1 = (k + 1) / STRIPS, r0 = inner + (outer - inner) * t0, r1 = inner + (outer - inner) * t1, heat = 1 - (t0 + t1) / 2;
       ctx.beginPath();
-      for (let i = 0; i <= 36; i++) { const ang = Math.PI + (Math.PI * i) / 36; const p = farPt(r1, ang, under); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
-      for (let i = 36; i >= 0; i--) { const ang = Math.PI + (Math.PI * i) / 36; const p = farPt(r0, ang, under); ctx.lineTo(p.x, p.y); }
+      for (let i = 0; i <= 36; i++) { const ang = a0 + (Math.PI * i) / 36; const p = at(r1, ang); if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); }
+      for (let i = 36; i >= 0; i--) { const ang = a0 + (Math.PI * i) / 36; const p = at(r0, ang); ctx.lineTo(p.x, p.y); }
       ctx.closePath();
       // bright, never brown: the rim stays a saturated orange rather than a dark red at low alpha
       const R = 255, G = Math.round(95 + 160 * Math.pow(heat, 0.7)), B = Math.round(25 + 200 * Math.pow(heat, 2.2));
@@ -1200,11 +1208,11 @@ function drawBlackHole(ctx, view, lw) {
       ctx.stroke();
     }
   };
-  archBody(true); archStreaks(true);                                    // the second image, under
-  archBody(false); archStreaks(false);                                  // the great arch, over
+  archBody('under'); archStreaks(true);                                 // the second image, under
+  archBody('over'); archStreaks(false);                                 // the great arch, over
   drawShadow();
-  // --- the near half, in front of the hole
-  body(0, Math.PI);
+  // --- the near half, in front of the hole: the same strips, on the flat ellipse
+  archBody('near');
   drawStreaks(false);
   // --- lensed starlight: short arcs of white round the horizon, the sky behind bent into rings
   for (let k = 0; k < 26; k++) {
