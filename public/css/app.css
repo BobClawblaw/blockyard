@@ -1274,8 +1274,23 @@ canvas.chart.donut { width: 100%; height: 380px; }
 .mnflow .bcard.tip { flex-basis: 160px; }
 .mnflow .bcard .chips, .mnflow .bcard.next .note.tiny { display: none; }
 .mnflow .bgrid span, .mnflow .brows span { font-size: 9.5px; }
-.mnflow .flowwrap { padding-bottom: 2px; }
-.mnflow .flow { padding-bottom: 2px; }
+.mnflow .flowwrap { padding-bottom: 0; }
+.mnflow .flow { padding: 2px 2px 0; }
+/* ...and no dead height (operator: "Too much empty space under the blocks to the panel border"):
+   measured 254px for a card whose blocks are 161 -- the legend row under the flow, the rail's
+   margin, the card's and the blocks' own padding. The legend goes on this page, the rest tightens. */
+.card.mnflow { padding: 8px 11px 7px; }
+.mnflow h3 { margin-bottom: 5px; }
+.mnflow .rail { margin-bottom: 3px; }
+.mnflow .tiplegend { display: none; }
+.mnflow .bcard { padding-top: 6px; padding-bottom: 6px; }
+.mnflow .bcard .bwhen { margin-top: 2px; margin-bottom: 3px; }
+.mnflow .bcard .bplaque { margin-top: 4px; }
+/* the whole Mining page packs tighter, the same way */
+.page[data-page="mining"] .mn3 .card { padding: 9px 11px 8px; }
+.page[data-page="mining"] .mn3 h3 { margin-bottom: 6px; }
+.page[data-page="mining"] .netstats { padding: 2px 0 4px; gap: 6px 12px; }
+.page[data-page="mining"] .netstats .ns .v { font-size: 20px; }
 .mn3 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
 @media (max-width: 1100px) { .mn3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 @media (max-width: 760px) { .mn3 { grid-template-columns: minmax(0, 1fr); } }

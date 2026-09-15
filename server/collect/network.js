@@ -282,7 +282,8 @@ export class NetworkStats {
     const windowFloor = tip != null ? tip - Math.ceil(this.windowDays * DAY_BLOCKS * 1.15) : null;
     return {
       at: this.at, lastError: this.lastError, tip,
-      rewards: rewardStats([...this.rewards.values()]),
+      // exactly the newest 144: the map keeps a few extra rows below the window between prunes
+      rewards: rewardStats([...this.rewards.values()].sort((a, b) => b.height - a.height).slice(0, this.rewardBlocks)),
       difficulty: this.difficulty,
       adjustment: est,
       halving: tip != null ? halvingInfo(tip, { now }) : null,
