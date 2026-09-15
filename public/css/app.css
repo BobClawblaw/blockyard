@@ -1298,7 +1298,11 @@ canvas.chart.donut { width: 100%; height: 380px; }
 .page[data-page="mining"] .netstats { padding: 2px 0 4px; gap: 6px 12px; }
 .page[data-page="mining"] .netstats .ns .v { font-size: 20px; }
 .mn3 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
-@media (max-width: 1100px) { .mn3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+/* three stacks only where each gets 450px or more (operator, 2026-09-15, of an 1146px window
+   where the packages table ran into the landscape and the pie was a coin): two below 1400 */
+@media (max-width: 1400px) { .mn3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+/* a table wider than its stack scrolls inside its card instead of bleeding into the next */
+.mn3 .card > div:has(> table), #mnPackages, #mnPools { overflow-x: auto; max-width: 100%; }
 @media (max-width: 760px) { .mn3 { grid-template-columns: minmax(0, 1fr); } }
 .donutlegend { display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 11.5px; max-height: 230px; overflow: auto; }
 .donutlegend div { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
