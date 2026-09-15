@@ -1361,7 +1361,9 @@ export function buildScene(tiles, o = {}) {
       // it. The angle's starting offset is small for the same reason.
       const peak = Math.max(fxv.pullPeak ?? fxv.pull, 0.001), kl = Math.min(1, fxv.pull / peak), k0 = kl * kl * (3 - 2 * kl);
       const dx = cx0 - hp.x, dy = cy0 - hp.y, r0 = Math.hypot(dx, dy) || 1, a0 = Math.atan2(dy, dx);
-      const swing = peak * peak * (o.now ?? 0) * 0.0014 + 0.5 * peak;   // clockwise on screen, Keplerian
+      // HALF THE SPEED (operator, 2026-09-15: "The bars sping around much much too quickly. Try to
+      // calm it down by at least half to start"): 0.0007 a millisecond at full pull, from 0.0014
+      const swing = peak * peak * (o.now ?? 0) * 0.0007 + 0.5 * peak;   // clockwise on screen, Keplerian
       const r1 = r0 * (1 - 0.55 * peak), a1 = a0 + swing;
       const cx1 = hp.x + Math.cos(a1) * r1, cy1 = hp.y + Math.sin(a1) * r1 * (1 - 0.6 * peak);      // flattened toward the disk
       const sx = (cx1 - cx0) * k0, sy = (cy1 - cy0) * k0;
