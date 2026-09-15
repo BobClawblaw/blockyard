@@ -338,7 +338,12 @@ test('THE SCAN IS A CONE, NOT A STACK OF SHEETS', () => {
     clock = 1000;
     assert.equal(triggerIdle(canvas, 'scan'), true, 'the scan is triggerable');
     drawn.length = 0;
-    clock = 3500;                                  // mid-sweep of the 6 s effect
+    // MID-SWEEP, DERIVED -- not a fixed 3500, which was mid-sweep of a 6 s effect and is barely off
+    // the starting line now that the Markets scan runs 14.6 s (operator asked for it slower twice).
+    // A hardcoded sample time silently stops testing the thing it was written for the moment the
+    // pacing changes: at 3500 the front was still off the board, so there was no cone to find.
+    const ms = MARKET_MS.scan ?? 6000;
+    clock = 1000 + ms * 0.5;
     const fn = raf; raf = null; fn?.(clock);
 
     const tris = drawn.filter((p) => p.length === 3 && !p[0].arc);
