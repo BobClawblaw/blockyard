@@ -315,7 +315,10 @@ function fxNow(st, t) {
     const grow = u < 0.22 ? Math.pow(u / 0.22, 1.6) : u > 0.82 ? Math.max(0, 1 - Math.pow((u - 0.82) / 0.18, 1.4)) : 1;
     const rs = 2.4 * grow;                                             // the horizon, in grid units
     out.blackhole = { x: hx, y: st.axes.y ?? st.gridH / 2, z: hz, rs, grow, lo, hi };
-    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, color: [255, 160, 60], alpha: grow, r: rs * 1.9, hide: 1 }] : [];
+    // SWALLOWED SMOOTHLY (operator, 2026-09-15: "the candles just blinking out of existence looks
+    // bad"): not `hide`, which is a threshold, but `scale: 0`, which fxAt applies by reach -- a
+    // candle shrinks toward nothing as it nears the horizon and grows back as the hole recedes
+    out.heads = grow > 0.02 ? [{ x: hx, y: st.axes.y ?? st.gridH / 2, color: [255, 160, 60], alpha: grow, r: rs * 2.2, scale: 0 }] : [];
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's

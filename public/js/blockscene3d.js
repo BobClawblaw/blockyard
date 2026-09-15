@@ -1138,7 +1138,7 @@ export function fxAt(t, fx) {
     }
     case 'pulse':        // the price line's surge lights the candles under its head (details3d fxNow)
     case 'firework':     // each shell lights its surroundings in its colour (details3d fxNow)
-    case 'blackhole':    // the hole's head swallows the candles it reaches (hide) and lights the rest orange
+    case 'blackhole':    // the hole's head shrinks the candles it reaches toward nothing (scale) and lights the rest orange
     case 'lightcycle':
     case 'packets':
     case 'centipede':

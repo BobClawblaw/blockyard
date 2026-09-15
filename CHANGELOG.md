@@ -26,9 +26,11 @@ All notable changes to this project are documented here. The format follows
   throws a fifth fewer arcs again and a quarter fewer chains, second and third.
 - **Black hole**, a new Markets effect (modelled on NASA's visualisation, svs.gsfc.nasa.gov/14576):
   a point of darkness opens on the price line and grows over 26 s; the line bends round it as
-  through a lens (`lensPoints`, the Einstein-radius push), the candles it reaches are swallowed
-  (a head that hides), and an accretion disk in the chart's own colours — gold, and the candles'
-  green and red — spirals in at Keplerian speed round the shadow, brighter on the side coming
+  through a lens (`lensPoints`, the Einstein-radius push), the candles it reaches shrink away
+  into it (a head that scales, by reach — smooth, never a blink), and an accretion disk of gas in
+  the chart's own colours — gold, and the candles' green and red — three hundred blobs on
+  Keplerian orbits in the disk's plane, the whole ring, its far half behind the shadow and its
+  near half across it, spirals in brighter on the side coming
   toward you, its far side lensed into an arch over the top and a thinner one under the bottom,
   a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
   straightens and the candles come back. Thirty-three effects; fifteen on Markets.
