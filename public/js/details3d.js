@@ -176,7 +176,12 @@ export const FX_KINDS = Object.keys(FX_MS);
 // 1.40x on Block space. These restore the crossing to the speed it had: measured, 9145 ms and
 // 8400 ms for the two boards. Markets needs the longer one because its panel is wide and its board
 // is shallow, so proportionally more of the journey happens off-screen.
-export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan: 9150 };   // and a fireworks display of five shells, each with its smoke, needs the time
+// ...and then slower still on Markets (operator, 2026-09-15: "It's still way too fast on the
+// markets display. Slow it down at least 50%"). 9150 restored the pacing the effect had BEFORE the
+// travel change, which turns out not to have been slow enough either -- restoring a speed is not
+// the same as it being right. 14600 makes the on-screen crossing 8451 ms against 5297, i.e. 60%
+// slower, which clears the "at least 50%" asked for.
+export const MARKET_MS = { stormball: 27500, firework: 14000, flare: 24000, scan: 14600 };   // and a fireworks display of five shells, each with its smoke, needs the time
 // The longest a refresh will ever wait for an effect to finish, plus a second of slack. Taken from
 // the table rather than written as a number, so culling or adding an effect cannot leave the cap
 // shorter than the effect it is meant to outlast. See the deferral in render3d.
