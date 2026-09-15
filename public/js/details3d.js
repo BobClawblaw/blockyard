@@ -1146,7 +1146,12 @@ function drawBlackHole(ctx, view, lw) {
   const farPt = (rr, ang, under) => {
     // the second image is a MIRROR, x as well as y: it turns with the band above it, not against
     // (2026-09-15: "the two discs are spinning in opposite directions")
-    const sx = Math.cos(ang) * rr * (under ? -0.78 : 1), sy = Math.abs(Math.sin(ang)) * (under ? rs * (1.05 + 0.45 * (rr - inner) / (outer - inner)) : lift(rr));
+    // CONTINUOUS INTO THE BAND (2026-09-15: "The transition between the two discs is not steady
+    // or continuous"): the arch's height starts at the flat band's own slope (rr * SQUASH per
+    // radian) and the lift takes over with |sin|^2.4, so the surface bends smoothly up from the
+    // band rather than kinking where the two meet
+    const sn = Math.abs(Math.sin(ang)), top = under ? rs * (1.05 + 0.45 * (rr - inner) / (outer - inner)) : lift(rr);
+    const sx = Math.cos(ang) * rr * (under ? -0.78 : 1), sy = rr * SQUASH * sn + Math.max(0, top - rr * SQUASH) * Math.pow(sn, 2.4);
     return { x: c.x + sx * Math.cos(TILT) - sy * (under ? 1 : -1) * Math.sin(TILT), y: c.y + sx * Math.sin(TILT) + (under ? sy : -sy) * Math.cos(TILT) };
   };
   // ONE SET OF STRIPS FOR THE WHOLE DISK (operator, 2026-09-15, of a hard line across the middle:

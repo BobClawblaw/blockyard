@@ -1292,11 +1292,26 @@ export function buildScene(tiles, o = {}) {
     // leans and lengthens toward the hole before the scale takes it. Each corner object is moved
     // once, however many faces share it.
     if (fxv.pull > 0.001 && fxv.pullAt) {
+      // ...AND ORBITS (operator, 2026-09-15: "The chart bars need to cleanly orbit the disc"): the
+      // tile is swept round the hole along the disk's flow as it is drawn in -- its centre swings
+      // about the hole by an angle that grows with the pull and the clock, on a radius that
+      // shrinks with the pull, flattened toward the disk's plane -- and its corners lean and
+      // stretch toward the hole on top of that
       const hp = project(fxv.pullAt.x, fxv.pullAt.y, fxv.pullAt.z, o);
-      const moved = new Set();
-      const drag = (p, k) => { if (moved.has(p)) return; moved.add(p); p.x += (hp.x - p.x) * k; p.y += (hp.y - p.y) * k; };
-      for (const p of f.top) drag(p, 0.85 * fxv.pull);
-      for (const sd of f.sides) { drag(sd.points[0], 0.85 * fxv.pull); drag(sd.points[1], 0.85 * fxv.pull); drag(sd.points[2], 0.3 * fxv.pull); drag(sd.points[3], 0.3 * fxv.pull); }
+      const pts = [...f.top, ...f.sides.flatMap((sd) => sd.points)];
+      const uniq = [...new Set(pts)];
+      const cx0 = uniq.reduce((a, p) => a + p.x, 0) / uniq.length, cy0 = uniq.reduce((a, p) => a + p.y, 0) / uniq.length;
+      const dx = cx0 - hp.x, dy = cy0 - hp.y, r0 = Math.hypot(dx, dy) || 1, a0 = Math.atan2(dy, dx);
+      const swing = fxv.pull * ((o.now ?? 0) * 0.0009 + 1.2);          // clockwise on screen, faster the deeper in
+      const r1 = r0 * (1 - 0.55 * fxv.pull), a1 = a0 + swing;
+      const cx1 = hp.x + Math.cos(a1) * r1, cy1 = hp.y + Math.sin(a1) * r1 * (1 - 0.6 * fxv.pull);   // flattened toward the disk
+      const sx = cx1 - cx0, sy = cy1 - cy0;
+      const tops = new Set([...f.top, ...f.sides.flatMap((sd) => [sd.points[0], sd.points[1]])]);
+      for (const p of uniq) {
+        p.x += sx; p.y += sy;                                           // carried round the orbit
+        const k = tops.has(p) ? 0.55 * fxv.pull : 0.2 * fxv.pull;      // and leaning in
+        p.x += (hp.x - p.x) * k; p.y += (hp.y - p.y) * k;
+      }
     }
     const a = t.alpha ?? 1;
     const airborne = (t.z ?? 0) > 0.02;
