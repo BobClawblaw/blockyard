@@ -58,6 +58,16 @@ export function localConfig(a) {
   if (a.indexDir) node.addressIndex = a.indexDir;
   if (a.indexBuild === 'manual') node.addressIndexBuild = 'manual';   // the server builds a missing index on start unless told not to
   if (Number.isInteger(a.workers) && a.workers > 0) node.addressIndexWorkers = a.workers;   // the server's background build uses the same number
+  // What the node told us it can do, from bmcgetcapabilities (scripts/check.js).
+  // A SNAPSHOT, written so the server knows on its first tick without a probe --
+  // not a source of truth. These are live settings on the node: an operator can
+  // enable the journal or the facade tomorrow, so the server re-reads them and
+  // this only saves the first round trip. Absent for a Core node, which is how
+  // the server tells the two apart.
+  if (a.nodeKind && a.nodeKind !== 'core') {
+    node.nodeKind = a.nodeKind;
+    if (a.nodeCapabilities) node.nodeCapabilities = a.nodeCapabilities;
+  }
   return { server: { host: a.host, port: Number(a.port) }, nodes: [node] };
 }
 
@@ -293,6 +303,10 @@ async function main() {
     result = await runChecks(node, { rpc: clientFor(node, defaults) });
     if (result.facts.chain && result.facts.chain !== a.chain) { a.chain = result.facts.chain; node.chainHint = a.chain; result = await runChecks(node, { rpc: clientFor(node, defaults) }); }
     spin.stop();
+    // Carry what the node said about itself into the answers, so localConfig
+    // can record it below. A Core node reports nodeKind 'core' and nothing is
+    // written -- absence is the signal.
+    if (result.facts.nodeKind) { a.nodeKind = result.facts.nodeKind; a.nodeCapabilities = result.facts.nodeCapabilities ?? null; }
     for (const ch of result.checks) out(checkLine(ch.status, ch.name, ch.detail));
     out();
     if (result.ok) { say(c.ok(c.bold('everything this needs is there'))); break; }

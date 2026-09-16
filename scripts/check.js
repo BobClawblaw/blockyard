@@ -148,6 +148,52 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
     }
   }
 
+  // ---- what KIND of node is this, and what can it do that Core cannot? ----
+  //
+  // Until 2026-09-16 there was no way to tell over RPC. The monitor says so in
+  // its own source: "both report the same non-Core subversion string. So RPC
+  // cannot tell you whether RPC is complete; only the log's build banner can."
+  // That is why `log.enabled` is a per-node setting -- identifying the node
+  // needed FILE ACCESS to a machine we can already reach by RPC.
+  //
+  // bmcgetcapabilities answers it in one call. A plain Core node does not have
+  // the method, and that is not a failure: it is how we learn this is Core.
+  // Every field it returns is LIVE STATE rather than a compile-time list, so
+  // "the node serves address history" means it is serving it now, not that the
+  // binary could if configured.
+  {
+    const caps = await one('bmcgetcapabilities', [], 5000);
+    if (!caps.ok) {
+      facts.nodeKind = 'core';
+      add('node kind', 'ok', 'Bitcoin Core (or a node without bmcgetcapabilities) — BlockYard supplies the address index itself');
+    } else {
+      const r = caps.result ?? {};
+      const x = r.extensions ?? {};
+      facts.nodeKind = r.node ?? 'bitcoinmachinecode';
+      facts.nodeBuild = r.build?.commit ?? null;
+      facts.nodeCapabilities = {
+        addrindex: Boolean(x.addrindex),
+        esploraPort: Number(x.esploraport ?? 0) || 0,
+        mempoolJournal: Boolean(x.mempooljournal?.enabled),
+        mempoolJournalCapacity: x.mempooljournal?.enabled ? Number(x.mempooljournal.capacity) : 0,
+        downloadInfo: Boolean(x.downloadinfo),
+        rpcComplete: Boolean(r.rpc_complete?.peerinfo && r.rpc_complete?.nettotals),
+      };
+      const have = [];
+      if (facts.nodeCapabilities.addrindex) have.push('address history from the node');
+      if (facts.nodeCapabilities.esploraPort) have.push(`Esplora facade on :${facts.nodeCapabilities.esploraPort}`);
+      if (facts.nodeCapabilities.mempoolJournal) have.push(`mempool departure journal (${facts.nodeCapabilities.mempoolJournalCapacity.toLocaleString()} records)`);
+      if (facts.nodeCapabilities.downloadInfo) have.push('download worker map');
+      add('node kind', 'ok',
+          `${facts.nodeKind} ${facts.nodeBuild ? `(${facts.nodeBuild}${r.build?.dirty ? ', dirty' : ''}) ` : ''}in ${caps.ms}`
+          + (have.length ? ` — ${have.join(', ')}` : ' — no extensions enabled'));
+      // The one that changes what BlockYard has to DO: with the node serving
+      // address history there is no reason to build and follow a second copy.
+      if (facts.nodeCapabilities.addrindex)
+        add('address index', 'ok', 'the node serves it (addrindex=1) — BlockYard does not need to build its own');
+    }
+  }
+
   return { ok: !checks.some((c) => c.status === 'fail'), checks, facts };
 }
 
