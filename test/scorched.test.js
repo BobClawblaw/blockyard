@@ -1106,7 +1106,7 @@ test('scorched yard: the air stays evenly filled, carries tails, and runs on cur
   // currents: traced through the same field, from the upwind edge across, and never upwind
   for (const wind of [5, -5]) {
     const lines = traceStreamlines(c, { wind, w: 800, h: 400 });
-    assert.ok(lines.length >= 20, 'a few dozen currents');
+    assert.ok(lines.length >= 12, 'a dozen or so currents');
     for (const l of lines) for (let i = 1; i < l.pts.length; i++) assert.ok((l.pts[i].x - l.pts[i - 1].x) * Math.sign(wind) > 0, 'every current runs downwind at every step');
     assert.ok(lines.some((l) => Math.abs(l.pts[l.pts.length - 1].y - l.pts[0].y) > 4), 'and they bend');
   }

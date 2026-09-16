@@ -164,8 +164,11 @@ export function stepFlow(parts, dt, { wind = 0, w = 800, h = 400, now = 0, scale
     segs.push({
       x0: p.px, y0: p.py, x1: p.x, y1: p.y, tail: p.tail,
       // twice the presence at half the count (operator, 2026-09-16: "They are too subtle now")
-      alpha: (0.24 + 0.5 * strength) * fade * (0.5 + 0.7 * speed) * (0.55 + 0.45 * p.band / 2),
-      th: p.sz * (1.1 + 1.1 * (p.band / 2)),
+      // and back to the middle (operator, with a night capture at a wind of nine: "this is way too
+      // much"): the day tuning had every layer turned up together, and on a dark sky at a strong
+      // wind that was a wall. The presence grows with the wind, but only to about half again
+      alpha: (0.15 + 0.2 * strength) * fade * (0.5 + 0.7 * speed) * (0.55 + 0.45 * p.band / 2),
+      th: p.sz * (0.85 + 0.85 * (p.band / 2)),
     });
   }
   return segs;
@@ -207,13 +210,13 @@ export function plasmaCells(w, h, clock, wind, cell = 30) {
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
       const v = field(i * 0.16 - drift, j * 0.16, t);
-      const a = (v - 0.45) * (0.08 + 0.05 * strength);
+      const a = (v - 0.45) * (0.06 + 0.03 * strength);
       if (a <= 0.004) continue;
       // a staggered grid of overlapping discs, not squares: on a dark sky a grid of squares is a
       // grid, and a blotch that overlaps its neighbours is weather
       // jittered off the lattice as well, so a black sky does not show the honeycomb underneath
       const jx = (hash2(i * 3.1, j * 7.7) - 0.5) * cell * 0.7, jy = (hash2(i * 5.3, j * 2.9) - 0.5) * cell * 0.7;
-      out.push({ x: i * cell + (j % 2 ? cell / 2 : 0) + jx, y: j * cell + jy, r: cell * (0.9 + 0.35 * hash2(j, i)), alpha: Math.min(0.075, a) });
+      out.push({ x: i * cell + (j % 2 ? cell / 2 : 0) + jx, y: j * cell + jy, r: cell * (0.9 + 0.35 * hash2(j, i)), alpha: Math.min(0.05, a) });
     }
   }
   return out;
@@ -238,7 +241,7 @@ export function paintPlasma(ctx, cells, colour = '196,214,238') {
  * flow along the curves like beads on a wire. Nearly free per frame, and there is no particle
  * state in them to age, reseed or synchronise.
  */
-export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 28, steps = 44, scale = 0.0042 } = {}) {
+export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 16, steps = 44, scale = 0.0042 } = {}) {
   const strength = Math.min(1, Math.abs(wind) / 10);
   if (!w || !h || strength < 0.03) return [];
   const dir = wind < 0 ? -1 : 1;
@@ -260,7 +263,7 @@ export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 28
       x += (vx / vm) * step; y += (vy / vm) * step;
       pts.push({ x, y });
     }
-    lines.push({ pts, alpha: 0.12 + 0.22 * strength * (0.6 + 0.4 * hash2(i, 9.1)) });
+    lines.push({ pts, alpha: 0.035 + 0.05 * strength * (0.6 + 0.4 * hash2(i, 9.1)) });
   }
   return lines;
 }
@@ -269,11 +272,11 @@ export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 28
 export function paintStreamlines(ctx, lines, travel, colour = '206,220,240') {
   if (!lines.length) return;
   ctx.lineCap = 'butt';
-  ctx.setLineDash([20, 14]);
+  ctx.setLineDash([12, 20]);
   for (const l of lines) {
     ctx.lineDashOffset = -travel;                          // the dashes run the way the curve was traced: downwind
     ctx.strokeStyle = `rgba(${colour},${l.alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.7;
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
     ctx.moveTo(l.pts[0].x, l.pts[0].y);
     for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);
