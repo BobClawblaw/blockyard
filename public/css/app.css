@@ -1818,6 +1818,7 @@ body { font-variant-numeric: tabular-nums; }
 .cfggroup { border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 8px 10px 10px; margin-bottom: 10px; background: var(--bg-2); }
 .cfggroup > h3 { margin: 0 0 4px; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
 .cfggroup > p { margin: 0 0 8px; color: var(--fg-faint); font-size: 11px; line-height: 1.4; }
+.cfggroup > p.cfgheld { color: var(--warn); }
 /* packed (2026-09-15): rows 5px not 7, hints tighter, and on the effects tabs the switches two across
    with the hint as the row's tooltip */
 .cfgrow { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line-soft); }

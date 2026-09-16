@@ -1275,7 +1275,9 @@ tonight's phase, and the star field comes out as the sun goes down.
 - **Sun rays**, **Rainbow** (opposite a low sun, in scattered weather) and **Shooting stars** (now
   and then, at night) are the touches, each a switch.
 
-The star field's own settings below still apply at night.
+The star field's own settings below still apply at night. The **Space effects** are off while the
+Living sky is on (a supernova over a blue afternoon is wrong); their switches are kept, and space
+gets them back.
 
 
 One sky, shared by every board that shows stars — so the density you choose applies to Block

@@ -1037,7 +1037,10 @@ export function spaceOptions(s) {
   const d = DETAIL[sp.detail] ?? DETAIL.full;
   const out = {
     shadows: sp.shadows,
-    idleFx: sp.idleFx,
+    // THE SPACE EFFECTS GO OFF UNDER THE LIVING SKY (operator, 2026-09-16: "We have to toggle all
+    // the Space effects off when Living Sky is selected"): supernovae and black holes over a blue
+    // afternoon are wrong. Gated here, not by flipping the switches, so space gets them back as saved.
+    idleFx: sp.idleFx && n.sky.type !== 'living',
     grid: sp.grid,
     neon: sp.neon,
     sheen: sp.sheen,
@@ -1071,7 +1074,7 @@ export function spaceOptions(s) {
   // merged into the camera by details3d (it owns the oblique constants); 0 leaves it exactly as it
   // has always been, so the switch costs nothing until someone moves it
   out.obliqueRise = sp.perspective;
-  out.fxKinds = enabledEffects(n);
+  out.fxKinds = n.sky.type === 'living' ? [] : enabledEffects(n);
   out.fxNoRepeat = n.effects.noRepeat;
   Object.assign(out, fxCadence(n.effects));
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;

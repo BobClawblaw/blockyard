@@ -143,6 +143,14 @@ test('the settings reach every board that draws a sky, and the defaults keep spa
   const rows = PANEL.find((g) => g.group === 'sky').rows.map((r) => r.key);
   for (const k of ['type', 'clock', 'hour', 'weather', 'cover', 'lat', 'rays', 'rainbow', 'shooting']) assert.ok(rows.includes(k), `${k} has a row`);
   assert.ok(Object.keys(DEFAULTS.sky).includes('type'));
+  // the Space effects go off under the Living sky, and the switches are kept for space
+  const withFx = normalise({ sky: { type: 'living' }, space: { idleFx: true }, effects: { nova: true, ripple: true } });
+  assert.equal(spaceOptions(withFx).idleFx, false, 'no idle effects over a blue afternoon');
+  assert.deepEqual(spaceOptions(withFx).fxKinds, [], 'none in the rotation');
+  assert.equal(withFx.effects.nova, true, 'the switch itself is untouched');
+  const back = normalise({ ...withFx, sky: { ...withFx.sky, type: 'space' } });
+  assert.equal(spaceOptions(back).idleFx, true, 'space gets them back');
+  assert.ok(spaceOptions(back).fxKinds.includes('nova'));
   // the renderer draws it in the star field's place and the games pass it to their sky canvases
   const engine = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(engine, /opts\.skyType === 'living'\) drawLivingSky/);

@@ -1198,7 +1198,9 @@ async function boot() {
       open = false;
       return `${close}<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
       }).join('') + (open ? '</div>' : '');
-      return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${bulk}${rowsHtml}</div>`;
+      // the Space effects tab says so while the Living sky has them off (settings.js spaceOptions)
+      const held = g.group === 'effects' && s.sky.type === 'living' ? '<p class="cfgheld">Off while the sky is the Living sky (Sky tab): these play over space. Your switches are kept.</p>' : '';
+      return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${held}${bulk}${rowsHtml}</div>`;
     }).join('');
     for (const el of cfgBody.querySelectorAll('[data-swatch]')) el.style.setProperty('background', el.dataset.swatch);
     for (const el of cfgBody.querySelectorAll('.thcard')) {
