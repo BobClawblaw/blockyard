@@ -77,13 +77,47 @@ export function* records(buf, magic = MAGIC.main, trailer = 0, key = null) {
 
 // --- undo data -----------------------------------------------------------
 // Core's VARINT (serialize.h), which is NOT CompactSize: MSB base-128 with an offset per byte.
-function readVarInt(buf, st) {
+// Core reads each field at a fixed width and throws "ReadVarInt(): size too large" past it. The
+// height code, the version placeholder and the script size are uint32, so a longer run of
+// continuation bytes is corruption, not a large number -- and refusing it keeps every value an exact
+// double (a flipped byte used to hand back heights and amounts past 2^53, rounded).
+function readVarInt(buf, st, max = 0xffffffff) {
+  const limit = Math.floor(max / 128);
   let n = 0;
   for (;;) {
     const b = buf[st.pos++];
     if (b === undefined) throw new RangeError('truncated VARINT');
+    if (n > limit) throw new RangeError('VARINT too large');
+    n = n * 128 + (b & 0x7f);
+    if (b & 0x80) { if (n === max) throw new RangeError('VARINT too large'); n += 1; } else return n;
+  }
+}
+// THE AMOUNT IS A uint64 VARINT, AND IT CAN PASS 2^53 FOR A LEGAL AMOUNT. CompressAmount makes an
+// amount that does not end in a zero about 9x larger, so from ~1e15 satoshis (10M BTC in one output,
+// never seen, but in range) the compressed value no longer fits a double: 2,099,999,999,999,999 sat
+// compresses to 18,899,999,999,999,991, which rounds to ...992, and came back as 209,999,999,999,999,940
+// -- a hundred times too much, because the rounding moved the exponent digit
+// (test/chain-decode-property.test.js). Every real amount stays on the number path; past 2^46,
+// where one more byte could round, the rest is read in BigInt, to Core's uint64 limit.
+const U64 = 0xffffffffffffffffn;
+function readAmountVarInt(buf, st) {
+  let n = 0;
+  for (;;) {
+    const b = buf[st.pos];
+    if (b === undefined) throw new RangeError('truncated VARINT');
+    if (n > 0x3fffffffffff) return readBigVarInt(buf, st, BigInt(n));
+    st.pos++;
     n = n * 128 + (b & 0x7f);
     if (b & 0x80) n += 1; else return n;
+  }
+}
+function readBigVarInt(buf, st, n) {
+  for (;;) {
+    const b = buf[st.pos++];
+    if (b === undefined) throw new RangeError('truncated VARINT');
+    if (n > U64 >> 7n) throw new RangeError('VARINT too large');
+    n = (n << 7n) | BigInt(b & 0x7f);
+    if (b & 0x80) { if (n === U64) throw new RangeError('VARINT too large'); n += 1n; } else return n;
   }
 }
 function readCompactSize(buf, st) {
@@ -94,8 +128,21 @@ function readCompactSize(buf, st) {
   const v = Number(buf.readBigUInt64LE(st.pos)); st.pos += 8; return v;
 }
 
-// compressor.cpp DecompressAmount
+// compressor.cpp DecompressAmount. `x` is a number, or a BigInt when its VARINT ran past 2^46 (see
+// readAmountVarInt). The result is an exact number of satoshis, or a RangeError past 2^53 -- far
+// beyond 21M BTC, so only corrupt data gets there, and Reader.u64 refuses such an amount the same way.
 export function decompressAmount(x) {
+  if (typeof x === 'bigint') {
+    if (x === 0n) return 0;
+    x -= 1n;
+    let e = x % 10n, n;
+    x /= 10n;
+    if (e < 9n) { const d = (x % 9n) + 1n; x /= 9n; n = x * 10n + d; } else { n = x + 1n; }
+    while (e > 0n) { n *= 10n; e--; }
+    if (n > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError(`amount ${n} is past the safe integer range`);
+    return Number(n);
+  }
+  if (x > Number.MAX_SAFE_INTEGER) return decompressAmount(BigInt(x));
   if (x === 0) return 0;
   x -= 1;
   let e = x % 10;
@@ -103,6 +150,7 @@ export function decompressAmount(x) {
   let n;
   if (e < 9) { const d = (x % 9) + 1; x = Math.floor(x / 9); n = x * 10 + d; } else { n = x + 1; }
   while (e > 0) { n *= 10; e--; }
+  if (n > Number.MAX_SAFE_INTEGER) throw new RangeError(`amount ${n} is past the safe integer range`);
   return n;
 }
 
@@ -119,7 +167,12 @@ function decompressPubkey(prefix, x32) {
 // compressor.cpp: sizes 0-5 are special script templates, 6+ a raw script of (size - 6) bytes
 function readCompressedScript(buf, st) {
   const size = readVarInt(buf, st);
-  const take = (n) => { const v = buf.subarray(st.pos, st.pos + n); st.pos += n; return v; };
+  // bounds-checked: a slice past the end used to come back short and silently, the record failing
+  // only later with a nonsense "-N bytes left" (or, for templates 4 and 5, a key rebuilt from a short x)
+  const take = (n) => {
+    if (st.pos + n > buf.length) throw new RangeError(`truncated script: need ${n} bytes at ${st.pos} of ${buf.length}`);
+    const v = buf.subarray(st.pos, st.pos + n); st.pos += n; return v;
+  };
   switch (size) {
     case 0: return Buffer.concat([Buffer.from([0x76, 0xa9, 0x14]), take(20), Buffer.from([0x88, 0xac])]);
     case 1: return Buffer.concat([Buffer.from([0xa9, 0x14]), take(20), Buffer.from([0x87])]);
@@ -144,7 +197,7 @@ export function decodeBlockUndo(body) {
       const code = readVarInt(body, st);
       const height = Math.floor(code / 2);
       if (height > 0) readVarInt(body, st);                  // the legacy nVersion placeholder, always 0
-      const value_sat = decompressAmount(readVarInt(body, st));
+      const value_sat = decompressAmount(readAmountVarInt(body, st));
       const script = readCompressedScript(body, st);
       coins[j] = { height, coinbase: (code & 1) === 1, value_sat, script };
     }
@@ -165,11 +218,17 @@ export function undoShape(body) {
     for (let j = 0; j < nin; j++) {
       const height = Math.floor(readVarInt(body, st) / 2);
       if (height > 0) readVarInt(body, st);
-      readVarInt(body, st);
+      readAmountVarInt(body, st);
       const size = readVarInt(body, st);
       st.pos += size === 0 || size === 1 ? 20 : size < 6 ? 32 : size - 6;
     }
   }
+  // SKIPPING IS NOT READING: script bytes are stepped over, never touched, so a record cut in the
+  // middle of its last script returned the full counts as if whole (found by truncating random
+  // records at every offset). pairBlocksWithUndo matches on this shape, so the end is checked here
+  // exactly as decodeBlockUndo checks it.
+  if (st.pos > body.length) throw new RangeError(`truncated undo record: need ${st.pos} bytes, have ${body.length}`);
+  if (st.pos !== body.length) throw new RangeError(`${body.length - st.pos} bytes left after the undo record`);
   return counts;
 }
 
