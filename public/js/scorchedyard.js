@@ -63,6 +63,9 @@ const DEMO_WAR_MS = 7000;              // and how long the war's result stands b
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, dirty: true, bound: false,
   state: null, h: null,
+  rep: null,                            // the held key's ramp: { key, n, at }
+  lastShot: null,                       // what the human fired last, for R
+  editing: null,                        // 'angle' | 'power' while a number is being typed
   paintNow: 0,                          // the instant the overlay layer paints at
   windAt: 0,                            // when the wind layer last moved, so it keeps blowing while the board is idle
   aiAt: 0,                              // when the computer's turn began, for the pause before it fires
@@ -381,7 +384,8 @@ function drawStats() {
       ['cash', money(t.cash)],
     ];
   }
-  const html = rows.map(([k, v]) => `<i>${k}</i><b>${v}</b>`).join('');
+  if (G.editing) return;                        // a number is being typed: leave the panel alone
+  const html = rows.map(([k, v]) => `<i>${k}</i><b${k === 'angle' || k === 'power' ? ` class="syval" data-edit="${k}" title="click to type it"` : ''}>${v}</b>`).join('');
   if (box.innerHTML !== html) box.innerHTML = html;
   const fireBtn = el('syFire');
   if (fireBtn) fireBtn.disabled = !humanTurn();
@@ -759,6 +763,73 @@ function gameOver() {
 }
 
 // ------------------------------------------------------------------ input
+// THE HELD KEY'S STEP. The browser repeats a held key for us; what it cannot do is accelerate.
+// Presses of the same key closer together than RAMP_GAP are counted as one hold: the first four
+// move by one, the next six by two, and after that by five. Any other key, or a pause, starts over.
+const RAMP_GAP = 260;
+export function rampStep(n) { return n < 4 ? 1 : n < 10 ? 2 : 5; }
+function repeatStep(key, now = performance.now()) {
+  const r = G.rep;
+  if (r && r.key === key && now - r.at < RAMP_GAP) { r.n += 1; r.at = now; } else G.rep = { key, n: 1, at: now };
+  return rampStep(G.rep.n);
+}
+
+/** The last shot again, exactly: the original's most missed convenience. */
+function repeatShot(g, t) {
+  const last = G.lastShot;
+  if (!last) { G.h?.toast?.('no shot to repeat yet'); return; }
+  aim(g, t, { angle: last.angle, power: last.power });
+  if (last.weapon && (t.inventory[last.weapon] ?? 0) > 0) t.weapon = last.weapon;
+  sound.play('rotate');
+}
+
+// THE WHEEL, over the field: power, and with Shift the angle. The pointer is already there, and a
+// wheel is the one input that gives a hundred units without a hundred presses.
+function onWheel(e) {
+  if (!humanTurn()) return;
+  const g = G.game, t = current(g);
+  const dir = e.deltaY < 0 ? 1 : -1;
+  e.preventDefault();
+  if (e.shiftKey) { aim(g, t, { angle: t.angle + dir }); sound.play('move'); }
+  else { aim(g, t, { power: t.power + dir * (e.ctrlKey ? 50 : 10) }); sound.play('soft'); }
+  G.dirty = true;
+  if (!G.raf) draw();
+}
+
+// TYPED NUMBERS. A player reading a solution off the last shot wants to enter it, not walk to it:
+// clicking the angle or the power on the HUD turns that value into a box. drawStats leaves the
+// panel alone while one is open, so the number under the cursor does not move as it is typed.
+function onStatsClick(e) {
+  const b = e.target?.closest?.('b[data-edit]');
+  if (!b || !humanTurn()) return;
+  const which = b.dataset.edit;
+  const g = G.game, t = current(g);
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'syedit';
+  input.value = String(which === 'angle' ? t.angle : t.power);
+  input.min = '0';
+  input.max = which === 'angle' ? '180' : '1000';
+  G.editing = which;
+  b.replaceChildren(input);
+  input.focus();
+  input.select();
+  const done = (commit) => {
+    if (G.editing !== which) return;
+    G.editing = null;
+    const v = Number(input.value);
+    if (commit && Number.isFinite(v)) aim(g, t, which === 'angle' ? { angle: v } : { power: v });
+    G.dirty = true;
+    draw();
+  };
+  input.addEventListener('keydown', (ev) => {
+    ev.stopPropagation();
+    if (ev.key === 'Enter') { ev.preventDefault(); done(true); }
+    if (ev.key === 'Escape') { ev.preventDefault(); done(false); }
+  });
+  input.addEventListener('blur', () => done(true));
+}
+
 function humanTurn() {
   const g = G.game;
   return G.running && !G.paused && g && g.phase === 'aim' && current(g).kind === 'human';
@@ -774,13 +845,21 @@ function onKey(e) {
   if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { if (G.running && g?.phase !== 'roundOver') { e.preventDefault(); G.paused ? resume() : pause('paused'); } return; }
   if (!humanTurn()) return;
   const t = current(g);
-  const big = e.shiftKey ? 5 : 1;
+  // THE RAMP (the control scope's C1): a held arrow steps 1, then 2, then 5 -- crossing 180
+  // degrees is a second and a half, and the last degree is still one press. Shift and Ctrl keep
+  // their fixed fine and coarse steps, so a player who knows the number can still land on it.
+  const ramp = repeatStep(e.key);
+  const big = e.shiftKey ? 5 : ramp;
+  const pstep = e.ctrlKey ? 100 : e.shiftKey ? 1 : 10 * ramp;
   let used = true;
   switch (e.key) {
     case 'ArrowLeft': aim(g, t, { angle: t.angle + big }); sound.play('move'); break;
     case 'ArrowRight': aim(g, t, { angle: t.angle - big }); sound.play('move'); break;
-    case 'ArrowUp': aim(g, t, { power: t.power + (e.ctrlKey ? 100 : e.shiftKey ? 1 : 10) }); sound.play('soft'); break;
-    case 'ArrowDown': aim(g, t, { power: t.power - (e.ctrlKey ? 100 : e.shiftKey ? 1 : 10) }); sound.play('soft'); break;
+    case 'ArrowUp': aim(g, t, { power: t.power + pstep }); sound.play('soft'); break;
+    case 'ArrowDown': aim(g, t, { power: t.power - pstep }); sound.play('soft'); break;
+    case ',': case '<': aim(g, t, { power: t.power - 1 }); sound.play('soft'); break;
+    case '.': case '>': aim(g, t, { power: t.power + 1 }); sound.play('soft'); break;
+    case 'r': case 'R': repeatShot(g, t); break;
     case 'PageUp': case ']': cycleWeapon(t, 1); sound.play('rotate'); break;
     case 'PageDown': case '[': cycleWeapon(t, -1); sound.play('rotate'); break;
     case 'a': case 'A': if (drive(g, t, -1)) { onEvents(step(g, 0), performance.now()); sound.play('move'); } break;
@@ -798,7 +877,9 @@ function onKey(e) {
 function fireNow() {
   const g = G.game;
   if (!humanTurn()) return;
-  if (fire(g, current(g))) {
+  const me = current(g);
+  G.lastShot = { angle: me.angle, power: me.power, weapon: me.weapon };   // R fires it again
+  if (fire(g, me)) {
     onEvents(step(g, 0), performance.now());
     if (g.phase === 'settle') startSettle(performance.now());   // the laser is over at once
     G.dirty = true;
@@ -850,6 +931,8 @@ function bind() {
   el('syResume')?.addEventListener('click', () => resume());
   el('syFire')?.addEventListener('click', () => fireNow());
   el('syShop')?.addEventListener('click', onShopClick);
+  el('syStats')?.addEventListener('click', onStatsClick);
+  el('syField')?.addEventListener('wheel', onWheel, { passive: false });
   const field = el('syField');
   field?.addEventListener('pointerdown', onPointerDown);
   field?.addEventListener('pointermove', onPointerMove);

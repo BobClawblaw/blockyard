@@ -1954,6 +1954,10 @@ body { font-variant-numeric: tabular-nums; }
 /* THE WIND'S OWN PLANE: flat, behind the land, and NOT scaled with the board -- it is not in the
    scene, it is the air behind it (operator: "drawn behind everything else on a flat plane") */
 .seyard canvas.sywind { width: 100%; height: 100%; transform: none; }
+/* the two numbers a player actually tunes: click one and type it */
+#syStats b.syval { cursor: text; border-bottom: 1px dotted var(--line); }
+#syStats b.syval:hover { color: var(--accent); }
+.syedit { width: 5.2em; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 3px; padding: 0 2px; text-align: right; }
 .syfire { width: 100%; margin: 2px 0 10px; }
 .syfire:disabled { opacity: .45; cursor: default; }
 .sytanks { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; }

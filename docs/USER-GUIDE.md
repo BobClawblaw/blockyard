@@ -813,6 +813,17 @@ Every point of damage you land earns $10, a kill $2,000, and the last tank stand
 while you can afford it. The computer players shop at the same moment, in their own way. What you
 buy stays with you for the rest of the game.
 
+### The controls
+
+**← →** turn the barrel, **↑ ↓** change the power, and a **held key accelerates**: one a step, then
+two, then five, so crossing the whole arc takes about a second and a half and the last degree still
+takes one press. **Shift** is fine (1° and 1), **Ctrl** coarse (100 of power). **, and .** nudge the
+power by one, which is how you bracket a target. The **wheel** over the field changes the power, and
+with **Shift** the angle. **Click the angle or the power** on the panel and type the number. **R**
+fires the last shot again, exactly. **Space** or the fire button sends it; **[ ]** change weapon;
+**A D** drive if you have fuel; **B** battery, **S** shield, **T** contact trigger, **H** heat
+guidance; **P** pauses; **N** starts the next round.
+
 Over the tank whose turn it is stands the **aim gauge**: a protractor with a tick every fifteen
 degrees, a needle along the current angle whose length is the power, and both numbers at its tip.
 It is dimmed on a computer player's turn, so you can read what it is about to do before it fires.

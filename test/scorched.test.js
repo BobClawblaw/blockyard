@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, rampStep, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -894,4 +894,22 @@ test('scorched yard: attract mode fields no human', () => {
   assert.match(html, /id="syDemo"/);
   assert.equal(DEFAULTS.scorched.demo, false, 'off until it is asked for');
   assert.equal(scorchedOptions(normalise({ scorched: { demo: true } })).demo, true);
+});
+
+// THE CONTROLS (the scope's C1): the ramp, the nudges, the wheel, R, and the typed numbers
+test('scorched yard: a held key accelerates, and the numbers can be typed', () => {
+  // the ramp: one, then two, then five -- crossing 180 degrees in about a second and a half
+  assert.deepEqual([0, 1, 3, 4, 9, 10, 40].map(rampStep), [1, 1, 1, 2, 2, 5, 5]);
+  let deg = 0;
+  for (let n = 1; n <= 45; n++) deg += rampStep(n);
+  assert.ok(deg >= 180, `forty-five repeats (about 1.5s at the browser's rate) crosses the arc: ${deg}`);
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /case ',': case '<': aim\(g, t, \{ power: t\.power - 1 \}\)/, 'comma nudges the power down by one');
+  assert.match(src, /case '\.': case '>': aim\(g, t, \{ power: t\.power \+ 1 \}\)/, 'and the full stop up');
+  assert.match(src, /case 'r': case 'R': repeatShot\(g, t\)/, 'R fires the last shot again');
+  assert.match(src, /G\.lastShot = \{ angle: me\.angle, power: me\.power, weapon: me\.weapon \}/, 'which is remembered as it is fired');
+  assert.match(src, /addEventListener\('wheel', onWheel, \{ passive: false \}\)/, 'the wheel works over the field');
+  assert.match(src, /if \(G\.editing\) return;/, 'and the panel holds still while a number is typed');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /hold to go faster/, 'the keys line says the modifiers out loud');
 });
