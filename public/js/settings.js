@@ -320,7 +320,7 @@ export const DEFAULTS = Object.freeze({
     opponentKind: 'mix',  // 'mix' (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark in turn) or one of the manual's eight
     rounds: 5,
     walls: 'none',        // the manual's default: 'none' | 'concrete' | 'padded' | 'rubber' | 'spring' | 'wrap'
-    wind: 'turn',         // 'turn' (changes every turn) | 'shot' | 'none'
+    wind: 'round',        // 'round' (one wind a round, the shipped mode) | 'turn' | 'shot' | 'none'
     gravity: 1,           // 1 = Earth
     land: 'hills',        // 'hills' | 'mountains' | 'valley' | 'flat'
     cash: 10000,          // to start, dollars
@@ -710,8 +710,8 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['none', 'None: it is lost (the original\u2019s default)'], ['concrete', 'Concrete: it explodes there'], ['padded', 'Padded: it stops and drops'], ['rubber', 'Rubber: it bounces'], ['spring', 'Spring: it bounces back harder'], ['wrap', 'Wraparound: it comes in the other side']]),
       }),
       Object.freeze({
-        key: 'wind', label: 'Wind', kind: 'choice', hint: 'Whether the wind blows, and how often it changes',
-        options: Object.freeze([['turn', 'Changes every turn'], ['shot', 'Changes every shot'], ['none', 'No wind']]),
+        key: 'wind', label: 'Wind', kind: 'choice', hint: 'Whether the wind blows, and how often it changes. Once a round holds its direction and strength for the whole round, so the air blows one way while you read it; every turn is the original\u2019s, and it can turn right around between two shots',
+        options: Object.freeze([['round', 'Once a round'], ['turn', 'Changes every turn'], ['shot', 'Changes every shot'], ['none', 'No wind']]),
       }),
       Object.freeze({ key: 'gravity', label: 'Gravity', kind: 'range', min: 0.4, max: 2, step: 0.1, hint: 'How hard shells fall; 1 is Earth' }),
       Object.freeze({
@@ -891,6 +891,7 @@ const MIGRATIONS = {
     const map = { 'upper-left': 'top-left', 'upper-right': 'top-right' };
     return { ...raw, space: { ...sp, light: map[sp.light] ?? sp.light } };
   },
+
 };
 
 function migrate(raw) {

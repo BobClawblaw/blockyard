@@ -859,8 +859,9 @@ leave running on a screen in the corner.
 The rules the original exposed are in **Display settings → Scorched Yard**: the number of
 computer players, the rounds, the **walls** (none loses a shell off the edge, the original's
 default; concrete explodes it there; padded stops it and drops it; rubber bounces it; spring
-bounces it back harder; wraparound brings it in the other side), the **wind** (every turn, every shot,
-or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
+bounces it back harder; wraparound brings it in the other side), the **wind** (once a round, which is how it
+ships: one wind, one direction, held for every turn of that round; every turn, which is the
+original's and can turn right around between two shots; every shot; or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
 flat), the **starting cash** and the **interest** rate. They take effect at the next new game.
 
 ## Wolfenstein 3D

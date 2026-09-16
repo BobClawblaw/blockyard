@@ -158,7 +158,7 @@ export function settleDirt(g, x0 = 0, x1 = COLS - 1) {
 /**
  * A new game. `players` is a list of `{ name, kind: 'human' | 'moron' | ..., colour? }`; the
  * first human plays from the keyboard, the rest are decided by scorchedai.js. Options: `seed`,
- * `gravity` (1 = Earth), `wind` ('turn' | 'shot' | 'none'), `walls` ('concrete' | 'rubber' |
+ * `gravity` (1 = Earth), `wind` ('round' | 'turn' | 'shot' | 'none'), `walls` ('concrete' | 'rubber' |
  * 'wrap' | 'none'), `land` (a landscape style), `rounds`, `cash` (to start), `interest` (a rate).
  */
 export function newGame(players, opts = {}) {
@@ -168,7 +168,7 @@ export function newGame(players, opts = {}) {
     W: COLS, H: ROWS,
     dirt: new Uint8Array(COLS * ROWS), tops: new Int16Array(COLS),
     gravity: Number.isFinite(opts.gravity) ? opts.gravity : 1,
-    windMode: opts.wind ?? 'turn', walls: opts.walls ?? 'concrete', land: opts.land ?? 'hills',
+    windMode: opts.wind ?? 'round', walls: opts.walls ?? 'concrete', land: opts.land ?? 'hills',
     interest: Number.isFinite(opts.interest) ? opts.interest : 0.05,
     wind: 0,
     tanks: (players ?? []).map((p, i) => ({
@@ -240,6 +240,15 @@ function placeTanks(g) {
   g.landVersion += 1;
 }
 
+/**
+ * A NEW WIND. It is drawn at the start of every round; whether it is drawn again inside the round
+ * is the mode's business (operator, 2026-09-16: "the wind still changes direction during my round
+ * ... it needs to consistently move in one direction, not shift back and forth during the same
+ * round"). `round` -- the shipped mode -- draws it once and leaves it, so the air over a round
+ * blows one way and every shot in that round is read against the same gauge. `turn` is the
+ * original's: a fresh wind, direction and all, for every tank's turn. `shot` redraws it at each
+ * shot, and `none` is still air.
+ */
 function newWind(g) {
   if (g.windMode === 'none') { g.wind = 0; return; }
   g.wind = Math.round((g.rnd() * 2 - 1) * WIND_MAX * 10) / 10;
