@@ -223,9 +223,17 @@ function paintSun(ctx, pw, ph, s, sun, cols, softStops, pass = 'both') {
   const vis = sun.alt < 0 ? Math.max(0, 1 + sun.alt / 8) : 1;
   if (pass !== 'disc') softStops(ctx, s.x, s.y, ph * 0.5, [[0, rgb(c, glow * 0.7 * vis)], [0.08, rgb(c, glow * 0.45 * vis)], [0.3, rgb(c, glow * 0.12 * vis)], [1, rgb(c, 0)]], 90);
   if (pass === 'glow') return;
-  // the disc, with a soft edge: a few rings from the rim in
-  softStops(ctx, s.x, s.y, r * 1.5, [[0, rgb(c, vis)], [0.6, rgb(c, vis)], [1, rgb(c, 0)]], 12);
-  softStops(ctx, s.x, s.y, r * 0.9, [[0, rgb([255, 246, 214], 0.92 * k * vis)], [1, rgb([255, 246, 214], 0)]], 8);
+  // THE HALO AND THE EDGE (operator, 2026-09-16, with a screenshot: "still seeing some banding
+  // here. Can we add a glow effect around the sun?"). The disc's soft edge was twelve rings, which
+  // on a big panel is a step of several pixels each -- the rings in the picture. Ring counts are
+  // left to softStops now, which lays one per pixel or so. And a halo in front of the clouds: a
+  // wide, faint corona and a tighter bright one, so the sun sits in its own light rather than
+  // being a coin on the sky.
+  softStops(ctx, s.x, s.y, r * 4.2, [[0, rgb(c, 0.5 * vis)], [0.22, rgb(c, 0.28 * vis)], [0.55, rgb(c, 0.09 * vis)], [1, rgb(c, 0)]]);
+  softStops(ctx, s.x, s.y, r * 2.1, [[0, rgb([255, 236, 190], 0.6 * vis)], [0.5, rgb(c, 0.3 * vis)], [1, rgb(c, 0)]]);
+  // the disc, with a soft edge
+  softStops(ctx, s.x, s.y, r * 1.35, [[0, rgb(c, vis)], [0.7, rgb(c, vis)], [1, rgb(c, 0)]]);
+  softStops(ctx, s.x, s.y, r * 0.9, [[0, rgb([255, 246, 214], 0.92 * k * vis)], [1, rgb([255, 246, 214], 0)]]);
 }
 
 function paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops) {
@@ -234,7 +242,7 @@ function paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops) {
   // faint by day (a daytime moon is there, but it is not a lamp), and a thin crescent by day is invisible
   const show = Math.max(0, Math.min(1, (moon.alt + 3) / 6)) * (0.12 + 0.88 * night);
   if (show <= 0.02 || (night < 0.3 && phase.lit < 0.25)) return;
-  if (night > 0.3) softStops(ctx, m.x, m.y, r * 5, [[0, rgb([220, 228, 245], 0.25 * night * show)], [0.3, rgb([220, 228, 245], 0.08 * night * show)], [1, rgb([220, 228, 245], 0)]], 40);
+  if (night > 0.3) softStops(ctx, m.x, m.y, r * 5, [[0, rgb([220, 228, 245], 0.25 * night * show)], [0.3, rgb([220, 228, 245], 0.08 * night * show)], [1, rgb([220, 228, 245], 0)]]);
   // ONLY THE LIT PART IS PAINTED. The first cut drew a full disc and then a disc of sky colour over
   // the dark side; once the moon moved in front of the clouds and the stars, that sky-coloured
   // disc was a hole punched in them. The lit shape is a polygon: the outer half-circle on the lit
