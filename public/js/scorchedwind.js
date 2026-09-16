@@ -137,36 +137,55 @@ export function stepFlow(parts, dt, { wind = 0, w = 800, h = 400, now = 0, scale
     const dead = now - p.born > p.life;
     const out = p.x < -w * 0.06 || p.x > w * 1.06 || p.y < -h * 0.08 || p.y > h * 1.08;
     if (dead || out) {
-      // back in upwind, at a fresh height: the field is fed from the edge the wind comes from
-      p.x = dir > 0 ? -w * 0.04 * hash2(p.y, now) : w * (1 + 0.04 * hash2(p.y, now));
+      // A STEADY FLOW, NOT A FRONT (operator, 2026-09-16: "the wave simulation comes across as a
+      // front as opposed to a steady flow of fluid"). Every reborn particle used to come back in at
+      // the upwind edge -- so in a light wind, where a life ends long before the crossing does, the
+      // field was dense at that edge and empty downwind, and the density itself read as a wave
+      // rolling in. Now only a particle that LEFT the field comes back at the edge it is fed from;
+      // one that simply ran out of life is reborn anywhere, and the density stays even.
+      p.x = out ? (dir > 0 ? -w * 0.04 * hash2(p.y, now) : w * (1 + 0.04 * hash2(p.y, now))) : hash2(now * 0.11 + p.sz * 37, p.y) * w;
       p.y = hash2(now * 0.37 + p.sz * 91, p.x) * h;
       p.born = now;
       p.px = p.x; p.py = p.y;
+      p.tail = null;
       continue;                                            // no streak across the wrap
     }
     const age = (now - p.born) / p.life;
     const fade = Math.min(1, age * 6) * Math.min(1, (1 - age) * 3.2);   // in at birth, out at death
     const speed = Math.hypot(vx, vy) / Math.max(1, base);
+    // THE TAIL (operator: "think about transparency or other type motion effects"): the last few
+    // places the particle has been, kept on it and drawn as a ribbon that thins and fades toward
+    // its end. A streak the length of one frame's step says "a dot moved"; a ribbon a quarter of a
+    // second long says "something is being carried", and its curve shows the eddy it went round.
+    p.tail = p.tail ?? [];
+    p.tail.push({ x: p.px, y: p.py });
+    if (p.tail.length > TAIL) p.tail.shift();
     if (fade <= 0.01) continue;
     segs.push({
-      x0: p.px, y0: p.py, x1: p.x, y1: p.y,
+      x0: p.px, y0: p.py, x1: p.x, y1: p.y, tail: p.tail,
       alpha: (0.1 + 0.3 * strength) * fade * (0.5 + 0.7 * speed) * (0.55 + 0.45 * p.band / 2),
       th: p.sz * (0.7 + 0.8 * (p.band / 2)),
     });
   }
   return segs;
 }
+const TAIL = 7;                                            // positions kept: about a quarter of a second
 
 /** The streaks: one stroked line each, flat colour, no gradients. */
 export function paintFlow(ctx, segs, colour = '218,224,234') {
   ctx.lineCap = 'round';
   for (const s of segs) {
-    ctx.strokeStyle = `rgba(${colour},${Math.min(0.75, s.alpha).toFixed(3)})`;
-    ctx.lineWidth = s.th;
-    ctx.beginPath();
-    ctx.moveTo(s.x0, s.y0);
-    ctx.lineTo(s.x1, s.y1);
-    ctx.stroke();
+    const pts = s.tail && s.tail.length ? [...s.tail, { x: s.x1, y: s.y1 }] : [{ x: s.x0, y: s.y0 }, { x: s.x1, y: s.y1 }];
+    const n = pts.length - 1;
+    for (let i = 0; i < n; i++) {
+      const k = (i + 1) / n;                               // 0 at the tail's end, 1 at the head
+      ctx.strokeStyle = `rgba(${colour},${Math.min(0.75, s.alpha * (0.15 + 0.85 * k * k)).toFixed(3)})`;
+      ctx.lineWidth = Math.max(0.5, s.th * (0.35 + 0.65 * k));
+      ctx.beginPath();
+      ctx.moveTo(pts[i].x, pts[i].y);
+      ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+      ctx.stroke();
+    }
   }
 }
 
@@ -206,4 +225,59 @@ export function paintPlasma(ctx, cells, colour = '196,214,238') {
     ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+// ------------------------------------------------------------------ the currents
+/**
+ * STREAMLINES (operator: "make that air movement effect even more incredible ... new effects for
+ * wind flow?"). The particles show what is carried; these show the CURRENTS it is carried on: a
+ * few dozen curves traced through the same field, from the upwind edge across, bending round the
+ * same eddies the particles do. They are re-traced only now and then -- the field morphs slowly --
+ * and animated by a dashed stroke whose offset runs downwind at the wind's speed, so the dashes
+ * flow along the curves like beads on a wire. Nearly free per frame, and there is no particle
+ * state in them to age, reseed or synchronise.
+ */
+export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 28, steps = 44, scale = 0.0042 } = {}) {
+  const strength = Math.min(1, Math.abs(wind) / 10);
+  if (!w || !h || strength < 0.03) return [];
+  const dir = wind < 0 ? -1 : 1;
+  const base = w * (0.035 + 0.42 * strength);
+  const swirl = base * (0.16 + 0.2 * (1 - strength));
+  const cap = base * SWIRL_CAP;
+  const step = (w * 1.12) / steps;                         // in pixels along the curve
+  const lines = [];
+  for (let i = 0; i < count; i++) {
+    const y0 = ((i + 0.5) / count) * h + (hash2(i * 1.7, 3.3) - 0.5) * (h / count);
+    let x = dir > 0 ? -w * 0.06 : w * 1.06, y = y0;
+    const pts = [{ x, y }];
+    for (let k = 0; k < steps; k++) {
+      const c = curl(x * scale, y * scale, clock.t);
+      let sx = c.x * swirl, sy = c.y * swirl * 0.8;
+      const sm = Math.hypot(sx, sy);
+      if (sm > cap) { sx *= cap / sm; sy *= cap / sm; }
+      const vx = base * dir + sx, vy = sy, vm = Math.hypot(vx, vy) || 1;
+      x += (vx / vm) * step; y += (vy / vm) * step;
+      pts.push({ x, y });
+    }
+    lines.push({ pts, alpha: 0.05 + 0.1 * strength * (0.6 + 0.4 * hash2(i, 9.1)) });
+  }
+  return lines;
+}
+
+/** Draw them dashed, the dash offset carrying the pattern downwind: `travel` is pixels of drift so far. */
+export function paintStreamlines(ctx, lines, travel, colour = '206,220,240') {
+  if (!lines.length) return;
+  ctx.lineCap = 'butt';
+  ctx.setLineDash([14, 22]);
+  for (const l of lines) {
+    ctx.lineDashOffset = -travel;                          // the dashes run the way the curve was traced: downwind
+    ctx.strokeStyle = `rgba(${colour},${l.alpha.toFixed(3)})`;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(l.pts[0].x, l.pts[0].y);
+    for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.lineDashOffset = 0;
 }

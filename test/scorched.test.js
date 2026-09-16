@@ -14,7 +14,7 @@ import {
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
-import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir } from '../public/js/scorchedwind.js';
+import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines } from '../public/js/scorchedwind.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -893,10 +893,11 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const parts3 = makeFlow(40, 800, 400, 9, day);
   const c3 = airClock();
   for (let i = 0; i < 30; i++) { advanceAir(c3, 16, 3); stepFlow(parts3, 16, { wind: 3, w: 800, h: 400, now: day + i * 16, clock: c3 }); }
-  const xs = parts3.map((p) => p.x);
+  const xs = parts3.map((p) => p.x), borns = parts3.map((p) => p.born);
   advanceAir(c3, 16, -8);
   stepFlow(parts3, 16, { wind: -8, w: 800, h: 400, now: day + 31 * 16, clock: c3 });
-  const jump = Math.max(...parts3.map((p, i) => Math.abs(p.x - xs[i])).filter((d) => d < 400));
+  // a particle reborn on this very step is placed afresh, which is not a leap; the rest must not leap
+  const jump = Math.max(0, ...parts3.map((p, i) => (p.born === borns[i] ? Math.abs(p.x - xs[i]) : 0)));
   assert.ok(jump < 12, `no particle leaps when the wind turns (largest step ${jump.toFixed(1)}px)`);
 
   // NOTHING IN THE FIELD SCROLLS: a frame of evolution with no drift leaves the wash where it is,
@@ -1060,4 +1061,57 @@ test('scorched yard: the firing solution is the rules\u2019 own path, and eight 
   for (let i = 0; i < big.tanks.length; i++) for (let j = i + 1; j < big.tanks.length; j++) assert.ok(Math.abs(big.tanks[i].x - big.tanks[j].x) >= TANK_W, 'no two tanks overlap on the field');
   const row = PANEL.find((gr) => gr.group === 'scorched').rows.find((r) => r.key === 'opponents');
   assert.equal(row.max, 7, 'the setting reaches seven');
+});
+
+// THE LAND CANVAS FORGETS THE OLD GAME (operator, 2026-09-16: "more than 2 opponents are placed in
+// mid air and in ground"). The rules place every tank on its own ground -- checked here for three
+// to eight seats over many seeds -- so the tanks in the air were drawn over a land canvas that had
+// not been redrawn: a fresh game restarts the land's version count, and the screen keyed its cache
+// on that number alone.
+test('scorched yard: every seat stands on the ground, and a new game always redraws its land', () => {
+  for (const n of [3, 5, 8]) {
+    for (let seed = 1; seed <= 40; seed++) {
+      const seats = [{ name: 'You', kind: 'human' }];
+      for (let i = 1; i < n; i++) seats.push({ name: `A${i}`, kind: 'moron' });
+      const g = newGame(seats, { seed });
+      for (const t of g.tanks) assert.ok(topOf(g, t.x) === t.y && topOf(g, t.x + 1) === t.y, `${n} seats, seed ${seed}: a tank at ${t.x} sits on its ground`);
+    }
+  }
+  const a = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 1 });
+  const b = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 2 });
+  assert.equal(a.landVersion, b.landVersion, 'two fresh games share a version number, which is why the key alone was not enough');
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /clearTimeout\(G\.demoTimer\); G\.demoTimer = null;[\s\S]{0,900}G\.landKey = '';/, 'a new game clears the land cache');
+  assert.match(src, /nextRound\(g\);\n  G\.landKey = '';/, 'and so does a new round');
+});
+
+// A STEADY FLOW, NOT A FRONT (operator, 2026-09-16: "the wave simulation comes across as a front as
+// opposed to a steady flow of fluid ... make that air movement effect even more incredible")
+test('scorched yard: the air stays evenly filled, carries tails, and runs on currents', () => {
+  // density: in a light wind, where lives end before the crossing does, the downwind half used to
+  // empty out; a reborn particle now comes back anywhere, so both halves stay populated
+  const parts = makeFlow(240, 800, 400, 4, 0);
+  const c = airClock();
+  let now = 0;
+  for (let i = 0; i < 900; i++) { now += 16; advanceAir(c, 16, 1.5); stepFlow(parts, 16, { wind: 1.5, w: 800, h: 400, now, clock: c }); }
+  const left = parts.filter((p) => p.x >= 0 && p.x < 400).length, right = parts.filter((p) => p.x >= 400 && p.x <= 800).length;
+  assert.ok(Math.min(left, right) / Math.max(left, right) > 0.55, `both halves of the field are populated after fifteen seconds (${left} upwind, ${right} downwind)`);
+  // tails: a particle remembers where it has been, and the painter draws the ribbon
+  const segs = stepFlow(parts, 16, { wind: 1.5, w: 800, h: 400, now: now + 16, clock: c });
+  assert.ok(segs.some((sg) => sg.tail && sg.tail.length >= 5), 'a particle carries a tail of its last positions');
+  const R = recorder();
+  paintFlow(R.ctx, segs.slice(0, 5));
+  assert.ok(R.ops.filter((o) => o.op === 'stroke').length > 5 * 3, 'the ribbon is several strokes, thinning toward its end');
+  // currents: traced through the same field, from the upwind edge across, and never upwind
+  for (const wind of [5, -5]) {
+    const lines = traceStreamlines(c, { wind, w: 800, h: 400 });
+    assert.ok(lines.length >= 20, 'a few dozen currents');
+    for (const l of lines) for (let i = 1; i < l.pts.length; i++) assert.ok((l.pts[i].x - l.pts[i - 1].x) * Math.sign(wind) > 0, 'every current runs downwind at every step');
+    assert.ok(lines.some((l) => Math.abs(l.pts[l.pts.length - 1].y - l.pts[0].y) > 4), 'and they bend');
+  }
+  assert.equal(traceStreamlines(c, { wind: 0, w: 800, h: 400 }).length, 0, 'still air has no currents');
+  const D = recorder();
+  D.ctx.setLineDash = (d) => D.ops.push({ op: 'dash', d }); D.ctx.lineDashOffset = 0;
+  paintStreamlines(D.ctx, traceStreamlines(c, { wind: 5, w: 800, h: 400 }), 120);
+  assert.ok(D.ops.some((o) => o.op === 'dash' && o.d.length === 2), 'the currents are dashed, so their dashes can run');
 });

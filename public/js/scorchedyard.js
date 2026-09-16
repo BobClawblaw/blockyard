@@ -10,7 +10,7 @@
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from './scorchedfx.js';
-import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir } from './scorchedwind.js';
+import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines } from './scorchedwind.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   trajectory, dirtAt,
@@ -76,6 +76,7 @@ const G = {
   flow: null, flowW: 0, flowH: 0,       // the advected particles of the air, and the size they were made for
   flowAt: 0,                            // the last frame's clock, for the step
   air: null,                            // the air's own integrated clock { t, drift }
+  streams: null, streamsAt: 0, streamsW: 0, airTravel: 0,   // the currents, and how far the air has run
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -302,8 +303,13 @@ function drawWind(now) {
   // runs from here on and nothing else (scorchedwind.js, advanceAir)
   G.air ??= airClock();
   advanceAir(G.air, dt, G.windEased);
+  // the currents, re-traced every few hundred milliseconds and run along by their dash offset;
+  // `travel` is how far the air has gone, in pixels, and the dashes go with it
+  G.airTravel = (G.airTravel ?? 0) + (dt / 1000) * w * (0.035 + 0.42 * Math.min(1, Math.abs(G.windEased) / 10));
+  if (!G.streams || now - (G.streamsAt ?? 0) > 280 || G.streamsW !== w) { G.streams = traceStreamlines(G.air, { wind: G.windEased, w, h }); G.streamsAt = now; G.streamsW = w; }
   ctx.clearRect(0, 0, w, h);
   paintPlasma(ctx, plasmaCells(w, h, G.air, G.windEased));
+  paintStreamlines(ctx, G.streams, G.airTravel);
   paintFlow(ctx, stepFlow(G.flow, dt, { wind: G.windEased, w, h, now, clock: G.air }));
   paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
@@ -738,6 +744,12 @@ function demoWait(ms, go) {
 function start() {
   const t = scorchedOptions(loadSettings());
   clearTimeout(G.demoTimer); G.demoTimer = null;
+  // THE LAND CANVAS FORGETS THE OLD GAME (operator, 2026-09-16: "more than 2 opponents are placed
+  // in mid air and in ground"). The land is redrawn only when its version moves, and a fresh game
+  // starts back at the same version as the last one did -- so a restart before a shot, or a new
+  // game after a change of opponents, placed the new tanks over the OLD terrain: some in the air,
+  // some buried. The key is cleared here, so the first draw of a game always draws its own land.
+  G.landKey = '';
   G.game = newGame(players(t), { rounds: t.rounds, walls: t.walls, wind: t.wind, gravity: t.gravity, land: t.land, cash: t.cash, interest: t.interest / 100 });
   G.blasts = []; G.fires = []; G.beams = []; G.deaths = []; G.dusts = []; G.falls = new Map(); G.shopping = false;
   G.running = true; G.paused = false; G.last = 0; G.dirty = true; G.aiAt = performance.now();
@@ -799,6 +811,7 @@ function nextRoundNow() {
   for (const t of g.tanks) aiShop(g, t);                 // the computer shops as the round turns
   G.shopping = false;
   nextRound(g);
+  G.landKey = '';                                        // new land: never trust the old canvas
   G.blasts = []; G.fires = []; G.beams = []; G.last = 0; G.dirty = true; G.aiAt = performance.now();
   overlay(null);
   onEvents(step(g, 0), performance.now());
