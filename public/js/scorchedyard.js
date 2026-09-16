@@ -68,6 +68,9 @@ const G = {
   lastShot: null,                       // what the human fired last, for R
   editing: null,                        // 'angle' | 'power' while a number is being typed
   paintNow: 0,                          // the instant the overlay layer paints at
+  windShown: undefined,                 // the wind the plane is drawing, so a change can be crossfaded
+  windFade: null,                       // { from, t0 } while the old air thins and the new comes up
+  windAtChange: 0,                      // when the wind last changed, for the banner's brightness
   windAt: 0,                            // when the wind layer last moved, so it keeps blowing while the board is idle
   aiAt: 0,                              // when the computer's turn began, for the pause before it fires
   settleT0: 0, settleMs: 0,             // the fall on screen
@@ -227,18 +230,19 @@ const hashAt = (i) => (k) => { const x = Math.sin((i * 7 + k) * 12.9898 + 78.233
 // colours are mid greys on purpose: pale enough to read against a night sky, dark enough to read
 // against the Living sky's blue, and never so bright that a streak looks like a tracer round.
 const BANDS = Object.freeze([
-  Object.freeze({ speed: 0.55, len: 0.5, th: 0.7, near: '#6f7278', far: '#5d6066' }),
-  Object.freeze({ speed: 0.82, len: 0.78, th: 1.0, near: '#8e8c84', far: '#7b7972' }),
-  Object.freeze({ speed: 1.15, len: 1.1, th: 1.4, near: '#b3ada0', far: '#9e9890' }),
+  Object.freeze({ speed: 0.55, len: 0.5, th: 0.7, near: [111, 114, 120], far: [93, 96, 102] }),
+  Object.freeze({ speed: 0.82, len: 0.78, th: 1.0, near: [142, 140, 132], far: [123, 121, 114] }),
+  Object.freeze({ speed: 1.15, len: 1.1, th: 1.4, near: [179, 173, 160], far: [158, 152, 144] }),
 ]);
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
 
 /**
  * The streaks for a canvas `w` x `h` CSS pixels at `now`, as plain geometry: `{ x, y, len, th,
  * colour }` with x the centre. Pure, so a test can hold the wind to its speed and its shape.
  */
-export function windStreaks(wind, now, w, h) {
+export function windStreaks(wind, now, w, h, alpha = 1) {
   const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
-  if (!w || !h || strength < 0.03) return [];
+  if (!w || !h || strength < 0.03 || alpha <= 0.01) return [];
   const dir = wind < 0 ? -1 : 1;
   const t = now / 1000;
   // THE GUST NEVER PULLS BACKWARDS (operator: "the wind switches directions when idle"). A gust
@@ -257,14 +261,14 @@ export function windStreaks(wind, now, w, h) {
     const speed = w * (0.05 + 0.5 * strength) * band.speed * (0.7 + h6(1) * 0.6);
     const span = w + len * 2;
     const x = ((((h6(2) * span + phase * speed * dir) % span) + span) % span) - len;
-    out.push({ x, y: Math.round(h6(3) * h) + 0.5, len, th: band.th * (0.8 + h6(4) * 0.6), colour: h6(5) > 0.5 ? band.near : band.far, dir });
+    out.push({ x, y: Math.round(h6(3) * h) + 0.5, len, th: band.th * (0.8 + h6(4) * 0.6), colour: rgba(h6(5) > 0.5 ? band.near : band.far, alpha), dir });
   }
   return out;
 }
 
 /** Paint them: a tapered quad each, flat colour, nothing else -- the canvas rules hold here too. */
-export function paintWind(ctx, streaks, w, h) {
-  ctx.clearRect(0, 0, w, h);
+export function paintWind(ctx, streaks, w, h, clear = true) {
+  if (clear) ctx.clearRect(0, 0, w, h);
   for (const s of streaks) {
     const tail = s.x - (s.len / 2) * s.dir, head = s.x + (s.len / 2) * s.dir;
     const waist = s.x - (s.len * 0.2) * s.dir;
@@ -279,6 +283,57 @@ export function paintWind(ctx, streaks, w, h) {
   }
 }
 
+// THE CHANGE OF WIND (operator, 2026-09-16: "the old wind needs to fade out when ending, and new
+// wind needs to draw in ... I have to wait for the wind to settle animating before seeing what it
+// is doing for my turn").
+//
+// A new wind used to replace the old one between two frames: every streak jumped, because a
+// streak's place is its speed times the elapsed time and both had changed. What follows is a
+// CROSSFADE, not a settling -- the old air thins away while the new air, already at its own speed
+// and in its own direction, comes up over it. The two overlap for WIND_FADE_MS, and the new one
+// leads: at the halfway point it is already the brighter of the two, so the direction is readable
+// long before the old one is gone. Nothing waits on anything.
+const WIND_FADE_MS = 600;
+export function windFadeAt(fade, now, ms = WIND_FADE_MS) {
+  if (!fade) return { k: 1 };
+  const k = Math.min(1, Math.max(0, (now - fade.t0) / ms));
+  return { k, out: fade.from, outAlpha: (1 - k) * (1 - k), inAlpha: Math.sqrt(k) };
+}
+
+// THE BANNER: the wind written on the field itself, at the top, so the answer to "which way, how
+// hard" is there the moment the turn begins rather than after the air has drifted enough to read.
+// Chevrons pointing downwind, as many as the wind is strong, bright while it is new.
+export function windBanner(wind, w, h, fresh = 0) {
+  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
+  if (!w || !h || strength < 0.03) return [];
+  const dir = wind < 0 ? -1 : 1;
+  const n = 1 + Math.round(strength * 6);
+  const size = Math.max(7, Math.min(16, w * 0.011));
+  const y = Math.max(10, h * 0.045);
+  const gap = size * 1.5;
+  const x0 = w / 2 - ((n - 1) * gap) / 2;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const lead = 1 - i / (n + 1);                       // the leading chevron is the brightest
+    out.push({ x: x0 + i * gap, y, size, dir, alpha: (0.3 + 0.45 * lead) * (0.55 + 0.45 * fresh) });
+  }
+  return out;
+}
+
+export function paintBanner(ctx, chevrons) {
+  for (const c of chevrons) {
+    const back = -c.dir * c.size * 0.5, front = c.dir * c.size * 0.5;
+    ctx.strokeStyle = `rgba(236,240,248,${c.alpha.toFixed(3)})`;
+    ctx.lineWidth = Math.max(1.4, c.size * 0.18);
+    ctx.lineJoin = 'miter';
+    ctx.beginPath();
+    ctx.moveTo(c.x + back, c.y - c.size * 0.45);
+    ctx.lineTo(c.x + front, c.y);
+    ctx.lineTo(c.x + back, c.y + c.size * 0.45);
+    ctx.stroke();
+  }
+}
+
 function drawWind(now) {
   const c = el('syWind');
   if (!c) return;
@@ -290,7 +345,16 @@ function drawWind(now) {
   const ctx = c.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  paintWind(ctx, windStreaks(G.game?.wind ?? 0, now, w, h), w, h);
+  const wind = G.game?.wind ?? 0;
+  // a new wind starts a crossfade from the one on screen
+  if (G.windShown === undefined) G.windShown = wind;
+  if (wind !== G.windShown) { G.windFade = { from: G.windShown, t0: now }; G.windShown = wind; }
+  const f = windFadeAt(G.windFade, now);
+  if (f.k >= 1) G.windFade = null;
+  ctx.clearRect(0, 0, w, h);
+  if (G.windFade) paintWind(ctx, windStreaks(f.out, now, w, h, f.outAlpha), w, h, false);
+  paintWind(ctx, windStreaks(wind, now, w, h, G.windFade ? f.inAlpha : 1), w, h, false);
+  paintBanner(ctx, windBanner(wind, w, h, G.windFade ? 1 - f.k * 0.5 : Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 
 /** The cells of the runs still falling, as "x,y" keys: left off the land canvas while the actor canvas animates them. */
@@ -601,7 +665,11 @@ function onEvents(events, now) {
       case 'shield': sound.play('levelup'); break;
       case 'shieldDown': sound.play('life'); break;
       case 'battery': sound.play('clear'); break;
-      case 'death': { sound.play('syDeath'); const tk = g.tanks[e.tank]; G.deaths.push({ id: ++G.seq, x: tk.x + TANK_W / 2, y: tk.y, colour: tk.colour, t0: now }); say(tk, 'death', 2); G.h?.toast?.(`${tk.name} is destroyed`); break; }
+      case 'death': { sound.play('syDeath'); const tk = g.tanks[e.tank]; G.deaths.push({ id: ++G.seq, x: tk.x + TANK_W / 2, y: tk.y, colour: tk.colour, t0: now }); say(tk, 'death', 2); G.h?.toast?.(`${tk.name} is destroyed`);
+        // knocked out with rounds still to play: say what the ways out are, rather than leaving a
+        // dead player watching the computer finish (operator, 2026-09-16)
+        if (tk.kind === 'human' && g.round < g.rounds) G.h?.toast?.('you are out for this round — restart (F2) for a new war, or watch it out');
+        break; }
       case 'bounce': sound.play('wall'); break;
       case 'turn': G.aiAt = now; sound.play('syTurn'); drawSky(); break;
       case 'round': drawSky(); break;
@@ -711,6 +779,15 @@ function start() {
   drawSwitches();
   onEvents(step(G.game, 0), performance.now());
   if (!G.raf) G.raf = requestAnimationFrame(frame);
+}
+
+/** A fresh war, from round one, whatever the board is doing. */
+function restart() {
+  clearTimeout(G.demoTimer); G.demoTimer = null;
+  sound.unlock();
+  sound.holdMusic(false);
+  start();
+  G.h?.toast?.('a new war');
 }
 
 function pause(why) {
@@ -863,6 +940,10 @@ function onKey(e) {
   const g = G.game;
   if (e.key === 'Enter' && !humanTurn()) { e.preventDefault(); resume(); return; }
   if (e.key === 'n' || e.key === 'N') { if (g?.phase === 'roundOver') { e.preventDefault(); nextRoundNow(); } return; }
+  // A WAY OUT WHEN YOU ARE DEAD (operator, 2026-09-16: "There is no way to restart the game if I
+  // die. I have to wait for the AI to finish the game"). A war is five rounds; a player knocked out
+  // in round one had nothing to do but watch. F2 and the button start a fresh one from round one.
+  if (e.key === 'F2') { e.preventDefault(); restart(); return; }
   if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { if (G.running && g?.phase !== 'roundOver') { e.preventDefault(); G.paused ? resume() : pause('paused'); } return; }
   if (!humanTurn()) return;
   const t = current(g);
@@ -951,6 +1032,7 @@ function bind() {
   document.addEventListener('visibilitychange', () => { if (document.hidden && G.running && !G.paused) pause('paused — you looked away'); });
   el('syResume')?.addEventListener('click', () => resume());
   el('syFire')?.addEventListener('click', () => fireNow());
+  el('syRestart')?.addEventListener('click', () => restart());
   el('syShop')?.addEventListener('click', onShopClick);
   el('syStats')?.addEventListener('click', onStatsClick);
   el('syField')?.addEventListener('wheel', onWheel, { passive: false });

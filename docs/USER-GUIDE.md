@@ -824,6 +824,14 @@ fires the last shot again, exactly. **Space** or the fire button sends it; **[ ]
 **A D** drive if you have fuel; **B** battery, **S** shield, **T** contact trigger, **H** heat
 guidance; **P** pauses; **N** starts the next round.
 
+**Restart** on the panel (or **F2**) starts a fresh war from round one, whatever the board is doing:
+a war is five rounds, and a player knocked out early should not have to watch the computer finish.
+
+The wind is written on the field as well as on the panel: a row of **chevrons** at the top points
+the way it blows, as many as it is strong, brightest just after it changes. When it does change, at
+the start of a round, the old air thins away while the new air comes up over it already at its own
+speed and direction, so there is nothing to wait for.
+
 Over the tank whose turn it is stands the **aim gauge**: a protractor with a tick every fifteen
 degrees, a needle along the current angle whose length is the power, and both numbers at its tip.
 It is dimmed on a computer player's turn, so you can read what it is about to do before it fires.

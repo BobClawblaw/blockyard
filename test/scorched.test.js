@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, windFadeAt, windBanner, paintBanner, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -857,8 +857,24 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   // it stays on its canvas and knows nothing of cells
   for (const t of windStreaks(9, 3000, 800, 400)) {
     assert.ok(t.y >= 0 && t.y <= 400 && t.x > -t.len - 1 && t.x < 800 + t.len + 1, 'on the plane');
-    assert.ok(t.th > 0 && t.colour.startsWith('#'));
+    assert.ok(t.th > 0 && /^rgba\(/.test(t.colour), 'a colour with an alpha, so a change of wind can fade');
   }
+  // A CHANGE OF WIND CROSSFADES (operator: "the old wind needs to fade out when ending, and new
+  // wind needs to draw in ... I have to wait for the wind to settle before seeing what it is doing")
+  const at = (ms) => windFadeAt({ from: -6, t0: 0 }, ms, 600);
+  assert.ok(at(0).inAlpha < 0.01 && at(0).outAlpha > 0.99, 'at the change the old air is all there is');
+  assert.ok(at(300).inAlpha > at(300).outAlpha, 'halfway the new air already reads stronger than the old');
+  assert.equal(at(700).k, 1, 'and the fade is over inside its time');
+  assert.equal(windStreaks(6, 0, 800, 400, 0).length, 0, 'a layer faded to nothing is not drawn at all');
+  const faint = windStreaks(6, 0, 800, 400, 0.25)[0].colour;
+  assert.match(faint, /,0\.2[0-9]*\)$/, 'and a fading layer carries its alpha into every streak');
+  // the banner: chevrons downwind, more of them the harder it blows, at the top of the plane
+  const soft2 = windBanner(2, 800, 400), hard2 = windBanner(9, 800, 400);
+  assert.ok(hard2.length > soft2.length, `a stronger wind writes more chevrons (${soft2.length} -> ${hard2.length})`);
+  assert.equal(windBanner(-6, 800, 400)[0].dir, -1, 'and they point the way it blows');
+  assert.equal(windBanner(0, 800, 400).length, 0, 'still air says nothing');
+  assert.ok(windBanner(6, 800, 400, 1)[0].alpha > windBanner(6, 800, 400, 0)[0].alpha, 'brightest while the wind is new');
+
   // and it paints with flat fills only
   const ops = [];
   const ctx = { clearRect: () => ops.push('clear'), beginPath: () => {}, moveTo: () => {}, lineTo: () => {}, closePath: () => {}, fill: () => ops.push('fill'), set fillStyle(v) { ops.push(`fill:${v}`); } };
@@ -965,4 +981,17 @@ test('scorched yard: one wind a round, unless the mode says otherwise', () => {
   // rewrote this key would take the old mode away from anyone who wanted it, every time they loaded
   assert.equal(DEFAULTS.scorched.wind, 'round', 'a fresh install holds its wind for the round');
   assert.equal(normalise({ scorched: { wind: 'turn' } }).scorched.wind, 'turn', 'and a saved choice stands');
+});
+
+// A WAY OUT WHEN YOU ARE KNOCKED OUT (operator, 2026-09-16: "There is no way to restart the game if
+// I die. I have to wait for the AI to finish the game. Give me a restart button")
+test('scorched yard: a restart button and its key', () => {
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="syRestart"/, 'the button is on the panel');
+  assert.match(html, /F2 restart/, 'and the keys line says the key');
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(e\.key === 'F2'\) \{ e\.preventDefault\(\); restart\(\); return; \}/, 'F2 restarts');
+  assert.match(src, /el\('syRestart'\)\?\.addEventListener\('click', \(\) => restart\(\)\)/, 'so does the button');
+  assert.match(src, /function restart\(\) \{[\s\S]*?start\(\);/, 'and a restart is a fresh war from round one');
+  assert.match(src, /you are out for this round/, 'a knocked-out player is told what the ways out are');
 });

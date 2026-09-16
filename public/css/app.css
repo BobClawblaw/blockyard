@@ -1957,6 +1957,7 @@ body { font-variant-numeric: tabular-nums; }
 /* the two numbers a player actually tunes: click one and type it */
 #syStats b.syval { cursor: text; border-bottom: 1px dotted var(--line); }
 #syStats b.syval:hover { color: var(--accent); }
+.syrestart { width: 100%; margin-top: 6px; }
 .syedit { width: 5.2em; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 3px; padding: 0 2px; text-align: right; }
 .syfire { width: 100%; margin: 2px 0 10px; }
 .syfire:disabled { opacity: .45; cursor: default; }
