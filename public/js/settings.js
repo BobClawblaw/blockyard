@@ -312,6 +312,7 @@ export const DEFAULTS = Object.freeze({
     talk: true,           // what the tanks say, over the field
     roundSky: true,       // under the Living sky, each round draws its own hour
     fast: false,          // shells fly at three times the pace
+    demo: false,          // attract mode: every seat is a computer player, and it plays on by itself
     grid: false,          // the quiet grid under the field, off: the land is the picture
     gridColour: '#2a5a8f',
     gridBrightness: 1,
@@ -694,6 +695,7 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'talk', label: 'Talk', kind: 'toggle', hint: 'What the tanks say when they fire, are hit, or die' }),
       Object.freeze({ key: 'roundSky', label: 'A sky per round', kind: 'toggle', hint: 'Under the Living sky, each round draws its own hour: dawn, noon, dusk, night' }),
       Object.freeze({ key: 'fast', label: 'Fast shells', kind: 'toggle', hint: 'Shells fly at three times the pace, for the impatient' }),
+      Object.freeze({ key: 'demo', label: 'Attract mode', kind: 'toggle', hint: 'Every seat is a computer player and the war runs on by itself, for a wall display' }),
       Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'A quiet grid under the field' }),
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of that grid' }),
       Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 0 hides it' }),
@@ -1194,7 +1196,7 @@ export function scorchedOptions(s) {
   const sky = spaceOptions(s);
   const sc = n.scorched;
   return {
-    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast,
+    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, demo: sc.demo,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
     opponents: sc.opponents, opponentKind: sc.opponentKind, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,

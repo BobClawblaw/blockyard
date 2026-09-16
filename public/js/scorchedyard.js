@@ -51,6 +51,8 @@ const DUST_MS = 700;                   // dust where fallen dirt lands
 const TALK_MS = 2400;
 const FIRE_MS = 2600;                  // how long napalm burns on screen
 const BEAM_MS = 420;                   // how long a laser's line stays
+const DEMO_ROUND_MS = 4200;            // attract mode: how long the round's scoreboard stands before the next
+const DEMO_WAR_MS = 7000;              // and how long the war's result stands before a fresh one
 
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, dirty: true, bound: false,
@@ -63,6 +65,7 @@ const G = {
   dusts: [],                            // { id, x, y, t0 } where fallen dirt landed
   falls: new Map(),                     // tank id -> { from, to, t0, ms, chute } a tank on its way down
   talkTimer: null,
+  demoTimer: null,                      // attract mode's wait between a round and the next, and between wars
   fires: [],                            // { cells, t0 } napalm on the ground, drained as it burns out
   beams: [],                            // { x0, y0, x1, y1, t0 } laser lines
   drag: null,                           // a mouse aim in progress
@@ -431,7 +434,7 @@ function drawShop() {
   if (box.innerHTML !== html) box.innerHTML = html;
 }
 
-const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast']];
+const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syDemo', 'demo']];
 function drawSwitches() {
   const t = scorchedOptions(loadSettings());
   for (const [id, key] of SWITCHES) {
@@ -450,6 +453,7 @@ function flip(key) {
   sound.unlock();
   drawSwitches();
   if (key === 'stars' || key === 'galaxy') drawSky();
+  if (key === 'demo') { clearTimeout(G.demoTimer); G.demoTimer = null; if (G.running) { start(); return; } }
   G.dirty = true;
   if (!G.running || G.paused) draw();
 }
@@ -612,11 +616,16 @@ function frame(t) {
 // Cyborg -- or every seat the one kind the setting names. Named for what they are, the manual's way.
 const MIX = ['shooter', 'tosser', 'chooser', 'spoiler', 'cyborg', 'poolshark'];
 const NAMES = { moron: 'Moron', shooter: 'Shooter', poolshark: 'Poolshark', tosser: 'Tosser', chooser: 'Chooser', spoiler: 'Spoiler', cyborg: 'Cyborg', unknown: 'Unknown' };
-function players() {
-  const t = scorchedOptions(loadSettings());
-  const list = [{ name: 'You', kind: 'human' }];
+/**
+ * The seats. ATTRACT MODE (M5): with `demo` on there is no human seat -- the human's chair is
+ * taken by another computer player, so the war plays itself on a wall. Everything else is the
+ * same game: the same shop, the same rounds, the same rules.
+ */
+export function players(t = scorchedOptions(loadSettings())) {
+  const list = t.demo ? [] : [{ name: 'You', kind: 'human' }];
   const seen = {};
-  for (let i = 0; i < t.opponents; i++) {
+  const seats = t.opponents + (t.demo ? 1 : 0);
+  for (let i = 0; i < seats; i++) {
     const kind = t.opponentKind === 'mix' ? MIX[i % MIX.length] : t.opponentKind;
     seen[kind] = (seen[kind] ?? 0) + 1;
     list.push({ name: seen[kind] > 1 ? `${NAMES[kind] ?? kind} ${seen[kind]}` : (NAMES[kind] ?? kind), kind });
@@ -624,9 +633,17 @@ function players() {
   return list;
 }
 
+/** Attract mode is on and this game has nobody at the keys. */
+const demoing = () => !!G.game && !G.game.tanks.some((t) => t.kind === 'human');
+function demoWait(ms, go) {
+  clearTimeout(G.demoTimer);
+  G.demoTimer = setTimeout(() => { G.demoTimer = null; if (demoing()) go(); }, ms);
+}
+
 function start() {
   const t = scorchedOptions(loadSettings());
-  G.game = newGame(players(), { rounds: t.rounds, walls: t.walls, wind: t.wind, gravity: t.gravity, land: t.land, cash: t.cash, interest: t.interest / 100 });
+  clearTimeout(G.demoTimer); G.demoTimer = null;
+  G.game = newGame(players(t), { rounds: t.rounds, walls: t.walls, wind: t.wind, gravity: t.gravity, land: t.land, cash: t.cash, interest: t.interest / 100 });
   G.blasts = []; G.fires = []; G.beams = []; G.deaths = []; G.dusts = []; G.falls = new Map(); G.shopping = false;
   G.running = true; G.paused = false; G.last = 0; G.dirty = true; G.aiAt = performance.now();
   overlay(null);
@@ -669,6 +686,7 @@ function roundOver(e) {
     'next round',
     true,
   );
+  if (demoing()) demoWait(DEMO_ROUND_MS, nextRoundNow);      // nobody to shop: the attract mode plays on
 }
 
 function nextRoundNow() {
@@ -703,6 +721,7 @@ function gameOver() {
     'play again',
     true,
   );
+  if (demoing()) demoWait(DEMO_WAR_MS, start);               // and the next war begins by itself
 }
 
 // ------------------------------------------------------------------ input

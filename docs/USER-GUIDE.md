@@ -832,7 +832,12 @@ score at the end wins, and your score goes in the high-score table, this browser
 Living sky on, each round draws its own hour of it, dawn to night, unless **A sky per round** is
 off). **Music** is a march in D minor on oscillators. **Sound** is the shot, the blast, a hit, a
 fall, a death. **Talk** is what the tanks say when they fire, are hit, or die. **Fast** flies
-shells at three times the pace.
+shells at three times the pace. **Watch** is the attract mode: the computer takes your chair as
+well, so every seat is a computer player and the war runs on by itself — a round rolls into the
+next without waiting at the shop, and when one of them wins the war a fresh one begins. Nothing
+is scored in the high-score table for a war nobody played. Turn it off and the next game seats
+you again; it is also in **Display settings → Scorched Yard → Attract mode**, and it is what to
+leave running on a screen in the corner.
 The rules the original exposed are in **Display settings → Scorched Yard**: the number of
 computer players, the rounds, the **walls** (none loses a shell off the edge, the original's
 default; concrete explodes it there; padded stops it and drops it; rubber bounces it; spring

@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, dustTiles, fallingTanks, windTiles, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, dustTiles, fallingTanks, windTiles, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { THEMES, THEME_SCORCHED, setMusic } from '../public/js/tetsound.js';
 import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
 
@@ -319,7 +319,7 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
   }
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
-  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
   assert.equal(scorchedOptions(normalise(null)).opponentKind, 'mix');
   assert.equal(scorchedOptions(normalise({ scorched: { opponentKind: 'cyborg' } })).opponentKind, 'cyborg');
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
@@ -795,4 +795,23 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const known = new Set(['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'GS4', 'E4', 'D4', 'F4', 'G4', 'BB4', 'R']);
   for (const [n, beats] of THEME_SCORCHED) { assert.ok(known.has(n), `${n} is a note the table knows`); assert.ok(beats > 0); }
   assert.doesNotThrow(() => { setMusic(true, 'scorched'); setMusic(false); }, 'a no-op without an AudioContext');
+});
+
+// M5: ATTRACT MODE -- every seat a computer player, and no high score written for a war nobody played
+test('scorched yard: attract mode fields no human', () => {
+  const base = { opponents: 2, opponentKind: 'mix', demo: false };
+  const seats = players(base);
+  assert.equal(seats.length, 3);
+  assert.equal(seats.filter((p) => p.kind === 'human').length, 1, 'the human keeps a seat with the switch off');
+  const demo = players({ ...base, demo: true });
+  assert.equal(demo.length, 3, 'the same table: the human chair is taken by a computer player');
+  assert.ok(!demo.some((p) => p.kind === 'human'), 'nobody at the keys');
+  assert.equal(new Set(demo.map((p) => p.name)).size, 3, 'and they are all named apart');
+  const one = players({ opponents: 3, opponentKind: 'spoiler', demo: true });
+  assert.deepEqual(one.map((p) => p.name), ['Spoiler', 'Spoiler 2', 'Spoiler 3', 'Spoiler 4'].slice(0, 4));
+  // the switch is on the panel and in Display settings
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="syDemo"/);
+  assert.equal(DEFAULTS.scorched.demo, false, 'off until it is asked for');
+  assert.equal(scorchedOptions(normalise({ scorched: { demo: true } })).demo, true);
 });

@@ -350,7 +350,7 @@ Each milestone is playable at its end and lands as its own commit set, tests inc
 | M2 | **the roster**: every v1 weapon and item, the walls, wind modes, fuel, the checked price table, the shop between rounds, cash and interest, a game of N rounds, the scoreboard, high scores | the game — *landed 2026-09-16; the price table is as remembered, not yet checked against SCORCH.DOC* |
 | M3 | **the AI**: Shooter, Tosser, Poolshark, Chooser, Spoiler, Cyborg, Unknown, AI shopping | a real opponent — *landed 2026-09-16* |
 | M4 | **fabulous**: strata, day skies and weather, the tank models, the blast treatments, dirt dust, death fireworks, traces, sound and music, talk | the look — *landed 2026-09-16 (the Living sky serves as the day sky, with an hour per round)* |
-| M5 | **finish**: the settings tab, Kiosk attract mode (if wanted), docs, the full test set, `counts:fix`, screenshots for the guide and the announcement | ship |
+| M5 | **finish**: the settings tab, Kiosk attract mode (if wanted), docs, the full test set, `counts:fix`, screenshots for the guide and the announcement | ship — *landed 2026-09-16; the attract mode is the game's own **watch** switch rather than a Kiosk panel: the Kiosk is the two boards and the chain, and a game among them would have pushed one of those off the wall* |
 
 Rough size, from the three games that exist: M1 is the largest single step (about the size of
 Blockanoid's first cut); M2 and M4 are each about that again; M3 and M5 are smaller.
