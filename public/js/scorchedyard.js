@@ -11,7 +11,7 @@
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from './scorchedfx.js';
 import { airClock, advanceAir, paintRipple, skyBrightness } from './scorchedwind.js';
-import { makeFluid, stepFluid, setSolid, paintFluid, warmFluid } from './scorchedair.js';
+import { makeFluid, stepFluid, setSolid, warmFluid, makeTracers, stepTracers, paintTracers } from './scorchedair.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   trajectory, dirtAt, shellLook,
@@ -82,7 +82,7 @@ const G = {
   air: null,                            // the air's own integrated clock { t, drift }
   airTravel: 0,                         // the signed distance the air has run, for the ripple and the bands
   skyLight: 0, skyLightAt: 0,           // how bright the sky behind the air is, sampled now and then
-  fluid: null, fluidLand: '', fluidCanvas: null,   // the simulated air, the land it was given, and the canvas it paints to
+  fluid: null, fluidLand: '', tracers: null,   // the simulated air, the land it was given, and the streaklines carried by it
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -348,12 +348,14 @@ function drawWind(now) {
     // new land: take its silhouette, and let the air settle round it before it is seen
     fluidFloor(G.fluid, land, w, h);
     G.fluidLand = landKey;
-    warmFluid(G.fluid, 8, we);
+    warmFluid(G.fluid, 6, we, { dye: false });
+    G.tracers = makeTracers(G.fluid, 320, 5);
+    for (let i = 0; i < 40; i++) stepTracers(G.fluid, G.tracers, 33);   // paths already drawn out when first seen
   }
-  stepFluid(G.fluid, dt, { wind: we });
+  stepFluid(G.fluid, dt, { wind: we, dye: false });
+  if (G.tracers) stepTracers(G.fluid, G.tracers, dt);
   if (sky && now - (G.skyLightAt ?? 0) > 1500) { G.skyLight = skyBrightness(sky); G.skyLightAt = now; }
-  G.fluidCanvas ??= document.createElement('canvas');
-  paintFluid(ctx, G.fluidCanvas, G.fluid, w, h, { bright: G.skyLight ?? 0, wind: we });
+  if (G.tracers) paintTracers(ctx, G.fluid, G.tracers, w, h, { bright: G.skyLight ?? 0, wind: we });
   paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 

@@ -27,15 +27,20 @@ const smooth = (t) => t * t * (3 - 2 * t);
 function noise1(x) { const i = Math.floor(x), f = x - i; return hash(i) * (1 - smooth(f)) + hash(i + 1) * smooth(f); }
 
 /** A fluid of `nx` by `ny` cells, still, with a little dye already in it so the first frame is not empty. */
-export function makeFluid(nx = 96, ny = 48, seed = 1) {
+export function makeFluid(nx = 96, ny = 48, seed = 1, dyeScale = 2) {
   const n = nx * ny;
+  // THE SMOKE ON A FINER GRID THAN THE AIR (operator, 2026-09-16: "the airflow bands are not clear
+  // enough"). On the air's own 96 x 48 grid a stream a few cells wide smears into haze within a
+  // crossing; the velocity is smooth and can stay coarse, but the smoke is what the eye follows,
+  // so it lives at twice the resolution and samples the velocity underneath.
+  const dx = nx * dyeScale, dy = ny * dyeScale, dn = dx * dy;
   const f = {
-    nx, ny, t: 0, seed,
+    nx, ny, t: 0, seed, ds: dyeScale, dx, dy,
     u: new Float32Array(n), v: new Float32Array(n), u0: new Float32Array(n), v0: new Float32Array(n),
-    d: new Float32Array(n), d0: new Float32Array(n), p: new Float32Array(n), div: new Float32Array(n),
-    w: new Float32Array(n), solid: new Uint8Array(n),
+    p: new Float32Array(n), div: new Float32Array(n), w: new Float32Array(n), solid: new Uint8Array(n),
+    d: new Float32Array(dn), d0: new Float32Array(dn), d1: new Float32Array(dn),
   };
-  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) f.d[IX(f, x, y)] = inflowAt(f, y, x * 0.37);
+  for (let y = 0; y < dy; y++) for (let x = 0; x < dx; x++) f.d[x + y * dx] = inflowAt(f, y / dyeScale, (x / dyeScale) * 0.37);
   return f;
 }
 
@@ -46,8 +51,8 @@ export function makeFluid(nx = 96, ny = 48, seed = 1) {
  * the streams being bent over the hills and torn into eddies that shows the flow.
  */
 function inflowAt(f, y, t) {
-  const band = noise1(y * 0.36 + f.seed * 3.1 + t * 0.22);
-  const edge = band < 0.58 ? 0 : band > 0.7 ? 1 : smooth((band - 0.58) / 0.12);
+  const band = noise1(y * 0.62 + f.seed * 3.1 + t * 0.22);
+  const edge = band < 0.62 ? 0 : band > 0.7 ? 1 : smooth((band - 0.62) / 0.08);
   const pulse = noise1(t * 1.1 + y * 0.09 + f.seed * 5.3);
   return edge * (0.55 + 0.9 * pulse);
 }
@@ -71,7 +76,7 @@ function sample(f, a, x, y) {
 }
 
 /** One step of the solver: `dt` in ms, `wind` the gauge value (-10..10). */
-export function stepFluid(f, dt, { wind = 0 } = {}) {
+export function stepFluid(f, dt, { wind = 0, dye = true } = {}) {
   const s = Math.min(0.05, Math.max(0, dt / 1000));
   if (!s) return f;
   f.t += s;
@@ -164,17 +169,52 @@ export function stepFluid(f, dt, { wind = 0 } = {}) {
     if ((y === 0 && v[i] < 0) || (y === ny - 1 && v[i] > 0)) v[i] = 0;
   }
 
-  // --- the dye: carried by the air, breathed in on the upwind edge, thinning as it goes
+  if (!dye) return f;
+  // --- the dye: carried by the air on its own fine grid, breathed in on the upwind edge, thinning.
+  // MACCORMACK, not plain semi-Lagrangian: advect back, advect that forward again, and correct by
+  // half the round-trip error, clamped to the neighbours the backtrace landed among. Plain advection
+  // blurs a filament a little every step, and over a crossing of the field that is all of it; this
+  // keeps the streams as streams for the cost of a second pass.
+  const { ds, dx, dy, d1 } = f;
+  const dn = dx * dy;
+  const velAt = (a, x, y) => sample(f, a, x / ds - 0.5 + 0.5 / ds, y / ds - 0.5 + 0.5 / ds);
+  const sampleD = (arr, x, y) => {
+    x = ((x % dx) + dx) % dx;
+    y = y < 0 ? 0 : y > dy - 1.001 ? dy - 1.001 : y;
+    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = (x0 + 1) % dx, y1 = y0 + 1;
+    const sx = x - x0, sy = y - y0;
+    return (arr[x0 + y0 * dx] * (1 - sx) + arr[x1 + y0 * dx] * sx) * (1 - sy) + (arr[x0 + y1 * dx] * (1 - sx) + arr[x1 + y1 * dx] * sx) * sy;
+  };
+  const solidD = (x, y) => solid[Math.min(nx - 1, Math.floor(x / ds)) + Math.min(ny - 1, Math.floor(y / ds)) * nx];
+  const inflowEdge = (bx) => (dir > 0 ? bx < 0 : bx > dx - 1);
   d0.set(d);
   const decay = 1 - Math.min(1, 0.02 * s);
-  for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
-    const i = x + y * nx;
-    if (solid[i]) { d[i] = 0; continue; }
-    const bx = x - u[i] * s, by = y - v[i] * s;
-    // a backtrace that leaves the strip on the upwind side comes from outside: fresh inflow
-    const fromOutside = dir > 0 ? bx < 0 : bx > nx - 1;
-    d[i] = (fromOutside ? inflowAt(f, y, f.t) : sample(f, d0, bx, by)) * decay;
+  const hs = s * ds;                                        // cells of the fine grid per cell of the air, per step
+  // back: phi^ = A(phi)
+  for (let y = 0; y < dy; y++) for (let x = 0; x < dx; x++) {
+    const i = x + y * dx;
+    if (solidD(x, y)) { d1[i] = 0; continue; }
+    const bx = x - velAt(u, x, y) * hs, by = y - velAt(v, x, y) * hs;
+    d1[i] = inflowEdge(bx) ? inflowAt(f, y / ds, f.t) : sampleD(d0, bx, by);
   }
+  // forward and correct: phi = phi^ + (phi - A^R(phi^)) / 2, clamped to the neighbourhood
+  for (let y = 0; y < dy; y++) for (let x = 0; x < dx; x++) {
+    const i = x + y * dx;
+    if (solidD(x, y)) { d[i] = 0; continue; }
+    const vx = velAt(u, x, y), vy = velAt(v, x, y);
+    const bx = x - vx * hs, by = y - vy * hs;
+    if (inflowEdge(bx)) { d[i] = d1[i] * decay; continue; }
+    const fx = x + vx * hs, fy = y + vy * hs;
+    const back = sampleD(d1, fx, fy);
+    let val = d1[i] + 0.5 * (d0[i] - back);
+    const cx = ((Math.floor(bx) % dx) + dx) % dx, cy = Math.max(0, Math.min(dy - 2, Math.floor(by)));
+    const c1 = (cx + 1) % dx;
+    const n0 = d0[cx + cy * dx], n1 = d0[c1 + cy * dx], n2 = d0[cx + (cy + 1) * dx], n3 = d0[c1 + (cy + 1) * dx];
+    const lo = Math.min(n0, n1, n2, n3), hi = Math.max(n0, n1, n2, n3);
+    val = val < lo ? lo : val > hi ? hi : val;
+    d[i] = val * decay;
+  }
+  if (dn !== d.length) throw new Error('dye grid size');
   return f;
 }
 
@@ -188,24 +228,26 @@ export function paintFluid(ctx, small, f, w, h, { bright = 0, wind = 0 } = {}) {
   if (!small || strength < 0.03) return false;
   const sc = small.getContext('2d');
   if (!sc) return false;
-  if (small.width !== f.nx || small.height !== f.ny) { small.width = f.nx; small.height = f.ny; }
-  const img = sc.createImageData(f.nx, f.ny);
+  const W = f.dx ?? f.nx, H = f.dy ?? f.ny;
+  if (small.width !== W || small.height !== H) { small.width = W; small.height = H; }
+  const img = sc.createImageData(W, H);
   const px = img.data;
-  // opacity from the dye through a compressing curve: 1 - e^(-3.2d). The smoke thins to about a
-  // third as it crosses (it spreads and mixes on a coarse grid), and a knee that hid thin smoke left
-  // a dense wall at the upwind edge and nothing downstream; this keeps thin smoke visible and stops
-  // the dense streams from dominating. The ceiling is lower on a dark sky, where pale is loud.
+  // CLEAR AIR STAYS CLEAR: a smoothstep from 0.1 to 0.5 of dye, so the thin haze the streams leave
+  // behind is gone and each stream reads as a band with an edge; its dense core is a touch brighter
+  // than its body. The ceiling is lower on a dark sky, where pale is loud.
   const lit = Math.max(0, Math.min(1, bright));
-  const peak = (82 + 46 * lit) * (0.65 + 0.35 * strength);
+  const peak = (90 + 60 * lit) * (0.7 + 0.3 * strength);
   for (let i = 0, j = 0; i < f.d.length; i++, j += 4) {
-    const dv = Math.max(0, f.d[i] - 0.02);
-    const a = peak * (1 - Math.exp(-3.2 * dv));
-    px[j] = 228; px[j + 1] = 236; px[j + 2] = 250; px[j + 3] = a;
+    const dv = f.d[i];
+    const t = dv <= 0.1 ? 0 : dv >= 0.5 ? 1 : smooth((dv - 0.1) / 0.4);
+    const core = dv > 0.7 ? Math.min(1, (dv - 0.7) / 0.5) : 0;
+    const a = peak * t + 40 * core;
+    px[j] = 232; px[j + 1] = 239; px[j + 2] = 252; px[j + 3] = a > 255 ? 255 : a;
   }
   sc.putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = true;
   if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(small, 0, 0, f.nx, f.ny, 0, 0, w, h);
+  ctx.drawImage(small, 0, 0, W, H, 0, 0, w, h);
   return true;
 }
 
@@ -221,8 +263,100 @@ export function meanFlow(f) {
  * round's land -- opens on air that is already flowing round the hills rather than on a front of
  * smoke crawling in from one edge. About a quarter of a millisecond a step.
  */
-export function warmFluid(f, seconds, wind) {
+export function warmFluid(f, seconds, wind, { dye = true } = {}) {
   const steps = Math.ceil((seconds * 1000) / 33);
-  for (let i = 0; i < steps; i++) stepFluid(f, 33, { wind });
+  for (let i = 0; i < steps; i++) stepFluid(f, 33, { wind, dye });
   return steps;
+}
+
+// ------------------------------------------------------------------ what the eye follows
+/**
+ * STREAKLINES THROUGH THE SIMULATED FLOW (operator, 2026-09-16: "looks too much like smoke blowing
+ * out the scene"). Any soft density drifting across the sky reads as smoke, however it is tuned.
+ * What reads as AIR is the wind map: many thin lines, each the recent path of a weightless tracer
+ * carried by the simulated velocity, so they curve where the air curves -- up over a hill, into the
+ * eddy behind it. Earlier lines read as shooting stars for two reasons, both absent here: they were
+ * straight (told where to go, not carried), and bright at the head. These taper to nothing at BOTH
+ * ends, brightest in the middle of their length, and there is no head to catch the eye.
+ */
+const TRAIL = 22;
+export function makeTracers(f, n = 320, seed = 1) {
+  const tr = { n, x: new Float32Array(n), y: new Float32Array(n), age: new Float32Array(n), life: new Float32Array(n), len: new Uint8Array(n), hx: new Float32Array(n * TRAIL), hy: new Float32Array(n * TRAIL), head: new Uint8Array(n), seed, k: 0 };
+  for (let i = 0; i < n; i++) respawn(f, tr, i, true);
+  return tr;
+}
+
+function respawn(f, tr, i, anywhere) {
+  // a free cell, anywhere on the field: density stays even, nothing enters as a front
+  for (let tries = 0; tries < 24; tries++) {
+    tr.k += 1;
+    const x = hash(tr.seed * 31.7 + tr.k * 1.618) * f.nx, y = hash(tr.seed * 17.3 + tr.k * 2.414) * f.ny;
+    if (!f.solid[Math.floor(x) + Math.floor(y) * f.nx]) { tr.x[i] = x; tr.y[i] = y; break; }
+  }
+  tr.age[i] = 0;
+  tr.life[i] = 2.5 + hash(tr.seed + tr.k * 0.77) * 3.5;
+  tr.len[i] = 0;
+  tr.head[i] = 0;
+  if (anywhere) tr.age[i] = hash(tr.k * 3.3) * tr.life[i] * 0.6;
+}
+
+/** Carry every tracer `dt` ms through the fluid's velocity, keeping its recent path. */
+export function stepTracers(f, tr, dt) {
+  const s = Math.min(0.05, Math.max(0, dt / 1000));
+  if (!s) return tr;
+  for (let i = 0; i < tr.n; i++) {
+    const ux = sample(f, f.u, tr.x[i], tr.y[i]), vy = sample(f, f.v, tr.x[i], tr.y[i]);
+    let x = tr.x[i] + ux * s, y = tr.y[i] + vy * s;
+    tr.age[i] += s;
+    const wrapped = x < 0 || x >= f.nx;
+    const cell = f.solid[clampI(Math.floor(((x % f.nx) + f.nx) % f.nx), 0, f.nx - 1) + clampI(Math.floor(y), 0, f.ny - 1) * f.nx];
+    if (wrapped || y < 0 || y >= f.ny || cell || tr.age[i] > tr.life[i]) { respawn(f, tr, i, false); continue; }
+    tr.x[i] = x; tr.y[i] = y;
+    const h = (tr.head[i] + 1) % TRAIL;
+    tr.head[i] = h;
+    tr.hx[i * TRAIL + h] = x; tr.hy[i * TRAIL + h] = y;
+    if (tr.len[i] < TRAIL) tr.len[i] += 1;
+  }
+  return tr;
+}
+
+/**
+ * Draw the paths as thin polylines. Segments are bucketed into four opacities by where they sit
+ * along the path -- faint at both ends, full in the middle -- so the whole field is four strokes,
+ * not thousands. A tracer fades in over its first half second and out over its last.
+ */
+export function paintTracers(ctx, f, tr, w, h, { bright = 0, wind = 0, colour = '240,246,255' } = {}) {
+  const strength = Math.min(1, Math.abs(wind) / 10);
+  if (strength < 0.03) return 0;
+  const sx = w / f.nx, sy = h / f.ny;
+  const lit = Math.max(0, Math.min(1, bright));
+  const base = (0.2 + 0.2 * lit) * (0.7 + 0.3 * strength);
+  const levels = [0.25, 0.5, 0.75, 1];
+  const paths = levels.map(() => []);
+  for (let i = 0; i < tr.n; i++) {
+    const L = tr.len[i];
+    if (L < 3) continue;
+    const fade = Math.min(1, tr.age[i] / 0.5, (tr.life[i] - tr.age[i]) / 0.8);
+    if (fade <= 0.05) continue;
+    for (let k = 1; k < L; k++) {
+      const a = (tr.head[i] - L + 1 + k - 1 + TRAIL * 2) % TRAIL, b = (a + 1) % TRAIL;
+      const along = k / L;                                   // 0 at the tail, 1 at the head
+      const taper = Math.sin(Math.PI * along) * fade;       // nothing at either end
+      const lv = taper < 0.3 ? 0 : taper < 0.55 ? 1 : taper < 0.8 ? 2 : 3;
+      if (taper < 0.08) continue;
+      paths[lv].push(tr.hx[i * TRAIL + a] * sx, tr.hy[i * TRAIL + a] * sy, tr.hx[i * TRAIL + b] * sx, tr.hy[i * TRAIL + b] * sy);
+    }
+  }
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 1.3;
+  let strokes = 0;
+  paths.forEach((segs, lv) => {
+    if (!segs.length) return;
+    ctx.strokeStyle = `rgba(${colour},${(base * levels[lv]).toFixed(3)})`;
+    ctx.beginPath();
+    for (let j = 0; j < segs.length; j += 4) { ctx.moveTo(segs[j], segs[j + 1]); ctx.lineTo(segs[j + 2], segs[j + 3]); }
+    ctx.stroke();
+    strokes += 1;
+  });
+  return strokes;
 }

@@ -15,7 +15,7 @@ import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInter
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands, skyBrightness } from '../public/js/scorchedwind.js';
-import { makeFluid, stepFluid, setSolid, warmFluid, paintFluid, meanFlow } from '../public/js/scorchedair.js';
+import { makeFluid, stepFluid, setSolid, warmFluid, paintFluid, meanFlow, makeTracers, stepTracers, paintTracers } from '../public/js/scorchedair.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -1211,8 +1211,8 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
   const wind = src.slice(src.indexOf('function drawWind('), src.indexOf('\n}\n', src.indexOf('function drawWind(')));
   assert.ok(!/paintFlow|paintStreamlines/.test(wind), 'the meteor-shaped streaks are gone from the picture');
   assert.match(wind, /paintRipple\(ctx, sky,/, 'the sky is refracted');
-  assert.match(wind, /stepFluid\(G\.fluid, dt, \{ wind: we \}\)/, 'the air is stepped as a fluid every frame');
-  assert.match(wind, /paintFluid\(ctx, G\.fluidCanvas, G\.fluid, w, h,/, 'and painted');
+  assert.match(wind, /stepFluid\(G\.fluid, dt, \{ wind: we, dye: false \}\)/, 'the air is stepped as a fluid every frame');
+  assert.match(wind, /paintTracers\(ctx, G\.fluid, G\.tracers, w, h,/, 'and shown by streaklines carried in it, not by smoke');
   // brighter against a bright sky, and no brighter at night than before
   const night = airBands(50, 8, 800, h, 10, 0), noon = airBands(50, 8, 800, h, 10, 1);
   assert.ok(noon[0].alpha > night[0].alpha * 2.5, 'the bands carry about three times more at noon');
@@ -1250,7 +1250,7 @@ test('scorched yard: the air is simulated -- driven by the wind, flowing round t
   for (let y = 4; y < 20; y++) for (let x = 2; x < 94; x++) { const i = x + y * 96; if (g.solid[i] || g.solid[i + 1] || g.solid[i - 1] || g.solid[i + 96] || g.solid[i - 96]) continue; div += Math.abs((g.u[i + 1] - g.u[i - 1] + g.v[i + 96] - g.v[i - 96]) * 0.5); m += 1; }
   assert.ok(div / m < 1.2, `divergence is small in open air (${(div / m).toFixed(3)} per cell against a flow of ~12)`);
   // the smoke crosses the whole field, stays finite, and still air paints nothing
-  const cols = [8, 40, 72, 90].map((x) => { let d = 0; for (let y = 0; y < 30; y++) d += g.d[x + y * 96]; return d; });
+  const cols = [8, 40, 72, 90].map((x) => { let d = 0; for (let y = 0; y < 60; y++) d += g.d[x * g.ds + y * g.dx]; return d; });
   assert.ok(cols.every((d) => d > 0.5), `smoke reaches every part of the field (${cols.map((d) => d.toFixed(1)).join(', ')})`);
   assert.ok(g.u.every(Number.isFinite) && g.d.every((v) => Number.isFinite(v) && v >= 0), 'every value finite, no negative smoke');
   const small = { width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: () => {} }) };
@@ -1263,4 +1263,43 @@ test('scorched yard: the air is simulated -- driven by the wind, flowing round t
   // cheap enough for every frame
   const t0 = performance.now(); for (let i = 0; i < 60; i++) stepFluid(g, 33, { wind: 7 }); const per = (performance.now() - t0) / 60;
   assert.ok(per < 8, `a step costs well under a frame (${per.toFixed(2)} ms)`);
+});
+
+// STREAKLINES, NOT SMOKE (operator, 2026-09-16: "looks too much like smoke blowing out the scene").
+// The picture is thin paths of weightless tracers carried by the simulated air: they follow it,
+// never sit inside the land, and taper to nothing at both ends so nothing has a bright head.
+test('scorched yard: the flow is drawn as streaklines carried by the simulated air', () => {
+  const hill = (x) => 34 - 16 * Math.max(0, 1 - Math.abs(x - 48) / 14);
+  const f = makeFluid(96, 48, 4);
+  setSolid(f, hill);
+  warmFluid(f, 5, 7, { dye: false });
+  const tr = makeTracers(f, 200, 3);
+  let moved = 0, n = 0;
+  for (let k = 0; k < 30; k++) {
+    const x0 = Float32Array.from(tr.x), age0 = Float32Array.from(tr.age);
+    stepFluid(f, 33, { wind: 7, dye: false });
+    stepTracers(f, tr, 33);
+    for (let i = 0; i < tr.n; i++) if (tr.age[i] > age0[i]) { moved += tr.x[i] - x0[i]; n += 1; }
+  }
+  assert.ok(moved / n > 0.2, `tracers are carried downwind by the air (${(moved / n).toFixed(3)} cells a step)`);
+  for (let i = 0; i < tr.n; i++) assert.equal(f.solid[Math.floor(tr.x[i]) + Math.floor(tr.y[i]) * f.nx], 0, 'no tracer ever sits inside the land');
+  // they rise over the upwind slope, as the air does
+  let risers = 0, near = 0;
+  for (let i = 0; i < tr.n; i++) {
+    const x = Math.floor(tr.x[i]);
+    if (x < 36 || x > 46 || tr.y[i] < hill(x) - 4) continue;
+    near += 1;
+    const h = tr.head[i], p = (h - 4 + 22) % 22;
+    if (tr.len[i] > 5 && tr.hy[i * 22 + h] < tr.hy[i * 22 + p]) risers += 1;
+  }
+  assert.ok(near === 0 || risers / near > 0.5, `near the upwind slope the paths climb (${risers} of ${near})`);
+  // four strokes for the whole field; still air draws nothing
+  const alphas = [];
+  const ctx = { set strokeStyle(v) { alphas.push(parseFloat(String(v).split(',')[3])); }, lineCap: '', lineWidth: 1, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {} };
+  assert.ok(paintTracers(ctx, f, tr, 800, 400, { wind: 7 }) <= 4, 'at most four strokes');
+  assert.equal(paintTracers(ctx, f, tr, 800, 400, { wind: 0 }), 0, 'still air draws nothing');
+  assert.ok(Math.max(...alphas) < 0.45, 'faint lines, not bright ones');
+  // no bright head: the taper is zero at both ends of a path
+  const src = readFileSync(new URL('../public/js/scorchedair.js', import.meta.url), 'utf8');
+  assert.match(src, /const taper = Math\.sin\(Math\.PI \* along\) \* fade;/, 'brightest mid-path, nothing at either end');
 });
