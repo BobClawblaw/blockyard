@@ -14,7 +14,7 @@
 import fsp from 'node:fs/promises';
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendJsonl } from './history.js';
+import { appendJsonl, fchmodOwnerOnly } from './history.js';
 
 export class AuditLog {
   constructor(file, { maxBytes = 8 * 1024 * 1024, keep = 5, log = () => {} } = {}) {
@@ -129,6 +129,11 @@ export class AuditLog {
 
   /** Adopt an existing file's size so the first append after a restart is correct. */
   async adopt() {
+    // THE MODE IS TIGHTENED ON FILES THAT ALREADY EXIST (audit 2026-09-16, L10): appendJsonl passes
+    // 0o600, which applies only when it creates the file, so a trail written before 2026-09-14 kept
+    // whatever the umask gave it. Opened without following a symlink where the platform allows, and
+    // fchmod'ed through the descriptor.
+    for (const f of this.chain()) await fchmodOwnerOnly(f);
     try {
       this.bytes = (await fsp.stat(this.file)).size;
       return { adopted: this.bytes };

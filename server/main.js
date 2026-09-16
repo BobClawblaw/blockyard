@@ -26,8 +26,9 @@ const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf
 
 export async function boot({ configFile, log: logOverride = null } = {}) {
   const cfg = loadConfig({ configFile });
-  await fsp.mkdir(cfg.store.dir, { recursive: true });
-  await fsp.mkdir(cfg.auth.dataDir, { recursive: true });
+  // owner-only where this creates them (audit 2026-09-16, L10); an existing directory keeps its mode
+  await fsp.mkdir(cfg.store.dir, { recursive: true, mode: 0o700 });
+  await fsp.mkdir(cfg.auth.dataDir, { recursive: true, mode: 0o700 });
 
   const app = {
     version: VERSION,

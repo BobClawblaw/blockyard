@@ -54,7 +54,7 @@ async function sqliteEngine() {
 
 export async function openLedger({ file, engine = 'auto', keepHeights = 52_594, log = () => {} } = {}) {
   if (!file) throw new Error('openLedger needs a file path');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });   // owner-only (audit 2026-09-16, L10)
   let chosen = engine;
   if (engine === 'auto') {
     chosen = (process.env.BLOCKYARD_LEDGER_ENGINE ?? 'sqlite').trim().toLowerCase();
@@ -90,6 +90,9 @@ class SqliteLedger {
       height INTEGER PRIMARY KEY, pool_key TEXT, pool_label TEXT, seen_at INTEGER, row TEXT
     )`);
     this.db.exec('CREATE INDEX IF NOT EXISTS attribution_seen ON attribution(seen_at DESC)');
+    // SQLite creates its files by the umask: tightened to owner-only, and an older file with them
+    // (audit 2026-09-16, L10)
+    for (const f of [file, `${file}-wal`, `${file}-shm`]) ownerOnly(f);
     this.insert = this.db.prepare('INSERT OR REPLACE INTO attribution VALUES (?,?,?,?,?)');
   }
 
@@ -164,7 +167,8 @@ class JsonlLedger {
         if (Number.isInteger(row?.height)) this.byHeight.set(row.height, row);
       } catch { /* the incomplete final write; ignored, then overwritten */ }
     }
-    this.fd = fs.openSync(file, 'a');
+    this.fd = fs.openSync(file, 'a', 0o600);
+    try { fs.fchmodSync(this.fd, 0o600); } catch { /* not every filesystem keeps modes */ }   // one created before (audit 2026-09-16, L10)
   }
 
   put(row) { return this.putMany([row]); }
@@ -188,13 +192,15 @@ class JsonlLedger {
   #compact() {
     const rows = [...this.byHeight.values()].sort((a, b) => a.height - b.height);
     const tmp = `${this.file}.tmp`;
-    const fd = fs.openSync(tmp, 'w');
+    // never a planted symlink followed: unlinked, then created afresh and owner-only (audit 2026-09-16, L10)
+    try { fs.unlinkSync(tmp); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+    const fd = fs.openSync(tmp, 'wx', 0o600);
     for (const r of rows) fs.writeSync(fd, JSON.stringify(r) + '\n');
     fs.fsyncSync(fd);
     fs.closeSync(fd);
     fs.closeSync(this.fd);
     fs.renameSync(tmp, this.file);
-    this.fd = fs.openSync(this.file, 'a');
+    this.fd = fs.openSync(this.file, 'a', 0o600);
     this.dirty = 0;
   }
 
@@ -287,4 +293,9 @@ export function aggregate(rows = []) {
       firstHeight: p.firstHeight, lastHeight: p.lastHeight,
     }))
     .sort((a, b) => b.blocks - a.blocks || b.lastHeight - a.lastHeight);
+}
+
+// chmod 0o600 when the file exists; a missing file or a filesystem without modes is not an error
+function ownerOnly(file) {
+  try { fs.chmodSync(file, 0o600); } catch { /* absent, or modes not kept here */ }
 }

@@ -23,7 +23,7 @@ import path from 'node:path';
 import { crc32 } from 'node:zlib';
 import { IndexStore } from './store.js';
 import { ROW, RowSink, verboseBlockRows } from './rows.js';
-import { BLOCK_ROWS } from './build.js';
+import { BLOCK_ROWS, openTempFile } from './build.js';
 
 export const CONFIRMATIONS = 100;
 export const FOLD_BLOCKS = 144;
@@ -59,10 +59,11 @@ export function sortRows(buf, blockRows = BLOCK_ROWS) {
   return { rows: out.subarray(0, w), idx: Buffer.from(new BigUint64Array(sparse).buffer) };
 }
 
+// The temporary name is unlinked and created afresh with O_EXCL, owner-only: a symlink planted at
+// live.log.tmp or tips.json.tmp is never followed (audit 2026-09-16, L10)
 function writeAtomic(file, data) {
-  const fd = openSync(file + '.tmp', 'w');
-  for (let o = 0; o < data.length;) o += writeSync(fd, data, o, data.length - o);
-  fsyncSync(fd); closeSync(fd);
+  const fd = openTempFile(file + '.tmp');
+  try { for (let o = 0; o < data.length;) o += writeSync(fd, data, o, data.length - o); fsyncSync(fd); } finally { closeSync(fd); }
   renameSync(file + '.tmp', file);
 }
 
@@ -81,7 +82,7 @@ export class LiveIndex {
   constructor(dir, { rpc, nodeId = null, log = null, confirmations = CONFIRMATIONS, foldBlocks = FOLD_BLOCKS, maxLayers = MAX_LAYERS, maxBlocksPerPoll = 50 } = {}) {
     this.dir = dir; this.rpc = rpc; this.nodeId = nodeId; this.log = log;
     this.confirmations = confirmations; this.foldBlocks = foldBlocks; this.maxLayers = maxLayers; this.maxBlocksPerPoll = maxBlocksPerPoll;
-    this.store = new IndexStore(dir);
+    this.store = new IndexStore(dir, { log });
     this.blocks = new Map();             // height -> { hash, rows: Buffer }
     this.byKey = new Map();              // key hex (16) -> [Buffer, offset, Buffer, offset, ...]
     this.stale = null;                   // a reason, once the chain has left us behind
@@ -138,6 +139,11 @@ export class LiveIndex {
       if (pos + 9 + len + 4 > buf.length) break;
       const payload = buf.subarray(pos + 9, pos + 9 + len);
       if (crc32(payload) !== buf.readUInt32LE(pos + 9 + len)) break;
+      // A RECORD WHOSE CHECKSUM HOLDS BUT WHOSE SHAPE DOES NOT is treated like a torn one: the log is cut
+      // there (audit 2026-09-16, I4). A block record shorter than its height and hash, or with rows
+      // that are not whole 21-byte rows, threw from this constructor and the follower never started.
+      if (type === T_BLOCK && (len < 36 || (len - 36) % ROW !== 0)) break;
+      if (type === T_ROLLBACK && len < 4) break;
       if (type === T_BLOCK) {
         const height = payload.readUInt32LE(0), hash = payload.toString('hex', 4, 36);
         if (height === this.tip + 1) this.#add(height, hash, Buffer.from(payload.subarray(36)));
@@ -155,7 +161,7 @@ export class LiveIndex {
   }
 
   #append(rec) {
-    const fd = openSync(this.logFile, 'a');
+    const fd = openSync(this.logFile, 'a', 0o600);                // owner-only (audit 2026-09-16, L10)
     try { writeSync(fd, rec); fsyncSync(fd); } finally { closeSync(fd); }
   }
 
@@ -235,7 +241,7 @@ export class LiveIndex {
     const from = deep[0], to = deep[deep.length - 1];
     const { rows, idx } = sortRows(Buffer.concat(deep.map((h) => this.blocks.get(h).rows)), this.store.blockRows);
     const dir = path.join(this.dir, 'layers');
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     const base = path.join(dir, `L${from}-${to}`);
     // the top block's hash first, so a layer is never on disk without it
     let tips = {};

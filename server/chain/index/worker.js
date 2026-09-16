@@ -14,6 +14,7 @@ import { Reader, readHeader } from '../tx.js';
 import { readChainFile, records, pairBlocksWithUndo, MAGIC } from '../blockfile.js';
 import { blockRows, RowSink, ROW } from './rows.js';
 import { HeightTable } from './heights.js';
+import { openTempFile } from './build.js';
 
 const { blocksDir, key, heightsBuffer, heightsCapacity, blockRowsPerIndex } = workerData;
 const heights = HeightTable.attach(heightsBuffer, heightsCapacity);
@@ -29,7 +30,7 @@ function scan(file) {
   for (const r of records(blk, MAGIC.main, 0, xor)) {
     const rd = new Reader(r.body);
     const h = readHeader(rd);
-    blocks.push({ body: r.body, hash: h.hash, previousblockhash: h.previousblockhash, ntx: rd.varint() });
+    blocks.push({ offset: r.offset, body: r.body, hash: h.hash, previousblockhash: h.previousblockhash, ntx: rd.varint() });
   }
   const pairs = pairBlocksWithUndo(blocks, [...records(rev, MAGIC.main, 32, xor)]);
   const sink = new RowSink(1 << 18);
@@ -40,7 +41,12 @@ function scan(file) {
     if (height < 0) { stale++; return; }                          // not on the chain this build covers
     const undo = pairs.get(i);
     if (!undo && height !== 0) { missingUndo++; return; }
-    blockRows(b.body, undo ? undo.body : null, height, sink);
+    // A CORRUPT OR MISPAIRED RECORD FAILS THE FILE, AND SO THE BUILD -- fail-safe, and kept that way
+    // (audit 2026-09-16, I4) -- but the message names the files and offsets to look at
+    try { blockRows(b.body, undo ? undo.body : null, height, sink); } catch (err) {
+      err.message = `blk${id}.dat offset ${b.offset}${undo ? `, rev${id}.dat offset ${undo.offset}` : ''} (block ${height} ${b.hash}): ${err.message}`;
+      throw err;
+    }
     indexed.push(height);
   });
   // counting sort by the first key byte: 256 buffers the main thread appends as they are
@@ -98,7 +104,8 @@ function sortBucket(bucket, dir, expectSize = null, expectCrc = null) {
     w += ROW;
   }
   const idx = Buffer.from(new BigUint64Array(sparse).buffer);
-  const write = (file, data) => { const f = openSync(file + '.tmp', 'w'); try { for (let o = 0; o < data.length;) o += writeSync(f, data, o, data.length - o); fsyncSync(f); } finally { closeSync(f); } renameSync(file + '.tmp', file); };
+  // a temporary name is unlinked and created afresh, owner-only: never a planted symlink followed (audit 2026-09-16, L10)
+  const write = (file, data) => { const f = openTempFile(file + '.tmp'); try { for (let o = 0; o < data.length;) o += writeSync(f, data, o, data.length - o); fsyncSync(f); } finally { closeSync(f); } renameSync(file + '.tmp', file); };
   write(path.join(dir, `seg-${hex}.rows`), out.subarray(0, w));
   write(path.join(dir, `seg-${hex}.idx`), idx);
   return { msg: { type: 'sorted', bucket, rows: w / ROW, dupes, ms: performance.now() - t0 }, transfer: [] };

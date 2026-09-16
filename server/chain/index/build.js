@@ -14,8 +14,8 @@
 // The node's files are only read. Output goes to `out`, which should be on a different device from
 // the block files if one is available: the build reads ~880 GB and writes ~120 GB.
 import { Worker } from 'node:worker_threads';
-import { openSync, writeSync, closeSync, mkdirSync, readdirSync, rmSync, renameSync, statSync, lstatSync, realpathSync, readFileSync, fsyncSync, ftruncateSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { openSync, writeSync, closeSync, mkdirSync, readdirSync, rmSync, renameSync, statSync, lstatSync, realpathSync, readFileSync, fsyncSync, ftruncateSync, unlinkSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import { crc32 } from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
@@ -27,7 +27,7 @@ export const FORMAT = 1;
 export const BLOCK_ROWS = 4096;
 
 async function chainHashes(rpc, tip, onProgress, pace = null) {
-  const table = new HeightTable(1 << 21);
+  const table = HeightTable.forTip(tip);        // sized from the tip, not a fixed 2^21 (audit 2026-09-16, L7)
   const hashes = new Array(tip + 1);
   // small batches at the lowest priority: the monitor's own polls interleave between them, and
   // on a machine shared with the node a 5,000-call batch held the lane for seconds (2026-09-14)
@@ -177,14 +177,14 @@ export const JOURNAL = 'build-journal.json';
 // one typo each. Now the directory must be missing, empty, or hold nothing but names an index writes;
 // it must not be a symlink, the filesystem root, the home directory, the working directory, or the
 // node's blocks directory or anything that contains it. A build clears index names and nothing else.
-export const INDEX_ENTRY = /^(?:manifest\.json|build-journal\.json|live\.log|layers|bucket-[0-9a-f]{2}\.unsorted|seg-[0-9a-f]{2}\.(?:rows|idx))(?:\.tmp)?$/;
+export const INDEX_ENTRY = /^(?:manifest\.json|build-journal\.json|build\.lock|live\.log|layers|bucket-[0-9a-f]{2}\.unsorted|seg-[0-9a-f]{2}\.(?:rows|idx))(?:\.tmp)?$/;
 
 export function checkOutputDir(out, { blocksDir = null } = {}) {
   const abs = path.resolve(out);
   let st;
   try { st = lstatSync(abs); } catch (err) {
     if (err.code !== 'ENOENT') throw err;
-    mkdirSync(abs, { recursive: true });
+    mkdirSync(abs, { recursive: true, mode: 0o700 });      // owner-only (audit 2026-09-16, L10)
     return abs;
   }
   if (st.isSymbolicLink()) throw new Error(`refusing to build the address index into ${abs}: it is a symlink; name the real directory`);
@@ -204,9 +204,50 @@ export function checkOutputDir(out, { blocksDir = null } = {}) {
   return abs;
 }
 
-/** Remove the index's own entries from `out`, and nothing else (checkOutputDir has run). */
+/** Remove the index's own entries from `out`, and nothing else (checkOutputDir has run). The build's lock is never one of them. */
 function clearIndexEntries(out, keep = new Set()) {
-  for (const f of readdirSync(out)) if (INDEX_ENTRY.test(f) && !keep.has(f)) rmSync(path.join(out, f), { recursive: true, force: true });
+  for (const f of readdirSync(out)) if (INDEX_ENTRY.test(f) && f !== LOCK && !keep.has(f)) rmSync(path.join(out, f), { recursive: true, force: true });
+}
+
+// ---------------------------------------------------------------------------------------------------
+// ONE BUILD TO A DIRECTORY (audit 2026-09-16, L9). The server's background build and
+// `scripts/index-build.js --out <the same dir>` could run at once -- the server's own failure message
+// suggests that command, and a restart re-enters the build -- and each deleted, truncated and renamed
+// the other's files. `build.lock` is created with O_EXCL and holds the owner's PID; a lock whose
+// process is gone is taken over. A lock naming THIS process but not held by it is stale too: a
+// restarted container often gets the PID the killed one had. Released in a finally, and a
+// release removes only the lock this build wrote.
+export const LOCK = 'build.lock';
+const heldLocks = new Set();
+
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (err) { return err.code === 'EPERM'; }
+}
+
+/** Take the build lock in `out` (which exists), or throw naming the build that holds it. Returns release(). */
+export function lockOutputDir(out) {
+  const file = path.join(out, LOCK);
+  const key = path.resolve(file);
+  if (heldLocks.has(key)) throw new Error(`an address index build is already running into ${out} in this process`);
+  const token = JSON.stringify({ pid: process.pid, token: randomUUID(), startedAt: new Date().toISOString() });
+  for (let attempt = 0; ; attempt++) {
+    let fd;
+    try { fd = openSync(file, 'wx', 0o600); } catch (err) {
+      if (err.code !== 'EEXIST' || attempt >= 2) throw err;
+      let holder = null;
+      try { holder = JSON.parse(readFileSync(file, 'utf8')); } catch { /* torn or foreign: a build that died writing it */ }
+      const pid = Number.isSafeInteger(holder?.pid) && holder.pid > 0 ? holder.pid : null;
+      if (pid != null && pid !== process.pid && pidAlive(pid)) throw new Error(`another address index build (process ${pid}, started ${holder.startedAt ?? 'at an unknown time'}) is writing ${out}; wait for it to finish, or stop it`);
+      unlinkSync(file);                                        // a lock left by a process that is gone
+      continue;
+    }
+    try { writeSync(fd, token); fsyncSync(fd); } finally { closeSync(fd); }
+    heldLocks.add(key);
+    return () => {
+      heldLocks.delete(key);
+      try { if (readFileSync(file, 'utf8') === token) unlinkSync(file); } catch { /* already gone */ }
+    };
+  }
 }
 const JOURNAL_VERSION = 1;
 
@@ -214,11 +255,22 @@ function syncDir(dir) {
   try { const fd = openSync(dir, 'r'); try { fsyncSync(fd); } finally { closeSync(fd); } } catch { /* a directory cannot be fsynced everywhere */ }
 }
 
+/**
+ * Open a temporary file for writing, owner-only, without following a symlink planted at its name
+ * (audit 2026-09-16, L10: flag `w` followed one, so anyone who could create `manifest.json.tmp` in
+ * the directory had another file overwritten as the service account). Whatever is at the name is
+ * unlinked -- a link, not its target -- and the file is created with O_EXCL.
+ */
+export function openTempFile(tmp) {
+  try { unlinkSync(tmp); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+  return openSync(tmp, 'wx', 0o600);
+}
+
 /** Write a file durably and atomically: a temporary name, fsync, rename, fsync the directory. */
 export function writeFileAtomic(file, data) {
   const tmp = `${file}.tmp`;
   const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
-  const fd = openSync(tmp, 'w');
+  const fd = openTempFile(tmp);
   try { for (let o = 0; o < buf.length;) o += writeSync(fd, buf, o, buf.length - o); fsyncSync(fd); } finally { closeSync(fd); }
   renameSync(tmp, file);
   syncDir(path.dirname(file));
@@ -270,6 +322,8 @@ export function readJournal(out) {
  * as a crash would.
  */
 export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers(), files = null, onProgress = () => {}, pace = null, log = () => {}, checkpointMs = 60_000, hook = null }) {
+  // a pool of no workers scans nothing and would publish an empty index (audit 2026-09-16, I3)
+  if (!Number.isSafeInteger(workers) || workers < 1) throw new Error(`an address index build needs at least one worker, not ${JSON.stringify(workers)}`);
   const t0 = performance.now();
   const stats = { format: FORMAT, workers, phases: {} };
   const info = await rpc.batch([{ method: 'getblockchaininfo', params: [] }], { key: 'index:info', timeoutMs: 60_000 });
@@ -279,7 +333,16 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
   const selection = files ? [...files] : 'all';
   const discarding = (why) => log(`address index build: discarding the interrupted build in ${out} and starting over: ${why}`);
   checkOutputDir(out, { blocksDir });
+  // the lock is taken after the directory is checked, so a refused directory is left untouched (L9)
+  const unlock = lockOutputDir(out);
+  try {
+    return await buildLocked({ rpc, blocksDir, out, workers, files, onProgress, pace, log, checkpointMs, hook, t0, stats, chain, nodeTip, selection, discarding });
+  } finally {
+    unlock();
+  }
+}
 
+async function buildLocked({ rpc, blocksDir, out, workers, files, onProgress, pace, log, checkpointMs, hook, t0, stats, chain, nodeTip, selection, discarding }) {
   // --- resume? --------------------------------------------------------------
   // The journal's identity is checked here, cheaply (one getblockhash); the files on disk are checked
   // against it after the heights phase, where a fresh build clears the directory.
@@ -325,6 +388,11 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
         if (sizeOf(`seg-${hex2(b)}.rows`) !== rows * ROW || sizeOf(`seg-${hex2(b)}.idx`) !== Math.ceil(rows / BLOCK_ROWS) * 8) why = `bucket ${hex2(b)} is journaled as sorted but its segment files are not the journaled size`;
         keep.add(`seg-${hex2(b)}.rows`); keep.add(`seg-${hex2(b)}.idx`);
       } else if (len > 0) {
+        // A BUCKET IS NEVER A SYMLINK (audit 2026-09-16, L10): a forged journal beside a planted
+        // bucket-XX.unsorted link made a resume truncate the link's target
+        let link = false;
+        try { link = lstatSync(bucketFile(b)).isSymbolicLink(); } catch { /* missing: the size check says so */ }
+        if (link) throw new Error(`refusing to resume the address index build in ${out}: ${bucketName(b)} is a symlink, which a build never writes`);
         const size = sizeOf(bucketName(b));
         if (size < len) why = `bucket ${hex2(b)} holds ${Math.max(0, size)} bytes and the journal proves ${len}`;
         else if (journal.phase === 'sort' && size !== len) why = `bucket ${hex2(b)} grew after its scan was finished`;
@@ -398,7 +466,7 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
       const fdFor = (b) => {
         if (fds[b] === null) {
           if (lru.length >= MAX_OPEN) { const old = lru.shift(); closeSync(fds[old]); fds[old] = null; }
-          fds[b] = openSync(bucketFile(b), 'a');
+          fds[b] = openSync(bucketFile(b), 'a', 0o600);          // owner-only (audit 2026-09-16, L10)
         } else lru.splice(lru.indexOf(b), 1);
         lru.push(b);
         return fds[b];
@@ -501,7 +569,7 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
     // --- manifest ---------------------------------------------------------------
     hook?.('manifest', {});
     let bytes = 0;
-    for (const f of readdirSync(out)) if (f !== JOURNAL) bytes += statSync(path.join(out, f)).size;
+    for (const f of readdirSync(out)) if (f !== JOURNAL && f !== LOCK) bytes += statSync(path.join(out, f)).size;
     stats.totalSec = (performance.now() - t0) / 1000;
     const manifest = {
       format: FORMAT, rowBytes: ROW, blockRows: BLOCK_ROWS, chain,

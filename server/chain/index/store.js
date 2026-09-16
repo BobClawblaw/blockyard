@@ -14,7 +14,9 @@ import { ROW, scriptKey, readRow } from './rows.js';
 import { FORMAT } from './build.js';
 
 const LAYER = /^L(\d+)-(\d+)\.rows$/;
-const RING_MAX_BLIND = 4096;   // rows (86 KB) a page may keep without first counting the history
+const RING_MAX_BLIND = 4096;
+// the most rows to a sparse-index block a manifest may name: it sizes a read buffer (4,096 is written)
+export const MAX_BLOCK_ROWS = 1 << 16;   // rows (86 KB) a page may keep without first counting the history
 
 // NO FILE IS HELD OPEN (2026-09-14): a store used to keep one descriptor per segment and layer --
 // 256 and more -- for the life of the process, which is the whole soft limit on a stock macOS
@@ -22,16 +24,24 @@ const RING_MAX_BLIND = 4096;   // rows (86 KB) a page may keep without first cou
 // and closes it: three syscalls on a 0.25 ms lookup.
 function openSorted(rowsFile, idxFile) {
   const raw = readFileSync(idxFile);
+  // whole 8-byte keys and whole rows, or the source is not one this code wrote (audit 2026-09-16, I4)
+  if (raw.length % 8 !== 0) throw new Error(`${path.basename(idxFile)} is ${raw.length} bytes, not a whole number of 8-byte keys`);
+  const size = statSync(rowsFile).size;
+  if (size % ROW !== 0) throw new Error(`${path.basename(rowsFile)} is ${size} bytes, not a whole number of ${ROW}-byte rows`);
   const idx = new BigUint64Array(raw.buffer, raw.byteOffset, raw.length / 8).slice();
-  return { idx, file: rowsFile, rows: statSync(rowsFile).size / ROW };
+  return { idx, file: rowsFile, rows: size / ROW };
 }
 
 export class IndexStore {
-  constructor(dir) {
+  constructor(dir, { log = null } = {}) {
     this.dir = dir;
+    this.log = log;
     this.manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
     if (this.manifest.format !== FORMAT) throw new Error(`index format ${this.manifest.format}, this code reads ${FORMAT}`);
-    this.blockRows = this.manifest.blockRows;
+    // blockRows sizes the read buffer below: checked before it allocates anything (audit 2026-09-16, I4)
+    const br = this.manifest.blockRows;
+    if (!Number.isSafeInteger(br) || br < 1 || br > MAX_BLOCK_ROWS) throw new Error(`index manifest names ${JSON.stringify(br)} rows to a block; this code reads 1 to ${MAX_BLOCK_ROWS}`);
+    this.blockRows = br;
     this.segments = Array.from({ length: 256 }, (_, b) => {
       const hex = b.toString(16).padStart(2, '0');
       try { return openSorted(path.join(dir, `seg-${hex}.rows`), path.join(dir, `seg-${hex}.idx`)); } catch { return null; }
@@ -53,8 +63,21 @@ export class IndexStore {
     const ranges = names.map((f) => { const [, from, to] = f.match(LAYER); return { f, from: Number(from), to: Number(to) }; });
     const live = ranges.filter((r) => !ranges.some((o) => o !== r && o.from <= r.from && o.to >= r.to && (o.to - o.from) > (r.to - r.from)));
     const idxOf = (f) => path.join(dir, f.replace(/\.rows$/, '.idx'));
+    // A LAYER THAT CANNOT BE READ IS SKIPPED, as a segment is (audit 2026-09-16, I4): an .idx of the
+    // wrong length threw from here, out of a fold, and out of the constructor. It is named in
+    // `badLayers` and said once, and a missing .idx (a fold interrupted between its files) stays quiet.
+    this.badLayers = [];
     this.layers = live.filter((r) => { try { readFileSync(idxOf(r.f), { flag: 'r' }); return true; } catch { return false; } })
-      .map((r) => ({ from: r.from, to: r.to, ...openSorted(path.join(dir, r.f), idxOf(r.f)) }))
+      .flatMap((r) => {
+        try { return [{ from: r.from, to: r.to, ...openSorted(path.join(dir, r.f), idxOf(r.f)) }]; } catch (err) {
+          this.badLayers.push({ layer: r.f, error: err.message });
+          if (!(this.warned ??= new Set()).has(r.f)) {
+            this.warned.add(r.f);
+            this.log?.warn?.(`address index: skipping layer ${r.f}: ${err.message}`);
+          }
+          return [];
+        }
+      })
       .sort((a, b) => a.from - b.from);
   }
 

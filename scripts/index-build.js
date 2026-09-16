@@ -14,6 +14,10 @@ import path from 'node:path';
 import { progress, progressLine, strip, c, fmt } from './ui.js';
 
 const arg = (name, def) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : def; };
+// --workers must be a whole number of at least one (audit 2026-09-16, I3): `abc` or `0` made a pool with
+// no workers, and with --files that wrote a "successful" manifest of zero rows
+const workersArg = process.argv.includes('--workers') ? String(arg('workers')) : null;
+if (workersArg != null && !(/^\d+$/.test(workersArg) && Number(workersArg) >= 1 && Number.isSafeInteger(Number(workersArg)))) { console.error(`--workers must be a whole number of at least 1, not ${JSON.stringify(workersArg)}`); process.exit(2); }
 const cfg = loadConfig();
 const node = cfg.nodes.find((n) => n.id === arg('node', null)) ?? cfg.nodes.find((n) => n.datadir) ?? cfg.nodes[0];
 if (!node.datadir) { console.error(`node ${node.id} has no datadir configured; the index is built from its block files`); process.exit(2); }
@@ -28,7 +32,7 @@ const manifest = await buildIndex({
   rpc, blocksDir: path.join(node.datadir, 'blocks'), out,
   pace: rpcPacer(rpc, { onChange: (held) => process.stderr.write(held ? '  paused while the node\'s RPC is slow or failing\n' : '  resumed\n') }),
   log: (text) => { bar.done(); process.stderr.write(`  ${text}\n`); },
-  workers: arg('workers', null) ? Number(arg('workers')) : undefined,
+  workers: workersArg != null ? Number(workersArg) : undefined,
   files: arg('files', null) ? arg('files').split(',').map(Number) : null,
   onProgress: (p) => {
     if (p.phase !== phase) {

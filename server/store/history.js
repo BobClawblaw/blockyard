@@ -7,6 +7,7 @@
 // whole"), and it is the only sane answer when the process can be SIGKILLed
 // mid-flush by a system OOM killer this box has actually triggered before.
 import fsp from 'node:fs/promises';
+import fs from 'node:fs';
 import path from 'node:path';
 import { Ring } from './ring.js';
 
@@ -141,7 +142,7 @@ export class History {
     if (this.saving) return { skipped: true };
     this.saving = true;
     try {
-      await fsp.mkdir(this.dir, { recursive: true });
+      await fsp.mkdir(this.dir, { recursive: true, mode: 0o700 });
       const payload = {
         version: 1,
         savedAt: Date.now(),
@@ -151,7 +152,10 @@ export class History {
         eventsSeq: this.eventsSeq,
       };
       const tmp = `${this.file}.tmp`;
-      const fh = await fsp.open(tmp, 'w', 0o600);   // node-derived detail: owner-only, like users and sessions
+      // node-derived detail: owner-only, like users and sessions. The temporary name is unlinked and
+      // created with O_EXCL, so a symlink planted there is never followed (audit 2026-09-16, L10)
+      await fsp.unlink(tmp).catch((err) => { if (err.code !== 'ENOENT') throw err; });
+      const fh = await fsp.open(tmp, 'wx', 0o600);
       await fh.writeFile(JSON.stringify(payload));
       await fh.sync();
       await fh.close();
@@ -170,6 +174,7 @@ export class History {
   }
 
   async load() {
+    await fchmodOwnerOnly(this.file);   // a snapshot written before the mode was passed (audit 2026-09-16, L10)
     let raw;
     try {
       raw = await fsp.readFile(this.file, 'utf8');
@@ -215,6 +220,17 @@ export class History {
 
 // Atomic append-only text sink, used by the audit log.
 export async function appendJsonl(file, row) {
-  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   await fsp.appendFile(file, JSON.stringify(row) + '\n', { encoding: 'utf8', mode: 0o600 });   // who did what: owner-only (audit 2026-09-14, L4)
+}
+
+// An existing file made owner-only through its own descriptor (audit 2026-09-16, L10). O_NOFOLLOW
+// where the platform has it, so a symlink's target is never re-moded; a missing file, or a platform
+// that keeps no modes (Windows), is not an error.
+export async function fchmodOwnerOnly(file) {
+  let fh;
+  try {
+    fh = await fsp.open(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    await fh.chmod(0o600);
+  } catch { /* absent, a symlink, or modes not kept here */ } finally { await fh?.close().catch(() => {}); }
 }

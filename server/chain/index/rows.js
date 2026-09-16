@@ -76,7 +76,7 @@ export function blockRows(body, undoBody, height, out) {
   const moved = new Map();
   for (let p = 0; p < ntx; p++) {
     moved.clear();
-    walkTx(body, st, (value, script) => {
+    const nin = walkTx(body, st, (value, script) => {
       if (script.length > 0 && script[0] === 0x6a) return;       // OP_RETURN: unspendable, not an address
       const k = scriptKey(script);
       moved.set(k, (moved.get(k) ?? 0) + value);
@@ -84,6 +84,11 @@ export function blockRows(body, undoBody, height, out) {
     if (p > 0) {
       const coins = undo[p - 1];
       if (!coins) throw new Error(`block ${height}: no undo for transaction ${p}`);
+      // ONE SPENT COIN PER INPUT, OR THIS IS NOT THE BLOCK'S UNDO (audit 2026-09-16, L8). Blocks and
+      // undo records are paired by hash256(prevhash || undo), which does not commit to the block, so
+      // two sibling blocks in one file can each match the other's record. The coin count was trusted,
+      // and a two-input transaction given a one-coin undo wrote rows with the wrong spent scripts.
+      if (coins.length !== nin) throw new Error(`block ${height}: transaction ${p} has ${nin} inputs and its undo record ${coins.length} spent coins -- a block paired with another block's undo`);
       for (const c of coins) {
         const k = scriptKey(c.script);
         moved.set(k, (moved.get(k) ?? 0) - c.value_sat);
