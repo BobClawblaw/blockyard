@@ -912,19 +912,22 @@ export function landTiles(g, { omit = null } = {}) {
  * every shell as a ball, and the last shot's trace as a string of dim beads. Ids are stable, so a
  * tank that has not moved is the same tile frame after frame.
  */
-export function actorTiles(g, { trace = true } = {}) {
+export function actorTiles(g, { trace = true, tankY = null, chutes = null } = {}) {
   const out = [];
   for (const t of g.tanks) {
     if (!t.alive) continue;
     const c = t.colour;
-    out.push({ txid: `hull${t.id}a`, x: t.x, y: t.y, s: 1, tall: 1.2, color: c, label: t.name });
-    out.push({ txid: `hull${t.id}b`, x: t.x + 1, y: t.y, s: 1, tall: 1.2, color: c, label: t.name });
-    out.push({ txid: `turret${t.id}`, x: t.x + 0.65, y: t.y + 0.55, s: 0.7, tall: 1.6, color: shade(c, 1.15) });
+    const y = tankY?.get(t.id) ?? t.y;                 // the screen may still be lowering it after a fall
+    out.push({ txid: `track${t.id}`, x: t.x - 0.15, y: y - 0.05, s: 1.15, tall: 0.35, color: shade(c, 0.45) });
+    out.push({ txid: `track${t.id}b`, x: t.x + 1, y: y - 0.05, s: 1.15, tall: 0.35, color: shade(c, 0.45) });
+    out.push({ txid: `hull${t.id}a`, x: t.x, y: y + 0.3, s: 1, tall: 0.9, color: c, label: t.name });
+    out.push({ txid: `hull${t.id}b`, x: t.x + 1, y: y + 0.3, s: 1, tall: 0.9, color: c, label: t.name });
+    out.push({ txid: `turret${t.id}`, x: t.x + 0.65, y: y + 0.55, s: 0.7, tall: 1.6, color: shade(c, 1.15) });
     // the barrel: a bar in unit space pointing right, turned by the angle (screen y is down, so
     // a counter-clockwise angle on the field is a negative rotation on the screen)
     out.push({
-      txid: `barrel${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: t.y + 0.6, s: 1, tall: 1.4, color: shade(c, 0.85),
-      poly: [[0, -0.06], [0.7, -0.06], [0.7, 0.06], [0, 0.06]], rot: -(t.angle * Math.PI) / 180,
+      txid: `barrel${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: y + 0.6, s: 1, tall: 1.4, color: shade(c, 0.85),
+      poly: [[0, -0.06], [0.75, -0.06], [0.75, 0.06], [0, 0.06]], rot: -(t.angle * Math.PI) / 180,
     });
     // a pennant on the turret, streaming downwind and lifting with the strength (the wind made visible)
     const w = g.wind;
@@ -932,13 +935,20 @@ export function actorTiles(g, { trace = true } = {}) {
       const len = 0.45 + 0.5 * Math.min(1, Math.abs(w) / WIND_MAX), lift = 0.35 * (1 - Math.min(1, Math.abs(w) / WIND_MAX));
       const dir = w > 0 ? 1 : -1;
       out.push({
-        txid: `flag${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: t.y + 1.9, s: 1, tall: 0.01, color: shade(c, 1.2),
+        txid: `flag${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: y + 1.9, s: 1, tall: 0.01, color: shade(c, 1.2),
         poly: [[0, 0], [dir * len, -lift * 0.5 - 0.06], [dir * len * 0.85, -lift * 0.5 + 0.06]], rot: 0,
       });
     }
+    if (chutes?.has(t.id)) {
+      // a canopy over a tank coming down under its parachute: a half-disc, and the lines to the hull
+      const pts = [];
+      for (let i = 0; i <= 8; i++) { const a = Math.PI + (i / 8) * Math.PI; pts.push([Math.cos(a) * 0.5, Math.sin(a) * 0.5 - 0.1]); }
+      pts.push([0.5, -0.1], [0.15, 0.45], [-0.15, 0.45], [-0.5, -0.1]);
+      out.push({ txid: `chute${t.id}`, x: t.x + TANK_W / 2 - 1.4, y: y + 2.4, s: 2.8, tall: 0.01, color: '#f2efe6', poly: pts, rot: 0 });
+    }
     if (t.shield) {
       const k = t.shield.id === 'heavyShield' ? '#7ad7ff' : t.shield.id === 'forceShield' ? '#8fe0ff' : '#9ce8ff';
-      out.push({ txid: `shield${t.id}`, x: t.x - 0.6, y: t.y - 0.4, s: TANK_W + 1.2, tall: 1.6, wire: k, color: k });
+      out.push({ txid: `shield${t.id}`, x: t.x - 0.6, y: y - 0.4, s: TANK_W + 1.2, tall: 1.6, wire: k, color: k });
     }
   }
   g.shells.forEach((s, i) => {

@@ -13,7 +13,8 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, dustTiles, fallingTanks, windTiles, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { THEMES, THEME_SCORCHED, setMusic } from '../public/js/tetsound.js';
 import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
 
 const three = (opts = {}) => newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }, { name: 'B', kind: 'moron' }], { seed: 7, ...opts });
@@ -314,11 +315,11 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
   assert.match(read('scorchedyard.js'), /hover: false/, 'the field does not light up under the pointer');
   assert.match(read('app.js'), /case 'scorched': renderScorchedYard/, 'the router knows the page');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  for (const id of ['sySky', 'syLand', 'syField', 'syFieldWrap', 'syShop', 'syItems', 'syOver', 'syMsg', 'sySub', 'syResume', 'syStats', 'syFire', 'syTanks', 'syScores', 'syStars', 'syGalaxy', 'sySfx', 'syFast']) {
+  for (const id of ['sySky', 'syLand', 'syField', 'syFieldWrap', 'syShop', 'syItems', 'syTalk', 'syMusic', 'syTalkSw', 'syOver', 'syMsg', 'sySub', 'syResume', 'syStats', 'syFire', 'syTanks', 'syScores', 'syStars', 'syGalaxy', 'sySfx', 'syFast']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
   }
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
-  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
   assert.equal(scorchedOptions(normalise(null)).opponentKind, 'mix');
   assert.equal(scorchedOptions(normalise({ scorched: { opponentKind: 'cyborg' } })).opponentKind, 'cyborg');
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
@@ -752,4 +753,46 @@ test('the computer shops by taste: a Shooter buys missiles, a Tosser MIRVs, a Cy
   tm.cash = 60000;
   const m = aiShop(gm, tm, rng(9));
   assert.ok(m.length >= 1 && m.every((id) => SHOP.some((e) => e.id === id)));
+});
+
+// ------------------------------------------------------------------ M4: the look, the sound, the talk
+test('the fabulous part: a blast smokes after its flash, a tank goes up in sparks and pieces, dust rises where dirt lands, a fall is animated and a parachute drawn, the wind blows motes, the march is notes the table knows', () => {
+  const b = [{ id: 1, x: 40, y: 20, r: 4, t0: 0, big: true }];
+  const early = blastTiles(b, 200, 650, { wind: 3 }), late = blastTiles(b, 1500, 650, { wind: 3 }), gone = blastTiles(b, 3000);
+  assert.ok(early.some((t) => t.txid.startsWith('ring')), 'a shockwave ring early');
+  assert.ok(early.some((t) => t.txid.startsWith('flash')));
+  assert.ok(late.some((t) => t.txid.startsWith('smoke')) && !late.some((t) => t.txid.startsWith('flash')), 'smoke after the flash is gone');
+  const smokeA = blastTiles(b, 1500, 650, { wind: 6 }).filter((t) => t.txid.startsWith('smoke')), smokeB = blastTiles(b, 1500, 650, { wind: -6 }).filter((t) => t.txid.startsWith('smoke'));
+  const mean = (l) => l.reduce((n, t) => n + t.x, 0) / l.length;
+  assert.ok(mean(smokeA) > mean(smokeB), 'the smoke drifts downwind');
+  assert.equal(gone.length, 0, 'all gone after');
+  assert.equal(blastTiles([{ id: 2, x: 10, y: 10, r: 4, t0: 0, riot: true }], 1500).filter((t) => t.txid.startsWith('smoke')).length, 0, 'a riot charge makes no smoke');
+  const d = deathTiles([{ id: 3, x: 20, y: 12, colour: '#4d8dff', t0: 0 }], 300);
+  assert.ok(d.filter((t) => t.txid.startsWith('dspark')).length > 15 && d.filter((t) => t.txid.startsWith('piece')).length === 3, 'sparks and three pieces');
+  assert.ok(d.filter((t) => t.txid.startsWith('piece')).every((t) => t.poly && t.rot !== 0), 'the pieces tumble');
+  assert.equal(deathTiles([{ id: 3, x: 20, y: 12, colour: '#4d8dff', t0: 0 }], 5000).length, 0);
+  assert.equal(dustTiles([{ id: 4, x: 5, y: 9, t0: 0 }], 200).length, 4);
+  assert.equal(dustTiles([{ id: 4, x: 5, y: 9, t0: 0 }], 2000).length, 0);
+  // a fall: from the old height to the new, by gravity; a chute: linear, with a canopy while it lasts
+  const falls = new Map([[0, { from: 20, to: 12, t0: 0, ms: 1000, chute: false }], [1, { from: 20, to: 12, t0: 0, ms: 1000, chute: true }]]);
+  const half = fallingTanks(falls, 500);
+  assert.ok(Math.abs(half.tankY.get(0) - 18) < 1e-9, 'gravity: a quarter of the way at half time');
+  assert.ok(Math.abs(half.tankY.get(1) - 16) < 1e-9, 'a parachute: halfway at half time');
+  assert.ok(half.chutes.has(1) && !half.chutes.has(0));
+  const g = three();
+  const drawn = actorLayer(g, 500, { falls });
+  assert.ok(drawn.some((t) => t.txid === 'chute1' && t.poly), 'the canopy is drawn over the tank under it');
+  assert.ok(drawn.some((t) => t.txid === 'track0'), 'a tank has tracks now');
+  // the wind: motes only when it blows, more and faster the harder
+  g.wind = 0; assert.equal(windTiles(g, 0).length, 0);
+  g.wind = 2; const few = windTiles(g, 0).length; g.wind = 9; const many = windTiles(g, 0).length;
+  assert.ok(few > 0 && many > few, `more motes in a gale (${few} -> ${many})`);
+  g.wind = 5; const p0 = windTiles(g, 0)[0].x, p1 = windTiles(g, 1000)[0].x;
+  assert.ok(((p1 - p0) % COLS + COLS) % COLS > 0 && ((p1 - p0) % COLS + COLS) % COLS < COLS / 2, 'they move downwind');
+  assert.ok(actorLayer(g, 0).some((t) => t.txid.startsWith('flag')), 'a pennant streams on every turret');
+  // the march
+  assert.ok(THEMES.scorched && THEMES.scorched.notes === THEME_SCORCHED && THEMES.scorched.bpm > 60);
+  const known = new Set(['A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'GS4', 'E4', 'D4', 'F4', 'G4', 'BB4', 'R']);
+  for (const [n, beats] of THEME_SCORCHED) { assert.ok(known.has(n), `${n} is a note the table knows`); assert.ok(beats > 0); }
+  assert.doesNotThrow(() => { setMusic(true, 'scorched'); setMusic(false); }, 'a no-op without an AudioContext');
 });

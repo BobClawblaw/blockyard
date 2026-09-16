@@ -1962,6 +1962,12 @@ body { font-variant-numeric: tabular-nums; }
 .sytank span { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
 .sytank small { grid-column: 2 / -1; color: var(--fg-faint); font-size: 10.5px; }
 .sydot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: var(--fg-faint); }
+/* what a tank says: a bubble over the field at the tank's place (its position is two custom
+   properties set through the CSSOM, never a style attribute -- the CSP) */
+.sytalk { position: absolute; z-index: 3; left: var(--x, 50%); top: var(--y, 50%); transform: translate(-50%, -100%);
+  padding: 4px 9px; border-radius: 10px; background: rgba(14, 16, 22, .88); border: 1px solid var(--line); color: var(--fg);
+  font-size: 12px; white-space: nowrap; pointer-events: none; }
+.sytalk.hidden { display: none; }
 .sydot-0 { background: #f7931a; } .sydot-1 { background: #4d8dff; } .sydot-2 { background: #2ecc8f; }
 .sydot-3 { background: #ef5a5a; } .sydot-4 { background: #c78bff; } .sydot-5 { background: #f0c419; }
 /* the items line: pills, lit when armed */

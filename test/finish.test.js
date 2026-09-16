@@ -170,7 +170,7 @@ test('the lamp: overhead shades no slope, a corner does, and the choice reaches 
   assert.ok(new Set(sidesOf({ light: 'overhead' })).size === 1, 'overhead: every side the same light');
   assert.ok(new Set(sidesOf({ light: 'front' })).size > 1, 'a lamp at the viewer: the side facing it brighter than the one edge-on');
   assert.equal(DEFAULTS.space.light, 'overhead', 'the Block space lamp hangs straight above the board (operator, 2026-09-12)');
-  assert.equal(spaceOptions({ space: { light: 'viewer' } }).light, 'viewer');
+  assert.equal(spaceOptions({ space: { light: 'front' } }).light, 'front');
   assert.equal(spaceOptions({ space: { light: 'nowhere' } }).light, 'overhead', 'an unknown lamp is the default');
   // six places at three heights (2026-09-16): the height reaches the scene, low rakes the sides harder than high
   assert.equal(spaceOptions({ space: { light: 'bottom-right', lightHeight: 'low' } }).lightHeight, 'low');
@@ -178,11 +178,12 @@ test('the lamp: overhead shades no slope, a corner does, and the choice reaches 
   const spread = (h) => { const v = sidesOf({ light: 'bottom-left', lightHeight: h }); return Math.max(...v) - Math.min(...v); };
   assert.ok(spread('low') > spread('high'), 'a low lamp tells the sides apart more than a high one');
   assert.deepEqual(lampOf({ light: 'upper-left' }), lampOf({ light: 'top-left' }), 'the old names still answer: upper-left is top-left');
-  assert.deepEqual(lampOf({ light: 'front' }), lampOf({ light: 'viewer' }), 'and front is the viewer');
+  assert.notDeepEqual(lampOf({ light: 'viewer' }), lampOf({ light: 'front' }), "'viewer' is the Markets board's flat finish, not a placement: it falls to the default lamp");
+  assert.deepEqual(lampOf({ light: 'viewer' }), lampOf({ light: 'top-left' }));
   // a store from before the rename comes forward: front is the viewer, upper-left the top left
   const mem = new Map(); const st = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
   st.setItem('blockyard.settings', JSON.stringify({ version: 4, space: { light: 'front' } }));
-  assert.equal(loadSettings(st).space.light, 'viewer', 'v4 front -> v5 viewer');
+  assert.equal(loadSettings(st).space.light, 'front', 'v4 front stays front');
   st.setItem('blockyard.settings', JSON.stringify({ version: 4, space: { light: 'upper-left' } }));
   assert.equal(loadSettings(st).space.light, 'top-left');
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');

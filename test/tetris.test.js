@@ -205,6 +205,6 @@ test('setMusic is idempotent: the HUD may ask for the tune on every render witho
   // so this pins the guard on the state, not the timer.
   setMusic(false);
   const src = readFileSync(new URL('../public/js/tetsound.js', import.meta.url), 'utf8');
-  assert.match(src, /if \(want === S\.music && \(!want \|\| S\.timer\)\) return;/, 'a second setMusic(true) is a no-op while the tune runs');
+  assert.match(src, /if \(want === S\.music && \(!want \|\| S\.timer\) && S\.theme === tune\) return;/, 'a second setMusic(true) is a no-op while the tune runs (a different tune restarts it)');
   assert.match(src, /const LOOKAHEAD_S = 4;/, 'four seconds of notes are queued on the audio clock ahead of the page');
 });

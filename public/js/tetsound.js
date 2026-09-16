@@ -8,7 +8,7 @@
 // the first play or key press, and nothing here throws where there is no AudioContext at all
 // (tests, or a browser with audio blocked): every call is a no-op then.
 
-const HZ = { A4: 440, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880, GS4: 415.3, E4: 329.63, R: 0 };
+const HZ = { A4: 440, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880, GS4: 415.3, E4: 329.63, D4: 293.66, F4: 349.23, G4: 392, BB4: 466.16, R: 0 };
 
 // Korobeiniki, A minor, one verse: [note, beats]
 export const THEME = Object.freeze([
@@ -22,6 +22,24 @@ export const THEME = Object.freeze([
   ['C5', 1], ['A4', 1], ['A4', 1], ['R', 1],
 ]);
 export const BPM = 148;
+
+// SCORCHED YARD's tune (2026-09-16): a march in D minor, sixteen bars, on the same square wave --
+// a drum-less thing that keeps time between the turns and does not fight the blasts
+export const THEME_SCORCHED = Object.freeze([
+  ['D4', 1], ['D4', 0.5], ['D4', 0.5], ['F4', 1], ['A4', 1],
+  ['G4', 1], ['F4', 0.5], ['E4', 0.5], ['D4', 2],
+  ['F4', 1], ['F4', 0.5], ['F4', 0.5], ['A4', 1], ['C5', 1],
+  ['BB4', 1], ['A4', 0.5], ['G4', 0.5], ['A4', 2],
+  ['D5', 1], ['D5', 0.5], ['D5', 0.5], ['C5', 1], ['BB4', 1],
+  ['A4', 1], ['G4', 0.5], ['F4', 0.5], ['G4', 2],
+  ['A4', 1], ['BB4', 0.5], ['A4', 0.5], ['G4', 1], ['F4', 1],
+  ['E4', 1], ['E4', 0.5], ['E4', 0.5], ['D4', 2],
+  ['D4', 0.5], ['R', 0.5], ['D4', 0.5], ['R', 0.5], ['A4', 1], ['R', 1],
+  ['F4', 0.5], ['R', 0.5], ['F4', 0.5], ['R', 0.5], ['D5', 1], ['R', 1],
+  ['C5', 1], ['BB4', 1], ['A4', 1], ['G4', 1],
+  ['F4', 1], ['E4', 1], ['D4', 2],
+]);
+export const THEMES = Object.freeze({ tetrust: { notes: THEME, bpm: BPM }, scorched: { notes: THEME_SCORCHED, bpm: 112 } });
 
 // the effects: [frequency from, frequency to, seconds, wave, gain]
 export const SFX = Object.freeze({
@@ -144,12 +162,13 @@ const TIMER_MS = 500;
 function schedule() {
   const c = S.ctx;
   if (!c || !S.music) return;
-  const beat = 60 / BPM;
+  const tune = THEMES[S.theme] ?? THEMES.tetrust;
+  const beat = 60 / tune.bpm;
   // fallen behind (the tab was hidden, the thread was held): pick the tune up from now rather
   // than cramming the missed notes into an instant
   if (S.at < c.currentTime - 0.05) S.at = c.currentTime + 0.02;
   while (S.at < c.currentTime + LOOKAHEAD_S) {
-    const [name, beats] = THEME[S.i % THEME.length];
+    const [name, beats] = tune.notes[S.i % tune.notes.length];
     const dur = beats * beat;
     const hz = HZ[name] ?? 0;
     if (hz > 0) {
@@ -162,9 +181,11 @@ function schedule() {
   S.timer = setTimeout(schedule, TIMER_MS);
 }
 
-export function setMusic(on) {
+export function setMusic(on, theme = 'tetrust') {
   const want = !!on;
-  if (want === S.music && (!want || S.timer)) return;    // already so: never restart a running tune
+  const tune = THEMES[theme] ? theme : 'tetrust';
+  if (want === S.music && (!want || S.timer) && S.theme === tune) return;    // already so: never restart a running tune
+  if (S.theme !== tune) { S.theme = tune; S.i = 0; }
   S.music = want;
   if (S.timer) { clearTimeout(S.timer); S.timer = null; }
   if (!S.music) { hush(); return; }

@@ -230,6 +230,27 @@ if (doing('tetrust')) {
   } catch (e) { fail('tetrust', e); }
 }
 
+// ------------------------------------------------------------- scorched yard
+// a game against the computer, a nuke on its way in from You (the shot is set up through the
+// screen's currentGame hook so the picture has a blast in it rather than an empty field)
+if (doing('scorched')) {
+  try {
+    await evl(`document.getElementById('navDivBtn')?.click()`);
+    await sleep(700);
+    const ok = await evl(`(() => { const b=document.querySelector('button[data-page="scorched"]'); if(!b) return false; b.click(); return true; })()`);
+    if (!ok) throw new Error('no scorched button behind Diversions');
+    await sleep(2500);
+    await metrics(1000);
+    await evl(`document.getElementById('syResume')?.click()`);
+    await sleep(1500);
+    await evl(`import('/js/scorchedyard.js').then(async (m) => { const g = m.currentGame(); const t = g.tanks[0]; const ai = await import('/js/scorchedai.js'); const target = ai.nearest(g, t); t.inventory.nuke = 1; t.weapon = 'nuke'; const s = ai.spoiler(g, t, () => 0.9, target); t.angle = s.angle; t.power = s.power; })`);
+    await sleep(300);
+    await evl(`document.getElementById('syFire')?.click()`);
+    await sleep(2400);
+    done.push(await shoot('scorched', { settle: 0, height: 1000 }));
+  } catch (e) { fail('scorched', e); }
+}
+
 // -------------------------------------------------- neon: LAST, and it is restored
 if (doing('block-space-neon')) {
   let toggled = false;

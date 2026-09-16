@@ -783,6 +783,8 @@ and 5% interest, which the settings allow.
 
 ### The computer players
 
+![Scorched Yard](images/scorched.jpg)
+
 Out of the box you face a **mix**, climbing from the easy ones: a Shooter and a Tosser, then a
 Chooser, a Spoiler, a Cyborg and a Poolshark as you add seats. **Display settings → Scorched Yard
 → Their kind** fields one kind in every seat instead. They are the manual's eight, and they
@@ -826,8 +828,11 @@ score at the end wins, and your score goes in the high-score table, this browser
 
 ### The switches on the panel
 
-**Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's). **Sound**
-is the shot, the blast, a hit, a fall, a death. **Fast** flies shells at three times the pace.
+**Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's; with the
+Living sky on, each round draws its own hour of it, dawn to night, unless **A sky per round** is
+off). **Music** is a march in D minor on oscillators. **Sound** is the shot, the blast, a hit, a
+fall, a death. **Talk** is what the tanks say when they fire, are hit, or die. **Fast** flies
+shells at three times the pace.
 The rules the original exposed are in **Display settings → Scorched Yard**: the number of
 computer players, the rounds, the **walls** (none loses a shell off the edge, the original's
 default; concrete explodes it there; padded stops it and drops it; rubber bounces it; spring

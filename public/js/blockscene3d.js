@@ -856,13 +856,15 @@ const flipOf = (o) => (o.flipY === false ? -1 : 1);
 // Middle and High light placement locations, top left, top right, bottom left, bottom right,
 // viewer, direct overhead"). A placement is a direction across the board (x right, y screen-up);
 // the height is the lamp's elevation over it: low 25°, middle 45°, high 65°. `overhead` ignores
-// the height. The old names (upper-left, upper-right, front) still answer, as top-left,
-// top-right and viewer at the middle height.
+// the height. The old names (upper-left, upper-right) still answer, as top-left and top-right at
+// the middle height; `front` is the lamp at the viewer. (Not 'viewer': `light: 'viewer'` is the
+// Markets board's own flat, viewer-lit finish -- viewerLit below -- and a placement of that name
+// turned the whole block board flat-shaded, which the operator saw at once on 2026-09-16.)
 export const LIGHT_PLACES = Object.freeze({
-  'overhead': [0, 0], 'top-left': [-1, 1], 'top-right': [1, 1], 'bottom-left': [-1, -1], 'bottom-right': [1, -1], 'viewer': [0, -1],
+  'overhead': [0, 0], 'top-left': [-1, 1], 'top-right': [1, 1], 'bottom-left': [-1, -1], 'bottom-right': [1, -1], 'front': [0, -1],
 });
 export const LIGHT_HEIGHTS = Object.freeze({ low: 25, middle: 45, high: 65 });
-const LIGHT_ALIASES = Object.freeze({ 'upper-left': 'top-left', 'upper-right': 'top-right', 'front': 'viewer' });
+const LIGHT_ALIASES = Object.freeze({ 'upper-left': 'top-left', 'upper-right': 'top-right' });
 export function lampFor(place, height = 'middle') {
   const p = LIGHT_PLACES[place] ?? LIGHT_PLACES['top-left'];
   if (!p[0] && !p[1]) return { L: [0, 0, 1], side: [0, 0] };
@@ -875,8 +877,8 @@ export function lampFor(place, height = 'middle') {
 }
 export const LIGHTS = Object.freeze({
   'overhead': lampFor('overhead'),
-  'top-left': lampFor('top-left'), 'top-right': lampFor('top-right'), 'bottom-left': lampFor('bottom-left'), 'bottom-right': lampFor('bottom-right'), 'viewer': lampFor('viewer'),
-  'upper-left': lampFor('top-left'), 'upper-right': lampFor('top-right'), 'front': lampFor('viewer'),
+  'top-left': lampFor('top-left'), 'top-right': lampFor('top-right'), 'bottom-left': lampFor('bottom-left'), 'bottom-right': lampFor('bottom-right'), 'front': lampFor('front'),
+  'upper-left': lampFor('top-left'), 'upper-right': lampFor('top-right'),
 });
 export const LIGHT_DEFAULT = 'top-left';
 const NEON_HEX = /^#[0-9a-f]{6}$/i;

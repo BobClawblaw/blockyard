@@ -45,6 +45,10 @@ const AI_THINK_MS = 700;               // a computer player's pause before it fi
 const FALL_MS_PER_CELL = 55;           // how long a run of dirt takes to fall each cell (plus a base)
 const FALL_BASE_MS = 180;
 const BLAST_MS = 650;
+const SMOKE_MS = 2400;                 // the smoke after a blast, rising and drifting on the wind
+const DEATH_MS = 1100;                 // a tank's pieces and sparks
+const DUST_MS = 700;                   // dust where fallen dirt lands
+const TALK_MS = 2400;
 const FIRE_MS = 2600;                  // how long napalm burns on screen
 const BEAM_MS = 420;                   // how long a laser's line stays
 
@@ -55,6 +59,10 @@ const G = {
   settleT0: 0, settleMs: 0,             // the fall on screen
   landKey: '',                          // what the land canvas last drew: the land version and whether dirt is falling
   blasts: [],                           // { id, x, y, r, t0, big } pictures of the blasts, drained as they end
+  deaths: [],                           // { id, x, y, colour, t0 } a tank going up
+  dusts: [],                            // { id, x, y, t0 } where fallen dirt landed
+  falls: new Map(),                     // tank id -> { from, to, t0, ms, chute } a tank on its way down
+  talkTimer: null,
   fires: [],                            // { cells, t0 } napalm on the ground, drained as it burns out
   beams: [],                            // { x0, y0, x1, y1, t0 } laser lines
   drag: null,                           // a mouse aim in progress
@@ -105,29 +113,121 @@ function shadeTo(hex, k) {
   return `#${[ch(0), ch(2), ch(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
+const mixHex = (a, b, k) => {
+  const p = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const x = p(a), y = p(b);
+  return `#${x.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (y[i] - v) * k))).toString(16).padStart(2, '0')).join('')}`;
+};
+const hash = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+
 /**
- * A blast on screen: a flash that swells and fades, and sparks flung out and falling. Tiles, so
- * the engine draws them like everything else; gone after BLAST_MS.
+ * A blast on screen (M4, "make it look fabulous"): a flash that swells and fades, a shockwave
+ * ring racing out, sparks flung out and falling, and then smoke -- puffs that rise, grow, drift on
+ * the wind and darken -- for a couple of seconds after. Tiles, so the engine draws them like
+ * everything else; the flash and the sparks are gone after BLAST_MS, the smoke after SMOKE_MS.
  */
-export function blastTiles(blasts, now, ms = BLAST_MS) {
+export function blastTiles(blasts, now, ms = BLAST_MS, { wind = 0 } = {}) {
   const out = [];
   for (const b of blasts) {
-    const t = Math.min(1, Math.max(0, (now - b.t0) / ms));
-    if (t >= 1) continue;
-    const flash = t < 0.35 ? (0.5 + t / 0.35 * 0.5) : Math.max(0, 1 - (t - 0.35) / 0.65);
-    const fr = b.r * (0.6 + 0.8 * t);
-    const hot = b.riot ? '#9fd8ff' : t < 0.3 ? '#fff6d0' : t < 0.6 ? '#ffb347' : '#b8472a';
-    out.push({ txid: `flash${b.id}`, x: b.x - fr, y: b.y - fr, s: fr * 2, tall: 0.05, sphere: true, color: shadeTo(hot, flash) });
-    const n = b.big ? 22 : 12;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + b.id * 0.7;
-      const sp = (0.8 + ((i * 7) % 5) / 5) * b.r * 2.2;
-      const x = b.x + Math.cos(a) * sp * t, y = b.y + Math.sin(a) * sp * t - 6 * t * t;
-      if (y < 0) continue;
-      out.push({ txid: `spark${b.id}_${i}`, x: x - 0.12, y: y - 0.12, s: 0.24, tall: 0.24, sphere: true, color: shadeTo(t < 0.5 ? '#ffd27a' : '#ff7a3a', 1 - t * 0.7) });
+    const age = now - b.t0;
+    const t = Math.min(1, Math.max(0, age / ms));
+    if (t < 1) {
+      const flash = t < 0.35 ? (0.5 + t / 0.35 * 0.5) : Math.max(0, 1 - (t - 0.35) / 0.65);
+      const fr = b.r * (0.6 + 0.8 * t);
+      const hot = b.riot ? '#9fd8ff' : t < 0.3 ? '#fff6d0' : t < 0.6 ? '#ffb347' : '#b8472a';
+      out.push({ txid: `flash${b.id}`, x: b.x - fr, y: b.y - fr, s: fr * 2, tall: 0.05, sphere: true, color: shadeTo(hot, flash) });
+      // the shockwave: a ring of beads racing out and thinning
+      if (t < 0.45 && !b.riot) {
+        const rr = b.r * (0.4 + 3.2 * t), nb = 22;
+        for (let i = 0; i < nb; i++) {
+          const a = (i / nb) * Math.PI * 2;
+          const x = b.x + Math.cos(a) * rr, y = b.y + Math.sin(a) * rr;
+          if (y < 0) continue;
+          out.push({ txid: `ring${b.id}_${i}`, x: x - 0.1, y: y - 0.1, s: 0.2, tall: 0.2, sphere: true, color: shadeTo('#fff2d8', 1 - t / 0.45) });
+        }
+      }
+      const n = b.big ? 22 : 12;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + b.id * 0.7;
+        const sp = (0.8 + ((i * 7) % 5) / 5) * b.r * 2.2;
+        const x = b.x + Math.cos(a) * sp * t, y = b.y + Math.sin(a) * sp * t - 6 * t * t;
+        if (y < 0) continue;
+        out.push({ txid: `spark${b.id}_${i}`, x: x - 0.12, y: y - 0.12, s: 0.24, tall: 0.24, sphere: true, color: shadeTo(t < 0.5 ? '#ffd27a' : '#ff7a3a', 1 - t * 0.7) });
+      }
+    }
+    // the smoke: MANY SMALL beads, not a few big balls -- the engine draws a sphere with a rim and
+    // a highlight, and at a cell or more across a dark one reads as a bowling ball (the first cut
+    // filled the sky with eyes); at a third of a cell the highlight is a glint and a cloud of them
+    // reads as smoke. They rise, fan out, drift on the wind and darken.
+    if (!b.riot && b.r >= 1.4 && age < SMOKE_MS && age > 80) {
+      const u = age / SMOKE_MS;
+      const np = Math.min(60, 14 + Math.round(b.r * 5));
+      for (let i = 0; i < np; i++) {
+        const h = (k) => hash(b.id * 13 + i * 7 + k);
+        const a = Math.PI * (0.12 + 0.76 * h(1));                       // upward, fanned
+        const rise = (1.0 + h(2) * 1.8) * b.r * Math.sqrt(u);
+        const x = b.x + Math.cos(a) * rise * 0.75 + wind * 0.25 * age / 1000 + (h(3) - 0.5) * b.r * 0.8 * u;
+        const y = b.y + Math.sin(a) * rise + 0.3 + Math.sin(age / 400 + h(5) * 6) * 0.15;
+        const s = Math.min(0.55, 0.22 + 0.25 * u) * (0.7 + h(4) * 0.5);
+        const col = mixHex(u < 0.3 ? '#9a98a3' : '#6a6974', '#44434d', Math.max(0, (u - 0.4) / 0.6));
+        if (y < 0 || u > 0.85 + h(6) * 0.15) continue;                 // each bead thins out on its own time
+        out.push({ txid: `smoke${b.id}_${i}`, x: x - s / 2, y: y - s / 2, s, tall: s * 0.5, sphere: true, color: col });
+      }
     }
   }
   return out;
+}
+
+/** A tank going up: sparks in its colour flung out and falling, and three pieces of hull tumbling away. */
+export function deathTiles(deaths, now, ms = DEATH_MS) {
+  const out = [];
+  for (const d of deaths) {
+    const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
+    if (t >= 1) continue;
+    for (let i = 0; i < 26; i++) {
+      const h = (k) => hash(d.id * 17 + i * 5 + k);
+      const a = Math.PI * (0.05 + 0.9 * h(1)), sp = 6 + h(2) * 10;
+      const x = d.x + Math.cos(a) * sp * t, y = d.y + 0.5 + Math.sin(a) * sp * t - 10 * t * t;
+      if (y < 0) continue;
+      out.push({ txid: `dspark${d.id}_${i}`, x: x - 0.11, y: y - 0.11, s: 0.22, tall: 0.22, sphere: true, color: shadeTo(t < 0.4 ? '#fff0c0' : d.colour, 1 - t * 0.6) });
+    }
+    for (let i = 0; i < 3; i++) {
+      const h = (k) => hash(d.id * 23 + i * 11 + k);
+      const a = Math.PI * (0.25 + 0.5 * h(1)), sp = 4 + h(2) * 6;
+      const x = d.x + Math.cos(a) * sp * t * (i - 1), y = d.y + 0.6 + Math.sin(a) * sp * t - 9 * t * t;
+      if (y < 0) continue;
+      out.push({ txid: `piece${d.id}_${i}`, x: x - 0.4, y: y - 0.4, s: 0.8, tall: 0.01, color: shadeTo(d.colour, 0.8), poly: [[-0.4, -0.2], [0.35, -0.3], [0.4, 0.2], [-0.3, 0.35]], rot: t * (4 + i * 3) * (i % 2 ? 1 : -1) });
+    }
+  }
+  return out;
+}
+
+/** Dust where fallen dirt landed: a few puffs that rise and thin. */
+export function dustTiles(dusts, now, ms = DUST_MS) {
+  const out = [];
+  for (const d of dusts) {
+    const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
+    if (t >= 1) continue;
+    for (let i = 0; i < 4; i++) {
+      const h = (k) => hash(d.id * 19 + i * 3 + k);
+      const x = d.x + 0.5 + (h(1) - 0.5) * 1.6 * (0.3 + t), y = d.y + 0.2 + t * (0.6 + h(2) * 0.8);
+      const s = 0.3 + t * 0.5;
+      out.push({ txid: `dust${d.id}_${i}`, x: x - s / 2, y: y - s / 2, s, tall: s * 0.5, sphere: true, color: mixHex('#a08a68', '#6a5d48', t) });
+    }
+  }
+  return out;
+}
+
+/** Where each falling tank is at `now`: from its old height to its new, by gravity or under a parachute. */
+export function fallingTanks(falls, now) {
+  const tankY = new Map(), chutes = new Set();
+  for (const [id, f] of falls) {
+    const t = Math.min(1, Math.max(0, (now - f.t0) / f.ms));
+    const e = f.chute ? t : t * t;
+    tankY.set(id, f.from + (f.to - f.from) * e);
+    if (f.chute && t < 1) chutes.add(id);
+  }
+  return { tankY, chutes };
 }
 
 /** Napalm on screen: each burning cell a lit cube that flickers and dies down over FIRE_MS. */
@@ -204,8 +304,9 @@ export function fallingCells(g) {
  * a cube lifted by what it has left to fall, gathering speed), fire, beams, and the blasts over
  * everything.
  */
-export function actorLayer(g, now, { settleT0 = 0, settleMs = 1, blasts = [], fires = [], beams = [] } = {}) {
-  const out = actorTiles(g);
+export function actorLayer(g, now, { settleT0 = 0, settleMs = 1, blasts = [], fires = [], beams = [], deaths = [], dusts = [], falls = new Map() } = {}) {
+  const { tankY, chutes } = fallingTanks(falls, now);
+  const out = actorTiles(g, { tankY, chutes });
   const falling = g.falling ?? [];
   if (falling.length && settleMs > 0) {
     const t = Math.min(1, Math.max(0, (now - settleT0) / settleMs));
@@ -218,7 +319,7 @@ export function actorLayer(g, now, { settleT0 = 0, settleMs = 1, blasts = [], fi
       }
     }
   }
-  out.push(...windTiles(g, now), ...fireTiles(fires, now), ...beamTiles(beams, now), ...blastTiles(blasts, now));
+  out.push(...windTiles(g, now), ...fireTiles(fires, now), ...beamTiles(beams, now), ...dustTiles(dusts, now), ...blastTiles(blasts, now, BLAST_MS, { wind: g.wind ?? 0 }), ...deathTiles(deaths, now));
   return out;
 }
 
@@ -330,7 +431,7 @@ function drawShop() {
   if (box.innerHTML !== html) box.innerHTML = html;
 }
 
-const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['sySfx', 'sfx'], ['syFast', 'fast']];
+const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast']];
 function drawSwitches() {
   const t = scorchedOptions(loadSettings());
   for (const [id, key] of SWITCHES) {
@@ -340,6 +441,8 @@ function drawSwitches() {
     b.setAttribute('aria-pressed', t[key] ? 'true' : 'false');
   }
   sound.setSfx(t.sfx);
+  // the march plays while a game runs; a pause holds it; the switch off stops it
+  sound.setMusic(t.music && G.running && !G.paused, 'scorched');
 }
 function flip(key) {
   const cur = scorchedOptions(loadSettings())[key];
@@ -363,8 +466,11 @@ function drawSky() {
     ...t.sky,
     // the clouds of the Living sky drift with this round's wind, and turn with it
     skyWind: G.game ? Math.sign(G.game.wind || 1) * (0.4 + Math.abs(G.game.wind) / 4) : 1,
+    // and each round draws its own hour of the Living sky (the original's sky changed each round)
+    ...(G.game && t.roundSky && t.sky.skyType === 'living' ? { skyClock: 'fixed', skyHour: ROUND_HOURS[(G.game.seed + G.game.round * 7) % ROUND_HOURS.length] } : {}),
   });
 }
+const ROUND_HOURS = [6.6, 9, 12, 15, 17.8, 19, 21.5, 1];
 
 function draw(now = performance.now()) {
   const g = G.game;
@@ -379,11 +485,32 @@ function draw(now = performance.now()) {
       board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }), opts(FIELD));
       G.landKey = key;
     }
-    if (field) board3d(field, actorLayer(g, now, { settleT0: G.settleT0, settleMs: G.settleMs, blasts: G.blasts, fires: G.fires, beams: G.beams }), opts(ACTORS));
+    if (field) board3d(field, actorLayer(g, now, { settleT0: G.settleT0, settleMs: G.settleMs, blasts: G.blasts, fires: G.fires, beams: G.beams, deaths: G.deaths, dusts: G.dusts, falls: G.falls }), opts(ACTORS));
   }
   drawStats();
   drawTanks();
   drawShop();
+}
+
+// ------------------------------------------------------------------ what the tanks say
+// (M4; the original's tanks talked, "Nuke 'em" and the rest) -- a bubble over the field at the
+// tank's place, for a couple of seconds, picked by a hash so the same moment says the same thing
+const SAY = {
+  fire: ['Fire in the hole!', 'Eat this.', 'Incoming!', 'Say hello.', "Nuke 'em!", "This one's for you.", 'Watch this.', 'Bombs away.', 'Take that.'],
+  hurt: ['Ouch!', 'Hey!', "Is that all you've got?", "I'm hit!", "You'll pay for that.", 'Cheap shot.', "Just wait 'til my turn.", 'Missed the good bits.'],
+  death: ['Tell my wife…', 'I regret nothing.', 'Oops.', 'Argh!', 'Not like this.', 'Well played.', 'See you next round.'],
+  miss: ['Missed me!', 'Close.', 'Try again.', 'Ha!'],
+};
+function say(tank, kind, salt = 0) {
+  const box = el('syTalk');
+  if (!box || !tank || !scorchedOptions(loadSettings()).talk) return;
+  const lines = SAY[kind] ?? SAY.fire;
+  box.textContent = lines[Math.floor(hash(tank.id * 31 + (G.game?.shots ?? 0) * 7 + salt) * lines.length)];
+  box.style.setProperty('--x', `${((tank.x + TANK_W / 2) / COLS) * 100}%`);
+  box.style.setProperty('--y', `${(1 - (tank.y + 3.2) / ROWS) * 100}%`);
+  box.classList.remove('hidden');
+  if (G.talkTimer) clearTimeout(G.talkTimer);
+  G.talkTimer = setTimeout(() => box.classList.add('hidden'), TALK_MS);
 }
 
 // ------------------------------------------------------------------ what the rules report
@@ -391,7 +518,7 @@ function onEvents(events, now) {
   const g = G.game;
   for (const e of events) {
     switch (e.kind) {
-      case 'fire': sound.play('syFire'); break;
+      case 'fire': sound.play('syFire'); say(g.tanks[e.tank], 'fire'); break;
       case 'blast':
         G.blasts.push({ id: ++G.seq, x: e.x, y: e.y, r: e.radius, t0: now, big: e.radius >= 4, riot: !!e.riot });
         sound.play(e.radius >= 4 ? 'syBig' : 'syBlast');
@@ -399,14 +526,24 @@ function onEvents(events, now) {
       case 'dirt': G.blasts.push({ id: ++G.seq, x: e.x, y: e.y, r: e.radius * 0.6, t0: now, riot: true }); sound.play('syDirt'); break;
       case 'napalm': G.fires.push({ id: ++G.seq, cells: e.cells, t0: now }); sound.play('syBlast'); break;
       case 'laser': G.beams.push({ id: ++G.seq, x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, t0: now }); sound.play('syHit'); break;
-      case 'hit': if (e.damage > 0) sound.play('syHit'); break;
-      case 'fall': if (e.damage > 0) sound.play('syHit'); break;
-      case 'chute': sound.play('rotate'); G.h?.toast?.(`${g.tanks[e.tank].name}'s parachute opens`); break;
+      case 'hit': if (e.damage > 0) sound.play('syHit'); if (e.damage >= 20 && g.tanks[e.tank].alive) say(g.tanks[e.tank], 'hurt', 1); break;
+      case 'fall': {
+        if (e.damage > 0) sound.play('syHit');
+        const tk = g.tanks[e.tank];
+        if (e.cells > 0.5) G.falls.set(e.tank, { from: tk.y + e.cells, to: tk.y, t0: now, ms: FALL_BASE_MS + FALL_MS_PER_CELL * e.cells, chute: false });
+        break;
+      }
+      case 'chute': {
+        sound.play('rotate');
+        const tk = g.tanks[e.tank];
+        G.falls.set(e.tank, { from: tk.y + e.cells, to: tk.y, t0: now, ms: 300 + 260 * e.cells, chute: true });
+        break;
+      }
       case 'disrupt': sound.play('syDirt'); break;
       case 'shield': sound.play('levelup'); break;
       case 'shieldDown': sound.play('life'); break;
       case 'battery': sound.play('clear'); break;
-      case 'death': sound.play('syDeath'); G.h?.toast?.(`${g.tanks[e.tank].name} is destroyed`); break;
+      case 'death': { sound.play('syDeath'); const tk = g.tanks[e.tank]; G.deaths.push({ id: ++G.seq, x: tk.x + TANK_W / 2, y: tk.y, colour: tk.colour, t0: now }); say(tk, 'death', 2); G.h?.toast?.(`${tk.name} is destroyed`); break; }
       case 'bounce': sound.play('wall'); break;
       case 'turn': G.aiAt = now; sound.play('syTurn'); drawSky(); break;
       case 'round': drawSky(); break;
@@ -444,6 +581,7 @@ function frame(t) {
   if (g.phase === 'settle') {
     G.dirty = true;
     if (!g.falling.length || t - G.settleT0 >= G.settleMs) {
+      for (const f of g.falling.slice(0, 14)) if (f.from - f.y >= 2) G.dusts.push({ id: ++G.seq, x: f.x, y: f.y + f.len, t0: t });
       settled(g);
       onEvents(step(g, 0), t);                 // the turn event, or the round's end
     }
@@ -459,7 +597,10 @@ function frame(t) {
       G.dirty = true;
     }
   }
-  if (G.blasts.length) { G.blasts = G.blasts.filter((b) => t - b.t0 < BLAST_MS); G.dirty = true; }
+  if (G.blasts.length) { G.blasts = G.blasts.filter((b) => t - b.t0 < SMOKE_MS); G.dirty = true; }
+  if (G.deaths.length) { G.deaths = G.deaths.filter((d) => t - d.t0 < DEATH_MS); G.dirty = true; }
+  if (G.dusts.length) { G.dusts = G.dusts.filter((d) => t - d.t0 < DUST_MS); G.dirty = true; }
+  if (G.falls.size) { for (const [id, f] of G.falls) if (t - f.t0 >= f.ms) G.falls.delete(id); G.dirty = true; }
   if (G.fires.length) { G.fires = G.fires.filter((f) => t - f.t0 < FIRE_MS); G.dirty = true; }
   if (G.beams.length) { G.beams = G.beams.filter((b) => t - b.t0 < BEAM_MS); G.dirty = true; }
   if (before !== g.phase) G.dirty = true;
@@ -486,7 +627,7 @@ function players() {
 function start() {
   const t = scorchedOptions(loadSettings());
   G.game = newGame(players(), { rounds: t.rounds, walls: t.walls, wind: t.wind, gravity: t.gravity, land: t.land, cash: t.cash, interest: t.interest / 100 });
-  G.blasts = []; G.fires = []; G.beams = []; G.shopping = false;
+  G.blasts = []; G.fires = []; G.beams = []; G.deaths = []; G.dusts = []; G.falls = new Map(); G.shopping = false;
   G.running = true; G.paused = false; G.last = 0; G.dirty = true; G.aiAt = performance.now();
   overlay(null);
   drawScores();
@@ -500,6 +641,7 @@ function pause(why) {
   if (!G.running || G.paused) return;
   G.paused = true; G.why = why;
   overlay(why, 'the guns are holding', 'resume', true);
+  sound.holdMusic(true);
   G.h?.toast?.(why);
 }
 
@@ -511,6 +653,7 @@ function resume() {
   G.paused = false; G.last = 0; G.dirty = true;
   overlay(null);
   sound.unlock();
+  sound.holdMusic(false);
   if (!G.raf) G.raf = requestAnimationFrame(frame);
 }
 
@@ -544,6 +687,7 @@ function gameOver() {
   const g = G.game;
   G.running = false; G.paused = false; G.shopping = false;
   g.phase = 'over';
+  sound.setMusic(false);
   sound.play('over');
   draw();
   const you = g.tanks.find((t) => t.kind === 'human');

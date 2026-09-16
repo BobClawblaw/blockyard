@@ -308,6 +308,9 @@ export const DEFAULTS = Object.freeze({
     galaxy: true,
     galaxyAt: 'top-right',
     sfx: true,
+    music: true,          // the march
+    talk: true,           // what the tanks say, over the field
+    roundSky: true,       // under the Living sky, each round draws its own hour
     fast: false,          // shells fly at three times the pace
     grid: false,          // the quiet grid under the field, off: the land is the picture
     gridColour: '#2a5a8f',
@@ -491,7 +494,7 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.001, step: 0.0001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows a little wider than its base and a flying block swells slightly as it rises' }),
       Object.freeze({
         key: 'light', label: 'Light', kind: 'choice', hint: 'Where the lamp hangs. Straight above lights the whole board evenly; a corner shades the far slope of the curve and the sides turned away',
-        options: Object.freeze([['overhead', 'Straight above'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right'], ['viewer', 'From the viewer']]),
+        options: Object.freeze([['overhead', 'Straight above'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right'], ['front', 'From the viewer']]),
       }),
       Object.freeze({
         key: 'lightHeight', label: 'Light height', kind: 'choice', hint: 'How high the lamp hangs over that place: low rakes the sides and shades the far slope hard, high is nearly overhead',
@@ -687,6 +690,9 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The shot, the blast, a hit, a fall, a death' }),
+      Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'A march in D minor, on oscillators' }),
+      Object.freeze({ key: 'talk', label: 'Talk', kind: 'toggle', hint: 'What the tanks say when they fire, are hit, or die' }),
+      Object.freeze({ key: 'roundSky', label: 'A sky per round', kind: 'toggle', hint: 'Under the Living sky, each round draws its own hour: dawn, noon, dusk, night' }),
       Object.freeze({ key: 'fast', label: 'Fast shells', kind: 'toggle', hint: 'Shells fly at three times the pace, for the impatient' }),
       Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'A quiet grid under the field' }),
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of that grid' }),
@@ -877,10 +883,10 @@ const MIGRATIONS = {
     return { ...raw, marketEffects: { ...fx } };
   },
   // v4 -> v5: the lamp's placements were renamed as six places at three heights (2026-09-16):
-  // upper-left is top-left, upper-right top-right, front the viewer; the height is new (middle)
+  // upper-left is top-left, upper-right top-right; front stays; the height is new (middle)
   4: (raw) => {
     const sp = raw.space && typeof raw.space === 'object' ? raw.space : {};
-    const map = { 'upper-left': 'top-left', 'upper-right': 'top-right', 'front': 'viewer' };
+    const map = { 'upper-left': 'top-left', 'upper-right': 'top-right' };
     return { ...raw, space: { ...sp, light: map[sp.light] ?? sp.light } };
   },
 };
@@ -1188,7 +1194,7 @@ export function scorchedOptions(s) {
   const sky = spaceOptions(s);
   const sc = n.scorched;
   return {
-    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, fast: sc.fast,
+    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
     opponents: sc.opponents, opponentKind: sc.opponentKind, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,
