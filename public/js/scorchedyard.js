@@ -63,6 +63,7 @@ const DEMO_WAR_MS = 7000;              // and how long the war's result stands b
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, dirty: true, bound: false,
   state: null, h: null,
+  html: {},                             // what each panel last had written into it, so it is not rewritten every frame
   rep: null,                            // the held key's ramp: { key, n, at }
   lastShot: null,                       // what the human fired last, for R
   editing: null,                        // 'angle' | 'power' while a number is being typed
@@ -351,6 +352,26 @@ function paintOver(ctx, view, hx) {
 
 // ------------------------------------------------------------------ the screen
 const el = (id) => document.getElementById(id);
+
+// WRITING A PANEL ONLY WHEN IT CHANGED (2026-09-16: "i can't buy anything in the shop between
+// rounds"). Each of these compared the markup it was about to write with `box.innerHTML` -- but the
+// browser gives that back NORMALISED (`disabled` comes out as `disabled=""`, entities are re-coded),
+// so the comparison never matched and the panel was rebuilt on every draw. Harmless while the board
+// only drew on events; fatal once the wind made it draw thirty times a second, because a button
+// replaced between the press and the release is a button that never gets clicked. The shop was
+// unusable and the two typed readouts would have gone the same way.
+//
+// So each panel remembers the string IT wrote, and the scrolling one keeps its place.
+export function setHtml(box, html, key) {
+  if (!box || G.html[key] === html) return false;
+  const top = box.scrollTop;
+  box.innerHTML = html;
+  G.html[key] = html;
+  if (top) box.scrollTop = top;
+  return true;
+}
+
+
 const money = (n) => `$${Math.round(n).toLocaleString()}`;
 
 function overlay(msg, sub, button, dim = false) {
@@ -386,7 +407,7 @@ function drawStats() {
   }
   if (G.editing) return;                        // a number is being typed: leave the panel alone
   const html = rows.map(([k, v]) => `<i>${k}</i><b${k === 'angle' || k === 'power' ? ` class="syval" data-edit="${k}" title="click to type it"` : ''}>${v}</b>`).join('');
-  if (box.innerHTML !== html) box.innerHTML = html;
+  setHtml(box, html, 'stats');
   const fireBtn = el('syFire');
   if (fireBtn) fireBtn.disabled = !humanTurn();
   drawItems();
@@ -409,7 +430,7 @@ function drawItems() {
     pills.push(`<span class="sypill${armed ? ' on' : ''}" title="${it.name}: ${it.note ?? ''}${key ? ` — ${key}` : ''}">${it.name} × ${n}${armed ? ' ✓' : ''}</span>`);
   }
   const html = pills.join('') || '<span class="faint">no items — the shop opens between rounds</span>';
-  if (box.innerHTML !== html) box.innerHTML = html;
+  setHtml(box, html, 'items');
 }
 
 function drawTanks() {
@@ -421,7 +442,7 @@ function drawTanks() {
       + `<meter min="0" max="100" low="34" high="67" optimum="100" value="${t.health}" title="${t.health} health"></meter>`
       + `<span>${t.alive ? `${t.health}${t.shield ? '🛡' : ''}` : '☠'}</span><small>${t.score} pts · ${t.kills} kills · ${money(t.cash)}</small></div>`;
   }).join('') : '';
-  if (box.innerHTML !== html) box.innerHTML = html;
+  setHtml(box, html, 'tanks');
 }
 
 function drawScores(highlightAt = null) {
@@ -432,7 +453,7 @@ function drawScores(highlightAt = null) {
     ? `<tr><th>#</th><th>score</th><th>kills</th><th>won</th><th>when</th></tr>` + list.map((r, i) =>
       `<tr${r.at === highlightAt ? ' class="now"' : ''}><td>${i + 1}</td><td>${r.score.toLocaleString()}</td><td>${r.kills}</td><td>${r.won ? 'yes' : 'no'}</td><td>${new Date(r.at).toISOString().slice(0, 10)}</td></tr>`).join('')
     : `<tr><td class="faint">no battles yet — fire the first shot</td></tr>`;
-  if (t.innerHTML !== html) t.innerHTML = html;
+  setHtml(t, html, 'scores');
 }
 
 // THE SHOP, between rounds: every weapon and item with its price and pack, what you own, and a
@@ -440,9 +461,9 @@ function drawScores(highlightAt = null) {
 function drawShop() {
   const g = G.game, box = el('syShop');
   if (!box) return;
-  if (!G.shopping || !g) { box.classList.add('hidden'); return; }
+  if (!G.shopping || !g) { box.classList.add('hidden'); G.html.shop = null; return; }
   const you = g.tanks.find((t) => t.kind === 'human');
-  if (!you) { box.classList.add('hidden'); return; }
+  if (!you) { box.classList.add('hidden'); G.html.shop = null; return; }
   box.classList.remove('hidden');
   const row = (e) => {
     const owned = (e.item ? you.items[e.id] : you.inventory[e.id]) ?? 0;
@@ -455,7 +476,7 @@ function drawShop() {
   const items = SHOP.filter((e) => e.item).map(row).join('');
   const html = `<div class="syshophead">the shop <span class="sp"></span><b>${money(you.cash)}</b></div>`
     + `<div class="sycols"><div><h4>Weapons</h4>${weapons}</div><div><h4>Items</h4>${items}</div></div>`;
-  if (box.innerHTML !== html) box.innerHTML = html;
+  setHtml(box, html, 'shop');
 }
 
 const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syDemo', 'demo']];

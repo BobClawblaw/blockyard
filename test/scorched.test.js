@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, rampStep, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -912,4 +912,31 @@ test('scorched yard: a held key accelerates, and the numbers can be typed', () =
   assert.match(src, /if \(G\.editing\) return;/, 'and the panel holds still while a number is typed');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.match(html, /hold to go faster/, 'the keys line says the modifiers out loud');
+});
+
+// THE SHOP WAS UNBUYABLE (operator, 2026-09-16: "i can't buy anything in the shop between rounds").
+// Each panel compared its new markup with `box.innerHTML`, which the browser gives back normalised,
+// so the comparison never matched and the markup was rebuilt on every draw -- thirty times a second
+// once the wind kept the board drawing. A button replaced between the press and the release is
+// never clicked. The panels remember what they wrote instead.
+test('scorched yard: a panel is written once, not on every frame', () => {
+  // a box that normalises what it is given, the way a browser does
+  const box = {
+    _v: '', scrollTop: 0, writes: 0,
+    set innerHTML(v) { this.writes += 1; this._v = String(v).replace(/ disabled>/g, ' disabled="">'); },
+    get innerHTML() { return this._v; },
+  };
+  const html = '<button data-buy="nuke" disabled>buy</button>';
+  assert.equal(setHtml(box, html, 'test-shop'), true, 'the first write lands');
+  assert.equal(box.writes, 1);
+  for (let i = 0; i < 30; i++) setHtml(box, html, 'test-shop');
+  assert.equal(box.writes, 1, 'and the same markup is never written again, however many frames pass');
+  assert.notEqual(box.innerHTML, html, 'even though the browser hands it back changed');
+  // a changed panel is written, and keeps its place in the list
+  box.scrollTop = 300;
+  assert.equal(setHtml(box, html + '<i>more</i>', 'test-shop'), true);
+  assert.equal(box.writes, 2);
+  assert.equal(box.scrollTop, 300, 'the shop does not jump back to the top when something is bought');
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.ok(!/innerHTML !== html/.test(src), 'no panel compares against the browser\u2019s own innerHTML any more');
 });
