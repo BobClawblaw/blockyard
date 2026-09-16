@@ -881,6 +881,8 @@ export const LIGHTS = Object.freeze({
   'upper-left': lampFor('top-left'), 'upper-right': lampFor('top-right'),
 });
 export const LIGHT_DEFAULT = 'top-left';
+// the middle of the shipped brightness range: `lightGain` stretches the faces about this point
+const LIT_MID = 0.58;
 const NEON_HEX = /^#[0-9a-f]{6}$/i;
 export function lightOf(o = {}) {
   const name = LIGHT_ALIASES[o.light] ?? o.light;
@@ -1354,6 +1356,9 @@ export function buildScene(tiles, o = {}) {
   // the lamp's direction across the screen, for the side faces (LIGHTS); under the overhead
   // lamp every side takes the same light, a shade under the top
   const lampSide = lampOf(o).side;
+  // the lamp's hardness and how bright the tops sit under it (see the side loop below)
+  const gain = Number.isFinite(o.lightGain) ? Math.max(0.2, Math.min(3, o.lightGain)) : 1;
+  const topLit = Number.isFinite(o.topLight) ? Math.max(0.1, Math.min(1.4, o.topLight)) : 0.8;
   for (const t of ordered) {
     const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
     // GONE FOR THE DURATION, not deleted: a hidden cube is skipped this frame and drawn again the
@@ -1544,11 +1549,19 @@ export function buildScene(tiles, o = {}) {
       // brighter, one turned away falls into shadow
       const d = side.nx * lampSide[0] + side.ny * lampSide[1];
       // from the viewer: a face pointing down the screen (toward the camera) takes the most light
-      const k = viewerLit ? 0.6 + 0.42 * Math.max(0, side.ny) + 0.3 * Math.max(0, side.nx) - 0.16 * Math.max(0, -side.nx) : 0.34 + 0.26 * (d + 1);
+      const k0 = viewerLit ? 0.6 + 0.42 * Math.max(0, side.ny) + 0.3 * Math.max(0, side.nx) - 0.16 * Math.max(0, -side.nx) : 0.34 + 0.26 * (d + 1);
+      // HOW HARD THE LAMP IS (operator, 2026-09-16: "we need better lighting on the front of the
+      // blocks. Still looks too washed out and not illuminated well enough"). The shipped range put
+      // every face between 0.34 and 0.86 of its colour with the top at 0.8: a narrow band, and a
+      // board of it reads as tinted rather than lit. `lightGain` stretches that range about its
+      // middle -- above 1 the face turned to the lamp goes brighter than its own colour and the one
+      // turned away falls properly dark. 1 is exactly what every board drew before this.
+      const k = Math.max(0.06, Math.min(1.4, LIT_MID + (k0 - LIT_MID) * gain));
       out.push({ txid: t.txid, face: 'side', key: side.key, points: side.points, fill: shade(c, k * lit, a), ...(viewerLit ? { stroke: lift(c, 0.45, round3(0.5 * a)) } : {}) });
       side.points.forEach(note);
     }
-    out.push({ txid: t.txid, face: 'top', points: f.top, fill: shade(c, (viewerLit ? 1.02 : 0.8) * lit, a), stroke: viewerLit ? lift(c, 0.55, round3(0.6 * a)) : `rgba(0,0,0,${round3(seam * a)})` });
+    const topK = viewerLit ? 1.02 : Math.max(0.06, Math.min(1.4, LIT_MID + (topLit - LIT_MID) * gain));
+    out.push({ txid: t.txid, face: 'top', points: f.top, fill: shade(c, topK * lit, a), stroke: viewerLit ? lift(c, 0.55, round3(0.6 * a)) : `rgba(0,0,0,${round3(seam * a)})` });
     f.top.forEach(note);
 
     if (f.innerG && !viewerLit) {

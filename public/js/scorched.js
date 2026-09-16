@@ -241,17 +241,25 @@ function placeTanks(g) {
 }
 
 /**
- * A NEW WIND. It is drawn at the start of every round; whether it is drawn again inside the round
- * is the mode's business (operator, 2026-09-16: "the wind still changes direction during my round
- * ... it needs to consistently move in one direction, not shift back and forth during the same
- * round"). `round` -- the shipped mode -- draws it once and leaves it, so the air over a round
- * blows one way and every shot in that round is read against the same gauge. `turn` is the
- * original's: a fresh wind, direction and all, for every tank's turn. `shot` redraws it at each
- * shot, and `none` is still air.
+ * A NEW WIND. It is drawn at the start of every round; what happens to it inside the round is the
+ * mode's business (operator, 2026-09-16: first "it needs to consistently move in one direction, not
+ * shift back and forth during the same round", then "the wind speed did not change the entire
+ * game").
+ *
+ *   round  the shipped mode. The round's DIRECTION is drawn once and held to the end of it; the
+ *          STRENGTH is drawn afresh for each tank's turn. The air over a round blows one way, and
+ *          how hard is still a thing to read before every shot.
+ *   turn   the original's: direction and strength both fresh every turn.
+ *   shot   redrawn at every shot.
+ *   none   still air.
+ *
+ * `sign`, when given, keeps the direction and rolls only the strength.
  */
-function newWind(g) {
+function newWind(g, sign = null) {
   if (g.windMode === 'none') { g.wind = 0; return; }
-  g.wind = Math.round((g.rnd() * 2 - 1) * WIND_MAX * 10) / 10;
+  const mag = Math.round(g.rnd() * WIND_MAX * 10) / 10;
+  const dir = sign ?? (g.rnd() < 0.5 ? -1 : 1);
+  g.wind = Math.round(mag * dir * 10) / 10;
 }
 
 export const current = (g) => g.tanks[g.order[g.turn]];
@@ -858,7 +866,10 @@ export function nextTurn(g) {
     const i = (g.turn + k) % n;
     if (g.tanks[g.order[i]].alive) { g.turn = i; break; }
   }
+  // the round mode keeps this round's direction and rolls the strength again; the original's mode
+  // rolls both; the others leave it alone
   if (g.windMode === 'turn') newWind(g);
+  else if (g.windMode === 'round') newWind(g, g.wind < 0 ? -1 : 1);
   g.phase = 'aim';
   const t = current(g);
   autoDefend(g, t);

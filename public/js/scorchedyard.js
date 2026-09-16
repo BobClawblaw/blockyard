@@ -37,6 +37,9 @@ const FIELD = {
   // the cubes and left every face the player actually looks at on one flat shade. The lamp stands
   // at the viewer, low, so the front faces carry the light and the strata separate.
   light: 'front', lightHeight: 'low',
+  // and a hard lamp: the shipped range put every face within half a stop of every other and the
+  // board read as tinted dirt rather than lit dirt (operator: "too washed out")
+  lightGain: 2.15, topLight: 0.6,
   gridStep: 4,
   space: true,
   background: 'rgba(0,0,0,0)',
@@ -245,19 +248,19 @@ export function windStreaks(wind, now, w, h, alpha = 1) {
   if (!w || !h || strength < 0.03 || alpha <= 0.01) return [];
   const dir = wind < 0 ? -1 : 1;
   const t = now / 1000;
-  // THE GUST NEVER PULLS BACKWARDS (operator: "the wind switches directions when idle"). A gust
-  // that multiplies `t * speed` moves a streak BACK whenever it eases off, because the whole
-  // elapsed time is rescaled. So the gust is a rate, and the distance travelled is its integral:
-  // t + (a/w)*(1 - cos(w*t)) rises for every t while a < 1, so the air only ever goes one way.
-  const GA = 0.3, GW = 0.55;
-  const phase = t + (GA / GW) * (1 - Math.cos(GW * t));
-  const gustLen = 1 + GA * Math.sin(GW * t);                 // the same wave, for the length alone
+  // NO GUST (operator, 2026-09-16: "the wind effects were not staying consistent", and before that
+  // "I keep seeing it oscillating back and forth while I idle"). The air used to breathe: a slow
+  // wave lengthened and quickened every streak together, by a third either way, on an eleven-second
+  // cycle. It never reversed -- measured frame by frame, no streak ever moved upwind -- but a
+  // stream that surges and eases while the gauge reads one number does not look like that number.
+  // One wind, one speed: the streaks advance at exactly the rate the gauge says and no faster.
+  const phase = now / 1000;
   const n = Math.round(18 + 54 * strength);
   const out = [];
   for (let i = 0; i < n; i++) {
     const h6 = hashAt(i);
     const band = BANDS[i % BANDS.length];
-    const len = w * (0.011 + 0.062 * strength) * band.len * (0.55 + h6(6) * 0.9) * gustLen;
+    const len = w * (0.011 + 0.062 * strength) * band.len * (0.55 + h6(6) * 0.9);
     const speed = w * (0.05 + 0.5 * strength) * band.speed * (0.7 + h6(1) * 0.6);
     const span = w + len * 2;
     const x = ((((h6(2) * span + phase * speed * dir) % span) + span) % span) - len;

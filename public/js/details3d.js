@@ -4231,6 +4231,8 @@ export function render3d(canvas, cells, options = {}) {
       neon: opts.neon === true, sheen: opts.sheen === true, sheenStyle: opts.sheenStyle,
       overheadLight: opts.overheadLight === true,   // the lamp straight above (Tetrust)
       light: opts.light,                            // or wherever settings.js space.light puts it
+      lightHeight: opts.lightHeight,
+      lightGain: opts.lightGain, topLight: opts.topLight,   // how hard the lamp is, and how bright the tops sit under it
       neonSource: opts.neonSource, neonColour: opts.neonColour, neonBrightness: opts.neonBrightness,
       wireWidth: opts.wireWidth,
       // the paint order's memory across frames (blockscene3d obliqueOrder): a tangle keeps the

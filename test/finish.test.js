@@ -255,3 +255,17 @@ test('CHROME mirrors a horizon that differs from cube to cube and moves with the
   assert.equal(spaceOptions({ space: { sheen: true, sheenStyle: 'satin' } }).sheenStyle, 'satin');
   assert.equal(spaceOptions({ space: { sheenStyle: 'mirror' } }).sheenStyle, 'chrome', 'an unknown finish falls back to chrome');
 });
+
+// HOW HARD THE LAMP IS (operator, 2026-09-16: "we need better lighting on the front of the blocks.
+// Still looks too washed out and not illuminated well enough")
+test('a board can ask for a harder lamp, and 1 is what every board drew before', () => {
+  const tiles = [{ txid: 'a', x: 2, y: 2, s: 1, tall: 1, color: '#8a6a44' }];
+  const base = { gridW: 8, gridH: 8, unit: 12, light: 'front', lightHeight: 'low', oblique: { ox: 0.1, oy: 0.3, headroom: 3, flight: 0 } };
+  const litOf = (o) => buildScene(tiles, { ...base, ...o }).ops.filter((p) => p.face === 'side' || p.face === 'top').map((p) => p.fill);
+  const plain = litOf({}), gained = litOf({ lightGain: 1.8, topLight: 0.66 });
+  assert.equal(plain.length, gained.length, 'the same faces either way');
+  assert.deepEqual(plain, litOf({ lightGain: 1 }), 'a gain of 1 is exactly the shipped look');
+  const value = (fill) => { const m = String(fill).match(/rgba?\(([^)]+)\)/); if (!m) return 0; const v = m[1].split(',').map(Number); return v[0] + v[1] + v[2]; };
+  const spread = (list) => Math.max(...list.map(value)) - Math.min(...list.map(value));
+  assert.ok(spread(gained) > spread(plain) * 1.4, `a harder lamp tells the faces further apart (${spread(plain)} -> ${spread(gained)})`);
+});

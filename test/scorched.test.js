@@ -962,24 +962,22 @@ test('scorched yard: a panel is written once, not on every frame', () => {
 test('scorched yard: one wind a round, unless the mode says otherwise', () => {
   const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }, { name: 'B', kind: 'moron' }], { seed: 11 });
   assert.equal(g.windMode, 'round', 'the shipped mode');
-  const w0 = g.wind;
-  for (let i = 0; i < 12; i++) nextTurn(g);
-  assert.equal(g.wind, w0, 'twelve turns later it is the same wind, direction and strength');
+  const sign = Math.sign(g.wind);
+  const mags = new Set([Math.abs(g.wind)]);
+  for (let i = 0; i < 12; i++) { nextTurn(g); assert.equal(Math.sign(g.wind), sign, 'the round holds its direction, turn after turn'); mags.add(Math.abs(g.wind)); }
+  assert.ok(mags.size > 4, `and its strength is drawn again for every turn (${[...mags].join(', ')})`);
   nextRound(g);
-  const w1 = g.wind;
-  for (let i = 0; i < 6; i++) nextTurn(g);
-  assert.equal(g.wind, w1, 'and the next round has its own, which also holds');
+  const next = new Set();
+  for (let i = 0; i < 40; i++) { const t2 = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: i }); next.add(Math.sign(t2.wind)); }
+  assert.equal(next.size, 2, 'a fresh round can blow either way');
   // the original's mode is still there for anyone who wants it
   const t = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 3, wind: 'turn' });
   const seen = new Set();
   for (let i = 0; i < 20; i++) { nextTurn(t); seen.add(t.wind); }
-  assert.ok(seen.size > 3, 'every turn draws a fresh wind under the old mode');
+  assert.ok(seen.size > 3 && new Set([...seen].map(Math.sign)).size === 2, 'every turn draws a fresh wind under the old mode, direction and all');
   const still = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 3, wind: 'none' });
   assert.equal(still.wind, 0);
-  // the shipped choice, and a saved one is left exactly as the player set it: settings stored on
-  // the server carry no schema version, so their migrations run on every boot -- a migration that
-  // rewrote this key would take the old mode away from anyone who wanted it, every time they loaded
-  assert.equal(DEFAULTS.scorched.wind, 'round', 'a fresh install holds its wind for the round');
+  assert.equal(DEFAULTS.scorched.wind, 'round', 'a fresh install holds its direction for the round');
   assert.equal(normalise({ scorched: { wind: 'turn' } }).scorched.wind, 'turn', 'and a saved choice stands');
 });
 

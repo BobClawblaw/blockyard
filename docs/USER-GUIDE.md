@@ -828,9 +828,10 @@ guidance; **P** pauses; **N** starts the next round.
 a war is five rounds, and a player knocked out early should not have to watch the computer finish.
 
 The wind is written on the field as well as on the panel: a row of **chevrons** at the top points
-the way it blows, as many as it is strong, brightest just after it changes. When it does change, at
-the start of a round, the old air thins away while the new air comes up over it already at its own
-speed and direction, so there is nothing to wait for.
+the way it blows, as many as it is strong, brightest just after it changes. When it does change, the
+old air thins away while the new air comes up over it, already at its own speed and direction, so
+there is nothing to wait for. Between changes the stream is dead steady: a streak crosses the field
+at exactly the rate the gauge says, and never surges or eases.
 
 Over the tank whose turn it is stands the **aim gauge**: a protractor with a tick every fifteen
 degrees, a needle along the current angle whose length is the power, and both numbers at its tip.
@@ -867,9 +868,11 @@ leave running on a screen in the corner.
 The rules the original exposed are in **Display settings → Scorched Yard**: the number of
 computer players, the rounds, the **walls** (none loses a shell off the edge, the original's
 default; concrete explodes it there; padded stops it and drops it; rubber bounces it; spring
-bounces it back harder; wraparound brings it in the other side), the **wind** (once a round, which is how it
-ships: one wind, one direction, held for every turn of that round; every turn, which is the
-original's and can turn right around between two shots; every shot; or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
+bounces it back harder; wraparound brings it in the other side), the **wind** (once a round, which is how it ships: the round's
+direction is drawn when the round starts and held to the end of it, while the strength is drawn
+again for every turn, so the air blows one way and how hard is still something to read before each
+shot; every turn, which is the original's and can turn right around between two shots; every shot;
+or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
 flat), the **starting cash** and the **interest** rate. They take effect at the next new game.
 
 ## Wolfenstein 3D
