@@ -5,239 +5,256 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
-- **Appearance**: a first tab in Display settings for the colours of the layout — a theme mode (Light, Dark, or System, which follows the operating system), theme cards with swatch strips (BlockYard, the shipped look and the default; Mono; Nous; GitHub Light Default and Dark Default; Catppuccin Latte and Mocha), and Custom: nine colour pickers (page, panels, text, muted text, accent, lines, good, warning, bad) with the rest derived, and a **customise** button that copies the theme on screen into the pickers. Saved on the server with the other settings, so every screen of the monitor draws the same; the sign-in page draws in the theme the browser last saw. The charts' axis text, grid lines and tooltips, the order-book depth chart's sides and the market chart grounds follow the theme (they were literals of the dark look); the 3D boards stay space and the Explorer's block pages keep their dark cards
-- The Admin page packs the same way: two stacks (Users over the audit log; Node actions over Change own password, whose two fields share a row) instead of grid rows that left a hole under the short Users card
-- The sign-in card packs the same way: tighter padding, fields and note
-- The Display settings sheet packs the same way: rows, note and groups tighter, the sheet a little wider so hints wrap less, and on the two effects tabs the switches run two across with each hint as the row's tooltip — the Space effects tab is under half the scrolling it was
-- The About page fills the window and no more: the sky runs to the bottom edge with the credit line at its foot, the inner air is tighter, and the GitHub link and the tip pill share a row
-- The Diversions pages take the window: the wells of Tetrust, Blockout and Blockanoid grow to the window's height (they stopped at 600px), and the DOS screen is always 4:3 and as large as the window allows either way — at a 1093px window the 320×200 picture had been drawn squashed into a 761×720 box
-- The DOS games have a way out of full screen: an **exit full screen** button in the top corner while full screen, and holding **Esc** for a second (a tap of Esc stays the game's menu, which is what the keyboard lock is for); leaving unlocks the keyboard and releases the mouse
-- Markets fits one screen: the board takes what the window leaves, and the exchange table and the order-book depth sit side by side beneath it (under 1400px the table drops the pair, 24 h range and volume columns — all still in the summary line and on the Kiosk — and the book's title its description) instead of the depth chart starting a thousand pixels down
-- Node & RPC packs the same way: two stacks (RPC etiquette with its figures in two columns, Data quality and Node connection; Poll cadence, self-telemetry beside the log tail, Panel sources and the RPC console) instead of grid rows that left holes beside the short cards
-- Chain & Sync packs the same way: one-line notes under the block-size and tip charts (the longer sentences are their tooltips), the transaction-rate figures as one wrapping line instead of a grid that overflowed a narrow card, values that keep to their line, and a shorter uptime label that stopped squeezing its neighbours — the first three rows sit level and the drill-down and indexes reach the first screen at 1093×945
-- A streak of stale drops of the full-pool poll is one story: one warning event when it starts, a counter on Node & RPC while it lasts, one event when the poll answers again with the count and the span. On a day the node answered slowly for thirteen hours, each drop had been its own event, 188 of the feed's 200 rows
-- The Events tab's feed reaches the window's bottom edge (it stopped a hundred pixels short)
-- The Network tab packs the same way: Throughput beside a stack of Upload and Traffic accounting (the accounting card no longer sits alone beside half a screen of nothing), the throughput chart taller, and the sources table taking the rest of the window
-- The Mining tab's pool pie folds its smallest pools into "Other" when its card is too short for every name, so no label runs off the bottom
-- The Peers tab packs the same way: a long onion or i2p address no longer makes the whole page scroll sideways (the address clips with an ellipsis and carries the full text as its title; a wide table scrolls inside its card), rows and service badges tighter, the top strip's cards at their own heights
-- The Explorer packs the same way: a smaller title, the block strip's padding and scrollbar band trimmed, tighter table rows and the table reaching the window's bottom edge — three more blocks on the first screen
-- The Mempool tab keeps its two columns down to 900px (it stacked from 1100, which put a 1093px window on one long column); The Mempool tab: already one screen after the global packing, so the room over goes to its time-series charts, a fifth taller, and the note cards under them sit tight to their line
-- The Kiosk packs the same way: tighter heads and gaps, the price panel's padding trimmed, the Block flow strip a quarter shorter with the tight flow, and the full-screen button in that strip's head instead of floating over its cards
-- The Mining tab's pie and year chart size themselves to the window's height, so the flow, the two figure cards and the two chart cards with their View more links fit one screen from about 900px tall
-- The Mining tab follows mempool.space's mining dashboard layout: two columns in its order (reward stats, difficulty adjustment; pools, hashrate; recent blocks, adjustments) under the block flow, our own panels beneath, and **View more »** on four cards opening that card full screen, with the whole week of pools as a table, the year's chart large, the whole attributed window of blocks and a year of adjustments
-- Every tab packs the same way: the card padding and heading spacing that Mining, Overview and Block space got are the default now, and a short card beside a tall one keeps its own height instead of being stretched to match (Chain & Sync's drill-down card had a thousand pixels of nothing under its input; Node & RPC's poll cadence and connection cards hundreds)
-- Block space packs the same way: the card tighter and the board sized so the whole page, note included, fits the viewport without a scroll
-- The Mining tab's packages table no longer bleeds into the neighbouring card at a middling window width: a table wider than its stack scrolls inside its card, and the three stacks become two below 1400px, where each would be under 450px
-- Overview gets the same packing: the block flow card a quarter shorter, cards and headings tighter, and the Block space board capped to the viewport (it set the whole right column's height and stretched Last blocks and the events to match), so the events are on the first screen
-- The Mining tab's block flow card is a fifth shorter (no dead height under the blocks: the legend row goes, the paddings tighten) and the page's cards and figures pack tighter; the reward window is exactly 144 blocks
-- The Mining tab at a narrow window: the block flow spans the width at every size and is thinner (narrower cards, the being-built card's badge and queue lines left to the packages panel), and the pool pie sizes itself from its measured labels — shorter names, then no share figures — so no name is cut at the card's edge
-- The Mining tab fits one screen: Block flow across the top, then three stacks (the figures and the packages; the pool pie and the feerate landscape; the year chart, the adjustments, the window's pools and the attribution). The Mempool space viewer left this page — it is on Overview, Block space and Mempool — and with it the full-pool poll the page used to ask for
-- The Mining tab's pool chart is a labelled pie: every pool named beside its slice and joined to it by a leader in the slice's colour, the small ones stacked, slices under half a percent gathered as "Other"
-- The Mining tab's reward stats carry dollar figures while market polling is on, from a new `/api/price` that answers the cached spot price and never starts the exchange polling itself
-- **The Mining tab has the network row**: reward stats over the last 144 blocks, the difficulty period (blocks remaining, the estimated and the previous change, the next halving), a week of pools as a donut with luck and counts, a year of hashrate with the difficulty's steps, and the last twelve adjustments as a table — every figure from this node alone (`server/collect/network.js`: getblockstats for the reward window, block headers for the periods and a daily sample, the week's coinbases read in the background)
-- **HTTPS by default.** Every listener serves HTTPS; with no certificate named, the first start makes the monitor its own self-signed one under `<data>/tls/` — written without dependencies (`server/tls/selfsigned.js`, ECDSA P-256), naming the bound hosts, this machine's addresses and hostname — and remakes it near expiry or when a bound address is missing from it. `blockyard tls` remakes it by hand (`--san` to add names, `--print` to export it). Your own certificate still replaces it; `BLOCKYARD_TLS=0` serves plain HTTP behind a proxy. The installer's summary and port probe know both schemes.
-- The shareware game packages live under `games/`: DOOM's files moved from `doom_dos/` at the repository root to `games/doom_dos/`
 
-### Added
-- **Wolfenstein 3D, first of the DOS Diversions.** The shareware `WOLF3D.EXE` v1.4 and its `.WL1`
-  files from `games/wolf3d_dos/`, unmodified, on the same emulated PC -- which now also runs a
-  16-bit real-mode DOS program: real mode in the CPU (segments times sixteen, a wrapping SP, 16-bit
-  string instructions and interrupt frames), a plain MZ loader with its relocations, DOS's memory
-  allocator, the interrupt vector table, and VGA write mode 1. Menus, demos, AdLib music, digitised
-  sound effects, savegames and high scores kept in the browser, at its full 70 frames a second. It
-  sits before DOOM and Quake in the Diversions menu.
-- **Quake, the fifth Diversion.** The shareware `QUAKE.EXE` v1.06 and `PAK0.PAK` from
-  `games/quake_dos/`, unmodified, on the same emulated PC as DOOM -- which now also plays the go32
-  stub and CWSDPMI for a DJGPP program: segment bases and 16-bit code in the CPU, a COFF loader, a
-  directory tree, DOS's system file table, the BIOS tick count. Demos, menus, savegames, sound
-  effects through the Sound Blaster, and the order screen on quit; about thirty frames a second
-  (`timedemo demo1`: 28.9). W A S D and mouse look on the first start, Quake's own bindings after.
-  The game files are served at `/games/<game>/<path>` (`server/http/games.js`), for DOOM too.
+## [0.1.0] — 2026-09-16
 
-### Changed
-- **The emulated PC is much faster.** Each instruction is decoded once and cached rather than
-  decoded every time it runs (writes into cached code clear what they overlap, because both games
-  patch their own drawing code), the arithmetic and the x87 forms Quake runs most have handlers of
-  their own, and memory addresses are formed inline: Quake 77 -> about 141 million instructions a
-  second, and its `timedemo demo1` from 29.7 fps to over 50. **Quake starts with a smaller view**
-  (`viewsize 80`); **−** and **=** change it and Quake keeps the choice. In the browser Quake plays at
-  40-50 frames a second.
+The first minor release, two days after the initial 0.0.9, and everything since it in one place:
+the 0.0.10 that was prepared on 2026-09-15 was never published, and its changes ship here. Four
+things shaped it. The **first outside review** of 0.0.9 on bitcointalk, which called out a monitor
+that bound every interface with no sign-in: 0.1.0 ships hardened — this machine only, sign-in on,
+HTTPS with a certificate it makes itself, and no outbound connection at all until the exchange
+feed is switched on. A day of **use on a laptop screen**, which found every tab a scroll: every
+page now packs to one screen at 1093×945, and the Mining tab follows mempool.space's dashboard
+with its **View more** panels. **Appearance**: the layout's colours are a setting — light or
+dark, five themes, or nine colours of your own. And the **DOS Diversions**: Wolfenstein 3D, DOOM
+and Quake, unmodified shareware on a PC emulated in the browser, written here with no
+dependencies, because "can it run DOOM?" deserved a straight answer. 944 tests, from 862.
 
-## [0.0.10] — 2026-09-15
-
-A point release, the day after 0.0.9, shaped by the first outside review of it on bitcointalk: the
-monitor now ships hardened -- bound to this machine, sign-in on, and no outbound connection at all
-until the exchange feed is switched on. The rest is the price board's effects, a Kiosk that is never
-whited out, a DOOM answer for the doubters, and the fixes of a day's use.
+Upgrading from 0.0.9: [docs/INSTALL.md §11](docs/INSTALL.md#11-updating) — the first start after
+the update serves HTTPS, creates the `admin` account and prints its password once.
 
 ### Security
-- **Hardened defaults** (after the first outside review of 0.0.9): the monitor now binds `127.0.0.1` and requires sign-in out of the box — the first start creates the `admin` account and prints its password once (or takes `BLOCKYARD_ADMIN_PASSWORD`). Reach it from elsewhere over an SSH tunnel, or bind a LAN address with `BLOCKYARD_BIND` / `server.hosts`; open read-only access is a choice (`BLOCKYARD_AUTH=0`), announced at boot. The boot banner says how to reach a loopback-only monitor. Existing installs keep whatever `config/local.json` says.
-- **Market polling is off by default** — a new checkbox, **Display settings → Markets & Price → Enable market polling**, shared by every screen. A fresh install makes no outbound connection but to the node: the Markets and Kiosk tabs say that polling is off and where the switch is, Overview's price line stays hidden and the explorer shows no dollar figures. Ticking it takes effect at once; unticking parks the feed at once. `BLOCKYARD_MARKETS=0` still removes the feed so that the checkbox cannot turn it on. Existing installs tick the box once.
 
-### Changed
-- The fireworks are off by default on both boards, kept for special occasions: tick the switch to put them in the rotation
-- The black hole is a Markets effect only again: it hovered over Block space for a day and its cubes never came home cleanly enough, so it was taken off that board's list
-- A held pool refresh waits a moment and a half after an idle effect ends, with the board whole and still, instead of lifting off on the effect's last frame
-- Whatever a head pulls is painted last, nearest the head on top, so a pulled candle never cuts through the neighbours it passes over
-- The black hole finishes its crossing before it lets go, so a candle is released by the release curve alone and never dropped in a few frames as the hole moves out of reach of it
-- The black hole lets go evenly: its hold used to fall with its shrinking reach, which released the outer candles gently and the ones right under it all at once in the last frames (they popped home full size); the reach now holds through the release and the pull and the scale themselves fade over the last fifth, so every candle glides home and grows back smoothly, arriving at zero speed by 0.97 of the run rather than a step on the last frame
-### Changed
-- On Block space the black hole hovers twice as high off the grid: double its old height over the tallest cube, and the cubes beneath still rise to meet it in orbit
-- The black hole crosses the board: on Markets it opens a fifth of the way in on one side and runs a straight line through the chart to a fifth from the other, from one height to another, so the price line is seen bending round it as it passes and the candles' orbits ride along at a quarter of the old speed
-- The scanner's cone is dimmer on both boards, a little over half of what it was
-- The supernova's violet stage comes sooner and heavier: the debris turns purple patch by patch from a tenth of the run, a violet heart and a wider violet cloud rise behind it, so the nebula is prominently purple as the pulsar starts to blink and holds its weight until four fifths of the run; the white plumes are drawn on a half-resolution layer to keep the frame cheap
-- The supernova's opening explosion is a white-hot flash, held for a moment and washing far out, that throws a hundred and twenty-eight plumes of white gas in every direction, each flying and growing on its own out to nine star radii and drifting on until the effect is nearly done
+- **Hardened defaults** (after the first outside review of 0.0.9): the monitor binds `127.0.0.1`
+  and requires sign-in out of the box — the first start creates the `admin` account and prints its
+  password once (or takes `BLOCKYARD_ADMIN_PASSWORD`). Reach it from elsewhere over an SSH tunnel,
+  or bind a LAN address with `BLOCKYARD_BIND` / `server.hosts`; open read-only access is a choice
+  (`BLOCKYARD_AUTH=0`), announced at boot. The boot banner says how to reach a loopback-only
+  monitor. Existing installs keep whatever `config/local.json` says.
+- **HTTPS by default.** Every listener serves HTTPS; with no certificate named, the first start
+  makes the monitor its own self-signed one under `<data>/tls/` — written without dependencies
+  (`server/tls/selfsigned.js`: a v3 X.509 certificate assembled in DER and signed with ECDSA P-256
+  over SHA-256), naming the bound hosts, this machine's addresses and hostname — and remakes it
+  near expiry or when a bound address is missing from it. `blockyard tls` remakes it by hand
+  (`--san` to add names, `--print` to export it). Your own certificate still replaces it;
+  `BLOCKYARD_TLS=0` serves plain HTTP behind a proxy. The installer's summary and port probe know
+  both schemes.
+- **The installer asks twice before a non-loopback bind.** A LAN or wildcard address is written
+  only when the operator types it and confirms it; the default it offers is `127.0.0.1`.
+- **Market polling is off by default** — a new checkbox, **Display settings → Markets & Price →
+  Enable market polling**, shared by every screen. A fresh install makes no outbound connection
+  but to the node: the Markets and Kiosk tabs say that polling is off and where the switch is,
+  Overview's price line stays hidden and the explorer shows no dollar figures. Ticking it takes
+  effect at once; unticking parks the feed at once. `BLOCKYARD_MARKETS=0` still removes the feed
+  so that the checkbox cannot turn it on. Existing installs tick the box once.
 
-### Added
+### Appearance
 
-- **DOOM, the fourth Diversion.** The shareware `DOOM.EXE` v1.9 and `DOOM1.WAD` from `doom_dos/`,
-  unmodified, running on a PC emulated in the browser with no dependencies: an i386 interpreter
-  (`public/js/x86.js`), the DOS/4GW machine around it — DOS, DPMI, BIOS, PIC, timer, keyboard and a
-  planar VGA (`dospc.js`) — and a Sound Blaster Pro 2 with an OPL3 for the effects and the music
-  (`soundcard.js`), in a worker (`doomworker.js`). Demos, menus, savegames and ENDOOM all work; 35
-  frames a second at about 95 million emulated instructions a second. Mouse capture, WASD keys by
-  default (the switch rebinds the running game at once, no restart), smoothing, full screen; pauses when you look away; savegames and DOOM's config stay in
-  the browser. The server hands out the game files at `/doom/NAME` (`server/http/doom.js`).
+- **A first tab in Display settings for the colours of the layout.** A theme mode — Light, Dark,
+  or System, which follows the operating system and changes with it — and theme cards with swatch
+  strips of the face the mode picks: **BlockYard** (the shipped look, the default; its dark face
+  is value for value what the monitor drew before), **Mono** (clean grayscale), **Nous** (GitHub's
+  chrome with a Nous blue accent), **GitHub** (Light Default and Dark Default) and **Catppuccin**
+  (Latte and Mocha). **Custom** is nine colour pickers — page, panels, text, muted text, accent,
+  lines, good, warning, bad — with the rest of a face derived from them (a raised panel, the
+  softer rules, the fainter text, the darker accent of a pressed button), and whether Custom is
+  light or dark read off its page colour; **customise <theme>** copies the theme on screen into
+  the pickers so a custom scheme starts from a look. Saved on the server with the other settings,
+  so every screen of the monitor draws the same; the sign-in page draws in the theme the browser
+  last saw.
+- The theme is applied through the CSSOM (the page's custom properties rewritten on `<html>`),
+  which the content-security policy permits where a style attribute is refused. The charts' axis
+  text, grid lines and tooltips, the order-book depth chart's two sides and the market charts'
+  grounds follow the theme — they were literals of the dark look, and a light theme would have
+  drawn grey-on-grey. The 3D boards stay space, and the Explorer's block and transaction pages
+  keep their own dark cards.
 
+### Mining
 
-- **The energy pulse is heat, not blue, and its head is a crackling ball of plasma.** Behind the
-  head the tube goes white-hot through hot gold and cools back to the wire under a mist of
-  gradient puffs (no edges, so no circles); the head is a gradient sphere breathing on two sines,
-  three warm wisps of nebula round it, filaments of discharge over its surface re-rolled on a
-  60 ms beat, and every so often it spits sparks that arc under gravity and fade; the pipe swells
-  round it at twice the bulge effect's full size, and nowhere else — the whole-line swell that jumped
-  fat at the start and thin at the end is gone. A haze of three ghost copies of the charged
-  stretch shimmers off the wire, a soft warm light lies over it, and the candles under the head
-  glow. Nothing in the pulse is blue any more, and a test holds it so.
-- **Two new Markets effects on the price line: Breathe** (three slow swells from the plain wire
-  to the pulse's white heat and back) and **Light saber** (the line ignites from its left end,
-  blue, green, red or purple by the run, hums with a breathing glow and a shimmering core, spits
-  sparks, and retracts to the hilt). Thirty-two effects; the Markets list is fourteen.
-- **Ball lightning is a light source.** The ball throws a wide hazy white light on everything it
-  passes and every strike lights where it lands, on the candles and on the board; on Markets it
-  throws a fifth fewer arcs again and a quarter fewer chains, second and third.
-- **The Markets board keeps its price fit across refreshes.** Every refresh re-fitted the range
-  from the new candles, so the whole chart re-scaled unanimated — and a refresh that arrived
-  during a long effect was parked until it ended, so the snap landed exactly as the black hole
-  let go. The last fit is kept while the data still sits inside it and fills at least two-thirds
-  of it; only data that leaves the range, or shrinks well inside it, re-fits.
-- **The searchlight and the tractor beam never follow each other**: they fly the same saucer, so
-  they share the no-repeat window.
-- The supernova's shockwave throws the candles a tenth of what it first did (the shaking is
-  nearly gone), and its opening white emission has its presence back now that the fills add up
-  honestly.
-- **A Kiosk test suite** (`test/kiosk.test.js`): every Markets and Block space effect plays
-  through the frame loop on a Kiosk-sized panel; the supernova, the black hole and the fireworks
-  are bounded by the board's width (`boundedRadius`) so no panel is covered; and `softStops`'
-  nested discs are checked to add up to the stop's opacity, never to solid.
-- **The supernova's gas is smooth**: more and larger blobs at a lower weight, barely stretched, so
-  they melt into one another rather than reading as radial streaks.
-- **Layered soft fills add up correctly.** `softStops` (the banding-free replacement for radial
-  gradients) painted up to 220 nested discs each at a stop's whole alpha, so at the centre they
-  stacked to solid — the supernova's pool and glow were opaque discs, and on the Kiosk's panel
-  "far too much solid white". Each disc now carries only the increment, so the cumulative opacity
-  at every radius is exactly the stop's; measured on the Kiosk, the supernova's peak opacity fell
-  from about 0.9 to about 0.45 and the chart shows through it.
-- The black hole a third smaller again (2.3 units, at most 4.7% of the board); the fireworks'
-  pinwheel shell is gone (sparks fly straight).
-- **The scan line is a light curtain.** A vertical sheet of light standing on the board, floor
-  to the chart's top, sweeping across: a hard white core with soft cyan faces, raster lines
-  rippling down it, a bar of light it hangs from with glints at the ends, a glowing foot with a
-  green-cyan phosphor tail, motes drifting in the beam, sparks from the foot, a haze in its
-  thickness; the price line flares white where it crosses. 6 s, from 4.2.
-- **X-ray**, a new effect on both boards: a front sweeps the board and everything behind it goes
-  x-ray — bodies dimmed to glass, every edge lit, a raster of thin lines across each face — then
-  develops back to solid a few units on. Thirty-four effects; sixteen on Markets.
-- **Black hole**, a new Markets effect (modelled on NASA's visualisation, svs.gsfc.nasa.gov/14576):
-  a point of darkness opens on the price line and grows to a horizon nearly five units across over 26 s; the line bends round it as
-  through a lens (`lensPoints`, the Einstein-radius push), the candles it reaches stretch and lean
-  toward it (their faces sheared toward the hole, the tops dragged hardest) and then shrink away
-  into it (a head that scales, by reach — smooth, never a blink), and an accretion disk seen nearly edge-on, as in the Interstellar view — a thin
-  continuous band white-yellow at its inner edge through orange to a dark red rim crossing in
-  front of the shadow, five hundred thin fibres spiralling inward over it sheared by the
-  Keplerian flow (a few in the candles' green and red) — spirals in brighter on the side coming
-  toward you, its far side lensed into a great arch over the top of the shadow and a smaller one beneath — the far half of the same disk, every point keeping its place along the disk and raised by an amount that grows with its radius, so the arch comes down onto the flat band at both sides — with the disk's gradient body and fibres,
-  a photon ring hugging the horizon, starlight bent into arcs; then it shrinks away, the line
-  straightens and the candles come back. Thirty-three effects; fifteen on Markets.
-- **The solar flare is Supernova (renamed), modelled on NASA Goddard's animation** (svs.gsfc.nasa.gov/20413):
-  the star is a glint — halo, hot core, diffraction spikes — growing and blue-shifting from warm white to blue-white as it goes (`starGlint`, a new renderer); the whole picture whites out and comes back, with a
-  no flare (its turning rays read as glints and went); the debris is a **volume of gas**
-  (`gasCloud`: clumped, streaked, lumpy blobs — ellipses stretched along their own radial lines,
-  gathered in clumps, on a sphere with lobes and bays — carried outward by the expansion in
-  proportion to their own radius, the front ones paler, boiling slowly on the clock, in three
-  layers as the reference shows: a blue cloud out in front expanding fastest and thinning first,
-  a white one behind it into which violet grows patch by patch on each blob's own schedule, and a
-  deep violet heart showing as the others thin — no lines anywhere), a soft shock band at its
-  leading edge throwing the candles it crosses and shaking them as it approaches; and as the
-  cloud dims a **pulsar** appears — a point beating seven times a second at the centre, two thin
-  beams sweeping round, inside a pulsar-wind nebula of the same gas that grows. 16 s (24 on
-  Markets), the cloud dispersing slowly. First cut: It only ever lit a cube and its neighbours, which on a chart
-  of candles was one candle blinking. Now, on both boards over the same lit tile: the star swells
-  white-hot with crackle rising over it, blows out in a white flash and a lens flare the width of
-  the chart, a shockwave ring races outward and thins, seventy-two filaments of plasma are flung
-  on every side, a ring nebula (brighter at the rim than the middle) expands for the rest of the
-  run and cools gold → red → violet, and the star is left as a white dwarf fading. Its light on
-  the candles cools with it and reaches three times as far on the price board. Then made
-  violent: 220 filaments of ejecta in two waves with forty fragments of glowing debris tumbling
-  out under gravity, two shock fronts, a bigger and longer white-out, the remnant holding at full
-  for most of its life before it fades, and **the shockwave throws every candle it crosses** —
-  lifted hard and lit white as the front passes, shaking themselves out after. 12 s (18 on
-  Markets), from 3.6.
-- **The pulse's bulge sits on the head.** It was placed a share of the line's *length* along
-  while the head moves by candle *index*, so wherever the hops were unequal the swell lagged the
-  ball. The curve now answers "how far along at this point", and the two coincide.
-- A frame-loop test plays every Markets effect on a candle board; the supernova's first cut
-  called a helper it had not imported, the first frame threw, and the board froze on it — nothing
-  triggered a field effect on a price board before.
-- **Fireworks are a display, on both boards.** The effect only ever lit tiles — the ring of lit
-  cubes was the picture on Block space, and on eight rows of candles it was a candle or two
-  blinking. Now every shell is drawn: the rocket climbs an arc from the floor off to one side, a
-  comet with a tail and exhaust sparks; a white flash and a shockwave ring at the burst; a shell
-  of one of four kinds by turn — peony, chrysanthemum (long glittering trails that crackle white),
-  willow (heavy droop, long trails), ring — sixty to ninety sparks each a curved trail, slowing,
-  falling, twinkling; and a nebula of smoke that leaves the burst outward, drifting up, in the
-  shell's colour gone grey, fading as it disperses and lingering after the sparks. Seven shell
-  kinds by turn — the four above plus crossette (each spark splits four ways), strobe (the
-  sparks blink in unison) — a lens flare at every burst (an
-  anamorphic streak, four turning rays, a run of ghosts toward the picture's middle), glitter rain
-  after the shell, and the schedule fits the run with a fade at its end, so nothing is ever cut.
-  Up to **ten shells on Markets** over 14 s (five on Block space), launching at their own moments
-  so several are up at once, of every size, at every height of the picture; each shell lights
-  the candles under it and a wide pool round it **in its own colour** (one schedule serves the
-  drawing and the lighting); and the dissipation is a volume of gas (`gasCloud`, the supernova's
-  renderer: sixty soft blobs on a sphere carried out from the burst, drifting up, the shell's
-  colour going grey), embers falling and flickering, ash sinking after.
-- **Ball lightning on Markets:** a quarter of its original size, a third of the block board's
-  speed (27.5 s), throws half as many arcs, one strike in five blooms a lens flare, rides
-  up and down across most of the chart's height, throws nothing once off the board so the run
-  ends with it long gone, and every strike is a flash — the halo blazes, a white flash blooms
-  where it lands, a bead of light runs the channel, sparks spray and fall, two or three branches.
-- **Ball lightning's arcs are discharges, not zigzags.** Each bolt is built by midpoint
-  displacement (the channel split and thrown to one side, four levels deep, the throw halving each
-  level) with one or two thinner branches leaving it partway, its shape held for 60 ms at a time
-  so it flickers rather than shivers, and its strokes sized to the ball's own radius — so the
-  half-size ball on Markets throws half-width bolts. The first cut was nine points thrown 18% of
-  the length to either side, re-rolled every frame, in strokes sized to the grid unit, which on
-  the price board was a fat zigzag flailing at 60 Hz.
+- **The Mining tab has the network row**: reward stats over the last 144 blocks, the difficulty
+  period (blocks remaining, the estimated and the previous change, the next halving), a week of
+  pools with luck and counts, a year of hashrate with the difficulty's steps, and the last twelve
+  adjustments as a table — every figure from this node alone (`server/collect/network.js`:
+  `getblockstats` for the reward window, block headers for the periods and a daily sample, the
+  week's coinbases read in the background at the lowest RPC priority).
+- **mempool.space's layout**: two columns in its order (reward stats, difficulty adjustment;
+  pools, hashrate; recent blocks, adjustments) under the block flow, our own panels beneath, and
+  **View more »** on four cards opening that card full screen — the whole week of pools as a
+  table, the year's chart large, the whole attributed window of blocks, a year of adjustments.
+- **The pool chart is a labelled pie**: every pool named beside its slice and joined to it by a
+  leader in the slice's colour, the small ones stacked, slices under half a percent gathered as
+  "Other" — and the "Other" threshold rises until every label fits the card, so no name runs off
+  the bottom at any window height. The pie and the year chart size themselves to the window.
+- **Dollar figures** on the reward stats while market polling is on, from a new `/api/price` that
+  answers the cached spot price and never starts the exchange polling itself.
+- The Mempool space viewer left this page — it is on Overview, Block space and Mempool — and with
+  it the full-pool poll the page used to ask for. The reward window is exactly 144 blocks.
+- At a narrow window the block flow spans the width and is thinner, and the packages table scrolls
+  inside its card instead of bleeding into the neighbour; the three stacks become two below 1400px.
+- **A streak of stale drops of the full-pool poll is one story**: one warning event when it
+  starts, a counter on Node & RPC while it lasts, one event when the poll answers again with the
+  count and the span. On a day the node answered slowly for thirteen hours, each drop had been its
+  own event, 188 of the feed's 200 rows.
+
+### Every tab on one screen
+
+Measured at 1093×945 and 1600×1000 with a dead-height probe, page by page:
+
+- **Globally**: tighter card padding and heading spacing, and a short card beside a tall one keeps
+  its own height instead of being stretched to match (Chain & Sync's drill-down card had a
+  thousand pixels of nothing under its input; Node & RPC's poll cadence and connection cards
+  hundreds).
+- **Overview**: the block flow card a quarter shorter, and the Block space board capped to the
+  viewport (it set the whole right column's height), so the events are on the first screen.
+- **Block space**: the card tighter and the board sized so the whole page, note included, fits the
+  viewport without a scroll.
+- **Markets**: the board takes what the window leaves, and the exchange table and the order-book
+  depth sit side by side beneath it (under 1400px the table drops the pair, 24 h range and volume
+  columns; all still in the summary line and on the Kiosk) instead of the depth chart starting a
+  thousand pixels down.
+- **Kiosk**: tighter heads and gaps, the price panel's padding trimmed, the Block flow strip a
+  quarter shorter, and the full-screen button in that strip's head instead of floating over its
+  cards.
+- **Mempool**: keeps its two columns down to 900px (it stacked from 1100), and the room over goes
+  to its time-series charts, a fifth taller.
+- **Explorer**: a smaller title, the block strip's padding and scrollbar band trimmed, tighter
+  table rows and the table reaching the window's bottom edge — three more blocks on the first
+  screen.
+- **Peers**: a long onion or i2p address no longer makes the whole page scroll sideways (it clips
+  with an ellipsis and carries the full text as its title; a wide table scrolls inside its card),
+  rows and service badges tighter, the top strip's cards at their own heights.
+- **Network**: Throughput beside a stack of Upload and Traffic accounting, the throughput chart
+  taller, and the sources table taking the rest of the window.
+- **Events**: the feed reaches the window's bottom edge (it stopped a hundred pixels short).
+- **Chain & Sync**: one-line notes under the block-size and tip charts (the longer sentences are
+  their tooltips), the transaction-rate figures as one wrapping line, values that keep to their
+  line, and a shorter uptime label — the first three rows sit level and the drill-down and indexes
+  reach the first screen.
+- **Node & RPC**: two stacks (RPC etiquette with its figures in two columns, Data quality and Node
+  connection; Poll cadence, self-telemetry beside the log tail, Panel sources and the RPC
+  console) instead of grid rows that left holes beside the short cards.
+- **Admin**: two stacks (Users over the audit log; Node actions over Change own password, whose
+  two fields share a row). **Sign-in** and **404**: the same tighter card.
+- **Display settings**: rows, note and groups tighter, the sheet a little wider so hints wrap
+  less, and on the two effects tabs the switches run two across with each hint as the row's
+  tooltip — the Space effects tab is under half the scrolling it was. The price line on Overview
+  switch sits directly under the polling switch it depends on.
+- **About**: the sky runs to the bottom edge with the credit line at its foot, and the GitHub
+  link and the tip pill share a row.
+- **The Diversions pages take the window**: the wells of Tetrust, Blockout and Blockanoid grow to
+  the window's height (they stopped at 600px), and the DOS screen is always 4:3 and as large as
+  the window allows — at a 1093px window the 320×200 picture had been drawn squashed into a
+  761×720 box.
+
+### DOS Diversions
+
+- **DOOM.** The shareware `DOOM.EXE` v1.9 and `DOOM1.WAD` from `games/doom_dos/`, unmodified,
+  running on a PC emulated in the browser with no dependencies: an i386 interpreter
+  (`public/js/x86.js`), the DOS/4GW machine around it — DOS, DPMI, BIOS, PIC, timer, keyboard and
+  a planar VGA (`dospc.js`) — and a Sound Blaster Pro 2 with an OPL3 for the effects and the music
+  (`soundcard.js`), in a worker. Demos, menus, savegames and ENDOOM all work; 35 frames a second.
+  Mouse capture, WASD keys by default (the switch rebinds the running game at once), smoothing,
+  full screen; pauses when you look away; savegames and DOOM's config stay in the browser.
+- **Wolfenstein 3D.** The shareware `WOLF3D.EXE` v1.4 and its `.WL1` files from
+  `games/wolf3d_dos/`, unmodified, on the same emulated PC — which now also runs a 16-bit real-mode
+  DOS program: real mode in the CPU (segments times sixteen, a wrapping SP, 16-bit string
+  instructions and interrupt frames), a plain MZ loader with its relocations, DOS's memory
+  allocator, the interrupt vector table, and VGA write mode 1. Menus, demos, AdLib music,
+  digitised sound effects, savegames and high scores kept in the browser, at its full 70 frames a
+  second. It sits before DOOM and Quake in the Diversions menu.
+- **Quake.** The shareware `QUAKE.EXE` v1.06 and `PAK0.PAK` from `games/quake_dos/`, unmodified,
+  on the same emulated PC — which now also plays the go32 stub and CWSDPMI for a DJGPP program:
+  segment bases and 16-bit code in the CPU, a COFF loader, a directory tree, DOS's system file
+  table, the BIOS tick count. Demos, menus, savegames, sound effects through the Sound Blaster,
+  and the order screen on quit. W A S D and mouse look on the first start, Quake's own bindings
+  after. Quake starts with a smaller view (`viewsize 80`); **−** and **=** change it and Quake
+  keeps the choice.
+- **The emulated PC is fast.** Each instruction is decoded once and cached rather than decoded
+  every time it runs (writes into cached code clear what they overlap, because both games patch
+  their own drawing code), the arithmetic and the x87 forms Quake runs most have handlers of their
+  own, and memory addresses are formed inline: Quake from 77 to about 141 million instructions a
+  second, its `timedemo demo1` from 29.7 fps to over 50; in the browser Quake plays at 40–50
+  frames a second.
+- **A way out of full screen**: an **exit full screen** button in the top corner while full
+  screen, and holding **Esc** for a second (a tap of Esc stays the game's menu, which is what the
+  keyboard lock is for); leaving unlocks the keyboard and releases the mouse.
+- The game files are served at `/games/<game>/<path>` (`server/http/games.js`); the shareware
+  packages live under `games/` (DOOM's moved from `doom_dos/` at the repository root).
+
+### Markets and the effects
+
+- **Black hole**, a Markets effect (modelled on NASA's visualisation, svs.gsfc.nasa.gov/14576): a
+  point of darkness opens and grows to a horizon over 26 s, the price line bends round it as
+  through a lens (the Einstein-radius push), the candles it reaches stretch and lean toward it and
+  shrink away into it, and an accretion disk seen nearly edge-on — a thin band white-yellow at its
+  inner edge through orange to a dark red rim, five hundred fibres spiralling inward sheared by
+  the Keplerian flow, its far side lensed into an arch over the shadow and a smaller one beneath,
+  a photon ring hugging the horizon, starlight bent into arcs. **It crosses the board**: it opens
+  a fifth of the way in on one side and runs a straight line through the chart to a fifth from the
+  other, from one height to another, so the line is seen bending round it as it passes; the
+  candles' orbits ride along at a quarter of the first cut's speed. It finishes its crossing before
+  it lets go, and lets go evenly, every candle gliding home and growing back smoothly. It hovered
+  over Block space for a day and its cubes never came home cleanly enough, so it is a Markets
+  effect only.
+- **Supernova** (the solar flare, renamed and remade on NASA Goddard's animation,
+  svs.gsfc.nasa.gov/20413): the star is a glint — halo, hot core, diffraction spikes — growing and
+  blue-shifting as it goes; the opening explosion is a **white-hot flash**, held and washing far
+  out, that throws **a hundred and twenty-eight plumes of white gas** in every direction, each
+  flying and growing on its own out to nine star radii and drifting on until the effect is nearly
+  done (drawn on a half-resolution layer to keep the frame cheap); the debris is a volume of gas in
+  three layers — a blue cloud out in front, a white one behind it into which **violet grows patch
+  by patch from a tenth of the run**, and a deep violet heart — with a soft shock band throwing
+  and shaking the candles it crosses; and as the cloud dims a **pulsar** beats seven times a
+  second at the centre, two thin beams sweeping round, inside a nebula of the same gas that holds
+  its violet weight until four fifths of the run. 16 s (24 on Markets).
+- **Fireworks are a display**, on both boards: every shell drawn — the rocket's arc, a white flash
+  and a shockwave ring at the burst, seven shell kinds by turn (peony, chrysanthemum, willow, ring,
+  crossette, strobe and more), sixty to ninety sparks each a curved trail, a lens flare at every
+  burst, glitter rain, and a nebula of smoke that drifts up and lingers; up to ten shells on
+  Markets over 14 s (five on Block space), each lighting the candles under it in its own colour.
+  **Off by default** on both boards, kept for special occasions.
+- **X-ray**, on both boards: a front sweeps the board and everything behind it goes x-ray — bodies
+  dimmed to glass, every edge lit, a raster of thin lines across each face — then develops back.
+- **Breathe** and **Light saber**, on the price line: three slow swells from the plain wire to
+  white heat and back; and the line igniting from its left end, blue, green, red or purple by the
+  run, humming with a breathing glow, spitting sparks, retracting to the hilt.
+- **The energy pulse is heat, not blue, and its head is a crackling ball of plasma**; **the scan
+  line is a light curtain** standing on the board floor to the chart's top; **ball lightning is a
+  light source**, its arcs discharges built by midpoint displacement rather than zigzags, a quarter
+  of its size and a third of its speed on Markets; the scanner's cone is dimmer on both boards.
+- **The Markets board keeps its price fit across refreshes**: the last fit is kept while the data
+  still sits inside it and fills at least two-thirds of it, so a refresh no longer re-scales the
+  whole chart unanimated. Whatever a head pulls is painted last, nearest the head on top; a held
+  pool refresh waits a moment and a half after an idle effect ends, with the board whole and still.
+- **Layered soft fills add up correctly** (`softStops`): each nested disc carries only its
+  increment, so a stop's cumulative opacity is exactly the stop's; measured on the Kiosk, the
+  supernova's peak opacity fell from about 0.9 to about 0.45 and the chart shows through it.
+- **The no-repeat window holds from the first pick** on both boards: every effect plays once
+  before any repeats (a negative slice index had let one come round at the tenth pick). The
+  searchlight and the tractor beam, which fly the same saucer, share the window.
+- **A Kiosk test suite** (`test/kiosk.test.js`): every Markets and Block space effect plays through
+  the frame loop on a Kiosk-sized panel; the supernova, the black hole and the fireworks are
+  bounded by the board's width so no panel is covered.
 
 ### Fixed
 
 - **The donation QR shows on Safari.** It was an inline SVG of 800 module rects, and Safari on
-  the first Mac install painted its white ground and none of the rects. It is a PNG now
-  (`public/donate-qr.png`, from the same generator, checked to decode to the address), painted
+  the first Mac install painted its white ground and none of the rects. It is a PNG now, painted
   the same everywhere.
-- **A dead index worker fails the build instead of hanging it.** The worker pool listened for a
-  reply only, so a worker killed outright (out of memory, with four beside the node) left its job
-  unanswered and the build sat at "scan 5,720 of 5,721, about 1 s left" for an hour and a half on
-  the first Mac install. The run now rejects the moment a worker exits or throws, naming the job
-  and the fix (fewer `addressIndexWorkers`); the progress flag is rewritten every 30 s and says
-  *no progress for N min* when nothing has moved, and a pause shows the moment it begins.
-- **The no-repeat window holds from the first pick.** It was read with a slice whose index went
-  negative while fewer effects had played than the window is wide, and a negative index counts
-  from the end: nine plays under a window of eleven blocked only the last two, so an effect could
-  come round again before every other had played — right after the page opened, when anyone is
-  watching (measured on the Markets list: a repeat at the tenth pick). Every effect now plays
-  once before any repeats, from the first pick, on both boards.
+- **A dead index worker fails the build instead of hanging it.** A worker killed outright (out of
+  memory, with four beside the node) left its job unanswered and the build sat at "scan 5,720 of
+  5,721, about 1 s left" for an hour and a half on the first Mac install. The run now rejects the
+  moment a worker exits or throws, naming the job and the fix (fewer `addressIndexWorkers`); the
+  progress flag says *no progress for N min* when nothing has moved.
+- The 0.0.9 release notes' test count corrected (862, not 864).
+
+### Documentation
+
+- INSTALL, GETTING-STARTED, SECURITY, CONFIGURATION, API, TROUBLESHOOTING and the README describe
+  the hardened defaults, HTTPS and the polling switch; INSTALL §11 has the notes for updating a
+  0.0.9 install; the USER-GUIDE has the Appearance section, the Mining row and the packed layouts;
+  TROUBLESHOOTING explains a streak of stale pool-poll drops. Screenshots re-shot at 0.1.0, with a
+  Mining shot added. The announcement for the bitcointalk thread is in `docs/announcement/0.1.0/`.
 
 ## [0.0.9] — 2026-09-14
 

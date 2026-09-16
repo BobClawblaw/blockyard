@@ -241,8 +241,8 @@ real-time explorer data over RPC was a failed idea.
 
 `rpcUser` / `rpcPassword` are still accepted, for a node that authenticates with `rpcauth` rather
 than the cookie file (see [Configuration](CONFIGURATION.md#nodes)). The web UI's node-connection
-form takes no password on purpose -- taking one over an endpoint that is open by default is not
-something to add quietly -- so credentials go in `config/local.json`.
+form takes no password on purpose -- taking one over a web endpoint is not something to add
+quietly -- so credentials go in `config/local.json`.
 
 ##### `bitcoin.conf` settings worth having
 
@@ -285,17 +285,20 @@ npm run check       # every configured node: RPC, credentials, txindex, getblock
 npm start
 ```
 
-Watch the start-up lines. You should see the addresses it listens on, a line per node,
-and — because accounts are off by default — a warning that names who can read the monitor. If
-the node entry names an `addressIndex` directory with no index in it, `address index: building
-… with N workers -- the Overview shows the progress` follows, and the build runs on in the
-background (see [Building the address index](#building-the-address-index)). Then open
-<http://127.0.0.1:21000>.
+Watch the start-up lines. You should see `listening on https://127.0.0.1:21000` (the first start
+makes the monitor its own self-signed certificate under `data/tls/`; the browser warns once per
+address and remembers it), a line per node, and — because accounts are on by default — `created
+the first admin account (admin)` with a generated password **shown once** (set
+`BLOCKYARD_ADMIN_PASSWORD` before the first start to choose it; `blockyard user` changes it
+later). If the node entry names an `addressIndex` directory with no index in it, `address index:
+building … with N workers -- the Overview shows the progress` follows, and the build runs on in
+the background (see [Building the address index](#building-the-address-index)). Then open
+<https://127.0.0.1:21000> and sign in.
 
-Check it from the shell:
+Check it from the shell (`-k`, because the certificate is self-signed):
 
 ```bash
-curl -s http://127.0.0.1:21000/api/health
+curl -sk https://127.0.0.1:21000/api/health
 ```
 
 If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-shows-offline).
@@ -488,6 +491,23 @@ Your `config/local.json` and `data/` directory are untouched by updates. Read
 [CHANGELOG.md](../CHANGELOG.md) for anything that needs your attention. The browser picks
 up new front-end files on the next page load; the header shows a notice when the page you
 have open is older than the server.
+
+**Updating from 0.0.9.** The defaults hardened in 0.1.0, and a `config/local.json` written by
+0.0.9's installer does not name them, so the first start after the update behaves like a fresh
+install in three ways:
+
+- **HTTPS.** The monitor makes itself a self-signed certificate under `data/tls/` and serves
+  HTTPS on the same port; `http://…:21000` stops answering. Open `https://`, accept the
+  certificate once. Behind your own reverse proxy, set `BLOCKYARD_TLS=0` (§10).
+- **Sign-in.** Accounts are on. The first start creates the `admin` account and prints its
+  password **once** in the log (`journalctl -u blockyard` under systemd); set
+  `BLOCKYARD_ADMIN_PASSWORD` before that start to choose it. To keep the monitor open as before,
+  put `"auth": { "enabled": false }` in `config/local.json` or start with `BLOCKYARD_AUTH=0`.
+- **This machine only.** With no `server.host` in the config the bind is `127.0.0.1`. A
+  0.0.9 config written by the installer names the host it chose, so a LAN bind stays; if yours
+  does not, add `BLOCKYARD_BIND` or `server.hosts` (§7).
+- **Market polling is off** until someone ticks **Display settings → Markets & Price → Enable
+  market polling** — once, for every screen.
 
 ## 12. Uninstalling
 

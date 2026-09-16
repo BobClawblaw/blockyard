@@ -129,6 +129,8 @@ for (const [name, p, settle, height = null] of [
   // measures fine; this one is told what it is.
   ['kiosk', 'kiosk', 12000, 1000],
   ['explorer-home', 'explorer', 6000],
+  // the network row, the labelled pie and the year chart (2026-09-16); content-sized like the rest
+  ['mining', 'mining', 12000],
 ]) {
   if (!doing(name)) continue;
   try { await nav(p); done.push(await shoot(name, { settle, height })); } catch (e) { fail(name, e); }
@@ -240,6 +242,10 @@ if (doing('block-space-neon')) {
     await sleep(3000);
     await evl(`document.getElementById('btnSettings')?.click()`);
     await sleep(1200);
+    // THE BLOCK SPACE TAB FIRST (2026-09-16): the sheet opens on its first tab, Appearance since
+    // the themes arrived, and a tab's controls exist only while it is the open one.
+    await evl(`document.querySelector('[data-cfgtab="space"]')?.click()`);
+    await sleep(500);
     // space.neon lives in the Block space group; find its control by data-cfg.
     const on = await evl(`(() => {
       const el=document.querySelector('[data-cfg="space.neon"]');

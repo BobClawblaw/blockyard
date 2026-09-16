@@ -1,0 +1,156 @@
+[size=14pt][b][ANN] BlockYard 0.1.0 — a live monitor, 3D block-space viewer and block explorer for your own Bitcoin Core node. Zero dependencies. Zero telemetry. Hardened by default. 100% AI-written, human-directed.[/b][/size]
+
+[b]Repository:[/b] [url]https://github.com/BobClawblaw/blockyard[/url]
+[b]Release:[/b] [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.0[/url]
+[b]npm:[/b] [tt]npm install -g blockyard[/tt]
+[b]Licence:[/b] Apache-2.0
+
+[img width=800]IMAGE-URL-FOR:overview.jpg[/img]
+
+Two days ago we posted 0.0.9, the initial release. This is 0.1.0 — everything since, in one release, and the first one we would call the real starting point. The short version: it ships [b]hardened by default[/b], it makes [b]no outbound connection to anyone but your node[/b] until you say so, every page fits one screen, the layout's colours are yours to choose, the Mining tab is a proper dashboard, and yes, it runs DOOM. Also Wolfenstein 3D and Quake.
+
+[size=12pt][b]What it is[/b][/size]
+
+BlockYard is a self-hosted web app you point at [b]your own Bitcoin Core node[/b]. Open a browser and you get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a full block / transaction / address explorer with its own address index, exchange prices with order-book depth (opt-in), a mining dashboard, and a kiosk view for a wall screen. Every number on every page comes from your node — or, only if you switch it on, from a public exchange API.
+
+It is written in plain JavaScript on Node.js with [b]zero dependencies[/b]. Not "few": zero. [tt]package.json[/tt] has no [tt]dependencies[/tt] and no [tt]devDependencies[/tt]. No framework, no bundler, no CSS library, no chart library, no 3D library, no TLS library — the certificate generator is ours too — and no test framework beyond [tt]node:test[/tt]. There is no CDN in the browser app. [tt]npm install[/tt] installs nothing but BlockYard itself. The 944 unit tests run with [tt]npm test[/tt] and need nothing but Node.
+
+It is read-only toward your node by default. It never signs, never spends, never asks for a wallet.
+
+[size=12pt][b]Zero telemetry, and we mean it[/b][/size]
+
+The first review of 0.0.9 in this thread pointed out, correctly, that a monitor which binds every interface with no sign-in is not something to ship. 0.1.0 is the answer, and it goes further than the review asked.
+
+[list]
+[li][b]Nothing leaves your machine unless you switch it on.[/b] Out of the box BlockYard talks to your node and to nobody else. No update check, no crash reports, no analytics, no fonts or scripts from a CDN, no "phone home" of any kind — there is no code path for it. The one feature that talks to the outside world, the exchange price feed, is [b]off by default[/b] and behind an explicit switch: [i]Display settings → Markets & Price → Enable market polling[/i]. Until a human ticks that box, the Markets and Kiosk tabs say so and show nothing, the Overview shows no price line and the explorer shows no dollar figures. Tick it and the server polls five exchanges' public APIs — only while someone is looking at the page, and it stops ten minutes after the last look. Untick it and the feed parks at once. An operator who wants to be certain can set [tt]BLOCKYARD_MARKETS=0[/tt] and the switch cannot turn it on.[/li]
+[li][b]Bound to this machine.[/b] The default bind is [tt]127.0.0.1[/tt]. Reach it from elsewhere over an SSH tunnel, or bind a LAN address on purpose — the installer asks twice before it writes a non-loopback address.[/li]
+[li][b]Sign-in on.[/b] The first start creates the [tt]admin[/tt] account and prints its password once (or takes it from [tt]BLOCKYARD_ADMIN_PASSWORD[/tt]). Passwords are stored as scrypt hashes; there are viewer, operator and admin roles, rate limits and an audit log. Open read-only access is still a choice ([tt]BLOCKYARD_AUTH=0[/tt]) — announced at boot, never silent.[/li]
+[li][b]HTTPS by default.[/b] Every listener serves HTTPS. With no certificate of your own named, the first start makes a self-signed one — and because the project has no dependencies, that meant writing an X.509 certificate generator in plain Node: a v3 certificate assembled in DER, ECDSA P-256 over SHA-256, naming the bound hosts, the machine's addresses and its hostname, remade near expiry or when a bound address is missing from it. The browser warns once per address and remembers it. Your own certificate replaces it, [tt]blockyard tls[/tt] remakes it with extra names, and [tt]BLOCKYARD_TLS=0[/tt] serves plain HTTP behind your own reverse proxy.[/li]
+[li]A content-security policy with no inline scripts and no inline styles, a default-deny allowlist in front of the RPC console, and a security posture written up in the repo with two AI audits and their remediations.[/li]
+[/list]
+
+[size=12pt][b]What it does[/b][/size]
+
+[b]Live monitor.[/b] The Overview is the node at a glance: sync state with an honest ETA, block flow (the blocks being projected, the block being built, recent blocks with who mined them), mempool size and fee charts, peers and bandwidth, the node's event stream, and a provenance table that says where every figure came from and how old it is. Pages for Chain & Sync, Mempool, Peers, Network, Mining, Events, and a read-only RPC console. Everything updates live over one server-sent-events stream; several people can watch the same node from several screens. New in 0.1.0: [b]every page fits one screen[/b] — we measured each tab at a laptop's 1093×945 and at 1600×1000 and packed it until it did.
+
+[b]Block space, in 3D.[/b] The next block's worth of the mempool as a board of glowing stones: area is vbytes, colour is feerate. When the pool changes, the blocks lift, travel in collision-free lanes and land under gravity. At rest the board comes alive with thirty-odd idle effects — ripples, light cycles, ball lightning, a UFO's tractor beam, Missile Command, a centipede, fireworks, a supernova, an x-ray sweep, a spiral galaxy turning behind it — every one a switch, with sliders for how often they play. Neon tubes, metallic and chrome finishes, a movable lamp, perspective, a star field.
+
+[img width=800]IMAGE-URL-FOR:block-space-mode1.jpg[/img]
+
+[b]Mining, the mempool.space way.[/b] New in 0.1.0: reward stats over the last 144 blocks, the difficulty period with the estimated and previous change and the next halving, a week of pools as a labelled pie (every pool named beside its slice with a leader line), a year of hashrate with the difficulty's steps, and the last twelve adjustments — laid out like mempool.space's mining dashboard with a [i]View more »[/i] on each card that opens it full screen. Every figure comes from your own node's [tt]getblockstats[/tt] and block headers; dollar figures appear only if you switched the price feed on.
+
+[img width=800]IMAGE-URL-FOR:mining.jpg[/img]
+
+[b]An explorer that looks the part.[/b] Search a height, a block hash, a txid or an address. Block pages with the full transaction list, fee distribution and miner attribution (151 pools). Transaction pages with fee, fee rate, feature badges (SegWit, Taproot, RBF, consolidation, OP_RETURN, coinbase), a flow diagram from inputs to outputs, and links to where every coin came from and where it went. [b]Address pages with full history, balance and unspent outputs[/b] — Bitcoin Core has no address index at any setting, so BlockYard builds its own from the node's block and undo files, kept current as blocks arrive, balances checked against [tt]scantxoutset[/tt] to the satoshi. It builds in the background the first time you start (a few hours, ~125 GB of disk) while every other page keeps working.
+
+[img width=800]IMAGE-URL-FOR:explorer-tx.jpg[/img]
+
+[b]Markets (opt-in).[/b] Public prices from Coinbase, Kraken, Bitstamp, Bitfinex and OKX: a 3D candle board on the same engine as the block space with a neon price line and its own effects — a black hole that crosses the chart and bends the price line round it, a supernova, a light saber, a light curtain — a precise flat candlestick chart, an exchange table and a bitcoinity-style order-book depth chart. Fetched by the server only while someone is looking, and only after you tick the switch.
+
+[img width=800]IMAGE-URL-FOR:markets.jpg[/img]
+
+[b]Appearance.[/b] New in 0.1.0: the layout's colours are a setting. Light, Dark or System (follows the OS); five themes as cards with swatches — BlockYard (the shipped look), Mono, Nous, GitHub Light/Dark Default and Catppuccin Latte/Mocha — and Custom: nine colour pickers with the rest of the scheme derived from them, and a [i]customise[/i] button that copies the current theme into the pickers so you start from a look. The charts' axes, grids and tooltips follow the theme too. Saved on the server, so every screen agrees.
+
+[img width=800]IMAGE-URL-FOR:settings.jpg[/img]
+
+[b]Kiosk.[/b] The 3D markets board, a price panel and the block-space board side by side, full screen in one click. Put it on the wall.
+
+[img width=800]IMAGE-URL-FOR:kiosk.jpg[/img]
+
+[size=12pt][b]Can it run DOOM?[/b][/size]
+
+Naturally. Someone asked after 0.0.9, and the answer is now [b]Wolfenstein 3D, DOOM and Quake[/b] under the Diversions menu, next to Tetrust, Blockout and Blockanoid. The three id Software shareware releases run [b]unmodified[/b] — the original [tt]WOLF3D.EXE[/tt], [tt]DOOM.EXE[/tt] and [tt]QUAKE.EXE[/tt] with their data files, dropped into a [tt]games/[/tt] directory — on a PC emulated in the browser, written for this project with no dependencies: an i386 interpreter with a 487, real mode for Wolfenstein, the DOS/4GW and go32/CWSDPMI extenders for DOOM and Quake, DOS, DPMI, BIOS, timer, keyboard, a planar VGA, and a Sound Blaster Pro 2 with an OPL3 for the music and effects. Demos, menus, savegames, high scores and ENDOOM all work; savegames stay in your browser. The server never touches the game files except to hand them to the page.
+
+[b]Getting it to a good frame rate was the interesting part.[/b] The page's content-security policy forbids [tt]eval[/tt], so there is no JIT to hide behind: the interpreter has to run tens of millions of x86 instructions a second in plain JavaScript. What that took, in the order we found it:
+[list]
+[li][b]Every value is an int32.[/b] An unsigned 32-bit result written as [tt]>>> 0[/tt] above 2^31 becomes a double, and a double in a closure variable is an allocation; the first cut spent its time in the garbage collector. Unsigned comparisons flip the sign bit instead.[/li]
+[li][b]Lazy flags.[/b] Arithmetic records its operands and result in an [tt]Int32Array[/tt]; CF, ZF, SF, OF, PF and AF are computed only when something reads them — a conditional jump reads a compare's operands directly.[/li]
+[li][b]One try/catch around the loop[/b], not around each instruction (that alone cost 14%).[/li]
+[li][b]Decoded instructions are cached.[/b] Each instruction is decoded once into three int32s — a handler number with its registers packed beside it, a displacement, an immediate — in an [tt]Int32Array[/tt] per 4 KB page, and the run loop dispatches on the handler number with one switch. Not closures: a closure per instruction made every call site megamorphic and ran slower than the plain interpreter. Writes into a page holding decoded code invalidate only the instructions they overlap, which matters because DOOM and Quake both patch constants into their own span-drawing code on every call.[/li]
+[li][b]A handler per ALU operation[/b] with its flag bookkeeping inline rather than one shared routine branching on the operation, and the x87 forms Quake runs most decoded to handlers of their own.[/li]
+[li][b]Memory addresses formed inline in the loop[/b] before the switch, and aligned reads and writes inlined in the hottest moves: the switch is too big for V8 to inline helpers into every case, and those calls were most of what was left.[/li]
+[/list]
+The numbers, all in the repo's measurements log: Quake went from 77 to about 141 million instructions a second on one core, and its [tt]timedemo demo1[/tt] from 28.9 to 52.5 frames a second of wall time; in the browser Quake plays at 40–50 fps, DOOM at its own 35 fps cap with a hundred million instructions a second to spare, and Wolfenstein 3D at its full 70 fps. Two things we tried and removed, because the measurements said so: fused compare-and-branch dispatch, and "no flags" instruction forms chosen by flag liveness — the look-ahead re-ran on every re-decode of DOOM's self-patching drawer and gained nothing.
+
+[size=12pt][b]Setting it up[/b][/size]
+
+You need Bitcoin Core 25.0 or later with [tt]server=1[/tt] and [tt]txindex=1[/tt], Node.js 22 or later, and BlockYard [b]on the same machine as the node[/b] — it reads the node's block files to build the address index.
+
+[b]From npm[/b] (config and index under [tt]~/.blockyard[/tt]):
+
+[code]npm install -g blockyard
+blockyard setup
+blockyard start[/code]
+
+[b]From GitHub[/b] (config in [tt]config/[/tt] and the index in [tt]data/[/tt] inside the checkout):
+
+[code]git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
+npm test          # optional: the 944 unit tests, nothing to install first
+npm run setup
+npm start[/code]
+
+[tt]setup[/tt] finds your [tt]bitcoin.conf[/tt], reads the RPC settings out of it, proves the credentials, the chain, [tt]txindex[/tt], the block files and how fast the node answers, writes its config, and starts the address index build in the background. The first start prints [tt]listening on https://127.0.0.1:21000[/tt] and the [tt]admin[/tt] password, once. Open [url]https://127.0.0.1:21000[/url], accept the self-signed certificate, sign in. If you want prices, tick [i]Display settings → Markets & Price → Enable market polling[/i]. Full walk-through for macOS and Linux in [tt]docs/GETTING-STARTED.md[/tt].
+
+[b]Updating from 0.0.9:[/b] [tt]git pull[/tt] and restart. Because the defaults hardened, the first start after the update serves HTTPS on the same port, creates the [tt]admin[/tt] account and prints its password once, and leaves the price feed off until you tick it. [tt]docs/INSTALL.md[/tt] §11 has the details, including how to keep an open, plain-HTTP setup if that is what you want.
+
+[b]Uninstalling[/b] is deleting BlockYard's own directories; it never edits [tt]bitcoin.conf[/tt] and leaves the node exactly as it found it.
+
+[size=12pt][b]Changelog since 0.0.9[/b][/size]
+
+[b]Security[/b]
+[list]
+[li]Binds [tt]127.0.0.1[/tt] by default; sign-in on by default with a first-start admin account; the installer asks twice before writing a non-loopback bind.[/li]
+[li]HTTPS by default, with a self-signed certificate made in pure Node on the first start; [tt]blockyard tls[/tt] to remake it; [tt]BLOCKYARD_TLS=0[/tt] for a proxy.[/li]
+[li]Market polling off by default behind an explicit switch shared by every screen; [tt]BLOCKYARD_MARKETS=0[/tt] removes the feed entirely. No other outbound connection exists.[/li]
+[/list]
+[b]Appearance[/b]
+[list]
+[li]A first Display settings tab: Light / Dark / System, five themes (BlockYard, Mono, Nous, GitHub, Catppuccin) each with a light and a dark face, and a Custom scheme from nine pickers with the rest derived; "customise" copies the current theme into the pickers. Charts follow the theme.[/li]
+[/list]
+[b]Mining[/b]
+[list]
+[li]The network row: 144-block reward stats, the difficulty period, a week of pools as a labelled pie, a year of hashrate and difficulty, the last twelve adjustments — from this node alone.[/li]
+[li]mempool.space's two-column layout with View more » panels; dollar figures via a new [tt]/api/price[/tt] that never starts the polling itself.[/li]
+[li]A streak of stale full-pool poll drops is one event with a counter, not one event per drop.[/li]
+[/list]
+[b]Every tab on one screen[/b]
+[list]
+[li]Overview, Block space, Chain & Sync, Mempool, Explorer, Markets, Kiosk, Peers, Network, Mining, Events, Node & RPC, Admin, About, the settings sheet, sign-in and the 404 page, each measured and packed; Markets puts the exchange table and the depth chart side by side; the Diversions take the window's height; the DOS screen is always 4:3.[/li]
+[/list]
+[b]DOS Diversions[/b]
+[list]
+[li]Wolfenstein 3D, DOOM and Quake on an emulated PC written here (i386 + 487, real mode, DOS/4GW and DJGPP extenders, VGA, Sound Blaster Pro 2 + OPL3), with the optimisations above; an exit from full screen (button, or hold Esc).[/li]
+[/list]
+[b]Markets and the effects[/b]
+[list]
+[li]New: black hole (crossing the board, bending the price line), supernova (white-hot flash, 128 gas plumes, a violet nebula, a pulsar), x-ray, breathe, light saber; fireworks as a real display (off by default); the energy pulse as plasma; the scan line as a light curtain; ball lightning as a light source.[/li]
+[li]The Markets board keeps its price fit across refreshes; effects never repeat before every other has played; layered soft fills add up correctly; a Kiosk test plays every effect on the small panels.[/li]
+[/list]
+[b]Fixed[/b]
+[list]
+[li]The donation QR shows on Safari (a PNG instead of 800 SVG rects).[/li]
+[li]A dead address-index worker fails the build with a named cause instead of hanging it at "1 s left" for an hour and a half.[/li]
+[/list]
+Full detail, every item: [url]https://github.com/BobClawblaw/blockyard/blob/main/CHANGELOG.md[/url]
+
+[size=12pt][b]How it was made[/b][/size]
+
+[b]Every line of BlockYard was written by an AI, directed by a human.[/b] The server, the browser app, the 3D engine, the games, the PC emulator, the certificate generator, the tests, the installer and every document — machine-generated, under the direction of one human operator who never typed a line of it. The direction was real work: what to build, what was wrong, what was ugly, what was too often, what was too dark, what did not fit on the screen. The coding was the machine's, and so was the auditing; the audits, the defects register and the measurements behind every number in the docs are all in the repository. When a review in this thread found a problem, the fix landed the next day and this post says so.
+
+It is still [b]experimental pre-release software[/b]. Expect bugs. If you run it, tell us what broke — issues and pull requests are open — and if you read the code, tell us what you think of code that no human wrote.
+
+[size=12pt][b]Links[/b][/size]
+
+[list]
+[li]Source: [url]https://github.com/BobClawblaw/blockyard[/url][/li]
+[li]Release 0.1.0: [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.0[/url][/li]
+[li]Changelog: [url]https://github.com/BobClawblaw/blockyard/blob/main/CHANGELOG.md[/url][/li]
+[li]Getting started: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md[/url][/li]
+[li]User guide: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/USER-GUIDE.md[/url][/li]
+[li]Security: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY.md[/url][/li]
+[li]The audits: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY-AUDIT-2026-09-14.md[/url][/li]
+[li]Measurements (the emulator numbers are §32–35): [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/MEASUREMENTS.md[/url][/li]
+[/list]
+
+Apache-2.0. Run your own node.

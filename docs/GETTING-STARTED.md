@@ -158,12 +158,15 @@ existing `config/local.json` (with a backup).
 npm start
 ```
 
-The log says `BlockYard 0.0.9 listening on http://127.0.0.1:21000`, then `address index: building
+The log says `BlockYard 0.1.0 listening on https://127.0.0.1:21000` (its own self-signed
+certificate, made on this first start; the browser warns once and remembers it), then `created the
+first admin account (admin)` with a generated password **shown once** — copy it, or set
+`BLOCKYARD_ADMIN_PASSWORD` before the first start to choose it — then `address index: building
 /Users/you/blockyard/data/index from main's block files with 4 workers -- the Overview shows the
 progress` (and `address index build: paused while the node's RPC is answering in … s` /
 `resumed` if the node struggles) and, when that is done, `address index built: … rows to block N
 in … min -- address pages are live` followed by `address index /Users/you/blockyard/data/index:
-following main from block N`. Open <http://127.0.0.1:21000>. The
+following main from block N`. Open <https://127.0.0.1:21000> and sign in as `admin`. The
 Overview fills in within about thirty seconds; Block space lands a little after. Open Explorer,
 click the latest block, then any output address: while the index is building the page says so
 with the progress; once it is built, its balance, history and unspent outputs appear.

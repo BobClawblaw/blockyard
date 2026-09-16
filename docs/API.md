@@ -224,8 +224,8 @@ Auth `none`, not rate limited. Built for uptime probes. `ok` is `true` when at l
 {
   "ok": true,
   "degraded": [],
-  "version": "0.0.9",
-  "build": "0.0.9-fd620adc52",
+  "version": "0.1.0",
+  "build": "0.1.0-fd620adc52",
   "scheme": "http",
   "tls": false,
   "uptimeSec": 1519,
@@ -242,7 +242,7 @@ Auth `none`, not rate limited. Built for uptime probes. `ok` is `true` when at l
 What the About page shows: the monitor's version and live build, and the **shape** of the machine it runs on.
 
 ```json
-{ "version": "0.0.9", "build": "0.0.9-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
+{ "version": "0.1.0", "build": "0.1.0-a6ecedff3c", "platform": "linux", "release": "7.0.0-31-generic",
   "arch": "x64", "cpus": 32, "cpuModel": "AMD Ryzen 9 9950X3D 16-Core Processor",
   "totalMemGb": 132.3, "node": "v22.23.2", "uptimeSec": 2355 }
 ```
@@ -261,9 +261,9 @@ Auth `none`. Answers "is the code in my tab the code on disk?" The build id is `
 
 ```json
 {
-  "version": "0.0.9",
-  "build": "0.0.9-5223f98d84",
-  "bootBuild": "0.0.9-fd620adc52",
+  "version": "0.1.0",
+  "build": "0.1.0-5223f98d84",
+  "bootBuild": "0.1.0-fd620adc52",
   "matchesClient": null,
   "scheme": "http",
   "tls": false,
@@ -332,7 +332,7 @@ Trimmed example:
   "health": { "rpc": { "online": true, "...": "..." }, "cadence": { "fast": { "configuredMs": 4000,
               "effectiveMs": 4000, "stretched": false, "lastRunMs": 120 } }, "quality": [] },
   "series": { "mempool": { "hour": [ { "t": 1789154820000, "v": 18780 } ], "...": "..." } },
-  "app": { "version": "0.0.9", "build": "0.0.9-fd620adc52", "scheme": "http", "uptimeSec": 1536,
+  "app": { "version": "0.1.0", "build": "0.1.0-fd620adc52", "scheme": "http", "uptimeSec": 1536,
            "sseClients": 5, "self": { "rssMb": 175.6, "heapMb": 42.8, "cpuPct": 2.71 }, "serverTime": 1789155688322 },
   "user": { "username": "anonymous", "role": "viewer", "id": "anonymous", "disabled": false, "lastLoginAt": null },
   "seq": 406
@@ -1380,7 +1380,7 @@ The monitor's own health: process, RPC client, log tail, stream clients and the 
 ```json
 {
   "self": { "t": 1789155700000, "rssMb": 175.6, "heapMb": 42.8, "sseClients": 5, "usersActive": 0,
-            "cpuPct": 2.71, "eventRate": 0, "build": "0.0.9-fd620adc52" },
+            "cpuPct": 2.71, "eventRate": 0, "build": "0.1.0-fd620adc52" },
   "nodes": [
     { "id": "main",
       "rpc": { "nodeId": "main", "url": "http://127.0.0.1:8332", "cookieSource": "...", "online": true,

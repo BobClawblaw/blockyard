@@ -652,7 +652,7 @@ export function banner(app) {
   const hosts = app.cfg.server.hosts ?? [host];
   if (hosts.every((h) => LOOPBACK.has(h))) {
     const p = app.cfg.server.port;
-    lines.push(`    reach    this machine only. From elsewhere: ssh -L ${p}:127.0.0.1:${p} you@this-host, then http://localhost:${p}`);
+    lines.push(`    reach    this machine only. From elsewhere: ssh -L ${p}:127.0.0.1:${p} you@this-host, then ${app.scheme}://localhost:${p}`);
     lines.push('             or bind a LAN address: BLOCKYARD_BIND=192.0.2.10 (or 0.0.0.0 for every interface) — docs/INSTALL.md §7');
   }
   lines.push(`    nodes    ${[...app.monitors.values()].map((m) => `${m.id} -> ${m.rpc.url}`).join(', ')}`);

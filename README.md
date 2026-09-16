@@ -49,7 +49,8 @@ git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
 npm test            # optional: 944 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
-npm start           # builds the address index in the background (a few hours); open http://127.0.0.1:21000
+npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
+                    # and sign in as admin with the password the first start prints once
 ```
 
 `npm run setup` asks for the node's data directory, reads its `bitcoin.conf` for the rest,
@@ -145,12 +146,15 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.0.10** — a point release the day after the initial 0.0.9, and pre-release software:
-the word is meant literally. Published 2026-09-15: on [npm](https://www.npmjs.com/package/blockyard)
-as `blockyard`, as a [GitHub release](https://github.com/BobClawblaw/blockyard/releases/tag/v0.0.10),
+Version **0.1.0** — the first minor release, two days after the initial 0.0.9, and pre-release
+software: the word is meant literally. Published 2026-09-16: on [npm](https://www.npmjs.com/package/blockyard)
+as `blockyard`, as a [GitHub release](https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.0),
 and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
+It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certificate it makes itself,
+and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
+polling switch yourself.
 The test suite is
 comprehensive (944 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot

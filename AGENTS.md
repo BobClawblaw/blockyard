@@ -383,7 +383,21 @@ does not specialise goes through `step()`. What will bite:
   registers and flags every 10,000, memory identical at the end -- and the native fuzzer re-run through
   `run(1)` (118k instructions, 0 mismatches). `cpu.step()` in the API is the interpreter alone.
 
-## Current state (2026-09-14)
+## Current state (2026-09-16)
+
+**0.1.0, the first minor release**, tagged `v0.1.0` on 2026-09-16: everything since 0.0.9 in one
+release (the 0.0.10 that was prepared on 09-15 was never published; its GitHub draft was removed
+and its changes ship here). What it carries, in `CHANGELOG.md` under 0.1.0: hardened defaults
+(loopback bind, sign-in on, HTTPS with a self-signed certificate made in pure Node, no outbound
+connection until market polling is ticked), the Appearance tab (light/dark/system, five themes,
+a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
+more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
+an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 944 tests. Screenshots
+re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
+thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
+
+The paragraphs below are the state at 0.0.9 and remain true unless a later note says otherwise.
 
 Release day: **0.0.9, the initial release**, tagged `v0.0.9` (the operator names the number; do
 not bump it). **Shipped 2026-09-14 evening:** published to npm as `blockyard@0.0.9`, the GitHub
