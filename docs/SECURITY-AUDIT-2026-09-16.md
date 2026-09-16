@@ -1,6 +1,6 @@
 # BlockYard Security Audit — 2026-09-16
 
-> **STATUS: HIGH AND MEDIUM FINDINGS REMEDIATED — 2026-09-16, the same day.** H1: a stream client
+> **STATUS: EVERY FINDING REMEDIATED — 2026-09-16, the same day.** High and medium: H1: a stream client
 > whose socket is full is sent nothing until it drains, and is dropped at 4 MB buffered or a minute
 > blocked; 16 streams per address or account. M1/M2: with accounts off the node connection form
 > answers only a loopback caller (`auth.openNodeConfigFromNetwork` widens it, and a trusted proxy
@@ -13,7 +13,8 @@
 > the shipped unit is sandboxed, and was started under exactly those settings. Each fix has a test
 > in `test/audit-2026-09-16.test.js`. The H1 and M4 tests were run against the old code and failed,
 > and the M3 proof of concept was re-run against the old build, which again deleted the planted file.
-> The Low and Informational findings are still open.
+> **Lows and informational findings: all fixed the same day** (commits `d0e5865`, `c8615da`, `d98939e`, `843dc94`),
+> each with tests in `test/audit-2026-09-16-low-*.test.js`.
 >
 > Findings are listed most severe first. Each one says whether it was reproduced (**CONFIRMED**) or
 > found by reading the code (**CODE-READ**).
@@ -43,8 +44,8 @@
 |---|---|
 | High | **1**, fixed |
 | Medium | 8, all fixed |
-| Low | 17, open |
-| Informational | 6, open |
+| Low | 17, all fixed |
+| Informational | 6, all fixed |
 | Findings from the 2026-09-13 and 2026-09-14 audits | fixed, except the two left open by decision |
 | Test evidence | `npm test` 1013/1013 · targeted chain tests 19/19 · decoder fuzzing, 20,000 inputs per decoder |
 
@@ -289,7 +290,9 @@ for the cookie), `ReadWritePaths=` for `data/`, `config/` and the index director
 
 ## Low
 
-### L1 — LOW, CONFIRMED: open redirect after sign-in
+### L1 — LOW, FIXED, CONFIRMED: open redirect after sign-in
+
+> **FIXED 2026-09-16** (commit `d0e5865`). `public/js/safenext.js`: the target is resolved against this origin and kept only if the origin is unchanged; `//host` and `/\host` go to `/`.
 
 **File:** `public/js/login.js:79-80`.
 
@@ -304,7 +307,9 @@ genuine sign-in page to a lookalike "session expired" page. The server never set
 **Fix:** accept only `^/(?![/\\])`, or resolve with `new URL(back, location.origin)` and require the
 same origin. Or remove `next`.
 
-### L2 — LOW, CONFIRMED: some RPC fields reach the page unescaped
+### L2 — LOW, FIXED, CONFIRMED: some RPC fields reach the page unescaped
+
+> **FIXED 2026-09-16** (commit `d0e5865`). `kv()` in `public/js/panels.js` escapes every value unless it is wrapped in `raw()`, markup the file builds itself; the mining panel escapes its values; `server/collect/monitor.js` passes `chain`, `pruned`, `initialblockdownload` and `unbroadcastcount` on only in their own types.
 
 **Files:** `public/js/panels.js:84, 93, 95, 156, 291-292, 517`; `kv()` in `panels.js` (about line 833) does
 not escape; `setText` in `public/js/app.js:468-470` assigns `innerHTML`. Server side:
@@ -320,7 +325,9 @@ remote node, can do this. Peers and miners cannot.
 **Fix:** escape in `kv()` by default, with an explicit opt-in for markup. On the server, validate
 `chain` against the known chain names, booleans with `typeof`, and counts with `Number.isFinite`.
 
-### L3 — LOW, CONFIRMED: the node's RPC URL is rendered unescaped, and shown to viewers
+### L3 — LOW, FIXED, CONFIRMED: the node's RPC URL is rendered unescaped, and shown to viewers
+
+> **FIXED 2026-09-16** (commit `d0e5865`). escaped by `kv()`; `displayUrl()` in `server/rpc/client.js` removes a username and password from every URL sent to a client (Node page, node list, sync endpoint).
 
 **File:** `public/js/panels.js:477`, source `server/rpc/client.js:402`.
 
@@ -330,7 +337,9 @@ to every viewer, so a URL written as `http://user:pass@host` would expose those 
 
 **Fix:** escape it. On the server, strip the userinfo part before sending the URL to any client.
 
-### L4 — LOW, CONFIRMED: one malformed byte in a coinbase stalls pool attribution
+### L4 — LOW, FIXED, CONFIRMED: one malformed byte in a coinbase stalls pool attribution
+
+> **FIXED 2026-09-16** (commit `843dc94`). `parsePushes` checks a push's length bytes exist before reading them; `decodeCoinbaseSafe` never throws; the monitor and the pool history record an undecodable coinbase as an unknown pool and move on, while RPC failures still retry.
 
 **Files:** `server/collect/mining.js:44-45` (`parsePushes`), retry loops in `server/collect/monitor.js:814-831` and `server/collect/network.js:242-244`.
 
@@ -343,7 +352,9 @@ eight every 15 s and stops filling. `decodeCoinbase('03aabbcc4d')` throws `ERR_O
 **Fix:** stop parsing when `i + head > bytes.length`. Catch per block and record it as unparseable
 instead of retrying forever.
 
-### L5 — LOW, CONFIRMED: one absurd order book can freeze the server and allocate gigabytes
+### L5 — LOW, FIXED, CONFIRMED: one absurd order book can freeze the server and allocate gigabytes
+
+> **FIXED 2026-09-16** (commit `843dc94`). a book whose mid is more than 20% from the other books and recent tickers is not drawn; the grid is capped at 2,000 levels; bodies are read with a 5 MB cap; redirects are refused.
 
 **Files:** `server/collect/markets.js:114-120, 182-186, 234-247`.
 
@@ -356,7 +367,9 @@ compromised or intercepted exchange API; TLS verification is on. Market polling 
 **Fix:** discard a book whose mid is more than 20% from the ticker median, and clamp the level count,
 for example to 2,000. Stream response bodies with a byte cap.
 
-### L6 — LOW, CONFIRMED: a log-parsing pattern takes cubic time on long lines
+### L6 — LOW, FIXED, CONFIRMED: a log-parsing pattern takes cubic time on long lines
+
+> **FIXED 2026-09-16** (commit `843dc94`). lines are cut at 8 KB before matching and an unterminated line's carry is capped; `legDown`, `bandwidthTick` and eight other rules found by fuzzing rewritten so no run of spaces can be split two ways. Output on 312 known lines is byte-identical; a 20,000-space line parses in under 100 ms.
 
 **File:** `server/collect/logparse.js`, the `legDown` rule; `parseLine` runs every rule unanchored on the main thread.
 
@@ -367,7 +380,9 @@ keeps an unterminated line in `carry` with no limit. It needs a multi-kilobyte l
 **Fix:** truncate lines to 4–8 KB before matching and cap `carry` the same way. Replace
 `\s*(.+?)\s*` with a form that cannot backtrack across the same spaces, such as `\s*(\S.*?)\s*`.
 
-### L7 — LOW, CONFIRMED: the height table loops forever when it is full
+### L7 — LOW, FIXED, CONFIRMED: the height table loops forever when it is full
+
+> **FIXED 2026-09-16** (commit `d98939e`). `HeightTable.forTip()` sizes the table from the tip; `set()` throws past a 0.75 load and `get()` stops after one lap.
 
 **Files:** `server/chain/index/heights.js:141, 147`; capacity fixed at `1<<21` in `build.js:30`.
 
@@ -378,7 +393,9 @@ table of capacity 1,024 hung until the 5 s test timeout.
 
 **Fix:** size capacity from the tip, at least twice `tip + 1`, and throw past a load of 0.75.
 
-### L8 — LOW, CONFIRMED: the index trusts the coin count of an undo record
+### L8 — LOW, FIXED, CONFIRMED: the index trusts the coin count of an undo record
+
+> **FIXED 2026-09-16** (commit `d98939e`). a transaction whose input count differs from its undo record's coin count throws, naming the files and offsets.
 
 **File:** `server/chain/index/rows.js:514-521` (the `nin` from `walkTx` is ignored).
 
@@ -390,7 +407,9 @@ no error.
 
 **Fix:** throw when `coins.length !== nin`, which also turns a mispairing into a detected failure.
 
-### L9 — LOW, CODE-READ: nothing stops two builds writing the same index directory
+### L9 — LOW, FIXED, CODE-READ: nothing stops two builds writing the same index directory
+
+> **FIXED 2026-09-16** (commit `d98939e`). `build.lock` in the output directory (exclusive create, pid and token; a dead pid's lock is taken over; released only by its owner).
 
 **Files:** `server/chain/index/build.js`, `server/main.js`.
 
@@ -401,7 +420,9 @@ for segments.
 
 **Fix:** take an exclusive lock file in `out` (`openSync(lock, 'wx')`, with the PID and a stale-PID check).
 
-### L10 — LOW, CODE-READ: file modes follow the umask, and temporary files follow symlinks
+### L10 — LOW, FIXED, CODE-READ: file modes follow the umask, and temporary files follow symlinks
+
+> **FIXED 2026-09-16** (commit `d98939e`). explicit 0600 files and 0700 directories across the index, live index, ledger, history and audit trail, with existing files tightened on open; temp files unlinked and opened with `wx`; resume refuses a symlinked bucket.
 
 **Files:** `writeFileAtomic` in `build.js`, `worker.js` segment writes, `live.js` `writeAtomic`, bucket
 files, `server/store/ledger.js`, `server/store/audit.js`, `server/store/history.js`, directory creation
@@ -423,7 +444,9 @@ Journal-driven deletion was checked and stays inside `out`.
 `0o700`, set `UMask=0077` in the unit. Unlink temporary files first and open them with `wx`; `lstat`
 bucket files before truncating.
 
-### L11 — LOW, CONFIRMED: anonymous responses disclose filesystem paths
+### L11 — LOW, FIXED, CONFIRMED: anonymous responses disclose filesystem paths
+
+> **FIXED 2026-09-16** (commit `d0e5865`). `shortPath()`: viewers see the last two parts of the cookie, log and settings paths; admins still see full paths for the settings file.
 
 **Routes:** `/api/telemetry` (`cookieSource`), `/api/state` (`getrpcinfo.logpath`).
 
@@ -434,7 +457,9 @@ on purpose; these routes defeat that. `/api/about` also returns kernel, CPU mode
 
 **Fix:** send a boolean such as `cookieFound`, or a basename, and drop `logpath` for viewers.
 
-### L12 — LOW, CODE-READ: `setup.js` shows the RPC password on screen and on the command line
+### L12 — LOW, FIXED, CODE-READ: `setup.js` shows the RPC password on screen and on the command line
+
+> **FIXED 2026-09-16** (commit `c8615da`). the password prompt no longer echoes; `--rpc-password-file PATH` and `--rpc-password -` (stdin); `--rpc-password P` warns; `local.json` and its backups are chmod 0600 on every write.
 
 **File:** `scripts/setup.js:222-229, 261, 272, 297`.
 
@@ -445,7 +470,9 @@ to an existing file. `scripts/manage-users.js` already does all of this correctl
 **Fix:** use muted input as `manage-users.js` does, accept `--rpc-password-file` or stdin, and `chmod 0600`
 after writing.
 
-### L13 — LOW, CONFIRMED: malformed percent-encoding in a route parameter returns 500
+### L13 — LOW, FIXED, CONFIRMED: malformed percent-encoding in a route parameter returns 500
+
+> **FIXED 2026-09-16** (commit `d0e5865`). `matchRoute` answers a malformed escape with 400.
 
 **File:** `server/http/server.js:305-316` (`matchRoute`).
 
@@ -455,7 +482,9 @@ noisy log line.
 **Fix:** catch the `decodeURIComponent` error and return 400. The browser has the same pattern in
 `public/js/explorer.js:23` (I1).
 
-### L14 — LOW, CONFIRMED: sign-in lockout by address lets one client lock out a shared address
+### L14 — LOW, FIXED, CONFIRMED: sign-in lockout by address lets one client lock out a shared address
+
+> **FIXED 2026-09-16** (commit `d0e5865`). the lock is per username and address pair (8); an address spraying across accounts locks at 40 and an account ground from many addresses at 80, so one address cannot lock out another.
 
 **Files:** `server/auth/sessions.js:162-184`, `server/http/api.js:291-294`.
 
@@ -463,7 +492,9 @@ Eight failures lock both the username and the source address for 10 minutes, so 
 shared NAT or proxy can lock everyone behind it out of every account. This is the usual trade-off for
 lockouts, and the per-address token bucket limits floods. Worth knowing; not urgent.
 
-### L15 — LOW, CODE-READ: `pool-map.js` fetches without pinning and follows any redirect
+### L15 — LOW, FIXED, CODE-READ: `pool-map.js` fetches without pinning and follows any redirect
+
+> **FIXED 2026-09-16** (commit `c8615da`). https-only redirects on both fetch paths; a pool-by-pool diff and `--yes` or a confirmation before replacing the map; `--expect-sha256`; the coverage check uses the configured port and scheme.
 
 **File:** `scripts/pool-map.js:253-283, 299`.
 
@@ -474,7 +505,9 @@ default is now 21000, so coverage is never measured.
 
 **Fix:** add `--proto =https --proto-redir =https`, show a diff before overwriting, and read the port from config.
 
-### L16 — LOW, CONFIRMED: security documentation has drifted from the code
+### L16 — LOW, FIXED, CONFIRMED: security documentation has drifted from the code
+
+> **FIXED 2026-09-16** (commit `d0e5865`). `SECURITY.md` supports 0.1.x; `docs/CONFIGURATION.md` gives the real `BLOCKYARD_AUTH` default; `docs/SECURITY.md` open-mode table and wallet claim corrected (with the mediums); `scripts/smoke.sh` comments corrected, and its open-access instance now actually sets `BLOCKYARD_AUTH=0`.
 
 - `SECURITY.md`'s supported-versions table lists 0.0.9 and says nothing else was released; 0.0.1 and 0.1.0 are on npm.
 - `docs/CONFIGURATION.md:403` gives the `BLOCKYARD_AUTH` default as `false`; the code default is `true` (`server/config.js:221`).
@@ -486,7 +519,9 @@ Checked and still true: loopback bind and sign-in by default, TLS key `0600` in 
 the full header set, `/api/audit` and `/api/users` refused in open mode, node writes gated, market
 polling off by default, no credential value in any API response.
 
-### L17 — LOW, CONFIRMED: game files are served without sign-in, and CI actions are pinned by tag
+### L17 — LOW, FIXED, CONFIRMED: game files are served without sign-in, and CI actions are pinned by tag
+
+> **FIXED 2026-09-16** (commit `c8615da`). CI actions pinned to commit SHAs with Dependabot for updates. The game files were already refused without a session when accounts are on; they were reachable here only because the audited machine runs in open mode, which is a configuration choice and not a finding.
 
 - `/games/doom/DOOM1.WAD` returns 200 and 4 MB with no session. No data is exposed, but anyone who can
   reach the port can pull tens of megabytes repeatedly. Consider requiring a session for `/games/`.
@@ -497,6 +532,13 @@ polling off by default, no credential value in any API response.
 ---
 
 ## Informational
+
+> **ALL FIXED 2026-09-16.** I1: a malformed explorer link routes home (`d0e5865`). I2: the depth note is
+> escaped (`d0e5865`). I3: `--workers` must be a whole number of at least 1 (`d98939e`). I4: malformed
+> `live.log` records are cut as a torn tail, bad layers are skipped and warned about, manifest `blockRows`
+> is bounded, and an undo failure names its files and offsets (`d98939e`). I5: `config/*.bak-*` is ignored
+> and backups are 0600 (`c8615da`). I6: `games/SHA256SUMS` and a provenance note in `docs/ARCHITECTURE.md`
+> (`c8615da`).
 
 - **I1** — `public/js/explorer.js:23`: `decodeURIComponent` on a hash like `#explorer/tx/%E0` throws and
   stops that tab's explorer rendering. Wrap it and fall back to the explorer home.
@@ -576,7 +618,7 @@ polling off by default, no credential value in any API response.
 
 ## Recommendations, in priority order
 
-Items 1 to 7 are done (see each finding's FIXED note). Item 8, the Lows, is open.
+All eight items are done (see each finding's FIXED note).
 
 1. **H1 and M5 together.** Drop backpressured stream clients, cap streams per address, and restore a
    body deadline for everything except the stream. One area of `server/http/`.
