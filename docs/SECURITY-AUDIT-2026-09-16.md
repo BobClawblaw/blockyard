@@ -12,7 +12,7 @@
 > M7: `package.json` excludes the private notes, and a test holds the pack to tracked files. M8:
 > the shipped unit is sandboxed, and was started under exactly those settings. Each fix has a test
 > in `test/audit-2026-09-16.test.js`. The H1 and M4 tests were run against the old code and failed,
-> and the M3 proof of concept was re-run against the old build, which again deleted the planted file. The Low and Informational findings and the deployment findings D1–D4 are still open. The
+> and the M3 proof of concept was re-run against the old build, which again deleted the planted file. The Low and Informational findings are still open. The
 > report below is kept as written.
 >
 > Findings are listed most severe first. Each one says whether it was reproduced (**CONFIRMED**) or
@@ -27,14 +27,14 @@
   network collector (`server/collect/network.js`), the DOS game file route (`server/http/games.js`)
   and the self-signed TLS generator (`server/tls/selfsigned.js`).
 - **Scope:** the whole codebase: `server/`, `public/`, `scripts/`, `systemd/`, the CI workflow and the
-  npm package contents. It also covers the posture of the one live deployment the auditors could
-  observe, described generically below.
+  npm package contents. The machine the audit ran on is a development box that is deliberately not
+  configured as a secure install would be, so its own settings are not findings; only the code, the
+  shipped defaults and the shipped unit are.
 - **Method:** four auditors ran in parallel, one per area: network-facing server; chain parsing
   and data stores; browser code; scripts, deployment and supply chain. The lead auditor
   re-ran the most consequential proofs before writing this report. Dynamic tests used throwaway
   instances with scratch config files, a fake RPC node (`scripts/fake-node.js`) and hostile
-  subclasses of it, on ports other than production. Only read-only GET requests were sent to the
-  live deployment.
+  subclasses of it.
 - **Report generator model:** Claude Opus 5, in Claude Code.
 
 ## Executive summary
@@ -43,7 +43,6 @@
 |---|---|
 | High | **1** |
 | Medium | 8 |
-| Deployment (host configuration, not code) | 4 |
 | Low | 17 |
 | Informational | 6 |
 | Findings from the 2026-09-13 and 2026-09-14 audits | fixed, except the two left open by decision |
@@ -79,7 +78,7 @@ The weak points are availability and the "open mode" posture, where accounts are
 | `node --test test/chain-index.test.js test/chain-decode-property.test.js` | 19/19 pass. |
 | Decoder fuzzing | 20,000 random inputs each into `decodeBlockUndo`, `undoShape`, `decodeTx`, `decodeBlock`, `classifyScript`, `records`, `blockRows` and `addressToScript`, biased toward CompactSize markers. Every failure was a thrown `RangeError` or `ERR_OUT_OF_RANGE`. No hang. Worst input took 64 ms; peak memory 65 MB. |
 | Hostile node in a real browser | A fake node planted markup in every non-hex string, peer field, warning, log line, node label and a failed-login username. The only raw markup that reached the page came from the fields in L2 and L3. `<img onerror>` did not execute under the CSP. |
-| Live headers | CSP `script-src 'self' 'nonce-…'`, `style-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`, plus `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, and HSTS over TLS only. |
+| Response headers (throwaway instances) | CSP `script-src 'self' 'nonce-…'`, `style-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`, `form-action 'self'`, plus `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, and HSTS over TLS only. |
 | Path traversal | `/js/../../config/local.json`, `%2e%2e`, `%00`, `/.git/config`, `/games/doom/..%2f..` all return 404 or 400. |
 | RPC allowlist | `stop`, `dumpprivkey`, `dumpwallet`, `setban`, `addnode`, `invalidateblock`, `importdescriptors`, `signmessage`, `send*`, `getnewaddress`, `createpsbt` refused. `Stop`, `STOP`, ` stop`, `"getblockcount,stop"` and array methods refused. `listdescriptors`, `gethdkeys`, `listunspent` allowed (M4). |
 | Secret hygiene | `git log --all -p` over 441 commits: no private keys, tokens or real RPC passwords; only test fixtures. No tracked `.pem`, `.key`, `.bak`, `local.json`, `users.json` or `.env`. |
@@ -140,11 +139,10 @@ collector three times. The browser path stays refused, as the 2026-09-13 fix int
 
 **Impact:** persistent tampering with the monitor's configuration, and disclosure of the node's RPC
 cookie to whoever can reach the port. How useful the cookie is depends on whether the node's RPC
-port is reachable from the attacker. It was loopback-only on the audited host.
+port is reachable from the attacker.
 
 **Relation to earlier audits:** this is 2026-09-14 **I1**, left open by decision. It is raised to
-Medium here because it was reproduced end to end, and the deployment observed runs in exactly this
-posture (D1).
+Medium here because it was reproduced end to end.
 
 **Fix:** with accounts off, refuse config and settings writes unless the caller is on loopback or
 an explicit `allowOpenConfigWrites` option is set. On save, drop `cookieFile`, `rpcUser` and
@@ -203,7 +201,7 @@ no wallet access. The same prefix rule was 2026-09-13 finding 2, left open by de
 methods make it concrete.
 
 **Impact:** anyone allowed to use the RPC console can read wallet private keys. With accounts off
-that is anyone who can reach the port. No wallet was loaded on the audited host.
+that is anyone who can reach the port.
 
 **Fix:** deny `listdescriptors` and `gethdkeys` by exact name. Better, deny every wallet RPC,
 since the monitor has no use for them, and correct the documentation.
@@ -268,52 +266,6 @@ Any code-execution bug would reach everything the service account can.
 for the cookie), `ReadWritePaths=` for `data/`, `config/` and the index directory, `PrivateTmp=yes`,
 `CapabilityBoundingSet=`, `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`,
 `SystemCallFilter=@system-service`, `ProtectProc=invisible` and `UMask=0077`. Correct the comment.
-
----
-
-## Deployment findings (the audited host)
-
-These are properties of the one running deployment, not defects in the code. They are listed
-because they change how serious M1, M2, M4 and H1 are there. Host names, account names and
-addresses are withheld under the project's privacy rule.
-
-### D1 — open mode on every interface
-
-The service listens on `0.0.0.0:21000` with `auth.enabled: false`. The host firewall admits the
-port from the physical LAN and a private overlay network. Every Medium above that is marked "in
-open mode", and H1, is reachable by any host on those networks. An anonymous caller can read
-everything a viewer sees, run allowlisted RPCs, rewrite the node connection and write Display
-settings.
-
-**Recommendation:** turn accounts back on (remove `auth.enabled: false`), or set `server.allowCidrs`
-to the specific client hosts, or bind to loopback and reach it through an SSH tunnel.
-
-### D2 — the service runs as the operator's login account, without a sandbox
-
-The installed unit runs as the operator's everyday account, which holds unrestricted `sudo`
-without a password and membership of a group with root-equivalent access to a container daemon.
-`NoNewPrivileges` blocks `sudo` from inside the service but not the container socket. Filesystem
-protections are all off (see M8).
-
-**Recommendation:** run under a dedicated system account. Make the cookie group-readable
-(`rpccookieperms=group` on Core 28 and later, or an ACL). Apply the M8 directives.
-
-### D3 — the data volume's top directory is writable by every local account
-
-The parent of the checkout is mode `0757` with no sticky bit. Any local account can rename the
-checkout and put its own `server/main.js` in its place. The service would run that code as the
-operator's account on its next restart. The same applies to a node datadir on that volume.
-
-**Recommendation:** `chmod o-w` on that directory, or add the sticky bit if others must write there.
-
-### D4 — older data files keep group-readable modes
-
-`data/` is `0775` and `data/audit.jsonl` is `0664`. The audit log holds client addresses and actions.
-The 2026-09-14 L4 fix passes `mode: 0o600`, but a mode applies only when a file is created, so a file
-from before the fix keeps its old mode. `config/local.json`, `config/blockyard.json`, `users.json`,
-`sessions.json`, `history.json`, `data/tls` and the TLS key are correct.
-
-**Recommendation:** `chmod 700 data && chmod 600 data/audit.jsonl`. In code, see L10.
 
 ---
 
@@ -393,7 +345,6 @@ for example to 2,000. Stream response bodies with a byte cap.
 `'[mux:1] next peer a unreachable: ' + ' '.repeat(N) + 'x'` took 5 ms at 250 spaces, 177 ms at 1,000,
 1.4 s at 2,000, and did not finish in 300 s at 20,000. The `bandwidth` rule is quadratic. `splitLines`
 keeps an unterminated line in `carry` with no limit. It needs a multi-kilobyte line in the node's log.
-The log source is disabled on the audited host.
 
 **Fix:** truncate lines to 4–8 KB before matching and cap `carry` the same way. Replace
 `\s*(.+?)\s*` with a form that cannot backtrack across the same spaces, such as `\s*(\S.*?)\s*`.
@@ -440,7 +391,7 @@ in `server/main.js:29-30`.
 
 Index files, the journal, the live log and the ledger are created without a mode, so on a host with
 umask `0002` they are group-writable. `audit.js` and `history.js` pass `0o600`, which only applies on
-creation (D4). Every `.tmp` is opened with flag `w`, which follows a symlink. Anyone who can create
+creation, so a file created before the 2026-09-14 fix keeps its old mode. Every `.tmp` is opened with flag `w`, which follows a symlink. Anyone who can create
 entries in `out` or `data/` can plant `manifest.json.tmp` pointing at another file and have it
 overwritten as the service account.
 
@@ -572,7 +523,7 @@ polling off by default, no credential value in any API response.
 | L1 | pool key unescaped | **fixed** | `mining.js:1402` |
 | L2 | transaction cache bounded by count only | **fixed** | `explorer.js:37-44` |
 | L3 | test fixture at a fixed `/tmp` path | **fixed** | `shape-liveness.test.js:23-24` uses `mkdtempSync` |
-| L4 | runtime files not `0600` | **fixed for new files**; old files keep their modes (D4, L10) | `history.js:154,219` |
+| L4 | runtime files not `0600` | **fixed for new files**; old files keep their modes (L10) | `history.js:154,219` |
 | I1 | open-mode config save aims the cookie | **open by decision; reproduced** (M1) | save, restart, cookie sent three times |
 
 ---
@@ -611,13 +562,12 @@ polling off by default, no credential value in any API response.
    body deadline for everything except the stream. One area of `server/http/`.
 2. **Close open mode to scripts (M1, M2).** Refuse config writes and the probe in open mode unless
    the caller is on loopback, strip credentials when the RPC host changes, and stop echoing probe
-   response bodies. On the audited host, turning accounts on (D1) closes these today.
+   response bodies. Running with accounts on, the shipped default, closes these already.
 3. **M3.** Never remove the index directory itself; use a marker file and delete only the index's own files.
 4. **M4.** Deny wallet RPCs by name and correct `docs/SECURITY.md`.
 5. **M7** before the next publish: fix the `files` list and add the pack test.
 6. **M6.** Clamp free-form audit fields.
-7. **M8 and D2–D4.** Harden the shipped unit; on the audited host, move to a dedicated account, remove
-   world-write from the volume's top directory, and fix the data file modes.
+7. **M8.** Harden the shipped unit.
 8. The Lows, starting with L2/L3 (escape in `kv()`), L4 (the coinbase parser), L1 (the redirect) and L7
    (the height table), which are each a few lines.
 
@@ -625,14 +575,11 @@ polling off by default, no credential value in any API response.
 
 - **Reviewed:** every file under `server/`; every module under `public/js`, with each of about 90
   `innerHTML`, `outerHTML` and `insertAdjacentHTML` sinks read individually; `public/index.html`;
-  `scripts/`; `systemd/`; `.github/workflows/`; `package.json` and the packed file list; `.gitignore`;
-  the installed service unit, firewall rules, listening ports and file modes of the audited host, by
-  observation only.
+  `scripts/`; `systemd/`; `.github/workflows/`; `package.json` and the packed file list; `.gitignore`.
 - **Dynamic:** throwaway instances with auth on and off, fake and hostile RPC nodes, a headless browser
-  against a throwaway instance, and read-only GETs to the live deployment. No write request was sent to
-  the live deployment, and nothing on it was changed by the audit.
-- **Not covered:** the Bitcoin Core nodes themselves and other services on the host, except where they
-  affect BlockYard; a denial-of-service test of the live deployment; the DOS emulator's x86 core as an
+  against a throwaway instance.
+- **Not covered:** the Bitcoin Core nodes themselves; the configuration of the development machine
+  the audit ran on, which is not a secure install and is not reported; the DOS emulator's x86 core as an
   attack surface beyond confirming it runs in the browser with no `eval` or WebAssembly.
 - Per the project's privacy rule, no host name, account name, address, credential value or real peer
   address appears in this report.

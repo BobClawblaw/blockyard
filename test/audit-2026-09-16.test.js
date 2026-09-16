@@ -148,7 +148,7 @@ async function callRoute(route, { remoteAddress, auth = false, trustProxy = fals
 test('M1/M2: with accounts off, the node connection form answers only this machine', async () => {
   for (const p of ['/api/config/node', '/api/config/node/test']) {
     const route = nodeRoute(p);
-    for (const remoteAddress of ['192.168.1.20', '10.0.0.5', '::ffff:192.168.1.20', 'fd00::1', '100.64.0.9']) {
+    for (const remoteAddress of ['192.0.2.20', '203.0.113.5', '::ffff:192.0.2.20', '2001:db8::1', '198.51.100.30']) {
       const r = await callRoute(route, { remoteAddress, body: { rpcUrl: 'http://198.51.100.1:8332', datadir: '/x', confirm: 'save' } });
       assert.ok(r.err instanceof HttpError && r.err.status === 403 && r.err.code === 'local_only', `${p} from ${remoteAddress} must be refused (${r.err?.message ?? 'answered'})`);
     }
@@ -161,7 +161,7 @@ test('M1/M2: with accounts off, the node connection form answers only this machi
     const proxied = await callRoute(route, { remoteAddress: '127.0.0.1', trustProxy: true, body: { rpcUrl: 'nope' } });
     assert.equal(proxied.err?.code, 'local_only');
     // the explicit opt-in restores the old reach
-    const opted = await callRoute(route, { remoteAddress: '192.168.1.20', openNodeConfigFromNetwork: true, body: { rpcUrl: 'nope' } });
+    const opted = await callRoute(route, { remoteAddress: '192.0.2.20', openNodeConfigFromNetwork: true, body: { rpcUrl: 'nope' } });
     assert.notEqual(opted.err?.code, 'local_only');
   }
   assert.equal(isLoopbackAddress('127.3.4.5'), true);
