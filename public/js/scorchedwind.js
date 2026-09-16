@@ -51,6 +51,30 @@ export function curl(x, y, t, e = 0.09) {
   return { x: dy, y: -dx };
 }
 
+// ------------------------------------------------------------------ the air's own clock
+/**
+ * THE AIR KEEPS ITS OWN TIME (operator, 2026-09-16: "the nebula effects ... do something really
+ * jarring during wind transitions. it's like they rapidly block in the reverse direction before
+ * calming down"). The first cut took the page's clock and multiplied it by a rate that depended on
+ * the wind: field time = now * rate, drift = now * speed. On a page a day old `now` is tens of
+ * thousands of seconds, so the smallest change in the wind -- and the eased wind changes by a hair
+ * every frame of a transition -- moved the wash by tens of thousands of seconds' worth of travel,
+ * and flipped it end to end when the direction flipped.
+ *
+ * So the clock is INTEGRATED: each frame adds this frame's `dt` at this frame's rate. A change of
+ * wind changes how fast the clock runs from here on, and nothing else. `advanceAir` is the whole
+ * of it; the caller keeps the object.
+ */
+export function airClock() { return { t: 0, drift: 0 }; }
+export function advanceAir(clock, dt, wind) {
+  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
+  const dir = wind < 0 ? -1 : 1;
+  const s = Math.max(0, dt) / 1000;
+  clock.t += s * (0.1 + 0.12 * strength);
+  clock.drift += s * (0.06 + 0.5 * strength) * dir;
+  return clock;
+}
+
 // ------------------------------------------------------------------ what is carried
 const RESEED = 7000;                                     // a particle's life, ms: nothing lives in a lee for ever
 export const SWIRL_CAP = 0.34;                          // the eddies' share of the base wind, at most
@@ -79,12 +103,12 @@ export function makeFlow(n, w, h, seed = 1, now = 0) {
  * comes from it, the curl is a fraction of that base, and a particle that leaves downwind (or
  * outlives RESEED) comes back in upwind at a fresh height.
  */
-export function stepFlow(parts, dt, { wind = 0, w = 800, h = 400, now = 0, scale = 0.0042 } = {}) {
+export function stepFlow(parts, dt, { wind = 0, w = 800, h = 400, now = 0, scale = 0.0042, clock = null } = {}) {
   const strength = Math.min(1, Math.abs(wind) / 10);
   const dir = wind < 0 ? -1 : 1;
   const base = w * (0.035 + 0.42 * strength);              // px a second downwind
   const swirl = base * (0.16 + 0.2 * (1 - strength));      // a light wind wanders more than a gale
-  const t = now / 1000 * (0.12 + 0.1 * strength);
+  const t = clock ? clock.t : now / 1000 * 0.16;           // the field's own time, integrated by the caller
   const s = dt / 1000;
   const segs = [];
   for (const p of parts) {
@@ -143,12 +167,12 @@ export function paintFlow(ctx, segs, colour = '218,224,234') {
  * opacity is the field's value there. It gives the air body between the streaks without ever being
  * a thing you look at -- the strongest cell is four per cent opaque at a full gale.
  */
-export function plasmaCells(w, h, now, wind, cell = 30) {
+export function plasmaCells(w, h, clock, wind, cell = 30) {
   const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
   if (!w || !h || strength < 0.03) return [];
-  const dir = wind < 0 ? -1 : 1;
-  const t = now / 1000 * (0.1 + 0.12 * strength);
-  const drift = (now / 1000) * (0.06 + 0.5 * strength) * dir;
+  // the clock is the air's own (advanceAir): a plain number is taken as seconds of still time
+  const t = typeof clock === 'number' ? clock / 1000 * 0.16 : clock.t;
+  const drift = typeof clock === 'number' ? 0 : clock.drift;
   const out = [];
   const cols = Math.ceil(w / cell) + 1, rows = Math.ceil(h / cell) + 1;
   for (let j = 0; j < rows; j++) {

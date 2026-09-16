@@ -10,7 +10,7 @@
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from './scorchedfx.js';
-import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma } from './scorchedwind.js';
+import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir } from './scorchedwind.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   trajectory, dirtAt,
@@ -75,6 +75,7 @@ const G = {
   paintNow: 0,                          // the instant the overlay layer paints at
   flow: null, flowW: 0, flowH: 0,       // the advected particles of the air, and the size they were made for
   flowAt: 0,                            // the last frame's clock, for the step
+  air: null,                            // the air's own integrated clock { t, drift }
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -297,9 +298,13 @@ function drawWind(now) {
     G.flow = makeFlow(Math.round(Math.min(420, 150 + w * 0.22)), w, h, 7, now);
     G.flowW = w; G.flowH = h;
   }
+  // the air's own clock, integrated at the eased wind's rate: a change of wind changes how fast it
+  // runs from here on and nothing else (scorchedwind.js, advanceAir)
+  G.air ??= airClock();
+  advanceAir(G.air, dt, G.windEased);
   ctx.clearRect(0, 0, w, h);
-  paintPlasma(ctx, plasmaCells(w, h, now, G.windEased));
-  paintFlow(ctx, stepFlow(G.flow, dt, { wind: G.windEased, w, h, now }));
+  paintPlasma(ctx, plasmaCells(w, h, G.air, G.windEased));
+  paintFlow(ctx, stepFlow(G.flow, dt, { wind: G.windEased, w, h, now, clock: G.air }));
   paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 

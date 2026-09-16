@@ -14,7 +14,7 @@ import {
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
-import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma } from '../public/js/scorchedwind.js';
+import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir } from '../public/js/scorchedwind.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -875,6 +875,29 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   assert.equal(banner[0].dir, -1, 'the banner points the way it blows');
   assert.ok(windBanner(9, 800, 400).length > windBanner(2, 800, 400).length, 'more chevrons in a gale');
   assert.equal(windBanner(0, 800, 400).length, 0, 'still air says nothing');
+
+  // THE AIR KEEPS ITS OWN TIME (operator: "the nebula effects ... rapidly block in the reverse
+  // direction" during a change of wind). On a page clock a day old, a wash whose drift was
+  // `now * speed` moved by a day's worth of travel for the smallest change in speed. Integrated,
+  // a change of wind between two frames moves it by one frame's travel and no more.
+  const day = 86_400_000;
+  const clock = airClock();
+  for (let i = 0; i < 100; i++) advanceAir(clock, 16, 4);            // a while at one wind
+  const before = plasmaCells(800, 400, { ...clock }, 4);
+  advanceAir(clock, 16, -9);                                          // then the wind turns hard
+  const after = plasmaCells(800, 400, clock, -9);
+  const settled = (a, b) => a.length && b.length && Math.abs(a[0].x - b[0].x) < 40 && Math.abs(a[0].alpha - b[0].alpha) < 0.02;
+  assert.ok(settled(before, after), 'the wash barely moves across a change of wind');
+  assert.ok(Math.abs(clock.drift) < 1000, `and a day-old page changes nothing about that (drift ${clock.drift.toFixed(2)}, not ${(day / 1000 * 0.5).toFixed(0)})`);
+  // the flow's field likewise: one frame at the new wind moves a particle one frame's distance
+  const parts3 = makeFlow(40, 800, 400, 9, day);
+  const c3 = airClock();
+  for (let i = 0; i < 30; i++) { advanceAir(c3, 16, 3); stepFlow(parts3, 16, { wind: 3, w: 800, h: 400, now: day + i * 16, clock: c3 }); }
+  const xs = parts3.map((p) => p.x);
+  advanceAir(c3, 16, -8);
+  stepFlow(parts3, 16, { wind: -8, w: 800, h: 400, now: day + 31 * 16, clock: c3 });
+  const jump = Math.max(...parts3.map((p, i) => Math.abs(p.x - xs[i])).filter((d) => d < 400));
+  assert.ok(jump < 12, `no particle leaps when the wind turns (largest step ${jump.toFixed(1)}px)`);
 
   // and the plasma paints one flat rect a cell
   const ops = [];
