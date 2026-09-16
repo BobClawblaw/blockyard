@@ -36,9 +36,18 @@ export function noise2(x, y) {
   return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
 }
 
-/** Two octaves of it, which is enough structure for eddies at two sizes. */
+/**
+ * Two octaves of it, which is enough structure for eddies at two sizes. Time MORPHS the field in
+ * place: each octave is a blend of two samples that trade places on a slow cosine. The first cut
+ * scrolled the octaves instead, one up and one down, and two layers sliding against each other
+ * read as motion in whatever direction the eye picks -- against the wind as often as not. Nothing
+ * here travels; the drift the caller subtracts from x is the only translation there is.
+ */
 export function field(x, y, t) {
-  return noise2(x, y + t) * 0.68 + noise2(x * 2.3 + 11, y * 2.3 - t * 1.7) * 0.32;
+  const k = 0.5 - 0.5 * Math.cos(t * 0.9), k2 = 0.5 - 0.5 * Math.cos(t * 1.3 + 1.1);
+  const a = noise2(x, y) * (1 - k) + noise2(x + 37.3, y + 19.1) * k;
+  const b = noise2(x * 2.3 + 11, y * 2.3) * (1 - k2) + noise2(x * 2.3 + 53.7, y * 2.3 + 29.9) * k2;
+  return a * 0.68 + b * 0.32;
 }
 
 /**

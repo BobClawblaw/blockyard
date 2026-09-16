@@ -899,6 +899,14 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const jump = Math.max(...parts3.map((p, i) => Math.abs(p.x - xs[i])).filter((d) => d < 400));
   assert.ok(jump < 12, `no particle leaps when the wind turns (largest step ${jump.toFixed(1)}px)`);
 
+  // NOTHING IN THE FIELD SCROLLS: a frame of evolution with no drift leaves the wash where it is,
+  // cell for cell, and nearly the same shape
+  const c4 = airClock(); for (let i = 0; i < 20; i++) advanceAir(c4, 16, 0.5);
+  const still0 = plasmaCells(800, 400, { t: c4.t, drift: 0 }, 5), still1 = plasmaCells(800, 400, { t: c4.t + 0.016 * 0.16, drift: 0 }, 5);
+  const key = (c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
+  const set0 = new Set(still0.map(key)), shared = still1.filter((c) => set0.has(key(c))).length;
+  assert.ok(shared / Math.max(1, still1.length) > 0.95, `a frame later the same cells are lit (${shared} of ${still1.length})`);
+
   // and the plasma paints one flat rect a cell
   const ops = [];
   const ctx = { beginPath: () => {}, arc: () => ops.push('disc'), fill: () => {}, set fillStyle(v) { ops.push(`fill:${v}`); } };
