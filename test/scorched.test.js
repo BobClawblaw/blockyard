@@ -1115,3 +1115,19 @@ test('scorched yard: the air stays evenly filled, carries tails, and runs on cur
   paintStreamlines(D.ctx, traceStreamlines(c, { wind: 5, w: 800, h: 400 }), 120);
   assert.ok(D.ops.some((o) => o.op === 'dash' && o.d.length === 2), 'the currents are dashed, so their dashes can run');
 });
+
+// THE PANEL IS YOURS WHILE YOU SHOP (operator, 2026-09-16: "my cash doesn't get subtracted when I
+// purchase stuff" -- it was; the panel was showing the computer player whose turn the round ended on)
+test('scorched yard: a purchase takes the money, and the panel shows the shopper between rounds', () => {
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 3 });
+  const you = g.tanks[0];
+  you.cash = 13000;
+  assert.equal(buy(you, 'napalm'), true);
+  assert.equal(you.cash, 3000, 'the price is taken');
+  assert.equal(you.inventory.napalm, 10, 'and the pack is added');
+  assert.equal(buy(you, 'nuke'), false, 'and nothing is sold on credit');
+  assert.equal(you.cash, 3000);
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /const t = G\.shopping && you \? you : current\(g\);/, 'the panel shows the human while the shop is open');
+  assert.match(src, /\['turn', G\.shopping && you \? `\$\{t\.name\} · shopping` : t\.name\]/, 'and says so');
+});

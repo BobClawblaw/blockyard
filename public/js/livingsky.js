@@ -33,7 +33,10 @@ export function skyTime(opts = {}, nowMs = Date.now()) {
   else hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
   const start = new Date(d.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((d - start) / 86400000);
-  return { hour, dayOfYear, date: d, mode };
+  // under the cycle a day is 24 minutes, and the moon keeps its calendar in THOSE days: a lunar
+  // month goes by in about twelve hours of the clock on the wall, so the phases can be watched
+  const cycleDays = mode === 'cycle' ? Math.floor(nowMs / (24 * 60000)) : 0;
+  return { hour, dayOfYear, date: d, mode, cycleDays };
 }
 
 // ------------------------------------------------------------------- the sun
@@ -238,11 +241,19 @@ function paintSun(ctx, pw, ph, s, sun, cols, softStops, pass = 'both') {
 
 function paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops) {
   if (moon.alt < -3 || phase.lit < 0.03) return;
-  const r = ph * 0.038;
+  const r = ph * 0.046;
   // faint by day (a daytime moon is there, but it is not a lamp), and a thin crescent by day is invisible
   const show = Math.max(0, Math.min(1, (moon.alt + 3) / 6)) * (0.12 + 0.88 * night);
   if (show <= 0.02 || (night < 0.3 && phase.lit < 0.25)) return;
-  if (night > 0.3) softStops(ctx, m.x, m.y, r * 5, [[0, rgb([220, 228, 245], 0.25 * night * show)], [0.3, rgb([220, 228, 245], 0.08 * night * show)], [1, rgb([220, 228, 245], 0)]]);
+  // THE HALO (operator, 2026-09-16: "Can we give the moon a glow effect as well?"): the same two
+  // layers the sun has, in moonlight silver, and stronger the fuller the moon -- a full moon lights
+  // the sky round it; a crescent barely does
+  if (night > 0.3) {
+    const g = night * show * (0.35 + 0.65 * Math.max(0, Math.min(1, phase.lit)));
+    const silver = [222, 230, 248];
+    softStops(ctx, m.x, m.y, r * 7, [[0, rgb(silver, 0.42 * g)], [0.2, rgb(silver, 0.22 * g)], [0.5, rgb(silver, 0.08 * g)], [1, rgb(silver, 0)]]);
+    softStops(ctx, m.x, m.y, r * 2.6, [[0, rgb([236, 240, 255], 0.6 * g)], [0.5, rgb(silver, 0.28 * g)], [1, rgb(silver, 0)]]);
+  }
   // ONLY THE LIT PART IS PAINTED. The first cut drew a full disc and then a disc of sky colour over
   // the dark side; once the moon moved in front of the clouds and the stars, that sky-coloured
   // disc was a hole punched in them. The lit shape is a polygon: the outer half-circle on the lit
@@ -458,7 +469,10 @@ export function drawLivingSky(ctx, pw, ph, dpr, now, opts, helpers) {
   if (night > 0.01 && drawStars) drawStars({ ...opts, stars: true, starBrightness: (Number.isFinite(opts.starBrightness) ? opts.starBrightness : 1) * night });
   paintTwilight(ctx, pw, ph, s.x, cols, softStops);
   if (opts.skyShooting !== false) paintShootingStar(ctx, pw, ph, now, night, dpr);
-  const phase = moonPhase(t.date);
+  // the real calendar's phase (operator: "Is it ever a full moon? Does it go through phases?" --
+  // yes, on the real dates: new, crescent, quarter, gibbous, full and back over 29.5 days); under
+  // the cycle clock the calendar runs a day per 24-minute day, so the month passes in twelve hours
+  const phase = moonPhase(t.mode === 'cycle' ? new Date(t.date.getTime() + t.cycleDays * 86400000) : t.date);
   // THE MOON EVERY NIGHT (opts.skyMoon 'night', the shipped choice): on the real track a young
   // crescent sets an hour or two after the sun and a night has no moon in it at all, which is
   // astronomy and not what anyone looking at a night sky for pleasure expects. 'night' puts it on

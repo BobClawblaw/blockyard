@@ -186,3 +186,21 @@ test('the horizon can be raised, the discs go over the clouds, and the moon is u
   const game = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
   assert.match(game, /skyHorizon: 0\.58,/, 'Scorched Yard sets its horizon where its land is');
 });
+
+// THE MOON'S PHASES AND ITS GLOW (operator, 2026-09-16: "Can we give the moon a glow effect as
+// well? Is it ever a full moon? Does it go through phases?")
+test('the moon runs through its phases on the real calendar, a month in twelve hours under the cycle clock, and glows more the fuller it is', () => {
+  const full = moonPhase(new Date(Date.UTC(2000, 0, 21, 4, 40))), nw = moonPhase(new Date(Date.UTC(2000, 0, 6, 18, 14)));
+  assert.ok(full.lit > 0.98 && nw.lit < 0.02, 'full and new on their dates');
+  assert.ok(moonPhase(new Date(Date.UTC(2000, 0, 14))).lit > 0.4 && moonPhase(new Date(Date.UTC(2000, 0, 14))).lit < 0.6, 'a quarter halfway between');
+  // under the cycle clock the calendar advances a day per 24-minute day
+  const t0 = skyTime({ skyClock: 'cycle' }, 0), t1 = skyTime({ skyClock: 'cycle' }, 24 * 60000 * 15);
+  assert.equal(t0.cycleDays, 0); assert.equal(t1.cycleDays, 15, 'fifteen cycle days six hours later');
+  assert.equal(skyTime({ skyClock: 'real' }, 24 * 60000 * 15).cycleDays, 0, 'the real clock keeps the real calendar');
+  const src = readFileSync(new URL('../public/js/livingsky.js', import.meta.url), 'utf8');
+  assert.match(src, /moonPhase\(t\.mode === 'cycle' \? new Date\(t\.date\.getTime\(\) \+ t\.cycleDays \* 86400000\) : t\.date\)/, 'the phase is taken from the cycle\u2019s own calendar');
+  // the glow: two layers, stronger for a fuller moon
+  const halo = src.slice(src.indexOf('THE HALO (operator'), src.indexOf('ONLY THE LIT PART IS PAINTED'));
+  assert.ok((halo.match(/softStops\(ctx, m\.x, m\.y, r \* /g) || []).length === 2, 'a wide corona and a tight one');
+  assert.match(halo, /0\.35 \+ 0\.65 \* Math\.max\(0, Math\.min\(1, phase\.lit\)\)/, 'scaled by the lit fraction');
+});

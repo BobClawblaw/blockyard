@@ -440,12 +440,18 @@ function drawStats() {
   let rows;
   if (!g) rows = [['round', '–'], ['turn', '–'], ['wind', '–'], ['angle', '–'], ['power', '–'], ['weapon', '–'], ['cash', '–']];
   else {
-    const t = current(g);
+    // WHILE THE SHOP IS OPEN THE PANEL IS YOURS (operator, 2026-09-16: "my cash doesn't get
+    // subtracted when I purchase stuff"). The purchase always took the money; the panel was
+    // showing the tank whose turn it was when the round ended, and when that was a computer
+    // player its cash sat there unmoved while yours went down in the shop's own header. Between
+    // rounds the panel shows the human, who is the one shopping.
+    const you = g.tanks.find((k) => k.kind === 'human');
+    const t = G.shopping && you ? you : current(g);
     const w = WEAPONS[t.weapon];
     const count = t.weapon === 'babyMissile' ? '∞' : String(t.inventory[t.weapon] ?? 0);
     rows = [
       ['round', `${g.round} of ${g.rounds}`],
-      ['turn', t.name],
+      ['turn', G.shopping && you ? `${t.name} · shopping` : t.name],
       ['wind', `${windArrow(g.wind)} ${Math.abs(g.wind).toFixed(1)}`],
       ['angle', `${t.angle}°`],
       ['power', String(t.power)],
