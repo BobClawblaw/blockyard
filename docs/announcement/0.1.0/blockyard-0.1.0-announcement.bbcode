@@ -13,7 +13,7 @@ Two days ago we posted 0.0.9, the initial release. This is 0.1.0 — everything 
 
 BlockYard is a self-hosted web app you point at [b]your own Bitcoin Core node[/b]. Open a browser and you get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a full block / transaction / address explorer with its own address index, exchange prices with order-book depth (opt-in), a mining dashboard, and a kiosk view for a wall screen. Every number on every page comes from your node — or, only if you switch it on, from a public exchange API.
 
-It is written in plain JavaScript on Node.js with [b]zero dependencies[/b]. Not "few": zero. [tt]package.json[/tt] has no [tt]dependencies[/tt] and no [tt]devDependencies[/tt]. No framework, no bundler, no CSS library, no chart library, no 3D library, no TLS library — the certificate generator is ours too — and no test framework beyond [tt]node:test[/tt]. There is no CDN in the browser app. [tt]npm install[/tt] installs nothing but BlockYard itself. The 944 unit tests run with [tt]npm test[/tt] and need nothing but Node.
+It is written in plain JavaScript on Node.js with [b]zero dependencies[/b]. Not "few": zero. [tt]package.json[/tt] has no [tt]dependencies[/tt] and no [tt]devDependencies[/tt]. No framework, no bundler, no CSS library, no chart library, no 3D library, no TLS library — the certificate generator is ours too — and no test framework beyond [tt]node:test[/tt]. There is no CDN in the browser app. [tt]npm install[/tt] installs nothing but BlockYard itself. The 945 unit tests run with [tt]npm test[/tt] and need nothing but Node.
 
 It is read-only toward your node by default. It never signs, never spends, never asks for a wallet.
 
@@ -86,7 +86,7 @@ blockyard start[/code]
 
 [code]git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test          # optional: the 944 unit tests, nothing to install first
+npm test          # optional: the 945 unit tests, nothing to install first
 npm run setup
 npm start[/code]
 

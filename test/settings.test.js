@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import {
   DEFAULTS, PANEL, SETTINGS_KEY, SCHEMA_VERSION, normalise, loadSettings, saveSettings, setSetting,
   resetSettings, isDefault, spaceOptions, marketsOptions, tetrustOptions, onSettingsChange,
-  gridColours, courtGridColours, blockanoidOptions,
+  gridColours, courtGridColours, blockanoidOptions, TAB_ROWS,
 } from '../public/js/settings.js';
 import { buildScene } from '../public/js/blockscene3d.js';
 import { starField } from '../public/js/details3d.js';
@@ -63,6 +63,17 @@ test('a setting round-trips through the store, and reset puts everything back', 
   const back = resetSettings(s);
   assert.equal(isDefault(back), true);
   assert.equal(loadSettings(s).space.grid, true, 'the store is empty again');
+});
+
+test('the tabs come in labelled rows, every group in exactly one row, the Diversions last', () => {
+  // operator, 2026-09-16: "we really need to group these better. Diversions go at the very end"
+  const rowed = TAB_ROWS.flatMap((r) => r.groups);
+  assert.deepEqual([...rowed].sort(), Object.keys(DEFAULTS).sort(), 'every group is in a row, and no row names a group that is not a setting');
+  assert.equal(new Set(rowed).size, rowed.length, 'no group is in two rows');
+  assert.deepEqual(PANEL.map((g) => g.group), rowed, 'the sheet shows the groups row by row');
+  assert.deepEqual(TAB_ROWS.at(-1).groups, ['tetrust', 'blockout', 'blockanoid'], 'the games are the last row');
+  assert.equal(TAB_ROWS[0].groups[0], 'appearance', 'Appearance is the first tab');
+  for (const r of TAB_ROWS) assert.ok(r.label, 'each row is labelled');
 });
 
 test('every panel control names a real setting, and every setting has a control', () => {

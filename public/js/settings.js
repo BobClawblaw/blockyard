@@ -383,7 +383,16 @@ export function fxCadence(g) {
   return { idleEvery, idleFirst };
 }
 
-export const PANEL = Object.freeze([
+// THE TABS, IN ORDER AND IN ROWS (operator, 2026-09-16: "we really need to group these better.
+// Diversions go at the very end"). The groups are written below in the order they were added; the
+// sheet shows them in this order, each row of the strip labelled: the boards, their effects, the
+// games last.
+export const TAB_ROWS = Object.freeze([
+  Object.freeze({ label: 'Boards', groups: Object.freeze(['appearance', 'space', 'sky', 'markets']) }),
+  Object.freeze({ label: 'Effects', groups: Object.freeze(['effects', 'marketEffects']) }),
+  Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid']) }),
+]);
+const PANEL_GROUPS = Object.freeze([
   Object.freeze({
     group: 'appearance',
     title: 'Appearance',
@@ -612,6 +621,12 @@ export const PANEL = Object.freeze([
     ]),
   }),
 ]);
+/** The groups in the sheet's order: row by row of TAB_ROWS, then anything a row forgot (a test says nothing is). */
+export const PANEL = Object.freeze([
+  ...TAB_ROWS.flatMap((row) => row.groups.map((id) => PANEL_GROUPS.find((g) => g.group === id)).filter(Boolean)),
+  ...PANEL_GROUPS.filter((g) => !TAB_ROWS.some((row) => row.groups.includes(g.group))),
+]);
+
 
 // "group.key" -> the row that defines it. The bounds live in exactly one place now.
 const ROWS = new Map();

@@ -935,6 +935,8 @@ Peer identity is not guessed from another source.
 
 The block under construction and who has been mining. The layout follows mempool.space's mining dashboard: Block flow across the top, then two columns — reward stats and the difficulty adjustment, the pools and the hashrate, recent blocks and the adjustments — and our own panels beneath. **View more »** on the pools, hashrate, recent blocks and adjustments cards opens that card full screen (Esc, the close button or a click outside shuts it).
 
+![Mining](images/mining.jpg)
+
 | Panel | What it shows |
 |---|---|
 | **Reward stats** | The last 144 blocks: the miners' reward (subsidy plus fees), the average fees per block and the average fee per transaction, from `getblockstats`, rolled forward a block at a time. Each carries its dollar figure while market polling is on (the cached spot price, never a new poll); off, a note says so. |
@@ -1103,9 +1105,10 @@ same whatever you choose here.
 
 ![Display settings](images/settings.jpg)
 
-The panel is **tabbed** — Appearance, Block space, Sky, Markets & Price, Blockout, Blockanoid,
-Space effects, Market effects and Tetrust. The two **effects** tabs are lists of switches, so they
-also get **all on** and **all off**; twenty-nine of them is a lot of clicking otherwise.
+The panel is **tabbed**, in three labelled rows: **Boards** (Appearance, Block space, Sky,
+Markets & Price), **Effects** (Space effects, Market effects) and **Diversions** (Tetrust,
+Blockout, Blockanoid). The two **effects** tabs are lists of switches, so they also get **all
+on** and **all off**; twenty-nine of them is a lot of clicking otherwise.
 
 ### Appearance
 

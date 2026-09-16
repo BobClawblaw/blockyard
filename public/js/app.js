@@ -16,6 +16,7 @@ import {
 // APPEARANCE (2026-09-16): the theme goes on <html> before the first paint, from the browser's copy
 // of the settings, and follows every change after (followTheme); the cards' swatches are painted
 // through the CSSOM because the CSP refuses a style attribute in markup
+import { TAB_ROWS } from './settings.js';
 import { followTheme, presetFace, resolveScheme, resolveTheme, PRESETS, BASE_KEYS } from './theme.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets, summaryHtml as marketsSummaryHtml, REFRESH_MS as MARKETS_REFRESH_MS } from './markets.js';
@@ -1134,8 +1135,10 @@ async function boot() {
   const drawSettings = () => {
     const s = loadSettings();
     if (!SETTINGS_PANEL.some((g) => g.group === cfgTab)) cfgTab = SETTINGS_PANEL[0].group;
-    const tabs = `<div class="cfgtabs" role="tablist">${SETTINGS_PANEL.map((g) =>
-      `<button type="button" class="cfgtab${g.group === cfgTab ? ' on' : ''}" role="tab" aria-selected="${g.group === cfgTab}" data-cfgtab="${g.group}">${g.title}</button>`).join('')}</div>`;
+    // one row per TAB_ROWS entry, labelled, the games last (operator: "Diversions go at the very end")
+    const tab = (g) => `<button type="button" class="cfgtab${g.group === cfgTab ? ' on' : ''}" role="tab" aria-selected="${g.group === cfgTab}" data-cfgtab="${g.group}">${g.title}</button>`;
+    const tabs = `<div class="cfgtabs" role="tablist">${TAB_ROWS.map((row) =>
+      `<div class="cfgtabrow"><span class="cfgtablbl">${row.label}</span>${row.groups.map((id) => SETTINGS_PANEL.find((g) => g.group === id)).filter(Boolean).map(tab).join('')}</div>`).join('')}</div>`;
     cfgBody.innerHTML = tabs + SETTINGS_PANEL.filter((g) => g.group === cfgTab).map((g) => {
       // ALL / NONE, on the groups that ask for it (the two effects tabs): twenty-eight switches is
       // a lot of clicking to answer "just show me the quiet board". This was "every row is a

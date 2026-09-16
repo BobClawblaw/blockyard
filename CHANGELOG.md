@@ -18,7 +18,7 @@ page now packs to one screen at 1093×945, and the Mining tab follows mempool.sp
 with its **View more** panels. **Appearance**: the layout's colours are a setting — light or
 dark, five themes, or nine colours of your own. And the **DOS Diversions**: Wolfenstein 3D, DOOM
 and Quake, unmodified shareware on a PC emulated in the browser, written here with no
-dependencies, because "can it run DOOM?" deserved a straight answer. 944 tests, from 862.
+dependencies, because "can it run DOOM?" deserved a straight answer. 945 tests, from 862.
 
 Upgrading from 0.0.9: [docs/INSTALL.md §11](docs/INSTALL.md#11-updating) — the first start after
 the update serves HTTPS, creates the `admin` account and prints its password once.
@@ -135,7 +135,8 @@ Measured at 1093×945 and 1600×1000 with a dead-height probe, page by page:
   console) instead of grid rows that left holes beside the short cards.
 - **Admin**: two stacks (Users over the audit log; Node actions over Change own password, whose
   two fields share a row). **Sign-in** and **404**: the same tighter card.
-- **Display settings**: rows, note and groups tighter, the sheet a little wider so hints wrap
+- **Display settings**: the tabs in three labelled rows — Boards (Appearance, Block space, Sky,
+  Markets & Price), Effects, and the Diversions last; rows, note and groups tighter, the sheet a little wider so hints wrap
   less, and on the two effects tabs the switches run two across with each hint as the row's
   tooltip — the Space effects tab is under half the scrolling it was. The price line on Overview
   switch sits directly under the polling switch it depends on.
