@@ -8,6 +8,9 @@
 *.tmp
 
 config/local.json
+# The dated backups scripts/setup.js keeps when it replaces local.json (2026-09-16, audit I5):
+# they hold the same RPC password, so they must never be one `git add` away from a commit.
+config/*.bak-*
 # Display settings, written by the app itself (POST /api/settings). THIS DEPLOYMENT's
 # preferences, not the shipped ones -- those are DEFAULTS in public/js/settings.js and
 # belong in the repository. Ignored for the same reason local.json is: it is a choice

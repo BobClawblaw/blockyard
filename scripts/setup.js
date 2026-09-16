@@ -5,9 +5,15 @@
 // monitor -- so a new machine goes from a clone to running and indexing in one sitting.
 //
 //   npm run setup                       # interactive
-//   node scripts/setup.js --yes [--rpc-url URL] [--datadir DIR] [--label L] [--rpc-user U --rpc-password P]
+//   node scripts/setup.js --yes [--rpc-url URL] [--datadir DIR] [--label L]
+//                         [--rpc-user U (--rpc-password-file PATH | --rpc-password - | --rpc-password P)]
 //                         [--host 127.0.0.1] [--port 21000] [--index-dir DIR] [--workers N]
 //                         [--build-here | --build-later] [--start] [--force]
+//
+// The RPC password (2026-09-16, audit L12): --rpc-password-file PATH reads the first line of a
+// file, --rpc-password - reads the first line of stdin; --rpc-password P still works but warns,
+// because P is then visible to every user of the machine in `ps` and stays in shell history.
+// Typed at the prompt, it is not echoed.
 //
 // --yes takes every default without asking (a scripted install); --force replaces an existing
 // config/local.json (a backup is kept either way); --start boots the monitor at the end without
@@ -16,7 +22,7 @@
 // --build-later writes addressIndexBuild: "manual" so nothing builds until you run index-build.js.
 // The written file is mode 0600: it may carry an RPC password. Nothing here touches the
 // node: every call is a read. (operator, 2026-09-14: "Make this npm installer absolutely beautiful")
-import { existsSync, statSync, writeFileSync, copyFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync, chmodSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
 import http from 'node:http';
@@ -72,14 +78,80 @@ export function localConfig(a) {
 }
 
 /** Write it, keeping a dated copy of whatever was there. Refuses an existing file unless `force`. */
-export function writeLocalConfig(file, cfg, { force = false, now = new Date() } = {}) {
+export function writeLocalConfig(file, cfg, { force = false, now = new Date(), platform = process.platform } = {}) {
   if (existsSync(file)) {
     if (!force) throw new Error(`${file} exists; pass --force (or answer yes) to replace it`);
     const bak = `${file}.bak-${now.toISOString().replace(/[:.]/g, '').slice(0, 15)}`;
-    copyFileSync(file, bak);
+    // THE BACKUP IS OWNER-ONLY TOO (2026-09-16, audit I5): it holds the same RPC password, and
+    // copyFileSync kept whatever mode the old file had -- 0644 on a config written by hand. It is
+    // written fresh at 0600, and chmod'ed in case a backup of that name was already there.
+    writeFileSync(bak, readFileSync(file), { mode: 0o600 });
+    if (platform !== 'win32') chmodSync(bak, 0o600);
   }
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
+  // `mode` above applies only when the file is CREATED (2026-09-16, audit L12): --force over an
+  // existing 0644 local.json kept 0644 while putting a password in it. Windows has no such bits.
+  if (platform !== 'win32') chmodSync(file, 0o600);
+}
+
+/**
+ * WHERE THE RPC PASSWORD COMES FROM ON THE COMMAND LINE (2026-09-16, audit L12). `--rpc-password P`
+ * puts P in `ps` for every user of the machine and in the shell's history, so two ways that do
+ * not: `--rpc-password-file PATH` (the first line of the file) and `--rpc-password -` (the first
+ * line of stdin; needs --yes, since stdin is then not a terminal to ask on). The plain form still
+ * works, with a warning. Returns { password, source, warning } -- password null when none is named.
+ */
+export function rpcPasswordFrom(argv, { readFile = (p) => readFileSync(p, 'utf8'), readStdin = () => readFileSync(0, 'utf8') } = {}) {
+  const val = (name) => { const i = argv.indexOf(`--${name}`); return i >= 0 && argv[i + 1] != null && (argv[i + 1] === '-' || !argv[i + 1].startsWith('--')) ? argv[i + 1] : null; };
+  const firstLine = (text) => String(text).split(/\r?\n/)[0];
+  const file = val('rpc-password-file'), plain = val('rpc-password');
+  if (file != null && plain != null) throw new Error('--rpc-password and --rpc-password-file name the password twice; give one');
+  if (file != null) {
+    let text;
+    try { text = readFile(expand(file)); } catch (err) { throw new Error(`--rpc-password-file ${file}: ${err.code ?? err.message}`); }
+    return { password: firstLine(text), source: 'file', warning: null };
+  }
+  if (plain === '-') return { password: firstLine(readStdin()), source: 'stdin', warning: null };
+  if (plain != null) {
+    return { password: plain, source: 'argv',
+      warning: '--rpc-password on the command line is visible to other users of this machine (ps) and stays in your shell history; use --rpc-password-file PATH, or --rpc-password - to read it from stdin' };
+  }
+  return { password: null, source: null, warning: null };
+}
+
+/**
+ * A PROMPT THAT DOES NOT ECHO (2026-09-16, audit L12): readline's question() shows every character
+ * typed, so the "secret" rpcPassword prompt used to hide only its default. The same approach as
+ * scripts/manage-users.js: raw mode on a terminal, the characters collected by hand, nothing
+ * written back but the newline. Backspace edits, Ctrl-C calls `onInterrupt`. The caller closes
+ * any readline interface on `input` first, so it does not echo the keys itself.
+ */
+export function readHidden(question, { input = stdin, output = stdout, onInterrupt = () => process.exit(130) } = {}) {
+  return new Promise((resolve) => {
+    output.write(question);
+    const raw = Boolean(input.isTTY && input.setRawMode);
+    if (raw) input.setRawMode(true);
+    let buf = '';
+    input.setEncoding?.('utf8');
+    const finish = () => {
+      input.removeListener('data', onData);
+      if (raw) input.setRawMode(false);
+      input.pause();
+      output.write('\n');
+    };
+    // a chunk may hold many characters (a paste, or a pipe), so each is looked at on its own
+    const onData = (chunk) => {
+      for (const ch of String(chunk)) {
+        if (ch === '\n' || ch === '\r') { finish(); resolve(buf); return; }
+        if (ch === '\u007f' || ch === '\b') buf = buf.slice(0, -1);   // DEL is what backspace sends on a tty
+        else if (ch === '\u0003') { finish(); onInterrupt(); return; }
+        else buf += ch;
+      }
+    };
+    input.on('data', onData);
+    input.resume();
+  });
 }
 
 // ------------------------------------------------------------------------- what an answer must be
@@ -211,8 +283,12 @@ export async function portInUse(host, port) {
 
 // ------------------------------------------------------------------------------------ the flow
 async function main() {
-  if (!YES && !stdin.isTTY) { console.error('no terminal to ask on: pass --yes with the --rpc-url/--datadir flags (see the header of scripts/setup.js)'); process.exit(2); }
-  const rl = YES ? null : readline.createInterface({ input: stdin, output: stdout });
+  if (!YES && !stdin.isTTY) { console.error('no terminal to ask on: pass --yes with the --rpc-url/--datadir flags (see the header of scripts/setup.js; --rpc-password - reads stdin only with --yes)'); process.exit(2); }
+  // read once, before anything else touches stdin (2026-09-16, audit L12)
+  let pw;
+  try { pw = rpcPasswordFrom(argv); } catch (err) { console.error(c.bad(err.message)); process.exit(2); }
+  if (pw.warning) console.error(`${c.warn('!')} ${pw.warning}`);
+  let rl = YES ? null : readline.createInterface({ input: stdin, output: stdout });
   const out = (s = '') => stdout.write(`${s}\n`);
   // every line the installer says fits the terminal (operator: 80 columns, "Standard CRT")
   const say = (s) => out(`    ${wrapText(s, cols() - 4, 4)}`);
@@ -225,7 +301,14 @@ async function main() {
       if (YES) raw = def;
       else {
         const shown = def != null && def !== '' && !secret ? ` ${c.dim(`(${def})`)}` : '';
-        raw = (await rl.question(`    ${q} ${label}${shown} ${c.dim('›')} `)).trim();
+        const prompt = `    ${q} ${label}${shown} ${c.dim('›')} `;
+        if (secret) {
+          // not echoed (2026-09-16, audit L12): readline would echo the keys itself, so it is
+          // closed for the one answer and opened again after
+          rl.close();
+          raw = (await readHidden(`${prompt}${c.dim('(not shown) ')}`, { onInterrupt: () => process.emit('SIGINT') })).trim();
+          rl = readline.createInterface({ input: stdin, output: stdout });
+        } else raw = (await rl.question(prompt)).trim();
         if (raw === '') raw = def;
       }
       const r = check ? check(raw ?? '') : { value: raw };
@@ -283,7 +366,7 @@ async function main() {
     const port = conf.values.rpcport ?? RPC_PORT[conf.chain] ?? 8332;
     a.rpcUrl = await ask('RPC URL', arg('rpc-url', `http://${host}:${port}`), validate.rpcUrl);
     a.label = await ask('a label for the node', arg('label', conf.chain === 'main' ? 'Bitcoin Core' : `Bitcoin Core (${conf.chain})`), validate.label);
-    a.rpcUser = arg('rpc-user'); a.rpcPassword = arg('rpc-password');
+    a.rpcUser = arg('rpc-user'); a.rpcPassword = pw.password;
     a.cookieFile = conf.values.rpccookiefile ? (path.isAbsolute(conf.values.rpccookiefile) ? conf.values.rpccookiefile : path.join(a.datadir, conf.values.rpccookiefile)) : null;
     const cookie = resolveCookie({ datadir: a.datadir, chainHint: a.chain, cookieFile: a.cookieFile ?? undefined });
     if (cookie && cookie.source !== 'config') say(`${c.ok('✓')} cookie found: ${c.dim(cookie.source)}`);
@@ -294,7 +377,7 @@ async function main() {
       const who = conf.rpcauthUsers[0] ?? '';
       say(`${c.warn('!')} no .cookie readable under ${a.datadir}${who ? `; ${shortPath(conf.file)} has rpcauth for "${who}", whose password is not in the file` : ': a node authenticating with rpcauth needs a user and password'}`);
       a.rpcUser = await ask('rpcUser', who, null);
-      if (a.rpcUser) a.rpcPassword = await ask('rpcPassword', '', null, { secret: true });
+      if (a.rpcUser && a.rpcPassword == null) a.rpcPassword = await ask('rpcPassword', '', null, { secret: true });
     }
 
     out(step(2, STEPS, 'Checking the node'));

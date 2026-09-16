@@ -894,6 +894,20 @@ The game files are served from `games/<game>_dos/` by `server/http/games.js`
 `.PAK`, `.CFG` and `.WL1`, behind the session when accounts are on) rather than from `public/`, whose every
 file feeds the build id.
 
+**Provenance** (2026-09-16, audit I6). The files are the three shareware releases, kept byte for byte
+(`.gitattributes` marks `games/**` binary so git never rewrites them), and are served to the browser,
+never executed on the server:
+
+| Directory | Release | Its own terms, as shipped |
+|---|---|---|
+| `games/wolf3d_dos/` | Wolfenstein 3D v1.4 shareware (Apogee Software, 1992) | none beyond `file_id.diz`: the release's shareware licence text is not bundled |
+| `games/doom_dos/` | DOOM v1.9 shareware (id Software; `DOOM1.WAD`) | `README.TXT`, `ORDER.FRM`, the DOOM FAQ v6.666 |
+| `games/quake_dos/` | Quake v1.06 shareware (id Software, 1 October 1996) | `LICINFO.TXT`, `SLICNSE.TXT`, `READV106.TXT` |
+
+`games/SHA256SUMS` lists the SHA-256 of every tracked file under `games/` (`cd games && sha256sum -c
+SHA256SUMS`), and `test/audit-2026-09-16-low-scripts.test.js` recomputes them, so a changed game file
+is a failing test rather than an unnoticed one.
+
 ## 4. The 3D engine
 
 The 3D viewer turns a set of transactions, or any caller-supplied tiles, into

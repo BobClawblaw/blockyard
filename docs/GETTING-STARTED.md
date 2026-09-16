@@ -147,10 +147,17 @@ node scripts/setup.js --yes --rpc-url http://127.0.0.1:8332 \
   --datadir "$HOME/Library/Application Support/Bitcoin" --index-dir "$PWD/data/index" --workers 4
 ```
 
-Every question has a flag: `--datadir`, `--rpc-url`, `--label`, `--rpc-user` / `--rpc-password`,
-`--host`, `--port`, `--index-dir`, `--workers`. `--build-here` builds in the terminal and
-`--build-later` leaves it to you; `--start` boots the monitor at the end; `--force` replaces an
-existing `config/local.json` (with a backup).
+Every question has a flag: `--datadir`, `--rpc-url`, `--label`, `--rpc-user` /
+`--rpc-password-file`, `--host`, `--port`, `--index-dir`, `--workers`. `--build-here` builds in the
+terminal and `--build-later` leaves it to you; `--start` boots the monitor at the end; `--force`
+replaces an existing `config/local.json` (with a backup, also mode `0600`, and git-ignored).
+
+The RPC password, when the node needs one: `--rpc-password-file PATH` reads the first line of a
+file, and `--rpc-password -` reads it from stdin (with `--yes`, e.g.
+`pass show node/rpc | node scripts/setup.js --yes --rpc-user monitor --rpc-password - ...`).
+`--rpc-password P` still works but prints a warning: a password on the command line is visible to
+every user of the machine in `ps` and stays in your shell history. Typed at the interactive prompt,
+it is not echoed.
 
 ## 5. Run it
 

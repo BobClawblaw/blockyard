@@ -1,0 +1,9 @@
+# The workflow's actions are pinned by commit SHA (2026-09-16, audit L17), so nothing moves
+# under them without a reviewed change; this proposes that change when an action releases.
+# There are no npm dependencies to watch.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
