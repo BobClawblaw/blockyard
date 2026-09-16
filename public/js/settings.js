@@ -19,7 +19,7 @@
 // survivable, and `sky` below is the first one to take it.
 
 export const SETTINGS_KEY = 'blockyard.settings';
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const DEFAULTS = Object.freeze({
   // APPEARANCE (operator, 2026-09-16: "add an appearance section in preferences to change the colors
@@ -99,6 +99,7 @@ export const DEFAULTS = Object.freeze({
     // ten stops. A stored value above it clamps on load.
     perspective: 0,       // 0 = the parallel camera; 0.001 the most allowed
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
+    lightHeight: 'middle', // and how high it hangs when it is not overhead: 'low' | 'middle' | 'high'
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
     motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
     // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
@@ -312,6 +313,7 @@ export const DEFAULTS = Object.freeze({
     gridColour: '#2a5a8f',
     gridBrightness: 1,
     opponents: 2,         // computer players against the one human (operator: "at least 3 player")
+    opponentKind: 'mix',  // 'mix' (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark in turn) or one of the manual's eight
     rounds: 5,
     walls: 'none',        // the manual's default: 'none' | 'concrete' | 'padded' | 'rubber' | 'spring' | 'wrap'
     wind: 'turn',         // 'turn' (changes every turn) | 'shot' | 'none'
@@ -489,7 +491,11 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'perspective', label: 'Depth', kind: 'range', min: 0, max: 0.001, step: 0.0001, hint: 'How much height foreshortens. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube’s top grows a little wider than its base and a flying block swells slightly as it rises' }),
       Object.freeze({
         key: 'light', label: 'Light', kind: 'choice', hint: 'Where the lamp hangs. Straight above lights the whole board evenly; a corner shades the far slope of the curve and the sides turned away',
-        options: Object.freeze([['overhead', 'Straight above'], ['upper-left', 'Upper left'], ['upper-right', 'Upper right'], ['front', 'From the viewer']]),
+        options: Object.freeze([['overhead', 'Straight above'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right'], ['viewer', 'From the viewer']]),
+      }),
+      Object.freeze({
+        key: 'lightHeight', label: 'Light height', kind: 'choice', hint: 'How high the lamp hangs over that place: low rakes the sides and shades the far slope hard, high is nearly overhead',
+        options: Object.freeze([['low', 'Low'], ['middle', 'Middle'], ['high', 'High']]),
       }),
     ]),
   }),
@@ -686,6 +692,10 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of that grid' }),
       Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 0 hides it' }),
       Object.freeze({ key: 'opponents', label: 'Computer players', kind: 'range', min: 1, max: 5, step: 1, hint: 'How many tanks the computer fields against you. Two is the shipped game' }),
+      Object.freeze({
+        key: 'opponentKind', label: 'Their kind', kind: 'choice', hint: 'The manual\u2019s personalities: a mix climbs from the easy ones, or every seat the one you name. Moron fires at random; Shooter takes straight shots; Poolshark banks off rubber walls; Tosser lobs and corrects; Chooser picks its method; Spoiler nearly never misses; Cyborg is a Spoiler with a grudge; Unknown is one of them, drawn each round',
+        options: Object.freeze([['mix', 'A mix'], ['moron', 'Morons'], ['shooter', 'Shooters'], ['poolshark', 'Poolsharks'], ['tosser', 'Tossers'], ['chooser', 'Choosers'], ['spoiler', 'Spoilers'], ['cyborg', 'Cyborgs'], ['unknown', 'Unknowns']]),
+      }),
       Object.freeze({ key: 'rounds', label: 'Rounds', kind: 'range', min: 1, max: 10, step: 1, hint: 'A game is this many rounds; the highest score at the end wins' }),
       Object.freeze({
         key: 'walls', label: 'Walls', kind: 'choice', hint: 'What a shell does at the edge of the field',
@@ -865,6 +875,13 @@ const MIGRATIONS = {
     if (raw.marketEffects && typeof raw.marketEffects === 'object') return raw;
     const fx = raw.effects && typeof raw.effects === 'object' ? raw.effects : {};
     return { ...raw, marketEffects: { ...fx } };
+  },
+  // v4 -> v5: the lamp's placements were renamed as six places at three heights (2026-09-16):
+  // upper-left is top-left, upper-right top-right, front the viewer; the height is new (middle)
+  4: (raw) => {
+    const sp = raw.space && typeof raw.space === 'object' ? raw.space : {};
+    const map = { 'upper-left': 'top-left', 'upper-right': 'top-right', 'front': 'viewer' };
+    return { ...raw, space: { ...sp, light: map[sp.light] ?? sp.light } };
   },
 };
 
@@ -1071,6 +1088,7 @@ export function spaceOptions(s) {
   if (motion) out.transition = motion;
   out.departures = sp.departures;
   out.light = sp.light;
+  out.lightHeight = sp.lightHeight;
   // merged into the camera by details3d (it owns the oblique constants); 0 leaves it exactly as it
   // has always been, so the switch costs nothing until someone moves it
   out.obliqueRise = sp.perspective;
@@ -1173,7 +1191,7 @@ export function scorchedOptions(s) {
     stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, fast: sc.fast,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
-    opponents: sc.opponents, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,
+    opponents: sc.opponents, opponentKind: sc.opponentKind, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
     sky: skyExtras(n),

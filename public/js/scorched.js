@@ -29,6 +29,8 @@ export const COLS = 96;
 export const ROWS = 48;
 
 // the tanks' colours, in the order players are added (the original's palette, roughly)
+export const PERSONALITIES = Object.freeze(['moron', 'shooter', 'poolshark', 'tosser', 'chooser', 'spoiler', 'cyborg', 'unknown']);
+const UNKNOWN_POOL = Object.freeze(['moron', 'shooter', 'poolshark', 'tosser', 'chooser', 'spoiler', 'cyborg']);
 export const TANK_COLOURS = Object.freeze(['#f7931a', '#4d8dff', '#2ecc8f', '#ef5a5a', '#c78bff', '#f0c419']);
 export const MAX_HEALTH = 100;
 export const V_MAX = 56;              // cells/s at power 1000
@@ -43,6 +45,7 @@ export const TANK_H = 1.4;            // hull and turret, for the hitbox
 export const ROLL_SPEED = 14;         // cells/s along the ground
 export const BORE_SPEED = 16;         // cells/s through dirt
 export const HEAT_PULL = 14;          // cells/s² toward the nearest tank, heat-guided and falling
+const clampX = (x) => Math.max(0, Math.min(COLS - 1e-3, x));
 const BOMBLET = Object.freeze({ name: 'bomblet', kind: 'blast', radius: 1.5, damage: 30 });   // a Funky Bomb's pieces, which the shop does not sell
 
 // the strata: from the floor up, as a fraction of a column's own height, with a colour each
@@ -175,6 +178,9 @@ export function newGame(players, opts = {}) {
       shield: null,                       // { id, hp, deflect } while one is up
       armed: { contactTrigger: false, heatGuidance: false },
       kills: 0, score: 0, cash: Number.isFinite(opts.cash) ? opts.cash : START_CASH, damageDealt: 0,
+      lastHitBy: null,                    // who hurt this tank last (the Cyborg holds a grudge)
+      memory: null,                       // a computer player's last shot at its target, for correcting
+      persona: p.kind ?? 'human',         // what an Unknown is playing as this round
     })),
     round: 1, rounds: Math.max(1, Math.round(opts.rounds ?? 5)),
     turn: 0,                              // index into `order`
@@ -196,7 +202,12 @@ export function newGame(players, opts = {}) {
 export function startRound(g) {
   generateLand(g, g.land);
   placeTanks(g);
-  for (const t of g.tanks) { t.health = MAX_HEALTH; t.alive = true; t.shield = null; t.armed = { contactTrigger: false, heatGuidance: false }; }
+  for (const t of g.tanks) {
+    t.health = MAX_HEALTH; t.alive = true; t.shield = null; t.armed = { contactTrigger: false, heatGuidance: false };
+    t.lastHitBy = null; t.memory = null;
+    // an Unknown is one of the others, drawn each round and never announced (the manual)
+    t.persona = t.kind === 'unknown' ? UNKNOWN_POOL[Math.floor(g.rnd() * UNKNOWN_POOL.length)] : t.kind;
+  }
   const n = g.tanks.length;
   g.order = g.tanks.map((t) => t.id).map((_, i, a) => a[(i + g.round - 1) % n]);
   g.turn = 0;
@@ -380,6 +391,37 @@ export function trajectory(g, tank, secs = 8, dt = 1 / 60) {
 }
 
 /**
+ * Where a plain shell fired now would end up, with the walls, the dirt and the tanks in the way,
+ * and nothing changed: the computer players plan with this (docs/PLAN-SCORCHED-YARD.md §6).
+ * Returns `{ x, y, hit }` -- the impact, and the id of the tank it struck, if any -- and `lost`
+ * when the shell left the field or flew for longer than `secs`.
+ */
+export function simulateShot(g, tank, angle, power, secs = 14) {
+  const a = (angle * Math.PI) / 180;
+  const v = (Math.max(0, Math.min(1000, power)) / 1000) * V_MAX;
+  const m = muzzle({ ...tank, angle });
+  let x = m.x, y = m.y, vx = Math.cos(a) * v, vy = Math.sin(a) * v, t = 0;
+  const gy = GRAVITY * g.gravity, wx = g.wind * WIND_ACCEL;
+  const h = 1 / 120;
+  while (t < secs) {
+    vx += wx * h; vy -= gy * h; x += vx * h; y += vy * h; t += h;
+    if (x < 0 || x >= COLS) {
+      if (g.walls === 'rubber') { x = x < 0 ? -x : 2 * COLS - x - 1e-3; vx = -vx * 0.8; }
+      else if (g.walls === 'spring') { x = x < 0 ? -x : 2 * COLS - x - 1e-3; vx = -vx * 1.15; }
+      else if (g.walls === 'padded') { x = clampX(x); vx = 0; }
+      else if (g.walls === 'wrap') { x = ((x % COLS) + COLS) % COLS; }
+      else if (g.walls === 'none') return { x, y, hit: null, lost: true };
+      else return { x: clampX(x), y, hit: null, lost: false };
+    }
+    if (y < 0) return { x, y: 0, hit: null, lost: false };
+    if (y < ROWS && dirtAt(g, Math.floor(x), Math.floor(y))) return { x, y, hit: null, lost: false };
+    const hit = tankAt(g, x, y, t < 0.12 ? tank.id : -1, 0.2);
+    if (hit) return { x, y, hit: hit.id, lost: false };
+  }
+  return { x, y, hit: null, lost: true };
+}
+
+/**
  * Advance the game by dtMs. Returns the events of the step (the screen makes sounds and pictures
  * of them). Substepped so a shell never crosses more than MAX_STEP a hop, whatever the frame.
  */
@@ -401,7 +443,6 @@ export function step(g, dtMs) {
 
 const weaponOf = (id) => WEAPONS[id] ?? (id === 'funkyBomblet' ? BOMBLET : WEAPONS.babyMissile);
 const removeShell = (g, s) => { const i = g.shells.indexOf(s); if (i >= 0) g.shells.splice(i, 1); if (s.primary) g.lastPath = s.path; };
-const clampX = (x) => Math.max(0, Math.min(COLS - 1e-3, x));
 
 function flightStep(g, s, h, events) {
   const w = weaponOf(s.weapon);
@@ -740,7 +781,7 @@ export function applyDamage(g, t, dmg, byId) {
   t.health = Math.max(0, t.health - left);
   const lost = before - t.health;
   const by = g.tanks[byId] ?? null;
-  if (by && by !== t) { by.damageDealt += lost; by.cash += lost * CASH_PER_DAMAGE; }
+  if (by && by !== t) { by.damageDealt += lost; by.cash += lost * CASH_PER_DAMAGE; if (lost > 0) t.lastHitBy = byId; }
   g.sparks.push({ kind: 'hit', tank: t.id, damage: lost, absorbed, by: byId });
 }
 
@@ -885,6 +926,16 @@ export function actorTiles(g, { trace = true } = {}) {
       txid: `barrel${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: t.y + 0.6, s: 1, tall: 1.4, color: shade(c, 0.85),
       poly: [[0, -0.06], [0.7, -0.06], [0.7, 0.06], [0, 0.06]], rot: -(t.angle * Math.PI) / 180,
     });
+    // a pennant on the turret, streaming downwind and lifting with the strength (the wind made visible)
+    const w = g.wind;
+    if (Math.abs(w) > 0.05) {
+      const len = 0.45 + 0.5 * Math.min(1, Math.abs(w) / WIND_MAX), lift = 0.35 * (1 - Math.min(1, Math.abs(w) / WIND_MAX));
+      const dir = w > 0 ? 1 : -1;
+      out.push({
+        txid: `flag${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: t.y + 1.9, s: 1, tall: 0.01, color: shade(c, 1.2),
+        poly: [[0, 0], [dir * len, -lift * 0.5 - 0.06], [dir * len * 0.85, -lift * 0.5 + 0.06]], rot: 0,
+      });
+    }
     if (t.shield) {
       const k = t.shield.id === 'heavyShield' ? '#7ad7ff' : t.shield.id === 'forceShield' ? '#8fe0ff' : '#9ce8ff';
       out.push({ txid: `shield${t.id}`, x: t.x - 0.6, y: t.y - 0.4, s: TANK_W + 1.2, tall: 1.6, wire: k, color: k });

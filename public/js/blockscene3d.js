@@ -852,21 +852,46 @@ const flipOf = (o) => (o.flipY === false ? -1 : 1);
 // settings"). Each lamp is a direction over the board for the dome's slope shading (grid x,
 // screen-up rows, up) and a direction across the screen for the side faces (x right, y down);
 // `overhead` is straight above, so no slope is in shade and every side takes the same light.
-export const LIGHTS = Object.freeze({
-  'overhead': { L: [0, 0, 1], side: [0, 0] },
-  'upper-left': { L: [-0.55, 0.55, 0.63], side: [-0.7071, -0.7071] },
-  'upper-right': { L: [0.55, 0.55, 0.63], side: [0.7071, -0.7071] },
-  'front': { L: [0, -0.55, 0.63], side: [0, 0.9] },
+// SIX PLACEMENTS AT THREE HEIGHTS (operator, 2026-09-16: "add more camera light angles ... Low
+// Middle and High light placement locations, top left, top right, bottom left, bottom right,
+// viewer, direct overhead"). A placement is a direction across the board (x right, y screen-up);
+// the height is the lamp's elevation over it: low 25°, middle 45°, high 65°. `overhead` ignores
+// the height. The old names (upper-left, upper-right, front) still answer, as top-left,
+// top-right and viewer at the middle height.
+export const LIGHT_PLACES = Object.freeze({
+  'overhead': [0, 0], 'top-left': [-1, 1], 'top-right': [1, 1], 'bottom-left': [-1, -1], 'bottom-right': [1, -1], 'viewer': [0, -1],
 });
-export const LIGHT_DEFAULT = 'upper-left';
+export const LIGHT_HEIGHTS = Object.freeze({ low: 25, middle: 45, high: 65 });
+const LIGHT_ALIASES = Object.freeze({ 'upper-left': 'top-left', 'upper-right': 'top-right', 'front': 'viewer' });
+export function lampFor(place, height = 'middle') {
+  const p = LIGHT_PLACES[place] ?? LIGHT_PLACES['top-left'];
+  if (!p[0] && !p[1]) return { L: [0, 0, 1], side: [0, 0] };
+  const el = ((LIGHT_HEIGHTS[height] ?? 45) * Math.PI) / 180;
+  const n = Math.hypot(p[0], p[1]) || 1;
+  const ax = p[0] / n, ay = p[1] / n;
+  // the side faces take the lamp's direction across the screen (y down), weaker the higher it hangs
+  const k = 0.9 * Math.cos(el) / Math.cos((45 * Math.PI) / 180);
+  return { L: [ax * Math.cos(el), ay * Math.cos(el), Math.sin(el)], side: [ax * k, -ay * k] };
+}
+export const LIGHTS = Object.freeze({
+  'overhead': lampFor('overhead'),
+  'top-left': lampFor('top-left'), 'top-right': lampFor('top-right'), 'bottom-left': lampFor('bottom-left'), 'bottom-right': lampFor('bottom-right'), 'viewer': lampFor('viewer'),
+  'upper-left': lampFor('top-left'), 'upper-right': lampFor('top-right'), 'front': lampFor('viewer'),
+});
+export const LIGHT_DEFAULT = 'top-left';
 const NEON_HEX = /^#[0-9a-f]{6}$/i;
 export function lightOf(o = {}) {
-  return LIGHTS[o.light] ? o.light : o.overheadLight === true ? 'overhead' : LIGHT_DEFAULT;
+  const name = LIGHT_ALIASES[o.light] ?? o.light;
+  return LIGHT_PLACES[name] ? name : o.overheadLight === true ? 'overhead' : LIGHT_DEFAULT;
+}
+/** The lamp a board asks for: its placement at its height. */
+export function lampOf(o = {}) {
+  return lampFor(lightOf(o), LIGHT_HEIGHTS[o.lightHeight] ? o.lightHeight : 'middle');
 }
 export function domeLight(t, o = {}) {
   const { dome = 0, gridW = 0, gridH = 0 } = o;
   if (!dome || !gridW || !gridH) return 1;
-  const lamp = LIGHTS[lightOf(o)];
+  const lamp = lampOf(o);
   // straight above: the slope shades nothing -- the bottom rows, which lean away from a corner
   // lamp and sat at the 0.6 floor, read as bright as the middle
   if (lamp.L[0] === 0 && lamp.L[1] === 0) return 1;
@@ -1326,7 +1351,7 @@ export function buildScene(tiles, o = {}) {
   })).filter((e) => e.k > 0.01) : [];
   // the lamp's direction across the screen, for the side faces (LIGHTS); under the overhead
   // lamp every side takes the same light, a shade under the top
-  const lampSide = LIGHTS[lightOf(o)].side;
+  const lampSide = lampOf(o).side;
   for (const t of ordered) {
     const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
     // GONE FOR THE DURATION, not deleted: a hidden cube is skipped this frame and drawn again the

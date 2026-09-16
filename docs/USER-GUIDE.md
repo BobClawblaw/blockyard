@@ -728,9 +728,8 @@ box (**Display settings → Scorched Yard → Computer players** fields up to fi
 The rules are the original's (docs/PLAN-SCORCHED-YARD.md is the whole plan): the manual's roster
 of thirty-three weapons and eleven accessories at the manual's prices, packs and blast radii,
 craters, falling dirt, fall damage, death and its blast, the walls, wind, cash for damage and
-kills, a shop between rounds, and a game of rounds. One computer
-personality so far — the Moron, who fires at random and shops the same way; the others and the
-fabulous part are on their way.
+kills, a shop between rounds, and a game of rounds. The manual's eight computer
+personalities take the other seats. The fabulous part is on its way.
 
 ### Playing
 
@@ -782,6 +781,28 @@ tank as it falls. The items line under the fire button shows what you carry and 
 Prices, packs and radii are the manual's (SCORCH.DOC); the original started every player with $0
 and 5% interest, which the settings allow.
 
+### The computer players
+
+Out of the box you face a **mix**, climbing from the easy ones: a Shooter and a Tosser, then a
+Chooser, a Spoiler, a Cyborg and a Poolshark as you add seats. **Display settings → Scorched Yard
+→ Their kind** fields one kind in every seat instead. They are the manual's eight, and they
+behave as it says:
+
+| kind | how it plays |
+|---|---|
+| Moron | picks an angle and a power, and shoots; buys at random |
+| Shooter | takes low, straight shots when it has a line of fire, and shoots like a Moron when it does not |
+| Poolshark | a Shooter, except that under rubber or spring walls it looks for the bank shot too |
+| Tosser | lobs high, then corrects its power from each miss, by halves, until it hits |
+| Chooser | tries the straight shot, the lob and the bank, and takes whichever lands closest |
+| Spoiler | works the shot out from the wind and gravity and is nearly perfect, with a wobble now and then |
+| Cyborg | a Spoiler with a grudge: it fires at whoever hit it last, else at the weakest, else at the leader |
+| Unknown | one of the others, drawn afresh each round and never announced |
+
+All but the Moron use a battery when hurt and raise a shield before firing, and each shops to its
+own taste between rounds: Shooters buy missiles, Tossers MIRVs and Funky Bombs, Cyborgs the
+Death's Head and the heaviest shields.
+
 ### Cash and the shop
 
 Every point of damage you land earns $10, a kill $2,000, and the last tank standing $1,000; interest
@@ -791,7 +812,9 @@ while you can afford it. The computer players shop at the same moment, in their 
 buy stays with you for the rest of the game.
 
 The HUD shows whose turn it is, the round, the **wind** (an arrow and its strength: it changes
-every turn, and it bends every shot), your angle, power and weapon with its count, and every
+every turn, and it bends every shot; you can see it too — dust drifts across the field at its speed
+and direction, the pennant on every turret streams downwind, and the Living sky's clouds go with
+it), your angle, power and weapon with its count, and every
 tank's health. **Fire** on the HUD does what space does. A shell that lands carves a circle out of
 the dirt; the dirt above the crater falls until it rests, and a tank left in the air falls with
 it and is hurt by the fall. A blast hurts every tank in reach, most at its centre. A tank at zero

@@ -14,7 +14,7 @@ import {
   WEAPONS, ITEMS, COLS, ROWS, TANK_W,
 } from './scorched.js';
 import { SHOP } from './scorchedshop.js';
-import { decide, shop as aiShop } from './scorchedai.js';
+import { decide, prepare, shop as aiShop } from './scorchedai.js';
 import { loadSettings, setSetting, scorchedOptions } from './settings.js';
 import * as sound from './tetsound.js';
 
@@ -167,6 +167,31 @@ export function beamTiles(beams, now, ms = BEAM_MS) {
   return out;
 }
 
+/**
+ * THE WIND MADE VISIBLE (operator, 2026-09-16: "some sort of effects that reflect the change in
+ * wind speed"): motes -- dust, seed, ash -- drifting across the field at the wind's speed and in its
+ * direction, more of them and faster the harder it blows, with a slow rise and fall so they read
+ * as carried rather than sliding. None in still air. Their count and pace change the moment the
+ * wind does, which is every turn.
+ */
+export function windTiles(g, now) {
+  const w = g?.wind ?? 0;
+  const strength = Math.min(1, Math.abs(w) / 10);
+  if (strength < 0.03) return [];
+  const n = Math.round(8 + 40 * strength);
+  const t = now / 1000;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const h = (k) => { const x = Math.sin((i * 7 + k) * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+    const speed = (2 + 9 * strength) * (0.6 + h(1) * 0.8);
+    const x = (((h(2) * COLS + t * speed * Math.sign(w)) % COLS) + COLS) % COLS;
+    const y = 4 + h(3) * (ROWS - 8) + Math.sin(t * (0.6 + h(4)) + h(5) * 6) * 1.2;
+    const s = 0.12 + h(6) * 0.12;
+    out.push({ txid: `mote${i}`, x: x - s / 2, y: y - s / 2, s, tall: s, sphere: true, color: h(7) > 0.7 ? '#e8dcc0' : '#c9c2b6' });
+  }
+  return out;
+}
+
 /** The cells of the runs still falling, as "x,y" keys: left off the land canvas while the actor canvas animates them. */
 export function fallingCells(g) {
   const set = new Set();
@@ -193,7 +218,7 @@ export function actorLayer(g, now, { settleT0 = 0, settleMs = 1, blasts = [], fi
       }
     }
   }
-  out.push(...fireTiles(fires, now), ...beamTiles(beams, now), ...blastTiles(blasts, now));
+  out.push(...windTiles(g, now), ...fireTiles(fires, now), ...beamTiles(beams, now), ...blastTiles(blasts, now));
   return out;
 }
 
@@ -336,6 +361,8 @@ function drawSky() {
     starDensity: t.starDensity, starBrightness: t.starBrightness,
     nebulae: t.nebulae, galaxies: t.galaxies, dust: t.dust, clusters: t.clusters, starColours: t.starColours, starGlints: t.starGlints,
     ...t.sky,
+    // the clouds of the Living sky drift with this round's wind, and turn with it
+    skyWind: G.game ? Math.sign(G.game.wind || 1) * (0.4 + Math.abs(G.game.wind) / 4) : 1,
   });
 }
 
@@ -381,7 +408,8 @@ function onEvents(events, now) {
       case 'battery': sound.play('clear'); break;
       case 'death': sound.play('syDeath'); G.h?.toast?.(`${g.tanks[e.tank].name} is destroyed`); break;
       case 'bounce': sound.play('wall'); break;
-      case 'turn': G.aiAt = now; sound.play('syTurn'); break;
+      case 'turn': G.aiAt = now; sound.play('syTurn'); drawSky(); break;
+      case 'round': drawSky(); break;
       case 'roundOver': roundOver(e); break;
       default: break;
     }
@@ -423,6 +451,7 @@ function frame(t) {
   if (g.phase === 'aim') {
     const cur = current(g);
     if (cur.kind !== 'human' && t - G.aiAt >= AI_THINK_MS) {
+      prepare(g, cur);                           // a battery, a shield, before the shot
       aim(g, cur, decide(g, cur));
       fire(g, cur);
       onEvents(step(g, 0), t);
@@ -438,10 +467,19 @@ function frame(t) {
   if (g.phase !== 'over') G.raf = requestAnimationFrame(frame);
 }
 
+// THE OPPONENTS (M3): a mix climbs from the easy ones -- Shooter, Tosser, Chooser, Spoiler,
+// Cyborg -- or every seat the one kind the setting names. Named for what they are, the manual's way.
+const MIX = ['shooter', 'tosser', 'chooser', 'spoiler', 'cyborg', 'poolshark'];
+const NAMES = { moron: 'Moron', shooter: 'Shooter', poolshark: 'Poolshark', tosser: 'Tosser', chooser: 'Chooser', spoiler: 'Spoiler', cyborg: 'Cyborg', unknown: 'Unknown' };
 function players() {
   const t = scorchedOptions(loadSettings());
   const list = [{ name: 'You', kind: 'human' }];
-  for (let i = 0; i < t.opponents; i++) list.push({ name: `Moron ${i + 1}`, kind: 'moron' });
+  const seen = {};
+  for (let i = 0; i < t.opponents; i++) {
+    const kind = t.opponentKind === 'mix' ? MIX[i % MIX.length] : t.opponentKind;
+    seen[kind] = (seen[kind] ?? 0) + 1;
+    list.push({ name: seen[kind] > 1 ? `${NAMES[kind] ?? kind} ${seen[kind]}` : (NAMES[kind] ?? kind), kind });
+  }
   return list;
 }
 
@@ -631,7 +669,7 @@ export function renderScorchedYard(s, state, h) {
   drawSwitches();
   drawSky();
   if (!G.game) {
-    overlay('Scorched Yard', 'the block space is the battlefield. You against two Morons: ← → angle, ↑ ↓ power, [ ] weapon, space fires; or drag on the field to aim. Enter or the button to play.', 'play');
+    overlay('Scorched Yard', 'the block space is the battlefield. You against the computer: ← → angle, ↑ ↓ power, [ ] weapon, space fires; or drag on the field to aim. Enter or the button to play.', 'play');
     drawStats(); drawTanks(); drawScores(); draw();
     return;
   }

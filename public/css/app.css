@@ -1945,8 +1945,12 @@ body { font-variant-numeric: tabular-nums; }
 #scorched { grid-template-columns: minmax(0, 1fr) 270px; justify-content: stretch; }
 #scorched > .tetcard { min-width: 0; }
 .tetcard .treemapwrap.tetwell.seyard { width: min(100%, calc((100vh - 170px) * 2)); height: auto; aspect-ratio: 2 / 1; }
-/* two canvases stacked: the land under, the actors over, the sky behind both (scorchedyard.js) */
-.seyard canvas { position: absolute; inset: 0; }
+/* two canvases stacked: the land under, the actors over, the sky behind both (scorchedyard.js);
+   scaled a little from the bottom centre so the board's own margins leave the frame -- the land
+   meets the bottom edge and runs off both sides, and no sky shows under it (operator, 2026-09-16:
+   "Play field needs to go to the edges") */
+.seyard { overflow: hidden; }
+.seyard canvas { position: absolute; inset: 0; transform: scale(1.085); transform-origin: 50% 100%; }
 .syfire { width: 100%; margin: 2px 0 10px; }
 .syfire:disabled { opacity: .45; cursor: default; }
 .sytanks { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 12px; }

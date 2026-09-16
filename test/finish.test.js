@@ -5,9 +5,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildScene } from '../public/js/blockscene3d.js';
+import { buildScene, lampOf } from '../public/js/blockscene3d.js';
 import { board3d } from '../public/js/details3d.js';
-import { spaceOptions, DEFAULTS } from '../public/js/settings.js';
+import { spaceOptions, DEFAULTS, loadSettings } from '../public/js/settings.js';
 
 const TILES = [
   { txid: 'big', x: 2, y: 2, s: 5, z: 0, color: '#33cc99' },
@@ -170,8 +170,21 @@ test('the lamp: overhead shades no slope, a corner does, and the choice reaches 
   assert.ok(new Set(sidesOf({ light: 'overhead' })).size === 1, 'overhead: every side the same light');
   assert.ok(new Set(sidesOf({ light: 'front' })).size > 1, 'a lamp at the viewer: the side facing it brighter than the one edge-on');
   assert.equal(DEFAULTS.space.light, 'overhead', 'the Block space lamp hangs straight above the board (operator, 2026-09-12)');
-  assert.equal(spaceOptions({ space: { light: 'front' } }).light, 'front');
+  assert.equal(spaceOptions({ space: { light: 'viewer' } }).light, 'viewer');
   assert.equal(spaceOptions({ space: { light: 'nowhere' } }).light, 'overhead', 'an unknown lamp is the default');
+  // six places at three heights (2026-09-16): the height reaches the scene, low rakes the sides harder than high
+  assert.equal(spaceOptions({ space: { light: 'bottom-right', lightHeight: 'low' } }).lightHeight, 'low');
+  assert.equal(spaceOptions({ space: { lightHeight: 'nowhere' } }).lightHeight, 'middle');
+  const spread = (h) => { const v = sidesOf({ light: 'bottom-left', lightHeight: h }); return Math.max(...v) - Math.min(...v); };
+  assert.ok(spread('low') > spread('high'), 'a low lamp tells the sides apart more than a high one');
+  assert.deepEqual(lampOf({ light: 'upper-left' }), lampOf({ light: 'top-left' }), 'the old names still answer: upper-left is top-left');
+  assert.deepEqual(lampOf({ light: 'front' }), lampOf({ light: 'viewer' }), 'and front is the viewer');
+  // a store from before the rename comes forward: front is the viewer, upper-left the top left
+  const mem = new Map(); const st = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) };
+  st.setItem('blockyard.settings', JSON.stringify({ version: 4, space: { light: 'front' } }));
+  assert.equal(loadSettings(st).space.light, 'viewer', 'v4 front -> v5 viewer');
+  st.setItem('blockyard.settings', JSON.stringify({ version: 4, space: { light: 'upper-left' } }));
+  assert.equal(loadSettings(st).space.light, 'top-left');
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /light: opts\.light,/, 'render3d hands it to the scene (the finishes were once left out of that object)');
 });

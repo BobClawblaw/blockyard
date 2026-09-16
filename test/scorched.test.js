@@ -9,9 +9,10 @@ import {
   COLS, ROWS, WEAPONS, WEAPON_ORDER, ITEMS, START_INVENTORY, START_CASH, TANK_W, TANK_H, MAX_HEALTH, V_MAX, GRAVITY, MAX_STEP, DEATH_BLAST,
   newGame, generateLand, topOf, dirtAt, current, alive, aim, fire, step, settled, explode, settleDirt, landTanks, nextTurn, nextRound,
   cycleWeapon, muzzle, trajectory, tiles, landTiles, leader, rng, useItem, drive, buy, applyDamage, raiseShield, addDirt,
+  simulateShot, PERSONALITIES,
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
-import { decide, moron, solve, nearest, shop as aiShop } from '../public/js/scorchedai.js';
+import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
 
@@ -317,7 +318,9 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
   }
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
-  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.equal(scorchedOptions(normalise(null)).opponentKind, 'mix');
+  assert.equal(scorchedOptions(normalise({ scorched: { opponentKind: 'cyborg' } })).opponentKind, 'cyborg');
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
   assert.equal(o.opponents, 5, 'clamped to the slider'); assert.equal(o.rounds, 1); assert.equal(o.walls, 'none', 'the manual\u2019s default'); assert.equal(o.gravity, 2);
   const s = store();
@@ -649,4 +652,104 @@ test('the manual\u2019s other weapons: a riot charge cuts a wedge from the turre
   assert.ok(padded.blast && padded.blast.x > COLS - 2.5, 'padded: it dropped at the wall');
   const spring = wallShot('spring'), rubber = wallShot('rubber');
   assert.ok(spring.blast && rubber.blast && spring.blast.x < rubber.blast.x, 'spring: it came back further');
+});
+
+// ------------------------------------------------------------------ M3: the computer players
+const seatAI = (kind, seed = 11, opts = {}) => {
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind }, { name: 'B', kind: 'moron' }], { seed, wind: 'turn', walls: 'rubber', ...opts });
+  const t = g.tanks[1];
+  g.turn = g.order.indexOf(t.id); g.phase = 'aim';
+  return { g, t, target: nearest(g, t) };
+};
+const missOf = (g, t, target, d) => { const r = simulateShot(g, t, d.angle, d.power); return r.hit === target.id ? 0 : Math.abs(r.x - (target.x + TANK_W / 2)); };
+
+test('the shot simulator agrees with a real flight: the same shot lands in the same place, with the walls and the dirt in it', () => {
+  for (const walls of ['none', 'concrete', 'rubber', 'wrap']) {
+    const g = three({ wind: 'turn', walls });
+    const t = current(g);
+    aim(g, t, { angle: t.x < COLS / 2 ? 40 : 140, power: 780 });
+    const sim = simulateShot(g, t, t.angle, t.power);
+    fire(g, t);
+    const ev = play(g);
+    const blast = ev.find((e) => e.kind === 'blast');
+    if (sim.lost) assert.ok(!blast && ev.some((e) => e.kind === 'lost'), `${walls}: both lost`);
+    else assert.ok(blast && Math.abs(blast.x - sim.x) < 0.6 && Math.abs(blast.y - sim.y) < 0.6, `${walls}: the flight landed where the simulator said (${blast?.x.toFixed(1)} vs ${sim.x.toFixed(1)})`);
+  }
+  // it changes nothing
+  const g = three();
+  const dirt = [...g.dirt], sparks = g.sparks.length;
+  simulateShot(g, current(g), 45, 600);
+  assert.deepEqual([...g.dirt], dirt); assert.equal(g.sparks.length, sparks); assert.equal(g.phase, 'aim');
+});
+
+test('the personalities: the Spoiler and the Cyborg land on their target, the Chooser and the Poolshark find a line, the Shooter only fires straight, the Tosser corrects until it hits, the Moron does not', () => {
+  assert.deepEqual([...PERSONALITIES], ['moron', 'shooter', 'poolshark', 'tosser', 'chooser', 'spoiler', 'cyborg', 'unknown']);
+  const hits = (fn, seeds) => seeds.map((seed) => { const { g, t, target } = seatAI('shooter', seed); return missOf(g, t, target, fn(g, t)); });
+  const spoilerMisses = hits(spoiler, [1, 2, 3, 4, 5, 6]);
+  assert.ok(spoilerMisses.filter((m) => m <= 1.5).length >= 5, `the Spoiler is nearly perfect (${spoilerMisses.map((m) => m.toFixed(1)).join(', ')})`);
+  // the Cyborg picks its own target (the leader, here), so its miss is measured against whichever tank it chose
+  const cyborgMisses = [1, 2, 3, 4, 5, 6].map((seed) => { const { g, t } = seatAI('cyborg', seed); const d = cyborg(g, t); const r = simulateShot(g, t, d.angle, d.power); return r.hit != null && r.hit !== t.id ? 0 : Math.min(...g.tanks.filter((k) => k !== t).map((k) => Math.abs(r.x - (k.x + TANK_W / 2)))); });
+  assert.ok(cyborgMisses.filter((m) => m <= 1.5).length >= 5, `so is the Cyborg (${cyborgMisses.map((m) => m.toFixed(1)).join(', ')})`);
+  const chooserMisses = hits(chooser, [1, 2, 3, 4, 5, 6]);
+  assert.ok(chooserMisses.filter((m) => m <= 3).length >= 4, `the Chooser finds a line most of the time (${chooserMisses.map((m) => m.toFixed(1)).join(', ')})`);
+  const moronMisses = hits(moron, [1, 2, 3, 4, 5, 6]);
+  assert.ok(moronMisses.filter((m) => m > 3).length >= 4, `the Moron mostly misses (${moronMisses.map((m) => m.toFixed(1)).join(', ')})`);
+  // the Shooter: a low angle when it fires at all
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const { g, t, target } = seatAI('shooter', seed);
+    const d = shooter(g, t);
+    const low = Math.min(d.angle, 180 - d.angle);
+    if (!d.fallback) assert.ok(low <= 36, `a straight shot (${d.angle}°)`);
+  }
+  // the Tosser: high, and the miss shrinks over its turns at the same target
+  const { g, t, target } = seatAI('tosser', 5);
+  const first = tosser(g, t);
+  assert.ok(Math.min(first.angle, 180 - first.angle) >= 60, 'a lob');
+  const misses = [missOf(g, t, target, first)];
+  for (let i = 0; i < 6; i++) misses.push(missOf(g, t, target, tosser(g, t)));
+  assert.ok(Math.min(...misses.slice(1)) < Math.max(misses[0], 2), `it corrects (${misses.map((m) => m.toFixed(1)).join(' -> ')})`);
+  // the Poolshark banks off a rubber wall when that is the better line, and plays a Shooter otherwise
+  const bank = seatAI('poolshark', 11, { walls: 'rubber' });
+  const db = poolshark(bank.g, bank.t);
+  assert.ok(missOf(bank.g, bank.t, bank.target, db) <= 3, 'a line, off the wall or not');
+  const wall = seatAI('poolshark', 11, { walls: 'concrete' });
+  const pw = poolshark(wall.g, wall.t), sw = shooter(wall.g, wall.t);
+  if (!pw.fallback && !sw.fallback) assert.deepEqual(pw, sw, 'no rebound to play: a Shooter');
+  else assert.equal(!!pw.fallback, !!sw.fallback, 'both without a line of fire');
+  // the Cyborg's grudge: whoever hit it last is the target
+  const { g: gc, t: tc } = seatAI('cyborg', 3);
+  const you = gc.tanks[0];
+  applyDamage(gc, tc, 10, you.id);
+  assert.equal(tc.lastHitBy, you.id);
+  const dc = cyborg(gc, tc);
+  const rc = simulateShot(gc, tc, dc.angle, dc.power);
+  assert.ok(rc.hit === you.id || Math.abs(rc.x - (you.x + 1)) < 2, 'it fires back at You');
+  // decide() plays the persona, and an Unknown has one drawn from the others each round
+  const { g: gu, t: tu } = seatAI('unknown', 8);
+  assert.ok(PERSONALITIES.includes(tu.persona) && tu.persona !== 'unknown');
+  const d = decide(gu, tu);
+  assert.ok(d.angle >= 0 && d.angle <= 180 && WEAPONS[d.weapon]);
+  // prepare(): a hurt Spoiler uses a battery and raises a shield before its shot; a Moron does not
+  const { g: gp, t: tp } = seatAI('spoiler', 2);
+  tp.health = 40; tp.items = { battery: 1, shield: 1 };
+  assert.deepEqual(prepare(gp, tp), ['battery', 'shield']);
+  assert.equal(tp.health, 70); assert.ok(tp.shield);
+  const { g: gm, t: tm } = seatAI('moron', 2);
+  tm.health = 40; tm.items = { battery: 1 };
+  assert.deepEqual(prepare(gm, tm), []);
+});
+
+test('the computer shops by taste: a Shooter buys missiles, a Tosser MIRVs, a Cyborg the Death\u2019s Head; a Moron at random; nobody beyond their cash', () => {
+  const buys = (kind) => { const { g, t } = seatAI(kind, 4); t.cash = 60000; return aiShop(g, t); };
+  assert.ok(buys('shooter').includes('missile'));
+  assert.ok(buys('tosser').includes('mirv'));
+  assert.ok(buys('cyborg').includes('deathsHead'));
+  assert.ok(buys('spoiler').includes('nuke'));
+  const { g, t } = seatAI('chooser', 4);
+  t.cash = 500;
+  assert.deepEqual(aiShop(g, t), [], 'nothing it can afford on its list');
+  const { g: gm, t: tm } = seatAI('moron', 4);
+  tm.cash = 60000;
+  const m = aiShop(gm, tm, rng(9));
+  assert.ok(m.length >= 1 && m.every((id) => SHOP.some((e) => e.id === id)));
 });
