@@ -10,7 +10,8 @@
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from './scorchedfx.js';
-import { plasmaCells, paintPlasma, airClock, advanceAir, paintRipple, airBands, paintAirBands, skyBrightness } from './scorchedwind.js';
+import { airClock, advanceAir, paintRipple, skyBrightness } from './scorchedwind.js';
+import { makeFluid, stepFluid, setSolid, paintFluid, warmFluid } from './scorchedair.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   trajectory, dirtAt, shellLook,
@@ -81,6 +82,7 @@ const G = {
   air: null,                            // the air's own integrated clock { t, drift }
   airTravel: 0,                         // the signed distance the air has run, for the ripple and the bands
   skyLight: 0, skyLightAt: 0,           // how bright the sky behind the air is, sampled now and then
+  fluid: null, fluidLand: '', fluidCanvas: null,   // the simulated air, the land it was given, and the canvas it paints to
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -277,6 +279,28 @@ export function paintBanner(ctx, chevrons) {
   }
 }
 
+/**
+ * The land's silhouette as the fluid's floor. The land canvas is drawn at the wrap's size and
+ * scaled up 1.085 about its bottom centre by CSS, the wind plane is not scaled, so each fluid cell's
+ * centre is mapped back through that scale before its pixel is read.
+ */
+function fluidFloor(f, land, w, h) {
+  let data = null;
+  try { data = land.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, land.width, land.height).data; } catch { return; }
+  const k = land.width / Math.max(1, land.clientWidth || w), LW = land.width, LH = land.height;
+  const cellW = w / f.nx, cellH = h / f.ny, S = 1.085;
+  setSolid(f, (x) => {
+    const xs = (x + 0.5) * cellW, xc = w / 2 + (xs - w / 2) / S;
+    for (let y = 0; y < f.ny; y++) {
+      const ys = (y + 0.5) * cellH, yc = h - (h - ys) / S;
+      const px = Math.round(xc * k), py = Math.round(yc * k);
+      if (px < 0 || py < 0 || px >= LW || py >= LH) continue;
+      if (data[(py * LW + px) * 4 + 3] > 60) return y;
+    }
+    return f.ny;
+  });
+}
+
 function drawWind(now) {
   const c = el('syWind');
   if (!c) return;
@@ -315,10 +339,21 @@ function drawWind(now) {
     const scale = sky.width / Math.max(1, sr.width);
     paintRipple(ctx, sky, { sx: (cr.left - sr.left) * scale, sy: (cr.top - sr.top) * scale, scale }, w, h, G.airTravel, we);
   }
-  paintPlasma(ctx, plasmaCells(w, h, G.air, we));
-  // the sky's own light, read every second and a half: the bands carry more against a bright sky
+  // THE AIR, SIMULATED (scorchedair.js): a small fluid pushed by the wind, with the land as its
+  // solid floor, carrying a faint dye. Its mask is read off the land canvas whenever the land moves.
+  if (!G.fluid) G.fluid = makeFluid(96, 48, 3);
+  const land = el('syLand');
+  const landKey = `${G.landKey}|${w}x${h}`;
+  if (land && land.width && G.fluidLand !== landKey) {
+    // new land: take its silhouette, and let the air settle round it before it is seen
+    fluidFloor(G.fluid, land, w, h);
+    G.fluidLand = landKey;
+    warmFluid(G.fluid, 8, we);
+  }
+  stepFluid(G.fluid, dt, { wind: we });
   if (sky && now - (G.skyLightAt ?? 0) > 1500) { G.skyLight = skyBrightness(sky); G.skyLightAt = now; }
-  paintAirBands(ctx, airBands(G.airTravel, we, w, h, 10, G.skyLight ?? 0));
+  G.fluidCanvas ??= document.createElement('canvas');
+  paintFluid(ctx, G.fluidCanvas, G.fluid, w, h, { bright: G.skyLight ?? 0, wind: we });
   paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 

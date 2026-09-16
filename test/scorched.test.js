@@ -15,6 +15,7 @@ import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInter
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands, skyBrightness } from '../public/js/scorchedwind.js';
+import { makeFluid, stepFluid, setSolid, warmFluid, paintFluid, meanFlow } from '../public/js/scorchedair.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -1205,12 +1206,13 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
   const R = recorder();
   paintAirBands(R.ctx, bands);
   assert.ok(R.ops.every((o) => o.op === 'stroke'), 'strokes only: no heads, no dots, nothing a meteor is made of');
-  // and the wind plane no longer draws the streaks or the currents
+  // and the wind plane no longer draws the streaks or the currents: it draws the simulated air
   const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
   const wind = src.slice(src.indexOf('function drawWind('), src.indexOf('\n}\n', src.indexOf('function drawWind(')));
   assert.ok(!/paintFlow|paintStreamlines/.test(wind), 'the meteor-shaped streaks are gone from the picture');
   assert.match(wind, /paintRipple\(ctx, sky,/, 'the sky is refracted');
-  assert.match(wind, /paintAirBands\(ctx, airBands\(/, 'and the bands bow across it');
+  assert.match(wind, /stepFluid\(G\.fluid, dt, \{ wind: we \}\)/, 'the air is stepped as a fluid every frame');
+  assert.match(wind, /paintFluid\(ctx, G\.fluidCanvas, G\.fluid, w, h,/, 'and painted');
   // brighter against a bright sky, and no brighter at night than before
   const night = airBands(50, 8, 800, h, 10, 0), noon = airBands(50, 8, 800, h, 10, 1);
   assert.ok(noon[0].alpha > night[0].alpha * 2.5, 'the bands carry about three times more at noon');
@@ -1218,4 +1220,47 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
   assert.ok(skyBrightness(px(10, 12, 30)) < 0.05, 'a night sky reads dark');
   assert.ok(skyBrightness(px(90, 150, 230)) > 0.6, 'a day sky reads bright');
   assert.equal(skyBrightness(null), 0, 'and no sky reads as night');
+});
+
+// THE AIR IS A FLUID (operator, 2026-09-16: "There is no simulation movement. It's just a squiggly
+// line moving across the screen"). A small Stable Fluids solver: the wind drives it, the land is its
+// solid floor, and a dye carried by the flow is what is drawn.
+test('scorched yard: the air is simulated -- driven by the wind, flowing round the land, carrying smoke', () => {
+  const hill = (x) => 34 - 16 * Math.max(0, 1 - Math.abs(x - 48) / 14);   // first free row from the top
+  // the wind drives it, and it turns round with the wind rather than jumping
+  const f = makeFluid(96, 48, 1);
+  setSolid(f, hill);
+  warmFluid(f, 6, 7);
+  assert.ok(meanFlow(f) > 4, `a wind to the right moves the air to the right (${meanFlow(f).toFixed(2)} cells/s)`);
+  stepFluid(f, 33, { wind: -7 });
+  assert.ok(meanFlow(f) > 0, 'one frame after the wind turns the air still has its momentum');
+  warmFluid(f, 6, -7);
+  assert.ok(meanFlow(f) < -4, `and in a few seconds it blows the other way (${meanFlow(f).toFixed(2)})`);
+  // the land is solid: nothing moves inside it, and the air rises over the upwind slope
+  const g = makeFluid(96, 48, 2);
+  setSolid(g, hill);
+  warmFluid(g, 6, 7);
+  let inside = 0; for (let i = 0; i < g.u.length; i++) if (g.solid[i]) inside += Math.abs(g.u[i]) + Math.abs(g.v[i]);
+  assert.equal(inside, 0, 'no air moves inside the hill');
+  let rise = 0, n = 0;
+  for (let x = 38; x < 46; x++) { const i = x + (Math.round(hill(x)) - 2) * 96; rise += -g.v[i]; n += 1; }
+  assert.ok(rise / n > 1, `the air rises over the upwind slope (${(rise / n).toFixed(2)} cells/s)`);
+  // it is close to divergence-free where the air is free: the projection is doing its job
+  let div = 0, m = 0;
+  for (let y = 4; y < 20; y++) for (let x = 2; x < 94; x++) { const i = x + y * 96; if (g.solid[i] || g.solid[i + 1] || g.solid[i - 1] || g.solid[i + 96] || g.solid[i - 96]) continue; div += Math.abs((g.u[i + 1] - g.u[i - 1] + g.v[i + 96] - g.v[i - 96]) * 0.5); m += 1; }
+  assert.ok(div / m < 1.2, `divergence is small in open air (${(div / m).toFixed(3)} per cell against a flow of ~12)`);
+  // the smoke crosses the whole field, stays finite, and still air paints nothing
+  const cols = [8, 40, 72, 90].map((x) => { let d = 0; for (let y = 0; y < 30; y++) d += g.d[x + y * 96]; return d; });
+  assert.ok(cols.every((d) => d > 0.5), `smoke reaches every part of the field (${cols.map((d) => d.toFixed(1)).join(', ')})`);
+  assert.ok(g.u.every(Number.isFinite) && g.d.every((v) => Number.isFinite(v) && v >= 0), 'every value finite, no negative smoke');
+  const small = { width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: () => {} }) };
+  const drawn = [];
+  const ctx = { drawImage: (...a) => drawn.push(a), imageSmoothingEnabled: false };
+  assert.equal(paintFluid(ctx, small, g, 800, 400, { wind: 0 }), false, 'still air paints nothing');
+  assert.equal(paintFluid(ctx, small, g, 800, 400, { wind: 7, bright: 0.8 }), true);
+  assert.equal(drawn.length, 1, 'one smooth scaled draw of the whole field');
+  assert.equal(ctx.imageSmoothingEnabled, true, 'scaled up smooth, not in blocks');
+  // cheap enough for every frame
+  const t0 = performance.now(); for (let i = 0; i < 60; i++) stepFluid(g, 33, { wind: 7 }); const per = (performance.now() - t0) / 60;
+  assert.ok(per < 8, `a step costs well under a frame (${per.toFixed(2)} ms)`);
 });
