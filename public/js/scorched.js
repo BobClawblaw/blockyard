@@ -56,12 +56,17 @@ const BOMBLET = Object.freeze({ name: 'bomblet', kind: 'blast', radius: 1.5, dam
 // were dust-and-shadow browns that read as tinted rather than lit whatever the lamp did. These
 // are the same strata at full saturation: hot magma, slate rock with some blue in it, terracotta
 // clay, golden soil and a green that is actually green. The lamp then only has to do the shading.
+// AND BRIGHT (operator, 2026-09-16, with a screenshot: "See how the tanks are nice and bright on
+// their front faces? I would like the side of the terrain to be similarly brightened"). The tanks
+// and the land go through the same lamp; the tanks looked lit because their paint is bright. The
+// strata were lifted a fifth to a quarter in value at the same saturation: the front of the land
+// now sits where the front of a tank does.
 export const STRATA = Object.freeze([
-  Object.freeze({ to: 0.12, color: '#c8391f' }),   // magma, at the very bottom
-  Object.freeze({ to: 0.40, color: '#5d5a80' }),   // rock
-  Object.freeze({ to: 0.72, color: '#a84f22' }),   // clay
-  Object.freeze({ to: 0.97, color: '#cf9038' }),   // soil
-  Object.freeze({ to: 1.00, color: '#3fca3c' }),   // the grass cap
+  Object.freeze({ to: 0.12, color: '#e84a2c' }),   // magma, at the very bottom
+  Object.freeze({ to: 0.40, color: '#7b78a8' }),   // rock
+  Object.freeze({ to: 0.72, color: '#cc6a32' }),   // clay
+  Object.freeze({ to: 0.97, color: '#e9ad4e' }),   // soil
+  Object.freeze({ to: 1.00, color: '#55dc4e' }),   // the grass cap
 ]);
 
 // ------------------------------------------------------------------- randomness, seeded

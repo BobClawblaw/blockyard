@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- **Scorched Yard's land is brighter.** The tanks and the land go through the same lamp; the tanks looked lit because their paint is bright. Each stratum is lifted a fifth to a quarter in value at the same saturation, so the front of the land sits where the front of a tank does
 - **Scorched Yard: the mouse drag clicks.** The keys and the wheel clicked as the aim moved; dragging on the field was silent. It clicks on every whole degree and every ten of power it crosses, no more than every 45 ms, so a slow drag ticks and a fast one whirs
 - **The moon glows, and its phases can be watched.** The same two-layer halo the sun has, in moonlight silver, stronger the fuller the moon. The phase has always followed the real calendar (full on the real full-moon dates, new on the new ones, the quarters between); under the cycle clock, where a day is 24 minutes, the calendar now runs a day per cycle day, so a whole month of phases goes by in about twelve hours on the wall. The disc is a little larger
 - **Fixed: Scorched Yard's panel showed the wrong tank's cash while you shopped.** A purchase always took the money; the "This turn" panel was showing the tank whose turn it was when the round ended, and when that was a computer player its cash sat there unmoved while yours went down in the shop's own header. Between rounds the panel shows the human, marked "shopping"
