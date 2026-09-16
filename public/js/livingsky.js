@@ -175,6 +175,10 @@ function paintDome(ctx, pw, ph, cols) {
   // way round (the first cut came out one flat zenith blue for exactly that reason).
   const cy = ph * 2.4, R = cy;
   const tH = (cy - ph) / R;                                 // the horizon's radius, as a share of R
+  // the zenith colour under everything: the corners above the dome's crown are the top of the
+  // sky, and a first cut that left them unpainted showed the board's black as a dark arc
+  ctx.fillStyle = rgb(cols.zenith);
+  ctx.fillRect(0, 0, pw, ph);
   const N = 140;
   for (let i = 0; i <= N; i++) {
     const t = 1 - (i / N) * (1 - tH) - (i === N ? 0.002 : 0);
@@ -211,8 +215,9 @@ function paintSun(ctx, pw, ph, s, sun, cols, softStops) {
 function paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops) {
   if (moon.alt < -3 || phase.lit < 0.03) return;
   const r = ph * 0.03;
-  const show = Math.max(0, Math.min(1, (moon.alt + 3) / 6)) * (0.25 + 0.75 * night);
-  if (show <= 0.02) return;
+  // faint by day (a daytime moon is there, but it is not a lamp), and a thin crescent by day is invisible
+  const show = Math.max(0, Math.min(1, (moon.alt + 3) / 6)) * (0.12 + 0.88 * night);
+  if (show <= 0.02 || (night < 0.3 && phase.lit < 0.25)) return;
   if (night > 0.3) softStops(ctx, m.x, m.y, r * 5, [[0, rgb([220, 228, 245], 0.25 * night * show)], [0.3, rgb([220, 228, 245], 0.08 * night * show)], [1, rgb([220, 228, 245], 0)]], 40);
   ctx.fillStyle = rgb([236, 238, 244], show);
   ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.fill();
