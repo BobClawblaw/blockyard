@@ -312,11 +312,12 @@ export const DEFAULTS = Object.freeze({
     talk: true,           // what the tanks say, over the field
     roundSky: true,       // under the Living sky, each round draws its own hour
     fast: false,          // shells fly at three times the pace
+    cheat: false,         // cheat mode: the firing solution drawn live, wind and gravity and all
     demo: false,          // attract mode: every seat is a computer player, and it plays on by itself
     grid: false,          // the quiet grid under the field, off: the land is the picture
     gridColour: '#2a5a8f',
     gridBrightness: 1,
-    opponents: 2,         // computer players against the one human (operator: "at least 3 player")
+    opponents: 2,         // computer players against the one human; up to seven, for the original's eight seats
     opponentKind: 'mix',  // 'mix' (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark in turn) or one of the manual's eight
     rounds: 5,
     walls: 'none',        // the manual's default: 'none' | 'concrete' | 'padded' | 'rubber' | 'spring' | 'wrap'
@@ -695,11 +696,12 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'talk', label: 'Talk', kind: 'toggle', hint: 'What the tanks say when they fire, are hit, or die' }),
       Object.freeze({ key: 'roundSky', label: 'A sky per round', kind: 'toggle', hint: 'Under the Living sky, each round draws its own hour: dawn, noon, dusk, night' }),
       Object.freeze({ key: 'fast', label: 'Fast shells', kind: 'toggle', hint: 'Shells fly at three times the pace, for the impatient' }),
+      Object.freeze({ key: 'cheat', label: 'Cheat mode', kind: 'toggle', hint: 'Draw the firing solution while you aim: the shell\u2019s own path under this round\u2019s wind and the game\u2019s gravity, clipped where it meets the dirt, with a ring where it lands. It moves as you move' }),
       Object.freeze({ key: 'demo', label: 'Attract mode', kind: 'toggle', hint: 'Every seat is a computer player and the war runs on by itself, for a wall display' }),
       Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'A quiet grid under the field' }),
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of that grid' }),
       Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 0 hides it' }),
-      Object.freeze({ key: 'opponents', label: 'Computer players', kind: 'range', min: 1, max: 5, step: 1, hint: 'How many tanks the computer fields against you. Two is the shipped game' }),
+      Object.freeze({ key: 'opponents', label: 'Computer players', kind: 'range', min: 1, max: 7, step: 1, hint: 'How many tanks the computer fields against you. Two is the shipped game; seven fills the original\u2019s eight seats' }),
       Object.freeze({
         key: 'opponentKind', label: 'Their kind', kind: 'choice', hint: 'The manual\u2019s personalities: a mix climbs from the easy ones, or every seat the one you name. Moron fires at random; Shooter takes straight shots; Poolshark banks off rubber walls; Tosser lobs and corrects; Chooser picks its method; Spoiler nearly never misses; Cyborg is a Spoiler with a grudge; Unknown is one of them, drawn each round',
         options: Object.freeze([['mix', 'A mix'], ['moron', 'Morons'], ['shooter', 'Shooters'], ['poolshark', 'Poolsharks'], ['tosser', 'Tossers'], ['chooser', 'Choosers'], ['spoiler', 'Spoilers'], ['cyborg', 'Cyborgs'], ['unknown', 'Unknowns']]),
@@ -1213,7 +1215,7 @@ export function scorchedOptions(s) {
   const sky = spaceOptions(s);
   const sc = n.scorched;
   return {
-    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, demo: sc.demo,
+    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, cheat: sc.cheat, demo: sc.demo,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
     opponents: sc.opponents, opponentKind: sc.opponentKind, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,

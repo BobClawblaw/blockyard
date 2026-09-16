@@ -31,7 +31,10 @@ export const ROWS = 48;
 // the tanks' colours, in the order players are added (the original's palette, roughly)
 export const PERSONALITIES = Object.freeze(['moron', 'shooter', 'poolshark', 'tosser', 'chooser', 'spoiler', 'cyborg', 'unknown']);
 const UNKNOWN_POOL = Object.freeze(['moron', 'shooter', 'poolshark', 'tosser', 'chooser', 'spoiler', 'cyborg']);
-export const TANK_COLOURS = Object.freeze(['#f7931a', '#4d8dff', '#2ecc8f', '#ef5a5a', '#c78bff', '#f0c419']);
+// EIGHT SEATS, EIGHT COLOURS (operator, 2026-09-16: "I would like to add up to 8 players total like
+// the original"). Distinct at a glance on dirt, and none of them the dirt's own browns.
+export const TANK_COLOURS = Object.freeze(['#f7931a', '#4d8dff', '#2ecc8f', '#ef5a5a', '#c78bff', '#f0c419', '#32d4e0', '#ff86b8']);
+export const MAX_PLAYERS = 8;
 export const MAX_HEALTH = 100;
 export const V_MAX = 56;              // cells/s at power 1000
 export const GRAVITY = 30;            // cells/s² at the Earth setting (1)

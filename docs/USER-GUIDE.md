@@ -723,7 +723,8 @@ rather than the look, flipping them reaches the game you are playing, not just t
 Scorched Earth, the 1991 DOS artillery game, on the block engine: a landscape of dirt cubes that
 craters and falls, tanks that aim by angle and power, wind, and a round that ends when one tank is
 left. Under **Diversions**, after Blockanoid. You play against two computer opponents out of the
-box (**Display settings → Scorched Yard → Computer players** fields up to five).
+box (**Display settings → Scorched Yard → Computer players** fields up to seven, for the original's
+eight seats; every tank has its own colour).
 
 The rules are the original's (docs/PLAN-SCORCHED-YARD.md is the whole plan): the manual's roster
 of thirty-three weapons and eleven accessories at the manual's prices, packs and blast radii,
@@ -827,11 +828,18 @@ guidance; **P** pauses; **N** starts the next round.
 **Restart** on the panel (or **F2**) starts a fresh war from round one, whatever the board is doing:
 a war is five rounds, and a player knocked out early should not have to watch the computer finish.
 
-The wind is written on the field as well as on the panel: a row of **chevrons** at the top points
-the way it blows, as many as it is strong, brightest just after it changes. When it does change, the
-old air thins away while the new air comes up over it, already at its own speed and direction, so
-there is nothing to wait for. Between changes the stream is dead steady: a streak crosses the field
-at exactly the rate the gauge says, and never surges or eases.
+The wind is drawn as **moving air**, behind the land: a field of particles carried downwind and bent
+by eddies on the way, over a faint plasma wash of the same flow, so the sky reads as air rather
+than as a picture of arrows. Every particle nets downwind whatever the eddies do; the direction is
+never in doubt. When the wind changes, the flow bends into the new speed and direction over about
+half a second instead of jumping. A row of **chevrons** at the top of the field points the way it
+blows, as many as it is strong, brightest just after a change.
+
+**Cheat mode** (a switch on the panel, also under Display settings → Scorched Yard) draws the
+firing solution while you aim: the shell's own path under this round's wind and the game's
+gravity, clipped where it would meet the dirt, with a ring where it lands. It moves as you move
+the barrel or the power, so you can watch the arc bend under the wind. It is the rules' own
+arithmetic, so what it draws is what the shot does.
 
 Over the tank whose turn it is stands the **aim gauge**: a protractor with a tick every fifteen
 degrees, a needle along the current angle whose length is the power, and both numbers at its tip.

@@ -9,12 +9,13 @@ import {
   COLS, ROWS, WEAPONS, WEAPON_ORDER, ITEMS, START_INVENTORY, START_CASH, TANK_W, TANK_H, MAX_HEALTH, V_MAX, GRAVITY, MAX_STEP, DEATH_BLAST,
   newGame, generateLand, topOf, dirtAt, current, alive, aim, fire, step, settled, explode, settleDirt, landTanks, nextTurn, nextRound,
   cycleWeapon, muzzle, trajectory, tiles, landTiles, leader, rng, useItem, drive, buy, applyDamage, raiseShield, addDirt,
-  simulateShot, PERSONALITIES,
+  simulateShot, PERSONALITIES, TANK_COLOURS,
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, windFadeAt, windBanner, paintBanner, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
-import { paintBlasts, paintDeaths, paintDust, paintAim } from '../public/js/scorchedfx.js';
+import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma } from '../public/js/scorchedwind.js';
+import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
 // where, not to how it looks, so these run in node with no canvas at all.
@@ -36,7 +37,7 @@ const U = { x: 10, y: 8 };
 // the real softStops, cheaply: one arc per stop is enough to prove where and how big
 const stops = (ctx, x, y, r, list) => { for (const [o, col] of list) { ctx.fillStyle = col; ctx.arc(x, y, r * (1 - o), 0, 0); } };
 import { THEMES, THEME_SCORCHED, setMusic } from '../public/js/tetsound.js';
-import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
+import { DEFAULTS, PANEL, normalise, scorchedOptions } from '../public/js/settings.js';
 
 const three = (opts = {}) => newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }, { name: 'B', kind: 'moron' }], { seed: 7, ...opts });
 const play = (g, frames = 3000) => { const ev = []; let n = 0; while (g.phase === 'flight' && n++ < frames) ev.push(...step(g, 16)); if (g.phase === 'settle') { settled(g); ev.push(...step(g, 0)); } return ev; };
@@ -339,11 +340,11 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
   }
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
-  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'cheat', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
   assert.equal(scorchedOptions(normalise(null)).opponentKind, 'mix');
   assert.equal(scorchedOptions(normalise({ scorched: { opponentKind: 'cyborg' } })).opponentKind, 'cyborg');
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
-  assert.equal(o.opponents, 5, 'clamped to the slider'); assert.equal(o.rounds, 1); assert.equal(o.walls, 'none', 'the manual\u2019s default'); assert.equal(o.gravity, 2);
+  assert.equal(o.opponents, 7, 'clamped to the slider: seven fills the original\u2019s eight seats'); assert.equal(o.rounds, 1); assert.equal(o.walls, 'none', 'the manual\u2019s default'); assert.equal(o.gravity, 2);
   const s = store();
   assert.deepEqual(loadScores(s), []);
   recordScore({ score: 300, kills: 2, rounds: 5, won: true, at: 1 }, s);
@@ -836,51 +837,56 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const drawn = actorLayer(g, 500, { falls });
   assert.ok(drawn.some((t) => t.txid === 'chute1' && t.poly), 'the canopy is drawn over the tank under it');
   assert.ok(drawn.some((t) => t.txid === 'track0'), 'a tank has tracks now');
-  // THE WIND: its own flat layer behind the land, so it never clips the terrain and never sways
-  assert.equal(windStreaks(0, 0, 800, 400).length, 0, 'still air draws nothing');
-  const few = windStreaks(2, 0, 800, 400), many = windStreaks(9, 0, 800, 400);
-  assert.ok(many.length > few.length, `more streaks in a gale (${few.length} -> ${many.length})`);
-  assert.ok(many[0].len > few[0].len * 1.5, 'and each one is longer: the length is the speed');
-  // one direction, always: sampled every tenth of a second, no streak ever goes upwind
-  for (const wind of [3, -7]) {
-    const dir = Math.sign(wind);
-    let prev = windStreaks(wind, 0, 800, 400).map((t) => t.x);
-    for (let ms = 100; ms <= 12000; ms += 100) {
-      const nowStreaks = windStreaks(wind, ms, 800, 400);
-      nowStreaks.forEach((t, i) => {
-        const d = (t.x - prev[i]) * dir;
-        assert.ok(d >= -1e-9 || Math.abs(d) > 200, `a streak drifts downwind or wraps, never back (${d.toFixed(2)} at ${ms}ms)`);
-      });
-      prev = nowStreaks.map((t) => t.x);
+  // THE AIR IS A FLOW FIELD, ADVECTED (operator: "really leverage a shifting effect that conveys
+  // the air flow. Fluid simulation?"). Particles carried by the wind plus the curl of a drifting
+  // noise field: divergence-free, so it swirls without piling up or tearing.
+  const c0 = curl(3, 2, 0), c1 = curl(3.02, 2, 0);
+  assert.ok(Number.isFinite(c0.x) && Number.isFinite(c0.y), 'the curl is a vector');
+  assert.ok(Math.hypot(c1.x - c0.x, c1.y - c0.y) < 0.5, 'and it is smooth: a small step is a small change');
+  assert.ok(noise2(1.5, 2.5) >= 0 && noise2(1.5, 2.5) <= 1);
+  const flow = makeFlow(120, 800, 400, 7);
+  assert.equal(flow.length, 120);
+  assert.ok(flow.every((p) => p.x >= 0 && p.x <= 800 && p.y >= 0 && p.y <= 400), 'seeded over the plane');
+  // carried downwind, EVERY particle, EVERY step: the eddies bend the flow but never turn it
+  for (const wind of [6, -6, 1.5]) {
+    const parts = makeFlow(80, 800, 400, 3);
+    let now = 0, steps = 0, back = 0, total = 0;
+    for (let i = 0; i < 120; i++) {
+      now += 16;
+      for (const sg of stepFlow(parts, 16, { wind, w: 800, h: 400, now })) { steps += 1; const d = (sg.x1 - sg.x0) * Math.sign(wind); total += d; if (d <= 0) back += 1; }
     }
+    assert.equal(back, 0, `no streak ever points upwind at wind ${wind} (${back} of ${steps})`);
+    assert.ok(total / steps > 0.5, `and the air is carried, not just stirred (${(total / steps).toFixed(2)}px a frame)`);
   }
-  // it stays on its canvas and knows nothing of cells
-  for (const t of windStreaks(9, 3000, 800, 400)) {
-    assert.ok(t.y >= 0 && t.y <= 400 && t.x > -t.len - 1 && t.x < 800 + t.len + 1, 'on the plane');
-    assert.ok(t.th > 0 && /^rgba\(/.test(t.colour), 'a colour with an alpha, so a change of wind can fade');
-  }
-  // A CHANGE OF WIND CROSSFADES (operator: "the old wind needs to fade out when ending, and new
-  // wind needs to draw in ... I have to wait for the wind to settle before seeing what it is doing")
-  const at = (ms) => windFadeAt({ from: -6, t0: 0 }, ms, 600);
-  assert.ok(at(0).inAlpha < 0.01 && at(0).outAlpha > 0.99, 'at the change the old air is all there is');
-  assert.ok(at(300).inAlpha > at(300).outAlpha, 'halfway the new air already reads stronger than the old');
-  assert.equal(at(700).k, 1, 'and the fade is over inside its time');
-  assert.equal(windStreaks(6, 0, 800, 400, 0).length, 0, 'a layer faded to nothing is not drawn at all');
-  const faint = windStreaks(6, 0, 800, 400, 0.25)[0].colour;
-  assert.match(faint, /,0\.2[0-9]*\)$/, 'and a fading layer carries its alpha into every streak');
-  // the banner: chevrons downwind, more of them the harder it blows, at the top of the plane
-  const soft2 = windBanner(2, 800, 400), hard2 = windBanner(9, 800, 400);
-  assert.ok(hard2.length > soft2.length, `a stronger wind writes more chevrons (${soft2.length} -> ${hard2.length})`);
-  assert.equal(windBanner(-6, 800, 400)[0].dir, -1, 'and they point the way it blows');
+  // it swirls: the particles do not all travel on one straight line
+  const parts2 = makeFlow(120, 800, 400, 5);
+  let t2 = 0, spread = 0;
+  for (let i = 0; i < 90; i++) { t2 += 16; const segs = stepFlow(parts2, 16, { wind: 5, w: 800, h: 400, now: t2 }); if (i === 89) { const ys = segs.map((sg) => sg.y1 - sg.y0); spread = Math.max(...ys) - Math.min(...ys); } }
+  assert.ok(spread > 0.2, `the flow has eddies across it (${spread.toFixed(2)}px of crosswind in one step)`);
+  // still air draws nothing at all, and a gale draws more than a breeze
+  assert.equal(plasmaCells(800, 400, 0, 0).length, 0, 'no plasma in still air');
+  assert.ok(plasmaCells(800, 400, 0, 9).length > 0, 'and some under a wind');
+  assert.ok(plasmaCells(800, 400, 0, 9).every((c) => c.alpha <= 0.05), 'the wash is never more than a whisper');
+  // both painters use flat fills and strokes only
+  const R2 = recorder();
+  paintFlow(R2.ctx, stepFlow(makeFlow(20, 800, 400, 1), 16, { wind: 5, w: 800, h: 400, now: 500 }));
+  assert.ok(R2.ops.some((o) => o.op === 'stroke'), 'the streaks are stroked lines');
+  const banner = windBanner(-6, 800, 400);
+  assert.equal(banner[0].dir, -1, 'the banner points the way it blows');
+  assert.ok(windBanner(9, 800, 400).length > windBanner(2, 800, 400).length, 'more chevrons in a gale');
   assert.equal(windBanner(0, 800, 400).length, 0, 'still air says nothing');
-  assert.ok(windBanner(6, 800, 400, 1)[0].alpha > windBanner(6, 800, 400, 0)[0].alpha, 'brightest while the wind is new');
 
-  // and it paints with flat fills only
+  // and the plasma paints one flat rect a cell
   const ops = [];
-  const ctx = { clearRect: () => ops.push('clear'), beginPath: () => {}, moveTo: () => {}, lineTo: () => {}, closePath: () => {}, fill: () => ops.push('fill'), set fillStyle(v) { ops.push(`fill:${v}`); } };
-  paintWind(ctx, windStreaks(6, 0, 800, 400), 800, 400);
-  assert.equal(ops[0], 'clear');
-  assert.ok(ops.filter((o) => o === 'fill').length === windStreaks(6, 0, 800, 400).length, 'one quad per streak');
+  const ctx = { beginPath: () => {}, arc: () => ops.push('disc'), fill: () => {}, set fillStyle(v) { ops.push(`fill:${v}`); } };
+  paintPlasma(ctx, plasmaCells(800, 400, 0, 6));
+  assert.equal(ops.filter((o) => o === 'disc').length, plasmaCells(800, 400, 0, 6).length, 'one soft disc per cell');
+  // and the population is never one cohort: born on a clock twelve hours old, it still spreads
+  const old = makeFlow(60, 800, 400, 2, 46_000_000);
+  const lives = new Set(old.map((p) => p.life));
+  assert.ok(lives.size > 30, 'each particle has a life of its own');
+  let alive = 0; stepFlow(old, 16, { wind: 5, w: 800, h: 400, now: 46_000_016 }).forEach(() => { alive += 1; });
+  assert.ok(alive > 40, `most of the field is still in flight after the first step (${alive} of 60)`);
   const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
   assert.match(src, /t - G\.windAt >= WIND_MS\) \{ G\.windAt = t; G\.dirty = true; \}/, 'the loop marks itself dirty for the wind alone');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -992,4 +998,35 @@ test('scorched yard: a restart button and its key', () => {
   assert.match(src, /el\('syRestart'\)\?\.addEventListener\('click', \(\) => restart\(\)\)/, 'so does the button');
   assert.match(src, /function restart\(\) \{[\s\S]*?start\(\);/, 'and a restart is a fresh war from round one');
   assert.match(src, /you are out for this round/, 'a knocked-out player is told what the ways out are');
+});
+
+// CHEAT MODE AND EIGHT SEATS (operator, 2026-09-16)
+test('scorched yard: the firing solution is the rules\u2019 own path, and eight can play', () => {
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 4 });
+  const t = current(g);
+  aim(g, t, { angle: 45, power: 600 });
+  const sol = solutionOf(g, t);
+  assert.ok(sol && sol.pts.length > 10 && sol.impact, 'a path and a landing');
+  const real = simulateShot(g, t, 45, 600);
+  assert.ok(Math.abs(sol.impact.x - real.x) < 1 && Math.abs(sol.impact.y - real.y) < 1, 'it lands where the rules say it lands');
+  aim(g, t, { angle: 45, power: 700 });
+  const further = solutionOf(g, t);
+  assert.ok(further.pts.length !== sol.pts.length || further.impact.x !== sol.impact.x, 'and it moves with the aim');
+  const R = recorder();
+  paintSolution(R.ctx, P, U, sol.pts, { impact: sol.impact });
+  assert.ok(R.ops.filter((o) => o.op === 'arc').length > 10 && R.ops.some((o) => o.op === 'ellipse'), 'beads along the flight and a ring where it lands');
+  assert.equal(DEFAULTS.scorched.cheat, false, 'off until it is asked for');
+  assert.equal(scorchedOptions(normalise({ scorched: { cheat: true } })).cheat, true);
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="syCheat"/, 'the switch is on the panel');
+  // eight seats: the human and seven, each its own colour
+  assert.equal(TANK_COLOURS.length, 8);
+  assert.equal(new Set(TANK_COLOURS).size, 8, 'all different');
+  const eight = players({ opponents: 7, opponentKind: 'mix', demo: false });
+  assert.equal(eight.length, 8);
+  const big = newGame(eight, { seed: 2 });
+  assert.equal(new Set(big.tanks.map((k) => k.colour)).size, 8, 'no two tanks share a colour');
+  for (let i = 0; i < big.tanks.length; i++) for (let j = i + 1; j < big.tanks.length; j++) assert.ok(Math.abs(big.tanks[i].x - big.tanks[j].x) >= TANK_W, 'no two tanks overlap on the field');
+  const row = PANEL.find((gr) => gr.group === 'scorched').rows.find((r) => r.key === 'opponents');
+  assert.equal(row.max, 7, 'the setting reaches seven');
 });

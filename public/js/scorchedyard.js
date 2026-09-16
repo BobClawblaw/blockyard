@@ -9,9 +9,11 @@
 // it is the original's status line unrolled -- whose turn, angle, power, weapon, wind, cash, the
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
-import { paintBlasts, paintDeaths, paintDust, paintAim } from './scorchedfx.js';
+import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from './scorchedfx.js';
+import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma } from './scorchedwind.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
+  trajectory, dirtAt,
   WEAPONS, ITEMS, COLS, ROWS, TANK_W,
 } from './scorched.js';
 import { SHOP } from './scorchedshop.js';
@@ -71,9 +73,11 @@ const G = {
   lastShot: null,                       // what the human fired last, for R
   editing: null,                        // 'angle' | 'power' while a number is being typed
   paintNow: 0,                          // the instant the overlay layer paints at
-  windShown: undefined,                 // the wind the plane is drawing, so a change can be crossfaded
-  windFade: null,                       // { from, t0 } while the old air thins and the new comes up
-  windAtChange: 0,                      // when the wind last changed, for the banner's brightness
+  flow: null, flowW: 0, flowH: 0,       // the advected particles of the air, and the size they were made for
+  flowAt: 0,                            // the last frame's clock, for the step
+  windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
+  windShown: undefined,                 // the last wind the game reported, to date a change
+  windAtChange: 0,                      // when it changed, for the banner's brightness
   windAt: 0,                            // when the wind layer last moved, so it keeps blowing while the board is idle
   aiAt: 0,                              // when the computer's turn began, for the pause before it fires
   settleT0: 0, settleMs: 0,             // the fall on screen
@@ -232,77 +236,6 @@ const hashAt = (i) => (k) => { const x = Math.sin((i * 7 + k) * 12.9898 + 78.233
 // Three depths. The far band is short, dim and slow; the near one longer, paler and quicker. The
 // colours are mid greys on purpose: pale enough to read against a night sky, dark enough to read
 // against the Living sky's blue, and never so bright that a streak looks like a tracer round.
-const BANDS = Object.freeze([
-  Object.freeze({ speed: 0.55, len: 0.5, th: 0.7, near: [111, 114, 120], far: [93, 96, 102] }),
-  Object.freeze({ speed: 0.82, len: 0.78, th: 1.0, near: [142, 140, 132], far: [123, 121, 114] }),
-  Object.freeze({ speed: 1.15, len: 1.1, th: 1.4, near: [179, 173, 160], far: [158, 152, 144] }),
-]);
-const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
-
-/**
- * The streaks for a canvas `w` x `h` CSS pixels at `now`, as plain geometry: `{ x, y, len, th,
- * colour }` with x the centre. Pure, so a test can hold the wind to its speed and its shape.
- */
-export function windStreaks(wind, now, w, h, alpha = 1) {
-  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
-  if (!w || !h || strength < 0.03 || alpha <= 0.01) return [];
-  const dir = wind < 0 ? -1 : 1;
-  const t = now / 1000;
-  // NO GUST (operator, 2026-09-16: "the wind effects were not staying consistent", and before that
-  // "I keep seeing it oscillating back and forth while I idle"). The air used to breathe: a slow
-  // wave lengthened and quickened every streak together, by a third either way, on an eleven-second
-  // cycle. It never reversed -- measured frame by frame, no streak ever moved upwind -- but a
-  // stream that surges and eases while the gauge reads one number does not look like that number.
-  // One wind, one speed: the streaks advance at exactly the rate the gauge says and no faster.
-  const phase = now / 1000;
-  const n = Math.round(18 + 54 * strength);
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const h6 = hashAt(i);
-    const band = BANDS[i % BANDS.length];
-    const len = w * (0.011 + 0.062 * strength) * band.len * (0.55 + h6(6) * 0.9);
-    const speed = w * (0.05 + 0.5 * strength) * band.speed * (0.7 + h6(1) * 0.6);
-    const span = w + len * 2;
-    const x = ((((h6(2) * span + phase * speed * dir) % span) + span) % span) - len;
-    out.push({ x, y: Math.round(h6(3) * h) + 0.5, len, th: band.th * (0.8 + h6(4) * 0.6), colour: rgba(h6(5) > 0.5 ? band.near : band.far, alpha), dir });
-  }
-  return out;
-}
-
-/** Paint them: a tapered quad each, flat colour, nothing else -- the canvas rules hold here too. */
-export function paintWind(ctx, streaks, w, h, clear = true) {
-  if (clear) ctx.clearRect(0, 0, w, h);
-  for (const s of streaks) {
-    const tail = s.x - (s.len / 2) * s.dir, head = s.x + (s.len / 2) * s.dir;
-    const waist = s.x - (s.len * 0.2) * s.dir;
-    ctx.fillStyle = s.colour;
-    ctx.beginPath();
-    ctx.moveTo(head, s.y);
-    ctx.lineTo(waist, s.y - s.th);
-    ctx.lineTo(tail, s.y);
-    ctx.lineTo(waist, s.y + s.th);
-    ctx.closePath();
-    ctx.fill();
-  }
-}
-
-// THE CHANGE OF WIND (operator, 2026-09-16: "the old wind needs to fade out when ending, and new
-// wind needs to draw in ... I have to wait for the wind to settle animating before seeing what it
-// is doing for my turn").
-//
-// A new wind used to replace the old one between two frames: every streak jumped, because a
-// streak's place is its speed times the elapsed time and both had changed. What follows is a
-// CROSSFADE, not a settling -- the old air thins away while the new air, already at its own speed
-// and in its own direction, comes up over it. The two overlap for WIND_FADE_MS, and the new one
-// leads: at the halfway point it is already the brighter of the two, so the direction is readable
-// long before the old one is gone. Nothing waits on anything.
-const WIND_FADE_MS = 600;
-export function windFadeAt(fade, now, ms = WIND_FADE_MS) {
-  if (!fade) return { k: 1 };
-  const k = Math.min(1, Math.max(0, (now - fade.t0) / ms));
-  return { k, out: fade.from, outAlpha: (1 - k) * (1 - k), inAlpha: Math.sqrt(k) };
-}
-
 // THE BANNER: the wind written on the field itself, at the top, so the answer to "which way, how
 // hard" is there the moment the turn begins rather than after the air has drifted enough to read.
 // Chevrons pointing downwind, as many as the wind is strong, bright while it is new.
@@ -344,20 +277,30 @@ function drawWind(now) {
   if (!w || !h) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
-  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
+  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; G.flow = null; }
   const ctx = c.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const wind = G.game?.wind ?? 0;
-  // a new wind starts a crossfade from the one on screen
-  if (G.windShown === undefined) G.windShown = wind;
-  if (wind !== G.windShown) { G.windFade = { from: G.windShown, t0: now }; G.windShown = wind; }
-  const f = windFadeAt(G.windFade, now);
-  if (f.k >= 1) G.windFade = null;
+  // THE WIND EASES INTO ITS NEW VALUE rather than being swapped for it (operator: "the old wind
+  // needs to fade out when ending, and new wind needs to draw in"). The field is advected, so the
+  // streaks BEND into the new speed and direction over about half a second instead of jumping --
+  // which is what a change of wind looks like, and it needs no crossfade of two layers.
+  const dt = G.flowAt ? Math.min(120, now - G.flowAt) : 16;
+  G.flowAt = now;
+  if (G.windEased === undefined) G.windEased = wind;
+  else G.windEased += (wind - G.windEased) * Math.min(1, dt / 420);
+  if (Math.abs(wind - G.windEased) < 0.02) G.windEased = wind;
+  if (wind !== G.windShown) { G.windShown = wind; G.windAtChange = now; }
+  // the particles live as long as the canvas does
+  if (!G.flow || G.flowW !== w || G.flowH !== h) {
+    G.flow = makeFlow(Math.round(Math.min(420, 150 + w * 0.22)), w, h, 7, now);
+    G.flowW = w; G.flowH = h;
+  }
   ctx.clearRect(0, 0, w, h);
-  if (G.windFade) paintWind(ctx, windStreaks(f.out, now, w, h, f.outAlpha), w, h, false);
-  paintWind(ctx, windStreaks(wind, now, w, h, G.windFade ? f.inAlpha : 1), w, h, false);
-  paintBanner(ctx, windBanner(wind, w, h, G.windFade ? 1 - f.k * 0.5 : Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
+  paintPlasma(ctx, plasmaCells(w, h, now, G.windEased));
+  paintFlow(ctx, stepFlow(G.flow, dt, { wind: G.windEased, w, h, now }));
+  paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 
 /** The cells of the runs still falling, as "x,y" keys: left off the land canvas while the actor canvas animates them. */
@@ -406,8 +349,14 @@ function paintOver(ctx, view, hx) {
   paintDust(ctx, P, U, G.dusts, now, { softStops: S, ms: DUST_MS });
   paintBlasts(ctx, P, U, G.blasts, now, { wind: g.wind ?? 0, softStops: S, ms: BLAST_MS, smokeMs: SMOKE_MS });
   paintDeaths(ctx, P, U, G.deaths, now, { softStops: S, ms: DEATH_MS });
-  // the gauge belongs to whoever is aiming, and only while they are aiming
+  // CHEAT MODE: the firing solution, redrawn every frame the aim moves. Clipped where the shell
+  // would meet the dirt or leave the field, so what is drawn is the shot, not a parabola over it.
   const t = current(g);
+  if (t && g.phase === 'aim' && !G.shopping && scorchedOptions(loadSettings()).cheat) {
+    const sol = solutionOf(g, t);
+    if (sol) paintSolution(ctx, P, U, sol.pts, { colour: '255,224,140', impact: sol.impact });
+  }
+  // the gauge belongs to whoever is aiming, and only while they are aiming
   if (t && g.phase === 'aim' && !G.shopping) {
     paintAim(ctx, P, U, {
       x: t.x + TANK_W / 2, y: t.y, angle: t.angle, power: t.power,
@@ -415,6 +364,23 @@ function paintOver(ctx, view, hx) {
       dim: t.kind !== 'human',
     });
   }
+}
+
+/**
+ * The path the shell would take from where the barrel points now: the rules' own `trajectory`,
+ * stopped at the first cell of dirt it would enter or at the edge of the field. Answers the points
+ * and where it lands, or null when it flies off the board.
+ */
+export function solutionOf(g, tank, secs = 12) {
+  const pts = trajectory(g, tank, secs);
+  const out = [];
+  for (const p of pts) {
+    if (p.x < 0 || p.x > COLS || p.y > ROWS + 40) { return out.length > 1 ? { pts: out, impact: null } : null; }
+    out.push(p);
+    if (p.y <= 0) return { pts: out, impact: { x: p.x, y: 0 } };
+    if (p.y < ROWS && dirtAt(g, Math.floor(p.x), Math.floor(p.y))) return { pts: out, impact: p };
+  }
+  return out.length > 1 ? { pts: out, impact: null } : null;
 }
 
 // ------------------------------------------------------------------ the screen
@@ -546,7 +512,7 @@ function drawShop() {
   setHtml(box, html, 'shop');
 }
 
-const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syDemo', 'demo']];
+const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syCheat', 'cheat'], ['syDemo', 'demo']];
 function drawSwitches() {
   const t = scorchedOptions(loadSettings());
   const living = t.sky.skyType === 'living';

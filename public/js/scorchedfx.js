@@ -234,3 +234,39 @@ export function paintAim(ctx, P, U, { x, y, angle, power, colour = '#ffb347', sh
   ctx.textAlign = 'left';
   ctx.lineWidth = lw;
 }
+
+/**
+ * CHEAT MODE (operator, 2026-09-16: "a 'Cheat Mode' enable/disable where it plots the firing
+ * solution accounting for wind and power in realtime, so the player can see the arcs adjusting as
+ * the target location shifts").
+ *
+ * The shell's own path, under the round's wind and the game's gravity, recomputed every time the
+ * aim moves and clipped where it would meet the dirt: dim beads along the flight, brighter toward
+ * the end, and a ring on the ground where it lands. It is the rules' own arithmetic, not an
+ * approximation of it, so what it draws is what the shot does.
+ */
+export function paintSolution(ctx, P, U, pts, { colour = '255,216,120', impact = null } = {}) {
+  if (!pts || pts.length < 2) return;
+  const step = Math.max(1, Math.round(pts.length / 90));
+  for (let i = 0; i < pts.length; i += step) {
+    const k = i / pts.length;
+    const p = P(pts[i].x, pts[i].y, 1.2);
+    const r = U.x * (0.07 + 0.06 * k);
+    disc(ctx, p.x, p.y, r, `rgba(${colour},${(0.2 + 0.5 * k).toFixed(3)})`);
+  }
+  if (!impact) return;
+  const c = P(impact.x, impact.y, 1.2);
+  const lw = ctx.lineWidth;
+  ctx.strokeStyle = `rgba(${colour},0.85)`;
+  ctx.lineWidth = Math.max(1.2, U.x * 0.1);
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, U.x * 0.75, Math.max(1, U.y * 0.75), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(c.x - U.x * 0.42, c.y);
+  ctx.lineTo(c.x + U.x * 0.42, c.y);
+  ctx.moveTo(c.x, c.y - U.y * 0.42);
+  ctx.lineTo(c.x, c.y + U.y * 0.42);
+  ctx.stroke();
+  ctx.lineWidth = lw;
+}
