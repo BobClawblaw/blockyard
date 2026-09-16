@@ -301,7 +301,10 @@ function drawWind(now) {
   if (wind !== G.windShown) { G.windShown = wind; G.windAtChange = now; }
   // the particles live as long as the canvas does
   if (!G.flow || G.flowW !== w || G.flowH !== h) {
-    G.flow = makeFlow(Math.round(Math.min(420, 150 + w * 0.22)), w, h, 7, now);
+    // half the count it started with (operator, 2026-09-16: "cut the wave simulation particles by
+    // half to improve perf"): the tails and the currents carry the motion now, so the particles
+    // can be fewer
+    G.flow = makeFlow(Math.round(Math.min(210, 75 + w * 0.11)), w, h, 7, now);
     G.flowW = w; G.flowH = h;
   }
   // the air's own clock, integrated at the eased wind's rate: a change of wind changes how fast it
