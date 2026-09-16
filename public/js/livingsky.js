@@ -292,19 +292,31 @@ function paintClouds(ctx, pw, ph, now, opts, sun, s, cols, weather, softStops) {
       if (day > 0.2) softStops(ctx, px + toSun * r * 0.25, py - r * 0.25, r * 0.55, [[0, rgb([255, 255, 255], a * 0.35 * day)], [1, rgb([255, 255, 255], 0)]], 16);
     }
   }
-  // cirrus, high and slow, by day
+  // cirrus, high and slow, by day -- AS GAS, NOT AS A CHAIN OF DISCS (operator, 2026-09-16: "The
+  // banding on that faint cloud strip looks awful. Can we replace with plasma gasses instead?").
+  // The first cut laid hard-edged flat discs fourteen pixels apart along each wisp, and where
+  // they overlapped the outlines stacked into a row of rings. Each wisp is now a scatter of
+  // soft-edged puffs -- softStops, the same way the cumulus is built -- jittered off the line,
+  // of varying size, each drawn twice with a small offset along the wisp so it reads stretched
+  // in the direction it drifts. No puff has an edge, so nothing bands.
   if (day > 0.3 && !weather.storm) {
     const wisps = cirrusField(5, 3 + Math.round(cover * 3));
+    const white = [255, 255, 255];
     for (const w of wisps) {
       const u = ((w.u + t * w.speed * wind) % 1.4 + 1.4) % 1.4 - 0.2;
       const x0 = u * pw, y0 = w.v * ph;
-      const n = Math.max(8, Math.round(w.len * pw / 14));
+      const n = Math.max(6, Math.round(w.len * pw / 34));
+      const dx = w.len * pw / n, dy = w.tilt * ph / n;
       for (let k = 0; k <= n; k++) {
         const f = k / n;
-        const x = x0 + f * w.len * pw, y = y0 + f * w.tilt * ph + Math.sin(f * Math.PI * 2 + w.u * 9) * ph * 0.006;
-        const r = w.thick * ph * (0.5 + Math.sin(f * Math.PI)) * 2.2;
-        ctx.fillStyle = rgb([255, 255, 255], 0.05 * day);
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        const j = (q) => hash(w.u * 977 + k * 31 + q);
+        const x = x0 + f * w.len * pw + (j(1) - 0.5) * dx * 0.9;
+        const y = y0 + f * w.tilt * ph + Math.sin(f * Math.PI * 2 + w.u * 9) * ph * 0.006 + (j(2) - 0.5) * w.thick * ph * 2.5;
+        const r = w.thick * ph * (0.45 + Math.sin(f * Math.PI)) * (2.6 + 1.6 * j(3));
+        const a = 0.028 * day * (0.6 + 0.8 * j(4));
+        const stops = [[0, rgb(white, a)], [0.4, rgb(white, a * 0.55)], [1, rgb(white, 0)]];
+        softStops(ctx, x, y, r, stops, 12);
+        softStops(ctx, x + dx * 0.45, y + dy * 0.45, r * 0.85, stops, 12);
       }
     }
   }
