@@ -813,14 +813,19 @@ Every point of damage you land earns $10, a kill $2,000, and the last tank stand
 while you can afford it. The computer players shop at the same moment, in their own way. What you
 buy stays with you for the rest of the game.
 
+Over the tank whose turn it is stands the **aim gauge**: a protractor with a tick every fifteen
+degrees, a needle along the current angle whose length is the power, and both numbers at its tip.
+It is dimmed on a computer player's turn, so you can read what it is about to do before it fires.
+
 The HUD shows whose turn it is, the round, the **wind** (an arrow and its strength: it changes
 every turn, and it bends every shot; you can see it too — streaks of moving air run level across
 the sky behind the land, short and slow in a breeze, long and quick in a gale, in three bands of
 depth so the air has thickness; the pennant on every turret streams downwind; and the Living sky's
 clouds go with it), your angle, power and weapon with its count, and every
 tank's health. **Fire** on the HUD does what space does. A shell that lands carves a circle out of
-the dirt; the blast itself is blocks, a disc of fire on the field's own grid that throws embers and
-leaves a plume of smoke rising and drifting downwind; the dirt above the crater falls until it rests, and a tank left in the air falls with
+the dirt; the blast itself is drawn the way the fireworks are — a white core, a shockwave, sparks
+that curve and trail, and smoke that rises, spreads, drifts downwind and thins; the dirt above the
+crater falls until it rests, and a tank left in the air falls with
 it and is hurt by the fall. A blast hurts every tank in reach, most at its centre. A tank at zero
 health explodes, and its blast can take a neighbour with it.
 

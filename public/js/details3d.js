@@ -3768,6 +3768,13 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
   if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
   else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); drawBlackHole(ctx, view, ctx.lineWidth); drawScanCurtain(ctx, view, ctx.lineWidth); }
+  // A CALLER'S OWN LAYER, over the board and in the board's own projection (operator, 2026-09-16:
+  // "We have fucking firework and nebula effects and you're doing shitty block and sprite
+  // explosions?"). The effects above are the renderer's, chosen by cadence and seed; a game needs
+  // to draw ITS events -- a shell landing here, at this instant -- with the same primitives. The
+  // hook hands over the projector and softStops, so an explosion is built the way the fireworks
+  // are rather than out of tiles, and lands exactly where the cell it destroyed was.
+  if (typeof opts.overlay === 'function') opts.overlay(ctx, view, { project, softStops, lw: ctx.lineWidth });
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 

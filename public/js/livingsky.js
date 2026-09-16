@@ -202,14 +202,17 @@ function paintTwilight(ctx, pw, ph, sunX, cols, softStops) {
 function paintSun(ctx, pw, ph, s, sun, cols, softStops) {
   if (sun.alt < -8) return;
   const k = Math.max(0, Math.min(1, sun.alt / 30));
-  const c = mix3([255, 120, 60], [255, 250, 232], k);
+  // THE SUN IS NOT WHITE (operator, 2026-09-16: "The Sun is white?!"). A white disc is what a
+  // camera makes of it; the eye, and every painting of a sky, sees gold. Deep orange on the
+  // horizon, warm gold overhead -- never past a warm cream, even at noon.
+  const c = mix3([255, 120, 60], [255, 212, 116], k);
   const r = ph * 0.02 * (1 + 0.7 * (1 - k));
   const glow = 0.3 + 0.35 * (1 - k);
   const vis = sun.alt < 0 ? Math.max(0, 1 + sun.alt / 8) : 1;
   softStops(ctx, s.x, s.y, ph * 0.5, [[0, rgb(c, glow * 0.7 * vis)], [0.08, rgb(c, glow * 0.45 * vis)], [0.3, rgb(c, glow * 0.12 * vis)], [1, rgb(c, 0)]], 90);
   // the disc, with a soft edge: a few rings from the rim in
   softStops(ctx, s.x, s.y, r * 1.5, [[0, rgb(c, vis)], [0.6, rgb(c, vis)], [1, rgb(c, 0)]], 12);
-  softStops(ctx, s.x, s.y, r * 0.9, [[0, rgb([255, 255, 250], 0.9 * k * vis)], [1, rgb([255, 255, 250], 0)]], 8);
+  softStops(ctx, s.x, s.y, r * 0.9, [[0, rgb([255, 246, 214], 0.92 * k * vis)], [1, rgb([255, 246, 214], 0)]], 8);
 }
 
 function paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops) {

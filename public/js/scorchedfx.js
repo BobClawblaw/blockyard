@@ -1,0 +1,236 @@
+// SCORCHED YARD'S EXPLOSIONS, PAINTED (operator, 2026-09-16: "We have fucking firework and nebula
+// effects and you're doing shitty block and sprite explosions?").
+//
+// The blast used to be tiles -- first spheres, which the engine gives a rim and a glint so a cloud
+// of them read as bubbles, then cubes, which are honest but are not an explosion. Meanwhile the
+// renderer already knows how to draw a firework: a white core, a shockwave, sparks that curve and
+// trail and twinkle, and a nebula of smoke built from flat discs that add up to a soft cloud
+// (softStops, because gradients band on this rasteriser). That machinery is what a shell landing
+// deserves, so this module draws with it.
+//
+// Everything here is painted through the BOARD'S OWN PROJECTION: `P(gx, gy, gz)` is the renderer's
+// projector, handed to the overlay hook in details3d, so a crater at cell 40,12 and the fire over
+// it are the same place on the screen. `U` is how many pixels a cell is, across and up, which is
+// how a radius in cells becomes a radius in pixels.
+//
+// Nothing in here reads the DOM or the clock: the caller passes `now`, so a test can hold any
+// moment of any blast and a replay is exact.
+
+/** A line of the spark's recent path, fading from its head. */
+function trail(ctx, pts, colour, w) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = 1 - i / pts.length;
+    ctx.strokeStyle = colour(a);
+    ctx.lineWidth = Math.max(0.6, w * a);
+    ctx.beginPath();
+    ctx.moveTo(pts[i].x, pts[i].y);
+    ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+    ctx.stroke();
+  }
+}
+
+const disc = (ctx, x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.4, r), 0, Math.PI * 2); ctx.fill(); };
+const h01 = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+
+/**
+ * THE FIREBALL, THE SHOCKWAVE, THE SPARKS AND THE SMOKE.
+ *
+ *   0.00-0.25  the core: white, then gold, then orange, growing
+ *   0.00-0.50  the shockwave, an ellipse racing out and thinning (a circle on the ground is an
+ *              ellipse on an oblique board, so it is drawn from the two cell sizes)
+ *   0.00-1.00  sparks on ballistic paths, each a curved trail of its last positions, twinkling
+ *   0.05-1.00  the smoke: a nebula of soft lumps leaving the burst, rising, drifting downwind,
+ *              growing and thinning -- the fireworks' own dissipation, in dirt colours
+ */
+export function paintBlasts(ctx, P, U, blasts, now, { wind = 0, softStops, ms = 650, smokeMs = 2400 } = {}) {
+  const lw = ctx.lineWidth;
+  for (const b of blasts) {
+    const age = now - b.t0;
+    const t = Math.min(1, Math.max(0, age / ms));
+    const R = Math.max(2, b.r * U.x);
+    const c = P(b.x, b.y, 1.2);
+    const riot = !!b.riot;
+
+    if (t < 1) {
+      // --- the core
+      const fade = t < 0.22 ? 1 : Math.max(0, 1 - (t - 0.22) / 0.78);
+      const fr = R * (0.5 + 0.9 * t);
+      const core = riot
+        ? [[0, `rgba(240,252,255,${(0.95 * fade).toFixed(3)})`], [0.2, `rgba(160,220,255,${(0.85 * fade).toFixed(3)})`], [0.5, `rgba(80,160,230,${(0.45 * fade).toFixed(3)})`], [1, 'rgba(40,90,150,0)']]
+        : [[0, `rgba(255,255,240,${(0.98 * fade).toFixed(3)})`], [0.14, `rgba(255,236,170,${(0.92 * fade).toFixed(3)})`], [0.36, `rgba(255,158,64,${(0.66 * fade).toFixed(3)})`], [0.66, `rgba(196,66,26,${(0.3 * fade).toFixed(3)})`], [1, 'rgba(120,30,12,0)']];
+      softStops(ctx, c.x, c.y, fr * 1.9, core);
+
+      // --- the shockwave
+      // it belongs to the crater, not to the panel: a ring that races three radii out crosses the
+      // whole field and reads as a stray circle drawn over the picture
+      if (t < 0.38) {
+        const k = t / 0.38;
+        const rr = b.r * (0.5 + 1.3 * k);
+        const gone = (1 - k) * (1 - k);
+        ctx.strokeStyle = riot ? `rgba(200,240,255,${(0.7 * gone).toFixed(3)})` : `rgba(255,236,196,${(0.75 * gone).toFixed(3)})`;
+        ctx.lineWidth = Math.max(lw, U.x * 0.3 * (1 - k));
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, rr * U.x, Math.max(1, rr * U.y), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // --- the sparks: ballistic in cells, drawn as curved trails
+      // NOT A STARBURST OF RAYS: every spark leaving the centre at the same speed down the same
+      // straight line draws a sun, not an explosion. Each one gets its own speed, its own weight
+      // and a curl across its flight, and the slow ones stay near the crater where the fire is.
+      const n = Math.min(80, Math.round(16 + b.r * 5));
+      for (let i = 0; i < n; i++) {
+        const H = (k) => h01(b.id * 97 + i * 13 + k);
+        const a = (i / n) * Math.PI * 2 + H(1) * 0.9;
+        const slow = H(5) * H(5);                                   // most are slow, a few fly
+        const sp = b.r * (0.7 + 2.2 * slow);
+        const curl = (H(6) - 0.5) * 1.6;
+        const drop = 5 + H(3) * 9;
+        const at = (u) => {
+          const aa = a + curl * u;
+          const x = b.x + Math.cos(aa) * sp * u;
+          const y = b.y + Math.sin(aa) * sp * u * 0.85 - drop * u * u;
+          return P(x, y, 1.2);
+        };
+        const fadeS = Math.max(0, 1 - t * (0.7 + H(7) * 0.6));
+        if (fadeS <= 0.02) continue;
+        const twinkle = 0.55 + 0.45 * Math.sin(now / 42 + i * 2.1);
+        const pts = [];
+        const step = 0.02 + H(2) * 0.03;
+        for (let k = 0; k <= 5; k++) pts.push(at(Math.max(0, t - k * step)));
+        const warm = H(4) > 0.55;
+        trail(ctx, pts, (al) => (riot
+          ? `rgba(170,225,255,${(0.55 * al * fadeS).toFixed(3)})`
+          : warm ? `rgba(255,190,90,${(0.6 * al * fadeS).toFixed(3)})` : `rgba(255,120,50,${(0.5 * al * fadeS).toFixed(3)})`), U.x * 0.2);
+        const head = pts[0];
+        disc(ctx, head.x, head.y, U.x * 0.075 * (0.6 + 0.6 * twinkle) * fadeS, riot ? `rgba(235,250,255,${(0.9 * fadeS).toFixed(3)})` : `rgba(255,246,214,${(0.9 * fadeS * twinkle).toFixed(3)})`);
+      }
+    }
+
+    // --- the smoke, a nebula in dirt colours
+    if (!riot && b.r >= 1.2 && age > 60 && age < smokeMs) {
+      const u = age / smokeMs;
+      const lumps = Math.min(26, 8 + Math.round(b.r * 2.2));
+      for (let i = 0; i < lumps; i++) {
+        const H = (k) => h01(b.id * 31 + i * 7 + k);
+        const life = 0.72 + H(5) * 0.28;
+        if (u > life) continue;
+        const uu = u / life;
+        const ang = Math.PI * (0.1 + 0.8 * H(1));
+        const out = b.r * (0.5 + 1.4 * H(2)) * Math.sqrt(uu);
+        const x = b.x + Math.cos(ang) * out * 0.8 + wind * 0.3 * (age / 1000);
+        const y = b.y + Math.sin(ang) * out + 0.4 + uu * b.r * 0.5;
+        const p = P(x, y, 1.2);
+        const rr = U.x * b.r * (0.22 + 0.5 * uu) * (0.6 + H(3) * 0.8);
+        const dark = 1 - 0.45 * uu;
+        const al = 0.42 * (1 - uu) * (0.7 + H(4) * 0.5);
+        const g0 = Math.round(126 * dark), g1 = Math.round(96 * dark);
+        // two offset discs per lump, so a cloud is not a row of circles
+        softStops(ctx, p.x, p.y, rr, [[0, `rgba(${g0 + 24},${g0 + 18},${g0 + 12},${al.toFixed(3)})`], [0.55, `rgba(${g1},${g1 - 4},${g1 - 10},${(al * 0.55).toFixed(3)})`], [1, `rgba(${g1},${g1},${g1},0)`]]);
+        softStops(ctx, p.x + rr * 0.45, p.y - rr * 0.3, rr * 0.7, [[0, `rgba(${g0 + 12},${g0 + 8},${g0},${(al * 0.7).toFixed(3)})`], [1, `rgba(${g1},${g1},${g1},0)`]]);
+      }
+    }
+  }
+  ctx.lineWidth = lw;
+}
+
+/** A tank going up: a white flash, a burst of sparks in its own colour, and a puff of smoke. */
+export function paintDeaths(ctx, P, U, deaths, now, { softStops, ms = 1100 } = {}) {
+  const lw = ctx.lineWidth;
+  for (const d of deaths) {
+    const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
+    if (t >= 1) continue;
+    const c = P(d.x, d.y, 1.2);
+    const fade = 1 - t;
+    const col = String(d.colour || '#ffd27a').replace('#', '');
+    const rgb = [0, 2, 4].map((i) => parseInt(col.slice(i, i + 2), 16) || 200).join(',');
+    softStops(ctx, c.x, c.y, U.x * 4.5 * (0.5 + t), [[0, `rgba(255,255,245,${(0.9 * fade * fade).toFixed(3)})`], [0.25, `rgba(${rgb},${(0.6 * fade).toFixed(3)})`], [1, `rgba(${rgb},0)`]]);
+    for (let i = 0; i < 34; i++) {
+      const H = (k) => h01(d.id * 53 + i * 11 + k);
+      const a = (i / 34) * Math.PI * 2 + H(1);
+      const sp = 3 + H(2) * 7;
+      const at = (u) => P(d.x + Math.cos(a) * sp * u, d.y + Math.sin(a) * sp * u * 0.9 - 9 * u * u, 1.2);
+      const pts = [];
+      for (let k = 0; k <= 4; k++) pts.push(at(Math.max(0, t - k * 0.04)));
+      trail(ctx, pts, (al) => `rgba(${rgb},${(0.7 * al * fade).toFixed(3)})`, U.x * 0.18);
+      const head = pts[0];
+      disc(ctx, head.x, head.y, U.x * 0.11 * fade, `rgba(255,250,230,${(0.85 * fade).toFixed(3)})`);
+    }
+  }
+  ctx.lineWidth = lw;
+}
+
+/** Where fallen dirt lands: a low puff that spreads and settles. */
+export function paintDust(ctx, P, U, dusts, now, { softStops, ms = 700 } = {}) {
+  for (const d of dusts) {
+    const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
+    if (t >= 1) continue;
+    for (let i = 0; i < 4; i++) {
+      const H = (k) => h01(d.id * 17 + i * 5 + k);
+      const p = P(d.x + (H(1) - 0.5) * 2.2, d.y + 0.4 + t * 1.2 + H(2) * 0.6, 1.2);
+      const r = U.x * (0.5 + 1.5 * t) * (0.6 + H(3) * 0.7);
+      const al = 0.34 * (1 - t);
+      softStops(ctx, p.x, p.y, r, [[0, `rgba(196,172,132,${al.toFixed(3)})`], [0.6, `rgba(150,130,100,${(al * 0.5).toFixed(3)})`], [1, 'rgba(140,122,94,0)']]);
+    }
+  }
+}
+
+/**
+ * THE AIM GAUGE (operator, 2026-09-16: "seeing the turret moving on the tank is still not clear
+ * and intuitive ... a simple way of visualizing the current angle").
+ *
+ * A protractor over the tank whose turn it is: a half-circle of ticks every 15 degrees with 0, 45,
+ * 90, 135 and 180 written in, a bright needle along the current angle whose LENGTH is the power,
+ * and the two numbers at the needle's tip. It is the whole of the aim in one picture: where the
+ * barrel points, how hard, and how far from the round numbers you are.
+ */
+export function paintAim(ctx, P, U, { x, y, angle, power, colour = '#ffb347', show = true, dim = false } = {}) {
+  if (!show) return;
+  const lw = ctx.lineWidth;
+  const o = P(x, y + 0.9, 1.2);
+  const rad = U.x * 4.2;
+  const a = (angle * Math.PI) / 180;
+  const on = dim ? 0.35 : 1;
+  // the arc
+  ctx.strokeStyle = `rgba(226,232,240,${(0.3 * on).toFixed(3)})`;
+  ctx.lineWidth = Math.max(lw, U.x * 0.05);
+  ctx.beginPath();
+  ctx.ellipse(o.x, o.y, rad, rad * (U.y / U.x), 0, Math.PI, 2 * Math.PI);
+  ctx.stroke();
+  // the ticks
+  for (let deg = 0; deg <= 180; deg += 15) {
+    const ar = (deg * Math.PI) / 180;
+    const big = deg % 45 === 0;
+    const r0 = rad * (big ? 0.86 : 0.93), r1 = rad * 1.04;
+    const sx = Math.cos(ar), sy = Math.sin(ar) * (U.y / U.x);
+    ctx.strokeStyle = `rgba(226,232,240,${((big ? 0.55 : 0.3) * on).toFixed(3)})`;
+    ctx.lineWidth = Math.max(lw, U.x * (big ? 0.07 : 0.04));
+    ctx.beginPath();
+    ctx.moveTo(o.x + sx * r0, o.y - sy * r0);
+    ctx.lineTo(o.x + sx * r1, o.y - sy * r1);
+    ctx.stroke();
+  }
+  // the needle: its length is the power
+  const len = rad * (0.45 + 0.75 * Math.min(1, Math.max(0, power / 1000)));
+  const tipX = o.x + Math.cos(a) * len, tipY = o.y - Math.sin(a) * len * (U.y / U.x);
+  ctx.strokeStyle = `rgba(20,24,32,${(0.55 * on).toFixed(3)})`;
+  ctx.lineWidth = Math.max(lw, U.x * 0.3);
+  ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(tipX, tipY); ctx.stroke();
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(lw, U.x * 0.16);
+  ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(tipX, tipY); ctx.stroke();
+  disc(ctx, tipX, tipY, U.x * 0.22, 'rgba(255,250,235,0.95)');
+  disc(ctx, o.x, o.y, U.x * 0.16, colour);
+  // the numbers, at the tip, on the side the needle leans away from
+  const label = `${Math.round(angle)}°  ${Math.round(power)}`;
+  ctx.font = `${Math.max(8, Math.round(U.x * 0.7))}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.textAlign = angle > 90 ? 'right' : 'left';
+  ctx.textBaseline = 'bottom';
+  const off = (angle > 90 ? -1 : 1) * U.x * 0.35;
+  ctx.fillStyle = 'rgba(12,16,22,0.72)';
+  ctx.fillText(label, tipX + off + 1, tipY - U.x * 0.35 + 1);
+  ctx.fillStyle = 'rgba(245,249,255,0.96)';
+  ctx.fillText(label, tipX + off, tipY - U.x * 0.35);
+  ctx.textAlign = 'left';
+  ctx.lineWidth = lw;
+}

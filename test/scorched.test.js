@@ -13,7 +13,28 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, dustTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { paintBlasts, paintDeaths, paintDust, paintAim } from '../public/js/scorchedfx.js';
+
+// A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
+// where, not to how it looks, so these run in node with no canvas at all.
+function recorder() {
+  const ops = [];
+  const ctx = {
+    lineWidth: 1, font: '', textAlign: 'left', textBaseline: 'alphabetic',
+    beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
+    arc(x, y, r) { ops.push({ op: 'arc', x, y, r, fill: this.fillStyle }); },
+    ellipse(x, y, rx, ry) { ops.push({ op: 'ellipse', x, y, rx, ry, stroke: this.strokeStyle }); },
+    fill() {}, stroke() { ops.push({ op: 'stroke', stroke: this.strokeStyle, lw: this.lineWidth }); },
+    fillText(text, x, y) { ops.push({ op: 'text', text, x, y }); },
+  };
+  return { ctx, ops };
+}
+// the projector a board would hand over, flattened: a cell is ten pixels across and eight up
+const P = (x, y) => ({ x: x * 10, y: -y * 8 });
+const U = { x: 10, y: 8 };
+// the real softStops, cheaply: one arc per stop is enough to prove where and how big
+const stops = (ctx, x, y, r, list) => { for (const [o, col] of list) { ctx.fillStyle = col; ctx.arc(x, y, r * (1 - o), 0, 0); } };
 import { THEMES, THEME_SCORCHED, setMusic } from '../public/js/tetsound.js';
 import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
 
@@ -294,10 +315,9 @@ test('the tiles for the engine: a cube per cell of dirt by stratum, tanks are hu
   play(g);
   assert.ok(tiles(g).some((t) => t.txid.startsWith('trace')), 'the last shot leaves a trace');
   assert.ok(!tiles(g, { trace: false }).some((t) => t.txid.startsWith('trace')));
-  // the screen's tiles: a blast is a flash and sparks that are gone after their time
-  const bt = blastTiles([{ id: 1, x: 10, y: 10, r: 2.5, t0: 0, big: false }], 100);
-  assert.ok(bt.length > 5 && bt.every((t) => !t.sphere && t.alpha != null), 'a fireball and sparks, all blocks');
-  assert.equal(blastTiles([{ id: 1, x: 10, y: 10, r: 2.5, t0: 0 }], 5000).length, 0, 'gone after');
+  // the blast is painted, not tiled: nothing of it is in the tile layer at all
+  const lay = actorLayer(g, 100, { blasts: [{ id: 1, x: 10, y: 10, r: 2.5, t0: 0, big: false }], dusts: [{ id: 2, x: 4, y: 4, t0: 0 }] });
+  assert.ok(!lay.some((t) => /^(fire|ring|spark|smoke|dust)/.test(t.txid)), 'the fire and the dust are not tiles');
   // falling dirt is lifted by what it has left to fall on the actor layer, off the land layer meanwhile, and lands on time
   const h = three();
   h.falling = [{ x: 5, y: 10, len: 3, from: 14 }];
@@ -758,23 +778,54 @@ test('the computer shops by taste: a Shooter buys missiles, a Tosser MIRVs, a Cy
 // ------------------------------------------------------------------ M4: the look, the sound, the talk
 test('the fabulous part: a blast smokes after its flash, a tank goes up in sparks and pieces, dust rises where dirt lands, a fall is animated and a parachute drawn, the wind blows motes, the march is notes the table knows', () => {
   const b = [{ id: 1, x: 40, y: 20, r: 4, t0: 0, big: true }];
-  const early = blastTiles(b, 200, 650, { wind: 3 }), late = blastTiles(b, 1500, 650, { wind: 3 }), gone = blastTiles(b, 3000);
-  assert.ok(early.some((t) => t.txid.startsWith('ring')), 'a shockwave ring early');
-  assert.ok(early.some((t) => t.txid.startsWith('fire')), 'and a fireball of blocks under it');
-  assert.ok(early.every((t) => !t.sphere), 'nothing in a blast is a ball: the land is cubes and so is what hits it');
-  assert.ok(late.some((t) => t.txid.startsWith('smoke')) && !late.some((t) => t.txid.startsWith('fire')), 'smoke after the fireball is gone');
-  assert.ok(late.filter((t) => t.txid.startsWith('smoke')).every((t) => t.alpha > 0 && t.alpha <= 0.6), 'and it thins by its alpha, not by shrinking');
-  const smokeA = blastTiles(b, 1500, 650, { wind: 6 }).filter((t) => t.txid.startsWith('smoke')), smokeB = blastTiles(b, 1500, 650, { wind: -6 }).filter((t) => t.txid.startsWith('smoke'));
-  const mean = (l) => l.reduce((n, t) => n + t.x, 0) / l.length;
-  assert.ok(mean(smokeA) > mean(smokeB), 'the smoke drifts downwind');
-  assert.equal(gone.length, 0, 'all gone after');
-  assert.equal(blastTiles([{ id: 2, x: 10, y: 10, r: 4, t0: 0, riot: true }], 1500).filter((t) => t.txid.startsWith('smoke')).length, 0, 'a riot charge makes no smoke');
+  const R = recorder();
+  paintBlasts(R.ctx, P, U, b, 200, { wind: 3, softStops: stops });
+  assert.ok(R.ops.some((o) => o.op === 'ellipse'), 'a shockwave, an ellipse on an oblique board');
+  assert.ok(R.ops.some((o) => o.op === 'arc' && /255,255,240/.test(String(o.fill))), 'a white core at the centre');
+  assert.ok(R.ops.filter((o) => o.op === 'stroke').length > 20, 'and sparks trailing');
+  const near = R.ops.filter((o) => o.op === 'arc').map((o) => Math.hypot(o.x - 400, o.y + 160));
+  assert.ok(Math.min(...near) < 40, 'painted where the shell landed, in the board\u2019s own projection');
+
+  const L = recorder();
+  paintBlasts(L.ctx, P, U, b, 1500, { wind: 3, softStops: stops });
+  assert.ok(!L.ops.some((o) => o.op === 'ellipse'), 'the shockwave is over by then');
+  assert.ok(L.ops.some((o) => o.op === 'arc'), 'the smoke is not');
+  const meanX = (ops) => ops.filter((o) => o.op === 'arc').reduce((n, o) => n + o.x, 0) / ops.filter((o) => o.op === 'arc').length;
+  const A = recorder(), B = recorder();
+  paintBlasts(A.ctx, P, U, b, 1500, { wind: 6, softStops: stops });
+  paintBlasts(B.ctx, P, U, b, 1500, { wind: -6, softStops: stops });
+  assert.ok(meanX(A.ops) > meanX(B.ops), 'the smoke drifts downwind');
+  const Z = recorder();
+  paintBlasts(Z.ctx, P, U, b, 4000, { wind: 3, softStops: stops });
+  assert.equal(Z.ops.length, 0, 'and all of it is gone after');
+  const RI = recorder();
+  paintBlasts(RI.ctx, P, U, [{ id: 2, x: 10, y: 10, r: 4, t0: 0, riot: true }], 1500, { softStops: stops });
+  assert.equal(RI.ops.length, 0, 'a riot charge makes no smoke');
+
+  // a tank going up: its fire is painted in its own colour, its hull is three tumbling tiles
+  const D = recorder();
+  paintDeaths(D.ctx, P, U, [{ id: 3, x: 20, y: 12, colour: '#4d8dff', t0: 0 }], 300, { softStops: stops });
+  assert.ok(D.ops.some((o) => o.op === 'arc' && /77,141,255/.test(String(o.fill))), 'the flash takes the tank\u2019s colour');
+  assert.ok(D.ops.filter((o) => o.op === 'stroke').length > 40, 'sparks on their own paths');
   const d = deathTiles([{ id: 3, x: 20, y: 12, colour: '#4d8dff', t0: 0 }], 300);
-  assert.ok(d.filter((t) => t.txid.startsWith('dspark')).length > 15 && d.filter((t) => t.txid.startsWith('piece')).length === 3, 'sparks and three pieces');
-  assert.ok(d.filter((t) => t.txid.startsWith('piece')).every((t) => t.poly && t.rot !== 0), 'the pieces tumble');
+  assert.equal(d.filter((t) => t.txid.startsWith('piece')).length, 3, 'three pieces of hull');
+  assert.ok(d.every((t) => t.poly && t.rot !== 0), 'and they tumble');
   assert.equal(deathTiles([{ id: 3, x: 20, y: 12, colour: '#4d8dff', t0: 0 }], 5000).length, 0);
-  assert.equal(dustTiles([{ id: 4, x: 5, y: 9, t0: 0 }], 200).length, 4);
-  assert.equal(dustTiles([{ id: 4, x: 5, y: 9, t0: 0 }], 2000).length, 0);
+  const DU = recorder(), DUgone = recorder();
+  paintDust(DU.ctx, P, U, [{ id: 4, x: 5, y: 9, t0: 0 }], 200, { softStops: stops });
+  paintDust(DUgone.ctx, P, U, [{ id: 4, x: 5, y: 9, t0: 0 }], 2000, { softStops: stops });
+  assert.ok(DU.ops.length > 0 && DUgone.ops.length === 0, 'dust rises where dirt lands, and settles');
+
+  // THE AIM GAUGE: a protractor, a needle whose length is the power, and both numbers written out
+  const G1 = recorder();
+  paintAim(G1.ctx, P, U, { x: 30, y: 10, angle: 45, power: 500, colour: '#f7931a' });
+  const text = G1.ops.find((o) => o.op === 'text');
+  assert.ok(text && /45°/.test(text.text) && /500/.test(text.text), 'the angle and the power are written at the needle');
+  assert.ok(G1.ops.some((o) => o.op === 'ellipse'), 'the protractor arc');
+  assert.ok(G1.ops.filter((o) => o.op === 'stroke').length >= 13, 'a tick every fifteen degrees, and the needle');
+  const tipOf = (angle, power) => { const r = recorder(); paintAim(r.ctx, P, U, { x: 30, y: 10, angle, power }); return r.ops.find((o) => o.op === 'text'); };
+  assert.ok(tipOf(45, 1000).x > tipOf(45, 100).x, 'more power draws a longer needle');
+  assert.ok(tipOf(135, 500).x < tipOf(45, 500).x, 'and the needle follows the angle across');
   // a fall: from the old height to the new, by gravity; a chute: linear, with a canopy while it lasts
   const falls = new Map([[0, { from: 20, to: 12, t0: 0, ms: 1000, chute: false }], [1, { from: 20, to: 12, t0: 0, ms: 1000, chute: true }]]);
   const half = fallingTanks(falls, 500);

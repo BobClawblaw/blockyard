@@ -9,6 +9,7 @@
 // it is the original's status line unrolled -- whose turn, angle, power, weapon, wind, cash, the
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
+import { paintBlasts, paintDeaths, paintDust, paintAim } from './scorchedfx.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   WEAPONS, ITEMS, COLS, ROWS, TANK_W,
@@ -31,14 +32,18 @@ const FIELD = {
   gridW: COLS, gridH: ROWS,
   oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 },
   dome: 0,
-  light: 'overhead',
+  // THE FRONT OF THE BOARD IS THE PICTURE (operator, 2026-09-16: "We really need better
+  // illumination of the front of the board, it's dull and looks muted"). Overhead lit the tops of
+  // the cubes and left every face the player actually looks at on one flat shade. The lamp stands
+  // at the viewer, low, so the front faces carry the light and the strata separate.
+  light: 'front', lightHeight: 'low',
   gridStep: 4,
   space: true,
   background: 'rgba(0,0,0,0)',
   spaceFloor: 'rgba(0,0,0,0.22)',
   neonCell: 'rgba(60,200,140,0.14)',
 };
-const ACTORS = { ...FIELD, grid: false, spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)' };
+const ACTORS = { ...FIELD, grid: false, spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)', overlay: paintOver };
 const SKY = { gridW: COLS, gridH: ROWS, oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 }, dome: 0, space: false, grid: false, background: 'rgba(0,0,0,1)', idleFx: false, shadows: false, still: true, transition: { rise: 0, travel: 1, drop: 0 }, maxDpr: 1 };
 
 const AI_THINK_MS = 700;               // a computer player's pause before it fires
@@ -58,6 +63,7 @@ const DEMO_WAR_MS = 7000;              // and how long the war's result stands b
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, dirty: true, bound: false,
   state: null, h: null,
+  paintNow: 0,                          // the instant the overlay layer paints at
   windAt: 0,                            // when the wind layer last moved, so it keeps blowing while the board is idle
   aiAt: 0,                              // when the computer's turn began, for the pause before it fires
   settleT0: 0, settleMs: 0,             // the fall on screen
@@ -125,104 +131,12 @@ const mixHex = (a, b, k) => {
 };
 const hash = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
 
-/**
- * THE BLAST, IN BLOCKS (operator, 2026-09-16: "the bubble sprites look terrible on the terrain
- * explosions"). The first cut drew the fireball, the shockwave, the sparks and the smoke as
- * spheres, and the engine draws a sphere with a rim and a glint: at any size a cloud of them is a
- * cloud of BUBBLES sitting on the dirt. Nothing about that belongs in a game whose land, tanks and
- * shells are all cubes.
- *
- * So the explosion is made of the same thing as everything else -- blocks, on the field's own grid.
- * The fireball is a disc of them, coarse at the centre of a nuke and fine for a baby missile, hot
- * in the middle and darker at the rim; the shockwave is a ring of small ones racing out; the
- * sparks are single blocks thrown on ballistic paths; and the smoke is blocks that rise, spread,
- * drift downwind, grow, darken and thin away (their alpha, not their size, is what fades, so they
- * never shrink to glints). Alpha is a tile field the renderer already carries.
- */
-const HOT = Object.freeze(['#fff3cd', '#ffc457', '#f3813a', '#a83a20']);
-const RIOT = Object.freeze(['#e8f7ff', '#a8dcff', '#6fb6e8', '#3f7fae']);
-
-export function blastTiles(blasts, now, ms = BLAST_MS, { wind = 0 } = {}) {
-  const out = [];
-  for (const b of blasts) {
-    const age = now - b.t0;
-    const t = Math.min(1, Math.max(0, age / ms));
-    if (t < 1) {
-      const palette = b.riot ? RIOT : HOT;
-      // the fireball: a disc of blocks on a grid coarse enough that a nuke costs about a hundred
-      const fr = b.r * (0.55 + 0.8 * t);
-      const step = Math.max(0.55, fr / 5.5);
-      const fade = t < 0.3 ? 1 : Math.max(0, 1 - (t - 0.3) / 0.7);
-      for (let dy = -fr; dy <= fr + 1e-6; dy += step) {
-        for (let dx = -fr; dx <= fr + 1e-6; dx += step) {
-          const d = Math.hypot(dx, dy);
-          if (d > fr) continue;
-          const y = b.y + dy;
-          if (y < 0) continue;
-          const k = fr > 0 ? d / fr : 0;
-          const col = palette[Math.min(palette.length - 1, Math.floor(k * 3 + t * 0.8))];
-          out.push({
-            txid: `fire${b.id}_${dx.toFixed(2)}_${dy.toFixed(2)}`,
-            x: b.x + dx - step / 2, y: y - step / 2, s: step * 0.92, tall: step * 0.92,
-            color: col, alpha: Math.max(0, fade * (1 - 0.55 * k)),
-          });
-        }
-      }
-      // the shockwave: a ring of small blocks racing out and thinning
-      if (t < 0.45 && !b.riot) {
-        const rr = b.r * (0.4 + 3.2 * t), nb = 26, sz = Math.max(0.22, b.r * 0.1);
-        for (let i = 0; i < nb; i++) {
-          const a = (i / nb) * Math.PI * 2;
-          const x = b.x + Math.cos(a) * rr, y = b.y + Math.sin(a) * rr;
-          if (y < 0) continue;
-          out.push({ txid: `ring${b.id}_${i}`, x: x - sz / 2, y: y - sz / 2, s: sz, tall: sz, color: '#ffe9b8', alpha: Math.max(0, 1 - t / 0.45) });
-        }
-      }
-      // what the blast throws
-      const n = b.big ? 22 : 12;
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + b.id * 0.7;
-        const sp = (0.8 + ((i * 7) % 5) / 5) * b.r * 2.2;
-        const x = b.x + Math.cos(a) * sp * t, y = b.y + Math.sin(a) * sp * t - 6 * t * t;
-        if (y < 0) continue;
-        const sz = 0.14 + (i % 3) * 0.06;
-        out.push({ txid: `spark${b.id}_${i}`, x: x - sz / 2, y: y - sz / 2, s: sz, tall: sz, color: t < 0.4 ? '#ffb74d' : '#e2601f', alpha: Math.max(0, 1 - t * 0.9) });
-      }
-    }
-    // the smoke: blocks, rising and fanning, drifting downwind, growing and thinning
-    if (!b.riot && b.r >= 1.4 && age < SMOKE_MS && age > 80) {
-      const u = age / SMOKE_MS;
-      const np = Math.min(64, 14 + Math.round(b.r * 4.5));
-      for (let i = 0; i < np; i++) {
-        const h = (k) => hash(b.id * 13 + i * 7 + k);
-        const a = Math.PI * (0.12 + 0.76 * h(1));                       // upward, fanned
-        const rise = (0.8 + h(2) * 1.5) * b.r * Math.sqrt(u);
-        const x = b.x + Math.cos(a) * rise * 0.75 + wind * 0.25 * age / 1000 + (h(3) - 0.5) * b.r * 0.8 * u;
-        const y = b.y + Math.sin(a) * rise + 0.3 + Math.sin(age / 400 + h(5) * 6) * 0.15;
-        const life = 0.8 + h(6) * 0.2;
-        if (y < 0 || u > life) continue;                                // each block thins out on its own time
-        const s = (0.45 + h(4) * 0.4) * (0.75 + 1.1 * u) * Math.min(1.7, 0.85 + b.r * 0.075);
-        const col = mixHex(u < 0.3 ? '#a3a1ab' : '#6f6e79', '#403f49', Math.max(0, (u - 0.35) / 0.65));
-        out.push({ txid: `smoke${b.id}_${i}`, x: x - s / 2, y: y - s / 2, s, tall: s * 0.8, color: col, alpha: Math.max(0, 0.55 * (1 - u / life)) });
-      }
-    }
-  }
-  return out;
-}
-
-/** A tank going up: sparks in its colour flung out and falling, and three pieces of hull tumbling away. */
+/** What is left of a tank on the tile layer once its fire is painted: three pieces of hull, tumbling. */
 export function deathTiles(deaths, now, ms = DEATH_MS) {
   const out = [];
   for (const d of deaths) {
     const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
     if (t >= 1) continue;
-    for (let i = 0; i < 26; i++) {
-      const h = (k) => hash(d.id * 17 + i * 5 + k);
-      const a = Math.PI * (0.05 + 0.9 * h(1)), sp = 6 + h(2) * 10;
-      const x = d.x + Math.cos(a) * sp * t, y = d.y + 0.5 + Math.sin(a) * sp * t - 10 * t * t;
-      if (y < 0) continue;
-      out.push({ txid: `dspark${d.id}_${i}`, x: x - 0.11, y: y - 0.11, s: 0.22, tall: 0.22, sphere: true, color: shadeTo(t < 0.4 ? '#fff0c0' : d.colour, 1 - t * 0.6) });
-    }
     for (let i = 0; i < 3; i++) {
       const h = (k) => hash(d.id * 23 + i * 11 + k);
       const a = Math.PI * (0.25 + 0.5 * h(1)), sp = 4 + h(2) * 6;
@@ -234,21 +148,6 @@ export function deathTiles(deaths, now, ms = DEATH_MS) {
   return out;
 }
 
-/** Dust where fallen dirt landed: a few puffs that rise and thin. */
-export function dustTiles(dusts, now, ms = DUST_MS) {
-  const out = [];
-  for (const d of dusts) {
-    const t = Math.min(1, Math.max(0, (now - d.t0) / ms));
-    if (t >= 1) continue;
-    for (let i = 0; i < 4; i++) {
-      const h = (k) => hash(d.id * 19 + i * 3 + k);
-      const x = d.x + 0.5 + (h(1) - 0.5) * 1.6 * (0.3 + t), y = d.y + 0.2 + t * (0.6 + h(2) * 0.8);
-      const s = 0.3 + t * 0.5;
-      out.push({ txid: `dust${d.id}_${i}`, x: x - s / 2, y: y - s / 2, s, tall: s * 0.5, sphere: true, color: mixHex('#a08a68', '#6a5d48', t) });
-    }
-  }
-  return out;
-}
 
 /** Where each falling tank is at `now`: from its old height to its new, by gravity or under a parachute. */
 export function fallingTanks(falls, now) {
@@ -417,8 +316,34 @@ export function actorLayer(g, now, { settleT0 = 0, settleMs = 1, blasts = [], fi
       }
     }
   }
-  out.push(...fireTiles(fires, now), ...beamTiles(beams, now), ...dustTiles(dusts, now), ...blastTiles(blasts, now, BLAST_MS, { wind: g.wind ?? 0 }), ...deathTiles(deaths, now));
+  out.push(...fireTiles(fires, now), ...beamTiles(beams, now), ...deathTiles(deaths, now));
   return out;
+}
+
+// ------------------------------------------------------------------ the painted layer
+// The fire, the smoke and the aim gauge are not tiles: they are drawn over the board through the
+// renderer's own projector (details3d's `overlay` hook), with the same primitives the fireworks
+// use. scorchedfx.js holds the drawing; this is the bridge -- what is burning, where, and when.
+function paintOver(ctx, view, hx) {
+  const g = G.game;
+  if (!g) return;
+  const now = G.paintNow;
+  const P = (x, y, z = 1.2) => hx.project(x, y, z, view);
+  const o0 = P(0, 0), ox = P(1, 0), oy = P(0, 1);
+  const U = { x: Math.abs(ox.x - o0.x) || 8, y: Math.abs(oy.y - o0.y) || 8 };
+  const S = hx.softStops;
+  paintDust(ctx, P, U, G.dusts, now, { softStops: S, ms: DUST_MS });
+  paintBlasts(ctx, P, U, G.blasts, now, { wind: g.wind ?? 0, softStops: S, ms: BLAST_MS, smokeMs: SMOKE_MS });
+  paintDeaths(ctx, P, U, G.deaths, now, { softStops: S, ms: DEATH_MS });
+  // the gauge belongs to whoever is aiming, and only while they are aiming
+  const t = current(g);
+  if (t && g.phase === 'aim' && !G.shopping) {
+    paintAim(ctx, P, U, {
+      x: t.x + TANK_W / 2, y: t.y, angle: t.angle, power: t.power,
+      colour: t.colour,
+      dim: t.kind !== 'human',
+    });
+  }
 }
 
 // ------------------------------------------------------------------ the screen
@@ -580,6 +505,7 @@ const ROUND_HOURS = [6.6, 9, 12, 15, 17.8, 19, 21.5, 1];
 
 function draw(now = performance.now()) {
   const g = G.game;
+  G.paintNow = now;                       // the overlay paints at the frame's own instant
   const field = el('syField'), land = el('syLand');
   el('syFieldWrap')?.classList.toggle('idle', !g);
   if (g) {
