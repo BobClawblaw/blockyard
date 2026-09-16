@@ -98,6 +98,29 @@ function configWriteAllowed(app, ctx) {
   if (app.cfg.auth.enabled) needRole(ctx, 'admin');
 }
 
+// THE NODE CONNECTION IN OPEN MODE: FROM THIS MACHINE ONLY (audit 2026-09-16, M1 and M2).
+//
+// The open-mode cross-site check refuses a browser on another origin, because a browser cannot
+// suppress Origin or forge Sec-Fetch-Site. A script sends neither header, and can forge both. So with
+// accounts off, a script anywhere on the LAN could (1) save an rpcUrl of its choosing, after which the
+// next restart sends the datadir's cookie to it -- reproduced end to end -- and (2) use the probe to
+// make this server POST to internal URLs and read back what they answered. There is no identity to
+// check in open mode, so the check is WHERE the caller is: the socket's own peer address must be
+// loopback. X-Forwarded-For is never consulted, and behind a trusted proxy every request would look
+// local, so the form is refused there. `auth.openNodeConfigFromNetwork` restores the old reach.
+export function isLoopbackAddress(addr) {
+  const a = String(addr ?? '').replace(/^::ffff:/i, '');
+  return a === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(a);
+}
+function nodeConfigAllowed(app, ctx) {
+  if (app.cfg.auth.enabled) return needRole(ctx, 'admin');
+  if (app.cfg.auth.openNodeConfigFromNetwork === true) return undefined;
+  if (!app.cfg.server?.trustProxy && isLoopbackAddress(ctx.req.socket?.remoteAddress)) return undefined;
+  throw new HttpError(403, app.cfg.server?.trustProxy
+    ? 'with accounts off and server.trustProxy on, the node connection cannot be changed over HTTP: every proxied request looks local. Edit config/local.json, or turn accounts on'
+    : 'with accounts off, the node connection can only be changed from this machine (open the monitor at 127.0.0.1), or turn accounts on, or set auth.openNodeConfigFromNetwork', { code: 'local_only' });
+}
+
 // What a form may set, and nothing else. Credentials come from the datadir's .cookie
 // (config.js resolveCookie), so rpcUser / rpcPassword / cookieFile are NOT accepted here: taking a
 // password over an endpoint that is open by default is not a thing to add quietly.
@@ -606,8 +629,11 @@ export const routes = [
       const params = Array.isArray(ctx.body?.params) ? ctx.body.params : [];
       const cls = classifyMethod(method);
       if (!cls.allowed) {
-        await app.audit({ type: 'rpc-denied', username: ctx.user.username, node: m.id, method, reason: cls.reason, ip: ctx.ip });
-        throw new HttpError(403, `${method || '(empty)'} is not callable from the web UI: ${cls.reason}`, { code: 'rpc_denied' });
+        // No RPC name is longer than a few dozen characters; the caller's string is clamped before
+        // it is written or echoed (audit 2026-09-16, M6).
+        const shown = method.length > 64 ? `${method.slice(0, 64)}… (${method.length} chars)` : method;
+        await app.audit({ type: 'rpc-denied', username: ctx.user.username, node: m.id, method: shown, reason: cls.reason, ip: ctx.ip });
+        throw new HttpError(403, `${shown || '(empty)'} is not callable from the web UI: ${cls.reason}`, { code: 'rpc_denied' });
       }
       const t0 = Date.now();
       try {
@@ -772,7 +798,7 @@ export const routes = [
   {
     method: 'POST', path: '/api/config/node/test', auth: 'any', csrf: true, body: true,
     handler: async (ctx, app) => {
-      configWriteAllowed(app, ctx);
+      nodeConfigAllowed(app, ctx);
       const node = candidateNode(app, ctx.body);
       const started = Date.now();
       // A THROWAWAY CLIENT WITH ITS OWN LANE. The live node's client holds a serialized queue
@@ -825,9 +851,22 @@ export const routes = [
         // `authenticated` is reported on EVERY path, success or failure: a caller cannot otherwise
         // tell "it refused us" from "we deliberately sent no credential", and those mean different
         // things to someone deciding whether the connection they typed is right.
+        //
+        // NOT WHAT A FOREIGN ENDPOINT SAID (audit 2026-09-16, M2). RpcClient's message carries up to
+        // 200 characters of the reply body, so echoing it made this route a way to read internal URLs
+        // through the server. For any endpoint but the configured one, the answer is the class of
+        // failure only.
+        const GENERIC = {
+          timeout: 'the endpoint did not answer in time',
+          transport: 'the endpoint could not be reached, or answered with an HTTP error',
+          parse: 'the endpoint answered, but not with JSON-RPC: this is not a Bitcoin Core RPC port',
+          rpc: 'the endpoint answered with an RPC error',
+          breaker: 'the endpoint could not be reached',
+        };
+        const message = sameEndpoint ? err.message : (GENERIC[err.kind] ?? 'the connection failed');
         return {
           ok: false, ms: Date.now() - started, authenticated: sameEndpoint,
-          error: { message: err.message, kind: err.kind ?? null, code: err.code ?? null },
+          error: { message, kind: err.kind ?? null, code: sameEndpoint ? (err.code ?? null) : null },
         };
       }
     },
@@ -835,7 +874,7 @@ export const routes = [
   {
     method: 'POST', path: '/api/config/node', auth: 'any', csrf: true, body: true,
     handler: async (ctx, app) => {
-      configWriteAllowed(app, ctx);
+      nodeConfigAllowed(app, ctx);
       if (!app.configFile) {
         throw new HttpError(409, 'this process was started without a config file (BLOCKYARD_CONFIG=none), so there is nowhere to save to', { code: 'no_config_file' });
       }
@@ -850,7 +889,21 @@ export const routes = [
       // JSON.stringify then omits it -- so carrying `{...cur}` across could DELETE a field from the
       // file rather than preserve it. Only real values take part in the merge.
       const changes = Object.fromEntries(Object.entries(node).filter(([, v]) => v !== undefined));
-      nodes[0] = { ...(nodes[0] ?? {}), ...changes };
+      // CREDENTIALS BELONG TO AN ENDPOINT (audit 2026-09-16, M1). The merge kept rpcUser, rpcPassword
+      // and cookieFile while the URL changed, so a saved address inherited another server's secret.
+      // When the host or port changes they are dropped; the cookie is then read from the datadir the
+      // form names, which is the credential this form was always meant to use.
+      const hostOf = (u) => { try { return new URL(u).host; } catch { return null; } };
+      const prior = nodes[0] ?? {};
+      const droppedCredentials = [];
+      if (prior.rpcUrl && hostOf(prior.rpcUrl) !== hostOf(changes.rpcUrl)) {
+        for (const k of ['rpcUser', 'rpcPassword', 'cookieFile']) if (k in prior) droppedCredentials.push(k);
+      }
+      nodes[0] = { ...prior, ...changes };
+      for (const k of droppedCredentials) delete nodes[0][k];
+      if (droppedCredentials.length && !nodes[0].datadir) {
+        throw new HttpError(400, 'a new endpoint needs a datadir, so its own .cookie can be read', { code: 'need_datadir' });
+      }
       delete nodes[0].__urlOverridden;
       const next = { ...fileCfg, nodes };
 
@@ -870,7 +923,7 @@ export const routes = [
         .filter((k) => process.env[k] !== undefined && process.env[k] !== '');
       await app.audit({ type: 'config-node', username: ctx.user.username, ip: ctx.ip, rpcUrl: node.rpcUrl, file: app.configFile });
       return {
-        ok: true, file: app.configFile, restartRequired: true, envOverrides,
+        ok: true, file: app.configFile, restartRequired: true, envOverrides, droppedCredentials,
         note: envOverrides.length
           ? `saved, but this process takes its node from ${envOverrides.join(', ')}, which the environment sets and which beats the file — change the unit or drop-in, or the restart will keep the old endpoint`
           : 'saved; restart the monitor for it to take effect',

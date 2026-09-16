@@ -269,7 +269,12 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   // which are not secrets, and an audit trail full of [redacted] where the useful fields were is
   // its own kind of failure.
   const SECRETISH = /pass(word|phrase)?|secret|cookie|token|priv(ate)?_?key|seed|mnemonic|authorization|credential/i;
+  // AND CLAMP BY LENGTH (audit 2026-09-16, M6). A caller-chosen string went into the trail whole:
+  // a 900 KB RPC method name, sixty times over, rotated every retained file and took the sign-ins and
+  // user changes with it. No field the trail needs is anywhere near this long.
+  const AUDIT_STRING_MAX = 1024;
   const redact = (v, depth = 0) => {
+    if (typeof v === 'string' && v.length > AUDIT_STRING_MAX) return `${v.slice(0, AUDIT_STRING_MAX)}…[${v.length - AUDIT_STRING_MAX} more chars]`;
     if (v == null || depth > 6) return v;
     if (Array.isArray(v)) return v.map((x) => redact(x, depth + 1));
     if (typeof v !== 'object') return v;

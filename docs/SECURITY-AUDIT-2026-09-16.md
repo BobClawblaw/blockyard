@@ -1,8 +1,22 @@
 # BlockYard Security Audit — 2026-09-16
 
-> **STATUS: OPEN.** Nothing in this report has been remediated yet. Findings are listed most
-> severe first. Each one says whether it was reproduced (**CONFIRMED**) or found by reading the
-> code (**CODE-READ**).
+> **STATUS: HIGH AND MEDIUM FINDINGS REMEDIATED — 2026-09-16, the same day.** H1: a stream client
+> whose socket is full is sent nothing until it drains, and is dropped at 4 MB buffered or a minute
+> blocked; 16 streams per address or account. M1/M2: with accounts off the node connection form
+> answers only a loopback caller (`auth.openNodeConfigFromNetwork` widens it, and a trusted proxy
+> closes it); a save to a new host drops the old endpoint's credentials; a probe of a foreign
+> endpoint reports the kind of failure, not the body. M3: the index build checks its output
+> directory (no symlink, root, home, working or blocks directory, nothing an index does not write)
+> and removes only its own files. M4: every wallet RPC is refused by name. M5: `requestTimeout`
+> is 30 s (the stream is unaffected: measured). M6: audit strings are clamped to 1,024 characters.
+> M7: `package.json` excludes the private notes, and a test holds the pack to tracked files. M8:
+> the shipped unit is sandboxed, and was started under exactly those settings. Each fix has a test
+> in `test/audit-2026-09-16.test.js`. The H1 and M4 tests were run against the old code and failed,
+> and the M3 proof of concept was re-run against the old build, which again deleted the planted file. The Low and Informational findings and the deployment findings D1–D4 are still open. The
+> report below is kept as written.
+>
+> Findings are listed most severe first. Each one says whether it was reproduced (**CONFIRMED**) or
+> found by reading the code (**CODE-READ**).
 
 - **Project:** BlockYard, a multi-user web monitor for Bitcoin Core nodes.
 - **Audit date:** 2026-09-16.

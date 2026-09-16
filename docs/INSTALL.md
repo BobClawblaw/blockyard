@@ -336,7 +336,8 @@ If a node shows as offline, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-node-s
    ```
 
    Set `User=` / `Group=` to the account from step 1, `WorkingDirectory=` to where the code
-   lives, and replace the `Environment=` lines that name paths with your own (or delete
+   lives, the two `ReadWritePaths=` lines to that directory's `data` and `config` (and add one for
+   your address index directory; the unit makes everything else read-only to the service), and replace the `Environment=` lines that name paths with your own (or delete
    them and keep everything in `config/local.json`). Point `ExecStart` at an absolute Node
    22 binary — `/usr/bin/env node` can resolve to an older system Node under systemd:
 

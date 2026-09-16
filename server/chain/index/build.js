@@ -14,7 +14,7 @@
 // The node's files are only read. Output goes to `out`, which should be on a different device from
 // the block files if one is available: the build reads ~880 GB and writes ~120 GB.
 import { Worker } from 'node:worker_threads';
-import { openSync, writeSync, closeSync, mkdirSync, readdirSync, rmSync, renameSync, statSync, readFileSync, fsyncSync, ftruncateSync } from 'node:fs';
+import { openSync, writeSync, closeSync, mkdirSync, readdirSync, rmSync, renameSync, statSync, lstatSync, realpathSync, readFileSync, fsyncSync, ftruncateSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { crc32 } from 'node:zlib';
 import os from 'node:os';
@@ -168,6 +168,46 @@ export function rpcPacer(rpc, { slowMs = 5000, easeMs = 250, holdMs = 10_000, on
 // The manifest is still written last and atomically, and the journal is removed after it: readers
 // never see an index without a manifest, and a manifest is never beside a journal that is still needed.
 export const JOURNAL = 'build-journal.json';
+
+// ---------------------------------------------------------------------------------------------------
+// THE OUTPUT DIRECTORY IS CHECKED, AND ONLY THE INDEX'S OWN FILES ARE EVER REMOVED (audit 2026-09-16,
+// M3). A fresh build used to `rmSync(out, { recursive: true })`: whatever `addressIndex` or `--out`
+// named was deleted whole, minutes after start, with nobody watching. A test pointed it at a folder
+// holding `.ssh/id_x`, and the key was gone. `addressIndex: "/home/bitcoin"`, `"."`, `--out ~` are
+// one typo each. Now the directory must be missing, empty, or hold nothing but names an index writes;
+// it must not be a symlink, the filesystem root, the home directory, the working directory, or the
+// node's blocks directory or anything that contains it. A build clears index names and nothing else.
+export const INDEX_ENTRY = /^(?:manifest\.json|build-journal\.json|live\.log|layers|bucket-[0-9a-f]{2}\.unsorted|seg-[0-9a-f]{2}\.(?:rows|idx))(?:\.tmp)?$/;
+
+export function checkOutputDir(out, { blocksDir = null } = {}) {
+  const abs = path.resolve(out);
+  let st;
+  try { st = lstatSync(abs); } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    mkdirSync(abs, { recursive: true });
+    return abs;
+  }
+  if (st.isSymbolicLink()) throw new Error(`refusing to build the address index into ${abs}: it is a symlink; name the real directory`);
+  if (!st.isDirectory()) throw new Error(`refusing to build the address index into ${abs}: it is not a directory`);
+  const real = realpathSync(abs);
+  const realOr = (p) => { try { return realpathSync(p); } catch { return path.resolve(p); } };
+  const forbidden = new Map([[path.parse(real).root, 'the filesystem root'], [realOr(os.homedir()), 'the home directory'], [realOr(process.cwd()), 'the working directory']]);
+  if (forbidden.has(real)) throw new Error(`refusing to build the address index into ${abs}: it is ${forbidden.get(real)}`);
+  if (blocksDir) {
+    const blocks = realOr(blocksDir);
+    if (blocks === real || blocks.startsWith(real + path.sep)) throw new Error(`refusing to build the address index into ${abs}: it is, or contains, the node's blocks directory`);
+  }
+  const foreign = readdirSync(abs).filter((f) => !INDEX_ENTRY.test(f));
+  if (foreign.length) {
+    throw new Error(`refusing to build the address index into ${abs}: it holds files an index does not write (${foreign.slice(0, 5).join(', ')}${foreign.length > 5 ? ', …' : ''}); name an empty or new directory`);
+  }
+  return abs;
+}
+
+/** Remove the index's own entries from `out`, and nothing else (checkOutputDir has run). */
+function clearIndexEntries(out, keep = new Set()) {
+  for (const f of readdirSync(out)) if (INDEX_ENTRY.test(f) && !keep.has(f)) rmSync(path.join(out, f), { recursive: true, force: true });
+}
 const JOURNAL_VERSION = 1;
 
 function syncDir(dir) {
@@ -238,6 +278,7 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
   if (chain !== 'main') throw new Error(`only mainnet block files are framed here so far (the node is on ${chain})`);
   const selection = files ? [...files] : 'all';
   const discarding = (why) => log(`address index build: discarding the interrupted build in ${out} and starting over: ${why}`);
+  checkOutputDir(out, { blocksDir });
 
   // --- resume? --------------------------------------------------------------
   // The journal's identity is checked here, cheaply (one getblockhash); the files on disk are checked
@@ -299,13 +340,13 @@ export async function buildIndex({ rpc, blocksDir, out, workers = defaultWorkers
         const fd = openSync(bucketFile(b), 'r+');
         try { ftruncateSync(fd, journal.buckets[b][0]); fsyncSync(fd); } finally { closeSync(fd); }
       }
-      for (const f of readdirSync(out)) if (!keep.has(f)) rmSync(path.join(out, f), { recursive: true, force: true });
+      clearIndexEntries(out, keep);
       syncDir(out);
     }
   }
   if (!journal) {
-    rmSync(out, { recursive: true, force: true });
-    mkdirSync(out, { recursive: true });
+    clearIndexEntries(out);
+    syncDir(out);
   }
 
   const all = readdirSync(blocksDir).filter((f) => /^blk\d{5}\.dat$/.test(f)).map((f) => Number(f.slice(3, 8))).sort((a, b) => a - b);

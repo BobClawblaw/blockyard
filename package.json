@@ -35,6 +35,8 @@
     "config/pool-map.json",
     "systemd/",
     "docs/*.md",
+    "!docs/STATE-*.md",
+    "!docs/PRIVATE-*.md",
     "CHANGELOG.md",
     "SECURITY.md",
     "NOTICE"

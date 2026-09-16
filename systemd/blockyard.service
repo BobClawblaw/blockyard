@@ -84,15 +84,46 @@ Environment=BLOCKYARD_LOG_LEVEL=info
 #Environment=BLOCKYARD_ENABLE_ACTIONS=1
 #Environment=BLOCKYARD_ACTIONS=testmempoolaccept,savemempool
 
-# Modest hardening. NoNewPrivileges plus a read-only /home is enough here: the
-# service must read the node's RPC cookie and log, so a full PrivateTmp/
-# ProtectSystem=strict would fight the thing it is monitoring.
+# SANDBOX (audit 2026-09-16, M8). This block used to be "modest hardening", and its comment said
+# NoNewPrivileges plus a read-only /home was enough -- but no read-only /home was ever set, and it
+# claimed ProtectSystem=strict would stop the service reading the node's cookie. It would not:
+# strict makes paths READ-ONLY, and reading is all the monitor does with the node. Everything below
+# was started and checked against this app (tests/unit-sandbox note in docs/INSTALL.md section 6).
+#
+# The whole filesystem is read-only to the service except what it writes: its data directory
+# (sessions, history, audit trail, TLS certificate), its config directory (the node form and the
+# Display settings save there), and the address index if you configured one. EDIT ME: these paths
+# follow WorkingDirectory above; add the index directory (`addressIndex` in config/local.json) as a
+# third ReadWritePaths line. The leading "-" skips a path that does not exist yet.
+ReadWritePaths=-/storage/blockyard/data
+ReadWritePaths=-/storage/blockyard/config
+#ReadWritePaths=/var/lib/blockyard-index
+ProtectSystem=strict
+# The node's cookie and log are usually under a home directory: readable, never writable.
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+UMask=0077
 NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
+# AF_NETLINK: the boot check that a configured address exists reads the interfaces through it.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# NOT MemoryDenyWriteExecute: V8's JIT needs writable-executable memory, and node aborts under it.
 
 StandardOutput=journal
 StandardError=journal

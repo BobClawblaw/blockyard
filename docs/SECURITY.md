@@ -23,8 +23,9 @@ someone using the monitor to make the node do something (prevented: writes are o
 console is read-only behind a default-deny allowlist), someone reading your node's state who
 should not (controlled by where it listens, a CIDR gate, and optional accounts), and the
 monitor leaking information about you to third parties (limited to the on-demand market data
-connections listed below, which you can turn off). The monitor does not hold keys and has no
-wallet access.
+connections listed below, which you can turn off). The monitor does not hold keys, and every
+wallet RPC is refused by name (since 2026-09-16; before that, wallet reads such as
+`listdescriptors` passed the allowlist's `list` prefix, see the audit of that date).
 
 ## Access: sign-in by default, open on request
 
@@ -46,6 +47,7 @@ Open access is still available as a posture you choose: with `auth.enabled: fals
 | peer, mempool, block and transaction detail, the explorer | the audit trail |
 | the read-only RPC console (behind the allowlist) | password changes and sessions |
 | the live Server-Sent Events stream | **every node write**, even if actions are enabled |
+| Display settings (they are normalised before use) | the node connection form, except from this machine's loopback address (`auth.openNodeConfigFromNetwork` widens it) |
 
 The `viewer` ceiling cannot be raised by configuration or by any credential while accounts
 are off. The start-up log states which addresses are readable and how to close them, so
@@ -78,19 +80,30 @@ The last enabled admin cannot be demoted, disabled or deleted.
   routes had no cross-site protection at all. An audit proved it with a working exploit against
   the node-connection test. Open mode now refuses any state-changing request whose `Origin` is
   not this server, or whose `Sec-Fetch-Site` says cross-site. A client that sends neither header
-  (curl, a script) is unaffected: it can already reach the port, and this guards against what a
-  *browser* can be made to do on someone's behalf.
+  (curl, a script) is not stopped by that check, which only guards against what a *browser* can be
+  made to do. So the one form where a script could do real harm, the node connection (a saved
+  address decides where the node's cookie goes after a restart, and its test makes the server
+  connect somewhere), answers only a loopback caller while accounts are off (audit 2026-09-16).
+  A save that moves the node to a different host drops the old endpoint's `rpcUser`,
+  `rpcPassword` and `cookieFile`, and a test of a foreign endpoint reports the kind of failure,
+  never what the endpoint answered.
 - **Brute force**: sign-in is locked after 8 failures in 5 minutes per username and per
   address, for 10 minutes, with the same error and the same hashing time for unknown users
   and wrong passwords. A separate throttle limits sign-in attempts per address, because each
   attempt costs a deliberately expensive hash.
 - **Rate limits** apply per client address.
+- **Slow and stalled clients** cannot hold memory or connections: a request, body included, must
+  arrive within 30 seconds; an event stream whose reader stops reading is sent nothing more until
+  it drains, and is dropped when 4 MB is buffered or it stays blocked for a minute; one address
+  (or account) holds at most 16 streams. Free-form audit fields are clamped to 1,024 characters,
+  so a caller cannot rotate real events out of the trail.
 
 ## Talking to the node
 
 - **Read-only allowlist, default deny.** The RPC console and every internal call go through
-  an allowlist: read-shaped methods are allowed; wallet, key-material, spending, peer-control,
-  chain-mutating and very heavy methods are refused by name — including `getnewaddress` and
+  an allowlist: read-shaped methods are allowed; every wallet method (reads included, since some
+  return private keys), spending, peer-control, chain-mutating and very heavy methods are refused
+  by name — including `getnewaddress` and
   `getrawchangeaddress`, which start with "get" but create keys. Unknown methods are refused.
 - **One request at a time.** The node's RPC server is single-threaded, so the monitor runs a
   single serialized request lane with a minimum spacing, batching, priorities and a stale-drop
@@ -202,7 +215,13 @@ and errors; they never contain passwords, session tokens or RPC credentials.
 ## Hardening checklist
 
 - Run as a dedicated, unprivileged account that can read only the node's cookie and its
-  `blocks/` directory (and log), and write only its own `data/` and the index directory.
+  `blocks/` directory (and log), and write only its own `data/` and the index directory. The
+  shipped systemd unit enforces the write half (`ProtectSystem=strict` with `ReadWritePaths=` for
+  `data/`, `config/` and the index) and drops capabilities, system calls and address families the
+  monitor does not use; add your index directory to it.
+- Point `addressIndex` (or `--out`) at a new or empty directory. The build refuses a symlink, the
+  filesystem root, a home or working directory, the node's blocks directory, and any directory
+  holding files an index does not write; it only ever removes its own files.
 - Bind the narrowest set of addresses that serves your users; add a firewall rule if needed.
 - Turn accounts on if anyone who can reach the port should not see your node.
 - Use HTTPS, a reverse proxy, or an SSH tunnel on untrusted networks.

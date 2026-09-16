@@ -1155,7 +1155,7 @@ The default is **deny**. The rules are applied in this order, and the first matc
 Consequences worth knowing:
 
 - The list is fixed in code, and no setting widens it.
-- `get*` and `list*` wallet reads (for example `getbalance`, `listunspent`) are allowed if the node has a wallet loaded.
+- Wallet RPCs are refused by name, reads included (`getbalance`, `listunspent`, `listdescriptors`, `gethdkeys`, …): some of them return private keys, and the monitor has no use for a wallet.
 - `createrawtransaction` is allowed: it only builds an unsigned transaction and changes nothing.
 - `/api/config` → `allowlist` publishes a summary: the prefixes, the size of the deny list and the default decision.
 

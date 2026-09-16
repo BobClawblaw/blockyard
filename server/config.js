@@ -234,6 +234,12 @@ const DEFAULTS = {
     lockoutMs: 600000,
     cookieName: 'blockyard_sid',
     secureCookie: false, // forced true at boot when TLS is on
+    // OPEN MODE'S NODE CONNECTION IS SET FROM THIS MACHINE ONLY (audit 2026-09-16, M1/M2). With
+    // accounts off, the node-connection save and test are answered only for a loopback caller: the
+    // open-mode cross-site check stops a browser, never a script, and a script on the LAN could point
+    // the saved connection -- and with it the datadir cookie, after the next restart -- at itself, or
+    // make this server fetch its internal URLs. `true` restores the old reach, knowingly.
+    openNodeConfigFromNetwork: false,
   },
   actions: {
     // Anything that can change node or machine state is off unless explicitly
@@ -402,6 +408,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     'BLOCKYARD_DATA': ['store.dir', String],
     'BLOCKYARD_AUTH': ['auth.enabled', Boolean],
     'BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH': ['actions.allowWritesWithoutAuth', Boolean],
+    'BLOCKYARD_OPEN_NODE_CONFIG_FROM_NETWORK': ['auth.openNodeConfigFromNetwork', Boolean],
     // Run on RPC alone: 0 turns the log tail off for every node. Measured why is
     // in server/collect/monitor.js and MEASUREMENTS 3/4 -- bandwidth and per-peer
     // bytes work on builds that publish them and do not on the deployed one.

@@ -17,6 +17,7 @@ import { ipDecision } from '../netinfo.js';
 export { ipAllowed, parseIp, parseCidr } from '../netinfo.js';
 
 const MAX_BODY = 1024 * 1024; // 1 MB: a raw transaction is nowhere near this
+export const REQUEST_TIMEOUT_MS = 30_000; // the whole request, body included, must arrive within this
 
 function compile(routesTable) {
   return routesTable.map((r) => {
@@ -57,10 +58,13 @@ export function createAppServer(app) {
     ? https.createServer({ ...app.tlsOptions }, listener)
     : http.createServer(listener);
   server.keepAliveTimeout = 5000;
-  server.headersTimeout = 10000;
-  // SSE connections are long-lived by design; do not let the defaults reap them.
-  server.requestTimeout = 0;
+  // A DEADLINE FOR RECEIVING THE WHOLE REQUEST, body included (audit 2026-09-16, M5). This was 0,
+  // "so SSE connections are not reaped" -- but requestTimeout bounds only how long the REQUEST takes
+  // to arrive, and a stream's GET has arrived the moment its headers do; the response may then run
+  // for days. Measured on Node 22: with a 1.5 s deadline a stream kept delivering for 5 s, while a
+  // POST trickling one body byte every 500 ms got 408 at 2 s. At 0, that POST was held forever.
   server.headersTimeout = 15000;
+  server.requestTimeout = REQUEST_TIMEOUT_MS;
 
   async function handle(req, res) {
     const ip = clientIp(req, app.cfg);
@@ -116,7 +120,13 @@ export function createAppServer(app) {
           },
         });
       }
-      const client = app.hub.add(req, res, { user: user.user, nodeId: wantNode });
+      // A BOUNDED NUMBER OF STREAMS PER ADDRESS OR ACCOUNT (audit 2026-09-16, H1). The rate limiter
+      // above only paces how fast streams open; it never capped how many stay open.
+      const streamKey = openAccess ? `ip:${ip}` : `user:${user.user.id}`;
+      if (app.hub.countFor(streamKey) >= app.hub.limits.maxPerKey) {
+        return sendJson(req, res, 429, { error: { message: `too many open streams (${app.hub.limits.maxPerKey}) for this ${openAccess ? 'address' : 'account'}`, kind: 'ratelimited' } });
+      }
+      const client = app.hub.add(req, res, { user: user.user, nodeId: wantNode, key: streamKey });
       app.log({ level: 'info', msg: `sse #${client.id} opened by ${user.user.username} (${ip})` });
       req.on('close', () => app.log({ level: 'info', msg: `sse #${client.id} closed (${Math.round((Date.now() - started) / 1000)}s)` }));
       return undefined;

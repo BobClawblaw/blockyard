@@ -10,6 +10,20 @@
 // are coalesced per client -- at most one snapshot in flight, latest wins -- and
 // the event feed is batched. A client that cannot keep up sees a coarser stream,
 // never an unbounded queue that takes the process down.
+//
+// THAT LAST SENTENCE WAS NOT TRUE UNTIL 2026-09-16 (audit H1). Coalescing only helps if nothing is
+// written while the socket is full, and flush() wrote every pending frame regardless: `write()`
+// noted `backpressured` and nothing ever read it. The reaper removed a client only if it had been
+// sent zero bytes, which no client ever has. So a reader that stopped reading kept every snapshot
+// queued in Node's socket buffer: 400 stalled connections took a test instance from 73 MB to 1.5 GB
+// in three minutes. Now a backpressured client is sent nothing (its pending snapshot keeps being
+// replaced, latest wins) until the socket drains; one whose buffer passes a ceiling, or that stays
+// blocked past a deadline, is dropped; and one address holds a bounded number of streams.
+export const SSE_LIMITS = Object.freeze({
+  maxBufferedBytes: 4 * 1024 * 1024,   // well above one snapshot; a client this far behind is not reading
+  maxBlockedMs: 60_000,                // blocked for a minute: an EventSource reconnects on its own
+  maxPerKey: 16,                       // streams per address (open mode) or per account
+});
 class Client {
   constructor(res, user, id) {
     this.res = res;
@@ -25,13 +39,17 @@ class Client {
     this.alive = true;
     this.lastWriteAt = Date.now();
     this.nodeId = null;
+    this.key = null;
+    this.backpressured = false;
+    this.blockedSince = 0;
   }
 
   get dead() { return !this.alive || this.res.writableEnded || this.res.destroyed; }
 }
 
 export class StreamHub {
-  constructor({ log = () => {} } = {}) {
+  constructor({ log = () => {}, limits = {} } = {}) {
+    this.limits = { ...SSE_LIMITS, ...limits };
     this.clients = new Set();
     this.log = log;
     this.seq = 0;
@@ -39,10 +57,18 @@ export class StreamHub {
     this.timer = null;
   }
 
-  add(req, res, { user = null, nodeId = null } = {}) {
+  /** How many open streams share this key (an address in open mode, an account otherwise). */
+  countFor(key) {
+    let n = 0;
+    for (const c of this.clients) if (c.key === key && !c.dead) n += 1;
+    return n;
+  }
+
+  add(req, res, { user = null, nodeId = null, key = null } = {}) {
     const id = ++this.seq;
     const client = new Client(res, user, id);
     client.nodeId = nodeId;
+    client.key = key;
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -55,6 +81,11 @@ export class StreamHub {
     req.on('close', close);
     req.on('aborted', close);
     res.on('error', close);
+    res.on('drain', () => {
+      client.backpressured = false;
+      client.blockedSince = 0;
+      this.flush();
+    });
     if (!this.timer) this.startHeartbeat();
     return client;
   }
@@ -70,15 +101,25 @@ export class StreamHub {
     const tick = () => {
       for (const c of [...this.clients]) {
         if (c.dead) { this.remove(c); continue; }
+        if (this.stalled(c)) continue;
         // A comment frame keeps intermediaries from reaping an idle stream and
-        // lets us notice a dead socket on our own terms.
-        if (this.write(c, ': ping\n\n')) {
-          if (Date.now() - c.lastWriteAt > 120_000 && c.bytes === 0) this.remove(c);
-        }
+        // lets us notice a dead socket on our own terms. Never onto a full socket.
+        if (!c.backpressured) this.write(c, ': ping\n\n');
       }
     };
     this.timer = setInterval(tick, this.heartbeatMs);
     this.timer.unref?.();
+  }
+
+  /** Drop a client that is too far behind, or blocked too long; true if it was dropped. */
+  stalled(client) {
+    const buffered = client.res.writableLength ?? 0;
+    const blockedFor = client.backpressured && client.blockedSince ? Date.now() - client.blockedSince : 0;
+    if (buffered <= this.limits.maxBufferedBytes && blockedFor <= this.limits.maxBlockedMs) return false;
+    this.log({ level: 'warn', msg: `sse #${client.id} dropped: not reading (${Math.round(buffered / 1024)} KB buffered, blocked ${Math.round(blockedFor / 1000)}s)` });
+    this.remove(client);
+    try { client.res.destroy(); } catch { /* already gone */ }
+    return true;
   }
 
   write(client, frame) {
@@ -87,7 +128,8 @@ export class StreamHub {
       const ok = client.res.write(frame);
       client.bytes += frame.length;
       client.lastWriteAt = Date.now();
-      if (!ok) client.backpressured = true;
+      if (!ok && !client.backpressured) { client.backpressured = true; client.blockedSince = Date.now(); }
+      if (!ok) this.stalled(client);
       return ok;
     } catch (err) {
       this.log({ level: 'debug', msg: `sse write failed: ${err.message}` });
@@ -142,6 +184,9 @@ export class StreamHub {
       this.flushing = false;
       for (const c of [...this.clients]) {
         if (c.dead) { this.remove(c); continue; }
+        // A full socket gets nothing more: what is pending stays pending (and is replaced by
+        // newer state) until 'drain' flushes again.
+        if (c.backpressured) { this.stalled(c); continue; }
         if (c.pendingSnapshot !== null) {
           const snap = c.pendingSnapshot;
           c.pendingSnapshot = null;
@@ -166,6 +211,7 @@ export class StreamHub {
       perClient: [...this.clients].map((c) => ({
         id: c.id, user: c.user?.username ?? null, seconds: Math.round((Date.now() - c.connectedAt) / 1000),
         kb: Math.round(c.bytes / 1024), dropped: { ...c.dropped }, node: c.nodeId,
+        backpressured: c.backpressured, bufferedKb: Math.round((c.res.writableLength ?? 0) / 1024),
       })),
     };
   }

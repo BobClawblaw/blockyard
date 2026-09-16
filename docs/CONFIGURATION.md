@@ -252,7 +252,7 @@ sessions, CSRF protection and a per-user audit trail.
 
 | key | default | meaning |
 |---|---|---|
-| `auth.enabled` | `false` | Turn accounts on. |
+| `auth.enabled` | `true` | Accounts. `false` is open mode: anyone who can reach the port reads the monitor as a viewer. |
 | `auth.dataDir` | same as `store.dir` | Where `users.json` and `sessions.json` live. |
 | `auth.sessionTtlMs` | `259200000` (72 h) | Absolute session lifetime, counted from sign-in. |
 | `auth.idleTtlMs` | `28800000` (8 h) | A session unused for this long expires. Until 2026-09-13 the two defaults were the other way round, so the idle check could never fire and a session was 8 h whatever you did. |
@@ -264,6 +264,7 @@ sessions, CSRF protection and a per-user audit trail.
 | `auth.loginMaxAttempts` | `8` | Intended: failed logins per username before lockout. See [Known quirks](#known-quirks); the effective value is 8 whatever you set. |
 | `auth.loginWindowMs` | `300000` (5 min) | Intended: window in which failed attempts are counted. See [Known quirks](#known-quirks); the effective value is 5 minutes. |
 | `auth.lockoutMs` | `600000` (10 min) | How long a username stays locked after too many failures. |
+| `auth.openNodeConfigFromNetwork` | `false` | With accounts off, the node connection form (test and save) answers only a caller on this machine's loopback address, and never behind `server.trustProxy`. A browser check cannot stop a script, and a script that can save the connection decides where the node's cookie is sent after the next restart. `true` lets any client that reaches the port use the form. With accounts on, the form needs an admin either way. |
 | `auth.cookieName` | `"blockyard_sid"` | Name of the session cookie. |
 | `auth.secureCookie` | `false` | Mark the session cookie `Secure`. Forced to `true` when `server.tls` is on. Set it yourself only when a TLS-terminating reverse proxy sits in front, because browsers never send a `Secure` cookie over plain HTTP. |
 
@@ -400,7 +401,8 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop poll answers older than this. |
 | `BLOCKYARD_DATA` | `store.dir` | path | `<repo>/data` | Data directory. Also the default `auth.dataDir`. |
 | `BLOCKYARD_RETENTION_HOURS` | `store.retentionHours` | number | `72` | Chart history retention. |
-| `BLOCKYARD_AUTH` | `auth.enabled` | boolean | `false` | Turn accounts on. |
+| `BLOCKYARD_AUTH` | `auth.enabled` | boolean | `true` | Accounts; `0` is open mode. |
+| `BLOCKYARD_OPEN_NODE_CONFIG_FROM_NETWORK` | `auth.openNodeConfigFromNetwork` | boolean | `false` | In open mode, let any client use the node connection form, not only this machine. |
 | `BLOCKYARD_SECURE_COOKIE` | `auth.secureCookie` | boolean | `false` | `Secure` session cookie. Use it behind a TLS terminator; it is automatic with built-in TLS. |
 | `BLOCKYARD_ADMIN_PASSWORD` | *(none)* | string | *(generated)* | Password for the `admin` account created on first boot when accounts are on and no users exist. It is ignored once any user exists. It is a secret, so do not leave it in a unit file after first boot. |
 | `BLOCKYARD_ENABLE_ACTIONS` | `actions.enabled` | boolean | `false` | Master switch for node writes. |

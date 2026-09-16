@@ -47,7 +47,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1013 unit tests, all built in
+npm test            # optional: 1025 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -136,7 +136,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1013 unit tests (node:test, no dependencies)
+npm test             # 1025 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -156,7 +156,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1013 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1025 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node
@@ -170,7 +170,7 @@ Everything here was written by an AI directed by a human, and audited by AI:
 [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md),
 [docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md) and
 [docs/SECURITY-AUDIT-2026-09-16.md](docs/SECURITY-AUDIT-2026-09-16.md) are the audits, findings
-and remediation included (the 09-16 findings are still open). The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24);
+and remediation included (the 09-16 audit's low findings are still open). The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24);
 a real install has been done on macOS (Core 29.1) and Linux, and Windows has only the test suite.
 [docs/DEFECTS.md](docs/DEFECTS.md) lists five open items, honestly stated, with the
 measurements behind each. Read it before deploying: several are node-capability limits

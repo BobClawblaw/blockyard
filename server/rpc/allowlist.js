@@ -48,8 +48,33 @@ const ALLOW_PREFIXES = ['get', 'list', 'estimate', 'verify', 'estimat', 'help', 
 // transactions, which is a write in every way that matters.
 const DENY_PREFIXES = ['generate', 'invalidate', 'reconsider', 'import', 'send', 'set', 'unload', 'load', 'sign'];
 
+// EVERY WALLET RPC, READ-SHAPED OR NOT (audit 2026-09-16, M4). The `get` and `list` prefixes let
+// `listdescriptors true` and `gethdkeys {"private":true}` through, and both return private keys
+// from an unlocked wallet -- to anyone the console serves, which in open mode is anyone who can
+// reach the port. The monitor has no use for a wallet, so the whole category is refused by name.
+// The list is Bitcoin Core's own "== Wallet ==" section of `help` (Core 29/30, taken 2026-09-16),
+// plus the legacy-wallet methods older nodes still answer.
+export const WALLET_METHODS = new Set([
+  'abandontransaction', 'abortrescan', 'addhdkey', 'backupwallet', 'bumpfee', 'createwallet',
+  'createwalletdescriptor', 'encryptwallet', 'exportwatchonlywallet', 'getaddressesbylabel',
+  'getaddressinfo', 'getbalance', 'getbalances', 'gethdkeys', 'getnewaddress', 'getrawchangeaddress',
+  'getreceivedbyaddress', 'getreceivedbylabel', 'gettransaction', 'getwalletinfo', 'importdescriptors',
+  'importprunedfunds', 'keypoolrefill', 'listaddressgroupings', 'listdescriptors', 'listlabels',
+  'listlockunspent', 'listreceivedbyaddress', 'listreceivedbylabel', 'listsinceblock', 'listtransactions',
+  'listunspent', 'listwalletdir', 'listwallets', 'loadwallet', 'lockunspent', 'migratewallet',
+  'psbtbumpfee', 'removeprunedfunds', 'rescanblockchain', 'restorewallet', 'send', 'sendall', 'sendmany',
+  'sendtoaddress', 'setlabel', 'setwalletflag', 'signmessage', 'signrawtransactionwithwallet',
+  'simulaterawtransaction', 'unloadwallet', 'walletcreatefundedpsbt', 'walletdisplayaddress', 'walletlock',
+  'walletpassphrase', 'walletpassphrasechange', 'walletprocesspsbt',
+  // legacy (pre-descriptor) wallets
+  'dumpprivkey', 'dumpwallet', 'importprivkey', 'importaddress', 'importpubkey', 'importmulti',
+  'importwallet', 'sethdseed', 'upgradewallet', 'getunconfirmedbalance', 'listaccounts', 'getaccount',
+  'getaccountaddress', 'getaddressesbyaccount', 'getreceivedbyaccount', 'listreceivedbyaccount',
+]);
+
 export function classifyMethod(method) {
   if (typeof method !== 'string' || !method) return { allowed: false, kind: 'unknown', reason: 'method name must be a string' };
+  if (WALLET_METHODS.has(method)) return { allowed: false, kind: 'wallet', reason: 'wallet RPCs are not exposed: some of them return private keys, and the monitor has no use for a wallet' };
   if (DENY_EXACT.has(method)) return { allowed: false, kind: 'write-or-heavy', reason: 'this method mutates state or monopolises the node\'s single-threaded RPC server' };
   for (const p of DENY_PREFIXES) if (method.startsWith(p) && !ALLOW_PREFIXES.includes(method)) return { allowed: false, kind: 'write', reason: `method starts with "${p}" and is treated as a mutation` };
   if (method === 'help' || method === 'uptime' || method === 'stop') {
@@ -73,6 +98,7 @@ export const NODE_REFUSES = new Set([
 export function allowlistSummary() {
   return {
     denyExactCount: DENY_EXACT.size,
+    walletDenied: WALLET_METHODS.size,
     allowPrefixes: [...new Set(ALLOW_PREFIXES)].sort(),
     denyPrefixes: [...new Set(DENY_PREFIXES)].sort(),
     defaultDecision: 'deny',
