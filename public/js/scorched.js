@@ -52,12 +52,16 @@ const clampX = (x) => Math.max(0, Math.min(COLS - 1e-3, x));
 const BOMBLET = Object.freeze({ name: 'bomblet', kind: 'blast', radius: 1.5, damage: 30 });   // a Funky Bomb's pieces, which the shop does not sell
 
 // the strata: from the floor up, as a fraction of a column's own height, with a colour each
+// VIBRANT (operator, 2026-09-16: "make the terrain blocks more vibrant colored"). The first set
+// were dust-and-shadow browns that read as tinted rather than lit whatever the lamp did. These
+// are the same strata at full saturation: hot magma, slate rock with some blue in it, terracotta
+// clay, golden soil and a green that is actually green. The lamp then only has to do the shading.
 export const STRATA = Object.freeze([
-  Object.freeze({ to: 0.12, color: '#7a2f2a' }),   // magma, at the very bottom
-  Object.freeze({ to: 0.40, color: '#4b4652' }),   // rock
-  Object.freeze({ to: 0.72, color: '#6f4b32' }),   // clay
-  Object.freeze({ to: 0.97, color: '#8a6a3f' }),   // soil
-  Object.freeze({ to: 1.00, color: '#5fae4a' }),   // the grass cap
+  Object.freeze({ to: 0.12, color: '#c8391f' }),   // magma, at the very bottom
+  Object.freeze({ to: 0.40, color: '#5d5a80' }),   // rock
+  Object.freeze({ to: 0.72, color: '#a84f22' }),   // clay
+  Object.freeze({ to: 0.97, color: '#cf9038' }),   // soil
+  Object.freeze({ to: 1.00, color: '#3fca3c' }),   // the grass cap
 ]);
 
 // ------------------------------------------------------------------- randomness, seeded

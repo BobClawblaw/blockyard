@@ -41,7 +41,11 @@ const FIELD = {
   light: 'front', lightHeight: 'low',
   // and a hard lamp: the shipped range put every face within half a stop of every other and the
   // board read as tinted dirt rather than lit dirt (operator: "too washed out")
-  lightGain: 2.15, topLight: 0.6,
+  // 1.7, not the 2.15 tried first: with the lamp at the viewer the front face comes out at about
+  // 1.1 of its own colour, and the face turned away at under 0.2. Higher pushed the front past
+  // 1.25, where a channel clips and a saturated colour goes pale -- which is the "washed out" the
+  // operator kept seeing. Vibrance is the strata's own saturation; the lamp only shades them.
+  lightGain: 1.7, topLight: 0.55,
   gridStep: 4,
   space: true,
   background: 'rgba(0,0,0,0)',
