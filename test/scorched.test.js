@@ -14,8 +14,8 @@ import {
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, landOrder, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
-import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands, skyBrightness } from '../public/js/scorchedwind.js';
-import { makeFluid, stepFluid, setSolid, warmFluid, paintFluid, meanFlow, makeTracers, stepTracers, paintTracers } from '../public/js/scorchedair.js';
+import { rippleOffset, paintRipple, skyBrightness } from '../public/js/scorchedwind.js';
+import { makeFluid, stepFluid, setSolid, warmFluid, meanFlow, makeTracers, stepTracers, paintTracers } from '../public/js/scorchedair.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -839,88 +839,11 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const drawn = actorLayer(g, 500, { falls });
   assert.ok(drawn.some((t) => t.txid === 'chute1' && t.poly), 'the canopy is drawn over the tank under it');
   assert.ok(drawn.some((t) => t.txid === 'track0'), 'a tank has tracks now');
-  // THE AIR IS A FLOW FIELD, ADVECTED (operator: "really leverage a shifting effect that conveys
-  // the air flow. Fluid simulation?"). Particles carried by the wind plus the curl of a drifting
-  // noise field: divergence-free, so it swirls without piling up or tearing.
-  const c0 = curl(3, 2, 0), c1 = curl(3.02, 2, 0);
-  assert.ok(Number.isFinite(c0.x) && Number.isFinite(c0.y), 'the curl is a vector');
-  assert.ok(Math.hypot(c1.x - c0.x, c1.y - c0.y) < 0.5, 'and it is smooth: a small step is a small change');
-  assert.ok(noise2(1.5, 2.5) >= 0 && noise2(1.5, 2.5) <= 1);
-  const flow = makeFlow(120, 800, 400, 7);
-  assert.equal(flow.length, 120);
-  assert.ok(flow.every((p) => p.x >= 0 && p.x <= 800 && p.y >= 0 && p.y <= 400), 'seeded over the plane');
-  // carried downwind, EVERY particle, EVERY step: the eddies bend the flow but never turn it
-  for (const wind of [6, -6, 1.5]) {
-    const parts = makeFlow(80, 800, 400, 3);
-    let now = 0, steps = 0, back = 0, total = 0;
-    for (let i = 0; i < 120; i++) {
-      now += 16;
-      for (const sg of stepFlow(parts, 16, { wind, w: 800, h: 400, now })) { steps += 1; const d = (sg.x1 - sg.x0) * Math.sign(wind); total += d; if (d <= 0) back += 1; }
-    }
-    assert.equal(back, 0, `no streak ever points upwind at wind ${wind} (${back} of ${steps})`);
-    assert.ok(total / steps > 0.5, `and the air is carried, not just stirred (${(total / steps).toFixed(2)}px a frame)`);
-  }
-  // it swirls: the particles do not all travel on one straight line
-  const parts2 = makeFlow(120, 800, 400, 5);
-  let t2 = 0, spread = 0;
-  for (let i = 0; i < 90; i++) { t2 += 16; const segs = stepFlow(parts2, 16, { wind: 5, w: 800, h: 400, now: t2 }); if (i === 89) { const ys = segs.map((sg) => sg.y1 - sg.y0); spread = Math.max(...ys) - Math.min(...ys); } }
-  assert.ok(spread > 0.2, `the flow has eddies across it (${spread.toFixed(2)}px of crosswind in one step)`);
-  // still air draws nothing at all, and a gale draws more than a breeze
-  assert.equal(plasmaCells(800, 400, 0, 0).length, 0, 'no plasma in still air');
-  assert.ok(plasmaCells(800, 400, 0, 9).length > 0, 'and some under a wind');
-  assert.ok(plasmaCells(800, 400, 0, 9).every((c) => c.alpha <= 0.075), 'the wash is never more than a whisper');
-  // both painters use flat fills and strokes only
-  const R2 = recorder();
-  paintFlow(R2.ctx, stepFlow(makeFlow(20, 800, 400, 1), 16, { wind: 5, w: 800, h: 400, now: 500 }));
-  assert.ok(R2.ops.some((o) => o.op === 'stroke'), 'the streaks are stroked lines');
   const banner = windBanner(-6, 800, 400);
   assert.equal(banner[0].dir, -1, 'the banner points the way it blows');
   assert.ok(windBanner(9, 800, 400).length > windBanner(2, 800, 400).length, 'more chevrons in a gale');
   assert.equal(windBanner(0, 800, 400).length, 0, 'still air says nothing');
 
-  // THE AIR KEEPS ITS OWN TIME (operator: "the nebula effects ... rapidly block in the reverse
-  // direction" during a change of wind). On a page clock a day old, a wash whose drift was
-  // `now * speed` moved by a day's worth of travel for the smallest change in speed. Integrated,
-  // a change of wind between two frames moves it by one frame's travel and no more.
-  const day = 86_400_000;
-  const clock = airClock();
-  for (let i = 0; i < 100; i++) advanceAir(clock, 16, 4);            // a while at one wind
-  const before = plasmaCells(800, 400, { ...clock }, 4);
-  advanceAir(clock, 16, -9);                                          // then the wind turns hard
-  const after = plasmaCells(800, 400, clock, -9);
-  const settled = (a, b) => a.length && b.length && Math.abs(a[0].x - b[0].x) < 40 && Math.abs(a[0].alpha - b[0].alpha) < 0.02;
-  assert.ok(settled(before, after), 'the wash barely moves across a change of wind');
-  assert.ok(Math.abs(clock.drift) < 1000, `and a day-old page changes nothing about that (drift ${clock.drift.toFixed(2)}, not ${(day / 1000 * 0.5).toFixed(0)})`);
-  // the flow's field likewise: one frame at the new wind moves a particle one frame's distance
-  const parts3 = makeFlow(40, 800, 400, 9, day);
-  const c3 = airClock();
-  for (let i = 0; i < 30; i++) { advanceAir(c3, 16, 3); stepFlow(parts3, 16, { wind: 3, w: 800, h: 400, now: day + i * 16, clock: c3 }); }
-  const xs = parts3.map((p) => p.x), borns = parts3.map((p) => p.born);
-  advanceAir(c3, 16, -8);
-  stepFlow(parts3, 16, { wind: -8, w: 800, h: 400, now: day + 31 * 16, clock: c3 });
-  // a particle reborn on this very step is placed afresh, which is not a leap; the rest must not leap
-  const jump = Math.max(0, ...parts3.map((p, i) => (p.born === borns[i] ? Math.abs(p.x - xs[i]) : 0)));
-  assert.ok(jump < 12, `no particle leaps when the wind turns (largest step ${jump.toFixed(1)}px)`);
-
-  // NOTHING IN THE FIELD SCROLLS: a frame of evolution with no drift leaves the wash where it is,
-  // cell for cell, and nearly the same shape
-  const c4 = airClock(); for (let i = 0; i < 20; i++) advanceAir(c4, 16, 0.5);
-  const still0 = plasmaCells(800, 400, { t: c4.t, drift: 0 }, 5), still1 = plasmaCells(800, 400, { t: c4.t + 0.016 * 0.16, drift: 0 }, 5);
-  const key = (c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
-  const set0 = new Set(still0.map(key)), shared = still1.filter((c) => set0.has(key(c))).length;
-  assert.ok(shared / Math.max(1, still1.length) > 0.95, `a frame later the same cells are lit (${shared} of ${still1.length})`);
-
-  // and the plasma paints one flat rect a cell
-  const ops = [];
-  const ctx = { beginPath: () => {}, arc: () => ops.push('disc'), fill: () => {}, set fillStyle(v) { ops.push(`fill:${v}`); } };
-  paintPlasma(ctx, plasmaCells(800, 400, 0, 6));
-  assert.equal(ops.filter((o) => o === 'disc').length, plasmaCells(800, 400, 0, 6).length, 'one soft disc per cell');
-  // and the population is never one cohort: born on a clock twelve hours old, it still spreads
-  const old = makeFlow(60, 800, 400, 2, 46_000_000);
-  const lives = new Set(old.map((p) => p.life));
-  assert.ok(lives.size > 30, 'each particle has a life of its own');
-  let alive = 0; stepFlow(old, 16, { wind: 5, w: 800, h: 400, now: 46_000_016 }).forEach(() => { alive += 1; });
-  assert.ok(alive > 40, `most of the field is still in flight after the first step (${alive} of 60)`);
   const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
   assert.match(src, /t - G\.windAt >= WIND_MS\) \{ G\.windAt = t; G\.dirty = true; \}/, 'the loop marks itself dirty for the wind alone');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
@@ -1087,37 +1010,6 @@ test('scorched yard: every seat stands on the ground, and a new game always redr
   assert.match(src, /nextRound\(g\);\n  G\.landKey = '';/, 'and so does a new round');
 });
 
-// A STEADY FLOW, NOT A FRONT (operator, 2026-09-16: "the wave simulation comes across as a front as
-// opposed to a steady flow of fluid ... make that air movement effect even more incredible")
-test('scorched yard: the air stays evenly filled, carries tails, and runs on currents', () => {
-  // density: in a light wind, where lives end before the crossing does, the downwind half used to
-  // empty out; a reborn particle now comes back anywhere, so both halves stay populated
-  const parts = makeFlow(240, 800, 400, 4, 0);
-  const c = airClock();
-  let now = 0;
-  for (let i = 0; i < 900; i++) { now += 16; advanceAir(c, 16, 1.5); stepFlow(parts, 16, { wind: 1.5, w: 800, h: 400, now, clock: c }); }
-  const left = parts.filter((p) => p.x >= 0 && p.x < 400).length, right = parts.filter((p) => p.x >= 400 && p.x <= 800).length;
-  assert.ok(Math.min(left, right) / Math.max(left, right) > 0.55, `both halves of the field are populated after fifteen seconds (${left} upwind, ${right} downwind)`);
-  // tails: a particle remembers where it has been, and the painter draws the ribbon
-  const segs = stepFlow(parts, 16, { wind: 1.5, w: 800, h: 400, now: now + 16, clock: c });
-  assert.ok(segs.some((sg) => sg.tail && sg.tail.length >= 8), 'a particle carries a tail of its last positions');
-  const R = recorder();
-  paintFlow(R.ctx, segs.slice(0, 5));
-  assert.ok(R.ops.filter((o) => o.op === 'stroke').length > 5 * 3, 'the ribbon is several strokes, thinning toward its end');
-  // currents: traced through the same field, from the upwind edge across, and never upwind
-  for (const wind of [5, -5]) {
-    const lines = traceStreamlines(c, { wind, w: 800, h: 400 });
-    assert.ok(lines.length >= 12, 'a dozen or so currents');
-    for (const l of lines) for (let i = 1; i < l.pts.length; i++) assert.ok((l.pts[i].x - l.pts[i - 1].x) * Math.sign(wind) > 0, 'every current runs downwind at every step');
-    assert.ok(lines.some((l) => Math.abs(l.pts[l.pts.length - 1].y - l.pts[0].y) > 4), 'and they bend');
-  }
-  assert.equal(traceStreamlines(c, { wind: 0, w: 800, h: 400 }).length, 0, 'still air has no currents');
-  const D = recorder();
-  D.ctx.setLineDash = (d) => D.ops.push({ op: 'dash', d }); D.ctx.lineDashOffset = 0;
-  paintStreamlines(D.ctx, traceStreamlines(c, { wind: 5, w: 800, h: 400 }), 120);
-  assert.ok(D.ops.some((o) => o.op === 'dash' && o.d.length === 2), 'the currents are dashed, so their dashes can run');
-});
-
 // THE PANEL IS YOURS WHILE YOU SHOP (operator, 2026-09-16: "my cash doesn't get subtracted when I
 // purchase stuff" -- it was; the panel was showing the computer player whose turn the round ended on)
 test('scorched yard: a purchase takes the money, and the panel shows the shopper between rounds', () => {
@@ -1183,7 +1075,7 @@ test('scorched yard: every weapon that flies has a look of its own', () => {
 // movement. Is there some sort of more impressive ripple or bowing effect"). The streaks had bright
 // heads and fading tails -- a meteor's shape. The wind refracts the sky instead, and bows a few
 // broad soft bands of air, and nothing in either has a head.
-test('scorched yard: the wind ripples the sky and bows soft bands, downwind, with no bright points', () => {
+test('scorched yard: the wind ripples the sky, downwind, and the plane draws only the simulated air', () => {
   const h = 600;
   assert.equal(rippleOffset(100, 0, 0, h), 0, 'still air bends nothing');
   let peak = 0;
@@ -1198,24 +1090,15 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
   assert.ok(n === calls.length && n >= 100, `the sky is copied across in columns (${n})`);
   assert.ok(calls.every((c) => c.length === 9), 'each a source rectangle mapped to a shifted destination');
   assert.equal(paintRipple(ctx, { width: 1000 }, { sx: 0, sy: 0, scale: 1 }, 600, h, 30, 0), 0, 'and nothing at all in still air');
-  // the bands: broad, soft, bowing, stroked lines and nothing round
-  assert.equal(airBands(0, 0, 800, h).length, 0, 'no bands in still air');
-  const bands = airBands(50, 8, 800, h);
-  assert.equal(bands.length, 10, 'ten bands');
-  for (const b of bands) { const ys = b.pts.map((p) => p.y); assert.ok(Math.max(...ys) - Math.min(...ys) > 4, 'each one bows'); assert.ok(b.alpha <= 0.07 && b.width > 10, 'broad and faint'); }
-  const R = recorder();
-  paintAirBands(R.ctx, bands);
-  assert.ok(R.ops.every((o) => o.op === 'stroke'), 'strokes only: no heads, no dots, nothing a meteor is made of');
   // and the wind plane no longer draws the streaks or the currents: it draws the simulated air
   const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
   const wind = src.slice(src.indexOf('function drawWind('), src.indexOf('\n}\n', src.indexOf('function drawWind(')));
   assert.ok(!/paintFlow|paintStreamlines/.test(wind), 'the meteor-shaped streaks are gone from the picture');
   assert.match(wind, /paintRipple\(ctx, sky,/, 'the sky is refracted');
-  assert.match(wind, /stepFluid\(G\.fluid, dt, \{ wind: we, dye: false \}\)/, 'the air is stepped as a fluid every frame');
+  assert.match(wind, /stepFluid\(G\.fluid, dt, \{ wind: we \}\)/, 'the air is stepped as a fluid every frame');
+  assert.ok(!/airBands|plasmaCells|paintFluid/.test(wind), 'and nothing of the bands, the wash or the smoke is left in it');
   assert.match(wind, /paintTracers\(ctx, G\.fluid, G\.tracers, w, h,/, 'and shown by streaklines carried in it, not by smoke');
-  // brighter against a bright sky, and no brighter at night than before
-  const night = airBands(50, 8, 800, h, 10, 0), noon = airBands(50, 8, 800, h, 10, 1);
-  assert.ok(noon[0].alpha > night[0].alpha * 2.5, 'the bands carry about three times more at noon');
+  // the sky's own brightness, which the flow lines use to hold their contrast by day
   const px = (r, g, b) => ({ width: 10, height: 10, getContext: () => ({ getImageData: (x, y, w, hh) => ({ data: new Uint8ClampedArray(w * hh * 4).map((_, i) => [r, g, b, 255][i % 4]) }) }) });
   assert.ok(skyBrightness(px(10, 12, 30)) < 0.05, 'a night sky reads dark');
   assert.ok(skyBrightness(px(90, 150, 230)) > 0.6, 'a day sky reads bright');
@@ -1224,8 +1107,8 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
 
 // THE AIR IS A FLUID (operator, 2026-09-16: "There is no simulation movement. It's just a squiggly
 // line moving across the screen"). A small Stable Fluids solver: the wind drives it, the land is its
-// solid floor, and a dye carried by the flow is what is drawn.
-test('scorched yard: the air is simulated -- driven by the wind, flowing round the land, carrying smoke', () => {
+// solid floor.
+test('scorched yard: the air is simulated -- driven by the wind, flowing round the land', () => {
   const hill = (x) => 34 - 16 * Math.max(0, 1 - Math.abs(x - 48) / 14);   // first free row from the top
   // the wind drives it, and it turns round with the wind rather than jumping
   const f = makeFluid(96, 48, 1);
@@ -1249,17 +1132,7 @@ test('scorched yard: the air is simulated -- driven by the wind, flowing round t
   let div = 0, m = 0;
   for (let y = 4; y < 20; y++) for (let x = 2; x < 94; x++) { const i = x + y * 96; if (g.solid[i] || g.solid[i + 1] || g.solid[i - 1] || g.solid[i + 96] || g.solid[i - 96]) continue; div += Math.abs((g.u[i + 1] - g.u[i - 1] + g.v[i + 96] - g.v[i - 96]) * 0.5); m += 1; }
   assert.ok(div / m < 1.2, `divergence is small in open air (${(div / m).toFixed(3)} per cell against a flow of ~12)`);
-  // the smoke crosses the whole field, stays finite, and still air paints nothing
-  const cols = [8, 40, 72, 90].map((x) => { let d = 0; for (let y = 0; y < 60; y++) d += g.d[x * g.ds + y * g.dx]; return d; });
-  assert.ok(cols.every((d) => d > 0.5), `smoke reaches every part of the field (${cols.map((d) => d.toFixed(1)).join(', ')})`);
-  assert.ok(g.u.every(Number.isFinite) && g.d.every((v) => Number.isFinite(v) && v >= 0), 'every value finite, no negative smoke');
-  const small = { width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData: () => {} }) };
-  const drawn = [];
-  const ctx = { drawImage: (...a) => drawn.push(a), imageSmoothingEnabled: false };
-  assert.equal(paintFluid(ctx, small, g, 800, 400, { wind: 0 }), false, 'still air paints nothing');
-  assert.equal(paintFluid(ctx, small, g, 800, 400, { wind: 7, bright: 0.8 }), true);
-  assert.equal(drawn.length, 1, 'one smooth scaled draw of the whole field');
-  assert.equal(ctx.imageSmoothingEnabled, true, 'scaled up smooth, not in blocks');
+  assert.ok(g.u.every(Number.isFinite) && g.v.every(Number.isFinite), 'every value finite');
   // cheap enough for every frame
   const t0 = performance.now(); for (let i = 0; i < 60; i++) stepFluid(g, 33, { wind: 7 }); const per = (performance.now() - t0) / 60;
   assert.ok(per < 8, `a step costs well under a frame (${per.toFixed(2)} ms)`);
@@ -1272,12 +1145,12 @@ test('scorched yard: the flow is drawn as streaklines carried by the simulated a
   const hill = (x) => 34 - 16 * Math.max(0, 1 - Math.abs(x - 48) / 14);
   const f = makeFluid(96, 48, 4);
   setSolid(f, hill);
-  warmFluid(f, 5, 7, { dye: false });
+  warmFluid(f, 5, 7);
   const tr = makeTracers(f, 200, 3);
   let moved = 0, n = 0;
   for (let k = 0; k < 30; k++) {
     const x0 = Float32Array.from(tr.x), age0 = Float32Array.from(tr.age);
-    stepFluid(f, 33, { wind: 7, dye: false });
+    stepFluid(f, 33, { wind: 7 });
     stepTracers(f, tr, 33);
     for (let i = 0; i < tr.n; i++) if (tr.age[i] > age0[i]) { moved += tr.x[i] - x0[i]; n += 1; }
   }
@@ -1361,9 +1234,9 @@ test('scorched yard: a blast does not stall the frame', async () => {
   // 4. the flow lines are a few continuous paths, not thousands of segments
   const f = makeFluid(96, 48, 2);
   setSolid(f, () => 40);
-  warmFluid(f, 3, 7, { dye: false });
+  warmFluid(f, 3, 7);
   const tr = makeTracers(f, 320, 5);
-  for (let i = 0; i < 40; i++) { stepFluid(f, 33, { wind: 7, dye: false }); stepTracers(f, tr, 33); }
+  for (let i = 0; i < 40; i++) { stepFluid(f, 33, { wind: 7 }); stepTracers(f, tr, 33); }
   let moves = 0, lines = 0;
   const ctx = { set strokeStyle(v) {}, lineCap: '', lineJoin: '', lineWidth: 1, beginPath() {}, moveTo() { moves += 1; }, lineTo() { lines += 1; }, stroke() {} };
   paintTracers(ctx, f, tr, 1266, 633, { wind: 7 });

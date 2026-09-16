@@ -1,12 +1,15 @@
 // SCORCHED YARD'S AIR, SIMULATED (operator, 2026-09-16, with a night capture: "There is no
 // simulation movement. It's just a squiggly line moving across the screen").
 //
+// (It first showed the flow with a dye -- smoke carried by the air -- which read as smoke blowing
+// out of the scene. The dye is gone; the flow lines at the bottom of this module are the picture.)
+//
 // That was fair. Every earlier cut was kinematic: sprites, dashes and finally sine curves, each
 // told where to be at time t. None of them could flow round anything, because nothing in them knew
 // what was there. This is an actual fluid: a small grid solved the way Jos Stam's "Stable Fluids"
 // does it -- velocity advected semi-Lagrangian, made divergence-free by a pressure projection,
-// with vorticity confinement to keep the eddies alive -- and a dye field carried by that velocity,
-// which is what you see.
+// with vorticity confinement to keep the eddies alive -- and weightless tracers carried by that
+// velocity, whose paths are what you see.
 //
 //   * THE WIND is a body force pulling the air toward the gauge's speed and direction. A change of
 //     wind is not a fade: the air has momentum and turns round.
@@ -14,47 +17,23 @@
 //     up across the crests and rolls into eddies in their lee. That is the bowing.
 //   * TURBULENCE is a few small vortex impulses a step, stronger in a strong wind, which the solver
 //     carries, stretches and tears apart on its own.
-//   * THE DYE comes in on the upwind edge in filaments and thins as it goes. It is drawn as a soft,
-//     faint wash: a grid of cells written to a tiny canvas and scaled up smooth.
 //
 // Cheap by construction: 96 x 48 cells, fourteen Jacobi iterations a step, all typed arrays. Nothing
-// here reads the DOM; the caller hands over the size, the wind, the solid mask and a canvas.
+// here reads the DOM; the caller hands over the size, the wind and the solid mask.
 
 const IX = (f, x, y) => x + y * f.nx;
 const clampI = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const hash = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
 const smooth = (t) => t * t * (3 - 2 * t);
-function noise1(x) { const i = Math.floor(x), f = x - i; return hash(i) * (1 - smooth(f)) + hash(i + 1) * smooth(f); }
 
-/** A fluid of `nx` by `ny` cells, still, with a little dye already in it so the first frame is not empty. */
-export function makeFluid(nx = 96, ny = 48, seed = 1, dyeScale = 2) {
+/** A fluid of `nx` by `ny` cells, still. */
+export function makeFluid(nx = 96, ny = 48, seed = 1) {
   const n = nx * ny;
-  // THE SMOKE ON A FINER GRID THAN THE AIR (operator, 2026-09-16: "the airflow bands are not clear
-  // enough"). On the air's own 96 x 48 grid a stream a few cells wide smears into haze within a
-  // crossing; the velocity is smooth and can stay coarse, but the smoke is what the eye follows,
-  // so it lives at twice the resolution and samples the velocity underneath.
-  const dx = nx * dyeScale, dy = ny * dyeScale, dn = dx * dy;
-  const f = {
-    nx, ny, t: 0, seed, ds: dyeScale, dx, dy,
+  return {
+    nx, ny, t: 0, seed,
     u: new Float32Array(n), v: new Float32Array(n), u0: new Float32Array(n), v0: new Float32Array(n),
     p: new Float32Array(n), div: new Float32Array(n), w: new Float32Array(n), solid: new Uint8Array(n),
-    d: new Float32Array(dn), d0: new Float32Array(dn), d1: new Float32Array(dn),
   };
-  for (let y = 0; y < dy; y++) for (let x = 0; x < dx; x++) f.d[x + y * dx] = inflowAt(f, y / dyeScale, (x / dyeScale) * 0.37);
-  return f;
-}
-
-/**
- * The filaments the upwind edge breathes in. A thin even haze has nothing in it for the eye to
- * follow (the first live read: dye everywhere at a third, painted at seven per cent, invisible), so
- * the inflow is a few distinct streams with clear air between them, each one pulsing -- and it is
- * the streams being bent over the hills and torn into eddies that shows the flow.
- */
-function inflowAt(f, y, t) {
-  const band = noise1(y * 0.62 + f.seed * 3.1 + t * 0.22);
-  const edge = band < 0.62 ? 0 : band > 0.7 ? 1 : smooth((band - 0.62) / 0.08);
-  const pulse = noise1(t * 1.1 + y * 0.09 + f.seed * 5.3);
-  return edge * (0.55 + 0.9 * pulse);
 }
 
 /** Mark the cells the land fills. `topOf(x)` answers the first free row, from the top, of column x. */
@@ -76,11 +55,11 @@ function sample(f, a, x, y, wrap = true) {
 }
 
 /** One step of the solver: `dt` in ms, `wind` the gauge value (-10..10). */
-export function stepFluid(f, dt, { wind = 0, dye = true } = {}) {
+export function stepFluid(f, dt, { wind = 0 } = {}) {
   const s = Math.min(0.05, Math.max(0, dt / 1000));
   if (!s) return f;
   f.t += s;
-  const { nx, ny, u, v, u0, v0, d, d0, p, div, w, solid } = f;
+  const { nx, ny, u, v, u0, v0, p, div, w, solid } = f;
   const n = nx * ny;
   const strength = Math.min(1, Math.abs(wind) / 10);
   const dir = wind < 0 ? -1 : 1;
@@ -169,86 +148,7 @@ export function stepFluid(f, dt, { wind = 0, dye = true } = {}) {
     if ((y === 0 && v[i] < 0) || (y === ny - 1 && v[i] > 0)) v[i] = 0;
   }
 
-  if (!dye) return f;
-  // --- the dye: carried by the air on its own fine grid, breathed in on the upwind edge, thinning.
-  // MACCORMACK, not plain semi-Lagrangian: advect back, advect that forward again, and correct by
-  // half the round-trip error, clamped to the neighbours the backtrace landed among. Plain advection
-  // blurs a filament a little every step, and over a crossing of the field that is all of it; this
-  // keeps the streams as streams for the cost of a second pass.
-  const { ds, dx, dy, d1 } = f;
-  const dn = dx * dy;
-  const velAt = (a, x, y) => sample(f, a, x / ds - 0.5 + 0.5 / ds, y / ds - 0.5 + 0.5 / ds);
-  const sampleD = (arr, x, y) => {
-    x = ((x % dx) + dx) % dx;
-    y = y < 0 ? 0 : y > dy - 1.001 ? dy - 1.001 : y;
-    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = (x0 + 1) % dx, y1 = y0 + 1;
-    const sx = x - x0, sy = y - y0;
-    return (arr[x0 + y0 * dx] * (1 - sx) + arr[x1 + y0 * dx] * sx) * (1 - sy) + (arr[x0 + y1 * dx] * (1 - sx) + arr[x1 + y1 * dx] * sx) * sy;
-  };
-  const solidD = (x, y) => solid[Math.min(nx - 1, Math.floor(x / ds)) + Math.min(ny - 1, Math.floor(y / ds)) * nx];
-  const inflowEdge = (bx) => (dir > 0 ? bx < 0 : bx > dx - 1);
-  d0.set(d);
-  const decay = 1 - Math.min(1, 0.02 * s);
-  const hs = s * ds;                                        // cells of the fine grid per cell of the air, per step
-  // back: phi^ = A(phi)
-  for (let y = 0; y < dy; y++) for (let x = 0; x < dx; x++) {
-    const i = x + y * dx;
-    if (solidD(x, y)) { d1[i] = 0; continue; }
-    const bx = x - velAt(u, x, y) * hs, by = y - velAt(v, x, y) * hs;
-    d1[i] = inflowEdge(bx) ? inflowAt(f, y / ds, f.t) : sampleD(d0, bx, by);
-  }
-  // forward and correct: phi = phi^ + (phi - A^R(phi^)) / 2, clamped to the neighbourhood
-  for (let y = 0; y < dy; y++) for (let x = 0; x < dx; x++) {
-    const i = x + y * dx;
-    if (solidD(x, y)) { d[i] = 0; continue; }
-    const vx = velAt(u, x, y), vy = velAt(v, x, y);
-    const bx = x - vx * hs, by = y - vy * hs;
-    if (inflowEdge(bx)) { d[i] = d1[i] * decay; continue; }
-    const fx = x + vx * hs, fy = y + vy * hs;
-    const back = sampleD(d1, fx, fy);
-    let val = d1[i] + 0.5 * (d0[i] - back);
-    const cx = ((Math.floor(bx) % dx) + dx) % dx, cy = Math.max(0, Math.min(dy - 2, Math.floor(by)));
-    const c1 = (cx + 1) % dx;
-    const n0 = d0[cx + cy * dx], n1 = d0[c1 + cy * dx], n2 = d0[cx + (cy + 1) * dx], n3 = d0[c1 + (cy + 1) * dx];
-    const lo = Math.min(n0, n1, n2, n3), hi = Math.max(n0, n1, n2, n3);
-    val = val < lo ? lo : val > hi ? hi : val;
-    d[i] = val * decay;
-  }
-  if (dn !== d.length) throw new Error('dye grid size');
   return f;
-}
-
-/**
- * Draw the dye onto `small` (a canvas of nx by ny pixels) as a pale wash, then scale it up smooth
- * onto the main context. `bright` is how light the sky is, 0..1: pale air on a pale sky needs more
- * to be seen, and on a night sky less is plenty.
- */
-export function paintFluid(ctx, small, f, w, h, { bright = 0, wind = 0 } = {}) {
-  const strength = Math.min(1, Math.abs(wind) / 10);
-  if (!small || strength < 0.03) return false;
-  const sc = small.getContext('2d');
-  if (!sc) return false;
-  const W = f.dx ?? f.nx, H = f.dy ?? f.ny;
-  if (small.width !== W || small.height !== H) { small.width = W; small.height = H; }
-  const img = sc.createImageData(W, H);
-  const px = img.data;
-  // CLEAR AIR STAYS CLEAR: a smoothstep from 0.1 to 0.5 of dye, so the thin haze the streams leave
-  // behind is gone and each stream reads as a band with an edge; its dense core is a touch brighter
-  // than its body. The ceiling is lower on a dark sky, where pale is loud.
-  const lit = Math.max(0, Math.min(1, bright));
-  const peak = (90 + 60 * lit) * (0.7 + 0.3 * strength);
-  for (let i = 0, j = 0; i < f.d.length; i++, j += 4) {
-    const dv = f.d[i];
-    const t = dv <= 0.1 ? 0 : dv >= 0.5 ? 1 : smooth((dv - 0.1) / 0.4);
-    const core = dv > 0.7 ? Math.min(1, (dv - 0.7) / 0.5) : 0;
-    const a = peak * t + 40 * core;
-    px[j] = 232; px[j + 1] = 239; px[j + 2] = 252; px[j + 3] = a > 255 ? 255 : a;
-  }
-  sc.putImageData(img, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(small, 0, 0, W, H, 0, 0, w, h);
-  return true;
 }
 
 /** The mean horizontal speed of the free air, for tests and for anyone curious. */
@@ -263,9 +163,9 @@ export function meanFlow(f) {
  * round's land -- opens on air that is already flowing round the hills rather than on a front of
  * smoke crawling in from one edge. About a quarter of a millisecond a step.
  */
-export function warmFluid(f, seconds, wind, { dye = true } = {}) {
+export function warmFluid(f, seconds, wind) {
   const steps = Math.ceil((seconds * 1000) / 33);
-  for (let i = 0; i < steps; i++) stepFluid(f, 33, { wind, dye });
+  for (let i = 0; i < steps; i++) stepFluid(f, 33, { wind });
   return steps;
 }
 

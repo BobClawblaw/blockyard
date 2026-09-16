@@ -10,7 +10,7 @@
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from './scorchedfx.js';
-import { airClock, advanceAir, paintRipple, skyBrightness } from './scorchedwind.js';
+import { paintRipple, skyBrightness } from './scorchedwind.js';
 import { makeFluid, stepFluid, setSolid, warmFluid, makeTracers, stepTracers, paintTracers } from './scorchedair.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
@@ -79,7 +79,6 @@ const G = {
   editing: null,                        // 'angle' | 'power' while a number is being typed
   paintNow: 0,                          // the instant the overlay layer paints at
   flowAt: 0,                            // the last frame's clock, for the step
-  air: null,                            // the air's own integrated clock { t, drift }
   airTravel: 0,                         // the signed distance the air has run, for the ripple and the bands
   windDrawnAt: 0,                       // when the wind plane last drew: it is held to thirty a second
   skyLight: 0, skyLightAt: 0,           // how bright the sky behind the air is, sampled now and then
@@ -334,10 +333,6 @@ function drawWind(now) {
   else G.windEased += (wind - G.windEased) * Math.min(1, dt / 420);
   if (Math.abs(wind - G.windEased) < 0.02) G.windEased = wind;
   if (wind !== G.windShown) { G.windShown = wind; G.windAtChange = now; }
-  // the air's own clock, integrated at the eased wind's rate: a change of wind changes how fast it
-  // runs from here on and nothing else (scorchedwind.js, advanceAir)
-  G.air ??= airClock();
-  advanceAir(G.air, dt, G.windEased);
   // THE SIGNED DISTANCE THE AIR HAS TRAVELLED: speed follows the eased wind's size and sign, so the
   // ripple and the bands only ever move downwind, and bend round through zero when the wind turns
   const we = G.windEased, strength = Math.min(1, Math.abs(we) / 10);
@@ -369,7 +364,7 @@ function drawWind(now) {
     G.fluidTops = Int16Array.from(game.tops);
     G.fluidRows = Int16Array.from(G.fluid.floorRow ?? []);
     G.fluidVersion = game.landVersion;
-    warmFluid(G.fluid, 6, we, { dye: false });
+    warmFluid(G.fluid, 6, we);
     G.tracers = makeTracers(G.fluid, 320, 5);
     for (let i = 0; i < 40; i++) stepTracers(G.fluid, G.tracers, 33);   // paths already drawn out when first seen
   } else if (game && G.fluidTops && game.landVersion !== G.fluidVersion) {
@@ -381,7 +376,7 @@ function drawWind(now) {
       return base + Math.round((G.fluidTops[x] - game.tops[x]) * rowsPerCell);
     });
   }
-  stepFluid(G.fluid, dt, { wind: we, dye: false });
+  stepFluid(G.fluid, dt, { wind: we });
   if (G.tracers) stepTracers(G.fluid, G.tracers, dt);
   if (sky && now - (G.skyLightAt ?? 0) > 1500) { G.skyLight = skyBrightness(sky); G.skyLightAt = now; }
   if (G.tracers) paintTracers(ctx, G.fluid, G.tracers, w, h, { bright: G.skyLight ?? 0, wind: we });
