@@ -532,9 +532,13 @@ function drawShop() {
 const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syDemo', 'demo']];
 function drawSwitches() {
   const t = scorchedOptions(loadSettings());
+  const living = t.sky.skyType === 'living';
   for (const [id, key] of SWITCHES) {
     const b = el(id);
     if (!b) continue;
+    // a switch that does nothing is worse than no switch: the star field's two go away while the
+    // living sky is drawing the day
+    if (key === 'stars' || key === 'galaxy') b.classList.toggle('hidden', living);
     b.classList.toggle('on', !!t[key]);
     b.setAttribute('aria-pressed', t[key] ? 'true' : 'false');
   }
@@ -557,9 +561,12 @@ function drawSky() {
   const sky = el('sySky');
   if (!sky) return;
   const t = scorchedOptions(loadSettings());
+  // Under the LIVING SKY the star field's two switches do not apply: the day draws whatever they
+  // say (the sky was going black with them off), and a spiral galaxy does not belong over it.
+  const living = t.sky.skyType === 'living';
   board3d(sky, [], {
     ...SKY,
-    stars: t.stars, galaxy: t.stars && t.galaxy, galaxyAt: t.galaxyAt,
+    stars: living || t.stars, galaxy: !living && t.stars && t.galaxy, galaxyAt: t.galaxyAt,
     starDensity: t.starDensity, starBrightness: t.starBrightness,
     nebulae: t.nebulae, galaxies: t.galaxies, dust: t.dust, clusters: t.clusters, starColours: t.starColours, starGlints: t.starGlints,
     ...t.sky,

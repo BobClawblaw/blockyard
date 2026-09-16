@@ -3133,7 +3133,12 @@ const NO_CANVAS = {};
 // line, so turning the stars off through it RESTYLED THE WHOLE BOARD -- which is not what a switch
 // labelled "Star field" should do. `stars` gates the sky alone; where it is absent the old
 // meaning stands, so every caller that never heard of it behaves exactly as before.
-const starsOn = (o) => !!(o.stars ?? o.space);
+// THE LIVING SKY IS NOT THE STAR FIELD (operator, 2026-09-16: "The sky is not drawing for me ...
+// The background is all black for me"). With the living sky chosen and the Star field switch off,
+// this gate turned off the day as well: a blue afternoon and a moonrise were being hidden by a
+// switch about stars. A board that asks for the living sky draws it whatever that switch says;
+// `stars` still decides the star field, which the living sky brings out at night by itself.
+const starsOn = (o) => o.skyType === 'living' || !!(o.stars ?? o.space);
 // THE GALAXY (operator, 2026-09-12: "I want all the starts slowly rotating to form a spiral
 // galaxy in the background ... Make it a toggle").
 //

@@ -506,7 +506,7 @@ const PANEL_GROUPS = Object.freeze([
   Object.freeze({
     group: 'sky',
     title: 'Sky',
-    note: 'The star field itself, wherever it is drawn — behind the Block space board and behind the candles. Each board decides whether to show it; this decides what it looks like.',
+    note: 'What the sky behind the boards looks like — behind Block space, behind the candles, behind the artillery. Each board decides whether to draw a sky at all; this decides which sky. Space is the star field and its galaxy; the Living sky is a real day and night. Whichever you are not using, its rows below are dimmed.',
     rows: Object.freeze([
       Object.freeze({
         key: 'type', label: 'Sky', kind: 'choice', hint: 'Space is the star field; the living sky is a real day from this machine\u2019s clock \u2014 sun, clouds, dusk, the moon at its phase, and the stars at night',
@@ -515,27 +515,27 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({
         key: 'clock', label: 'Sky clock', kind: 'choice', hint: 'What time the living sky shows',
         options: Object.freeze([['real', 'Real time'], ['cycle', 'A day every 24 minutes'], ['fixed', 'A fixed hour']]),
-      }),
-      Object.freeze({ key: 'hour', label: 'Fixed hour', kind: 'range', min: 0, max: 24, step: 0.25, hint: 'The hour the living sky holds when the clock is fixed; 17.5 is late afternoon' }),
+        dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'hour', label: 'Fixed hour', kind: 'range', min: 0, max: 24, step: 0.25, hint: 'The hour the living sky holds when the clock is fixed; 17.5 is late afternoon', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
       Object.freeze({
         key: 'weather', label: 'Weather', kind: 'choice', hint: 'How much cloud, and whether it rains',
         options: Object.freeze([['clear', 'Clear'], ['scattered', 'Scattered cloud'], ['overcast', 'Overcast'], ['storm', 'Storm: rain and lightning']]),
-      }),
-      Object.freeze({ key: 'cover', label: 'Cloud cover', kind: 'range', min: -1, max: 1, step: 0.05, hint: 'Overrides the weather\u2019s cloud amount, 0 to 1; -1 leaves it to the weather' }),
-      Object.freeze({ key: 'lat', label: 'Latitude', kind: 'range', min: -100, max: 90, step: 1, hint: 'Your latitude, for real sunrise and sunset and the season; -100 leaves a six-to-six day' }),
-      Object.freeze({ key: 'rays', label: 'Sun rays', kind: 'toggle', hint: 'Crepuscular rays when the sun is low' }),
-      Object.freeze({ key: 'rainbow', label: 'Rainbow', kind: 'toggle', hint: 'A rainbow opposite a low sun in scattered weather' }),
-      Object.freeze({ key: 'shooting', label: 'Shooting stars', kind: 'toggle', hint: 'Now and then, at night' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes' }),
+        dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'cover', label: 'Cloud cover', kind: 'range', min: -1, max: 1, step: 0.05, hint: 'Overrides the weather\u2019s cloud amount, 0 to 1; -1 leaves it to the weather', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'lat', label: 'Latitude', kind: 'range', min: -100, max: 90, step: 1, hint: 'Your latitude, for real sunrise and sunset and the season; -100 leaves a six-to-six day', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'rays', label: 'Sun rays', kind: 'toggle', hint: 'Crepuscular rays when the sun is low', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'rainbow', label: 'Rainbow', kind: 'toggle', hint: 'A rainbow opposite a low sun in scattered weather', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'shooting', label: 'Shooting stars', kind: 'toggle', hint: 'Now and then, at night', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
       Object.freeze({
         key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice',
         hint: 'Where its middle sits. A corner crowds the bright centre there and sweeps the arms across; behind the board shows the whole spiral',
         options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-      }),
-      Object.freeze({ key: 'nebulae', label: 'Nebulae', kind: 'toggle', hint: 'Clouds of gas along the spiral arms, in the colours of star-forming lanes' }),
-      Object.freeze({ key: 'dust', label: 'Dust lanes', kind: 'toggle', hint: 'Dark ribbons along the inner edge of each arm, the way a real spiral carries them' }),
-      Object.freeze({ key: 'clusters', label: 'Star clusters', kind: 'toggle', hint: 'Tight knots of stars out in the halo, turning with the galaxy' }),
-      Object.freeze({ key: 'galaxies', label: 'Distant galaxies', kind: 'toggle', hint: 'Other galaxies, small and faint and far, behind everything else' }),
+        dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
+      Object.freeze({ key: 'nebulae', label: 'Nebulae', kind: 'toggle', hint: 'Clouds of gas along the spiral arms, in the colours of star-forming lanes', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
+      Object.freeze({ key: 'dust', label: 'Dust lanes', kind: 'toggle', hint: 'Dark ribbons along the inner edge of each arm, the way a real spiral carries them', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
+      Object.freeze({ key: 'clusters', label: 'Star clusters', kind: 'toggle', hint: 'Tight knots of stars out in the halo, turning with the galaxy', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
+      Object.freeze({ key: 'galaxies', label: 'Distant galaxies', kind: 'toggle', hint: 'Other galaxies, small and faint and far, behind everything else', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
       Object.freeze({ key: 'colours', label: 'Star colours', kind: 'toggle', hint: 'Warm old stars in the middle, blue-white young ones in the arms. Off is one colour of starlight' }),
       Object.freeze({ key: 'glints', label: 'Star glints', kind: 'toggle', hint: 'The halo and cross glint on the brightest stars' }),
       Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 8, step: 0.1, hint: 'How many stars, against the shipped number. High values are a lot of drawing on a big panel' }),
@@ -684,12 +684,12 @@ const PANEL_GROUPS = Object.freeze([
     title: 'Scorched Yard',
     note: 'The artillery game. The switches are also on the game\u2019s own panel; the rules below take effect at the next new game.',
     rows: Object.freeze([
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the field' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
+      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the field', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
       Object.freeze({
         key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy\u2019s centre sits on the panel',
         options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-      }),
+        dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The shot, the blast, a hit, a fall, a death' }),
       Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'A march in D minor, on oscillators' }),
       Object.freeze({ key: 'talk', label: 'Talk', kind: 'toggle', hint: 'What the tanks say when they fire, are hit, or die' }),
@@ -1047,6 +1047,24 @@ export function isDefault(s) {
  * the point of the mode; these are the user's preferences about how it is drawn.
  */
 /** The living sky's settings as board options, for every board that draws a sky. */
+/**
+ * THE DEEP SKY belongs to the star field: a spiral galaxy, nebulae, dust lanes, halo clusters and
+ * distant galaxies are wrong over a real day and a real night (operator, 2026-09-16: "It's counter
+ * intuitive in the preferences to display a spiral galaxy for a night/day scene"). Gated here like
+ * the Space effects, so choosing Space again brings them all back exactly as they were saved.
+ */
+export function deepSky(n) {
+  const off = n.sky.type === 'living';
+  return {
+    galaxy: n.sky.galaxy && !off,
+    galaxyAt: n.sky.galaxyAt,
+    nebulae: n.sky.nebulae && !off,
+    galaxies: n.sky.galaxies && !off,
+    dust: n.sky.dust && !off,
+    clusters: n.sky.clusters && !off,
+  };
+}
+
 export function skyExtras(n) {
   const sky = n.sky;
   return {
@@ -1081,9 +1099,7 @@ export function spaceOptions(s) {
     // the same sky the markets board draws: this board had stars and no way to thin them
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
-    galaxy: n.sky.galaxy,
-    galaxyAt: n.sky.galaxyAt,
-    nebulae: n.sky.nebulae, galaxies: n.sky.galaxies, dust: n.sky.dust, clusters: n.sky.clusters,
+    ...deepSky(n),
     starColours: n.sky.colours, starGlints: n.sky.glints,
     ...skyExtras(n),
   };
@@ -1219,9 +1235,7 @@ export function marketsOptions(s) {
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     ...skyExtras(n),
-    galaxy: n.sky.galaxy,
-    galaxyAt: n.sky.galaxyAt,
-    nebulae: n.sky.nebulae, galaxies: n.sky.galaxies, dust: n.sky.dust, clusters: n.sky.clusters,
+    ...deepSky(n),
     starColours: n.sky.colours, starGlints: n.sky.glints,
     // never, at any setting: the halo under the grid lines is not wanted on this board
     neonHalo: 'rgba(0,0,0,0)',

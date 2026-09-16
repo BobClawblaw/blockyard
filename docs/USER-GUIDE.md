@@ -830,9 +830,9 @@ score at the end wins, and your score goes in the high-score table, this browser
 
 ### The switches on the panel
 
-**Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's; with the
-Living sky on, each round draws its own hour of it, dawn to night, unless **A sky per round** is
-off). **Music** is a march in D minor on oscillators. **Sound** is the shot, the blast, a hit, a
+**Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's). They are
+about the star field, so with the Living sky chosen they are not shown: the day draws itself, and
+each round takes its own hour of it, dawn to night, unless **A sky per round** is off. **Music** is a march in D minor on oscillators. **Sound** is the shot, the blast, a hit, a
 fall, a death. **Talk** is what the tanks say when they fire, are hit, or die. **Fast** flies
 shells at three times the pace. **Watch** is the attract mode: the computer takes your chair as
 well, so every seat is a computer player and the war runs on by itself — a round rolls into the

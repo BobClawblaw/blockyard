@@ -1188,15 +1188,21 @@ async function boot() {
             : `<span class="cfgrange"><input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${formatRangeValue(r.step, v)}</span></span>`;
       // (and the nine custom colours of the Appearance tab the same way: two across, hint as tooltip,
       // dimmed while another theme is chosen, so the tab is a screen)
+      // A CONTROL THAT DOES NOTHING RIGHT NOW SAYS SO (operator, 2026-09-16: "It's counter
+      // intuitive in the preferences to display a spiral galaxy for a night/day scene"). A row
+      // whose `dimWhen` is true of the current settings is dimmed and says which sky it belongs
+      // to, rather than being hidden: the setting is still there, and still remembered.
+      const off = (r.custom && s.appearance.theme !== 'custom') || (typeof r.dimWhen === 'function' && r.dimWhen(s));
+      const idle = off ? ' idle' : '';
+      const note = off && r.dimNote ? ` <em>${r.dimNote}</em>` : '';
       if ((compact && r.kind === 'toggle') || r.custom) {
         const start = open ? '' : '<div class="cfgrows2">';
         open = true;
-        const idle = r.custom && s.appearance.theme !== 'custom' ? ' idle' : '';
-        return `${start}<div class="cfgrow compact${idle}" title="${String(r.hint).replace(/"/g, '&quot;')}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span></div>`;
+        return `${start}<div class="cfgrow compact${idle}" title="${String(off && r.dimNote ? `${r.dimNote} — ${r.hint}` : r.hint).replace(/"/g, '&quot;')}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span></div>`;
       }
       const close = open ? '</div>' : '';
       open = false;
-      return `${close}<div class="cfgrow"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}</i></div>`;
+      return `${close}<div class="cfgrow${idle}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}${note}</i></div>`;
       }).join('') + (open ? '</div>' : '');
       // the Space effects tab says so while the Living sky has them off (settings.js spaceOptions)
       const held = g.group === 'effects' && s.sky.type === 'living' ? '<p class="cfgheld">Off while the sky is the Living sky (Sky tab): these play over space. Your switches are kept.</p>' : '';
