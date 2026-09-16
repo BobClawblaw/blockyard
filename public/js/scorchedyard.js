@@ -51,12 +51,14 @@ const DUST_MS = 700;                   // dust where fallen dirt lands
 const TALK_MS = 2400;
 const FIRE_MS = 2600;                  // how long napalm burns on screen
 const BEAM_MS = 420;                   // how long a laser's line stays
+const WIND_MS = 33;                    // the wind redraws at 30 a second whatever else is happening
 const DEMO_ROUND_MS = 4200;            // attract mode: how long the round's scoreboard stands before the next
 const DEMO_WAR_MS = 7000;              // and how long the war's result stands before a fresh one
 
 const G = {
   game: null, running: false, paused: false, why: '', raf: null, last: 0, dirty: true, bound: false,
   state: null, h: null,
+  windAt: 0,                            // when the wind layer last moved, so it keeps blowing while the board is idle
   aiAt: 0,                              // when the computer's turn began, for the pause before it fires
   settleT0: 0, settleMs: 0,             // the fall on screen
   landKey: '',                          // what the land canvas last drew: the land version and whether dirt is falling
@@ -124,57 +126,84 @@ const mixHex = (a, b, k) => {
 const hash = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
 
 /**
- * A blast on screen (M4, "make it look fabulous"): a flash that swells and fades, a shockwave
- * ring racing out, sparks flung out and falling, and then smoke -- puffs that rise, grow, drift on
- * the wind and darken -- for a couple of seconds after. Tiles, so the engine draws them like
- * everything else; the flash and the sparks are gone after BLAST_MS, the smoke after SMOKE_MS.
+ * THE BLAST, IN BLOCKS (operator, 2026-09-16: "the bubble sprites look terrible on the terrain
+ * explosions"). The first cut drew the fireball, the shockwave, the sparks and the smoke as
+ * spheres, and the engine draws a sphere with a rim and a glint: at any size a cloud of them is a
+ * cloud of BUBBLES sitting on the dirt. Nothing about that belongs in a game whose land, tanks and
+ * shells are all cubes.
+ *
+ * So the explosion is made of the same thing as everything else -- blocks, on the field's own grid.
+ * The fireball is a disc of them, coarse at the centre of a nuke and fine for a baby missile, hot
+ * in the middle and darker at the rim; the shockwave is a ring of small ones racing out; the
+ * sparks are single blocks thrown on ballistic paths; and the smoke is blocks that rise, spread,
+ * drift downwind, grow, darken and thin away (their alpha, not their size, is what fades, so they
+ * never shrink to glints). Alpha is a tile field the renderer already carries.
  */
+const HOT = Object.freeze(['#fff3cd', '#ffc457', '#f3813a', '#a83a20']);
+const RIOT = Object.freeze(['#e8f7ff', '#a8dcff', '#6fb6e8', '#3f7fae']);
+
 export function blastTiles(blasts, now, ms = BLAST_MS, { wind = 0 } = {}) {
   const out = [];
   for (const b of blasts) {
     const age = now - b.t0;
     const t = Math.min(1, Math.max(0, age / ms));
     if (t < 1) {
-      const flash = t < 0.35 ? (0.5 + t / 0.35 * 0.5) : Math.max(0, 1 - (t - 0.35) / 0.65);
-      const fr = b.r * (0.6 + 0.8 * t);
-      const hot = b.riot ? '#9fd8ff' : t < 0.3 ? '#fff6d0' : t < 0.6 ? '#ffb347' : '#b8472a';
-      out.push({ txid: `flash${b.id}`, x: b.x - fr, y: b.y - fr, s: fr * 2, tall: 0.05, sphere: true, color: shadeTo(hot, flash) });
-      // the shockwave: a ring of beads racing out and thinning
+      const palette = b.riot ? RIOT : HOT;
+      // the fireball: a disc of blocks on a grid coarse enough that a nuke costs about a hundred
+      const fr = b.r * (0.55 + 0.8 * t);
+      const step = Math.max(0.55, fr / 5.5);
+      const fade = t < 0.3 ? 1 : Math.max(0, 1 - (t - 0.3) / 0.7);
+      for (let dy = -fr; dy <= fr + 1e-6; dy += step) {
+        for (let dx = -fr; dx <= fr + 1e-6; dx += step) {
+          const d = Math.hypot(dx, dy);
+          if (d > fr) continue;
+          const y = b.y + dy;
+          if (y < 0) continue;
+          const k = fr > 0 ? d / fr : 0;
+          const col = palette[Math.min(palette.length - 1, Math.floor(k * 3 + t * 0.8))];
+          out.push({
+            txid: `fire${b.id}_${dx.toFixed(2)}_${dy.toFixed(2)}`,
+            x: b.x + dx - step / 2, y: y - step / 2, s: step * 0.92, tall: step * 0.92,
+            color: col, alpha: Math.max(0, fade * (1 - 0.55 * k)),
+          });
+        }
+      }
+      // the shockwave: a ring of small blocks racing out and thinning
       if (t < 0.45 && !b.riot) {
-        const rr = b.r * (0.4 + 3.2 * t), nb = 22;
+        const rr = b.r * (0.4 + 3.2 * t), nb = 26, sz = Math.max(0.22, b.r * 0.1);
         for (let i = 0; i < nb; i++) {
           const a = (i / nb) * Math.PI * 2;
           const x = b.x + Math.cos(a) * rr, y = b.y + Math.sin(a) * rr;
           if (y < 0) continue;
-          out.push({ txid: `ring${b.id}_${i}`, x: x - 0.1, y: y - 0.1, s: 0.2, tall: 0.2, sphere: true, color: shadeTo('#fff2d8', 1 - t / 0.45) });
+          out.push({ txid: `ring${b.id}_${i}`, x: x - sz / 2, y: y - sz / 2, s: sz, tall: sz, color: '#ffe9b8', alpha: Math.max(0, 1 - t / 0.45) });
         }
       }
+      // what the blast throws
       const n = b.big ? 22 : 12;
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + b.id * 0.7;
         const sp = (0.8 + ((i * 7) % 5) / 5) * b.r * 2.2;
         const x = b.x + Math.cos(a) * sp * t, y = b.y + Math.sin(a) * sp * t - 6 * t * t;
         if (y < 0) continue;
-        out.push({ txid: `spark${b.id}_${i}`, x: x - 0.12, y: y - 0.12, s: 0.24, tall: 0.24, sphere: true, color: shadeTo(t < 0.5 ? '#ffd27a' : '#ff7a3a', 1 - t * 0.7) });
+        const sz = 0.14 + (i % 3) * 0.06;
+        out.push({ txid: `spark${b.id}_${i}`, x: x - sz / 2, y: y - sz / 2, s: sz, tall: sz, color: t < 0.4 ? '#ffb74d' : '#e2601f', alpha: Math.max(0, 1 - t * 0.9) });
       }
     }
-    // the smoke: MANY SMALL beads, not a few big balls -- the engine draws a sphere with a rim and
-    // a highlight, and at a cell or more across a dark one reads as a bowling ball (the first cut
-    // filled the sky with eyes); at a third of a cell the highlight is a glint and a cloud of them
-    // reads as smoke. They rise, fan out, drift on the wind and darken.
+    // the smoke: blocks, rising and fanning, drifting downwind, growing and thinning
     if (!b.riot && b.r >= 1.4 && age < SMOKE_MS && age > 80) {
       const u = age / SMOKE_MS;
-      const np = Math.min(60, 14 + Math.round(b.r * 5));
+      const np = Math.min(64, 14 + Math.round(b.r * 4.5));
       for (let i = 0; i < np; i++) {
         const h = (k) => hash(b.id * 13 + i * 7 + k);
         const a = Math.PI * (0.12 + 0.76 * h(1));                       // upward, fanned
-        const rise = (1.0 + h(2) * 1.8) * b.r * Math.sqrt(u);
+        const rise = (0.8 + h(2) * 1.5) * b.r * Math.sqrt(u);
         const x = b.x + Math.cos(a) * rise * 0.75 + wind * 0.25 * age / 1000 + (h(3) - 0.5) * b.r * 0.8 * u;
         const y = b.y + Math.sin(a) * rise + 0.3 + Math.sin(age / 400 + h(5) * 6) * 0.15;
-        const s = Math.min(0.55, 0.22 + 0.25 * u) * (0.7 + h(4) * 0.5);
-        const col = mixHex(u < 0.3 ? '#9a98a3' : '#6a6974', '#44434d', Math.max(0, (u - 0.4) / 0.6));
-        if (y < 0 || u > 0.85 + h(6) * 0.15) continue;                 // each bead thins out on its own time
-        out.push({ txid: `smoke${b.id}_${i}`, x: x - s / 2, y: y - s / 2, s, tall: s * 0.5, sphere: true, color: col });
+        const life = 0.8 + h(6) * 0.2;
+        if (y < 0 || u > life) continue;                                // each block thins out on its own time
+        const s = (0.45 + h(4) * 0.4) * (0.75 + 1.1 * u) * Math.min(1.7, 0.85 + b.r * 0.075);
+        const col = mixHex(u < 0.3 ? '#a3a1ab' : '#6f6e79', '#403f49', Math.max(0, (u - 0.35) / 0.65));
+        out.push({ txid: `smoke${b.id}_${i}`, x: x - s / 2, y: y - s / 2, s, tall: s * 0.8, color: col, alpha: Math.max(0, 0.55 * (1 - u / life)) });
       }
     }
   }
@@ -272,27 +301,93 @@ export function beamTiles(beams, now, ms = BEAM_MS) {
 
 /**
  * THE WIND MADE VISIBLE (operator, 2026-09-16: "some sort of effects that reflect the change in
- * wind speed"): motes -- dust, seed, ash -- drifting across the field at the wind's speed and in its
- * direction, more of them and faster the harder it blows, with a slow rise and fall so they read
- * as carried rather than sliding. None in still air. Their count and pace change the moment the
- * wind does, which is every turn.
+ * wind speed"; then "the dots don't convey enough motion"; then "it's swaying back and forth and
+ * clipping vs the terrain. It should be drawn behind everything else on a flat plane").
+ *
+ * Three tries. Dots in the scene said nothing about speed. Streaks in the scene said it, but they
+ * were tiles in a 3D board: they bobbed as they crossed, and a tile at a cell the land also
+ * occupies is drawn over the dirt, so they cut into the hills. Both faults come from putting the
+ * air in the same space as the ground.
+ *
+ * So the wind is its OWN FLAT LAYER, a plain 2D canvas between the sky and the land. It knows
+ * nothing about cells, the camera or the terrain: streaks run dead level from one side to the
+ * other, and the land canvas in front of them hides whatever passes behind a hill, which is
+ * exactly what should happen. Nothing sways; nothing clips.
+ *
+ * A streak is a tapered dash whose LENGTH is the speed -- a breeze draws short marks, a gale long
+ * ones -- and they run in three bands of depth: the far ones short, dim and slow, the near ones
+ * long, pale and quick, so the air has thickness. A slow gust wave lengthens and quickens them
+ * together. Nothing at all in still air.
  */
-export function windTiles(g, now) {
-  const w = g?.wind ?? 0;
-  const strength = Math.min(1, Math.abs(w) / 10);
-  if (strength < 0.03) return [];
-  const n = Math.round(8 + 40 * strength);
+const hashAt = (i) => (k) => { const x = Math.sin((i * 7 + k) * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+// Three depths. The far band is short, dim and slow; the near one longer, paler and quicker. The
+// colours are mid greys on purpose: pale enough to read against a night sky, dark enough to read
+// against the Living sky's blue, and never so bright that a streak looks like a tracer round.
+const BANDS = Object.freeze([
+  Object.freeze({ speed: 0.55, len: 0.5, th: 0.7, near: '#6f7278', far: '#5d6066' }),
+  Object.freeze({ speed: 0.82, len: 0.78, th: 1.0, near: '#8e8c84', far: '#7b7972' }),
+  Object.freeze({ speed: 1.15, len: 1.1, th: 1.4, near: '#b3ada0', far: '#9e9890' }),
+]);
+
+/**
+ * The streaks for a canvas `w` x `h` CSS pixels at `now`, as plain geometry: `{ x, y, len, th,
+ * colour }` with x the centre. Pure, so a test can hold the wind to its speed and its shape.
+ */
+export function windStreaks(wind, now, w, h) {
+  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
+  if (!w || !h || strength < 0.03) return [];
+  const dir = wind < 0 ? -1 : 1;
   const t = now / 1000;
+  // THE GUST NEVER PULLS BACKWARDS (operator: "the wind switches directions when idle"). A gust
+  // that multiplies `t * speed` moves a streak BACK whenever it eases off, because the whole
+  // elapsed time is rescaled. So the gust is a rate, and the distance travelled is its integral:
+  // t + (a/w)*(1 - cos(w*t)) rises for every t while a < 1, so the air only ever goes one way.
+  const GA = 0.3, GW = 0.55;
+  const phase = t + (GA / GW) * (1 - Math.cos(GW * t));
+  const gustLen = 1 + GA * Math.sin(GW * t);                 // the same wave, for the length alone
+  const n = Math.round(18 + 54 * strength);
   const out = [];
   for (let i = 0; i < n; i++) {
-    const h = (k) => { const x = Math.sin((i * 7 + k) * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
-    const speed = (2 + 9 * strength) * (0.6 + h(1) * 0.8);
-    const x = (((h(2) * COLS + t * speed * Math.sign(w)) % COLS) + COLS) % COLS;
-    const y = 4 + h(3) * (ROWS - 8) + Math.sin(t * (0.6 + h(4)) + h(5) * 6) * 1.2;
-    const s = 0.12 + h(6) * 0.12;
-    out.push({ txid: `mote${i}`, x: x - s / 2, y: y - s / 2, s, tall: s, sphere: true, color: h(7) > 0.7 ? '#e8dcc0' : '#c9c2b6' });
+    const h6 = hashAt(i);
+    const band = BANDS[i % BANDS.length];
+    const len = w * (0.011 + 0.062 * strength) * band.len * (0.55 + h6(6) * 0.9) * gustLen;
+    const speed = w * (0.05 + 0.5 * strength) * band.speed * (0.7 + h6(1) * 0.6);
+    const span = w + len * 2;
+    const x = ((((h6(2) * span + phase * speed * dir) % span) + span) % span) - len;
+    out.push({ x, y: Math.round(h6(3) * h) + 0.5, len, th: band.th * (0.8 + h6(4) * 0.6), colour: h6(5) > 0.5 ? band.near : band.far, dir });
   }
   return out;
+}
+
+/** Paint them: a tapered quad each, flat colour, nothing else -- the canvas rules hold here too. */
+export function paintWind(ctx, streaks, w, h) {
+  ctx.clearRect(0, 0, w, h);
+  for (const s of streaks) {
+    const tail = s.x - (s.len / 2) * s.dir, head = s.x + (s.len / 2) * s.dir;
+    const waist = s.x - (s.len * 0.2) * s.dir;
+    ctx.fillStyle = s.colour;
+    ctx.beginPath();
+    ctx.moveTo(head, s.y);
+    ctx.lineTo(waist, s.y - s.th);
+    ctx.lineTo(tail, s.y);
+    ctx.lineTo(waist, s.y + s.th);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+function drawWind(now) {
+  const c = el('syWind');
+  if (!c) return;
+  const w = c.clientWidth, h = c.clientHeight;
+  if (!w || !h) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
+  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
+  const ctx = c.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paintWind(ctx, windStreaks(G.game?.wind ?? 0, now, w, h), w, h);
 }
 
 /** The cells of the runs still falling, as "x,y" keys: left off the land canvas while the actor canvas animates them. */
@@ -322,7 +417,7 @@ export function actorLayer(g, now, { settleT0 = 0, settleMs = 1, blasts = [], fi
       }
     }
   }
-  out.push(...windTiles(g, now), ...fireTiles(fires, now), ...beamTiles(beams, now), ...dustTiles(dusts, now), ...blastTiles(blasts, now, BLAST_MS, { wind: g.wind ?? 0 }), ...deathTiles(deaths, now));
+  out.push(...fireTiles(fires, now), ...beamTiles(beams, now), ...dustTiles(dusts, now), ...blastTiles(blasts, now, BLAST_MS, { wind: g.wind ?? 0 }), ...deathTiles(deaths, now));
   return out;
 }
 
@@ -489,6 +584,7 @@ function draw(now = performance.now()) {
       board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }), opts(FIELD));
       G.landKey = key;
     }
+    drawWind(now);
     if (field) board3d(field, actorLayer(g, now, { settleT0: G.settleT0, settleMs: G.settleMs, blasts: G.blasts, fires: G.fires, beams: G.beams, deaths: G.deaths, dusts: G.dusts, falls: G.falls }), opts(ACTORS));
   }
   drawStats();
@@ -607,6 +703,11 @@ function frame(t) {
   if (G.falls.size) { for (const [id, f] of G.falls) if (t - f.t0 >= f.ms) G.falls.delete(id); G.dirty = true; }
   if (G.fires.length) { G.fires = G.fires.filter((f) => t - f.t0 < FIRE_MS); G.dirty = true; }
   if (G.beams.length) { G.beams = G.beams.filter((b) => t - b.t0 < BEAM_MS); G.dirty = true; }
+  // THE WIND NEVER STOPS (operator: "the wind effects stop when nothing is animating"). The loop
+  // only drew when something had changed, so on your own turn -- the longest part of the game --
+  // the air froze mid-gust. The wind layer is its own reason to redraw, at its own rate, and the
+  // land canvas is cached, so this repaints the actors and nothing else.
+  if (Math.abs(g.wind ?? 0) >= 0.3 && t - G.windAt >= WIND_MS) { G.windAt = t; G.dirty = true; }
   if (before !== g.phase) G.dirty = true;
   if (G.dirty) { draw(t); G.dirty = false; }
   if (g.phase !== 'over') G.raf = requestAnimationFrame(frame);

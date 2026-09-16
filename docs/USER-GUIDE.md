@@ -814,11 +814,13 @@ while you can afford it. The computer players shop at the same moment, in their 
 buy stays with you for the rest of the game.
 
 The HUD shows whose turn it is, the round, the **wind** (an arrow and its strength: it changes
-every turn, and it bends every shot; you can see it too — dust drifts across the field at its speed
-and direction, the pennant on every turret streams downwind, and the Living sky's clouds go with
-it), your angle, power and weapon with its count, and every
+every turn, and it bends every shot; you can see it too — streaks of moving air run level across
+the sky behind the land, short and slow in a breeze, long and quick in a gale, in three bands of
+depth so the air has thickness; the pennant on every turret streams downwind; and the Living sky's
+clouds go with it), your angle, power and weapon with its count, and every
 tank's health. **Fire** on the HUD does what space does. A shell that lands carves a circle out of
-the dirt; the dirt above the crater falls until it rests, and a tank left in the air falls with
+the dirt; the blast itself is blocks, a disc of fire on the field's own grid that throws embers and
+leaves a plume of smoke rising and drifting downwind; the dirt above the crater falls until it rests, and a tank left in the air falls with
 it and is hurt by the fall. A blast hurts every tank in reach, most at its centre. A tank at zero
 health explodes, and its blast can take a neighbour with it.
 

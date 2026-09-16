@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, dustTiles, fallingTanks, windTiles, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, blastTiles, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, dustTiles, fallingTanks, windStreaks, paintWind, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { THEMES, THEME_SCORCHED, setMusic } from '../public/js/tetsound.js';
 import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
 
@@ -296,7 +296,7 @@ test('the tiles for the engine: a cube per cell of dirt by stratum, tanks are hu
   assert.ok(!tiles(g, { trace: false }).some((t) => t.txid.startsWith('trace')));
   // the screen's tiles: a blast is a flash and sparks that are gone after their time
   const bt = blastTiles([{ id: 1, x: 10, y: 10, r: 2.5, t0: 0, big: false }], 100);
-  assert.ok(bt.length > 5 && bt.every((t) => t.sphere), 'a flash and sparks, all balls');
+  assert.ok(bt.length > 5 && bt.every((t) => !t.sphere && t.alpha != null), 'a fireball and sparks, all blocks');
   assert.equal(blastTiles([{ id: 1, x: 10, y: 10, r: 2.5, t0: 0 }], 5000).length, 0, 'gone after');
   // falling dirt is lifted by what it has left to fall on the actor layer, off the land layer meanwhile, and lands on time
   const h = three();
@@ -760,8 +760,10 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const b = [{ id: 1, x: 40, y: 20, r: 4, t0: 0, big: true }];
   const early = blastTiles(b, 200, 650, { wind: 3 }), late = blastTiles(b, 1500, 650, { wind: 3 }), gone = blastTiles(b, 3000);
   assert.ok(early.some((t) => t.txid.startsWith('ring')), 'a shockwave ring early');
-  assert.ok(early.some((t) => t.txid.startsWith('flash')));
-  assert.ok(late.some((t) => t.txid.startsWith('smoke')) && !late.some((t) => t.txid.startsWith('flash')), 'smoke after the flash is gone');
+  assert.ok(early.some((t) => t.txid.startsWith('fire')), 'and a fireball of blocks under it');
+  assert.ok(early.every((t) => !t.sphere), 'nothing in a blast is a ball: the land is cubes and so is what hits it');
+  assert.ok(late.some((t) => t.txid.startsWith('smoke')) && !late.some((t) => t.txid.startsWith('fire')), 'smoke after the fireball is gone');
+  assert.ok(late.filter((t) => t.txid.startsWith('smoke')).every((t) => t.alpha > 0 && t.alpha <= 0.6), 'and it thins by its alpha, not by shrinking');
   const smokeA = blastTiles(b, 1500, 650, { wind: 6 }).filter((t) => t.txid.startsWith('smoke')), smokeB = blastTiles(b, 1500, 650, { wind: -6 }).filter((t) => t.txid.startsWith('smoke'));
   const mean = (l) => l.reduce((n, t) => n + t.x, 0) / l.length;
   assert.ok(mean(smokeA) > mean(smokeB), 'the smoke drifts downwind');
@@ -783,12 +785,39 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   const drawn = actorLayer(g, 500, { falls });
   assert.ok(drawn.some((t) => t.txid === 'chute1' && t.poly), 'the canopy is drawn over the tank under it');
   assert.ok(drawn.some((t) => t.txid === 'track0'), 'a tank has tracks now');
-  // the wind: motes only when it blows, more and faster the harder
-  g.wind = 0; assert.equal(windTiles(g, 0).length, 0);
-  g.wind = 2; const few = windTiles(g, 0).length; g.wind = 9; const many = windTiles(g, 0).length;
-  assert.ok(few > 0 && many > few, `more motes in a gale (${few} -> ${many})`);
-  g.wind = 5; const p0 = windTiles(g, 0)[0].x, p1 = windTiles(g, 1000)[0].x;
-  assert.ok(((p1 - p0) % COLS + COLS) % COLS > 0 && ((p1 - p0) % COLS + COLS) % COLS < COLS / 2, 'they move downwind');
+  // THE WIND: its own flat layer behind the land, so it never clips the terrain and never sways
+  assert.equal(windStreaks(0, 0, 800, 400).length, 0, 'still air draws nothing');
+  const few = windStreaks(2, 0, 800, 400), many = windStreaks(9, 0, 800, 400);
+  assert.ok(many.length > few.length, `more streaks in a gale (${few.length} -> ${many.length})`);
+  assert.ok(many[0].len > few[0].len * 1.5, 'and each one is longer: the length is the speed');
+  // one direction, always: sampled every tenth of a second, no streak ever goes upwind
+  for (const wind of [3, -7]) {
+    const dir = Math.sign(wind);
+    let prev = windStreaks(wind, 0, 800, 400).map((t) => t.x);
+    for (let ms = 100; ms <= 12000; ms += 100) {
+      const nowStreaks = windStreaks(wind, ms, 800, 400);
+      nowStreaks.forEach((t, i) => {
+        const d = (t.x - prev[i]) * dir;
+        assert.ok(d >= -1e-9 || Math.abs(d) > 200, `a streak drifts downwind or wraps, never back (${d.toFixed(2)} at ${ms}ms)`);
+      });
+      prev = nowStreaks.map((t) => t.x);
+    }
+  }
+  // it stays on its canvas and knows nothing of cells
+  for (const t of windStreaks(9, 3000, 800, 400)) {
+    assert.ok(t.y >= 0 && t.y <= 400 && t.x > -t.len - 1 && t.x < 800 + t.len + 1, 'on the plane');
+    assert.ok(t.th > 0 && t.colour.startsWith('#'));
+  }
+  // and it paints with flat fills only
+  const ops = [];
+  const ctx = { clearRect: () => ops.push('clear'), beginPath: () => {}, moveTo: () => {}, lineTo: () => {}, closePath: () => {}, fill: () => ops.push('fill'), set fillStyle(v) { ops.push(`fill:${v}`); } };
+  paintWind(ctx, windStreaks(6, 0, 800, 400), 800, 400);
+  assert.equal(ops[0], 'clear');
+  assert.ok(ops.filter((o) => o === 'fill').length === windStreaks(6, 0, 800, 400).length, 'one quad per streak');
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /t - G\.windAt >= WIND_MS\) \{ G\.windAt = t; G\.dirty = true; \}/, 'the loop marks itself dirty for the wind alone');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('id="syWind"') < html.indexOf('id="syLand"'), 'the plane is behind the land');
   assert.ok(actorLayer(g, 0).some((t) => t.txid.startsWith('flag')), 'a pennant streams on every turret');
   // the march
   assert.ok(THEMES.scorched && THEMES.scorched.notes === THEME_SCORCHED && THEMES.scorched.bpm > 60);
