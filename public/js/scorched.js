@@ -903,6 +903,32 @@ export function leader(g) {
 }
 
 // ------------------------------------------------------------------- the picture
+// WHAT EACH SHELL LOOKS LIKE IN THE AIR (operator, 2026-09-16: "Everything is the same white dot
+// effect for the shot. We need to add some effects and different colors ... to the different
+// types of projectiles"). The core is the ball the tile layer draws; the glow and the trail are
+// painted over it by scorchedfx.js. Keyed by the weapon's BEHAVIOUR, with the two nukes and the
+// two sandhogs singled out because they are the ones a player most needs to see coming.
+export const SHELL_LOOKS = Object.freeze({
+  blast: Object.freeze({ core: '#fff2c8', glow: [255, 200, 120], trail: 'flame', size: 0.5 }),
+  nuke: Object.freeze({ core: '#e6ffc4', glow: [150, 255, 110], trail: 'radio', size: 0.7 }),
+  mirv: Object.freeze({ core: '#ecdcff', glow: [190, 150, 255], trail: 'comet', size: 0.55 }),
+  leapfrog: Object.freeze({ core: '#d2ffc8', glow: [120, 255, 150], trail: 'comet', size: 0.55 }),
+  funky: Object.freeze({ core: '#ffffff', glow: null, trail: 'rainbow', size: 0.5 }),
+  tracer: Object.freeze({ core: '#c9ced8', glow: null, trail: 'dash', size: 0.3 }),
+  roller: Object.freeze({ core: '#9aa2ad', glow: [200, 200, 215], trail: 'sparks', size: 0.6 }),
+  riot: Object.freeze({ core: '#c0f2ff', glow: [150, 220, 255], trail: 'wisp', size: 0.55 }),
+  dirt: Object.freeze({ core: '#b07a40', glow: [180, 130, 80], trail: 'clods', size: 0.6 }),
+  napalm: Object.freeze({ core: '#ffb347', glow: [255, 120, 40], trail: 'fire', size: 0.5 }),
+  digger: Object.freeze({ core: '#ff9a3c', glow: [255, 150, 60], trail: 'drill', size: 0.5 }),
+  sandhog: Object.freeze({ core: '#ff7a3c', glow: [255, 110, 60], trail: 'drill', size: 0.55 }),
+});
+export function shellLook(weaponId) {
+  if (weaponId === 'nuke' || weaponId === 'babyNuke') return SHELL_LOOKS.nuke;
+  if (weaponId === 'funkyBomblet') return SHELL_LOOKS.funky;
+  if (weaponId === 'liquidDirt') return SHELL_LOOKS.dirt;
+  const kind = WEAPONS[weaponId]?.kind;
+  return SHELL_LOOKS[kind] ?? SHELL_LOOKS.blast;
+}
 const strataColour = (y, top, x) => {
   const f = top > 0 ? (y + 0.5) / top : 0;
   let s = STRATA[STRATA.length - 1], i = STRATA.length - 1;
@@ -984,7 +1010,9 @@ export function actorTiles(g, { trace = true, tankY = null, chutes = null } = {}
     }
   }
   g.shells.forEach((s, i) => {
-    out.push({ txid: `shell${i}`, x: s.x - 0.25, y: s.y - 0.25, s: 0.5, tall: 0.5, sphere: true, color: s.boring ? '#ffb347' : '#fff2c8' });
+    const look = shellLook(s.weapon);
+    const sz = look.size;
+    out.push({ txid: `shell${i}`, x: s.x - sz / 2, y: s.y - sz / 2, s: sz, tall: sz, sphere: true, color: s.boring ? '#ffb347' : look.core });
   });
   if (trace && g.lastPath.length > 2) {
     const every = Math.max(1, Math.floor(g.lastPath.length / 40));

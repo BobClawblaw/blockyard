@@ -9,13 +9,13 @@ import {
   COLS, ROWS, WEAPONS, WEAPON_ORDER, ITEMS, START_INVENTORY, START_CASH, TANK_W, TANK_H, MAX_HEALTH, V_MAX, GRAVITY, MAX_STEP, DEATH_BLAST,
   newGame, generateLand, topOf, dirtAt, current, alive, aim, fire, step, settled, explode, settleDirt, landTanks, nextTurn, nextRound,
   cycleWeapon, muzzle, trajectory, tiles, landTiles, leader, rng, useItem, drive, buy, applyDamage, raiseShield, addDirt,
-  simulateShot, PERSONALITIES, TANK_COLOURS,
+  simulateShot, PERSONALITIES, TANK_COLOURS, SHELL_LOOKS, shellLook,
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines } from '../public/js/scorchedwind.js';
-import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from '../public/js/scorchedfx.js';
+import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
 // where, not to how it looks, so these run in node with no canvas at all.
@@ -28,6 +28,7 @@ function recorder() {
     ellipse(x, y, rx, ry) { ops.push({ op: 'ellipse', x, y, rx, ry, stroke: this.strokeStyle }); },
     fill() {}, stroke() { ops.push({ op: 'stroke', stroke: this.strokeStyle, lw: this.lineWidth }); },
     fillText(text, x, y) { ops.push({ op: 'text', text, x, y }); },
+    fillRect(x, y, w, h) { ops.push({ op: 'rect', x, y, w, h, fill: this.fillStyle }); },
   };
   return { ctx, ops };
 }
@@ -1139,4 +1140,35 @@ test('scorched yard: a mouse drag clicks as it crosses degrees and tens of power
   assert.match(move, /if \(Math\.round\(t\.angle\) !== wasAngle\) \{ sound\.play\('move'\)/, 'a degree crossed clicks');
   assert.match(move, /Math\.round\(t\.power \/ 10\) !== Math\.round\(wasPower \/ 10\)\) \{ sound\.play\('soft'\)/, 'ten of power crossed clicks');
   assert.match(move, /now - \(G\.dragClickAt \?\? 0\) >= 45/, 'and no more often than every 45 ms');
+});
+
+// EVERY SHELL LOOKS LIKE ITSELF (operator, 2026-09-16: "Everything is the same white dot effect for
+// the shot. We need to add some effects and different colors")
+test('scorched yard: each weapon\u2019s shell has its own core, glow and trail', () => {
+  const looks = new Set(WEAPON_ORDER.filter((id) => !['laser', 'riotCharge', 'riotBlast', 'dirtCharge', 'earthDisrupter', 'plasmaBlast'].includes(id)).map((id) => shellLook(id)));
+  assert.ok(looks.size >= 10, `the shells that fly wear at least ten different looks (${looks.size})`);
+  assert.equal(shellLook('nuke'), SHELL_LOOKS.nuke); assert.equal(shellLook('babyNuke'), SHELL_LOOKS.nuke, 'both nukes glow green');
+  assert.notEqual(shellLook('nuke').core, shellLook('babyMissile').core, 'a nuke is not a baby missile');
+  assert.equal(shellLook('funkyBomblet'), SHELL_LOOKS.funky, 'a bomblet is a funky bomb');
+  assert.equal(shellLook('tracer').glow, null, 'a tracer does not glow: that is the point of a tracer');
+  assert.equal(shellLook('no-such-thing'), SHELL_LOOKS.blast, 'anything unknown flies as a plain blast');
+  // the tile layer draws the core in the weapon's colour and size
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 5 });
+  g.shells.push({ x: 10, y: 20, vx: 5, vy: 5, weapon: 'nuke', owner: 0, path: [{ x: 9, y: 19 }, { x: 10, y: 20 }], t: 0, primary: true });
+  g.shells.push({ x: 30, y: 20, vx: 5, vy: 5, weapon: 'tracer', owner: 0, path: [{ x: 29, y: 19 }, { x: 30, y: 20 }], t: 0, primary: true });
+  const balls = actorLayer(g, 0).filter((t) => t.txid.startsWith('shell'));
+  assert.equal(balls.length, 2);
+  assert.notEqual(balls[0].color, balls[1].color); assert.ok(balls[0].s > balls[1].s, 'a nuke is a bigger ball than a tracer');
+  // the painted layer: a glow and a trail per kind, and every kind paints without throwing
+  for (const id of ['babyMissile', 'nuke', 'mirv', 'leapfrog', 'funkyBomb', 'tracer', 'roller', 'riotBomb', 'dirtClod', 'napalm', 'digger', 'sandhog']) {
+    const R = recorder();
+    const path = Array.from({ length: 14 }, (_, i) => ({ x: 10 + i, y: 20 + i * 0.5 }));
+    paintShells(R.ctx, P, U, [{ x: 24, y: 27, vx: 5, vy: 2, weapon: id, path }], 500, { softStops: stops, looks: shellLook });
+    assert.ok(R.ops.length > 0, `${id} paints something in the air`);
+  }
+  const N = recorder(), T = recorder();
+  paintShells(N.ctx, P, U, [{ x: 24, y: 27, vx: 5, vy: 2, weapon: 'nuke', path: [{ x: 23, y: 26 }, { x: 24, y: 27 }] }], 500, { softStops: stops, looks: shellLook });
+  paintShells(T.ctx, P, U, [{ x: 24, y: 27, vx: 5, vy: 2, weapon: 'tracer', path: [{ x: 23, y: 26 }, { x: 24, y: 27 }] }], 500, { softStops: stops, looks: shellLook });
+  assert.ok(N.ops.some((o) => o.op === 'arc' && /150,255,110/.test(String(o.fill))), 'a nuke glows green');
+  assert.ok(!T.ops.some((o) => /255,200,120|150,255,110/.test(String(o.fill))), 'a tracer glows in no colour at all');
 });

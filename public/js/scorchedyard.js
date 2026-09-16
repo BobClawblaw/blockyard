@@ -9,11 +9,11 @@
 // it is the original's status line unrolled -- whose turn, angle, power, weapon, wind, cash, the
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
-import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution } from './scorchedfx.js';
+import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from './scorchedfx.js';
 import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines } from './scorchedwind.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
-  trajectory, dirtAt,
+  trajectory, dirtAt, shellLook,
   WEAPONS, ITEMS, COLS, ROWS, TANK_W,
 } from './scorched.js';
 import { SHOP } from './scorchedshop.js';
@@ -365,6 +365,7 @@ function paintOver(ctx, view, hx) {
   paintDust(ctx, P, U, G.dusts, now, { softStops: S, ms: DUST_MS });
   paintBlasts(ctx, P, U, G.blasts, now, { wind: g.wind ?? 0, softStops: S, ms: BLAST_MS, smokeMs: SMOKE_MS });
   paintDeaths(ctx, P, U, G.deaths, now, { softStops: S, ms: DEATH_MS });
+  paintShells(ctx, P, U, g.shells, now, { softStops: S, looks: shellLook });
   // CHEAT MODE: the firing solution, redrawn every frame the aim moves. Clipped where the shell
   // would meet the dirt or leave the field, so what is drawn is the shot, not a parabola over it.
   const t = current(g);
