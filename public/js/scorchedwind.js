@@ -163,13 +163,14 @@ export function stepFlow(parts, dt, { wind = 0, w = 800, h = 400, now = 0, scale
     if (fade <= 0.01) continue;
     segs.push({
       x0: p.px, y0: p.py, x1: p.x, y1: p.y, tail: p.tail,
-      alpha: (0.1 + 0.3 * strength) * fade * (0.5 + 0.7 * speed) * (0.55 + 0.45 * p.band / 2),
-      th: p.sz * (0.7 + 0.8 * (p.band / 2)),
+      // twice the presence at half the count (operator, 2026-09-16: "They are too subtle now")
+      alpha: (0.24 + 0.5 * strength) * fade * (0.5 + 0.7 * speed) * (0.55 + 0.45 * p.band / 2),
+      th: p.sz * (1.1 + 1.1 * (p.band / 2)),
     });
   }
   return segs;
 }
-const TAIL = 7;                                            // positions kept: about a quarter of a second
+const TAIL = 11;                                           // positions kept: over a third of a second
 
 /** The streaks: one stroked line each, flat colour, no gradients. */
 export function paintFlow(ctx, segs, colour = '218,224,234') {
@@ -179,7 +180,7 @@ export function paintFlow(ctx, segs, colour = '218,224,234') {
     const n = pts.length - 1;
     for (let i = 0; i < n; i++) {
       const k = (i + 1) / n;                               // 0 at the tail's end, 1 at the head
-      ctx.strokeStyle = `rgba(${colour},${Math.min(0.75, s.alpha * (0.15 + 0.85 * k * k)).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${colour},${Math.min(0.92, s.alpha * (0.15 + 0.85 * k * k)).toFixed(3)})`;
       ctx.lineWidth = Math.max(0.5, s.th * (0.35 + 0.65 * k));
       ctx.beginPath();
       ctx.moveTo(pts[i].x, pts[i].y);
@@ -206,13 +207,13 @@ export function plasmaCells(w, h, clock, wind, cell = 30) {
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
       const v = field(i * 0.16 - drift, j * 0.16, t);
-      const a = (v - 0.45) * (0.05 + 0.03 * strength);
+      const a = (v - 0.45) * (0.08 + 0.05 * strength);
       if (a <= 0.004) continue;
       // a staggered grid of overlapping discs, not squares: on a dark sky a grid of squares is a
       // grid, and a blotch that overlaps its neighbours is weather
       // jittered off the lattice as well, so a black sky does not show the honeycomb underneath
       const jx = (hash2(i * 3.1, j * 7.7) - 0.5) * cell * 0.7, jy = (hash2(i * 5.3, j * 2.9) - 0.5) * cell * 0.7;
-      out.push({ x: i * cell + (j % 2 ? cell / 2 : 0) + jx, y: j * cell + jy, r: cell * (0.9 + 0.35 * hash2(j, i)), alpha: Math.min(0.045, a) });
+      out.push({ x: i * cell + (j % 2 ? cell / 2 : 0) + jx, y: j * cell + jy, r: cell * (0.9 + 0.35 * hash2(j, i)), alpha: Math.min(0.075, a) });
     }
   }
   return out;
@@ -259,7 +260,7 @@ export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 28
       x += (vx / vm) * step; y += (vy / vm) * step;
       pts.push({ x, y });
     }
-    lines.push({ pts, alpha: 0.05 + 0.1 * strength * (0.6 + 0.4 * hash2(i, 9.1)) });
+    lines.push({ pts, alpha: 0.12 + 0.22 * strength * (0.6 + 0.4 * hash2(i, 9.1)) });
   }
   return lines;
 }
@@ -268,11 +269,11 @@ export function traceStreamlines(clock, { wind = 0, w = 800, h = 400, count = 28
 export function paintStreamlines(ctx, lines, travel, colour = '206,220,240') {
   if (!lines.length) return;
   ctx.lineCap = 'butt';
-  ctx.setLineDash([14, 22]);
+  ctx.setLineDash([20, 14]);
   for (const l of lines) {
     ctx.lineDashOffset = -travel;                          // the dashes run the way the curve was traced: downwind
     ctx.strokeStyle = `rgba(${colour},${l.alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.1;
+    ctx.lineWidth = 1.7;
     ctx.beginPath();
     ctx.moveTo(l.pts[0].x, l.pts[0].y);
     for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);

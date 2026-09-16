@@ -867,7 +867,7 @@ test('the fabulous part: a blast smokes after its flash, a tank goes up in spark
   // still air draws nothing at all, and a gale draws more than a breeze
   assert.equal(plasmaCells(800, 400, 0, 0).length, 0, 'no plasma in still air');
   assert.ok(plasmaCells(800, 400, 0, 9).length > 0, 'and some under a wind');
-  assert.ok(plasmaCells(800, 400, 0, 9).every((c) => c.alpha <= 0.05), 'the wash is never more than a whisper');
+  assert.ok(plasmaCells(800, 400, 0, 9).every((c) => c.alpha <= 0.075), 'the wash is never more than a whisper');
   // both painters use flat fills and strokes only
   const R2 = recorder();
   paintFlow(R2.ctx, stepFlow(makeFlow(20, 800, 400, 1), 16, { wind: 5, w: 800, h: 400, now: 500 }));
@@ -1099,7 +1099,7 @@ test('scorched yard: the air stays evenly filled, carries tails, and runs on cur
   assert.ok(Math.min(left, right) / Math.max(left, right) > 0.55, `both halves of the field are populated after fifteen seconds (${left} upwind, ${right} downwind)`);
   // tails: a particle remembers where it has been, and the painter draws the ribbon
   const segs = stepFlow(parts, 16, { wind: 1.5, w: 800, h: 400, now: now + 16, clock: c });
-  assert.ok(segs.some((sg) => sg.tail && sg.tail.length >= 5), 'a particle carries a tail of its last positions');
+  assert.ok(segs.some((sg) => sg.tail && sg.tail.length >= 8), 'a particle carries a tail of its last positions');
   const R = recorder();
   paintFlow(R.ctx, segs.slice(0, 5));
   assert.ok(R.ops.filter((o) => o.op === 'stroke').length > 5 * 3, 'the ribbon is several strokes, thinning toward its end');
