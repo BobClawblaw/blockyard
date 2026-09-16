@@ -336,7 +336,8 @@ test('the tiles for the engine: a cube per cell of dirt by stratum, tanks are hu
 test('a playfield refuses hover, the page is wired, the settings group is complete, and the scores keep', () => {
   const read = (f) => readFileSync(new URL(`../public/js/${f}`, import.meta.url), 'utf8');
   assert.match(read('scorchedyard.js'), /hover: false/, 'the field does not light up under the pointer');
-  assert.match(read('app.js'), /case 'scorched': renderScorchedYard/, 'the router knows the page');
+  assert.match(read('app.js'), /case 'scorched':[^\n]*\n\s+renderGame\(state\.page, s\);/, 'the router knows the page');
+  assert.match(read('app.js'), /scorched: \(\) => import\('\.\/scorchedyard\.js'\)\.then\(\(m\) => m\.renderScorchedYard\)/, 'and loads the game the first time it is opened');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
   for (const id of ['sySky', 'syLand', 'syField', 'syFieldWrap', 'syShop', 'syItems', 'syTalk', 'syMusic', 'syTalkSw', 'syOver', 'syMsg', 'sySub', 'syResume', 'syStats', 'syFire', 'syTanks', 'syScores', 'sySkySw', 'sySfx', 'syFast']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);

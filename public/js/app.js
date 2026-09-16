@@ -20,13 +20,32 @@ import { followTheme, presetFace, resolveScheme, resolveTheme, PRESETS, BASE_KEY
 import { renderExplorer } from './explorer.js';
 import { renderMarkets, summaryHtml as marketsSummaryHtml, REFRESH_MS as MARKETS_REFRESH_MS } from './markets.js';
 import { renderKiosk } from './kiosk.js';
-import { renderTetrust } from './tetrust.js';
-import { renderBlockout } from './blockout.js';
-import { renderBlockanoid } from './blockanoid.js';
-import { renderScorchedYard } from './scorchedyard.js';
-import { renderWolf3d } from './wolf3d.js';
-import { renderDoom } from './doom.js';
-import { renderQuake } from './quake.js';
+// THE GAMES LOAD WHEN THEY ARE OPENED (the outside review of 2026-09-16: "Move the DOOM/Wolfenstein/
+// Quake emulator and 3D games into an optional, separately loadable module ... This reduces the
+// attack and bug surface of the core monitor"). They were static imports, so the Overview of a node
+// monitor fetched and evaluated twenty game modules -- a quarter of the app's code -- before it drew
+// a chart. Each game is now an import() made the first time its page is opened; a monitor that is
+// only ever used as a monitor never runs a line of them.
+const GAMES = Object.freeze({
+  tetrust: () => import('./tetrust.js').then((m) => m.renderTetrust),
+  blockout: () => import('./blockout.js').then((m) => m.renderBlockout),
+  blockanoid: () => import('./blockanoid.js').then((m) => m.renderBlockanoid),
+  scorched: () => import('./scorchedyard.js').then((m) => m.renderScorchedYard),
+  wolf3d: () => import('./wolf3d.js').then((m) => m.renderWolf3d),
+  doom: () => import('./doom.js').then((m) => m.renderDoom),
+  quake: () => import('./quake.js').then((m) => m.renderQuake),
+});
+const gameRenderers = new Map();
+const gameLoads = new Map();
+/** Draw a game's page, loading its module the first time; the page repaints once it has arrived. */
+function renderGame(page, s) {
+  const draw = gameRenderers.get(page);
+  if (draw) { draw(s, state, helpers); return; }
+  if (gameLoads.has(page)) return;
+  gameLoads.set(page, GAMES[page]()
+    .then((fn) => { gameRenderers.set(page, fn); if (state.page === page) render(); })
+    .catch((e) => { gameLoads.delete(page); toast(`${page} could not be loaded: ${e.message}`, 'bad'); }));
+}
 import { renderAbout } from './about.js';
 import { renderChain, renderMempool, renderPeers, renderNetwork, renderLogs, renderNode, renderAdmin, ensureLogsLoaded, init as initPanels, initChainDrill } from './panels.js';
 
@@ -528,13 +547,9 @@ export function render() {
     case 'explorer': renderExplorer(s, state, helpers); break;
     case 'markets': renderMarkets(s, state, helpers); break;
     case 'kiosk': renderKiosk(s, state, helpers); break;
-    case 'tetrust': renderTetrust(s, state, helpers); break;
-    case 'blockout': renderBlockout(s, state, helpers); break;
-    case 'blockanoid': renderBlockanoid(s, state, helpers); break;
-    case 'scorched': renderScorchedYard(s, state, helpers); break;
-    case 'wolf3d': renderWolf3d(s, state, helpers); break;
-    case 'doom': renderDoom(s, state, helpers); break;
-    case 'quake': renderQuake(s, state, helpers); break;
+    case 'tetrust': case 'blockout': case 'blockanoid': case 'scorched': case 'wolf3d': case 'doom': case 'quake':
+      renderGame(state.page, s);
+      break;
     case 'about': renderAbout(s, state, helpers); break;
   }
 }
