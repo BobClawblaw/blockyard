@@ -66,9 +66,9 @@ export function setSolid(f, topOf) {
   }
 }
 
-function sample(f, a, x, y) {
-  // x wraps (the field is a strip of sky), y clamps
-  x = ((x % f.nx) + f.nx) % f.nx;
+function sample(f, a, x, y, wrap = true) {
+  // x wraps (the field is a strip of sky) for the solver; a tracer beyond the edge reads the edge
+  x = wrap ? ((x % f.nx) + f.nx) % f.nx : (x < 0 ? 0 : x > f.nx - 1.001 ? f.nx - 1.001 : x);
   y = y < 0 ? 0 : y > f.ny - 1.001 ? f.ny - 1.001 : y;
   const x0 = Math.floor(x), y0 = Math.floor(y), x1 = (x0 + 1) % f.nx, y1 = y0 + 1;
   const sx = x - x0, sy = y - y0;
@@ -280,6 +280,8 @@ export function warmFluid(f, seconds, wind, { dye = true } = {}) {
  * ends, brightest in the middle of their length, and there is no head to catch the eye.
  */
 const TRAIL = 22;
+const EDGE_RUN = 10;                                       // cells a tracer keeps going beyond the field before it is reborn
+const EDGE_FADE = 0.09;                                    // the share of the width, and of the height at the top, over which lines fade out
 export function makeTracers(f, n = 320, seed = 1) {
   const tr = { n, x: new Float32Array(n), y: new Float32Array(n), age: new Float32Array(n), life: new Float32Array(n), len: new Uint8Array(n), hx: new Float32Array(n * TRAIL), hy: new Float32Array(n * TRAIL), head: new Uint8Array(n), seed, k: 0 };
   for (let i = 0; i < n; i++) respawn(f, tr, i, true);
@@ -305,12 +307,17 @@ export function stepTracers(f, tr, dt) {
   const s = Math.min(0.05, Math.max(0, dt / 1000));
   if (!s) return tr;
   for (let i = 0; i < tr.n; i++) {
-    const ux = sample(f, f.u, tr.x[i], tr.y[i]), vy = sample(f, f.v, tr.x[i], tr.y[i]);
+    const ux = sample(f, f.u, tr.x[i], tr.y[i], false), vy = sample(f, f.v, tr.x[i], tr.y[i], false);
     let x = tr.x[i] + ux * s, y = tr.y[i] + vy * s;
     tr.age[i] += s;
-    const wrapped = x < 0 || x >= f.nx;
-    const cell = f.solid[clampI(Math.floor(((x % f.nx) + f.nx) % f.nx), 0, f.nx - 1) + clampI(Math.floor(y), 0, f.ny - 1) * f.nx];
-    if (wrapped || y < 0 || y >= f.ny || cell || tr.age[i] > tr.life[i]) { respawn(f, tr, i, false); continue; }
+    // A TRACER RUNS ON PAST THE EDGE (operator, 2026-09-16, with a capture of the right edge: "It's
+    // not fading out cleanly at the edges, it just sorta disappears"). It was removed the moment it
+    // crossed, so its whole line vanished at once. It now carries on for a stretch beyond the field,
+    // where paintTracers has already faded it to nothing, and is only reborn once it is out of sight.
+    const gone = x < -EDGE_RUN || x >= f.nx + EDGE_RUN || y < -EDGE_RUN;
+    const inside = x >= 0 && x < f.nx && y >= 0 && y < f.ny;
+    const cell = inside && f.solid[Math.floor(x) + Math.floor(y) * f.nx];
+    if (gone || y >= f.ny || cell || tr.age[i] > tr.life[i]) { respawn(f, tr, i, false); continue; }
     tr.x[i] = x; tr.y[i] = y;
     const h = (tr.head[i] + 1) % TRAIL;
     tr.head[i] = h;
@@ -341,7 +348,12 @@ export function paintTracers(ctx, f, tr, w, h, { bright = 0, wind = 0, colour = 
     for (let k = 1; k < L; k++) {
       const a = (tr.head[i] - L + 1 + k - 1 + TRAIL * 2) % TRAIL, b = (a + 1) % TRAIL;
       const along = k / L;                                   // 0 at the tail, 1 at the head
-      const taper = Math.sin(Math.PI * along) * fade;       // nothing at either end
+      // and nothing at the edges of the field: each segment fades by how near it is to the left, the
+      // right or the top, smoothly, so a line going out of the picture thins away rather than ending
+      const mx = (tr.hx[i * TRAIL + a] + tr.hx[i * TRAIL + b]) * 0.5, my = (tr.hy[i * TRAIL + a] + tr.hy[i * TRAIL + b]) * 0.5;
+      const ex = Math.min(mx / (f.nx * EDGE_FADE), (f.nx - mx) / (f.nx * EDGE_FADE)), ey = my / (f.ny * EDGE_FADE);
+      const edge = smooth(Math.max(0, Math.min(1, Math.min(ex, ey))));
+      const taper = Math.sin(Math.PI * along) * fade * edge;   // nothing at either end, nothing at the edges
       const lv = taper < 0.3 ? 0 : taper < 0.55 ? 1 : taper < 0.8 ? 2 : 3;
       if (taper < 0.08) continue;
       paths[lv].push(tr.hx[i * TRAIL + a] * sx, tr.hy[i * TRAIL + a] * sy, tr.hx[i * TRAIL + b] * sx, tr.hy[i * TRAIL + b] * sy);

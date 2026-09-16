@@ -1282,7 +1282,10 @@ test('scorched yard: the flow is drawn as streaklines carried by the simulated a
     for (let i = 0; i < tr.n; i++) if (tr.age[i] > age0[i]) { moved += tr.x[i] - x0[i]; n += 1; }
   }
   assert.ok(moved / n > 0.2, `tracers are carried downwind by the air (${(moved / n).toFixed(3)} cells a step)`);
-  for (let i = 0; i < tr.n; i++) assert.equal(f.solid[Math.floor(tr.x[i]) + Math.floor(tr.y[i]) * f.nx], 0, 'no tracer ever sits inside the land');
+  for (let i = 0; i < tr.n; i++) {
+    if (tr.x[i] < 0 || tr.x[i] >= f.nx || tr.y[i] < 0) continue;              // running on past the edge, out of sight
+    assert.equal(f.solid[Math.floor(tr.x[i]) + Math.floor(tr.y[i]) * f.nx], 0, 'no tracer ever sits inside the land');
+  }
   // they rise over the upwind slope, as the air does
   let risers = 0, near = 0;
   for (let i = 0; i < tr.n; i++) {
@@ -1301,5 +1304,25 @@ test('scorched yard: the flow is drawn as streaklines carried by the simulated a
   assert.ok(Math.max(...alphas) < 0.45, 'faint lines, not bright ones');
   // no bright head: the taper is zero at both ends of a path
   const src = readFileSync(new URL('../public/js/scorchedair.js', import.meta.url), 'utf8');
-  assert.match(src, /const taper = Math\.sin\(Math\.PI \* along\) \* fade;/, 'brightest mid-path, nothing at either end');
+  assert.match(src, /const taper = Math\.sin\(Math\.PI \* along\) \* fade \* edge;/, 'brightest mid-path, nothing at either end or at the edges');
+  // THE EDGES FADE (operator: "It's not fading out cleanly at the edges, it just sorta disappears"):
+  // a path laid along the field's width is faint at both sides and strong in the middle, and a
+  // tracer that crosses the edge keeps going rather than vanishing with its whole line
+  const one = makeTracers(f, 1, 9);
+  one.n = 1; one.age[0] = 1; one.life[0] = 5; one.len[0] = 22; one.head[0] = 21;
+  const segAlpha = [];
+  const probe = { set strokeStyle(v) { this._a = parseFloat(String(v).split(',')[3]); }, lineCap: '', lineWidth: 1, beginPath() {}, moveTo(x) { segAlpha.push([x, this._a]); }, lineTo() {}, stroke() {} };
+  for (const startX of [0.2, 40, 90]) {
+    for (let k = 0; k < 22; k++) { one.hx[k] = startX + k * 0.25; one.hy[k] = 10; }
+    segAlpha.length = 0;
+    paintTracers(probe, f, one, 960, 480, { wind: 7 });
+    const peak = Math.max(0, ...segAlpha.map(([, a]) => a));
+    if (startX === 40) assert.ok(peak > 0.1, 'mid-field the line is plainly there');
+    else assert.ok(peak < 0.2, `at the ${startX < 1 ? 'left' : 'right'} edge it has faded (${peak})`);
+  }
+  const edge = makeTracers(f, 1, 11);
+  edge.x[0] = 95.8; edge.y[0] = 8; edge.age[0] = 1; edge.life[0] = 5;
+  const born = edge.k;
+  stepTracers(f, edge, 33); stepTracers(f, edge, 33);
+  assert.ok(edge.x[0] > 96 && edge.k === born, 'a tracer crossing the edge runs on, not reborn on the spot');
 });
