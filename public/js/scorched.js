@@ -40,8 +40,6 @@ export const FALL_DAMAGE = 4;         // per cell fallen beyond the first
 export const DEATH_BLAST = Object.freeze({ radius: 3.5, damage: 60 });
 export const TANK_W = 2;              // the hull: two cells wide
 export const TANK_H = 1.4;            // hull and turret, for the hitbox
-export const SHIELD_R = 2.6;          // a deflector's reach, from the hull's centre
-export const MAG_R = 5;               // a mag deflector's reach
 export const ROLL_SPEED = 14;         // cells/s along the ground
 export const BORE_SPEED = 16;         // cells/s through dirt
 export const HEAT_PULL = 14;          // cells/s² toward the nearest tank, heat-guided and falling
@@ -267,7 +265,7 @@ export function muzzle(tank) {
 }
 
 // ------------------------------------------------------------------- items, on your turn
-const SHIELD_PREFERENCE = ['force', 'deflector', 'shield'];
+const SHIELD_PREFERENCE = ['heavyShield', 'forceShield', 'shield'];
 
 /**
  * Use an item on your turn: a battery heals, a shield goes up (the named one, or the best owned
@@ -300,7 +298,7 @@ export function raiseShield(g, tank, id = null) {
   const pick = id ?? SHIELD_PREFERENCE.find((k) => (tank.items[k] ?? 0) > 0);
   if (!pick || (tank.items[pick] ?? 0) <= 0) return false;
   tank.items[pick] -= 1;
-  tank.shield = { id: pick, hp: ITEMS[pick].hp, deflect: !!ITEMS[pick].deflect };
+  tank.shield = { id: pick, hp: ITEMS[pick].hp };
   g.sparks.push({ kind: 'shield', tank: tank.id, item: pick });
   return true;
 }
@@ -344,7 +342,16 @@ export function fire(g, tank = current(g)) {
     if (tank.armed[k] && (tank.items[k] ?? 0) > 0) { tank.items[k] -= 1; armed[k] = true; }
     if ((tank.items[k] ?? 0) <= 0) tank.armed[k] = false;
   }
-  if (w.kind === 'laser') { laser(g, tank, w); return true; }
+  if (w.kind === 'laser' || w.kind === 'wedge' || w.kind === 'disrupter' || w.kind === 'plasma') {
+    if (w.kind === 'laser') laser(g, tank, w);
+    else if (w.kind === 'wedge') wedge(g, tank, w);
+    else if (w.kind === 'disrupter') disrupt(g, tank);
+    else plasma(g, tank, w);
+    g.lastPath = [];
+    g.phase = 'settle';
+    if (!g.falling.length) settled(g);
+    return true;
+  }
   const a = (tank.angle * Math.PI) / 180;
   const v = (tank.power / 1000) * V_MAX;
   const m = muzzle(tank);
@@ -436,10 +443,11 @@ function flightStep(g, s, h, events) {
     if (target) s.vx += Math.sign(centre(target).x - s.x) * HEAT_PULL * h;
   }
   for (const t of enemiesOf(g, s.owner)) {
-    if ((t.items.magDeflector ?? 0) <= 0) continue;
+    const mag = (t.items.superMag ?? 0) > 0 ? ITEMS.superMag : (t.items.magDeflector ?? 0) > 0 ? ITEMS.magDeflector : null;
+    if (!mag) continue;
     const c = centre(t);
     const d = Math.hypot(s.x - c.x, s.y - c.y);
-    if (d < MAG_R && d > 0.1) { const k = 30 * (1 - d / MAG_R) * h; s.vx += ((s.x - c.x) / d) * k; s.vy += ((s.y - c.y) / d) * k; }
+    if (d < mag.reach && d > 0.1) { const k = mag.push * (1 - d / mag.reach) * h; s.vx += ((s.x - c.x) / d) * k; s.vy += ((s.y - c.y) / d) * k; }
   }
   s.x += s.vx * h; s.y += s.vy * h; s.t += h;
   if (s.path.length < 600) s.path.push({ x: s.x, y: s.y });
@@ -447,7 +455,7 @@ function flightStep(g, s, h, events) {
   if (w.kind === 'mirv' && !s.split && s.vy <= 0 && s.t > 0.2) {
     const n = w.heads;
     for (let i = 0; i < n; i++) {
-      const spread = (i - (n - 1) / 2) * 3;
+      const spread = (i - (n - 1) / 2) * (n > 5 ? 2 : 3);
       g.shells.push({ ...s, path: [{ x: s.x, y: s.y }], vx: s.vx + spread, primary: false, split: true });
     }
     removeShell(g, s);
@@ -456,25 +464,11 @@ function flightStep(g, s, h, events) {
   // the walls, by mode
   if (s.x < 0 || s.x >= COLS) {
     if (g.walls === 'rubber') { s.x = s.x < 0 ? -s.x : 2 * COLS - s.x - 1e-3; s.vx = -s.vx * 0.8; events.push({ kind: 'bounce' }); }
+    else if (g.walls === 'spring') { s.x = s.x < 0 ? -s.x : 2 * COLS - s.x - 1e-3; s.vx = -s.vx * 1.15; events.push({ kind: 'bounce' }); }
+    else if (g.walls === 'padded') { s.x = clampX(s.x); s.vx = 0; events.push({ kind: 'bounce' }); }   // it stops dead and drops
     else if (g.walls === 'wrap') { s.x = ((s.x % COLS) + COLS) % COLS; }
     else if (g.walls === 'none') { g.sparks.push({ kind: 'lost' }); removeShell(g, s); return; }
     else { s.x = clampX(s.x); impact(g, s, s.x, s.y); return; }
-  }
-  // a deflector shield turns a shell away
-  for (const t of enemiesOf(g, s.owner)) {
-    if (!t.shield?.deflect) continue;
-    const c = centre(t);
-    const d = Math.hypot(s.x - c.x, s.y - c.y);
-    if (d < SHIELD_R) {
-      const nx = (s.x - c.x) / (d || 1), ny = (s.y - c.y) / (d || 1);
-      const dot = s.vx * nx + s.vy * ny;
-      if (dot < 0) { s.vx -= 2 * dot * nx; s.vy -= 2 * dot * ny; s.vx *= 0.8; s.vy *= 0.8; }
-      s.x = c.x + nx * (SHIELD_R + 0.05); s.y = c.y + ny * (SHIELD_R + 0.05);
-      t.shield.hp -= 5;
-      if (t.shield.hp <= 0) { t.shield = null; g.sparks.push({ kind: 'shieldDown', tank: t.id }); }
-      events.push({ kind: 'deflect', tank: t.id });
-      return;
-    }
   }
   // a contact trigger goes off within reach of a tank
   if (s.contact) {
@@ -556,23 +550,103 @@ function impact(g, s, x, y) {
       removeShell(g, s);
       return;
     }
-    case 'leapfrog':
-      blastAt(g, s, x, y, { keep: s.hops > 1 });
+    case 'leapfrog': {
+      const hop = (w.radii?.length ?? 0) - s.hops;            // 0, 1, 2
+      const r = w.radii?.[Math.max(0, Math.min((w.radii?.length ?? 1) - 1, hop))] ?? w.radius;
+      blastAt(g, s, x, y, { keep: s.hops > 1, radius: r });
       if (s.hops > 1) {
         s.hops -= 1;
         const col = Math.max(0, Math.min(COLS - 1, Math.floor(x)));
         s.y = g.tops[col] + 0.6; s.vy = Math.abs(s.vy) * 0.55 + 6; s.vx *= 0.85; s.t = 0;
       }
       return;
+    }
+    case 'liquidDirt':
+      ooze(g, x, y, w, s.owner);
+      removeShell(g, s);
+      return;
     default:
       blastAt(g, s, x, y);
   }
 }
 
-function blastAt(g, s, x, y, { keep = false, scale = 1 } = {}) {
+function blastAt(g, s, x, y, { keep = false, scale = 1, radius = null } = {}) {
   const w = weaponOf(s.weapon);
-  explode(g, x, y, { name: w.name, radius: w.radius * scale, damage: w.damage * scale }, s.owner);
+  explode(g, x, y, { name: w.name, radius: (radius ?? w.radius) * scale, damage: w.damage * scale }, s.owner);
   if (!keep) removeShell(g, s);
+}
+
+/**
+ * Liquid dirt: drops that ooze downhill along the surface and set where they pool, filling the
+ * holes. Simulated at once, like napalm; the dirt it leaves is real.
+ */
+function ooze(g, x, y, w, ownerId) {
+  const drops = [];
+  for (let i = 0; i < w.drops; i++) drops.push({ x: Math.max(0, Math.min(COLS - 1, Math.floor(x + (g.rnd() * 2 - 1) * 1.5))), alive: true });
+  let added = 0;
+  let lo = COLS, hi = 0;
+  for (let stepN = 0; stepN < w.steps; stepN++) {
+    for (const d of drops) {
+      if (!d.alive) continue;
+      const top = g.tops[d.x];
+      const l = d.x > 0 ? g.tops[d.x - 1] : Infinity, r = d.x < COLS - 1 ? g.tops[d.x + 1] : Infinity;
+      if (l < top && l <= r) d.x -= 1;
+      else if (r < top) d.x += 1;
+      else if (top < ROWS - 1) {                              // pooled: it sets here
+        g.dirt[idx(d.x, top)] = 1; g.tops[d.x] = top + 1; added += 1; d.alive = false;
+        lo = Math.min(lo, d.x); hi = Math.max(hi, d.x);
+      } else d.alive = false;
+    }
+  }
+  if (added) g.landVersion += 1;
+  g.sparks.push({ kind: 'dirt', x, y, radius: 1.5, added, ooze: true });
+  landTanks(g);
+  afterBlast(g, ownerId, 0);
+}
+
+/**
+ * A wedge from the turret, at once (Riot Charge, Riot Blast; Dirt Charge with `dig` false):
+ * every cell within `radius` of the muzzle and within `spread` degrees of the barrel's line is
+ * cleared, or filled.
+ */
+function wedge(g, tank, w) {
+  const m = muzzle(tank);
+  const a = (tank.angle * Math.PI) / 180;
+  const spread = (w.spread * Math.PI) / 180;
+  let changed = 0;
+  for (let x = Math.max(0, Math.floor(m.x - w.radius - 1)); x <= Math.min(COLS - 1, Math.ceil(m.x + w.radius + 1)); x++) {
+    for (let y = Math.max(0, Math.floor(m.y - w.radius - 1)); y <= Math.min(ROWS - 1, Math.ceil(m.y + w.radius + 1)); y++) {
+      const dx = x + 0.5 - m.x, dy = y + 0.5 - m.y;
+      const d = Math.hypot(dx, dy);
+      if (d > w.radius || d < 0.3) continue;
+      let da = Math.atan2(dy, dx) - a;
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      if (Math.abs(da) > spread) continue;
+      if (w.dig && g.dirt[idx(x, y)]) { g.dirt[idx(x, y)] = 0; changed += 1; }
+      else if (!w.dig && !g.dirt[idx(x, y)]) { g.dirt[idx(x, y)] = 1; changed += 1; }
+    }
+  }
+  if (changed) g.landVersion += 1;
+  g.sparks.push({ kind: w.dig ? 'blast' : 'dirt', x: m.x + Math.cos(a) * w.radius * 0.5, y: m.y + Math.sin(a) * w.radius * 0.5, radius: w.radius * 0.6, weapon: w.name, riot: true, wedge: true, removed: changed, added: changed });
+  settleDirt(g, Math.floor(m.x - w.radius - 1), Math.ceil(m.x + w.radius + 1));
+  landTanks(g);
+  afterBlast(g, tank.id, 0);
+}
+
+/** The Earth Disrupter: every hanging piece of dirt on the field settles. */
+function disrupt(g, tank) {
+  settleDirt(g, 0, COLS - 1);
+  g.sparks.push({ kind: 'disrupt', tank: tank.id, fell: g.falling.length });
+  landTanks(g);
+  afterBlast(g, tank.id, 0);
+}
+
+/** The Plasma Blast: energy thrown from the tank itself, its reach set by the power; the thrower is spared. */
+function plasma(g, tank, w) {
+  const r = w.minRadius + (w.radius - w.minRadius) * (tank.power / 1000);
+  const c = centre(tank);
+  explode(g, c.x, c.y, { name: w.name, radius: r, damage: w.damage }, tank.id, { spare: tank.id, dig: false });   // energy, not a crater
 }
 
 function endFlight(g) {
@@ -595,12 +669,9 @@ function laser(g, tank, w) {
     x += dx * 0.25; y += dy * 0.25; d += 0.25;
   }
   g.sparks.push({ kind: 'laser', x0: m.x, y0: m.y, x1: x, y1: y });
-  g.lastPath = [];
   settleDirt(g, Math.floor(Math.min(m.x, x)) - 1, Math.ceil(Math.max(m.x, x)) + 1);
   landTanks(g);
   afterBlast(g, tank.id, 0);
-  g.phase = 'settle';
-  if (!g.falling.length) settled(g);
 }
 
 /**
@@ -637,13 +708,13 @@ function flow(g, x, y, w, ownerId) {
  * A blast: the dirt inside the circle goes, tanks in reach take damage by distance, the dirt
  * above the crater falls, tanks left in the air fall with it. Deaths are handled, and can chain.
  */
-export function explode(g, cx, cy, weapon, ownerId, { chain = 0 } = {}) {
+export function explode(g, cx, cy, weapon, ownerId, { chain = 0, spare = -1, dig = true } = {}) {
   const r = weapon.radius;
-  const removed = crater(g, cx, cy, r);
+  const removed = dig ? crater(g, cx, cy, r) : 0;
   g.sparks.push({ kind: 'blast', x: cx, y: cy, radius: r, weapon: weapon.name, removed });
   // damage: full inside half the radius, falling to nothing a cell beyond the rim
   for (const t of g.tanks) {
-    if (!t.alive) continue;
+    if (!t.alive || t.id === spare) continue;
     const d = distToTank(cx, cy, t);
     if (d > r + 1) continue;
     const k = d <= r * 0.5 ? 1 : Math.max(0, 1 - (d - r * 0.5) / (r * 0.5 + 1));
@@ -815,7 +886,7 @@ export function actorTiles(g, { trace = true } = {}) {
       poly: [[0, -0.06], [0.7, -0.06], [0.7, 0.06], [0, 0.06]], rot: -(t.angle * Math.PI) / 180,
     });
     if (t.shield) {
-      const k = t.shield.deflect ? '#7ad7ff' : '#9ce8ff';
+      const k = t.shield.id === 'heavyShield' ? '#7ad7ff' : t.shield.id === 'forceShield' ? '#8fe0ff' : '#9ce8ff';
       out.push({ txid: `shield${t.id}`, x: t.x - 0.6, y: t.y - 0.4, s: TANK_W + 1.2, tall: 1.6, wire: k, color: k });
     }
   }

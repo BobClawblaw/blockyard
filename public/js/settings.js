@@ -302,7 +302,7 @@ export const DEFAULTS = Object.freeze({
     gridBrightness: 1,
     opponents: 2,         // computer players against the one human (operator: "at least 3 player")
     rounds: 5,
-    walls: 'concrete',    // 'concrete' | 'rubber' | 'wrap' | 'none'
+    walls: 'none',        // the manual's default: 'none' | 'concrete' | 'padded' | 'rubber' | 'spring' | 'wrap'
     wind: 'turn',         // 'turn' (changes every turn) | 'shot' | 'none'
     gravity: 1,           // 1 = Earth
     land: 'hills',        // 'hills' | 'mountains' | 'valley' | 'flat'
@@ -660,7 +660,7 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'rounds', label: 'Rounds', kind: 'range', min: 1, max: 10, step: 1, hint: 'A game is this many rounds; the highest score at the end wins' }),
       Object.freeze({
         key: 'walls', label: 'Walls', kind: 'choice', hint: 'What a shell does at the edge of the field',
-        options: Object.freeze([['concrete', 'Concrete: it explodes there'], ['rubber', 'Rubber: it bounces'], ['wrap', 'Wraparound: it comes in the other side'], ['none', 'None: it is lost']]),
+        options: Object.freeze([['none', 'None: it is lost (the original\u2019s default)'], ['concrete', 'Concrete: it explodes there'], ['padded', 'Padded: it stops and drops'], ['rubber', 'Rubber: it bounces'], ['spring', 'Spring: it bounces back harder'], ['wrap', 'Wraparound: it comes in the other side']]),
       }),
       Object.freeze({
         key: 'wind', label: 'Wind', kind: 'choice', hint: 'Whether the wind blows, and how often it changes',

@@ -252,7 +252,7 @@ function drawItems() {
     if (!n) continue;
     const it = ITEMS[id];
     const armed = t.armed?.[id];
-    const key = { battery: 'B', shield: 'S', deflector: 'S', force: 'S', fuel: 'A D', contactTrigger: 'T', heatGuidance: 'H' }[id];
+    const key = { battery: 'B', shield: 'S', forceShield: 'S', heavyShield: 'S', fuel: 'A D', contactTrigger: 'T', heatGuidance: 'H' }[id];
     pills.push(`<span class="sypill${armed ? ' on' : ''}" title="${it.name}: ${it.note ?? ''}${key ? ` — ${key}` : ''}">${it.name} × ${n}${armed ? ' ✓' : ''}</span>`);
   }
   const html = pills.join('') || '<span class="faint">no items — the shop opens between rounds</span>';
@@ -374,7 +374,7 @@ function onEvents(events, now) {
       case 'hit': if (e.damage > 0) sound.play('syHit'); break;
       case 'fall': if (e.damage > 0) sound.play('syHit'); break;
       case 'chute': sound.play('rotate'); G.h?.toast?.(`${g.tanks[e.tank].name}'s parachute opens`); break;
-      case 'deflect': sound.play('wall'); break;
+      case 'disrupt': sound.play('syDirt'); break;
       case 'shield': sound.play('levelup'); break;
       case 'shieldDown': sound.play('life'); break;
       case 'battery': sound.play('clear'); break;

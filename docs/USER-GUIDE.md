@@ -725,9 +725,10 @@ craters and falls, tanks that aim by angle and power, wind, and a round that end
 left. Under **Diversions**, after Blockanoid. You play against two computer opponents out of the
 box (**Display settings → Scorched Yard → Computer players** fields up to five).
 
-The rules are the original's (docs/PLAN-SCORCHED-YARD.md is the whole plan): the roster of
-twenty-six weapons and ten items, craters, falling dirt, fall damage, death and its blast, the
-walls, wind, cash for damage and kills, a shop between rounds, and a game of rounds. One computer
+The rules are the original's (docs/PLAN-SCORCHED-YARD.md is the whole plan): the manual's roster
+of thirty-three weapons and eleven accessories at the manual's prices, packs and blast radii,
+craters, falling dirt, fall damage, death and its blast, the walls, wind, cash for damage and
+kills, a shop between rounds, and a game of rounds. One computer
 personality so far — the Moron, who fires at random and shops the same way; the others and the
 fabulous part are on their way.
 
@@ -754,25 +755,32 @@ shell does when it lands:
 
 | weapon | what it does |
 |---|---|
-| Baby Missile, Missile, Baby Nuke, Nuke, Death's Head | a blast: a crater and damage that falls off with distance, from a cell and a half across to nine |
-| Funky Bomb | a small blast, then six bomblets thrown out that each blast where they land |
-| MIRV | splits into five shells at the top of its arc |
-| Leapfrog | explodes, bounces on, and explodes twice more |
+| Baby Missile, Missile, Baby Nuke, Nuke | a blast: a crater and damage that falls off with distance, from a cell and a half across to eleven |
+| Leap Frog | three warheads, one after another, each blast bigger than the last |
+| Funky Bomb | a blast, then six bomblets thrown out that each blast where they land |
+| MIRV, Death's Head | five (or nine, large) warheads splitting at the top of the arc |
 | Tracer, Smoke Tracer | no crater and no damage: it shows you the wind |
-| Roller, Heavy Roller | lands and rolls downhill until it meets a tank or the bottom of a dip, then blasts |
-| Riot Charge, Riot Blast, Riot Bomb | clears dirt in a circle and hurts no one |
-| Dirt Clod, Dirt Ball, Ton of Dirt | adds a ball of dirt where it lands |
+| Baby Roller, Roller, Heavy Roller | lands and rolls downhill until it meets a tank or the bottom of a dip, then blasts |
+| Riot Charge, Riot Blast | a wedge of dirt cut from the turret along the barrel's line, at once; nobody hurt |
+| Riot Bomb, Heavy Riot Bomb | a shell that clears a sphere of dirt and hurts no one |
+| Dirt Clod, Dirt Ball, Ton of Dirt | a shell that bursts into a ball of dirt |
+| Liquid Dirt | oozes downhill and sets where it pools, filling the holes |
+| Dirt Charge | a wedge of dirt thrown from the turret, at once |
+| Earth Disrupter | every hanging piece of dirt on the field settles, at once |
 | Napalm, Hot Napalm | liquid fire that runs downhill along the surface and burns what it reaches |
 | Baby Digger, Digger, Heavy Digger | digs straight down, then blasts |
-| Sandhog, Heavy Sandhog | tunnels on along its heading through the dirt, then blasts |
+| Baby Sandhog, Sandhog, Heavy Sandhog | tunnels on along its heading through the dirt, then blasts |
+| Plasma Blast | energy thrown from your own tank, its reach set by the power; you are spared, no crater |
 | Laser | a straight line from the barrel, at once: dirt along it goes, a tank on it burns |
 
-The items: **Shield**, **Deflector Shield** and **Force Shield** absorb damage (the deflector and
-the force shield bounce shells away too); a **Parachute** opens when you fall; a **Battery**
-restores health; a **Mag Deflector** pushes passing shells away; **Auto Defense** raises a shield
-for you as your turn begins; **Fuel** lets you drive; a **Contact Trigger** sets the shell off
-within reach of a tank before it buries; **Heat Guidance** bends the shell toward the nearest
+The accessories: **Shield**, **Force Shield** and **Heavy Shield** absorb 60, 100 and 150 damage;
+a **Mag Deflector** pushes passing shells away and a **Super Mag** harder and from further; a
+**Parachute** opens when you fall; a **Battery** restores health; **Auto Defense** raises a shield
+for you as your turn begins; a **Fuel Tank** lets you drive; a **Contact Trigger** sets the shell
+off within reach of a tank before it buries; **Heat Guidance** bends the shell toward the nearest
 tank as it falls. The items line under the fire button shows what you carry and what is armed.
+Prices, packs and radii are the manual's (SCORCH.DOC); the original started every player with $0
+and 5% interest, which the settings allow.
 
 ### Cash and the shop
 
@@ -798,8 +806,9 @@ score at the end wins, and your score goes in the high-score table, this browser
 **Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's). **Sound**
 is the shot, the blast, a hit, a fall, a death. **Fast** flies shells at three times the pace.
 The rules the original exposed are in **Display settings → Scorched Yard**: the number of
-computer players, the rounds, the **walls** (concrete explodes a shell at the edge, rubber bounces
-it, wraparound brings it in the other side, none loses it), the **wind** (every turn, every shot,
+computer players, the rounds, the **walls** (none loses a shell off the edge, the original's
+default; concrete explodes it there; padded stops it and drops it; rubber bounces it; spring
+bounces it back harder; wraparound brings it in the other side), the **wind** (every turn, every shot,
 or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
 flat), the **starting cash** and the **interest** rate. They take effect at the next new game.
 

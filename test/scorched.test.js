@@ -77,7 +77,7 @@ test('aim clamps the angle to 0..180 and the power to 0..1000; the weapon cycle 
   assert.equal(cycleWeapon(t, 1), 'babyMissile', 'and wraps');
   assert.equal(cycleWeapon(t, -1), 'nuke', 'backward too');
   assert.equal(WEAPON_ORDER[0], 'babyMissile');
-  assert.equal(WEAPON_ORDER.length, 26, 'the roster: five blasts, seven that do something first, three riots, three dirts, two napalms, five diggers, the laser');
+  assert.equal(WEAPON_ORDER.length, 33, 'the manual\u2019s roster, every entry');
   assert.deepEqual(START_INVENTORY, { babyMissile: 99 }, 'you start with the bottomless baby missile and your cash');
 });
 
@@ -161,7 +161,7 @@ test('a blast carves a circle of dirt, the dirt above falls until it rests, and 
   // a Nuke half-buried in the column
   explode(g, x + 0.5, top - 4, WEAPONS.nuke, 0);
   const after = [...g.dirt].reduce((n, v) => n + v, 0);
-  assert.ok(before - after > 60 && before - after < 160, `a nuke removes a circle's worth of cells (${before - after})`);
+  assert.ok(before - after > 100 && before - after < 500, `a nuke removes a circle's worth of cells (${before - after}; the manual's 75 px is eleven cells)`);
   for (let cx = 0; cx < COLS; cx++) {
     let seenAir = false;
     for (let y = 0; y < ROWS; y++) {
@@ -319,7 +319,7 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
   assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
-  assert.equal(o.opponents, 5, 'clamped to the slider'); assert.equal(o.rounds, 1); assert.equal(o.walls, 'concrete'); assert.equal(o.gravity, 2);
+  assert.equal(o.opponents, 5, 'clamped to the slider'); assert.equal(o.rounds, 1); assert.equal(o.walls, 'none', 'the manual\u2019s default'); assert.equal(o.gravity, 2);
   const s = store();
   assert.deepEqual(loadScores(s), []);
   recordScore({ score: 300, kills: 2, rounds: 5, won: true, at: 1 }, s);
@@ -337,7 +337,7 @@ const arm = (g, w, angle = 55, power = 620) => { const t = current(g); t.invento
 const kinds = (ev) => ev.map((e) => e.kind);
 
 test('the roster is data: every weapon has a kind the rules know, a price and a pack, and the shop lists what is for sale', () => {
-  const known = new Set(['blast', 'funky', 'mirv', 'leapfrog', 'tracer', 'roller', 'riot', 'dirt', 'napalm', 'digger', 'sandhog', 'laser']);
+  const known = new Set(['blast', 'funky', 'mirv', 'leapfrog', 'tracer', 'roller', 'riot', 'wedge', 'dirt', 'liquidDirt', 'disrupter', 'napalm', 'digger', 'sandhog', 'plasma', 'laser']);
   for (const [id, w] of Object.entries(WEAPONS)) {
     assert.ok(known.has(w.kind), `${id}: ${w.kind}`);
     assert.ok(w.price >= 0 && w.pack >= 1 && w.radius >= 0 && w.damage >= 0, `${id} has its numbers`);
@@ -347,6 +347,16 @@ test('the roster is data: every weapon has a kind the rules know, a price and a 
   assert.ok(SHOP.every((e) => e.price > 0), 'nothing free in the shop');
   assert.ok(!SHOP.some((e) => e.id === 'babyMissile'), 'the bottomless baby missile is not for sale');
   assert.equal(SHOP.filter((e) => e.item).length, ITEM_ORDER.length, 'every item is on sale');
+  // the manual's numbers (SCORCH.DOC), a few spot checks: price, pack, and radius in pixels over 6.67
+  assert.deepEqual([WEAPONS.missile.price, WEAPONS.missile.pack], [1875, 5]);
+  assert.deepEqual([WEAPONS.nuke.price, WEAPONS.nuke.pack, WEAPONS.nuke.radius], [12000, 1, 11.25]);
+  assert.deepEqual([WEAPONS.deathsHead.price, WEAPONS.deathsHead.kind, WEAPONS.deathsHead.heads], [20000, 'mirv', 9]);
+  assert.deepEqual([WEAPONS.heavySandhog.price, WEAPONS.heavySandhog.pack], [25000, 2]);
+  assert.deepEqual([WEAPONS.laser.price, WEAPONS.laser.pack], [5000, 5]);
+  assert.deepEqual([ITEMS.contactTrigger.price, ITEMS.contactTrigger.pack], [1000, 25]);
+  assert.deepEqual([ITEMS.autoDefense.price, ITEMS.parachute.pack, ITEMS.battery.pack, ITEMS.heatGuidance.pack], [1500, 8, 10, 6]);
+  assert.deepEqual([ITEMS.shield.price, ITEMS.forceShield.price, ITEMS.heavyShield.price, ITEMS.superMag.price], [20000, 25000, 30000, 40000]);
+  assert.equal(WEAPONS.riotCharge.kind, 'wedge', 'the riot charge is a wedge from the turret, not a shell');
 });
 
 test('a MIRV splits into five at its apex, a Funky Bomb bursts into bomblets, a Leapfrog explodes three times', () => {
@@ -363,7 +373,9 @@ test('a MIRV splits into five at its apex, a Funky Bomb bursts into bomblets, a 
   flatten(g3, 6);
   arm(g3, 'leapfrog', 50, 500);
   const ev3 = play(g3);
-  assert.equal(ev3.filter((e) => e.kind === 'blast' && e.weapon === 'Leapfrog').length, 3, 'three blasts of its own (a death blast may follow)');
+  const hops = ev3.filter((e) => e.kind === 'blast' && e.weapon === 'Leap Frog');
+  assert.equal(hops.length, 3, 'three blasts of its own (a death blast may follow)');
+  assert.ok(hops[0].radius < hops[1].radius && hops[1].radius < hops[2].radius, 'each bigger than the last');
 });
 
 test('a Roller rolls downhill and stops at a tank or in a dip; a Tracer leaves no crater; the riots clear dirt without hurting; the dirt weapons add it', () => {
@@ -398,7 +410,7 @@ test('a Roller rolls downhill and stops at a tank or in a dip; a Tracer leaves n
   g3.shells = [{ x: a.x + 1, y: a.y + 0.5, vx: 0, vy: -1, weapon: 'riotBomb', owner: 0, path: [], t: 1, primary: true }];
   g3.phase = 'flight';
   const ev3 = play(g3);
-  assert.ok([...g3.dirt].reduce((s2, v) => s2 + v, 0) < dirtBefore - 40, 'a riot bomb clears a lot of dirt');
+  assert.ok([...g3.dirt].reduce((s2, v) => s2 + v, 0) < dirtBefore - 20, 'a riot bomb clears a lot of dirt');
   assert.ok(ev3.every((e) => e.kind !== 'hit' || e.damage === 0), 'and hurts nobody by blast');
   // a ton of dirt on the field: more dirt after than before
   const g4 = three({ wind: 'none' });
@@ -474,17 +486,27 @@ test('items: a shield absorbs, a deflector turns shells away, a parachute cancel
   assert.equal(a.shield, null, 'the shield is gone');
   assert.equal(a.health, 80, 'and the rest came through');
   assert.equal(you.cash, START_CASH + 20 * CASH_PER_DAMAGE, 'cash only for health that went, not for the shield');
-  // a deflector: a shell aimed straight at a shielded tank bounces off it
-  const g2 = three({ wind: 'none' });
-  flatten(g2, 6);
-  const [me, foe] = g2.tanks;
-  me.x = 30; me.y = 6; foe.x = 40; foe.y = 6; g2.tanks[2].x = 80;
-  foe.items.deflector = 1; raiseShield(g2, foe);
-  g2.shells = [{ x: 36, y: 7, vx: 12, vy: 0, weapon: 'missile', owner: me.id, path: [], t: 1, primary: true }];
-  g2.phase = 'flight';
-  const ev2 = play(g2);
-  assert.ok(kinds(ev2).includes('deflect'), 'deflected');
-  assert.equal(foe.health, MAX_HEALTH, 'unhurt');
+  // a mag deflector pushes a passing shell off its line: the same flat shot lands further with one than without
+  const flatShot = (mag) => {
+    const g2 = three({ wind: 'none', walls: 'concrete' });
+    flatten(g2, 6);
+    const [me, foe] = g2.tanks;
+    me.x = 30; me.y = 6; foe.x = 50; foe.y = 6; g2.tanks[2].x = 85;
+    if (mag) foe.items[mag] = 1;
+    g2.shells = [{ x: 36, y: 12, vx: 20, vy: 0, weapon: 'tracer', owner: me.id, path: [], t: 1, primary: true }];
+    g2.phase = 'flight';
+    const ev2 = play(g2);
+    return ev2.find((e) => e.kind === 'tracer')?.x ?? -1;
+  };
+  const plain = flatShot(null), pushed = flatShot('magDeflector'), shoved = flatShot('superMag');
+  assert.ok(pushed !== plain, 'the mag deflector moved the shot');
+  assert.ok(Math.abs(shoved - plain) > Math.abs(pushed - plain), 'the super mag moved it more');
+  // the force and heavy shields absorb more
+  assert.ok(ITEMS.shield.hp < ITEMS.forceShield.hp && ITEMS.forceShield.hp < ITEMS.heavyShield.hp);
+  const g5 = three();
+  g5.tanks[1].items.heavyShield = 1; g5.tanks[1].items.shield = 1;
+  assert.ok(raiseShield(g5, g5.tanks[1]));
+  assert.equal(g5.tanks[1].shield.id, 'heavyShield', 'the best owned goes up');
   // a parachute
   const g3 = three();
   const t = g3.tanks[1];
@@ -555,4 +577,76 @@ test('the screen\u2019s pictures for fire and beams come and go with time', () =
   assert.equal(balls.length, 2, 'every shell in the air is drawn');
   g.tanks[0].shield = { id: 'shield', hp: 10, deflect: false };
   assert.ok(actorLayer(g, 0).some((t) => t.txid === 'shield0' && t.wire), 'a shield is a wire cube round the tank');
+});
+
+test('the manual\u2019s other weapons: a riot charge cuts a wedge from the turret at once, a dirt charge fills one, liquid dirt fills the holes, the disrupter settles the field, plasma spares its thrower, padded and spring walls', () => {
+  const g = three({ wind: 'none' });
+  flatten(g, 20);
+  const t = current(g);
+  t.x = 30; t.y = 20; g.tanks[1].x = 70; g.tanks[1].y = 20; g.tanks[2].x = 85; g.tanks[2].y = 20;
+  t.inventory.riotCharge = 1;
+  for (let x = 34; x < 42; x++) for (let y = 20; y < 27; y++) g.dirt[y * COLS + x] = 1;   // a bank of dirt in front of the barrel
+  for (let x = 34; x < 42; x++) g.tops[x] = 27;
+  aim(g, t, { angle: 0, power: 500, weapon: 'riotCharge' });      // flat to the right, into the bank
+  const before = [...g.dirt].reduce((a, v) => a + v, 0);
+  assert.ok(fire(g, t));
+  assert.equal(g.shells.length, 0, 'no shell: it is a wedge');
+  assert.ok(before - [...g.dirt].reduce((a, v) => a + v, 0) > 5, 'dirt went');
+  assert.ok(g.tanks.every((k) => k.health === MAX_HEALTH), 'nobody hurt');
+  // a dirt charge fills
+  const g2 = three({ wind: 'none' });
+  flatten(g2, 20);
+  const t2 = current(g2); t2.x = 30; t2.y = 20;
+  t2.inventory.dirtCharge = 1;
+  aim(g2, t2, { angle: 30, power: 500, weapon: 'dirtCharge' });
+  const b2 = [...g2.dirt].reduce((a, v) => a + v, 0);
+  fire(g2, t2);
+  assert.ok([...g2.dirt].reduce((a, v) => a + v, 0) > b2 + 10, 'dirt came');
+  // liquid dirt pools in a hole
+  const g3 = three({ wind: 'none' });
+  flatten(g3, 20);
+  for (let x = 50; x < 54; x++) for (let y = 14; y < 20; y++) g3.dirt[y * COLS + x] = 0;
+  for (let x = 50; x < 54; x++) g3.tops[x] = 14;
+  g3.tanks.forEach((k, i) => { k.x = 5 + i * 40 + (i ? 40 : 0); k.y = 20; });
+  g3.shells = [{ x: 48.5, y: 20.5, vx: 2, vy: -1, weapon: 'liquidDirt', owner: 0, path: [], t: 1, primary: true }];
+  g3.phase = 'flight';
+  play(g3);
+  assert.ok(g3.tops[51] > 14, 'the hole filled up some');
+  // the disrupter settles an overhang anywhere on the field
+  const g4 = three({ wind: 'none' });
+  const col = 10;
+  g4.dirt[(g4.tops[col] - 3) * COLS + col] = 0;                     // a hole under the top three cells, far from any blast
+  const t4 = current(g4); t4.inventory.earthDisrupter = 1;
+  aim(g4, t4, { weapon: 'earthDisrupter' });
+  fire(g4, t4);
+  assert.ok(g4.falling.some((f) => f.x === col) || dirtAt(g4, col, g4.tops[col] - 1), 'that column settled');
+  let air = false, floating = false;
+  for (let y = 0; y < ROWS; y++) { if (!dirtAt(g4, col, y)) air = true; else if (air) floating = true; }
+  assert.equal(floating, false, 'nothing hangs in column 10 after the disrupter');
+  // plasma: the thrower is spared, a neighbour in reach is not, and no crater
+  const g5 = three({ wind: 'none' });
+  flatten(g5, 10);
+  const [me, foe] = g5.tanks;
+  me.x = 40; me.y = 10; foe.x = 45; foe.y = 10; g5.tanks[2].x = 90; g5.tanks[2].y = 10;
+  me.inventory.plasmaBlast = 1;
+  aim(g5, me, { angle: 45, power: 1000, weapon: 'plasmaBlast' });
+  const d5 = [...g5.dirt].reduce((a, v) => a + v, 0);
+  fire(g5, me);
+  assert.equal(me.health, MAX_HEALTH, 'the thrower is spared');
+  assert.ok(foe.health < MAX_HEALTH, 'the neighbour is not');
+  assert.equal([...g5.dirt].reduce((a, v) => a + v, 0), d5, 'energy, not a crater');
+  // padded: the shell stops at the wall and drops; spring: it comes back faster than rubber
+  const wallShot = (walls) => {
+    const g6 = three({ wind: 'none', walls });
+    flatten(g6, 3);
+    const s6 = current(g6); s6.x = COLS - 6;
+    aim(g6, s6, { angle: 10, power: 1000 });
+    fire(g6, s6);
+    const ev = play(g6);
+    return { ev, blast: ev.find((e) => e.kind === 'blast') };
+  };
+  const padded = wallShot('padded');
+  assert.ok(padded.blast && padded.blast.x > COLS - 2.5, 'padded: it dropped at the wall');
+  const spring = wallShot('spring'), rubber = wallShot('rubber');
+  assert.ok(spring.blast && rubber.blast && spring.blast.x < rubber.blast.x, 'spring: it came back further');
 });

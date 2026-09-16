@@ -110,9 +110,44 @@ bounce, or every substep. That table is the whole roster (§4); the physics is s
 
 ## 4. The roster
 
-Prices, pack sizes and damages below are from the original's defaults as remembered; each one
-is checked against the original's manual (`SCORCH.DOC` from the shareware package) during M2
-before it is committed, and the checked table lives in `public/js/scorchedshop.js` as data.
+*Checked against the manual on 2026-09-16* (SCORCH.DOC, the copy at abandonwaredos.com). The
+manual's tables are the ones below; `public/js/scorchedshop.js` carries them as data, with each
+blast radius (pixels on the original's 640-wide screen) divided by 6.67 for a 96-cell field.
+Damage is ours: the manual does not number it. The manual's own defaults: **$0 to start, 5%
+interest, walls NONE, computers buy ON**; ours starts with $10,000 so the first shop has a use
+(a setting, down to 0).
+
+**Weapons** (cost · bundle · radius px · arms level): Baby Missile $400·10·10·0 (unlimited: you
+always have 99) · Missile $1,875·5·20·0 · Baby Nuke $10,000·3·40·0 · Nuke $12,000·1·75·1 · Leap
+Frog $10,000·2·20/25/30·3 · Funky Bomb $7,000·2·80·4 · MIRV $10,000·3·20·2 · Death's Head
+$20,000·1·35 ×9 warheads·4 · Napalm $10,000·10·2 · Hot Napalm $20,000·2·4 · Tracer $10·20·0 ·
+Smoke Tracer $500·10·1 · Baby Roller $5,000·10·10·2 · Roller $6,000·5·20·2 · Heavy Roller
+$6,750·2·45·3 · Riot Charge $2,000·10·36 (a wedge from the turret)·2 · Riot Blast $5,000·5·60
+(wider wedge)·3 · Riot Bomb $5,000·5·30·3 · Heavy Riot Bomb $4,750·2·45·3 · Baby Digger
+$3,000·10·0 · Digger $2,500·5·0 · Heavy Digger $6,750·2·1 · Baby Sandhog $10,000·10·0 · Sandhog
+$16,750·5·0 · Heavy Sandhog $25,000·2·1 · Dirt Clod $5,000·10·20·0 · Dirt Ball $5,000·5·35·0 ·
+Ton of Dirt $6,750·2·70·1 · Liquid Dirt $5,000·10·2 · Dirt Charge $5,000·5 (a wedge of dirt)·1 ·
+Earth Disrupter $5,000·10·0 · Plasma Blast $9,000·5·10–75·3 · Laser $5,000·5·2.
+
+**Accessories**: Heat Guidance $10,000·6 · Ballistic Guidance $10,000·2 · Horz Guidance
+$15,000·5 · Vert Guidance $20,000·5 · Lazy Boy $20,000·2 · Parachute $10,000·8 · Battery
+$5,000·10 · Mag Deflector $10,000·2 · Shield $20,000·3 · Force Shield $25,000·3 · Heavy Shield
+$30,000·2 · Super Mag $40,000·2 · Auto Defense $1,500·1 · Fuel Tank $10,000·10 · Contact
+Trigger $1,000·25. (The guidance systems and Lazy Boy are v2.) Shield strengths are not
+numbered in the manual; ours are 60 / 100 / 150.
+
+**The computer players, in the manual's words** (for M3): Moron — "pick an angle and power, and
+shoot"; Shooter — "significantly deadlier … only if they have a straight line of fire";
+Poolshark — "act like Shooters unless … rebounding walls. Then they try to rebound shots";
+Tosser — "start out like Morons, but they'll refine their aim … until they hit"; Chooser —
+"have all the above methods available … decide which one will be most effective"; Spoiler —
+"taking into account the wind factor and gravity, they will get a perfect shot almost every
+time"; Cyborg — "use methods similar to the Spoilers, but are much nastier … attack tanks who
+are weakened, winning, or have attacked them"; Unknown — "one of the above will be chosen
+randomly … you will not be notified". Walls in the original: CONCRETE, PADDED, RUBBER, SPRING,
+WRAP, RANDOM, ERRATIC, NONE.
+
+The table as first planned, superseded by the above:
 
 ### Weapons (v1 — the first playable set)
 

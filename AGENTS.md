@@ -393,7 +393,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 964 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 965 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -529,7 +529,8 @@ a tempo.
 `public/js/scorchedyard.js` screen, `public/js/scorchedshop.js` the roster and prices as data;
 `docs/PLAN-SCORCHED-YARD.md` the plan, M1 and M2 landed 2026-09-16). Every weapon is a shell with
 a `kind` the rules switch on at impact (blast, funky, mirv, leapfrog, tracer, roller, riot, dirt,
-napalm, digger, sandhog; the laser is instant); `g.shells` is a list so a MIRV's heads fly
+liquidDirt, napalm, digger, sandhog; wedge, disrupter, plasma and laser are instant from the
+turret); the table is the manual's (SCORCH.DOC via abandonwaredos.com, radii in pixels over 6.67); `g.shells` is a list so a MIRV's heads fly
 together; items sit on the tank (`items`, a `shield` up, `armed` for the shot); cash flows through
 `applyDamage`, `kill`, `settled` and `payInterest`; the shop is `SHOP` + `buy`.
 Scorched Earth on the engine: the dirt is a bitmap over a 96×48 grid drawn as **a cube per cell**
@@ -665,7 +666,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 964 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 965 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
