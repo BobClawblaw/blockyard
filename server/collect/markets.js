@@ -106,6 +106,22 @@ export const BOOKS = {
 export const DEPTH_STEP = 50;     // dollars a level on the depth grid: fixed, so snapshots compare as the price moves
 export const DEPTH_SPAN = 0.12;   // how far either side of the mid the grid reaches
 export const DEPTH_AGOS = [60, 300, 600, 1800, 3600];
+// BOUNDS ON WHAT AN EXCHANGE CAN MAKE US DO (2026-09-16, audit L5). The grid size was
+// ceil(mid x 0.24 / 50) with the mid taken from the books themselves, so one absurd book --
+// bid 60,000, ask 2e10, answering alone -- made 48 million levels, blocked pollBooks for
+// 10 s and held 5 GB for the hour the snapshot is kept. None of that takes a malicious
+// exchange, only a broken, compromised or intercepted one. So:
+//   - a book whose mid is more than DEPTH_SANE from the median of every other book and
+//     every recent ticker is not drawn; its row says why (an exchange answering nonsense
+//     is reported, never silently dropped -- rule 8);
+//   - the grid never exceeds DEPTH_MAX_LEVELS (at $50 a level that is a mid near $400,000
+//     before it bites; today's is about 370 levels);
+//   - a reply body is read up to MAX_BODY_BYTES and no further (Coinbase's whole book, the
+//     largest, measured 1.1 MB on 2026-09-11), and a redirect is an error, not a new host.
+export const DEPTH_SANE = 0.2;
+export const DEPTH_MAX_LEVELS = 2000;
+export const MAX_BODY_BYTES = 5 * 1024 * 1024;
+const TICKER_REF_MS = 600_000;    // how old a ticker may be and still vouch for a book's price
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
 // A book as cumulative depth on the grid p0 + i*step: bids[i] is the BTC bid at or above that
@@ -136,11 +152,36 @@ export function depthOf(book, p0, n, step = DEPTH_STEP) {
 }
 
 const UA = 'BlockYard (self-hosted Bitcoin node monitor)';
+
+// A reply body, read no further than `limit` bytes (2026-09-16, audit L5). A declared
+// Content-Length past the limit is refused before reading; otherwise the stream is read
+// chunk by chunk and cancelled the moment it passes the limit, so a hostile or broken
+// endpoint costs at most `limit` bytes of memory, not whatever it cares to send inside
+// the 8 s timeout. A reply object with no stream (the tests' stubs) falls back to json().
+export async function readJsonCapped(r, limit = MAX_BODY_BYTES) {
+  const declared = Number(r.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > limit) throw new Error(`reply of ${declared} bytes is over the ${limit}-byte limit`);
+  const reader = r.body?.getReader?.();
+  if (!reader) return r.json();
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limit) {
+      reader.cancel().catch(() => {});
+      throw new Error(`reply over the ${limit}-byte limit`);
+    }
+    chunks.push(value);
+  }
+  return JSON.parse(Buffer.concat(chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength))).toString('utf8'));
+}
 const median = (xs) => (xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2) : null);
 
 export class MarketFeed {
   constructor(cfg = {}, { log = () => {}, fetchImpl = globalThis.fetch, now = Date.now, exchanges = EXCHANGES } = {}) {
-    this.cfg = { tickerMs: 15_000, candleMs: 300_000, bookMs: 30_000, idleAfterMs: 600_000, timeoutMs: 8_000, candles: 168, ...cfg };
+    this.cfg = { tickerMs: 15_000, candleMs: 300_000, bookMs: 30_000, idleAfterMs: 600_000, timeoutMs: 8_000, candles: 168, maxBodyBytes: MAX_BODY_BYTES, ...cfg };
     this.log = log;
     this.fetch = fetchImpl;
     this.now = now;
@@ -180,9 +221,11 @@ export class MarketFeed {
   }
 
   async get(url) {
-    const r = await this.fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, signal: AbortSignal.timeout(this.cfg.timeoutMs) });
+    // redirect 'error' (2026-09-16, audit L5): every URL above is the exchange's own API
+    // host; a 3xx pointing somewhere else is not followed.
+    const r = await this.fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(this.cfg.timeoutMs) });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
+    return readJsonCapped(r, this.cfg.maxBodyBytes);
   }
 
   async pollTickers() {
@@ -231,15 +274,41 @@ export class MarketFeed {
       }
     }));
     if (!books.size) return;
-    const mids = [...books.values()].map((b) => {
+    const midOf = (b) => {
       let bb = -Infinity, ba = Infinity;
       for (const [p] of b.bids) if (p > bb) bb = p;
       for (const [p] of b.asks) if (p < ba) ba = p;
       return (bb + ba) / 2;
-    }).sort((a, b) => a - b);
+    };
+    const bookMids = new Map([...books].map(([id, b]) => [id, midOf(b)]));
+    // Sanity (2026-09-16, audit L5): each book against everyone else -- the other books'
+    // mids and every ticker younger than ten minutes. With one book answering, the tickers
+    // are the check; with nothing to compare against, the book stands as before.
+    const tickers = this.exchanges.map((ex) => this.rows.get(ex.id)?.ticker)
+      .filter((t) => t?.last > 0 && this.now() - t.at <= TICKER_REF_MS).map((t) => t.last);
+    for (const [id, m] of bookMids) {
+      const others = [...[...bookMids].filter(([k]) => k !== id).map(([, v]) => v), ...tickers].filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+      const ref = median(others);
+      const bad = !(Number.isFinite(m) && m > 0) ? 'no usable mid price'
+        : ref != null && Math.abs(m - ref) / ref > DEPTH_SANE ? `mid ${Math.round(m)} is more than ${DEPTH_SANE * 100}% from the other exchanges (${Math.round(ref)}); book not drawn`
+          : null;
+      if (bad) {
+        books.delete(id);
+        const row = this.rows.get(id);
+        if (row) row.bookError = { message: bad, at: this.now() };
+      }
+    }
+    if (!books.size) return;
+    const mids = [...books.keys()].map((id) => bookMids.get(id)).sort((a, b) => a - b);
     const mid = median(mids);
-    const p0 = Math.floor((mid * (1 - DEPTH_SPAN)) / DEPTH_STEP) * DEPTH_STEP;
-    const n = Math.ceil((mid * 2 * DEPTH_SPAN) / DEPTH_STEP) + 1;
+    let p0 = Math.floor((mid * (1 - DEPTH_SPAN)) / DEPTH_STEP) * DEPTH_STEP;
+    let n = Math.ceil((mid * 2 * DEPTH_SPAN) / DEPTH_STEP) + 1;
+    if (n > DEPTH_MAX_LEVELS) {
+      // Clamped: keep the mid in the middle of the grid rather than letting the grid stop
+      // short of it.
+      n = DEPTH_MAX_LEVELS;
+      p0 = Math.max(0, Math.floor((mid - (n / 2) * DEPTH_STEP) / DEPTH_STEP) * DEPTH_STEP);
+    }
     const snap = { at: this.now(), mid, p0, n, ex: {} };
     for (const [id, bk] of books) snap.ex[id] = depthOf(bk, p0, n);
     this.depthHist.push(snap);

@@ -17,12 +17,14 @@
 const TS_RE = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d{3}) /;
 const TAG_RE = /^\[[a-z0-9_]+(?::\d+)?\]\s*/;
 
-// "1.0KB", "32.0 KB/s", "0.0B", "2.3MB", "128 KB". The node prints decimal
+// "1.0KB", "32.0 KB/s", "0.0B", "2.3MB", "128 KB". (2026-09-16, audit L6: the number is
+// `\d*\.\d+|\d+`, the same numbers as the old `[0-9]*\.?[0-9]+` without the two digit
+// runs that could split a long string of digits every possible way.) The node prints decimal
 // units (4096 bytes renders as "4.0KB"), so decode the same way back.
 const SIZE_UNITS = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12, PB: 1e15 };
 export function parseSize(text) {
   if (text == null) return null;
-  const m = String(text).trim().match(/^([0-9]*\.?[0-9]+)\s*(B|KB|MB|GB|TB|PB)(?:\/s)?$/i);
+  const m = String(text).trim().match(/^(\d*\.\d+|\d+)\s*(B|KB|MB|GB|TB|PB)(?:\/s)?$/i);
   if (!m) return null;
   const unit = m[2].toUpperCase();
   return Math.round(parseFloat(m[1]) * SIZE_UNITS[unit]);
@@ -30,7 +32,7 @@ export function parseSize(text) {
 
 export function parseRate(text) {
   if (text == null) return null;
-  const m = String(text).trim().match(/^([0-9]*\.?[0-9]+)\s*(B|KB|MB|GB|TB)\/s$/i);
+  const m = String(text).trim().match(/^(\d*\.\d+|\d+)\s*(B|KB|MB|GB|TB)\/s$/i);
   if (!m) return null;
   return parseFloat(m[1]) * SIZE_UNITS[m[2].toUpperCase()];
 }
@@ -64,6 +66,11 @@ function addrParts(s) {
   return { host: s, port: null, addr: s };
 }
 
+// 2026-09-16 (audit L6): a `\s*` in front of a capture such as `([^,]+)` that can itself
+// start with a space lets the engine split one run of spaces between the two in every
+// possible way -- quadratic on a long run, and each rule pays it on every line. Those
+// captures now start with a character `\s` cannot match (`[^\s,][^,]*`), which matches
+// the same real lines and leaves only one way to read the spaces.
 const RULES = [
   // [dlc] -- network recv this tick: 4.0KB (405.0B/s) | total recv: 2.3MB || disk write this tick: 0.0B (0.0B/s) | total written: 1.9MB --
   {
@@ -90,7 +97,7 @@ const RULES = [
   // [dlc] -- dead-weight floor this tick: 32.0 KB/s (pool median 0.0 KB/s, absolute 32.0 KB/s) --
   {
     name: 'deadweight',
-    re: /\[dlc\]\s*--\s*dead-weight floor this tick:\s*([^\s]+(?:\s?[KMG]?B\/s)?)\s*\(pool median\s*([^,]+),\s*absolute\s*([^)]+)\)/,
+    re: /\[dlc\]\s*--\s*dead-weight floor this tick:\s*([^\s]+(?:\s?[KMG]?B\/s)?)\s*\(pool median\s*([^\s,][^,]*),\s*absolute\s*([^\s)][^)]*)\)/,
     apply(m) {
       return { kind: 'deadweight', floor: parseRate(m[1].trim()), poolMedian: parseRate(m[2].trim()), absolute: parseRate(m[3].trim()) };
     },
@@ -100,7 +107,7 @@ const RULES = [
   // [dlc] ranked 116 live peer(s) by a 2000-header sample in 44.6s: 39 answered, best 94 KB/s, median 63 KB/s, slowest answering 48 KB/s; the 77 silent rank last
   {
     name: 'ranking',
-    re: /\[dlc\]\s*ranked\s*(\d+)\s*live peer\(s\)[^.]*in\s*([\d.]+)s:\s*(\d+)\s*answered,\s*best\s*([^,]+),\s*median\s*([^,]+),\s*slowest answering\s*([^;]+);\s*the\s*(\d+)\s*silent/,
+    re: /\[dlc\]\s*ranked\s*(\d+)\s*live peer\(s\)[^.]*in\s*([\d.]+)s:\s*(\d+)\s*answered,\s*best\s*([^\s,][^,]*),\s*median\s*([^\s,][^,]*),\s*slowest answering\s*([^\s;][^;]*);\s*the\s*(\d+)\s*silent/,
     apply(m) {
       return {
         kind: 'peer_ranking', live: +m[1], sampleSecs: +m[2], answered: +m[3],
@@ -131,7 +138,7 @@ const RULES = [
   // [block] stored height=965923 hash=0000000000000000.. bytes=1464177 tx=6866 (via 193.223.81.8:8333)
   {
     name: 'blockStored',
-    re: /\[block\]\s*stored\s+height=(\d+)\s+hash=([0-9a-f.]+)\s+bytes=(\d+)\s+tx=(\d+)(?:\s*\(via\s*([^\)]+)\))?/,
+    re: /\[block\]\s*stored\s+height=(\d+)\s+hash=([0-9a-f.]+)\s+bytes=(\d+)\s+tx=(\d+)(?:\s*\(via\s*([^\s)][^)]*)\))?/,
     apply(m) {
       const via = addrParts(m[5]);
       return { kind: 'block_stored', height: +m[1], hashPrefix: m[2].replace(/\.$/, ''), bytes: +m[3], txs: +m[4], via: via?.addr ?? null, viaHost: via?.host ?? null };
@@ -198,7 +205,10 @@ const RULES = [
   // [mux:7] leg replaced: connected next pool peer 208.161.116.211:8333 (fd 266) addrv2=1
   { name: 'legReplaced', re: /\[mux:(\d+)\]\s*leg replaced:\s*connected next pool peer\s*(\S+)\s*\(fd\s*(\d+)\)\s*addrv2=(\d)/, apply: (m) => ({ kind: 'peer_connect', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, fd: +m[3], addrv2: m[4] === '1', reason: 'leg replaced' }) },
   // [mux:9] next peer 86.147.78.44:8333 unreachable: connect: Operation now in progress (leg stays down)
-  { name: 'legDown', re: /\[mux:(\d+)\]\s*next peer\s*(\S+)\s+unreachable:\s*(.+?)\s*\(leg stays down\)/, apply: (m) => ({ kind: 'peer_unreachable', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, reason: m[3].trim() }) },
+  // 2026-09-16 (audit L6): was `unreachable:\s*(.+?)\s*\(leg stays down\)`, which is cubic
+  // on a long run of spaces -- 20,000 of them did not finish in 300 s. The lazy capture
+  // now meets a literal straight away, and the apply trims what the two `\s*` used to.
+  { name: 'legDown', re: /\[mux:(\d+)\]\s*next peer\s*(\S+)\s+unreachable:(.+?)\(leg stays down\)/, apply: (m) => ({ kind: 'peer_unreachable', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, reason: m[3].trim() }) },
   // [dl:7] 209.38.162.73:8333 connection dropped (revents 0x11); re-dialing
   { name: 'legDropped', re: /\[dl:(\d+)\]\s*(\S+?)\s+connection dropped\s*\(revents\s*(\S+?)\)(?:;\s*(\S+))?/, apply: (m) => ({ kind: 'peer_drop', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, revents: m[3], follow: m[4] || null }) },
   // [net] feeler 47.232.103.88:8333 -> dead
@@ -217,7 +227,7 @@ const RULES = [
     },
   },
   // [mempool] recent-rejects filter: 128 KB shared (...)
-  { name: 'rejectFilter', re: /\[mempool\]\s*recent-rejects filter:\s*([^\s]+)\s*(?:KB|MB|B)?\s+shared/, apply: (m) => ({ kind: 'reject_filter', size: parseSize(m[1] + (/\s?(KB|MB|B)$/i.test(m[1]) ? '' : 'KB')) }) },
+  { name: 'rejectFilter', re: /\[mempool\]\s*recent-rejects filter:\s*([^\s]+)(?:\s*(?:KB|MB|B))?\s+shared/, apply: (m) => ({ kind: 'reject_filter', size: parseSize(m[1] + (/\s?(KB|MB|B)$/i.test(m[1]) ? '' : 'KB')) }) },
 
   // ---- the 2026-09-08 bench build (v0.0.1, built 03:02) rewrote these lines ----
   // Measured the same day against that node's own log: of 1,702 lines the rules
@@ -237,16 +247,21 @@ const RULES = [
   // unit to fill a gap.
   {
     name: 'bandwidthTick',
-    re: /\[dlc\]\s*--\s*recv\s*([^\s(]+)\s*\(avg\s*([^)]+)\)\s*\|\s*write\s*([^\s(]+)\s*\(avg\s*([^)]+)\)\s*\|\s*floor\s*([^()]+?)\s*\(median\s*([^)]+)\)\s*\|\s*banned\s*(\d+)\/(\d+)(?:\s*\|\s*(events.*?))?\s*--/,
+    // 2026-09-16 (audit L6): every `\s*` in front of a capture that could also match
+    // spaces now hands over to a first character that cannot (`[^\s)]`), and no lazy
+    // capture is followed by `\s*` -- the captures keep their trailing spaces and the
+    // apply trims them. The old form retried the same run of spaces from both sides and
+    // went quadratic on a long one.
+    re: /\[dlc\]\s*--\s*recv\s*([^\s(]+)\s*\(avg\s*([^\s)][^)]*)\)\s*\|\s*write\s*([^\s(]+)\s*\(avg\s*([^\s)][^)]*)\)\s*\|\s*floor\s*([^\s()][^()]*?)\(median\s*([^\s)][^)]*)\)\s*\|\s*banned\s*(\d+)\/(\d+)(?:\s*\|\s*(events.*?)|\s*)--/,
     apply(m) {
       const counters = {};
       for (const [, k, v] of (m[9] || '').matchAll(/\b(events|rot|wait|help|fail)\s+(\d+)/g)) counters[k] = +v;
       return {
         kind: 'bandwidth',
         netRate: parseRate(m[1]),
-        avgNetRate: parseRate(m[2]),
+        avgNetRate: parseRate(m[2].trim()),
         diskRate: parseRate(m[3]),
-        avgDiskRate: parseRate(m[4]),
+        avgDiskRate: parseRate(m[4].trim()),
         floor: parseRate((m[5] || '').trim()),
         poolMedianText: (m[6] || '').trim() || null,
         banned: +m[7],
@@ -274,7 +289,10 @@ const RULES = [
   // floor this tick:`, `average since start:`) stay with their own rules.
   {
     name: 'bandwidthTickFields',
-    re: /\[dlc\]\s*--\s*(.+?)\s*--/,
+    // 2026-09-16 (audit L6): `\s*(.+?)\s*--` retried every space run from both sides
+    // (quadratic). The capture now starts on a non-space and runs to the first `--`; its
+    // trailing spaces are trimmed with each segment below, so the fields are the same.
+    re: /\[dlc\]\s*--\s*(\S.*?)--/,
     apply(m) {
       const out = { kind: 'bandwidth', extraFields: [], extraValues: null };
       let claims = 0;
@@ -331,7 +349,8 @@ const RULES = [
   // the stored/applied figures survive whatever the node does to the prose.
   {
     name: 'dlcProgressFields',
-    re: /\[dlc\]\s*==\s*(.+?)\s*==/,
+    // 2026-09-16 (audit L6): same rewrite as bandwidthTickFields, same reason.
+    re: /\[dlc\]\s*==\s*(\S.*?)==/,
     apply(m) {
       const out = { kind: 'dlc_progress', extraFields: [] };
       let claims = 0;
@@ -429,7 +448,7 @@ const RULES = [
   // re-windowed, and that is decoded as negative rather than dropped.
   {
     name: 'dlcWorkerPeer',
-    re: /\[dlc\]\s*w(\d+)\s+(\S+?)\s+chunks=(\d+)\s+blocks=(\d+)\s*\(\+(-?\d+) blk\/s,\s*([^)]+)\)(?:\s*[\[(]([^\])]*?)[\])])?/,
+    re: /\[dlc\]\s*w(\d+)\s+(\S+?)\s+chunks=(\d+)\s+blocks=(\d+)\s*\(\+(-?\d+) blk\/s,\s*([^\s)][^)]*)\)(?:\s*[\[(]([^\])]*?)[\])])?/,
     apply(m) {
       const a = addrParts(m[2]);
       const note = (m[7] || '').trim() || null;
@@ -475,7 +494,11 @@ const RULES = [
   // Again: stored beside the others, not averaged with them.
   {
     name: 'catchupProgress',
-    re: /\[utxo_live\]\s*catchup progress:\s*height=(\d+)\/(\d+)\s*\((\d+\.?\d*)%\)\s*([\d.]+)\s*blk\/s\s*\(avg\s*([\d.]+)\)\s*eta\s*(\S+)\s*\|\s*(.*?)\s*\(([\d.]+)\s*ms\/blk over (\d+)\)/,
+    // 2026-09-16 (audit L6): the phase text was `\|\s*(.*?)\s*\(`, quadratic on spaces;
+    // it is now everything between the bar and the parenthesis. Only the `name N%` pairs
+    // are read out of it, so the spaces it now keeps change nothing. The eta stops at a
+    // bar, so a run of bars is not re-scanned once for every bar in it.
+    re: /\[utxo_live\]\s*catchup progress:\s*height=(\d+)\/(\d+)\s*\((\d+\.?\d*)%\)\s*([\d.]+)\s*blk\/s\s*\(avg\s*([\d.]+)\)\s*eta\s*([^\s|]+)\s*\|(.*?)\(([\d.]+)\s*ms\/blk over (\d+)\)/,
     apply(m) {
       // Groups: 1 height 2 of 3 pct 4 blk/s 5 avg 6 eta 7 phase text 8 ms/blk 9 samples.
       // An earlier cut of this apply() read 8/9/10 and returned msPerBlk 155 for a
@@ -496,7 +519,7 @@ const RULES = [
   //   12 input run(s) unlinked; apply never waited
   {
     name: 'utxoCompaction',
-    re: /\[utxo_live\]\s*compaction done in\s*([\d.]+)s\s*\((\d+) run\(s\)\s*\[[^\]]*\)\s*of\s*(\d+)[^;]*;\s*started at height\s*(\d+)\)?:\s*manifest_n\s*(\d+)\s*->\s*(\d+),\s*merged into run\s*(\d+),\s*(\d+) flushed meanwhile,\s*(\d+) input run\(s\) unlinked;\s*apply\s*(never waited|waited[^;,]*)/,
+    re: /\[utxo_live\]\s*compaction done in\s*([\d.]+)s\s*\((\d+) run\(s\)\s*\[[^\]]*\)\s*of\s*(\d+)(?:[^;\d][^;]*)?;\s*started at height\s*(\d+)\)?:\s*manifest_n\s*(\d+)\s*->\s*(\d+),\s*merged into run\s*(\d+),\s*(\d+) flushed meanwhile,\s*(\d+) input run\(s\) unlinked;\s*apply\s*(never waited|waited[^;,]*)/,
     apply(m) {
       const waited = m[10] !== 'never waited';
       return {
@@ -575,7 +598,7 @@ const RULES = [
   // median 59 s, p95 393 s apart on production.
   {
     name: 'dialTopUpFails',
-    re: /\[dl\]\s*outbound top-up:\s*(\d+)\s*dial\(s\) failed(?:,\s*first\s+(\S+):\s*(.+?))?\s*$/,
+    re: /\[dl\]\s*outbound top-up:\s*(\d+)\s*dial\(s\) failed(?:,\s*first\s+(\S+):(.+))?\s*$/,
     apply(m) {
       const a = m[2] ? addrParts(m[2]) : null;
       return {
@@ -625,7 +648,9 @@ const RULES = [
   // event list, which is what it is for.
   {
     name: 'dialBackgroundFail',
-    re: /\[dial\]\s*(\S+?):\s*background dial failed:\s*(.+?)\s*$/,
+    // 2026-09-16 (audit L6): `:\s*(.+?)\s*$` became `:(.+)$` (here and in dialTopUpFails):
+    // the same text once trimmed, and one pass to the end instead of one per space.
+    re: /\[dial\]\s*(\S+?):\s*background dial failed:(.+)$/,
     apply(m) {
       const a = addrParts(m[1]);
       return { kind: 'peer_reject', direction: 'outbound', addr: a?.addr ?? m[1], host: a?.host ?? m[1], reason: m[2].trim(), severity: 'warn' };
@@ -708,9 +733,19 @@ function localFromLogTs(dateTime, ms) {
   return new Date(+y, +mo - 1, +d, +h, +mi, +s, +ms).getTime();
 }
 
+// LONG LINES (2026-09-16, audit L6). Every rule runs unanchored on the server's main
+// thread, so a line's length is a cost every rule pays. No line this node prints comes
+// near 8 KB (the longest in the fixtures is a few hundred bytes); anything past that is
+// cut before matching, and the event says so (`truncated`: the characters dropped).
+// Together with the rewritten patterns above, a 20,000-space line parses in
+// a few milliseconds where `legDown` alone used to not finish in 300 s.
+export const MAX_LINE = 8192;
+
 // One line in, one event out (or null for a continuation/blank line).
 export function parseLine(line) {
   if (!line) return null;
+  let cut = 0;
+  if (line.length > MAX_LINE) { cut = line.length - MAX_LINE; line = line.slice(0, MAX_LINE); }
   const trimmed = line.replace(/\r$/, '');
   if (!trimmed.trim()) return null;
 
@@ -738,6 +773,7 @@ export function parseLine(line) {
         out.text = rest.trim();
         out.rule = rule.name;
         out.severity = out.severity ?? classify(tagBase, rest);
+        if (cut) out.truncated = cut;
         return out;
       }
     }
@@ -751,14 +787,25 @@ export function parseLine(line) {
     text: rest.trim(),
     severity: classify(tagBase, rest),
     rule: null,
+    ...(cut ? { truncated: cut } : {}),
   };
 }
 
 // Lines arrive in chunks; keep the trailing partial line for the next round.
+//
+// 2026-09-16 (audit L6): the partial line used to grow without limit, so a log that
+// never printed a newline was held whole in memory and handed to every rule at once.
+// `carry` now keeps at most MAX_LINE characters -- the front of the line, where the
+// timestamp and tag are -- and parseLine would cut it there anyway. What is dropped is
+// counted in `state.carryDropped`, so a mangled log shows up as a number, not silence.
 export function splitLines(buf, state = { carry: '' }) {
   const text = state.carry + buf;
   const parts = text.split('\n');
   state.carry = parts.pop() ?? '';
+  if (state.carry.length > MAX_LINE) {
+    state.carryDropped = (state.carryDropped ?? 0) + state.carry.length - MAX_LINE;
+    state.carry = state.carry.slice(0, MAX_LINE);
+  }
   const out = [];
   for (const p of parts) { const e = parseLine(p); if (e) out.push(e); }
   return out;

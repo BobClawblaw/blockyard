@@ -43,6 +43,16 @@ export function parsePushes(hex) {
     const op = bytes[i];
     let n = op;
     let head = 1;
+    // 2026-09-16 (audit L4): a scriptSig may END on an OP_PUSHDATA opcode with its length
+    // bytes missing -- consensus allows any bytes after the BIP34 height, so a pool can
+    // put this in its own block for free. readUInt16LE/readUInt32LE past the end threw
+    // ERR_OUT_OF_RANGE, the monitor's lane retried that block forever and every later
+    // block waited behind it. The length is read only when all of its bytes are there;
+    // a truncated frame header ends the walk like any other unparseable frame.
+    if (op === 0x4c) head = 2;
+    else if (op === 0x4d) head = 3;
+    else if (op === 0x4e) head = 5;
+    if (i + head > bytes.length) break;
     if (op === 0x4c) { n = bytes[i + 1]; head = 2; }
     else if (op === 0x4d) { n = bytes.readUInt16LE(i + 1); head = 3; }
     else if (op === 0x4e) { n = bytes.readUInt32LE(i + 1); head = 5; }
@@ -52,6 +62,26 @@ export function parsePushes(hex) {
     i += head + n;
   }
   return { consumed: i, total: bytes.length, pushes: out };
+}
+
+/**
+ * decodeCoinbase that cannot throw (2026-09-16, audit L4). The decoder is meant never to
+ * throw on any bytes, and the fuzz test holds it to that; this is the belt to that pair of
+ * braces for the two lanes that call it on untrusted blocks. A coinbase that still fails
+ * to decode is a fact about THAT block -- permanent, so it is recorded as unparseable (an
+ * unknown pool, `decodeError` saying why) and the lane moves on. Retrying it would only
+ * stall every block queued behind it, which is exactly what L4 found.
+ */
+export function decodeCoinbaseSafe(hex) {
+  try {
+    return decodeCoinbase(hex);
+  } catch (err) {
+    return {
+      parseable: false, truncatedAt: 0, height: null, tagText: null, tag: null,
+      commitment: null, extraNonce: null, raw: typeof hex === 'string' ? hex : '',
+      decodeError: String(err?.message ?? err),
+    };
+  }
 }
 
 /**
@@ -257,6 +287,8 @@ export function minerRow({ height, hash, decoded, stats, at }) {
     extraNonce: decoded?.extraNonce ?? null,
     commitment: decoded?.commitment ?? null,
     rawCoinbase: decoded?.raw ?? null,
+    // 2026-09-16 (audit L4): present only when the coinbase could not be decoded at all.
+    ...(decoded?.decodeError ? { decodeError: decoded.decodeError } : {}),
   };
 }
 

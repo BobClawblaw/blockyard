@@ -20,7 +20,7 @@ import { LogTail } from './logtail.js';
 import { CounterRate } from '../store/ring.js';
 import { computeSync, stripFacts } from './sync.js';
 import { SHAPES, RULE_TO_SHAPE } from './logparse.js';
-import { decodeCoinbase, minerRow, ledgerApply, ledgerRows, aliasFor, matchPool } from './mining.js';
+import { decodeCoinbaseSafe, minerRow, ledgerApply, ledgerRows, aliasFor, matchPool } from './mining.js';
 import { NetworkStats } from './network.js';
 import { summarizeTemplate, packagesFromTemplate, blockEconomy, templateCells } from './nextblock.js';
 import { templateFromMempool, LOCAL_TEMPLATE_NOTE } from './gbt.js';
@@ -897,7 +897,11 @@ export class NodeMonitor extends EventEmitter {
     const rtRes = await this.rpc.batch([{ method: 'getrawtransaction', params: [cbTxid, 2] }], { priority: 3 });
     if (!rtRes?.[0]?.ok) throw new Error(rtRes?.[0]?.error?.message ?? 'getrawtransaction unanswered');
     const vin0 = rtRes[0].result?.vin?.[0] ?? {};
-    const decoded = decodeCoinbase(vin0.coinbase ?? vin0.coinbaseHex ?? '');
+    // 2026-09-16 (audit L4): everything above that throws is the node not answering, and
+    // pumpMining puts the height back and backs off. What follows is the block's own bytes,
+    // and a coinbase we cannot read will read the same way next time -- so it never throws:
+    // the block is recorded as unparseable (an unknown pool) and the queue moves on.
+    const decoded = decodeCoinbaseSafe(vin0.coinbase ?? vin0.coinbaseHex ?? '');
     const stats = this.state.blocks.get(height) ?? {};
     const row = minerRow({
       height, hash,

@@ -16,7 +16,7 @@
 //                and the view says how far it has got
 //
 // The arithmetic is in pure functions above the class, which is what the tests hold.
-import { decodeCoinbase, matchPool, aliasFor, tagFingerprint } from './mining.js';
+import { decodeCoinbaseSafe, matchPool, aliasFor, tagFingerprint } from './mining.js';
 
 export const EPOCH = 2016;
 export const TARGET_SPACING = 600;
@@ -256,16 +256,26 @@ export class NetworkStats {
     const withCb = withHash.map((x, k) => ({ ...x, block: blocks[k]?.ok ? blocks[k].result : null })).filter((x) => x.block?.tx?.length);
     const cbs = await this.rpc.batch(withCb.map((x) => ({ method: 'getrawtransaction', params: [x.block.tx[0], 2, x.hash] })), { priority: 7, heavy: true });
     const map = this.poolMapOf(), aliases = this.aliasesOf();
+    // 2026-09-16 (audit L4): one block's coinbase used to be able to throw out of this loop,
+    // and pumpPools then put the whole chunk of eight back at the front and retried it every
+    // 15 s -- forever, since the bytes never change. Only the RPC calls above are worth a
+    // retry. A block whose coinbase cannot be read is a permanent fact about that block: it
+    // is recorded as an unknown pool (`unparseable`) and the week keeps filling.
     withCb.forEach((x, k) => {
       const tx = cbs[k]?.ok ? cbs[k].result : null;
-      const hex = tx?.vin?.[0]?.coinbase ?? '';
-      const decoded = decodeCoinbase(hex);
-      const tagText = decoded?.tagText ?? '';
-      const matched = matchPool(map, { tagText, rawHex: hex });
-      const rawKey = decoded?.tag ? decoded.tag : tagFingerprint(tagText);   // the ledger's own key rule (minerRow)
-      const key = matched ? matched.key : rawKey;
-      const name = matched ? matched.name : (aliasFor(aliases, rawKey) ?? rawKey);   // the ledger shows an unlabelled pool by its key
-      this.pools.set(x.h, { height: x.h, time: x.block.time, poolKey: key, name, labelled: !!matched, tagText });
+      const hex = typeof tx?.vin?.[0]?.coinbase === 'string' ? tx.vin[0].coinbase : '';
+      try {
+        const decoded = decodeCoinbaseSafe(hex);
+        const tagText = decoded?.tagText ?? '';
+        const matched = matchPool(map, { tagText, rawHex: hex });
+        const rawKey = decoded?.tag ? decoded.tag : tagFingerprint(tagText);   // the ledger's own key rule (minerRow)
+        const key = matched ? matched.key : rawKey;
+        const name = matched ? matched.name : (aliasFor(aliases, rawKey) ?? rawKey);   // the ledger shows an unlabelled pool by its key
+        this.pools.set(x.h, { height: x.h, time: x.block.time, poolKey: key, name, labelled: !!matched, tagText, ...(decoded?.decodeError ? { unparseable: true } : {}) });
+      } catch {
+        const key = tagFingerprint('');
+        this.pools.set(x.h, { height: x.h, time: x.block.time, poolKey: key, name: key, labelled: false, tagText: '', unparseable: true });
+      }
     });
     this.at = this.now();
   }
