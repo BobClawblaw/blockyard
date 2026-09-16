@@ -99,6 +99,7 @@
     <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
     <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
     <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
+    <button data-page="scorched" role="menuitem" title="Scorched Yard: artillery on a deformable block landscape">Scorched Yard</button>
     <button data-page="wolf3d" role="menuitem" title="Wolfenstein 3D: the shareware WOLF3D.EXE on an emulated PC">Wolfenstein 3D</button>
     <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
     <button data-page="quake" role="menuitem" title="Quake: the shareware QUAKE.EXE on an emulated PC">Quake</button>
@@ -601,6 +602,42 @@
           </div>
           <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
           <table class="tetscores" id="tetScores"></table>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" data-page="scorched">
+      <div class="tetrust" id="scorched">
+        <div class="card tetcard">
+          <canvas class="tetsky" id="sySky"></canvas>
+          <h3>Scorched Yard <span class="sp"></span><span class="src">artillery on the block space — the land is dirt, and it falls</span></h3>
+          <div class="treemapwrap tetwell seyard idle" id="syFieldWrap">
+            <canvas class="treemap" id="syLand"></canvas>
+            <canvas class="treemap" id="syField"></canvas>
+          </div>
+          <div class="tetover" id="syOver">
+            <div class="tetmsg" id="syMsg">Scorched Yard</div>
+            <div class="tetsub" id="sySub"></div>
+            <button type="button" class="btn primary" id="syResume">play</button>
+          </div>
+        </div>
+        <div class="card tethud">
+          <h3>This turn</h3>
+          <div class="tetstats" id="syStats"></div>
+          <button type="button" class="btn primary syfire" id="syFire" disabled>fire</button>
+          <h3>Tanks</h3>
+          <div class="sytanks" id="syTanks"></div>
+          <h3>Keys</h3>
+          <div class="tetkeys">← → angle (shift: 5°) · ↑ ↓ power (shift: 1, ctrl: 100) · [ ] weapon · space fires · drag on the field to aim · P pause · N next round</div>
+          <h3>Switches</h3>
+          <div class="tetswitches">
+            <button type="button" class="tetsw" id="syStars" aria-pressed="false" title="the star field across the panel">★ stars</button>
+            <button type="button" class="tetsw" id="syGalaxy" aria-pressed="false" title="the spiral galaxy in that sky">🌀 galaxy</button>
+            <button type="button" class="tetsw" id="sySfx" aria-pressed="false" title="the shot, the blast, a hit, a death">♫ sound</button>
+            <button type="button" class="tetsw" id="syFast" aria-pressed="false" title="shells at three times the pace">⏩ fast</button>
+          </div>
+          <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
+          <table class="tetscores" id="syScores"></table>
         </div>
       </div>
     </section>

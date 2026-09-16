@@ -289,6 +289,24 @@ export const DEFAULTS = Object.freeze({
     gridColour: '#1844bf',   // blue rather than the engine green
     gridBrightness: 1.55,    // and above full, which the blue needs to read at all
   }),
+  // SCORCHED YARD (operator, 2026-09-16; docs/PLAN-SCORCHED-YARD.md): the sky and the sound as the
+  // other games have them, and the rules the original exposed in its own menus
+  scorched: Object.freeze({
+    stars: true,
+    galaxy: true,
+    galaxyAt: 'top-right',
+    sfx: true,
+    fast: false,          // shells fly at three times the pace
+    grid: false,          // the quiet grid under the field, off: the land is the picture
+    gridColour: '#2a5a8f',
+    gridBrightness: 1,
+    opponents: 2,         // computer players against the one human (operator: "at least 3 player")
+    rounds: 5,
+    walls: 'concrete',    // 'concrete' | 'rubber' | 'wrap' | 'none'
+    wind: 'turn',         // 'turn' (changes every turn) | 'shot' | 'none'
+    gravity: 1,           // 1 = Earth
+    land: 'hills',        // 'hills' | 'mountains' | 'valley' | 'flat'
+  }),
 });
 
 const DETAIL = {
@@ -390,7 +408,7 @@ export function fxCadence(g) {
 export const TAB_ROWS = Object.freeze([
   Object.freeze({ label: 'Boards', groups: Object.freeze(['appearance', 'space', 'sky', 'markets']) }),
   Object.freeze({ label: 'Effects', groups: Object.freeze(['effects', 'marketEffects']) }),
-  Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid']) }),
+  Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid', 'scorched']) }),
 ]);
 const PANEL_GROUPS = Object.freeze([
   Object.freeze({
@@ -618,6 +636,39 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'The grid under the well' }),
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of the grid under the well' }),
       Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 1 is the shipped weight, 0 hides it' }),
+    ]),
+  }),
+  Object.freeze({
+    group: 'scorched',
+    title: 'Scorched Yard',
+    note: 'The artillery game. The switches are also on the game\u2019s own panel; the rules below take effect at the next new game.',
+    rows: Object.freeze([
+      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the field' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
+      Object.freeze({
+        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy\u2019s centre sits on the panel',
+        options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
+      }),
+      Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The shot, the blast, a hit, a fall, a death' }),
+      Object.freeze({ key: 'fast', label: 'Fast shells', kind: 'toggle', hint: 'Shells fly at three times the pace, for the impatient' }),
+      Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'A quiet grid under the field' }),
+      Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The colour of that grid' }),
+      Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 0 hides it' }),
+      Object.freeze({ key: 'opponents', label: 'Computer players', kind: 'range', min: 1, max: 5, step: 1, hint: 'How many tanks the computer fields against you. Two is the shipped game' }),
+      Object.freeze({ key: 'rounds', label: 'Rounds', kind: 'range', min: 1, max: 10, step: 1, hint: 'A game is this many rounds; the highest score at the end wins' }),
+      Object.freeze({
+        key: 'walls', label: 'Walls', kind: 'choice', hint: 'What a shell does at the edge of the field',
+        options: Object.freeze([['concrete', 'Concrete: it explodes there'], ['rubber', 'Rubber: it bounces'], ['wrap', 'Wraparound: it comes in the other side'], ['none', 'None: it is lost']]),
+      }),
+      Object.freeze({
+        key: 'wind', label: 'Wind', kind: 'choice', hint: 'Whether the wind blows, and how often it changes',
+        options: Object.freeze([['turn', 'Changes every turn'], ['shot', 'Changes every shot'], ['none', 'No wind']]),
+      }),
+      Object.freeze({ key: 'gravity', label: 'Gravity', kind: 'range', min: 0.4, max: 2, step: 0.1, hint: 'How hard shells fall; 1 is Earth' }),
+      Object.freeze({
+        key: 'land', label: 'Landscape', kind: 'choice', hint: 'The shape of the land each round is drawn from',
+        options: Object.freeze([['hills', 'Rolling hills'], ['mountains', 'Mountains'], ['valley', 'A valley'], ['flat', 'Flat']]),
+      }),
     ]),
   }),
 ]);
@@ -1058,6 +1109,21 @@ export function tetrustOptions(s) {
     // 0.06, not 0.18: the well draws its grid fainter than the brick courts do, because the stack
     // sits on top of it. That difference was hardcoded in tetrust.js; it lives here now.
     gridOpts: courtGridColours(n.tetrust.gridColour, n.tetrust.gridBrightness, 0.06),
+    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
+    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
+  };
+}
+
+/** Scorched Yard's switches and rules, with the sky's make-up from the Sky group. */
+export function scorchedOptions(s) {
+  const n = normalise(s);
+  const sky = spaceOptions(s);
+  const sc = n.scorched;
+  return {
+    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, fast: sc.fast,
+    grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
+    gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
+    opponents: sc.opponents, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
   };

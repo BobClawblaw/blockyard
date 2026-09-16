@@ -71,7 +71,7 @@ test('the tabs come in labelled rows, every group in exactly one row, the Divers
   assert.deepEqual([...rowed].sort(), Object.keys(DEFAULTS).sort(), 'every group is in a row, and no row names a group that is not a setting');
   assert.equal(new Set(rowed).size, rowed.length, 'no group is in two rows');
   assert.deepEqual(PANEL.map((g) => g.group), rowed, 'the sheet shows the groups row by row');
-  assert.deepEqual(TAB_ROWS.at(-1).groups, ['tetrust', 'blockout', 'blockanoid'], 'the games are the last row');
+  assert.deepEqual(TAB_ROWS.at(-1).groups, ['tetrust', 'blockout', 'blockanoid', 'scorched'], 'the games are the last row');
   assert.equal(TAB_ROWS[0].groups[0], 'appearance', 'Appearance is the first tab');
   for (const r of TAB_ROWS) assert.ok(r.label, 'each row is labelled');
 });
@@ -569,7 +569,7 @@ test('the neon tubes are tunable: source, one colour (a hex, validated), brightn
   assert.deepEqual([...colourRows].sort(), [
     // the nine a Custom theme is built from (theme.js, 2026-09-16)
     'appearance.customAccent', 'appearance.customBad', 'appearance.customBg', 'appearance.customLine', 'appearance.customMuted', 'appearance.customOk', 'appearance.customPanel', 'appearance.customText', 'appearance.customWarn',
-    'blockanoid.gridColour', 'blockanoid.neonColour', 'blockout.gridColour', 'blockout.neonColour', 'space.gridColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.gridColour', 'tetrust.neonColour'],
+    'blockanoid.gridColour', 'blockanoid.neonColour', 'blockout.gridColour', 'blockout.neonColour', 'scorched.gridColour', 'space.gridColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.gridColour', 'tetrust.neonColour'],
     'a colour for each finish and each game, the landing marker, the grid on every board that draws one, and the nine of a custom theme');
 });
 

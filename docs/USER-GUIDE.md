@@ -20,6 +20,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Tetrust](#tetrust)
 - [Blockout](#blockout)
 - [Blockanoid](#blockanoid)
+- [Scorched Yard](#scorched-yard)
 - [Wolfenstein 3D](#wolfenstein-3d)
 - [DOOM](#doom)
 - [Quake](#quake)
@@ -716,6 +717,51 @@ have switches too, on **Display settings → Blockanoid** — and because those 
 rather than the look, flipping them reaches the game you are playing, not just the next one.
 
 ---
+
+## Scorched Yard
+
+Scorched Earth, the 1991 DOS artillery game, on the block engine: a landscape of dirt cubes that
+craters and falls, tanks that aim by angle and power, wind, and a round that ends when one tank is
+left. Under **Diversions**, after Blockanoid. You play against two computer opponents out of the
+box (**Display settings → Scorched Yard → Computer players** fields up to five).
+
+This is the first cut (docs/PLAN-SCORCHED-YARD.md is the whole plan): four missiles, craters,
+falling dirt, fall damage, death and its blast, the walls, wind, a game of rounds, and one computer
+personality — the Moron, who fires at random. The roster, the shop, the other personalities and
+the fabulous part are on their way.
+
+### Playing
+
+| Keys | |
+|---|---|
+| **←** **→** or **A** **D** | the barrel's angle, a degree at a time (Shift: five) |
+| **↑** **↓** or **W** **S** | power, ten at a time (Shift: one, Ctrl: a hundred) |
+| **[** **]** or **PgUp** **PgDn** | the weapon: Baby Missile (bottomless), Missile, Baby Nuke, Nuke |
+| **space** or **Enter** | fire |
+| the mouse | drag on the field to aim: the direction from your tank is the angle, the distance the power |
+| **P** or **Esc** | pause |
+| **N** | the next round, from the round's end |
+
+The HUD shows whose turn it is, the round, the **wind** (an arrow and its strength: it changes
+every turn, and it bends every shot), your angle, power and weapon with its count, and every
+tank's health. **Fire** on the HUD does what space does. A shell that lands carves a circle out of
+the dirt; the dirt above the crater falls until it rests, and a tank left in the air falls with
+it and is hurt by the fall. A blast hurts every tank in reach, most at its centre. A tank at zero
+health explodes, and its blast can take a neighbour with it.
+
+A round ends when one tank is left (or none); the survivor scores 200, a kill 100, and a tank
+that kills itself loses 50. **Rounds** (a setting, five out of the box) make a game; the highest
+score at the end wins, and your score goes in the high-score table, this browser's.
+
+### The switches on the panel
+
+**Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's). **Sound**
+is the shot, the blast, a hit, a fall, a death. **Fast** flies shells at three times the pace.
+The rules the original exposed are in **Display settings → Scorched Yard**: the number of
+computer players, the rounds, the **walls** (concrete explodes a shell at the edge, rubber bounces
+it, wraparound brings it in the other side, none loses it), the **wind** (every turn, every shot,
+or none), **gravity**, and the **landscape** the rounds are drawn from (hills, mountains, a
+valley, flat). They take effect at the next new game.
 
 ## Wolfenstein 3D
 

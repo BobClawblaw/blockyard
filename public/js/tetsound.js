@@ -56,6 +56,15 @@ export const SFX = Object.freeze({
   // BLOCKANOID (arkanoid.js): a silver brick RINGS rather than breaks and gold rings harder and
   // lower, so the ear learns which bricks are worth hitting before the eye does. A capsule is a
   // rising chime (it is always good news), the laser a short zap, a minion a dull pop.
+  // SCORCHED YARD (scorchedyard.js): a thump for the shot, a crack for a small blast and a rumble
+  // for a nuke, a knock for a hit, a low sweep for a death, a tick for the turn, a rustle for dirt
+  syFire: [140, 40, 0.16, 'sawtooth', 0.1],
+  syBlast: [180, 30, 0.26, 'sawtooth', 0.11],
+  syBig: [90, 18, 0.7, 'sawtooth', 0.12],
+  syHit: [520, 180, 0.09, 'square', 0.06],
+  syDeath: [400, 40, 0.9, 'sawtooth', 0.1],
+  syTurn: [880, 880, 0.04, 'square', 0.035],
+  syDirt: [260, 120, 0.12, 'triangle', 0.05],
   silver: [560, 620, 0.06, 'triangle', 0.055],
   gold: [240, 210, 0.07, 'square', 0.05],
   capsule: [620, 1560, 0.22, 'triangle', 0.075],

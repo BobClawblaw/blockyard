@@ -393,7 +393,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 945 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 957 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -525,6 +525,19 @@ with `still: true`; the panel behind it is a second canvas carrying the star fie
 scheduler that runs on the audio clock, because the page's timers are not reliable enough to keep
 a tempo.
 
+**Scorched Yard** (`public/js/scorched.js` rules, `public/js/scorchedai.js` the computer players,
+`public/js/scorchedyard.js` screen; `docs/PLAN-SCORCHED-YARD.md` the plan, M1 landed 2026-09-16).
+Scorched Earth on the engine: the dirt is a bitmap over a 96×48 grid drawn as **a cube per cell**
+(about 1,600; a tall tile per run was tried first and drew as floating ribbons, because the oblique
+camera climbs 0.3 of a row per unit of height) on its own canvas that is redrawn only when
+`landVersion` moves; the actors -- tanks (two cubes, a turret, a `poly` barrel turned by the
+angle), the `sphere` shell, the trace, falling dirt, flash-and-spark blasts -- on a transparent
+canvas over it, every frame of a flight. `settleDirt` compacts the columns a blast touched and
+reports the runs that moved; `actorLayer` lifts their cells by what is left to fall while the land
+canvas leaves them out. Everything random comes from the game's seeded stream;
+`test/scorched.test.js` holds the physics to the closed form, the walls, the craters, the settling
+and the round.
+
 **Blockanoid** (`public/js/arkanoid.js` rules, `public/js/blockanoid.js` screen). Arkanoid on the
 same engine, the third Diversion. Same split as Tetrust and Blockout: the rules file has no DOM, no
 canvas, no clock and no `Math.random`, so a whole run is reproducible under `node:test`. The part
@@ -647,7 +660,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 945 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 957 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

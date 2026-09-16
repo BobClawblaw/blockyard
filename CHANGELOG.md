@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- **Scorched Yard, the first cut** (docs/PLAN-SCORCHED-YARD.md, M1): Scorched Earth on the block engine, under Diversions. A 96×48 field of dirt cubes drawn as runs by stratum, tanks with a turning barrel, a shell that flies under gravity and wind with the original's angle and power, craters, dirt that falls and settles, fall damage, death and its blast, the four wall modes, four missiles, one human against two computer players (the Moron; more opponents and personalities to come), turns, a game of rounds, a HUD with the wind and every tank's health, the mouse to aim, a high-score table, and a settings group for the rules
 
 ## [0.1.0] — 2026-09-16
 

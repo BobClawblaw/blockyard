@@ -51,7 +51,13 @@ column, so that tunnels, overhangs and caves exist (Diggers and Sandhogs need th
 the moment when a Nuke leaves an arch of dirt that then collapses). Each column also keeps its
 top for the fast questions (where does a shell land, where does a tank sit).
 
-The engine draws it as **one tile per vertical run of dirt**, not one cube per cell:
+*(M1 found otherwise: under the oblique camera a tile's height climbs 0.3 of a row per unit, so a
+tall run does not stack against the run above it -- the strata drew as floating ribbons. The land
+is a cube per cell after all, on its own canvas redrawn only when the dirt changes, with the
+actors on a transparent canvas over it; the tile budget below is therefore per change, not per
+frame, and the measured build for 1,600 cubes is well under a frame.)*
+
+The plan as first written: the engine draws it as **one tile per vertical run of dirt**, not one cube per cell:
 `{ txid: 't<x>:<base>', x, y: base, s: 1, tall: runLength, color }`. A column with no holes is
 one tile; a column with a tunnel is two or three. That keeps the tile count at a few hundred
 (the block-space board draws a thousand at full resolution without trouble) while every cell

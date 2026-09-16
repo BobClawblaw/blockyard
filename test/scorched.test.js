@@ -1,0 +1,328 @@
+// SCORCHED YARD, the rules under test (operator, 2026-09-16: "re-creating the classic PC DOS game
+// Scorched Earth using our engine ... at least 3 player ... as faithfully as possible";
+// docs/PLAN-SCORCHED-YARD.md §9 lists what M1 must hold). scorched.js knows nothing of the screen,
+// so every rule is asserted on a plain game object with a seed.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import {
+  COLS, ROWS, WEAPONS, WEAPON_ORDER, START_INVENTORY, TANK_W, TANK_H, MAX_HEALTH, V_MAX, GRAVITY, MAX_STEP, DEATH_BLAST,
+  newGame, generateLand, topOf, dirtAt, current, alive, aim, fire, step, settled, explode, settleDirt, landTanks, nextTurn, nextRound,
+  cycleWeapon, muzzle, trajectory, tiles, landTiles, leader, rng,
+} from '../public/js/scorched.js';
+import { decide, moron, solve, nearest } from '../public/js/scorchedai.js';
+import { blastTiles, actorLayer, fallingCells, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { DEFAULTS, normalise, scorchedOptions } from '../public/js/settings.js';
+
+const three = (opts = {}) => newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }, { name: 'B', kind: 'moron' }], { seed: 7, ...opts });
+const play = (g, frames = 3000) => { const ev = []; let n = 0; while (g.phase === 'flight' && n++ < frames) ev.push(...step(g, 16)); if (g.phase === 'settle') { settled(g); ev.push(...step(g, 0)); } return ev; };
+const store = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: (k) => m.delete(k) }; };
+// a flat field `h` deep with every tank on it, for shots whose only obstacle should be the one the test builds
+const flatten = (g, h = 3) => {
+  g.dirt.fill(0);
+  for (let x = 0; x < COLS; x++) { for (let y = 0; y < h; y++) g.dirt[y * COLS + x] = 1; g.tops[x] = h; }
+  for (const t of g.tanks) t.y = h;
+};
+
+test('the field is 96 x 48 and a seed draws the same landscape twice, with sky above and dirt below', () => {
+  assert.equal(COLS, 96); assert.equal(ROWS, 48);
+  const a = three(), b = three();
+  assert.deepEqual([...a.dirt], [...b.dirt], 'the same seed, the same dirt');
+  assert.deepEqual(a.tanks.map((t) => [t.x, t.y]), b.tanks.map((t) => [t.x, t.y]), 'and the same tank placement');
+  for (let x = 0; x < COLS; x++) {
+    assert.ok(a.tops[x] >= 3 && a.tops[x] <= ROWS * 0.8, `column ${x} has ground and sky`);
+    assert.equal(a.tops[x], topOf(a, x), 'the kept top is the true top');
+    for (let y = 0; y < a.tops[x]; y++) assert.ok(dirtAt(a, x, y), 'solid from the floor up at the start');
+  }
+  for (const style of ['hills', 'mountains', 'valley', 'flat']) {
+    const g = three({ land: style });
+    generateLand(g, style);
+    const tops = [...g.tops];
+    assert.ok(Math.max(...tops) <= ROWS * 0.8, `${style} leaves sky`);
+    if (style === 'flat') assert.ok(Math.max(...tops) - Math.min(...tops) <= 3, 'flat is flat');
+    if (style === 'mountains') assert.ok(Math.max(...tops) - Math.min(...tops) >= 8, 'mountains are not');
+  }
+});
+
+test('three players, the human first, each on a level plateau with full health, facing the field', () => {
+  const g = three();
+  assert.equal(g.tanks.length, 3);
+  assert.equal(current(g).kind, 'human', 'round 1 opens with the first player');
+  for (const t of g.tanks) {
+    assert.equal(t.health, MAX_HEALTH);
+    assert.equal(g.tops[t.x], t.y, 'the hull sits on the ground');
+    assert.equal(g.tops[t.x + 1], t.y, 'both cells of it');
+    assert.equal(t.angle, t.x < COLS / 2 ? 45 : 135, 'aimed across the field');
+    assert.deepEqual(t.inventory, { ...START_INVENTORY });
+  }
+  const xs = g.tanks.map((t) => t.x).sort((a, b) => a - b);
+  for (let i = 1; i < xs.length; i++) assert.ok(xs[i] - xs[i - 1] >= 8, 'tanks are spaced out');
+  assert.throws(() => newGame([{ name: 'alone' }]), /at least two/, 'a round needs an opponent');
+});
+
+test('aim clamps the angle to 0..180 and the power to 0..1000; the weapon cycle skips empty slots', () => {
+  const g = three();
+  const t = current(g);
+  aim(g, t, { angle: 400, power: -5 });
+  assert.equal(t.angle, 180); assert.equal(t.power, 0);
+  aim(g, t, { angle: -3, power: 5000, weapon: 'nuke' });
+  assert.equal(t.angle, 0); assert.equal(t.power, 1000); assert.equal(t.weapon, 'nuke');
+  aim(g, t, { weapon: 'no-such' });
+  assert.equal(t.weapon, 'nuke', 'an unknown weapon is ignored');
+  t.inventory.babyNuke = 0;
+  t.weapon = 'missile';
+  assert.equal(cycleWeapon(t, 1), 'nuke', 'forward skips the empty Baby Nuke slot');
+  assert.equal(cycleWeapon(t, 1), 'babyMissile', 'and wraps');
+  assert.equal(cycleWeapon(t, -1), 'nuke', 'backward too');
+  assert.deepEqual(WEAPON_ORDER, ['babyMissile', 'missile', 'babyNuke', 'nuke']);
+});
+
+test('a shot without wind lands where the closed form says, and the substeps never let it tunnel', () => {
+  const g = three({ wind: 'none', walls: 'none' });
+  assert.equal(g.wind, 0);
+  const t = current(g);
+  flatten(g, 3);                                          // so the shell reaches the floor
+  // fired toward the middle of the field, whichever side the tank drew
+  const inward = t.x < COLS / 2 ? 60 : 120;
+  aim(g, t, { angle: inward, power: 500 });
+  const m = muzzle(t);
+  const v = 0.5 * V_MAX, a = (inward * Math.PI) / 180;
+  const vx = Math.cos(a) * v, vy = Math.sin(a) * v;
+  // time to come down to the ground (y = 3) from the muzzle, then the x there
+  const gy = GRAVITY, h = m.y - 3;
+  const tt = (vy + Math.sqrt(vy * vy + 2 * gy * h)) / gy;
+  const xExpected = m.x + vx * tt;
+  assert.ok(fire(g, t));
+  const ev = play(g);
+  const blast = ev.find((e) => e.kind === 'blast');
+  assert.ok(blast, 'it came down and exploded');
+  assert.ok(Math.abs(blast.x - xExpected) < 0.6, `landed at ${blast.x.toFixed(2)}, the parabola says ${xExpected.toFixed(2)}`);
+  // no tunnelling: a full-power shot into a two-cell ridge at a coarse frame stops in the ridge
+  const h2 = three({ wind: 'none', walls: 'concrete' });
+  const s = current(h2);
+  flatten(h2, 3);
+  s.x = 20; const ridgeX = s.x + 8;
+  for (let y = 0; y < ROWS; y++) { h2.dirt[y * COLS + ridgeX] = 1; h2.dirt[y * COLS + ridgeX + 1] = 1; }
+  h2.tops[ridgeX] = ROWS; h2.tops[ridgeX + 1] = ROWS;
+  aim(h2, s, { angle: 5, power: 1000 });
+  fire(h2, s);
+  const ev2 = []; while (h2.phase === 'flight') ev2.push(...step(h2, 100));   // 100 ms frames, the cap
+  const b2 = ev2.find((e) => e.kind === 'blast');
+  assert.ok(b2 && b2.x <= ridgeX + 2.1 && b2.x >= ridgeX - MAX_STEP - 0.2, `stopped at the ridge (${b2?.x.toFixed(2)} vs ${ridgeX})`);
+});
+
+test('wind bends the shot; the trajectory oracle agrees with the integrator', () => {
+  const g = three({ wind: 'turn' });
+  g.wind = 6;
+  const t = current(g);
+  aim(g, t, { angle: 90, power: 600 });
+  const pts = trajectory(g, t, 8, 1 / 60);
+  assert.ok(pts[pts.length - 1].x > pts[0].x + 3, 'a vertical shot drifts downwind');
+  g.wind = -6;
+  const pts2 = trajectory(g, t, 8, 1 / 60);
+  assert.ok(pts2[pts2.length - 1].x < pts2[0].x - 3, 'and the other way');
+});
+
+test('the walls: concrete explodes at the edge, rubber bounces, wraparound comes in the other side, none loses the shell', () => {
+  const shotAtWall = (walls) => {
+    const g = three({ wind: 'none', walls });
+    const t = current(g);
+    flatten(g, 3);
+    // a tank near the right edge firing flat and hard to the right, over level ground
+    t.x = COLS - 6;
+    aim(g, t, { angle: 10, power: 1000 });
+    fire(g, t);
+    const ev = play(g);
+    return { g, ev };
+  };
+  const c = shotAtWall('concrete');
+  const cb = c.ev.find((e) => e.kind === 'blast');
+  assert.ok(cb && cb.x > COLS - 1.5, 'concrete: it went off at the wall');
+  const r = shotAtWall('rubber');
+  assert.ok(r.ev.some((e) => e.kind === 'bounce'), 'rubber: it bounced');
+  const rb = r.ev.find((e) => e.kind === 'blast');
+  assert.ok(rb && rb.x < COLS - 2, 'and came down somewhere inside');
+  const w = shotAtWall('wrap');
+  const wb = w.ev.find((e) => e.kind === 'blast');
+  assert.ok(wb && wb.x < COLS / 2, 'wraparound: it landed on the far side');
+  const n = shotAtWall('none');
+  assert.ok(n.ev.some((e) => e.kind === 'lost') && !n.ev.some((e) => e.kind === 'blast'), 'none: lost, no blast');
+  assert.equal(n.g.phase, 'aim', 'and the turn passed');
+});
+
+test('a blast carves a circle of dirt, the dirt above falls until it rests, and nothing floats after', () => {
+  const g = three({ wind: 'none' });
+  const x = 40, top = g.tops[x];
+  const before = [...g.dirt].reduce((n, v) => n + v, 0);
+  // a Nuke half-buried in the column
+  explode(g, x + 0.5, top - 4, WEAPONS.nuke, 0);
+  const after = [...g.dirt].reduce((n, v) => n + v, 0);
+  assert.ok(before - after > 60 && before - after < 160, `a nuke removes a circle's worth of cells (${before - after})`);
+  for (let cx = 0; cx < COLS; cx++) {
+    let seenAir = false;
+    for (let y = 0; y < ROWS; y++) {
+      const d = dirtAt(g, cx, y);
+      if (!d) seenAir = true;
+      else assert.ok(!seenAir, `column ${cx}: no dirt over air after settling (row ${y})`);
+    }
+    assert.equal(g.tops[cx], topOf(g, cx));
+  }
+  // an overhang settles: a run held up by nothing comes down, and the screen is told from where
+  const h = three();
+  h.falling = [];
+  const cx = 10;
+  h.dirt[(h.tops[cx] - 2) * COLS + cx] = 0;                                 // a hole two below the top
+  settleDirt(h, cx, cx);
+  assert.ok(h.falling.some((f) => f.x === cx && f.from > f.y), 'the run above the hole fell');
+  assert.equal(h.tops[cx], topOf(h, cx));
+});
+
+test('damage falls off with distance, a tank in the air falls and is hurt, and death credits the killer', () => {
+  const g = three({ wind: 'none' });
+  const [you, a, b] = g.tanks;
+  // a missile right on B: full damage; the same missile a few cells off: less; well away: none
+  const hb = b.health;
+  explode(g, b.x + TANK_W / 2, b.y + 0.5, WEAPONS.missile, you.id);
+  const hit = g.sparks.find((e) => e.kind === 'hit' && e.tank === b.id);
+  assert.equal(hit.damage, WEAPONS.missile.damage, 'a direct hit does the whole damage');
+  assert.ok(b.health <= hb - WEAPONS.missile.damage, 'and the crater under it may drop it for more');
+  assert.equal(you.damageDealt, WEAPONS.missile.damage);
+  const ha = a.health;
+  explode(g, a.x + TANK_W / 2 + 3.5, a.y + 0.5, WEAPONS.missile, you.id);
+  assert.ok(a.health < ha && a.health > ha - WEAPONS.missile.damage, 'a near miss hurts less');
+  const hy = you.health;
+  explode(g, you.x + 20, you.y, WEAPONS.missile, a.id);
+  assert.equal(you.health, hy, 'twenty cells away is nothing');
+  // a fall: take the ground away under A
+  const h = three({ wind: 'none' });
+  const t = h.tanks[1];
+  for (let cx = t.x - 1; cx <= t.x + 2; cx++) for (let y = 0; y < ROWS; y++) h.dirt[y * COLS + cx] = 0;
+  for (let cx = t.x - 1; cx <= t.x + 2; cx++) h.tops[cx] = 0;
+  const hh = t.health;
+  landTanks(h);
+  assert.equal(t.y, 0, 'it fell to the floor');
+  assert.ok(t.health < hh, 'and the fall hurt');
+  // death: a nuke on a weakened tank, by You
+  const k = three({ wind: 'none' });
+  const [me, victim] = k.tanks;
+  victim.health = 10;
+  explode(k, victim.x + 1, victim.y + 0.5, WEAPONS.nuke, me.id);
+  assert.equal(victim.alive, false);
+  assert.equal(me.kills, 1);
+  assert.equal(me.score, 100, 'a kill is a hundred points');
+  // its death blast is real: dirt under it went
+  assert.ok(k.tops[victim.x] < victim.y, 'the death blast cratered the ground');
+});
+
+test('a shot by the computer passes the turn; wind changes each turn; a round ends with one tank left and the game after the last round', () => {
+  const g = three({ wind: 'turn', rounds: 2 });
+  assert.equal(current(g).name, 'You');
+  aim(g, current(g), { angle: 90, power: 10 });        // straight up, gently: a harmless shot
+  fire(g, current(g));
+  const w0 = g.wind;
+  const ev = play(g);
+  assert.ok(ev.some((e) => e.kind === 'turn'), 'the turn passed');
+  assert.equal(current(g).name, 'A', 'to the next tank');
+  assert.notEqual(g.wind, w0, 'with a new wind');
+  // the computer decides and fires like anyone else
+  const d = decide(g, current(g));
+  assert.ok(d.angle >= 0 && d.angle <= 180 && d.power >= 0 && d.power <= 1000 && WEAPONS[d.weapon]);
+  aim(g, current(g), d);
+  assert.ok(fire(g, current(g)));
+  play(g);
+  assert.equal(current(g).name, 'B');
+  // kill A and B outright: the round is over, You are credited, and round 2 opens on new land
+  const before = [...g.dirt];
+  for (const t of g.tanks.slice(1)) { t.health = 1; explode(g, t.x + 1, t.y + 0.5, WEAPONS.babyMissile, 0); }
+  g.phase = 'settle'; settled(g);
+  assert.equal(g.phase, 'roundOver');
+  assert.equal(alive(g).length, 1);
+  assert.equal(leader(g).name, 'You');
+  assert.ok(nextRound(g), 'round 2');
+  assert.equal(g.round, 2);
+  assert.notDeepEqual([...g.dirt], before, 'new land');
+  assert.ok(g.tanks.every((t) => t.alive && t.health === MAX_HEALTH), 'everyone back with full health');
+  assert.equal(current(g).name, 'A', 'the turn order rotates with the round');
+  // the last round: no next
+  g.phase = 'roundOver';
+  assert.equal(nextRound(g), false);
+  assert.equal(g.phase, 'over');
+});
+
+test('the Moron is random but faces the field; the solver finds a shot that lands near its target', () => {
+  const g = three({ wind: 'none' });
+  const r = rng(3);
+  const [you, a] = g.tanks;
+  for (let i = 0; i < 20; i++) {
+    const d = moron(g, a, r);
+    if (a.x > COLS / 2) assert.ok(d.angle >= 90, 'a tank on the right fires left');
+    else assert.ok(d.angle <= 90, 'a tank on the left fires right');
+    assert.equal(d.weapon, 'babyMissile');
+  }
+  const target = nearest(g, you);
+  const best = solve(g, you, target);
+  assert.ok(best && best.miss < 1.5, `the solver lands within a cell and a half (${best?.miss.toFixed(2)})`);
+});
+
+test('the tiles for the engine: a cube per cell of dirt by stratum, tanks are hull, turret and a turning barrel, the shell a ball, the trace beads', () => {
+  const g = three({ wind: 'none' });
+  const ts = tiles(g);
+  const dirt = ts.filter((t) => /^c\d+:/.test(t.txid));
+  const cells = [...g.dirt].reduce((n, v) => n + v, 0);
+  assert.equal(dirt.length, cells, 'a cube per cell of dirt (the camera draws height at a third of a row, so a tall run would not stack)');
+  for (const t of dirt) { assert.equal(t.s, 1); assert.equal(t.tall, 1); assert.match(t.color, /^#[0-9a-f]{6}$/); }
+  const covered = new Uint8Array(COLS * ROWS);
+  for (const t of dirt) for (let y = t.y; y < t.y + t.tall; y++) covered[y * COLS + t.x] += 1;
+  for (let i = 0; i < covered.length; i++) assert.equal(covered[i], g.dirt[i], 'every dirt cell is under exactly one tile, and no air is');
+  for (const k of g.tanks) {
+    assert.ok(ts.find((t) => t.txid === `hull${k.id}a`) && ts.find((t) => t.txid === `hull${k.id}b`), 'a two-cell hull');
+    const barrel = ts.find((t) => t.txid === `barrel${k.id}`);
+    assert.ok(barrel.poly && barrel.poly.length === 4, 'the barrel is a turning outline');
+    assert.ok(Math.abs(barrel.rot + (k.angle * Math.PI) / 180) < 1e-9, 'turned by the angle');
+  }
+  assert.ok(!ts.some((t) => t.txid === 'shell'), 'no shell before a shot');
+  fire(g, current(g));
+  step(g, 16);
+  assert.ok(tiles(g).some((t) => t.txid === 'shell' && t.sphere), 'the shell is a ball in flight');
+  play(g);
+  assert.ok(tiles(g).some((t) => t.txid.startsWith('trace')), 'the last shot leaves a trace');
+  assert.ok(!tiles(g, { trace: false }).some((t) => t.txid.startsWith('trace')));
+  // the screen's tiles: a blast is a flash and sparks that are gone after their time
+  const bt = blastTiles([{ id: 1, x: 10, y: 10, r: 2.5, t0: 0, big: false }], 100);
+  assert.ok(bt.length > 5 && bt.every((t) => t.sphere), 'a flash and sparks, all balls');
+  assert.equal(blastTiles([{ id: 1, x: 10, y: 10, r: 2.5, t0: 0 }], 5000).length, 0, 'gone after');
+  // falling dirt is lifted by what it has left to fall on the actor layer, off the land layer meanwhile, and lands on time
+  const h = three();
+  h.falling = [{ x: 5, y: 10, len: 3, from: 14 }];
+  assert.deepEqual([...fallingCells(h)], ['5,10', '5,11', '5,12']);
+  assert.ok(!landTiles(h, { omit: fallingCells(h) }).some((t) => t.txid === 'c5:11'), 'the land layer leaves a falling cell out');
+  const lifted = actorLayer(h, 0, { settleT0: 0, settleMs: 1000 }).find((t) => t.txid === 'c5:12');
+  assert.ok(lifted && Math.abs(lifted.floor - 4) < 1e-9, 'at the start it is four cells up');
+  const landed = actorLayer(h, 1000, { settleT0: 0, settleMs: 1000 }).find((t) => t.txid === 'c5:12');
+  assert.ok(landed && !landed.floor, 'and down at the end');
+  assert.ok(g.landVersion > 0 && (() => { const v = g.landVersion; explode(g, 30, g.tops[30] - 1, WEAPONS.babyMissile, 0); return g.landVersion > v; })(), 'a blast moves the land version');
+});
+
+test('a playfield refuses hover, the page is wired, the settings group is complete, and the scores keep', () => {
+  const read = (f) => readFileSync(new URL(`../public/js/${f}`, import.meta.url), 'utf8');
+  assert.match(read('scorchedyard.js'), /hover: false/, 'the field does not light up under the pointer');
+  assert.match(read('app.js'), /case 'scorched': renderScorchedYard/, 'the router knows the page');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  for (const id of ['sySky', 'syLand', 'syField', 'syFieldWrap', 'syOver', 'syMsg', 'sySub', 'syResume', 'syStats', 'syFire', 'syTanks', 'syScores', 'syStars', 'syGalaxy', 'sySfx', 'syFast']) {
+    assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
+  }
+  assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'fast', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'rounds', 'walls', 'wind', 'gravity', 'land']);
+  const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
+  assert.equal(o.opponents, 5, 'clamped to the slider'); assert.equal(o.rounds, 1); assert.equal(o.walls, 'concrete'); assert.equal(o.gravity, 2);
+  const s = store();
+  assert.deepEqual(loadScores(s), []);
+  recordScore({ score: 300, kills: 2, rounds: 5, won: true, at: 1 }, s);
+  recordScore({ score: 500, kills: 3, rounds: 5, won: true, at: 2 }, s);
+  assert.equal(loadScores(s)[0].score, 500);
+  assert.equal(rankOf(400, loadScores(s)), 2);
+  s.setItem('blockyard.scorched.scores', '{not json');
+  assert.deepEqual(loadScores(s), [], 'a corrupt store is an empty table');
+  assert.deepEqual(DEATH_BLAST, { radius: 3.5, damage: 60 });
+  assert.equal(TANK_H, 1.4);
+});
