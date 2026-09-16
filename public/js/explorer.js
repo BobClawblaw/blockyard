@@ -19,8 +19,14 @@
 
 const X = { key: null, data: null, error: null, loading: false, shown: null, bound: false };
 
+// A malformed escape in a pasted link (`#explorer/tx/%E0`) made decodeURIComponent throw inside the
+// render, and the explorer stopped drawing for that tab (audit 2026-09-16, I1). Such a link is a
+// route to the explorer's home, not an exception.
+const decodePart = (x) => { try { return decodeURIComponent(x); } catch { return null; } };
 export function parseRoute(r) {
-  const [kind, id, page] = String(r ?? '').split('/').filter((x) => x !== '').map((x) => decodeURIComponent(x));
+  const parts = String(r ?? '').split('/').filter((x) => x !== '').map(decodePart);
+  if (parts.includes(null)) return { kind: 'home' };
+  const [kind, id, page] = parts;
   if ((kind === 'block' || kind === 'address') && id) return { kind, id, page: Math.max(0, Math.floor(Number(page) || 0)) };
   if (kind === 'tx' && id) return { kind, id };
   return { kind: 'home' };

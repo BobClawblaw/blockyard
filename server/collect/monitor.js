@@ -15,7 +15,7 @@
 //    empty in this deployment -- so `health.quality` records every such gap
 //    rather than silently preferring one.
 import { EventEmitter } from 'node:events';
-import { RpcClient, RpcError } from '../rpc/client.js';
+import { RpcClient, RpcError, displayUrl, shortPath } from '../rpc/client.js';
 import { LogTail } from './logtail.js';
 import { CounterRate } from '../store/ring.js';
 import { computeSync, stripFacts } from './sync.js';
@@ -38,6 +38,15 @@ import fs from 'node:fs';
 export const BLOCKSTATS_FIELDS = ['totalfee', 'txs', 'total_size', 'total_weight', 'avgfeerate', 'mediantxsize', 'avgtxsize',
   'swtotal_size', 'swtxs', 'subsidy', 'utxo_increase', 'ins', 'outs', 'avgfee', 'medianfee', 'maxfee',
   'feerate_percentiles', 'height', 'blockhash', 'time', 'mediantime'];
+
+
+// WHAT THE NODE SAYS IS DATA OF A KNOWN SHAPE, OR NOTHING (audit 2026-09-16, L2). These fields went
+// from the RPC reply to the page unchecked, and the page wrote some of them as markup: a node that
+// answered `chain: "main<img src=x onerror=…>"` put an element on the Chain page. The page now
+// escapes them too; the server also refuses to pass on a value that is not the type it names.
+export const chainName = (v) => (typeof v === 'string' && /^[a-z0-9_-]{1,24}$/i.test(v) ? v : null);
+export const boolOrNull = (v) => (typeof v === 'boolean' ? v : null);
+export const countOrNull = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
 
 export class NodeMonitor extends EventEmitter {
   constructor(nodeCfg, { rpc, poll, store, log, history, logCfg, miningCfg }) {
@@ -1821,8 +1830,8 @@ export class NodeMonitor extends EventEmitter {
       label: s.label,
       color: s.color,
       online: this.rpc.telemetry().online,
-      chain: s.chain,
-      ibd: s.chainInfo?.initialblockdownload ?? null,
+      chain: chainName(s.chain),
+      ibd: boolOrNull(s.chainInfo?.initialblockdownload),
       tip: {
         height: s.chainInfo?.blocks ?? null,
         headers: s.chainInfo?.headers ?? null,
@@ -1841,12 +1850,12 @@ export class NodeMonitor extends EventEmitter {
       sync: computeSync({
         blocks: s.chainInfo?.blocks ?? null,
         headers: s.chainInfo?.headers ?? null,
-        ibd: s.chainInfo?.initialblockdownload ?? null,
+        ibd: boolOrNull(s.chainInfo?.initialblockdownload),
         verificationProgress: s.chainInfo?.verificationprogress ?? null,
         tipTime: s.chainInfo?.time ?? null,
         bestHash: s.chainInfo?.bestblockhash ?? null,
         sizeOnDisk: s.chainInfo?.size_on_disk ?? null,
-        chain: s.chain,
+        chain: chainName(s.chain),
         warnings: s.chainInfo?.warnings ?? [],
         blockRatePerSec: this.blockRateFast.rate(),
         blockRateFastSpanMs: this.blockRateFast.span,
@@ -1875,7 +1884,7 @@ export class NodeMonitor extends EventEmitter {
       hashrateNote: hashrateSuppressed ?? (hashrateRaw == null ? 'difficulty or a block-gap sample is missing' : null),
       avgBlockGapSec: avgGap,
       sizeOnDisk: s.chainInfo?.size_on_disk ?? null,
-      pruned: s.chainInfo?.pruned ?? null,
+      pruned: boolOrNull(s.chainInfo?.pruned),
       chainwork: s.chainInfo?.chainwork ?? null,
       uptimeSec: s.uptimeSec ?? null,
       network: s.networkInfo ? {
@@ -1901,7 +1910,7 @@ export class NodeMonitor extends EventEmitter {
         minFee: mi.mempoolminfee ?? null,
         minRelayFee: mi.minrelaytxfee ?? null,
         incrementalRelayFee: mi.incrementalrelayfee ?? null,
-        unbroadcast: mi.unbroadcastcount ?? null,
+        unbroadcast: countOrNull(mi.unbroadcastcount),
         maxDataCarrier: mi.maxdatacarriersize ?? null,
         permitBareMultisig: mi.permitbaremultisig ?? null,
         ingestRate: s.logState.relayRate ?? s.logState.acceptRate ?? null,
@@ -2038,7 +2047,7 @@ export class NodeMonitor extends EventEmitter {
       indexes: s.indexes,
       tips: s.tips,
       deployments: s.deployments,
-      rpcInfo: s.rpcInfo,
+      rpcInfo: s.rpcInfo ? { ...s.rpcInfo, logpath: shortPath(s.rpcInfo.logpath) } : null,   // no directories to viewers (audit 2026-09-16, L11)
       log: {
         ...(this.tail ? this.tail.status() : { exists: false, file: null }),
         // 'disabled' is a configuration decision; 'missing' would be a fault. The
@@ -2128,7 +2137,7 @@ export class NodeMonitor extends EventEmitter {
     // the bar without drawing which node it belongs to.
     out.sync.node = s.id;
     out.sync.nodeLabel = s.label;
-    out.sync.endpoint = this.cfg.rpcUrl;
+    out.sync.endpoint = displayUrl(this.cfg.rpcUrl);   // no userinfo to viewers (audit 2026-09-16, L3)
     // One dense row for every state; `strip` is the ordered facts to draw in it.
     out.sync.strip = stripFacts(out.sync);
     return out;

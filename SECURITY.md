@@ -4,8 +4,8 @@
 
 | version | supported |
 |---|---|
-| 0.0.9 | yes |
-| anything else | no (never released) |
+| 0.1.x | yes |
+| 0.0.9 and earlier | no: upgrade. 0.0.9 shipped bound to every interface with no sign-in, and later audits fixed issues it still has |
 
 ## Reporting a vulnerability
 

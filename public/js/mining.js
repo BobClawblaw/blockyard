@@ -959,10 +959,10 @@ export function nextHud(nb, { meter = '', fresh = null, mempool = null } = {}, f
   const mins = fresh && Number.isFinite(fresh.seconds) ? Math.floor(fresh.seconds / 60) : null;
   const ageSec = nb.at ? Math.max(0, Math.round((Date.now() - nb.at) / 1000)) : null;
   const ec = nb.economy ?? null;
-  const kv = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
-  return `${head(`<span class="hudk">#${nb.height ?? '?'}</span><span class="hudclock ${lvl}" title="time since the last block: how long this block has been accumulating${fresh?.basis === 'block time' ? ' (from the block timestamp)' : ''}">${mins != null ? `${mins}m` : '–'}</span>`)}
+  const kv = (k, v) => `<dt>${fmt.esc(k)}</dt><dd>${fmt.esc(v)}</dd>`;   // text only (audit 2026-09-16, L2)
+  return `${head(`<span class="hudk">#${fmt.esc(nb.height ?? '?')}</span><span class="hudclock ${lvl}" title="time since the last block: how long this block has been accumulating${fresh?.basis === 'block time' ? ' (from the block timestamp)' : ''}">${mins != null ? `${mins}m` : '–'}</span>`)}
     ${meter}
-    <div class="hudbig">${pct.toFixed(1)}<small>% full</small>${ec?.marginal?.rate != null ? `<span class="chip hot">marginal ~${ec.marginal.rate}/vB</span>` : '<span class="chip">not full</span>'}</div>
+    <div class="hudbig">${pct.toFixed(1)}<small>% full</small>${ec?.marginal?.rate != null ? `<span class="chip hot">marginal ~${fmt.esc(ec.marginal.rate)}/vB</span>` : '<span class="chip">not full</span>'}</div>
     <dl class="hudkv">
       ${kv('transactions', nb.txCount != null ? fmt.num(nb.txCount) : '–')}
       ${kv('fees', btc(nb.totalFeesSat))}
@@ -983,7 +983,7 @@ export function tipHud(tipHeight, row, prev, { avgGapSec = null, now = Date.now(
   const w = who(row);
   const f = blockFacts(row);
   const gap = prev?.time && row.time ? row.time - prev.time : null;
-  const kv = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  const kv = (k, v) => `<dt>${fmt.esc(k)}</dt><dd>${fmt.esc(v)}</dd>`;   // text only (audit 2026-09-16, L2)
   return `${head}
     <div class="hudpool"><span class="bdot" data-pool="${w.idx}"></span><b data-pool-fg="${w.idx}">${fmt.esc(trunc(w.name, 22))}</b><span class="faint">${agoText(row.at ?? row.seenAt, now) ? `mined ${agoText(row.at ?? row.seenAt, now)}` : ''}</span></div>
     <div class="hudbar" title="${f.capPct != null ? `${f.capPct.toFixed(1)}% of the 4,000,000 WU cap` : 'weight unknown'}"><span data-w="${f.capPct == null ? 0 : f.capPct.toFixed(1)}" data-pool="${w.idx}"></span></div>

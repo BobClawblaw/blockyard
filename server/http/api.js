@@ -4,7 +4,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { classifyMethod, allowlistSummary, ACTIONS, actionAllowed, NODE_REFUSES } from '../rpc/allowlist.js';
-import { RpcClient } from '../rpc/client.js';
+import { RpcClient, displayUrl, shortPath } from '../rpc/client.js';
 import { SERIES } from '../store/history.js';
 import { randomPassword } from '../auth/users.js';
 import { formatEta, formatBytes } from '../util/fmt.js';
@@ -108,6 +108,10 @@ function configWriteAllowed(app, ctx) {
 // check in open mode, so the check is WHERE the caller is: the socket's own peer address must be
 // loopback. X-Forwarded-For is never consulted, and behind a trusted proxy every request would look
 // local, so the form is refused there. `auth.openNodeConfigFromNetwork` restores the old reach.
+// Full server paths go to an admin; everyone else, which in open mode is anyone who can reach the
+// port, gets the last two parts (audit 2026-09-16, L11).
+const pathFor = (ctx, p) => (ctx.user?.role === 'admin' ? p : shortPath(p));
+
 export function isLoopbackAddress(addr) {
   const a = String(addr ?? '').replace(/^::ffff:/i, '');
   return a === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(a);
@@ -561,7 +565,7 @@ export const routes = [
         let sync = null;
         try { sync = m.snapshot({ seriesRanges: {} }).sync; } catch { /* not yet populated */ }
         return {
-          id: m.id, label: m.label, color: m.color, rpcUrl: m.node?.rpcUrl ?? m.rpc.url,
+          id: m.id, label: m.label, color: m.color, rpcUrl: displayUrl(m.node?.rpcUrl ?? m.rpc.url),
           chain: m.state.chain, online: m.rpc.telemetry().online,
           optional: !!m.cfg.optional,
           syncState: sync?.state ?? null, pct: sync?.pct ?? null,
@@ -949,12 +953,12 @@ export const routes = [
     handler: async (ctx, app) => {
       try {
         const raw = await fsp.readFile(app.settingsFile, 'utf8');
-        return { settings: JSON.parse(raw), file: app.settingsFile, stored: true };
+        return { settings: JSON.parse(raw), file: pathFor(ctx, app.settingsFile), stored: true };
       } catch (err) {
         // Nothing saved yet is the normal first-run answer, not a fault: the client then keeps its
         // own defaults and offers to push them up. A CORRUPT file is different and says so.
-        if (err.code === 'ENOENT') return { settings: null, file: app.settingsFile, stored: false };
-        return { settings: null, file: app.settingsFile, stored: false, error: `unreadable: ${err.message}` };
+        if (err.code === 'ENOENT') return { settings: null, file: pathFor(ctx, app.settingsFile), stored: false };
+        return { settings: null, file: pathFor(ctx, app.settingsFile), stored: false, error: `unreadable: ${err.message.replaceAll(app.settingsFile, pathFor(ctx, app.settingsFile))}` };
       }
     },
   },
@@ -980,7 +984,7 @@ export const routes = [
       await fh.close();
       await fsp.rename(tmp, app.settingsFile);
 
-      return { ok: true, file: app.settingsFile, bytes: text.length };
+      return { ok: true, file: pathFor(ctx, app.settingsFile), bytes: text.length };
     },
   },
 ];

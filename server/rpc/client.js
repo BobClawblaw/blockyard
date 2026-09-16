@@ -34,6 +34,34 @@ import http from 'node:http';
 import https from 'node:https';
 import { resolveCookie } from '../config.js';
 
+
+/**
+ * A file path as it may be shown to a viewer (audit 2026-09-16, L11): its last two parts, which say
+ * which cookie or log it is (`main/.cookie`, `bitcoin/debug.log`) without the directories above --
+ * a home directory in them names the account the node runs as, and in open mode anyone who can
+ * reach the port reads these responses.
+ */
+export function shortPath(p) {
+  if (typeof p !== 'string' || !p) return p ?? null;
+  const parts = p.split(/[\\/]+/).filter(Boolean);
+  return parts.length <= 2 ? parts.join('/') : `…/${parts.slice(-2).join('/')}`;
+}
+
+/**
+ * The RPC URL as it may be shown to a viewer (audit 2026-09-16, L3): never with a username or
+ * password in it. `http://user:pass@host:8332` is a valid rpcUrl, and the endpoint is shown on the
+ * Node page and in the node picker's tooltip to everyone who can read the monitor.
+ */
+export function displayUrl(u) {
+  if (typeof u !== 'string' || !u) return u ?? null;
+  try {
+    const url = new URL(u);
+    if (!url.username && !url.password) return u;
+    url.username = ''; url.password = '';
+    return url.toString();
+  } catch { return u.replace(/\/\/[^@/]*@/, '//'); }
+}
+
 export class RpcError extends Error {
   constructor(message, { code = null, httpStatus = null, kind = 'rpc' } = {}) {
     super(message);
@@ -399,8 +427,8 @@ export class RpcClient {
   telemetry() {
     return {
       nodeId: this.id,
-      url: this.node.rpcUrl,
-      cookieSource: this._cookieSource,
+      url: displayUrl(this.node.rpcUrl),
+      cookieSource: shortPath(this._cookieSource),
       online: !!this.lastGoodAt && !this.lane.breakerOpen && (!this.lastError || (this.lastGoodAt > this.lastError.at)),
       lastGoodAt: this.lastGoodAt,
       lastError: this.lastError,

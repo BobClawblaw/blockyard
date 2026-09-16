@@ -59,8 +59,8 @@ echo "== booting server on :${PORT} (fake node :${FAKE_PORT}) =="
 # choices -- including which addresses to bind -- and inheriting them made this script
 # curl 127.0.0.1 against a server listening elsewhere (54 failures, 2 passes).
 # BLOCKYARD_BIND: pin it explicitly anyway, so a future default cannot repeat that.
-# BLOCKYARD_AUTH=1: accounts are OFF by default now, and this script's bulk is the
-# signed-in contract (sessions, CSRF, per-user audit, RBAC). The open posture gets its
+# BLOCKYARD_AUTH=1: accounts are ON by default (since 2026-09-15); set explicitly anyway, since
+# this script's bulk is the signed-in contract (sessions, CSRF, per-user audit, RBAC). The open posture gets its
 # own instance further down, on its own port, so both are asserted rather than one
 # replacing the other.
 BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_AUTH=1 BLOCKYARD_TLS=0 \
@@ -282,8 +282,9 @@ check "the breaker names its threshold" "$(echo "$TEL" | grep -c '"threshold":3'
 check "telemetry reports the audit log too" "$(echo "$TEL" | grep -c '"rotationError"')" "1"
 check "the peer identity table has data to draw" "$(curl -s -b "$DIR/ck" "$BASE/api/peers" | grep -c '"identity"')" "1"
 
-echo "== open access: the default posture, no sign-in =="
-# Accounts are OFF by default. A second instance on its own port asserts what that
+echo "== open access: the opt-in posture, no sign-in =="
+# Accounts are ON by default (since 2026-09-15); open access is chosen with BLOCKYARD_AUTH=0,
+# which this second instance sets. On its own port it asserts what that
 # grants (reads, the read-only RPC console, the stream) and, more importantly, what it
 # does NOT: user admin, the audit trail, node writes. Keeping this a separate boot is
 # the point -- the signed-in checks above must not be quietly replaced by open ones.
@@ -291,7 +292,7 @@ OPEN_PORT="${BLOCKYARD_SMOKE_OPEN_PORT:-18199}"
 OPEN_DIR="$(mktemp -d /tmp/blockyard-open.XXXXXX)"
 OPID=""
 # OPID is reaped by the single cleanup trap at the top
-BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 \
+BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_AUTH=0 BLOCKYARD_TLS=0 \
 BLOCKYARD_DATA="$OPEN_DIR" BLOCKYARD_FAKE_NODE=1 BLOCKYARD_PORT="$OPEN_PORT" \
 BLOCKYARD_LOG_LEVEL=warn FAKE_PORT="$((FAKE_PORT + 1))" node server/main.js >"$OPEN_DIR/server.log" 2>&1 &
 OPID=$!

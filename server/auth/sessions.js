@@ -140,9 +140,18 @@ export class RateLimiter {
   }
 }
 
-// Failed-login tracking, keyed on BOTH username and address: a spray across many
-// usernames from one host and a grind on one username from many hosts are
-// different attacks and both need to be visible.
+// Failed-login tracking. Two attacks need to be visible: a grind on one account, and a spray across
+// many accounts from one host.
+//
+// THE LOCK IS PER (USERNAME, ADDRESS) PAIR, NOT PER USERNAME (audit 2026-09-16, L14). The first cut
+// locked the username itself after 8 failures from anywhere, and the address after 8 failures for
+// any account: so one person behind a shared NAT or proxy could lock every account for everyone
+// behind it, and anyone who knew a username could lock its owner out from any address. Now:
+//   * 8 failures for one username from one address lock that pair;
+//   * 5x that from one address, across every username, lock the address (a spray);
+//   * 10x that for one username, across every address, lock the username (a distributed grind) --
+//     a threshold only a real attack reaches, where locking the account is the right trade.
+// The per-address throttle in front of the KDF (main.js loginLimiter) still paces all of it.
 export class LoginGuard {
   constructor({ maxAttempts = 8, windowMs = 300000, lockoutMs = 600000 } = {}) {
     this.maxAttempts = maxAttempts;
@@ -159,24 +168,35 @@ export class LoginGuard {
     return e;
   }
 
+  _keys(username, ip) {
+    return [
+      [`p:${username}\u0000${ip}`, this.maxAttempts],
+      [`i:${ip}`, this.maxAttempts * 5],
+      [`u:${username}`, this.maxAttempts * 10],
+    ];
+  }
+
   status(username, ip) {
-    const a = this._entry(`u:${username}`);
-    const b = this._entry(`i:${ip}`);
-    const locked = Math.max(a.lockedUntil, b.lockedUntil);
+    let locked = 0, remaining = Infinity, worst = 0;
+    for (const [key, max] of this._keys(username, ip)) {
+      const e = this._entry(key);
+      locked = Math.max(locked, e.lockedUntil);
+      worst = Math.max(worst, e.hits.length);
+      remaining = Math.min(remaining, Math.max(0, max - e.hits.length));
+    }
     if (locked > Date.now()) return { blocked: true, retryAfterMs: locked - Date.now() };
-    const worst = Math.max(a.hits.length, b.hits.length);
-    return { blocked: false, attempts: worst, remaining: Math.max(0, this.maxAttempts - worst) };
+    return { blocked: false, attempts: worst, remaining };
   }
 
   noteFailure(username, ip) {
     const out = [];
-    for (const key of [`u:${username}`, `i:${ip}`]) {
+    for (const [key, max] of this._keys(username, ip)) {
       const e = this._entry(key);
       e.hits.push(Date.now());
-      if (e.hits.length >= this.maxAttempts) {
+      if (e.hits.length >= max) {
         e.lockedUntil = Date.now() + this.lockoutMs;
         e.hits = [];
-        out.push(key);
+        out.push(key.startsWith('p:') ? `u:${username}@i:${ip}` : key);
       }
       this.attempts.set(key, e);
     }
@@ -184,8 +204,8 @@ export class LoginGuard {
   }
 
   noteSuccess(username, ip) {
-    this.attempts.delete(`u:${username}`);
-    this.attempts.delete(`i:${ip}`);
+    // success clears this pair only: it proves nothing about other addresses guessing this account
+    this.attempts.delete(`p:${username}\u0000${ip}`);
   }
 }
 

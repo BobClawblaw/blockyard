@@ -111,8 +111,8 @@ export function renderChain(s, state, h) {
     // hundreds of blocks a second is not a hashrate), and the reason travels with it
     // so the dash is an explanation rather than a mystery.
     ['network hash', s.hashrateEstEh != null ? fmt.eh(s.hashrateEstEh)
-      : `<span title="${fmt.esc(s.hashrateNote ?? '')}">–</span>`],
-    ...(s.hashrateEstEh == null && s.hashrateNote ? [['hash rate note', `<span class="tiny faint">${fmt.esc(s.hashrateNote)}</span>`]] : []),
+      : raw(`<span title="${fmt.esc(s.hashrateNote ?? '')}">–</span>`)],
+    ...(s.hashrateEstEh == null && s.hashrateNote ? [['hash rate note', raw(`<span class="tiny faint">${fmt.esc(s.hashrateNote)}</span>`)]] : []),
     ['avg interval', s.avgBlockGapSec != null ? fmt.ageSec(s.avgBlockGapSec) : '–'],
     ['reorgs seen', String(s.blocks?.reorgs ?? 0)],
   ]));
@@ -521,7 +521,7 @@ export function renderNode(s, state, h) {
   const lh = t.health ?? {};
   h.setText('ndTail', kv([
     ['file', t.source === 'disabled'
-      ? '<span class="faint">disabled — running on RPC only</span>'
+      ? raw('<span class="faint">disabled — running on RPC only</span>')
       : (t.file ? fmt.hash(t.file, 16) : 'not configured')],
     ['exists', t.exists == null ? '–' : String(t.exists)],
     ['size', t.size != null ? fmt.bytes(t.size, 1) : '–'],
@@ -536,10 +536,10 @@ export function renderNode(s, state, h) {
     // The two figures that separate "this node is quiet" from "we are tailing the
     // wrong file". A tail that stops moving is invisible in every other panel.
     ['lines matched', lh.ratio != null
-      ? `${Math.round(lh.ratio * 100)}%${lh.lines ? ` <span class="faint tiny">(${fmt.num(lh.parsed)}/${fmt.num(lh.lines)} last window)</span>` : ''}`
-      : '<span class="faint">not checked yet</span>'],
+      ? raw(`${Math.round(lh.ratio * 100)}%${lh.lines ? ` <span class="faint tiny">(${fmt.num(lh.parsed)}/${fmt.num(lh.lines)} last window)</span>` : ''}`)
+      : raw('<span class="faint">not checked yet</span>')],
     ['last new bytes', lh.lastGrowthAt
-      ? `${fmt.ago(lh.lastGrowthAt)} <span class="faint tiny">(warns after ${lh.staleAfterMs ? Math.round(lh.staleAfterMs / 60000) : '?'} min)</span>`
+      ? raw(`${fmt.esc(fmt.ago(lh.lastGrowthAt))} <span class="faint tiny">(warns after ${lh.staleAfterMs ? Math.round(lh.staleAfterMs / 60000) : '?'} min)</span>`)
       : '–'],
   ]));
 
@@ -826,8 +826,17 @@ function drawFromSeries(h, id, points, color, fmtY, extra = {}) {
   });
 }
 
-function kv(pairs) {
-  return pairs.map(([k, v]) => `<dt>${String(k)}</dt><dd>${String(v)}</dd>`).join('');
+// ESCAPED BY DEFAULT (audit 2026-09-16, L2/L3). kv() used to write every value as markup, and some
+// values are the node's own strings passed straight through -- `chain`, `pruned`, the RPC endpoint,
+// the cookie path. A hostile or misconfigured node returned `chain` with an <img> appended and it
+// became an element on the Chain page (the CSP stopped the script; the element was still there).
+// Now a value is text unless it is wrapped in raw(), which says at the call site "this is markup
+// this file built, with its own dynamic parts already escaped".
+const RAW = Symbol('raw');
+export const raw = (html) => ({ [RAW]: String(html) });
+export function kv(pairs) {
+  const cell = (v) => (v && typeof v === 'object' && RAW in v ? v[RAW] : F().esc(v));
+  return pairs.map(([k, v]) => `<dt>${F().esc(k)}</dt><dd>${cell(v)}</dd>`).join('');
 }
 
 function median(a) {
@@ -888,8 +897,8 @@ export function initChainDrill(h) {
       return;
     }
     const rows = [
-      ['txid', `<span class="mono tiny select-all">${fmt.esc(d.txid ?? txid)}</span> <a class="xlink" href="#explorer/tx/${encodeURIComponent(d.txid ?? txid)}">open in the explorer ›</a>`],
-      ['in', d.inMempool ? '<span class="warn">mempool (unconfirmed)</span>' : `block ${fmt.esc(d.blockHash ?? '?')}`],
+      ['txid', raw(`<span class="mono tiny select-all">${fmt.esc(d.txid ?? txid)}</span> <a class="xlink" href="#explorer/tx/${encodeURIComponent(d.txid ?? txid)}">open in the explorer ›</a>`)],
+      ['in', d.inMempool ? raw('<span class="warn">mempool (unconfirmed)</span>') : `block ${d.blockHash ?? '?'}`],
       ['confirmations', d.confirmations == null ? '– (in the pool)' : fmt.num(d.confirmations)],
       ['size / vsize / weight', [d.size, d.vsize, d.weight].map((v) => (v == null ? '–' : fmt.num(v))).join(' / ')],
       ['locktime', d.locktime ?? 0],
@@ -898,8 +907,8 @@ export function initChainDrill(h) {
       ['total out', d.totalOutSat != null ? `${fmt.num(d.totalOutSat)} sat` : '–'],
     ];
     const io = (rows2, label) => `<div class="note tiny mt-6"><b>${label}</b></div><table class="t"><tbody>${rows2}</tbody></table>`;
-    const inRows = (d.inputs ?? []).map((v) => `<tr><td class=\"mono tiny w\">${fmt.esc(String(v.txid ?? 'coinbase').slice(0, 16))}…:${v.vout ?? '–'}</td><td class=\"tiny faint\">${fmt.esc(v.scriptSigType ?? '')} ${fmt.esc(v.scriptSigAsm ?? '')}</td></tr>`).join('');
-    const outRows = (d.outputs ?? []).map((v) => `<tr><td class=\"r faint\">${v.n ?? '–'}</td><td class=\"mono tiny\">${fmt.esc(String(v.address ?? v.scriptPubKeyType ?? '–'))}</td><td class=\"r\">${v.value == null ? '–' : fmt.num(v.value)}</td></tr>`).join('');
+    const inRows = (d.inputs ?? []).map((v) => `<tr><td class=\"mono tiny w\">${fmt.esc(String(v.txid ?? 'coinbase').slice(0, 16))}…:${fmt.esc(v.vout ?? '–')}</td><td class=\"tiny faint\">${fmt.esc(v.scriptSigType ?? '')} ${fmt.esc(v.scriptSigAsm ?? '')}</td></tr>`).join('');
+    const outRows = (d.outputs ?? []).map((v) => `<tr><td class=\"r faint\">${fmt.esc(v.n ?? '–')}</td><td class=\"mono tiny\">${fmt.esc(String(v.address ?? v.scriptPubKeyType ?? '–'))}</td><td class=\"r\">${v.value == null ? '–' : fmt.num(v.value)}</td></tr>`).join('');
     box.innerHTML = `<div class=\"drill\">
       <dl class=\"kv\">${kv(rows)}</dl>
       ${inRows ? io(inRows, `inputs (${d.inputsTotal})`) : ''}
@@ -936,20 +945,20 @@ export function initChainDrill(h) {
     const b = d.header ?? {};
     const st = d.stats ?? {};
     if (hdr()) hdr().innerHTML = kv([
-      ['height', b.height == null ? '–' : `<a class="xlink" href="#explorer/block/${b.height}">${fmt.num(b.height)}</a> <span class="tiny faint">open in the explorer</span>`],
-      ['hash', `<span class=\"mono tiny select-all\">${fmt.esc(String(b.hash ?? '').slice(0, 24))}…</span>`],
-      ['confirmations', b.confirmations == null ? '–' : `${fmt.num(b.confirmations)}${b.confirmations === 0 ? ' <span class=\"bad\">(not on the best chain)</span>' : ''}`],
+      ['height', b.height == null ? '–' : raw(`<a class="xlink" href="#explorer/block/${encodeURIComponent(Number(b.height))}">${fmt.esc(fmt.num(b.height))}</a> <span class="tiny faint">open in the explorer</span>`)],
+      ['hash', raw(`<span class=\"mono tiny select-all\">${fmt.esc(String(b.hash ?? '').slice(0, 24))}…</span>`)],
+      ['confirmations', b.confirmations == null ? '–' : raw(`${fmt.esc(fmt.num(b.confirmations))}${b.confirmations === 0 ? ' <span class=\"bad\">(not on the best chain)</span>' : ''}`)],
       ['time', b.time ? `${new Date(b.time * 1000).toISOString().replace('T', ' ').slice(0, 19)}Z` : '–'],
       ['age', b.time ? fmt.ago(b.time * 1000) : '–'],
       ['size / weight', `${b.size == null ? '–' : fmt.bytes(b.size, 0)} / ${b.weight == null ? '–' : fmt.num(b.weight)} WU`],
       ['transactions', fmt.num(b.nTx ?? b.txCount ?? 0)],
-      ['fees', st.totalfee == null ? (d.statsError ? '<span class=\"warn\">getblockstats failed</span>' : '–') : `${fmt.num(st.totalfee)} sat`],
+      ['fees', st.totalfee == null ? (d.statsError ? raw('<span class=\"warn\">getblockstats failed</span>') : '–') : `${fmt.num(st.totalfee)} sat`],
       ['median fee', st.medianfee == null ? '–' : `${fmt.num(st.medianfee)} sat`],
       ['fee rate p10/50/90', (st.feerate_percentiles ?? []).length ? st.feerate_percentiles.map((v) => Number(v).toFixed(1)).join(' / ') : '–'],
       ['subsidy', st.subsidy == null ? '–' : `${fmt.num(st.subsidy)} sat`],
       ['utxo delta', st.utxo_increase == null ? '–' : fmt.num(st.utxo_increase)],
-      ['prev / next', `<span class=\"mono tiny\">${fmt.esc(String(b.previousblockhash ?? '–').slice(0, 10))}… / ${fmt.esc(String(b.nextblockhash ?? 'none').slice(0, 10))}…</span>`],
-      ['merkle root', `<span class=\"mono tiny\">${fmt.esc(String(b.merkleRoot ?? '–').slice(0, 16))}…</span>`],
+      ['prev / next', raw(`<span class=\"mono tiny\">${fmt.esc(String(b.previousblockhash ?? '–').slice(0, 10))}… / ${fmt.esc(String(b.nextblockhash ?? 'none').slice(0, 10))}…</span>`)],
+      ['merkle root', raw(`<span class=\"mono tiny\">${fmt.esc(String(b.merkleRoot ?? '–').slice(0, 16))}…</span>`)],
     ]);
     const ids = d.txids ?? [];
     if (list()) {

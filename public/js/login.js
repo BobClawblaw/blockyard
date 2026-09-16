@@ -4,6 +4,7 @@
 // the theme the browser last saw (settings.js keeps a copy under blockyard.settings), so a light
 // theme's sign-in page is light too; a first visit gets the shipped look
 import { followTheme } from './theme.js';
+import { safeNext } from './safenext.js';
 followTheme();
 
 const err = document.getElementById('err');
@@ -76,8 +77,7 @@ form.addEventListener('submit', async (ev) => {
     // X-CSRF-Token header -- reading it is the thing a cross-origin page cannot
     // do, which is what makes the check mean anything.
     void /(?:^|;\s*)blockyard_csrf=/.test(document.cookie);
-    const back = new URLSearchParams(location.search).get('next');
-    window.location.replace(back && back.startsWith('/') ? back : '/');
+    window.location.replace(safeNext(new URLSearchParams(location.search).get('next'), location.origin));
   } catch (e) {
     show(`cannot reach the server: ${e.message}`);
     btn.disabled = false;
@@ -86,3 +86,4 @@ form.addEventListener('submit', async (ev) => {
 });
 
 document.getElementById('u').focus();
+

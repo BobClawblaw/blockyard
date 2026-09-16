@@ -37,7 +37,8 @@ test('nothing saved yet is a first-run answer, not a fault', async () => {
     assert.equal(r.status, 200, 'the absence of settings is a 200 with an answer, not a 404');
     assert.equal(r.body.stored, false);
     assert.equal(r.body.settings, null, 'and no blob, so the client keeps its own defaults');
-    assert.equal(r.body.file, app.settingsFile, 'it names the file it looked in');
+    // open mode: a viewer is told which file, not the directories above it (audit 2026-09-16, L11)
+    assert.equal(r.body.file, `…/${app.settingsFile.split(/[\\/]+/).slice(-2).join('/')}`, 'it names the file it looked in');
   });
 });
 
@@ -47,7 +48,7 @@ test('a saved blob round-trips, and the file is written for this user only', asy
     const w = await client.post('/api/settings', { settings });
     assert.equal(w.status, 200, JSON.stringify(w.body));
     assert.equal(w.body.ok, true);
-    assert.equal(w.body.file, app.settingsFile, 'it names the file it wrote');
+    assert.equal(w.body.file, `…/${app.settingsFile.split(/[\\/]+/).slice(-2).join('/')}`, 'it names the file it wrote');
 
     const r = await client.get('/api/settings');
     assert.equal(r.body.stored, true);

@@ -242,7 +242,7 @@ const offText = (d) => (d?.enabled === false ? (d.polling === false ? 'market po
 
 export function depthNote(d, fmt) {
   if (!d) return 'asking the exchanges for their order books…';
-  if (d.enabled === false) return d.note ?? 'market data is off on this monitor';
+  if (d.enabled === false) return d.note != null ? fmt.esc(d.note) : 'market data is off on this monitor';   // markup sink: escaped (audit 2026-09-16, I2)
   if (d.warming) return 'reading the order books for the first time…';
   const agoL = AGOS.find(([s]) => s === d.ago)?.[1] ?? `${d.ago} s`;
   const parts = [`books read at ${clock(d.at)} UTC, every ${Math.round((d.bookMs ?? DEPTH_MS) / 1000)} s while this tab is open`];

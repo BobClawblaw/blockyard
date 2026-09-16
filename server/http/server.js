@@ -133,6 +133,7 @@ export function createAppServer(app) {
     }
 
     const match = matchRoute(compiled, req.method, path);
+    if (match?.badPath) return sendJson(req, res, 400, { error: { message: 'malformed percent-encoding in the path', kind: 'bad_request' } });
     if (match?.methodMismatch) {
       res.setHeader('Allow', [...new Set(compiled.filter((r) => r.re.test(path)).map((r) => r.method))].join(', '));
       return sendJson(req, res, 405, { error: { message: `${req.method} is not allowed on ${path}`, kind: 'method' } });
@@ -319,7 +320,13 @@ function matchRoute(compiled, method, path) {
     if (!m) continue;
     if (r.method !== method) { methodMismatch = true; continue; }
     const params = {};
-    r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
+    // A malformed escape in a path parameter is the client's mistake, and answered as one: it used to
+    // throw here and come back as a 500 "internal error" (audit 2026-09-16, L13).
+    try {
+      r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
+    } catch {
+      return { badPath: true };
+    }
     return { route: r, params };
   }
   return methodMismatch ? { methodMismatch: true } : null;
