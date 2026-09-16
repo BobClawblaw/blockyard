@@ -80,7 +80,11 @@ function pickWeapon(tank, target, { thrifty = false } = {}) {
 // ------------------------------------------------------------------- the personalities
 /** The Moron: "pick an angle and power, and shoot". Whatever it happens to own. */
 export function moron(g, tank, rnd = g.rnd) {
-  const left = tank.x > COLS / 2;
+  // random, but toward SOMEONE: it used to fire toward the middle of the field whatever was there,
+  // so once the tanks on that side were gone it (and every player falling back on it) kept shelling
+  // the empty half of the board
+  const foe = nearest(g, tank);
+  const left = foe ? centreX(foe) < centreX(tank) : tank.x > COLS / 2;
   const angle = left ? 95 + Math.round(rnd() * 65) : 20 + Math.round(rnd() * 65);
   const power = 300 + Math.round(rnd() * 700);
   const owned = WEAPON_ORDER.filter((w) => (tank.inventory[w] ?? 0) > 0);

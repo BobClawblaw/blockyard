@@ -1371,3 +1371,39 @@ test('scorched yard: a blast does not stall the frame', async () => {
   assert.ok(lines + moves < 5500, `under half the path points of the first cut (${moves} runs, ${lines} segments)`);
   assert.ok(lines > moves, 'runs are continuous lines, not lone segments');
 });
+
+// THE COMPUTER AIMS AT THE LIVING (operator, 2026-09-16: "The AI is trying to fire at opponents that are
+// no longer on the board")
+test('scorched yard: a computer player plans against the tanks still standing and swings its barrel to the shot', () => {
+  // the random shot goes toward someone alive, not toward the middle of the field
+  for (let seed = 1; seed <= 30; seed++) {
+    const g = newGame([{ name: 'A', kind: 'moron' }, { name: 'B', kind: 'moron' }, { name: 'C', kind: 'moron' }], { seed });
+    const t = g.tanks[0];
+    for (const k of g.tanks.slice(1)) { k.alive = false; }
+    const foe = g.tanks[1]; foe.alive = true;                       // one left standing
+    const d = moron(g, t, rng(seed));
+    const toward = Math.sign((foe.x + TANK_W / 2) - (t.x + TANK_W / 2));
+    assert.equal(Math.sign(Math.cos((d.angle * Math.PI) / 180)), toward, `seed ${seed}: the random shot heads for the one tank left`);
+  }
+  // no personality ever fires away from every living enemy, over whole games
+  const kinds = ['moron', 'shooter', 'poolshark', 'tosser', 'chooser', 'spoiler', 'cyborg'];
+  let shots = 0, away = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const g = newGame(kinds.slice(0, 5).map((k, i) => ({ name: k, kind: kinds[(i + seed) % kinds.length] })), { seed, rounds: 1 });
+    for (let turn = 0; turn < 300 && g.phase === 'aim' || (turn < 300 && (g.phase === 'flight' || g.phase === 'settle')); turn++) {
+      if (g.phase !== 'aim') { step(g, 50); if (g.phase === 'settle') settled(g); continue; }
+      const t = current(g); const d = decide(g, t);
+      const dirX = Math.cos((d.angle * Math.PI) / 180), cx = t.x + TANK_W / 2;
+      if (!alive(g).filter((k) => k !== t).some((k) => Math.sign(k.x + TANK_W / 2 - cx) === Math.sign(dirX) || Math.abs(dirX) < 0.05)) away += 1;
+      shots += 1; aim(g, t, d); fire(g, t);
+      for (let k = 0; k < 2000 && (g.phase === 'flight' || g.phase === 'settle'); k++) { step(g, 50); if (g.phase === 'settle') settled(g); }
+    }
+  }
+  assert.ok(shots > 50, `a real sample (${shots} shots)`);
+  assert.equal(away, 0, 'not one shot is fired away from every tank still standing');
+  // the screen plans at the start of the turn and eases the barrel to it; cheat mode is the human's
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /G\.aiPlan = \{ tank: cur\.id, at: G\.aiAt, from: \{ angle: cur\.angle, power: cur\.power \}, to: decide\(g, cur\) \};/, 'the plan is made as the turn begins, against the tanks alive then');
+  assert.match(src, /aim\(g, cur, \{ angle: from\.angle \+ \(to\.angle - from\.angle\) \* e, power: from\.power \+ \(to\.power - from\.power\) \* e \}\);/, 'the barrel swings from the old aim to the new one');
+  assert.match(src, /if \(t && t\.kind === 'human' && g\.phase === 'aim' && !G\.shopping && scorchedOptions\(loadSettings\(\)\)\.cheat\)/, 'cheat mode draws your solution, not the computer\u2019s stale one');
+});

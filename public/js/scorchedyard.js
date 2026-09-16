@@ -90,6 +90,7 @@ const G = {
   windAtChange: 0,                      // when it changed, for the banner's brightness
   windAt: 0,                            // when the wind layer last moved, so it keeps blowing while the board is idle
   aiAt: 0,                              // when the computer's turn began, for the pause before it fires
+  aiPlan: null,                         // { tank, at, from, to }: the shot a computer player chose as its turn began
   settleT0: 0, settleMs: 0,             // the fall on screen
   landKey: '',                          // what the land canvas last drew: the land version and whether dirt is falling
   blasts: [],                           // { id, x, y, r, t0, big } pictures of the blasts, drained as they end
@@ -437,7 +438,7 @@ function paintOver(ctx, view, hx) {
   // CHEAT MODE: the firing solution, redrawn every frame the aim moves. Clipped where the shell
   // would meet the dirt or leave the field, so what is drawn is the shot, not a parabola over it.
   const t = current(g);
-  if (t && g.phase === 'aim' && !G.shopping && scorchedOptions(loadSettings()).cheat) {
+  if (t && t.kind === 'human' && g.phase === 'aim' && !G.shopping && scorchedOptions(loadSettings()).cheat) {
     const sol = solutionOf(g, t);
     if (sol) paintSolution(ctx, P, U, sol.pts, { colour: '255,224,140', impact: sol.impact });
   }
@@ -783,9 +784,27 @@ function frame(t) {
   }
   if (g.phase === 'aim') {
     const cur = current(g);
+    // THE COMPUTER DECIDES AT THE START OF ITS TURN, AND ITS BARREL SWINGS TO THE SHOT (operator,
+    // 2026-09-16: "The AI is trying to fire at opponents that are no longer on the board"). It used
+    // to decide only when its thinking pause ran out, so for the whole pause its gauge -- and in cheat
+    // mode its trajectory -- still showed its LAST shot, usually aimed at the tank it had just
+    // destroyed. It now plans the moment its turn begins, against the tanks alive then, and the
+    // barrel and the power ease from the old aim to the new one while it thinks, so what you watch
+    // it line up is what it fires.
+    if (cur.kind !== 'human') {
+      if (!G.aiPlan || G.aiPlan.tank !== cur.id || G.aiPlan.at !== G.aiAt) {
+        prepare(g, cur);                         // a battery, a shield, before the shot
+        G.aiPlan = { tank: cur.id, at: G.aiAt, from: { angle: cur.angle, power: cur.power }, to: decide(g, cur) };
+      }
+      const k = Math.min(1, (t - G.aiAt) / (AI_THINK_MS * 0.8));
+      const e = k * k * (3 - 2 * k);
+      const { from, to } = G.aiPlan;
+      aim(g, cur, { angle: from.angle + (to.angle - from.angle) * e, power: from.power + (to.power - from.power) * e });
+      G.dirty = true;
+    }
     if (cur.kind !== 'human' && t - G.aiAt >= AI_THINK_MS) {
-      prepare(g, cur);                           // a battery, a shield, before the shot
-      aim(g, cur, decide(g, cur));
+      aim(g, cur, G.aiPlan.to);
+      G.aiPlan = null;
       fire(g, cur);
       onEvents(step(g, 0), t);
       if (g.phase === 'settle') startSettle(t);   // the laser is over at once
@@ -845,6 +864,7 @@ function start() {
   // game after a change of opponents, placed the new tanks over the OLD terrain: some in the air,
   // some buried. The key is cleared here, so the first draw of a game always draws its own land.
   G.landKey = '';
+  G.aiPlan = null;
   G.game = newGame(players(t), { rounds: t.rounds, walls: t.walls, wind: t.wind, gravity: t.gravity, land: t.land, cash: t.cash, interest: t.interest / 100 });
   G.blasts = []; G.fires = []; G.beams = []; G.deaths = []; G.dusts = []; G.falls = new Map(); G.shopping = false;
   G.running = true; G.paused = false; G.last = 0; G.dirty = true; G.aiAt = performance.now();
