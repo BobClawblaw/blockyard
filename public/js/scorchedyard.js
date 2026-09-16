@@ -10,7 +10,7 @@
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from './scorchedfx.js';
-import { plasmaCells, paintPlasma, airClock, advanceAir, paintRipple, airBands, paintAirBands } from './scorchedwind.js';
+import { plasmaCells, paintPlasma, airClock, advanceAir, paintRipple, airBands, paintAirBands, skyBrightness } from './scorchedwind.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   trajectory, dirtAt, shellLook,
@@ -80,6 +80,7 @@ const G = {
   flowAt: 0,                            // the last frame's clock, for the step
   air: null,                            // the air's own integrated clock { t, drift }
   airTravel: 0,                         // the signed distance the air has run, for the ripple and the bands
+  skyLight: 0, skyLightAt: 0,           // how bright the sky behind the air is, sampled now and then
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -315,7 +316,9 @@ function drawWind(now) {
     paintRipple(ctx, sky, { sx: (cr.left - sr.left) * scale, sy: (cr.top - sr.top) * scale, scale }, w, h, G.airTravel, we);
   }
   paintPlasma(ctx, plasmaCells(w, h, G.air, we));
-  paintAirBands(ctx, airBands(G.airTravel, we, w, h));
+  // the sky's own light, read every second and a half: the bands carry more against a bright sky
+  if (sky && now - (G.skyLightAt ?? 0) > 1500) { G.skyLight = skyBrightness(sky); G.skyLightAt = now; }
+  paintAirBands(ctx, airBands(G.airTravel, we, w, h, 10, G.skyLight ?? 0));
   paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 

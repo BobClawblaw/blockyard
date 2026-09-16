@@ -338,12 +338,18 @@ export function paintRipple(ctx, src, map, w, h, travel, wind, col = 6) {
  * with the ripple. No head, no tail, no bright point anywhere in them -- a band of slightly paler
  * sky that undulates, the way wind is drawn in a woodblock print.
  */
-export function airBands(travel, wind, w, h, count = 5) {
+// `bright` is how light the sky behind them is, 0 at night to 1 at noon: white on a pale blue sky
+// has a fraction of the contrast it has on black, so the bands carry more by day and no more by
+// night (operator, 2026-09-16: "not prominent enough in daylight" -- after a night-time wall of
+// streaks had been "way too much")
+export function airBands(travel, wind, w, h, count = 10, bright = 0) {
   const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
   if (!w || !h || strength < 0.03) return [];
   const out = [];
   for (let i = 0; i < count; i++) {
-    const y0 = h * (0.1 + 0.105 * i + 0.02 * Math.sin(i * 2.3));
+    // ten bands, twice the first cut (operator, 2026-09-16: "not prominent enough in daylight, can
+    // we double the amount of trails"), spread over the same height of sky
+    const y0 = h * (0.07 + (0.53 / Math.max(1, count - 1)) * i + 0.015 * Math.sin(i * 2.3));
     const amp = h * (0.012 + 0.028 * strength) * (0.7 + 0.3 * Math.sin(i * 1.7));
     const k = 0.006 + 0.0022 * i;
     const lag = 0.75 + 0.1 * i;
@@ -352,7 +358,7 @@ export function airBands(travel, wind, w, h, count = 5) {
       const u = x - travel * lag;
       pts.push({ x, y: y0 + amp * Math.sin(u * k + i * 1.3) + amp * 0.35 * Math.sin(u * k * 2.4 + i) });
     }
-    out.push({ pts, width: h * (0.03 + 0.02 * ((i * 7) % 3) / 2), alpha: 0.012 + 0.028 * strength });
+    out.push({ pts, width: h * (0.024 + 0.018 * ((i * 7) % 3) / 2), alpha: (0.02 + 0.04 * strength) * (1 + 2.2 * Math.max(0, Math.min(1, bright))) });
   }
   return out;
 }
@@ -363,7 +369,7 @@ export function paintAirBands(ctx, bands, colour = '206,222,246') {
   for (const b of bands) {
     // twice, wide and faint then narrow and a touch brighter: a soft band with no edge to catch
     for (const [wk, ak] of [[1, 1], [0.45, 1.1]]) {
-      ctx.strokeStyle = `rgba(${colour},${Math.min(0.08, b.alpha * ak).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(${colour},${Math.min(0.26, b.alpha * ak).toFixed(3)})`;
       ctx.lineWidth = b.width * wk;
       ctx.beginPath();
       ctx.moveTo(b.pts[0].x, b.pts[0].y);
@@ -371,4 +377,19 @@ export function paintAirBands(ctx, bands, colour = '206,222,246') {
       ctx.stroke();
     }
   }
+}
+
+/**
+ * How light a sky canvas is, 0 to 1, from a coarse sample of its upper half. Cheap enough to take
+ * every second or two: the sky changes its light over minutes, not frames.
+ */
+export function skyBrightness(sky) {
+  try {
+    const cx = sky?.getContext?.('2d', { willReadFrequently: true });
+    if (!cx || !sky.width || !sky.height) return 0;
+    const d = cx.getImageData(0, 0, sky.width, Math.max(1, Math.round(sky.height * 0.5))).data;
+    let sum = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4 * 97) { sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; n += 1; }
+    return n ? Math.max(0, Math.min(1, (sum / n - 0.12) / 0.45)) : 0;
+  } catch { return 0; }
 }

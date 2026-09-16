@@ -14,7 +14,7 @@ import {
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
-import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands } from '../public/js/scorchedwind.js';
+import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands, skyBrightness } from '../public/js/scorchedwind.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -1200,8 +1200,8 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
   // the bands: broad, soft, bowing, stroked lines and nothing round
   assert.equal(airBands(0, 0, 800, h).length, 0, 'no bands in still air');
   const bands = airBands(50, 8, 800, h);
-  assert.ok(bands.length >= 4, 'a handful of bands');
-  for (const b of bands) { const ys = b.pts.map((p) => p.y); assert.ok(Math.max(...ys) - Math.min(...ys) > 4, 'each one bows'); assert.ok(b.alpha <= 0.05 && b.width > 10, 'broad and faint'); }
+  assert.equal(bands.length, 10, 'ten bands');
+  for (const b of bands) { const ys = b.pts.map((p) => p.y); assert.ok(Math.max(...ys) - Math.min(...ys) > 4, 'each one bows'); assert.ok(b.alpha <= 0.07 && b.width > 10, 'broad and faint'); }
   const R = recorder();
   paintAirBands(R.ctx, bands);
   assert.ok(R.ops.every((o) => o.op === 'stroke'), 'strokes only: no heads, no dots, nothing a meteor is made of');
@@ -1211,4 +1211,11 @@ test('scorched yard: the wind ripples the sky and bows soft bands, downwind, wit
   assert.ok(!/paintFlow|paintStreamlines/.test(wind), 'the meteor-shaped streaks are gone from the picture');
   assert.match(wind, /paintRipple\(ctx, sky,/, 'the sky is refracted');
   assert.match(wind, /paintAirBands\(ctx, airBands\(/, 'and the bands bow across it');
+  // brighter against a bright sky, and no brighter at night than before
+  const night = airBands(50, 8, 800, h, 10, 0), noon = airBands(50, 8, 800, h, 10, 1);
+  assert.ok(noon[0].alpha > night[0].alpha * 2.5, 'the bands carry about three times more at noon');
+  const px = (r, g, b) => ({ width: 10, height: 10, getContext: () => ({ getImageData: (x, y, w, hh) => ({ data: new Uint8ClampedArray(w * hh * 4).map((_, i) => [r, g, b, 255][i % 4]) }) }) });
+  assert.ok(skyBrightness(px(10, 12, 30)) < 0.05, 'a night sky reads dark');
+  assert.ok(skyBrightness(px(90, 150, 230)) > 0.6, 'a day sky reads bright');
+  assert.equal(skyBrightness(null), 0, 'and no sky reads as night');
 });
