@@ -97,6 +97,7 @@ const G = {
   fires: [],                            // { cells, t0 } napalm on the ground, drained as it burns out
   beams: [],                            // { x0, y0, x1, y1, t0 } laser lines
   drag: null,                           // a mouse aim in progress
+  dragClickAt: 0,                       // when the drag last clicked, so it ticks rather than machine-guns
   shopping: false,                      // the shop is open between rounds
   seq: 0,
 };
@@ -1006,7 +1007,17 @@ function onPointerMove(e) {
   if (!G.drag.moved && Math.hypot(p.x - G.drag.x0, p.y - G.drag.y0) < 0.5) return;
   G.drag.moved = true;
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  const wasAngle = Math.round(t.angle), wasPower = Math.round(t.power);
   aim(g, t, { angle: Math.max(0, Math.min(180, angle)), power: Math.min(1000, Math.hypot(dx, dy) * 28) });
+  // THE CLICKS (operator, 2026-09-16: "I'm not hearing the adjustment clicks when I move with the
+  // mouse"). The keys and the wheel clicked; the drag was silent. It clicks now on every whole
+  // degree and every ten of power it crosses, no more than a few times a frame's worth apart, so
+  // a slow drag ticks and a fast one whirs rather than machine-gunning.
+  const now = performance.now();
+  if (now - (G.dragClickAt ?? 0) >= 45) {
+    if (Math.round(t.angle) !== wasAngle) { sound.play('move'); G.dragClickAt = now; }
+    else if (Math.round(t.power / 10) !== Math.round(wasPower / 10)) { sound.play('soft'); G.dragClickAt = now; }
+  }
   G.dirty = true;
   if (!G.raf) draw();
 }

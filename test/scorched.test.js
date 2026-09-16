@@ -1131,3 +1131,12 @@ test('scorched yard: a purchase takes the money, and the panel shows the shopper
   assert.match(src, /const t = G\.shopping && you \? you : current\(g\);/, 'the panel shows the human while the shop is open');
   assert.match(src, /\['turn', G\.shopping && you \? `\$\{t\.name\} · shopping` : t\.name\]/, 'and says so');
 });
+
+// THE DRAG CLICKS (operator, 2026-09-16: "I'm not hearing the adjustment clicks when I move with the mouse")
+test('scorched yard: a mouse drag clicks as it crosses degrees and tens of power, like the keys', () => {
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  const move = src.slice(src.indexOf('function onPointerMove'), src.indexOf('function onPointerUp'));
+  assert.match(move, /if \(Math\.round\(t\.angle\) !== wasAngle\) \{ sound\.play\('move'\)/, 'a degree crossed clicks');
+  assert.match(move, /Math\.round\(t\.power \/ 10\) !== Math\.round\(wasPower \/ 10\)\) \{ sound\.play\('soft'\)/, 'ten of power crossed clicks');
+  assert.match(move, /now - \(G\.dragClickAt \?\? 0\) >= 45/, 'and no more often than every 45 ms');
+});
