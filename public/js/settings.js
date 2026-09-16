@@ -306,6 +306,8 @@ export const DEFAULTS = Object.freeze({
     wind: 'turn',         // 'turn' (changes every turn) | 'shot' | 'none'
     gravity: 1,           // 1 = Earth
     land: 'hills',        // 'hills' | 'mountains' | 'valley' | 'flat'
+    cash: 10000,          // to start, dollars
+    interest: 5,          // per cent, on what is left between rounds
   }),
 });
 
@@ -669,6 +671,8 @@ const PANEL_GROUPS = Object.freeze([
         key: 'land', label: 'Landscape', kind: 'choice', hint: 'The shape of the land each round is drawn from',
         options: Object.freeze([['hills', 'Rolling hills'], ['mountains', 'Mountains'], ['valley', 'A valley'], ['flat', 'Flat']]),
       }),
+      Object.freeze({ key: 'cash', label: 'Starting cash', kind: 'range', min: 0, max: 100000, step: 5000, hint: 'What every tank has to spend at the first shop; damage and kills earn more' }),
+      Object.freeze({ key: 'interest', label: 'Interest', kind: 'range', min: 0, max: 25, step: 1, hint: 'Per cent paid on unspent cash between rounds' }),
     ]),
   }),
 ]);
@@ -1123,7 +1127,7 @@ export function scorchedOptions(s) {
     stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, fast: sc.fast,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
-    opponents: sc.opponents, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land,
+    opponents: sc.opponents, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
   };

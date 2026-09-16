@@ -725,10 +725,11 @@ craters and falls, tanks that aim by angle and power, wind, and a round that end
 left. Under **Diversions**, after Blockanoid. You play against two computer opponents out of the
 box (**Display settings → Scorched Yard → Computer players** fields up to five).
 
-This is the first cut (docs/PLAN-SCORCHED-YARD.md is the whole plan): four missiles, craters,
-falling dirt, fall damage, death and its blast, the walls, wind, a game of rounds, and one computer
-personality — the Moron, who fires at random. The roster, the shop, the other personalities and
-the fabulous part are on their way.
+The rules are the original's (docs/PLAN-SCORCHED-YARD.md is the whole plan): the roster of
+twenty-six weapons and ten items, craters, falling dirt, fall damage, death and its blast, the
+walls, wind, cash for damage and kills, a shop between rounds, and a game of rounds. One computer
+personality so far — the Moron, who fires at random and shops the same way; the others and the
+fabulous part are on their way.
 
 ### Playing
 
@@ -736,11 +737,50 @@ the fabulous part are on their way.
 |---|---|
 | **←** **→** or **A** **D** | the barrel's angle, a degree at a time (Shift: five) |
 | **↑** **↓** or **W** **S** | power, ten at a time (Shift: one, Ctrl: a hundred) |
-| **[** **]** or **PgUp** **PgDn** | the weapon: Baby Missile (bottomless), Missile, Baby Nuke, Nuke |
+| **[** **]** or **PgUp** **PgDn** | the weapon, through what you own |
 | **space** or **Enter** | fire |
 | the mouse | drag on the field to aim: the direction from your tank is the angle, the distance the power |
+| **A** **D** | drive a cell left or right, a unit of fuel each |
+| **B** | a battery: 30 health back |
+| **S** | raise a shield (the best you own) |
+| **T** **H** | arm a contact trigger or heat guidance for the next shot |
 | **P** or **Esc** | pause |
-| **N** | the next round, from the round's end |
+| **N** | the next round, from the shop |
+
+### The roster
+
+You start with the bottomless **Baby Missile** and your cash; everything else is bought. What a
+shell does when it lands:
+
+| weapon | what it does |
+|---|---|
+| Baby Missile, Missile, Baby Nuke, Nuke, Death's Head | a blast: a crater and damage that falls off with distance, from a cell and a half across to nine |
+| Funky Bomb | a small blast, then six bomblets thrown out that each blast where they land |
+| MIRV | splits into five shells at the top of its arc |
+| Leapfrog | explodes, bounces on, and explodes twice more |
+| Tracer, Smoke Tracer | no crater and no damage: it shows you the wind |
+| Roller, Heavy Roller | lands and rolls downhill until it meets a tank or the bottom of a dip, then blasts |
+| Riot Charge, Riot Blast, Riot Bomb | clears dirt in a circle and hurts no one |
+| Dirt Clod, Dirt Ball, Ton of Dirt | adds a ball of dirt where it lands |
+| Napalm, Hot Napalm | liquid fire that runs downhill along the surface and burns what it reaches |
+| Baby Digger, Digger, Heavy Digger | digs straight down, then blasts |
+| Sandhog, Heavy Sandhog | tunnels on along its heading through the dirt, then blasts |
+| Laser | a straight line from the barrel, at once: dirt along it goes, a tank on it burns |
+
+The items: **Shield**, **Deflector Shield** and **Force Shield** absorb damage (the deflector and
+the force shield bounce shells away too); a **Parachute** opens when you fall; a **Battery**
+restores health; a **Mag Deflector** pushes passing shells away; **Auto Defense** raises a shield
+for you as your turn begins; **Fuel** lets you drive; a **Contact Trigger** sets the shell off
+within reach of a tank before it buries; **Heat Guidance** bends the shell toward the nearest
+tank as it falls. The items line under the fire button shows what you carry and what is armed.
+
+### Cash and the shop
+
+Every point of damage you land earns $10, a kill $2,000, and the last tank standing $1,000; interest
+(a setting, 5% out of the box) is paid on what you keep between rounds. When a round ends the
+**shop** opens: every weapon and item with its price and pack size, what you own, and a buy button
+while you can afford it. The computer players shop at the same moment, in their own way. What you
+buy stays with you for the rest of the game.
 
 The HUD shows whose turn it is, the round, the **wind** (an arrow and its strength: it changes
 every turn, and it bends every shot), your angle, power and weapon with its count, and every
@@ -760,8 +800,8 @@ is the shot, the blast, a hit, a fall, a death. **Fast** flies shells at three t
 The rules the original exposed are in **Display settings → Scorched Yard**: the number of
 computer players, the rounds, the **walls** (concrete explodes a shell at the edge, rubber bounces
 it, wraparound brings it in the other side, none loses it), the **wind** (every turn, every shot,
-or none), **gravity**, and the **landscape** the rounds are drawn from (hills, mountains, a
-valley, flat). They take effect at the next new game.
+or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
+flat), the **starting cash** and the **interest** rate. They take effect at the next new game.
 
 ## Wolfenstein 3D
 

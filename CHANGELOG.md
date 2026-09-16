@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows
 [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
+- **Scorched Yard, the roster and the shop** (M2): twenty-six weapons with the original's behaviours — the five blasts, Funky Bomb, MIRV, Leapfrog, the tracers, the rollers, the riot charges, the dirt weapons, napalm that flows and burns, the diggers and sandhogs that bore, the laser — and ten items (three shields, parachute, battery, mag deflector, auto defense, fuel, contact trigger, heat guidance); several shells in flight at once; cash for damage, kills and survival, interest between rounds, and the shop in the round-end overlay; the items line and cash on the HUD; keys to drive, heal, shield and arm; the computer players shop too; fire and beams on screen
 - **Scorched Yard, the first cut** (docs/PLAN-SCORCHED-YARD.md, M1): Scorched Earth on the block engine, under Diversions. A 96×48 field of dirt cubes drawn as runs by stratum, tanks with a turning barrel, a shell that flies under gravity and wind with the original's angle and power, craters, dirt that falls and settles, fall damage, death and its blast, the four wall modes, four missiles, one human against two computer players (the Moron; more opponents and personalities to come), turns, a game of rounds, a HUD with the wind and every tank's health, the mouse to aim, a high-score table, and a settings group for the rules
 
 ## [0.1.0] — 2026-09-16

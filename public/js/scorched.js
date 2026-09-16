@@ -1,35 +1,32 @@
 // SCORCHED YARD, the rules (operator, 2026-09-16: "Scope out a plan for re-creating the classic PC
 // DOS game Scorched Earth using our engine. I suggest using blocks to generate the deformable
 // landscape ... Make it at least 3 player. 1 Human Player and 2 AI Players. Try to reproduce it as
-// faithfully as possible, but make it look fabulous"; then "go with 96x48, start on M1").
+// faithfully as possible, but make it look fabulous"; then "go with 96x48, start on M1", "start on
+// M2"). docs/PLAN-SCORCHED-YARD.md is the plan; this is its M1 and M2: the landscape, the tanks,
+// the whole roster of shells and items, craters, falling dirt, damage, death, turns, rounds, cash.
 //
 // This file knows nothing of the screen: no DOM, no canvas, no clock. A game is a plain object; a
-// shot is a function of it; the screen (scorchedyard.js) asks for `tiles(g)` when it wants to
-// draw. Every random choice comes from the game's own seeded stream, so a round replays exactly in
-// a test (docs/PLAN-SCORCHED-YARD.md is the plan; this is its M1: the landscape, the tanks, four
-// missiles, craters, falling dirt, damage, death, turns and a round).
+// shot is a function of it; the screen (scorchedyard.js) asks for the tiles when it wants to draw.
+// Every random choice comes from the game's own seeded stream, so a round replays exactly in a
+// test. The roster itself is data in scorchedshop.js; the behaviours are here.
 //
 // THE FIELD is W x H cells (96 x 48: the original's 640 x 350 EGA screen was about 2:1, so a cell
 // stands in for six or seven of its pixels). The dirt is a BITMAP over those cells, not a height
-// per column, so that a tunnel or an overhang exists once the diggers arrive (M2); a column's top
-// is kept beside it for the fast questions. Grid y runs UP from the floor, as the engine draws it.
+// per column, so that a tunnel or an overhang exists once a digger has been through; a column's
+// top is kept beside it for the fast questions. Grid y runs UP from the floor, as the engine
+// draws it.
 //
 // UNITS: grid cells, and seconds inside the integrator (the screen hands it milliseconds). Power
 // 0..1000 is the original's scale; 1000 throws a shell at V_MAX cells a second, which on Earth
 // gravity carries a 45° shot across the whole field and no further -- the original's feel.
+import {
+  WEAPONS, WEAPON_ORDER, ITEMS, ITEM_ORDER, START_INVENTORY, START_ITEMS, START_CASH,
+  CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, buy, payInterest,
+} from './scorchedshop.js';
+export { WEAPONS, WEAPON_ORDER, ITEMS, ITEM_ORDER, START_INVENTORY, START_ITEMS, START_CASH, buy, payInterest };
 
 export const COLS = 96;
 export const ROWS = 48;
-
-// what a shot does (M1: four missiles; the roster grows in M2 -- docs/PLAN-SCORCHED-YARD.md §4)
-export const WEAPONS = Object.freeze({
-  babyMissile: Object.freeze({ name: 'Baby Missile', radius: 1.5, damage: 30, price: 0, pack: 99 }),
-  missile: Object.freeze({ name: 'Missile', radius: 2.5, damage: 55, price: 1875, pack: 5 }),
-  babyNuke: Object.freeze({ name: 'Baby Nuke', radius: 4, damage: 80, price: 10000, pack: 3 }),
-  nuke: Object.freeze({ name: 'Nuke', radius: 6.5, damage: 100, price: 12000, pack: 1 }),
-});
-export const WEAPON_ORDER = Object.freeze(['babyMissile', 'missile', 'babyNuke', 'nuke']);
-export const START_INVENTORY = Object.freeze({ babyMissile: 99, missile: 5, babyNuke: 2, nuke: 1 });
 
 // the tanks' colours, in the order players are added (the original's palette, roughly)
 export const TANK_COLOURS = Object.freeze(['#f7931a', '#4d8dff', '#2ecc8f', '#ef5a5a', '#c78bff', '#f0c419']);
@@ -43,7 +40,12 @@ export const FALL_DAMAGE = 4;         // per cell fallen beyond the first
 export const DEATH_BLAST = Object.freeze({ radius: 3.5, damage: 60 });
 export const TANK_W = 2;              // the hull: two cells wide
 export const TANK_H = 1.4;            // hull and turret, for the hitbox
-export const MIN_SPACING = 12;        // columns between tanks at placement
+export const SHIELD_R = 2.6;          // a deflector's reach, from the hull's centre
+export const MAG_R = 5;               // a mag deflector's reach
+export const ROLL_SPEED = 14;         // cells/s along the ground
+export const BORE_SPEED = 16;         // cells/s through dirt
+export const HEAT_PULL = 14;          // cells/s² toward the nearest tank, heat-guided and falling
+const BOMBLET = Object.freeze({ name: 'bomblet', kind: 'blast', radius: 1.5, damage: 30 });   // a Funky Bomb's pieces, which the shop does not sell
 
 // the strata: from the floor up, as a fraction of a column's own height, with a colour each
 export const STRATA = Object.freeze([
@@ -100,12 +102,63 @@ export function generateLand(g, style = 'hills') {
   g.landVersion = (g.landVersion ?? 0) + 1;
 }
 
+/** Clear every dirt cell inside a circle. Returns how many went. */
+export function crater(g, cx, cy, r) {
+  let removed = 0;
+  for (let x = Math.max(0, Math.floor(cx - r - 1)); x <= Math.min(COLS - 1, Math.ceil(cx + r + 1)); x++) {
+    for (let y = Math.max(0, Math.floor(cy - r - 1)); y <= Math.min(ROWS - 1, Math.ceil(cy + r + 1)); y++) {
+      if (!g.dirt[idx(x, y)]) continue;
+      if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) { g.dirt[idx(x, y)] = 0; removed += 1; }
+    }
+  }
+  if (removed) g.landVersion += 1;
+  return removed;
+}
+
+/** Fill every cell inside a circle with dirt (the dirt weapons). Returns how many were added. */
+export function addDirt(g, cx, cy, r) {
+  let added = 0;
+  for (let x = Math.max(0, Math.floor(cx - r - 1)); x <= Math.min(COLS - 1, Math.ceil(cx + r + 1)); x++) {
+    for (let y = Math.max(0, Math.floor(cy - r - 1)); y <= Math.min(ROWS - 1, Math.ceil(cy + r + 1)); y++) {
+      if (g.dirt[idx(x, y)]) continue;
+      if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) { g.dirt[idx(x, y)] = 1; added += 1; }
+    }
+  }
+  if (added) g.landVersion += 1;
+  return added;
+}
+
+/**
+ * Dirt above a hole falls until it rests: each column in x0..x1 is compacted downward, run by
+ * run, and every run that moved is recorded in `g.falling` for the screen to animate.
+ */
+export function settleDirt(g, x0 = 0, x1 = COLS - 1) {
+  for (let x = Math.max(0, x0); x <= Math.min(COLS - 1, x1); x++) {
+    let write = 0;
+    let y = 0;
+    while (y < ROWS) {
+      if (!g.dirt[idx(x, y)]) { y++; continue; }
+      const start = y;
+      while (y < ROWS && g.dirt[idx(x, y)]) y++;
+      const len = y - start;
+      if (start !== write) {
+        for (let k = 0; k < len; k++) g.dirt[idx(x, start + k)] = 0;
+        for (let k = 0; k < len; k++) g.dirt[idx(x, write + k)] = 1;
+        g.falling.push({ x, y: write, len, from: start });
+      }
+      write += len;
+    }
+    g.tops[x] = write;
+  }
+  g.landVersion += 1;
+}
+
 // ------------------------------------------------------------------- the game
 /**
  * A new game. `players` is a list of `{ name, kind: 'human' | 'moron' | ..., colour? }`; the
  * first human plays from the keyboard, the rest are decided by scorchedai.js. Options: `seed`,
  * `gravity` (1 = Earth), `wind` ('turn' | 'shot' | 'none'), `walls` ('concrete' | 'rubber' |
- * 'wrap' | 'none'), `land` (a landscape style), `rounds`.
+ * 'wrap' | 'none'), `land` (a landscape style), `rounds`, `cash` (to start), `interest` (a rate).
  */
 export function newGame(players, opts = {}) {
   const seed = Number.isFinite(opts.seed) ? opts.seed : (Date.now() >>> 0);
@@ -115,19 +168,23 @@ export function newGame(players, opts = {}) {
     dirt: new Uint8Array(COLS * ROWS), tops: new Int16Array(COLS),
     gravity: Number.isFinite(opts.gravity) ? opts.gravity : 1,
     windMode: opts.wind ?? 'turn', walls: opts.walls ?? 'concrete', land: opts.land ?? 'hills',
+    interest: Number.isFinite(opts.interest) ? opts.interest : 0.05,
     wind: 0,
     tanks: (players ?? []).map((p, i) => ({
       id: i, name: p.name ?? `Player ${i + 1}`, kind: p.kind ?? 'human', colour: p.colour ?? TANK_COLOURS[i % TANK_COLOURS.length],
       x: 0, y: 0, health: MAX_HEALTH, alive: true, angle: 45, power: 500, weapon: 'babyMissile',
-      inventory: { ...START_INVENTORY }, kills: 0, score: 0, cash: 0, damageDealt: 0,
+      inventory: { ...START_INVENTORY }, items: { ...START_ITEMS },
+      shield: null,                       // { id, hp, deflect } while one is up
+      armed: { contactTrigger: false, heatGuidance: false },
+      kills: 0, score: 0, cash: Number.isFinite(opts.cash) ? opts.cash : START_CASH, damageDealt: 0,
     })),
     round: 1, rounds: Math.max(1, Math.round(opts.rounds ?? 5)),
     turn: 0,                              // index into `order`
     order: [],                            // tank ids, this round's turn order
     phase: 'aim',                         // 'aim' | 'flight' | 'settle' | 'roundOver' | 'over'
-    shell: null,                          // { x, y, vx, vy, weapon, owner, path: [] } while in flight
+    shells: [],                           // in flight: { x, y, vx, vy, weapon, owner, path, t, ... }
     lastPath: [],                         // the last shot's trace, for the screen
-    falling: [],                          // dirt runs on their way down, for the screen: { x, y0, y1, from }
+    falling: [],                          // dirt runs on their way down, for the screen
     sparks: [],                           // events the screen makes sounds and pictures of, drained by it
     shots: 0,
     landVersion: 0,                       // bumped whenever the dirt changes: the screen redraws its land layer only then
@@ -141,14 +198,15 @@ export function newGame(players, opts = {}) {
 export function startRound(g) {
   generateLand(g, g.land);
   placeTanks(g);
-  for (const t of g.tanks) { t.health = MAX_HEALTH; t.alive = true; }
+  for (const t of g.tanks) { t.health = MAX_HEALTH; t.alive = true; t.shield = null; t.armed = { contactTrigger: false, heatGuidance: false }; }
   const n = g.tanks.length;
   g.order = g.tanks.map((t) => t.id).map((_, i, a) => a[(i + g.round - 1) % n]);
   g.turn = 0;
   g.phase = 'aim';
-  g.shell = null; g.lastPath = []; g.falling = [];
+  g.shells = []; g.lastPath = []; g.falling = [];
   newWind(g);
   g.sparks.push({ kind: 'round', round: g.round });
+  autoDefend(g, current(g));
 }
 
 function placeTanks(g) {
@@ -180,6 +238,8 @@ function newWind(g) {
 
 export const current = (g) => g.tanks[g.order[g.turn]];
 export const alive = (g) => g.tanks.filter((t) => t.alive);
+const enemiesOf = (g, id) => g.tanks.filter((t) => t.alive && t.id !== id);
+const centre = (t) => ({ x: t.x + TANK_W / 2, y: t.y + 0.7 });
 
 /** Aim: angle 0..180 (90 straight up), power 0..1000, clamped. */
 export function aim(g, tank, { angle, power, weapon } = {}) {
@@ -191,8 +251,9 @@ export function aim(g, tank, { angle, power, weapon } = {}) {
 /** The next weapon in the cycle that the tank still has, `dir` +1 or -1. */
 export function cycleWeapon(tank, dir = 1) {
   const i = WEAPON_ORDER.indexOf(tank.weapon);
-  for (let k = 1; k <= WEAPON_ORDER.length; k++) {
-    const w = WEAPON_ORDER[(i + dir * k + WEAPON_ORDER.length * k) % WEAPON_ORDER.length];
+  const n = WEAPON_ORDER.length;
+  for (let k = 1; k <= n; k++) {
+    const w = WEAPON_ORDER[(((i + dir * k) % n) + n) % n];
     if ((tank.inventory[w] ?? 0) > 0) { tank.weapon = w; return w; }
   }
   return tank.weapon;
@@ -205,25 +266,97 @@ export function muzzle(tank) {
   return { x: cx + Math.cos(a) * 1.3, y: cy + Math.sin(a) * 1.3 };
 }
 
+// ------------------------------------------------------------------- items, on your turn
+const SHIELD_PREFERENCE = ['force', 'deflector', 'shield'];
+
+/**
+ * Use an item on your turn: a battery heals, a shield goes up (the named one, or the best owned
+ * for 'shield'), the two arming items toggle for the next shot. Returns false when the tank has
+ * none, or it is not the moment.
+ */
+export function useItem(g, tank, id) {
+  if (g.phase !== 'aim' || tank !== current(g) || !tank.alive) return false;
+  const item = ITEMS[id];
+  if (!item) return false;
+  if (item.kind === 'arm') {
+    if ((tank.items[id] ?? 0) <= 0) return false;
+    tank.armed[id] = !tank.armed[id];
+    return true;
+  }
+  if (item.kind === 'battery') {
+    if ((tank.items.battery ?? 0) <= 0 || tank.health >= MAX_HEALTH) return false;
+    tank.items.battery -= 1;
+    tank.health = Math.min(MAX_HEALTH, tank.health + item.heal);
+    g.sparks.push({ kind: 'battery', tank: tank.id });
+    return true;
+  }
+  if (item.kind === 'shield') return raiseShield(g, tank, (tank.items[id] ?? 0) > 0 ? id : null);
+  return false;
+}
+
+/** Put up a shield: the named one, or the best the tank owns. */
+export function raiseShield(g, tank, id = null) {
+  if (tank.shield) return false;
+  const pick = id ?? SHIELD_PREFERENCE.find((k) => (tank.items[k] ?? 0) > 0);
+  if (!pick || (tank.items[pick] ?? 0) <= 0) return false;
+  tank.items[pick] -= 1;
+  tank.shield = { id: pick, hp: ITEMS[pick].hp, deflect: !!ITEMS[pick].deflect };
+  g.sparks.push({ kind: 'shield', tank: tank.id, item: pick });
+  return true;
+}
+
+function autoDefend(g, tank) {
+  if (tank?.alive && (tank.items.autoDefense ?? 0) > 0 && !tank.shield) raiseShield(g, tank);
+}
+
+/** Drive a cell left or right with a unit of fuel, following the ground; a cliff is a fall. */
+export function drive(g, tank, dir) {
+  if (g.phase !== 'aim' || tank !== current(g) || !tank.alive) return false;
+  if ((tank.items.fuel ?? 0) <= 0) return false;
+  const nx = tank.x + (dir < 0 ? -1 : 1);
+  if (nx < 0 || nx + TANK_W > COLS) return false;
+  const ground = Math.min(g.tops[nx], g.tops[nx + 1]);
+  if (ground - tank.y > 2) return false;                 // too steep to climb
+  tank.items.fuel -= 1;
+  tank.x = nx;
+  tank.y = Math.max(tank.y, ground);
+  landTanks(g);                                          // off a cliff: it falls, and may be hurt
+  g.sparks.push({ kind: 'drive', tank: tank.id, x: tank.x });
+  return true;
+}
+
+// ------------------------------------------------------------------- firing
 /**
  * Fire the current tank's weapon. Returns false if it is not the moment (a shell in flight, a
- * dead tank, an empty slot). The shell then flies through `step()`.
+ * dead tank, an empty slot). The shell then flies through `step()`; the laser is over at once.
  */
 export function fire(g, tank = current(g)) {
   if (g.phase !== 'aim' || !tank?.alive || tank !== current(g)) return false;
   if ((tank.inventory[tank.weapon] ?? 0) <= 0) { cycleWeapon(tank, 1); if ((tank.inventory[tank.weapon] ?? 0) <= 0) return false; }
+  const w = WEAPONS[tank.weapon];
   if (tank.weapon !== 'babyMissile') tank.inventory[tank.weapon] -= 1;   // the baby missile is the original's bottomless one
+  if (g.windMode === 'shot') newWind(g);
+  g.shots += 1;
+  g.sparks.push({ kind: 'fire', tank: tank.id, weapon: tank.weapon });
+  // the arming items, one of each spent per shot they are armed for
+  const armed = {};
+  for (const k of ['contactTrigger', 'heatGuidance']) {
+    if (tank.armed[k] && (tank.items[k] ?? 0) > 0) { tank.items[k] -= 1; armed[k] = true; }
+    if ((tank.items[k] ?? 0) <= 0) tank.armed[k] = false;
+  }
+  if (w.kind === 'laser') { laser(g, tank, w); return true; }
   const a = (tank.angle * Math.PI) / 180;
   const v = (tank.power / 1000) * V_MAX;
   const m = muzzle(tank);
-  g.shell = { x: m.x, y: m.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, weapon: tank.weapon, owner: tank.id, path: [{ x: m.x, y: m.y }], t: 0 };
+  g.shells = [{
+    x: m.x, y: m.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, weapon: tank.weapon, owner: tank.id, path: [{ x: m.x, y: m.y }], t: 0,
+    hops: w.hops ?? 0, contact: !!armed.contactTrigger, heat: !!armed.heatGuidance, primary: true,
+  }];
   g.phase = 'flight';
-  g.shots += 1;
-  g.sparks.push({ kind: 'fire', tank: tank.id, weapon: tank.weapon });
   return true;
 }
 
-/** The shell's position `t` seconds from now with no walls in the way (the AI's oracle, and a test's). */
+/** The shell's positions with no walls in the way (the AI's oracle, and a test's). */
 export function trajectory(g, tank, secs = 8, dt = 1 / 60) {
   const a = (tank.angle * Math.PI) / 180;
   const v = (tank.power / 1000) * V_MAX;
@@ -245,55 +378,259 @@ export function trajectory(g, tank, secs = 8, dt = 1 / 60) {
  */
 export function step(g, dtMs) {
   const events = [];
-  if (g.phase === 'flight' && g.shell) {
+  if (g.phase === 'flight') {
     const dt = Math.min(100, Math.max(0, dtMs)) / 1000;   // a frame, capped: a tab that slept catches up in hops, not a leap
-    const s = g.shell;
-    const sp = Math.hypot(s.vx, s.vy) + 1e-6;
-    const n = Math.max(1, Math.ceil((sp * dt) / MAX_STEP) + 1);
+    const fastest = Math.max(1, ...g.shells.map((s) => Math.hypot(s.vx, s.vy)), ROLL_SPEED, BORE_SPEED);
+    const n = Math.max(1, Math.ceil((fastest * dt) / MAX_STEP) + 1);
     const h = dt / n;
-    for (let i = 0; i < n && g.phase === 'flight'; i++) flightStep(g, h, events);
-  }
-  if (g.phase === 'settle') {
-    // the dirt has settled and the tanks have landed in `explode`; the screen animates the fall
-    // from `g.falling` and calls `settled()` when the last run is down. A test calls it directly.
+    for (let i = 0; i < n && g.phase === 'flight'; i++) {
+      for (const s of [...g.shells]) flightStep(g, s, h, events);
+      if (!g.shells.length) endFlight(g);
+    }
   }
   if (g.sparks.length) { events.push(...g.sparks); g.sparks = []; }
   return events;
 }
 
-function flightStep(g, h, events) {
-  const s = g.shell;
+const weaponOf = (id) => WEAPONS[id] ?? (id === 'funkyBomblet' ? BOMBLET : WEAPONS.babyMissile);
+const removeShell = (g, s) => { const i = g.shells.indexOf(s); if (i >= 0) g.shells.splice(i, 1); if (s.primary) g.lastPath = s.path; };
+const clampX = (x) => Math.max(0, Math.min(COLS - 1e-3, x));
+
+function flightStep(g, s, h, events) {
+  const w = weaponOf(s.weapon);
+  // ---- rolling along the ground (a Roller after it lands)
+  if (s.rolling) {
+    const col = Math.max(0, Math.min(COLS - 1, Math.floor(s.x)));
+    const ground = g.tops[col];
+    s.x += s.dir * ROLL_SPEED * h; s.rollLeft -= ROLL_SPEED * h; s.t += h;
+    const nc = Math.floor(s.x);
+    if (nc < 0 || nc >= COLS) { blastAt(g, s, clampX(s.x), ground); return; }
+    s.y = g.tops[nc] + 0.3;
+    if (s.path.length < 600) s.path.push({ x: s.x, y: s.y });
+    if (tankAt(g, s.x, s.y, s.owner, 0.3)) { blastAt(g, s, s.x, s.y); return; }
+    if (nc !== col) {
+      const next = g.tops[nc];
+      if (next > ground + 1) { blastAt(g, s, col + 0.5, ground); return; }        // a wall in the way: it stops there
+      const ahead = g.tops[Math.max(0, Math.min(COLS - 1, nc + s.dir))];
+      if (ahead > next && ground > next) { blastAt(g, s, nc + 0.5, next); return; }   // the bottom of a dip
+    }
+    if (s.rollLeft <= 0) blastAt(g, s, s.x, s.y);
+    return;
+  }
+  // ---- boring through dirt (a Digger or a Sandhog after it lands)
+  if (s.boring) {
+    const d = BORE_SPEED * h;
+    s.x += s.boring.dx * d; s.y += s.boring.dy * d; s.boring.left -= d; s.t += h;
+    if (s.path.length < 600) s.path.push({ x: s.x, y: s.y });
+    if (s.x >= 0 && s.x < COLS && s.y >= 0) crater(g, s.x, s.y, w.radius * 0.7);
+    if (s.x < 0 || s.x >= COLS || s.y < 0.5 || s.boring.left <= 0 || tankAt(g, s.x, s.y, s.owner, 0.2)) {
+      blastAt(g, s, clampX(s.x), Math.max(0, s.y));
+    }
+    return;
+  }
+  // ---- in the air
   s.vx += g.wind * WIND_ACCEL * h;
   s.vy -= GRAVITY * g.gravity * h;
+  if (s.heat && s.vy < 0) {
+    const target = nearestEnemy(g, s.owner, s.x);
+    if (target) s.vx += Math.sign(centre(target).x - s.x) * HEAT_PULL * h;
+  }
+  for (const t of enemiesOf(g, s.owner)) {
+    if ((t.items.magDeflector ?? 0) <= 0) continue;
+    const c = centre(t);
+    const d = Math.hypot(s.x - c.x, s.y - c.y);
+    if (d < MAG_R && d > 0.1) { const k = 30 * (1 - d / MAG_R) * h; s.vx += ((s.x - c.x) / d) * k; s.vy += ((s.y - c.y) / d) * k; }
+  }
   s.x += s.vx * h; s.y += s.vy * h; s.t += h;
   if (s.path.length < 600) s.path.push({ x: s.x, y: s.y });
+  // a MIRV splits at its apex
+  if (w.kind === 'mirv' && !s.split && s.vy <= 0 && s.t > 0.2) {
+    const n = w.heads;
+    for (let i = 0; i < n; i++) {
+      const spread = (i - (n - 1) / 2) * 3;
+      g.shells.push({ ...s, path: [{ x: s.x, y: s.y }], vx: s.vx + spread, primary: false, split: true });
+    }
+    removeShell(g, s);
+    return;
+  }
   // the walls, by mode
   if (s.x < 0 || s.x >= COLS) {
     if (g.walls === 'rubber') { s.x = s.x < 0 ? -s.x : 2 * COLS - s.x - 1e-3; s.vx = -s.vx * 0.8; events.push({ kind: 'bounce' }); }
     else if (g.walls === 'wrap') { s.x = ((s.x % COLS) + COLS) % COLS; }
-    else if (g.walls === 'none') { g.sparks.push({ kind: 'lost' }); endFlight(g, null); return; }
-    else { s.x = Math.max(0, Math.min(COLS - 1e-3, s.x)); explode(g, s.x, s.y, WEAPONS[s.weapon], s.owner); endFlight(g, null); return; }
+    else if (g.walls === 'none') { g.sparks.push({ kind: 'lost' }); removeShell(g, s); return; }
+    else { s.x = clampX(s.x); impact(g, s, s.x, s.y); return; }
   }
-  if (s.y < 0) { explode(g, s.x, 0, WEAPONS[s.weapon], s.owner); endFlight(g, null); return; }
-  if (s.y < ROWS && dirtAt(g, Math.floor(s.x), Math.floor(s.y))) { explode(g, s.x, s.y, WEAPONS[s.weapon], s.owner); endFlight(g, null); return; }
-  for (const t of g.tanks) {
-    if (!t.alive) continue;
-    if (s.x >= t.x - 0.2 && s.x <= t.x + TANK_W + 0.2 && s.y >= t.y - 0.2 && s.y <= t.y + TANK_H) {
-      // the shooter's own hull is passed on the way out of the barrel
-      if (t.id === s.owner && s.t < 0.12) continue;
-      explode(g, s.x, s.y, WEAPONS[s.weapon], s.owner);
-      endFlight(g, null);
+  // a deflector shield turns a shell away
+  for (const t of enemiesOf(g, s.owner)) {
+    if (!t.shield?.deflect) continue;
+    const c = centre(t);
+    const d = Math.hypot(s.x - c.x, s.y - c.y);
+    if (d < SHIELD_R) {
+      const nx = (s.x - c.x) / (d || 1), ny = (s.y - c.y) / (d || 1);
+      const dot = s.vx * nx + s.vy * ny;
+      if (dot < 0) { s.vx -= 2 * dot * nx; s.vy -= 2 * dot * ny; s.vx *= 0.8; s.vy *= 0.8; }
+      s.x = c.x + nx * (SHIELD_R + 0.05); s.y = c.y + ny * (SHIELD_R + 0.05);
+      t.shield.hp -= 5;
+      if (t.shield.hp <= 0) { t.shield = null; g.sparks.push({ kind: 'shieldDown', tank: t.id }); }
+      events.push({ kind: 'deflect', tank: t.id });
       return;
     }
   }
+  // a contact trigger goes off within reach of a tank
+  if (s.contact) {
+    for (const t of enemiesOf(g, s.owner)) {
+      const c = centre(t);
+      if (Math.hypot(s.x - c.x, s.y - c.y) < 2) { impact(g, s, s.x, s.y); return; }
+    }
+  }
+  if (s.y < 0) { impact(g, s, s.x, 0); return; }
+  if (s.y < ROWS && dirtAt(g, Math.floor(s.x), Math.floor(s.y))) { impact(g, s, s.x, s.y); return; }
+  if (tankAt(g, s.x, s.y, s.t < 0.12 ? s.owner : -1, 0.2)) impact(g, s, s.x, s.y);
 }
 
-function endFlight(g, at) {
-  g.lastPath = g.shell?.path ?? [];
-  g.shell = null;
+/** The living tank whose hull box (grown by `pad`) holds the point, skipping `skipId`. */
+function tankAt(g, x, y, skipId, pad = 0) {
+  for (const t of g.tanks) {
+    if (!t.alive || t.id === skipId) continue;
+    if (x >= t.x - pad && x <= t.x + TANK_W + pad && y >= t.y - pad && y <= t.y + TANK_H + pad) return t;
+  }
+  return null;
+}
+function nearestEnemy(g, ownerId, x) {
+  return enemiesOf(g, ownerId).sort((a, b) => Math.abs(centre(a).x - x) - Math.abs(centre(b).x - x))[0] ?? null;
+}
+
+/** A shell has arrived somewhere: what its kind does there. */
+function impact(g, s, x, y) {
+  const w = weaponOf(s.weapon);
+  switch (w.kind) {
+    case 'tracer':
+      g.sparks.push({ kind: 'tracer', x, y, smoke: !!w.smoke });
+      removeShell(g, s);
+      return;
+    case 'riot':
+      crater(g, x, y, w.radius);
+      g.sparks.push({ kind: 'blast', x, y, radius: w.radius, weapon: w.name, riot: true });
+      settleDirt(g, Math.floor(x - w.radius - 1), Math.ceil(x + w.radius + 1));
+      landTanks(g);
+      afterBlast(g, s.owner, 0);
+      removeShell(g, s);
+      return;
+    case 'dirt': {
+      const added = addDirt(g, x, y, w.radius);
+      g.sparks.push({ kind: 'dirt', x, y, radius: w.radius, added });
+      settleDirt(g, Math.floor(x - w.radius - 1), Math.ceil(x + w.radius + 1));
+      landTanks(g);
+      afterBlast(g, s.owner, 0);
+      removeShell(g, s);
+      return;
+    }
+    case 'napalm':
+      flow(g, x, y, w, s.owner);
+      removeShell(g, s);
+      return;
+    case 'roller': {
+      const col = Math.max(0, Math.min(COLS - 1, Math.floor(x)));
+      const left = g.tops[Math.max(0, col - 1)], right = g.tops[Math.min(COLS - 1, col + 1)];
+      s.rolling = true; s.dir = left < right ? -1 : right < left ? 1 : (s.vx < 0 ? -1 : 1);
+      s.rollLeft = 60; s.y = g.tops[col] + 0.3; s.x = col + 0.5;
+      g.sparks.push({ kind: 'roll', x: s.x, y: s.y });
+      return;
+    }
+    case 'digger':
+      s.boring = { dx: 0, dy: -1, left: w.bore }; s.vx = 0; s.vy = 0;
+      g.sparks.push({ kind: 'bore', x, y });
+      return;
+    case 'sandhog': {
+      const sp = Math.hypot(s.vx, s.vy) || 1;
+      s.boring = { dx: s.vx / sp, dy: Math.min(-0.15, s.vy / sp), left: w.bore };
+      g.sparks.push({ kind: 'bore', x, y });
+      return;
+    }
+    case 'funky': {
+      blastAt(g, s, x, y, { keep: true, scale: 0.6 });
+      for (let i = 0; i < w.bomblets; i++) {
+        const vx = (g.rnd() * 2 - 1) * 10, vy = 8 + g.rnd() * 10;
+        g.shells.push({ x, y: y + 0.5, vx, vy, weapon: 'funkyBomblet', owner: s.owner, path: [{ x, y }], t: 0, primary: false, hops: 0 });
+      }
+      removeShell(g, s);
+      return;
+    }
+    case 'leapfrog':
+      blastAt(g, s, x, y, { keep: s.hops > 1 });
+      if (s.hops > 1) {
+        s.hops -= 1;
+        const col = Math.max(0, Math.min(COLS - 1, Math.floor(x)));
+        s.y = g.tops[col] + 0.6; s.vy = Math.abs(s.vy) * 0.55 + 6; s.vx *= 0.85; s.t = 0;
+      }
+      return;
+    default:
+      blastAt(g, s, x, y);
+  }
+}
+
+function blastAt(g, s, x, y, { keep = false, scale = 1 } = {}) {
+  const w = weaponOf(s.weapon);
+  explode(g, x, y, { name: w.name, radius: w.radius * scale, damage: w.damage * scale }, s.owner);
+  if (!keep) removeShell(g, s);
+}
+
+function endFlight(g) {
+  g.shells = [];
   g.phase = 'settle';
-  if (at) g.sparks.push(at);
   if (!g.falling.length) settled(g);
+}
+
+/** The laser: a straight line from the muzzle, at once; dirt along it goes, tanks on it burn. */
+function laser(g, tank, w) {
+  const a = (tank.angle * Math.PI) / 180;
+  const m = muzzle(tank);
+  const dx = Math.cos(a), dy = Math.sin(a);
+  let x = m.x, y = m.y, d = 0;
+  const burnt = new Set();
+  while (x >= 0 && x < COLS && y >= 0 && y < ROWS + 2 && d < 200) {
+    crater(g, x, y, w.radius);
+    const t = tankAt(g, x, y, tank.id, 0.2);
+    if (t && !burnt.has(t.id)) { burnt.add(t.id); applyDamage(g, t, w.damage, tank.id); }
+    x += dx * 0.25; y += dy * 0.25; d += 0.25;
+  }
+  g.sparks.push({ kind: 'laser', x0: m.x, y0: m.y, x1: x, y1: y });
+  g.lastPath = [];
+  settleDirt(g, Math.floor(Math.min(m.x, x)) - 1, Math.ceil(Math.max(m.x, x)) + 1);
+  landTanks(g);
+  afterBlast(g, tank.id, 0);
+  g.phase = 'settle';
+  if (!g.falling.length) settled(g);
+}
+
+/**
+ * Napalm: drops that run downhill along the surface and burn whatever they sit on, spent when
+ * they pool in a dip. Simulated at once; the screen animates the cells it is told about.
+ */
+function flow(g, x, y, w, ownerId) {
+  const cells = [];
+  const drops = [];
+  for (let i = 0; i < w.drops; i++) drops.push({ x: Math.max(0, Math.min(COLS - 1, Math.floor(x + (g.rnd() * 2 - 1) * 1.5))), alive: true });
+  const burnt = new Map();
+  for (let stepN = 0; stepN < w.steps; stepN++) {
+    for (const d of drops) {
+      if (!d.alive) continue;
+      const top = g.tops[d.x];
+      cells.push({ x: d.x, y: top, step: stepN });
+      const t = tankAt(g, d.x + 0.5, top + 0.5, -1, 0.6);
+      if (t) {
+        const so = burnt.get(t.id) ?? 0;
+        if (so < w.damage * 6) { applyDamage(g, t, w.damage, ownerId); burnt.set(t.id, so + w.damage); }
+      }
+      const l = d.x > 0 ? g.tops[d.x - 1] : Infinity, r = d.x < COLS - 1 ? g.tops[d.x + 1] : Infinity;
+      if (l < top && l <= r) d.x -= 1;
+      else if (r < top) d.x += 1;
+      else if (g.rnd() < 0.35) d.alive = false;                // pooled: it burns out
+    }
+  }
+  g.sparks.push({ kind: 'napalm', cells, x, y });
+  landTanks(g);
+  afterBlast(g, ownerId, 0);
 }
 
 /**
@@ -302,35 +639,42 @@ function endFlight(g, at) {
  */
 export function explode(g, cx, cy, weapon, ownerId, { chain = 0 } = {}) {
   const r = weapon.radius;
-  const x0 = Math.max(0, Math.floor(cx - r - 1)), x1 = Math.min(COLS - 1, Math.ceil(cx + r + 1));
-  let removed = 0;
-  for (let x = x0; x <= x1; x++) {
-    for (let y = Math.max(0, Math.floor(cy - r - 1)); y <= Math.min(ROWS - 1, Math.ceil(cy + r + 1)); y++) {
-      if (!g.dirt[idx(x, y)]) continue;
-      if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) { g.dirt[idx(x, y)] = 0; removed += 1; }
-    }
-  }
-  g.landVersion += 1;
+  const removed = crater(g, cx, cy, r);
   g.sparks.push({ kind: 'blast', x: cx, y: cy, radius: r, weapon: weapon.name, removed });
   // damage: full inside half the radius, falling to nothing a cell beyond the rim
-  const owner = g.tanks[ownerId] ?? null;
   for (const t of g.tanks) {
     if (!t.alive) continue;
     const d = distToTank(cx, cy, t);
     if (d > r + 1) continue;
     const k = d <= r * 0.5 ? 1 : Math.max(0, 1 - (d - r * 0.5) / (r * 0.5 + 1));
     const dmg = Math.round(weapon.damage * k);
-    if (dmg <= 0) continue;
-    t.health = Math.max(0, t.health - dmg);
-    if (owner && owner !== t) owner.damageDealt += dmg;
-    g.sparks.push({ kind: 'hit', tank: t.id, damage: dmg, by: ownerId });
+    if (dmg > 0) applyDamage(g, t, dmg, ownerId);
   }
-  settleDirt(g, x0, x1);
+  settleDirt(g, Math.floor(cx - r - 1), Math.ceil(cx + r + 1));
   landTanks(g);
-  for (const t of g.tanks) {
-    if (t.alive && t.health <= 0) kill(g, t, ownerId, chain);
+  afterBlast(g, ownerId, chain);
+}
+
+/** Damage through a shield first; cash to the attacker for every point of health that went. */
+export function applyDamage(g, t, dmg, byId) {
+  let left = dmg;
+  let absorbed = 0;
+  if (t.shield) {
+    absorbed = Math.min(t.shield.hp, left);
+    t.shield.hp -= absorbed;
+    left -= absorbed;
+    if (t.shield.hp <= 0) { t.shield = null; g.sparks.push({ kind: 'shieldDown', tank: t.id }); }
   }
-  // (the flight ends in flightStep, after the outermost blast and its chain have all landed)
+  const before = t.health;
+  t.health = Math.max(0, t.health - left);
+  const lost = before - t.health;
+  const by = g.tanks[byId] ?? null;
+  if (by && by !== t) { by.damageDealt += lost; by.cash += lost * CASH_PER_DAMAGE; }
+  g.sparks.push({ kind: 'hit', tank: t.id, damage: lost, absorbed, by: byId });
+}
+
+function afterBlast(g, ownerId, chain) {
+  for (const t of g.tanks) if (t.alive && t.health <= 0) kill(g, t, ownerId, chain);
 }
 
 function distToTank(cx, cy, t) {
@@ -338,54 +682,34 @@ function distToTank(cx, cy, t) {
   return Math.hypot(cx - nx, cy - ny);
 }
 
-/**
- * Dirt above a hole falls until it rests: each column in x0..x1 is compacted downward, run by
- * run, and every run that moved is recorded in `g.falling` for the screen to animate.
- */
-export function settleDirt(g, x0 = 0, x1 = COLS - 1) {
-  for (let x = Math.max(0, x0); x <= Math.min(COLS - 1, x1); x++) {
-    let write = 0;
-    let y = 0;
-    while (y < ROWS) {
-      if (!g.dirt[idx(x, y)]) { y++; continue; }
-      const start = y;
-      while (y < ROWS && g.dirt[idx(x, y)]) y++;
-      const len = y - start;
-      if (start !== write) {
-        for (let k = 0; k < len; k++) { g.dirt[idx(x, start + k)] = 0; }
-        for (let k = 0; k < len; k++) { g.dirt[idx(x, write + k)] = 1; }
-        g.falling.push({ x, y: write, len, from: start });
-      }
-      write += len;
-    }
-    g.tops[x] = write;
-  }
-  g.landVersion += 1;
-}
-
-/** Tanks left in the air fall to the ground under them; a fall of more than a cell hurts. */
+/** Tanks left in the air fall to the ground under them; a fall of more than a cell hurts, unless a parachute opens. */
 export function landTanks(g) {
   for (const t of g.tanks) {
     if (!t.alive) continue;
     const ground = Math.min(g.tops[t.x], g.tops[Math.min(COLS - 1, t.x + 1)]);
     if (ground >= t.y) {
-      // buried by dirt that landed on it (M2's dirt weapons): dig it out to the surface
-      if (ground > t.y) { t.y = ground; }
+      if (ground > t.y) t.y = ground;                  // buried by dirt that landed on it: dug out to the surface
       continue;
     }
     const drop = t.y - ground;
     t.y = ground;
+    if (drop > 1 && (t.items.parachute ?? 0) > 0) {
+      t.items.parachute -= 1;
+      g.sparks.push({ kind: 'chute', tank: t.id, cells: drop });
+      continue;
+    }
     const dmg = Math.max(0, Math.round((drop - 1) * FALL_DAMAGE));
-    if (dmg > 0) { t.health = Math.max(0, t.health - dmg); g.sparks.push({ kind: 'fall', tank: t.id, cells: drop, damage: dmg }); }
-    else g.sparks.push({ kind: 'fall', tank: t.id, cells: drop, damage: 0 });
+    if (dmg > 0) t.health = Math.max(0, t.health - dmg);
+    g.sparks.push({ kind: 'fall', tank: t.id, cells: drop, damage: dmg });
   }
 }
 
 function kill(g, t, byId, chain) {
   t.alive = false;
   t.health = 0;
+  t.shield = null;
   const by = g.tanks[byId] ?? null;
-  if (by && by !== t) { by.kills += 1; by.score += 100; }
+  if (by && by !== t) { by.kills += 1; by.score += 100; by.cash += KILL_BONUS; }
   else t.score -= 50;                    // by its own shot, or the fall
   g.sparks.push({ kind: 'death', tank: t.id, by: byId });
   // the death blast, which can take a neighbour with it (chained at most as deep as there are tanks)
@@ -400,7 +724,7 @@ export function settled(g) {
   if (living.length <= 1) {
     g.phase = 'roundOver';
     const w = living[0] ?? null;
-    if (w) w.score += 200;
+    if (w) { w.score += 200; w.cash += SURVIVOR_BONUS; }
     g.sparks.push({ kind: 'roundOver', winner: w?.id ?? null, round: g.round, last: g.round >= g.rounds });
     return;
   }
@@ -415,13 +739,16 @@ export function nextTurn(g) {
   }
   if (g.windMode === 'turn') newWind(g);
   g.phase = 'aim';
-  g.sparks.push({ kind: 'turn', tank: current(g).id });
+  const t = current(g);
+  autoDefend(g, t);
+  g.sparks.push({ kind: 'turn', tank: t.id });
 }
 
-/** After a round: the next one, or the game is over. */
+/** After a round: interest is paid, then the next one, or the game is over. */
 export function nextRound(g) {
   if (g.phase !== 'roundOver') return false;
   if (g.round >= g.rounds) { g.phase = 'over'; g.sparks.push({ kind: 'over', winner: leader(g)?.id ?? null }); return false; }
+  for (const t of g.tanks) payInterest(t, g.interest);
   g.round += 1;
   startRound(g);
   return true;
@@ -436,8 +763,7 @@ const strataColour = (y, top, x) => {
   const f = top > 0 ? (y + 0.5) / top : 0;
   let s = STRATA[STRATA.length - 1], i = STRATA.length - 1;
   for (let b = 0; b < STRATA.length; b++) if (f <= STRATA[b].to) { s = STRATA[b]; i = b; break; }
-  // a nudge per column and stratum so the face is not flat colour -- per column, not per row, so a
-  // run stays one tile (a nudge every few rows made eight hundred tiles of a field of four hundred)
+  // a nudge per column and stratum so the face is not flat colour
   const k = 0.9 + 0.2 * hash01(x * 7 + i * 131);
   return shade(s.color, k);
 };
@@ -470,9 +796,9 @@ export function landTiles(g, { omit = null } = {}) {
 }
 
 /**
- * The actors: the tanks as a hull, a turret and a barrel, the shell as a ball, and the last
- * shot's trace as a string of dim beads. Ids are stable, so a tank that has not moved is the same
- * tile frame after frame.
+ * The actors: the tanks as a hull, a turret and a barrel (and a shield as a wire cube round them),
+ * every shell as a ball, and the last shot's trace as a string of dim beads. Ids are stable, so a
+ * tank that has not moved is the same tile frame after frame.
  */
 export function actorTiles(g, { trace = true } = {}) {
   const out = [];
@@ -488,10 +814,14 @@ export function actorTiles(g, { trace = true } = {}) {
       txid: `barrel${t.id}`, x: t.x + TANK_W / 2 - 0.5, y: t.y + 0.6, s: 1, tall: 1.4, color: shade(c, 0.85),
       poly: [[0, -0.06], [0.7, -0.06], [0.7, 0.06], [0, 0.06]], rot: -(t.angle * Math.PI) / 180,
     });
+    if (t.shield) {
+      const k = t.shield.deflect ? '#7ad7ff' : '#9ce8ff';
+      out.push({ txid: `shield${t.id}`, x: t.x - 0.6, y: t.y - 0.4, s: TANK_W + 1.2, tall: 1.6, wire: k, color: k });
+    }
   }
-  if (g.shell) {
-    out.push({ txid: 'shell', x: g.shell.x - 0.25, y: g.shell.y - 0.25, s: 0.5, tall: 0.5, sphere: true, color: '#fff2c8' });
-  }
+  g.shells.forEach((s, i) => {
+    out.push({ txid: `shell${i}`, x: s.x - 0.25, y: s.y - 0.25, s: 0.5, tall: 0.5, sphere: true, color: s.boring ? '#ffb347' : '#fff2c8' });
+  });
   if (trace && g.lastPath.length > 2) {
     const every = Math.max(1, Math.floor(g.lastPath.length / 40));
     for (let i = 0; i < g.lastPath.length; i += every) {
