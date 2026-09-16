@@ -503,8 +503,10 @@ half-block art seams, and 256 open file descriptors on a platform that allows 25
   1 s threshold held a healthy Mac at a sixth of its speed). Progress is the `address-index-building`
   flag (phase, done/total, rows, ETA, "paused while the node's RPC is slow"); events of kind `index`
   at start, finish and failure, which `app.js` toasts; on finish the follower starts and address
-  pages go live with no restart; failure raises `address-index-build-failed`. Ctrl-C does not resume
-  a build; the next start begins it again. Config keys per node: `addressIndex`,
+  pages go live with no restart; failure raises `address-index-build-failed`. A build stopped by Ctrl-C
+  or a crash resumes on the next start from `build-journal.json` (per block file in the scan, per
+  bucket in the sort; discarded, with the reason logged, on another tip, format or selection, or
+  damage). Config keys per node: `addressIndex`,
   `addressIndexBuild: "manual"`, `addressIndexWorkers` (default at most 4, half a dedicated build's;
   1 on spinning disks).
 - **`/api/x/address`** now carries `utxos` (up to 100-transaction histories, else `null` with a

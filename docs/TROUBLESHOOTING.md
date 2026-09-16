@@ -168,17 +168,22 @@ so far and an ETA; the address page repeats it. Things it says, and what they me
   2026-09-15 that fails the build at once with `an index worker exited with code N while on
   {"type":"scan","file":...}` and the flag turns to *build failed*; before that fix the build
   hung there for good. Either way: restart BlockYard with fewer workers (`addressIndexWorkers` on
-  the node entry in `config/local.json`). The build starts over; it is not resumable. The flag
+  the node entry in `config/local.json`). The build resumes with the files it had finished. The flag
   also says **no progress for N min** whenever nothing has moved for two minutes, so a stall is
   visible as one rather than as a stale ETA.
 - **Hours, not minutes** — expect **a few hours**: 29 min 45 s is 16 workers on NVMe, and four
   workers (the installer's default) are roughly four times slower; **spinning disks** are slower still whatever the
   number, and there one worker is the fast setting, because parallel readers only seek against
   each other and against the node. Set `addressIndexWorkers` on the node entry in
-  `config/local.json` (the installer writes the number you gave it) and restart: there is no
-  resume, so the build starts over from the first file.
-- **It started over** — stopping BlockYard stops the build, and the next start begins it again
-  from scratch. Leave it running until the notification says it is done.
+  `config/local.json` (the installer writes the number you gave it) and restart: the build resumes with the files already scanned, and only the rest are read with the
+  new number of workers.
+- **It started over** — a stopped build normally resumes: the log says `address index build:
+  resuming the interrupted build in <dir> at block N` with how much was already done. When it
+  says `discarding the interrupted build … and starting over` instead, the reason follows: the
+  node's chain reorganised below the block the build was working to, the node is behind it (a
+  reindex, or another node), the index format changed with an update, or the journal or a bucket
+  file was damaged. Unfinished work that cannot be proven whole is never used, so the build begins
+  again from the first file.
 - **the address index build failed** — the reason is in the events feed and the log; fix it and
   restart (the server builds again), or run `node scripts/index-build.js --out <dir>` by hand.
   A pruned node, unreadable block files and a full disk are the usual causes.

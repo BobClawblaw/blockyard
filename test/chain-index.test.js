@@ -4,14 +4,14 @@
 // this keeps the machinery honest without one.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, mkdirSync, cpSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { hash256, decodeTx } from '../server/chain/tx.js';
 import { Pool } from '../server/chain/index/build.js';
 import { MAGIC } from '../server/chain/blockfile.js';
 import { blockRows, RowSink, ROW, readRow, scriptKey } from '../server/chain/index/rows.js';
-import { buildIndex } from '../server/chain/index/build.js';
+import { buildIndex, JOURNAL, journalText, FORMAT } from '../server/chain/index/build.js';
 import { IndexStore } from '../server/chain/index/store.js';
 import { HeightTable } from '../server/chain/index/heights.js';
 
@@ -203,4 +203,175 @@ test('a worker that dies fails the build, naming the job -- it does not hang at 
   try {
     await assert.rejects(throwing.run([{ type: 'throw', n: 1 }], () => {}), (err) => /threw: worker blew up/.test(err.message));
   } finally { await throwing.close(); }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// AN INTERRUPTED BUILD RESUMES (build.js, THE BUILD JOURNAL). A chain of eight block files, built once
+// straight through for reference; then builds stopped at every point that matters -- after some files,
+// half way through appending one, with a worker killed, between sorted buckets, after a sort's segments
+// were renamed but before the journal said so, and just before the manifest -- each resumed twice over:
+// from the directory the failed build left (an orderly stop, which saves what it finished) and from a
+// copy taken at the moment of the stop (what a process killed there leaves on the disk). Every resumed
+// index must be the reference's byte for byte, and answer every address as it does.
+const resumeChain = (() => {
+  let cached = null;
+  return () => {
+    if (cached) return cached;
+    const txs = FX.txs.filter((f) => f.expect.vin[0].coinbase == null).map((f) => f.hex);
+    const coinbase = FX.txs.find((f) => f.covers.includes('segwit-coinbase')).hex;
+    const spentScripts = [hex('76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac'), hex('0014751e76e8199196d454941c45d1b3a323f1433bd6'), hex('a914b472a266d0bd89c13706a4132ccfb16f7c3b9fcb87')];
+    const chain = [{ body: hex(FX.genesis.hex), hash: FX.genesis.expect.hash }];
+    for (let k = 1; k < 16; k++) chain.push(makeBlock(chain[k - 1].hash, coinbase, Array.from({ length: 1 + (k % 3) }, (_, i) => txs[(k * 3 + i) % txs.length]), spentScripts));
+    const stale = makeBlock(chain[5].hash, coinbase, [txs[1]], spentScripts);
+    cached = { chain, stale };
+    return cached;
+  };
+})();
+
+function writeResumeBlocks(blocksDir) {
+  const { chain, stale } = resumeChain();
+  const checksum = (prev, undo) => hash256(Buffer.concat([hex(prev).reverse(), undo]));
+  mkdirSync(blocksDir, { recursive: true });
+  for (let f = 0; f < 8; f++) {
+    const a = chain[2 * f], b = chain[2 * f + 1];
+    const blocks = f % 2 ? [b, a] : [a, b];                      // odd files out of order
+    const undo = [a, b].filter((x) => x.undo).map((x) => frame(x.undo, checksum(chain[chain.indexOf(x) - 1].hash, x.undo)));
+    if (f === 3) { blocks.push(stale); undo.push(frame(stale.undo, checksum(chain[5].hash, stale.undo))); }
+    writeFileSync(path.join(blocksDir, `blk${String(f).padStart(5, '0')}.dat`), Buffer.concat(blocks.map((x) => frame(x.body))));
+    writeFileSync(path.join(blocksDir, `rev${String(f).padStart(5, '0')}.dat`), Buffer.concat(undo));
+  }
+}
+
+const resumeRpc = ({ tip = 15, hashAt = (h) => resumeChain().chain[h].hash } = {}) => ({ batch: async (calls) => calls.map((c) => {
+  if (c.method === 'getblockchaininfo') return { ok: true, result: { chain: 'main', blocks: tip } };
+  if (c.method === 'getblockhash') return { ok: true, result: hashAt(c.params[0]) };
+  return { ok: false, error: { message: c.method } };
+}) });
+
+// everything a reader can see: the segment files' bytes, and every key's rows and summary
+function indexView(dir) {
+  const segs = readdirSync(dir).filter((f) => f.startsWith('seg-')).sort();
+  const bytes = Object.fromEntries(segs.map((f) => [f, readFileSync(path.join(dir, f)).toString('hex')]));
+  const store = new IndexStore(dir);
+  const keys = new Set();
+  for (const f of segs.filter((s) => s.endsWith('.rows'))) { const buf = readFileSync(path.join(dir, f)); for (let at = 0; at < buf.length; at += ROW) keys.add(buf.readBigUInt64BE(at)); }
+  const answers = [...keys].sort().map((k) => [String(k), store.rowsForKey(k), store.summaryForKey(k, { limit: 3 })]);
+  answers.push(['nobody', store.rowsForKey(scriptKey(hex('51')))]);
+  store.close();
+  return { bytes, answers, keys: keys.size };
+}
+
+test('A BUILD STOPPED ANYWHERE RESUMES to the index an uninterrupted build writes, byte for byte, and no manifest appears before the end', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-resume-'));
+  try {
+    const blocksDir = path.join(root, 'blocks');
+    writeResumeBlocks(blocksDir);
+    const refDir = path.join(root, 'ref');
+    const ref = await buildIndex({ rpc: resumeRpc(), blocksDir, out: refDir, workers: 2 });
+    const want = indexView(refDir);
+    assert.equal(ref.stats.check.missingHeights, 0);
+    assert.equal(ref.stats.scan.staleBlocks, 1);
+    assert.ok(want.keys > 5 && Object.keys(want.bytes).length > 10, `a reference with something in it (${want.keys} keys)`);
+    assert.ok(!readdirSync(refDir).includes(JOURNAL), 'a finished build leaves no journal');
+
+    const STOP = new Error('stopped here');
+    let sortResults = 0;
+    const cases = [
+      { name: 'after three files, checkpointed as they finished', checkpointMs: 0, at: (p, i) => p === 'scanned' && i.done === 3, resumedScan: true },
+      { name: 'half way through appending a file', checkpointMs: 0, at: (p, i) => p === 'scan-part' && i.part === 1 && i.parts > 2 },
+      { name: 'half way through a file, with no checkpoint since the start', checkpointMs: 1e9, at: (p, i) => p === 'scan-part' && i.part === 1 && i.parts > 2 },
+      { name: 'with a worker killed', checkpointMs: 1e9, kill: 3 },
+      { name: 'between sorted buckets', checkpointMs: 0, at: (p, i) => p === 'sorted' && i.done === 4 },
+      { name: 'after a sort renamed its segments, before the journal recorded them', checkpointMs: 0, at: (p) => p === 'sort-result' && ++sortResults === 3 },
+      { name: 'just before the manifest', checkpointMs: 0, at: (p) => p === 'manifest' },
+    ];
+    for (const c of cases) {
+      sortResults = 0;
+      const out = path.join(root, `stop-${cases.indexOf(c)}`), crash = `${out}-crash`;
+      let pool = null, paced = 0, copied = false;
+      const hook = (p, i) => {
+        if (p === 'pool') { pool = i.pool; return; }
+        assert.ok(!readdirSync(out).includes('manifest.json'), `no manifest during the build (${c.name}, ${p})`);
+        if (c.at?.(p, i)) { cpSync(out, crash, { recursive: true }); copied = true; throw STOP; }
+      };
+      const pace = c.kill ? async () => { if (++paced === c.kill) { cpSync(out, crash, { recursive: true }); copied = true; await pool.workers[1].terminate(); } } : null;
+      await assert.rejects(buildIndex({ rpc: resumeRpc(), blocksDir, out, workers: 2, hook, pace, checkpointMs: c.checkpointMs }), (err) => err === STOP || /exited with code/.test(err.message), c.name);
+      assert.ok(copied, `the stop was reached (${c.name})`);
+      for (const dir of [out, crash]) {
+        const how = `${c.name}, ${dir === crash ? 'as a crash left it' : 'as the stopped build left it'}`;
+        assert.ok(!readdirSync(dir).includes('manifest.json'), `no manifest after the stop (${how})`);
+        assert.ok(readdirSync(dir).includes(JOURNAL), `a journal is left (${how})`);
+        const logs = [], progress = [];
+        const m = await buildIndex({ rpc: resumeRpc(), blocksDir, out: dir, workers: 2, log: (s) => logs.push(s), onProgress: (p) => progress.push(p) });
+        assert.ok(logs.some((s) => /resuming the interrupted build/.test(s)) && !logs.some((s) => /discarding/.test(s)), `resumed, not discarded (${how}): ${logs.join(' | ')}`);
+        assert.deepEqual(indexView(dir), want, `the same index (${how})`);
+        assert.equal(m.rows, ref.rows); assert.deepEqual(m.bucketRows, ref.bucketRows);
+        assert.deepEqual({ ...m.stats.scan, workerReadSec: 0, workerCpuSec: 0 }, { ...ref.stats.scan, workerReadSec: 0, workerCpuSec: 0 }, `the same scan counts, no file counted twice (${how})`);
+        assert.equal(m.stats.sort.duplicateRowsDropped, ref.stats.sort.duplicateRowsDropped, `no rows appended twice (${how})`);
+        assert.ok(!readdirSync(dir).some((f) => f === JOURNAL || f.endsWith('.tmp') || f.endsWith('.unsorted')), `nothing left behind (${how})`);
+        const scan = progress.filter((p) => p.phase === 'scan');
+        if (c.resumedScan) assert.ok(scan[0].done >= 3 && scan[0].done === scan[0].from, `progress starts where the build stopped, not at zero (${how}: ${JSON.stringify(scan[0])})`);
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('A JOURNAL THAT DOES NOT MATCH, or cannot be trusted, is discarded and the build starts over', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-resume-'));
+  try {
+    const blocksDir = path.join(root, 'blocks');
+    writeResumeBlocks(blocksDir);
+    const refDir = path.join(root, 'ref');
+    await buildIndex({ rpc: resumeRpc(), blocksDir, out: refDir, workers: 2 });
+    const want = indexView(refDir);
+    const STOP = new Error('stopped here');
+    const stopped = async (out, at = (p, i) => p === 'scanned' && i.done === 4) => {
+      await assert.rejects(buildIndex({ rpc: resumeRpc(), blocksDir, out, workers: 2, checkpointMs: 0, hook: (p, i) => { if (at(p, i)) throw STOP; } }), (err) => err === STOP);
+      return JSON.parse(JSON.parse(readFileSync(path.join(out, JOURNAL), 'utf8')).body);
+    };
+    const rewrite = (out, edit) => { const j = JSON.parse(JSON.parse(readFileSync(path.join(out, JOURNAL), 'utf8')).body); edit(j); writeFileSync(path.join(out, JOURNAL), journalText(j)); };
+    const cases = [
+      { name: 'another index format', edit: (out) => rewrite(out, (j) => { j.format = FORMAT + 1; }), why: /format/ },
+      { name: 'another file selection', edit: (out) => rewrite(out, (j) => { j.files = [0, 1]; }), why: /files/ },
+      { name: 'a reorganisation below the tip', rpc: resumeRpc({ tip: 16, hashAt: (h) => (h >= 12 ? 'ab'.repeat(30) + String(h).padStart(4, '0') : resumeChain().chain[h].hash) }), why: /reorganisation/ },
+      { name: 'a node behind the journal', rpc: resumeRpc({ tip: 9 }), why: /node is at 9/ },
+      { name: 'a truncated journal', edit: (out) => { const f = path.join(out, JOURNAL); writeFileSync(f, readFileSync(f).subarray(0, 200)); }, why: /not readable JSON/ },
+      { name: 'a journal edited in place', edit: (out) => { const f = path.join(out, JOURNAL); const text = readFileSync(f, 'utf8'); const at = text.indexOf('\\"rows\\":') + 9; writeFileSync(f, text.slice(0, at) + '9' + text.slice(at)); }, why: /checksum/ },
+      { name: 'a well-formed journal of the wrong shape', edit: (out) => rewrite(out, (j) => { j.buckets.pop(); }), why: /shape/ },
+      { name: 'a bucket shorter than the journal proves', edit: (out) => { const f = readdirSync(out).find((x) => x.endsWith('.unsorted')); writeFileSync(path.join(out, f), Buffer.alloc(0)); }, why: /journal proves/ },
+    ];
+    for (const c of cases) {
+      const out = path.join(root, `bad-${cases.indexOf(c)}`);
+      const j = await stopped(out);
+      assert.equal(j.phase, 'scan'); assert.equal(j.tip.height, 15);
+      c.edit?.(out);
+      const logs = [];
+      // the reorganised and the lagging node fail here (their invented chains have no blocks on disk);
+      // what matters is that the journal was not trusted
+      const m = await buildIndex({ rpc: c.rpc ?? resumeRpc(), blocksDir, out, workers: 2, log: (s) => logs.push(s) }).catch((err) => err);
+      assert.ok(logs.some((s) => /discarding the interrupted build/.test(s) && c.why.test(s)), `discarded, saying why (${c.name}): ${logs.join(' | ')}`);
+      assert.ok(!logs.some((s) => /resuming/.test(s)), `and not resumed (${c.name})`);
+      if (c.rpc) continue;
+      assert.ok(!(m instanceof Error), `${c.name}: ${m?.message}`);
+      assert.deepEqual(indexView(out), want, `a fresh build is the reference (${c.name})`);
+    }
+
+    // a bucket changed in place after the scan -- same length, other bytes -- is caught by its CRC
+    // before it is sorted: the build fails, the journal goes, and the next start is a fresh build
+    const out = path.join(root, 'crc');
+    const j = await stopped(out, (p, i) => p === 'sorted' && i.done === 2);
+    assert.equal(j.phase, 'sort');
+    const victim = readdirSync(out).find((x) => x.endsWith('.unsorted'));
+    const buf = readFileSync(path.join(out, victim)); buf[buf.length - 1] ^= 0xff; writeFileSync(path.join(out, victim), buf);
+    const logs = [];
+    await assert.rejects(buildIndex({ rpc: resumeRpc(), blocksDir, out, workers: 2, log: (s) => logs.push(s) }), /does not hold what the scan wrote/);
+    assert.ok(logs.some((s) => /resuming/.test(s)) && logs.some((s) => /discarding/.test(s)), logs.join(' | '));
+    assert.ok(!readdirSync(out).includes('manifest.json') && !readdirSync(out).includes(JOURNAL), 'no manifest, and no journal to trust next time');
+    await buildIndex({ rpc: resumeRpc(), blocksDir, out, workers: 2 });
+    assert.deepEqual(indexView(out), want, 'the fresh build after it is the reference');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

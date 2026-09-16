@@ -22,7 +22,7 @@ machines you choose. Every setting mentioned here is described in full in
 
 | need | notes |
 |---|---|
-| **Node.js 22 or newer** | `node -v` must print `v22` or later. Older runtimes fail on syntax at start-up, which looks like a bug in the app. Install from [nodejs.org](https://nodejs.org), your distribution's backports, or a version manager such as `nvm`. |
+| **Node.js 22.2 or newer** | `node -v` must print `v22.2` or later (the index build uses its built-in CRC-32). Older runtimes fail on syntax at start-up, which looks like a bug in the app. Install from [nodejs.org](https://nodejs.org), your distribution's backports, or a version manager such as `nvm`. |
 | **Bitcoin Core 25.0 or later** | [Bitcoin Core](https://github.com/bitcoin/bitcoin) with `server=1` and `txindex=1`, **on the same machine** as BlockYard, which reads the node's block files for the explorer's address index. A node on another machine is not supported. 25.0 is where `getblock` verbosity 3, which the index follower uses, arrived; 29.1 is what the macOS install was done against. `coinstatsindex=1` is optional (without it the UTXO figures are blank and the node is not asked for them). Not a pruned node: the index needs every block file. |
 | **RPC credentials** | Either read access to the node's cookie file (`<datadir>/<chain>/.cookie`, the usual case on the same machine) or an RPC user and password. |
 | **macOS or Linux** | There is nothing to compile, and the server calls no platform-specific API (no `child_process`, no `/proc`, no `systemctl`). Developed on Linux; a real install has been done on macOS (Core 29.1). The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24), but on Windows nothing more than the suite has been tried. Only the *service* instructions in section 6 are Linux-specific (they use systemd); on macOS run it in a terminal, or write a `launchd` plist. The index store opens its files per lookup, so macOS's default limit of 256 open files is enough. |
@@ -70,8 +70,10 @@ while every page keeps working: the Overview's "What this panel cannot tell you"
 progress (phase, files done, rows so far, an ETA that settles after the first few files), the
 address page says the same in place of a history, and an event — which the browser shows as a
 notification — marks the start, the finish and a failure. When it finishes the follower starts
-on the spot, so address pages work without a restart. Stopping BlockYard stops the build; there
-is no resume, so the next start begins it again. Three keys on the node entry control it:
+on the spot, so address pages work without a restart. Stopping BlockYard stops the build, and the
+next start resumes it: the files already scanned and the buckets already sorted are kept, and
+only what was not finished is read again (at most about a minute of scanning). Three keys on the
+node entry control it:
 
 | key | meaning |
 |---|---|

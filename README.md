@@ -37,7 +37,7 @@ Nous, GitHub, Catppuccin, or nine colours of your own.
 
 ## Quick start
 
-You need **Node.js 22 or newer** and a running **Bitcoin Core 25.0 or later** with `server=1`
+You need **Node.js 22.2 or newer** and a running **Bitcoin Core 25.0 or later** with `server=1`
 and `txindex=1`, **on the same machine** — BlockYard reads the node's block files to build the
 explorer's address index, and a node on another machine is not supported. Without `txindex` the
 explorer cannot look a confirmed transaction up by id; everything else works without it (see

@@ -3,7 +3,9 @@
 //
 //   node scripts/index-build.js --out <dir> [--node <id>] [--workers N] [--files 0,1,5754]
 //
-// --files builds a partial index for testing (the completeness check is skipped). Progress goes to
+// --files builds a partial index for testing (the completeness check is skipped). A build stopped part
+// way resumes when run again with the same --out (build.js, THE BUILD JOURNAL); the log line says so,
+// or says why the unfinished work was discarded. Progress goes to
 // stderr once a second; the manifest, with every phase's timings, goes to stdout at the end.
 import { loadConfig } from '../server/config.js';
 import { RpcClient } from '../server/rpc/client.js';
@@ -25,6 +27,7 @@ const bar = progress();
 const manifest = await buildIndex({
   rpc, blocksDir: path.join(node.datadir, 'blocks'), out,
   pace: rpcPacer(rpc, { onChange: (held) => process.stderr.write(held ? '  paused while the node\'s RPC is slow or failing\n' : '  resumed\n') }),
+  log: (text) => { bar.done(); process.stderr.write(`  ${text}\n`); },
   workers: arg('workers', null) ? Number(arg('workers')) : undefined,
   files: arg('files', null) ? arg('files').split(',').map(Number) : null,
   onProgress: (p) => {

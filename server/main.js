@@ -485,10 +485,14 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       heartbeat.unref?.();
       buildIndex({
         rpc, blocksDir: path.join(m.cfg.datadir, 'blocks'), out: dir, workers, pace,
+        // AN INTERRUPTED BUILD RESUMES (build.js, THE BUILD JOURNAL): where it resumed, or why the
+        // unfinished work was thrown away, is an event like the start
+        log: (text) => say(text),
         onProgress: (p) => {
           if (p.phase !== phase) { phase = p.phase; phaseAt = Date.now(); }
           const elapsed = (Date.now() - phaseAt) / 1000;
-          const rate = elapsed > 0 && p.done > 0 ? p.done / elapsed : 0;
+          // a resumed build starts the phase part way (`from`): the rate is this run's, not the earlier one's
+          const rate = elapsed > 0 && p.done > (p.from ?? 0) ? (p.done - (p.from ?? 0)) / elapsed : 0;
           Object.assign(status, { phase: p.phase, done: p.done, total: p.total, rows: p.rows ?? status.rows, eta: rate > 0 && p.total > p.done ? HMS((p.total - p.done) / rate) : null });
           lastProgressAt = Date.now();
           if (Date.now() - lastFlag > 5000) {

@@ -744,7 +744,10 @@ Kept as checked rather than deleted, so nobody re-derives them.
   budget has no room for a fourth figure and rules 4/9 forbid merging them. They now
   appear as three separately-labelled rows behind `detail`, where "not printed by this
   build" is a possible answer and the absence is visible.
-- [ ] **An interrupted index build starts over.** Noted 2026-09-14. `buildIndex` empties its output
+- [x] **An interrupted index build starts over.** Noted 2026-09-14. Fixed 2026-09-16: the build
+  keeps `build-journal.json` beside its output and resumes per scanned block file and per sorted
+  bucket, cutting the buckets back to what the journal proves (`server/chain/index/build.js`, THE
+  BUILD JOURNAL). What was noted: `buildIndex` empties its output
   directory before it begins (`server/chain/index/build.js`), and the server treats an index as
   built only when `manifest.json` exists (`server/main.js`), so a build stopped by Ctrl-C, a crash
   or a reboot keeps nothing of its scan: the installer says so when it is stopped, and the server's

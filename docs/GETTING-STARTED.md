@@ -137,8 +137,8 @@ node scripts/index-build.js --out data/index --workers 4
 ```
 
 Last question: **start BlockYard now, in this terminal?** — yes runs it right there (Ctrl-C
-stops it, and stops a background build with it; there is no resume, so it starts over on the
-next start); `--start` does the same without asking.
+stops it, and stops a background build with it; the next start resumes the build where it
+stopped); `--start` does the same without asking.
 
 Scripted, with no questions (a fresh machine, a Makefile):
 

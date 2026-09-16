@@ -2,10 +2,13 @@
 //
 //   scan  one blk/rev file pair -> the file's index rows, partitioned by the key's first byte into
 //         256 buffers (a counting sort), so the main thread only appends each to its bucket file
-//   sort  one bucket file -> sorted, de-duplicated rows plus a sparse index, then the unsorted
-//         input is removed
+//   sort  one bucket file -> sorted, de-duplicated rows plus a sparse index, each written to a
+//         temporary name, fsynced and renamed. The input is first checked against the length and
+//         CRC-32 the scan journaled, and it is left in place: the main thread removes it once the
+//         build journal records the bucket sorted (build.js, THE BUILD JOURNAL)
 import { parentPort, workerData } from 'node:worker_threads';
-import { openSync, readSync, writeSync, closeSync, fstatSync, unlinkSync, renameSync } from 'node:fs';
+import { openSync, readSync, writeSync, closeSync, fstatSync, fsyncSync, renameSync } from 'node:fs';
+import { crc32 } from 'node:zlib';
 import path from 'node:path';
 import { Reader, readHeader } from '../tx.js';
 import { readChainFile, records, pairBlocksWithUndo, MAGIC } from '../blockfile.js';
@@ -57,7 +60,7 @@ function scan(file) {
   };
 }
 
-function sortBucket(bucket, dir) {
+function sortBucket(bucket, dir, expectSize = null, expectCrc = null) {
   const t0 = performance.now();
   const name = (s) => path.join(dir, `bucket-${bucket.toString(16).padStart(2, '0')}${s}`);
   const fd = openSync(name('.unsorted'), 'r');
@@ -65,6 +68,9 @@ function sortBucket(bucket, dir) {
   const buf = Buffer.allocUnsafe(size);
   for (let got = 0; got < size;) { const k = readSync(fd, buf, got, size - got, got); if (!k) break; got += k; }
   closeSync(fd);
+  const hex = bucket.toString(16).padStart(2, '0');
+  if (expectSize != null && size !== expectSize) throw new Error(`bucket ${hex} does not hold what the scan wrote: ${size} bytes, and the scan wrote ${expectSize}`);
+  if (expectCrc != null && crc32(buf) !== expectCrc) throw new Error(`bucket ${hex} does not hold what the scan wrote: its CRC-32 is ${crc32(buf)}, and the scan's was ${expectCrc}`);
   const n = size / ROW;
   // order by the next 16 key bits into sub-buckets, then compare the rest numerically:
   // hi = key bytes 3..7 (40 bits), lo = height (24 bits) and position (16 bits)
@@ -92,16 +98,15 @@ function sortBucket(bucket, dir) {
     w += ROW;
   }
   const idx = Buffer.from(new BigUint64Array(sparse).buffer);
-  const write = (file, data) => { const f = openSync(file + '.tmp', 'w'); for (let o = 0; o < data.length;) o += writeSync(f, data, o, data.length - o); closeSync(f); renameSync(file + '.tmp', file); };
-  write(path.join(dir, `seg-${bucket.toString(16).padStart(2, '0')}.rows`), out.subarray(0, w));
-  write(path.join(dir, `seg-${bucket.toString(16).padStart(2, '0')}.idx`), idx);
-  unlinkSync(name('.unsorted'));
+  const write = (file, data) => { const f = openSync(file + '.tmp', 'w'); try { for (let o = 0; o < data.length;) o += writeSync(f, data, o, data.length - o); fsyncSync(f); } finally { closeSync(f); } renameSync(file + '.tmp', file); };
+  write(path.join(dir, `seg-${hex}.rows`), out.subarray(0, w));
+  write(path.join(dir, `seg-${hex}.idx`), idx);
   return { msg: { type: 'sorted', bucket, rows: w / ROW, dupes, ms: performance.now() - t0 }, transfer: [] };
 }
 
 parentPort.on('message', (job) => {
   try {
-    const r = job.type === 'scan' ? scan(job.file) : sortBucket(job.bucket, job.dir);
+    const r = job.type === 'scan' ? scan(job.file) : sortBucket(job.bucket, job.dir, job.size, job.crc);
     parentPort.postMessage(r.msg, r.transfer);
   } catch (err) {
     parentPort.postMessage({ type: 'error', job, message: err.stack || err.message });

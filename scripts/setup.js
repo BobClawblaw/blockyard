@@ -248,7 +248,7 @@ async function main() {
   let building = null;
   process.on('SIGINT', () => {
     out(); out();
-    if (building) say(c.warn(`stopped. The index in ${building} is unfinished: run the build again (it starts over) before pointing BlockYard at it.`));
+    if (building) say(c.warn(`stopped. The index in ${building} is unfinished: run the build again (it resumes where it stopped) before pointing BlockYard at it.`));
     else say(c.dim('stopped; nothing written.'));
     process.exit(130);
   });
@@ -399,6 +399,7 @@ async function main() {
       const manifest = await buildIndex({
         rpc, blocksDir: path.join(node.datadir, 'blocks'), out: a.indexDir, workers: a.workers,
         pace: rpcPacer(rpc, { onChange: (held) => bar.done(held ? c.dim('  paused while the node\'s RPC is slow or failing') : c.dim('  resumed')) }),
+        log: (text) => bar.done(c.dim(`  ${text}`)),
         onProgress: (p) => {
           if (p.phase !== phase) {
             if (phase) bar.done(strip(progressLine({ phase, done: 1, total: 1, elapsed: (Date.now() - phaseStart) / 1000 })));

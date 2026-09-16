@@ -409,8 +409,8 @@ page reads **not indexed** and says so in a note with the phase, the progress, t
 and the time left; the Overview's "what this panel cannot tell you" box shows the same line, and
 adds `paused while the node's RPC is slow` whenever the build is holding back so the node keeps
 answering. A notification appears in every open tab when the build starts, when it finishes and
-if it fails; on finish the page fills in with no restart. The build does not resume after the
-server is stopped: the next start begins it again.
+if it fails; on finish the page fills in with no restart. A build stopped with the server
+resumes on the next start from the files it had finished, and its progress picks up from there.
 
 **Without an index configured**, the address and its type are still confirmed
 (`validateaddress` needs none), and balance, totals and history read **not indexed**. It does

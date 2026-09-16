@@ -212,8 +212,8 @@ it directly; running the file as a script calls it and prints the banner.
     `address-index-building` quality flag, `index` events at start, finish and
     failure, and the follower started on completion (section 2.8).
     `app.shutdown()` stops timers, closes streams, stops monitors, saves history
-    and sessions, and closes the listeners. A build in flight is not resumed:
-    the next start begins it again.
+    and sessions, and closes the listeners. A build in flight stops with the
+    process and resumes on the next start from its journal (section 2.8).
 
 `boot({ log })` and `loadConfig({ ifaces, now })` are **seams**: tests inject a
 logger, a fake interface list, or a fake clock instead of intercepting
@@ -577,7 +577,24 @@ files. The numbers are in `docs/MEASUREMENTS.md` §28-30 and the history in
   bucket files; a check that every height is indexed exactly once, or the build
   stops rather than publish a hole; each bucket sorted into `seg-XX.rows` plus a
   sparse `seg-XX.idx` (one key per 4,096 rows); and a manifest written last, so an
-  index without one is unfinished. Measured on the whole chain: 29 min 45 s on 16
+  index without one is unfinished. **An interrupted build resumes** from
+  `build-journal.json`, written beside the output with a temporary name, fsync and
+  rename, and carrying a SHA-256 of its own body. The scan resumes per block file:
+  a checkpoint (at most once a minute, and when the scan ends or fails in an orderly
+  way) fsyncs the buckets written since the last one and records the files
+  finished, each bucket's length and running CRC-32, the heights seen and the
+  counters; a resume cuts every bucket back to its journaled length, so rows from a
+  half-appended file are gone, and scans that file again. The sort resumes per
+  bucket: the worker checks the input against the journaled length and CRC, writes
+  the segment with fsync and rename, the journal records it, and only then is the
+  input removed. The journal names the journal version, index format, row and
+  block sizes, chain, tip height and hash and the `--files` selection; a resume
+  works to the journal's tip, not the node's newer one, so the result is byte for
+  byte the index an uninterrupted build would have written. A journal that is torn,
+  of another format or selection, whose tip hash the node's active chain no longer
+  has, or whose files on disk disagree with it is discarded with the reason logged,
+  and the build starts over. The manifest is still last; the journal is removed
+  after it. Measured on the whole chain: 29 min 45 s on 16
   workers, 5.89 billion rows, 123.7 GB (§30). The build reads ~880 GB and writes
   ~120 GB, so `--out` should be a different device from the block files.
 - **Lookups** (`chain/index/store.js`, `IndexStore`). The sparse keys of the 256
@@ -607,8 +624,8 @@ files. The numbers are in `docs/MEASUREMENTS.md` §28-30 and the history in
   the phase's own rate, `paused while the node's RPC is slow`), refreshed at most
   every 5 s; `index` events mark start, finish and failure; on finish the follower
   starts and address pages go live with no restart; failure leaves
-  `address-index-build-failed` naming the command to run by hand. There is no
-  resume: a build stopped with the server starts over next time.
+  `address-index-build-failed` naming the command to run by hand. A build stopped with the server resumes next time; the flag's ETA is
+  computed from what this run has done (`from` in the progress), not from zero.
 - **Following the chain** (`chain/index/live.js`, `LiveIndex`). The base is
   immutable and covers the chain to the block it was built at. The follower polls
   the node's tip, rolls the tail back to the fork if a block it holds is no longer

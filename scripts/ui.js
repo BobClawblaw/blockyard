@@ -143,12 +143,14 @@ const G = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)} B` : n >= 1e6 ? `${(n / 1e
  * One line of a progress bar: `phase ████░░ done/total · rows · rate · ETA`. `elapsed` in seconds
  * since the phase began; the ETA assumes the rate so far holds. Pure, so it is tested.
  */
-export function progressLine({ phase, done, total, rows = null, elapsed = 0 }, width = cols()) {
+// `from` is where the phase started this run: a resumed build begins part way, and its rate (and so
+// the time left) is what this run has done, not what an earlier run did
+export function progressLine({ phase, done, total, from = 0, rows = null, elapsed = 0 }, width = cols()) {
   const frac = total > 0 ? Math.min(1, done / total) : 0;
   const barW = Math.max(10, Math.min(30, width - 62));
   const filled = Math.round(frac * barW);
   const bar = c.accent('█'.repeat(filled)) + c.dim('░'.repeat(barW - filled));
-  const rate = elapsed > 0 && done > 0 ? done / elapsed : 0;
+  const rate = elapsed > 0 && done > from ? (done - from) / elapsed : 0;
   const eta = rate > 0 && total > done ? HMS((total - done) / rate) : null;
   const bits = [`${String(done).padStart(String(total).length)}/${total}`, `${Math.round(frac * 100)}%`];
   if (rows != null) bits.push(`${G(rows)} rows`);

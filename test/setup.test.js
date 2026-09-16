@@ -211,6 +211,9 @@ test('the progress bar and the box are arithmetic, not decoration', async () => 
   assert.match(strip(progressLine({ phase: 'sort', done: 256, total: 256, elapsed: 190 }, 100)), /100% · done in 3 min$/);
   assert.match(strip(progressLine({ phase: 'scan', done: 0, total: 5757, elapsed: 0 }, 100)), /0\/5757 · 0%$/, 'no rate yet, no ETA claimed');
   assert.match(strip(progressLine({ phase: 'scan', done: 10, total: 5757, rows: 5, elapsed: 20 }, 100)), /about 3\.2 h left$/);
+  // a resumed build starts the phase part way: the rate is this run's files, not the earlier run's
+  assert.match(strip(progressLine({ phase: 'scan', done: 50, from: 40, total: 100, elapsed: 60 }, 100)), /50\/100 · 50% · about 5 min left$/, 'ten files in a minute, fifty to go');
+  assert.match(strip(progressLine({ phase: 'scan', done: 40, from: 40, total: 100, elapsed: 5 }, 100)), /40\/100 · 40%$/, 'resumed, nothing done yet this run: no ETA claimed');
   const b = box(['ab', 'abcd'], { title: 'T' });
   const lines = strip(b).split('\n');
   assert.equal(lines.length, 4);
