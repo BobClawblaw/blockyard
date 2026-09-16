@@ -828,12 +828,15 @@ guidance; **P** pauses; **N** starts the next round.
 **Restart** on the panel (or **F2**) starts a fresh war from round one, whatever the board is doing:
 a war is five rounds, and a player knocked out early should not have to watch the computer finish.
 
-The wind is drawn as **moving air**, behind the land: a field of particles carried downwind and bent
-by eddies on the way, over a faint plasma wash of the same flow, so the sky reads as air rather
-than as a picture of arrows. Every particle nets downwind whatever the eddies do; the direction is
-never in doubt. When the wind changes, the flow bends into the new speed and direction over about
-half a second instead of jumping. A row of **chevrons** at the top of the field points the way it
-blows, as many as it is strong, brightest just after a change.
+The wind is **simulated air**, behind the land. A small fluid simulation is pushed by the round's
+wind and treats the land as its solid floor, so the air rises over the hills, speeds across the
+crests and rolls into eddies behind them, and it follows the craters as they are blown. You see it
+as thin flow lines, the wind-map kind: each one the recent path of something weightless carried by
+that air, fading in and out and thinning away at the edges of the field. The sky behind them sways
+very slightly, as if seen through moving air. When the wind changes, the air turns round by its own
+momentum rather than jumping. A row of **chevrons** at the top of the field points the way it
+blows, as many as it is strong, brightest just after a change. A computer player decides its shot
+as its turn begins, and you can watch its barrel swing onto it while it thinks.
 
 **Cheat mode** (a switch on the panel, also under Display settings → Scorched Yard) draws the
 firing solution while you aim: the shell's own path under this round's wind and the game's
