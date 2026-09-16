@@ -10,7 +10,7 @@
 // items, and every tank's health -- and between rounds the overlay is the shop.
 import { board3d } from './details3d.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from './scorchedfx.js';
-import { makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines } from './scorchedwind.js';
+import { plasmaCells, paintPlasma, airClock, advanceAir, paintRipple, airBands, paintAirBands } from './scorchedwind.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
   trajectory, dirtAt, shellLook,
@@ -77,10 +77,9 @@ const G = {
   lastShot: null,                       // what the human fired last, for R
   editing: null,                        // 'angle' | 'power' while a number is being typed
   paintNow: 0,                          // the instant the overlay layer paints at
-  flow: null, flowW: 0, flowH: 0,       // the advected particles of the air, and the size they were made for
   flowAt: 0,                            // the last frame's clock, for the step
   air: null,                            // the air's own integrated clock { t, drift }
-  streams: null, streamsAt: 0, streamsW: 0, airTravel: 0,   // the currents, and how far the air has run
+  airTravel: 0,                         // the signed distance the air has run, for the ripple and the bands
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -284,7 +283,7 @@ function drawWind(now) {
   if (!w || !h) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const pw = Math.round(w * dpr), ph = Math.round(h * dpr);
-  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; G.flow = null; }
+  if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
   const ctx = c.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -299,26 +298,24 @@ function drawWind(now) {
   else G.windEased += (wind - G.windEased) * Math.min(1, dt / 420);
   if (Math.abs(wind - G.windEased) < 0.02) G.windEased = wind;
   if (wind !== G.windShown) { G.windShown = wind; G.windAtChange = now; }
-  // the particles live as long as the canvas does
-  if (!G.flow || G.flowW !== w || G.flowH !== h) {
-    // half the count it started with (operator, 2026-09-16: "cut the wave simulation particles by
-    // half to improve perf"): the tails and the currents carry the motion now, so the particles
-    // can be fewer
-    G.flow = makeFlow(Math.round(Math.min(210, 75 + w * 0.11)), w, h, 7, now);
-    G.flowW = w; G.flowH = h;
-  }
   // the air's own clock, integrated at the eased wind's rate: a change of wind changes how fast it
   // runs from here on and nothing else (scorchedwind.js, advanceAir)
   G.air ??= airClock();
   advanceAir(G.air, dt, G.windEased);
-  // the currents, re-traced every few hundred milliseconds and run along by their dash offset;
-  // `travel` is how far the air has gone, in pixels, and the dashes go with it
-  G.airTravel = (G.airTravel ?? 0) + (dt / 1000) * w * (0.035 + 0.42 * Math.min(1, Math.abs(G.windEased) / 10));
-  if (!G.streams || now - (G.streamsAt ?? 0) > 280 || G.streamsW !== w) { G.streams = traceStreamlines(G.air, { wind: G.windEased, w, h }); G.streamsAt = now; G.streamsW = w; }
+  // THE SIGNED DISTANCE THE AIR HAS TRAVELLED: speed follows the eased wind's size and sign, so the
+  // ripple and the bands only ever move downwind, and bend round through zero when the wind turns
+  const we = G.windEased, strength = Math.min(1, Math.abs(we) / 10);
+  G.airTravel = (G.airTravel ?? 0) + (dt / 1000) * w * (0.02 + 0.2 * strength) * (we < 0 ? -1 : 1);
   ctx.clearRect(0, 0, w, h);
-  paintPlasma(ctx, plasmaCells(w, h, G.air, G.windEased));
-  paintStreamlines(ctx, G.streams, G.airTravel);
-  paintFlow(ctx, stepFlow(G.flow, dt, { wind: G.windEased, w, h, now, clock: G.air }));
+  // the sky, refracted: seen through moving air it bows in a ripple that rolls downwind
+  const sky = el('sySky');
+  if (sky && sky.width) {
+    const sr = sky.getBoundingClientRect(), cr = c.getBoundingClientRect();
+    const scale = sky.width / Math.max(1, sr.width);
+    paintRipple(ctx, sky, { sx: (cr.left - sr.left) * scale, sy: (cr.top - sr.top) * scale, scale }, w, h, G.airTravel, we);
+  }
+  paintPlasma(ctx, plasmaCells(w, h, G.air, we));
+  paintAirBands(ctx, airBands(G.airTravel, we, w, h));
   paintBanner(ctx, windBanner(wind, w, h, Math.max(0, 1 - (now - (G.windAtChange ?? 0)) / 2500)));
 }
 

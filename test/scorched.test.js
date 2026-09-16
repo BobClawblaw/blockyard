@@ -14,7 +14,7 @@ import {
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
 import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
-import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines } from '../public/js/scorchedwind.js';
+import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands } from '../public/js/scorchedwind.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
 
 // A CANVAS THAT ONLY REMEMBERS: the painted layer (scorchedfx.js) is held to what it draws and
@@ -1176,4 +1176,39 @@ test('scorched yard: every weapon that flies has a look of its own', () => {
   assert.ok(ops('nuke').some((o) => o.op === 'arc' && /100,255,70/.test(String(o.fill))), 'a nuke glows green');
   assert.ok(!ops('tracer').some((o) => o.op === 'arc' && /255,205,130|100,255,70/.test(String(o.fill))), 'a tracer glows in no colour at all');
   assert.ok(ops('missile').some((o) => o.op === 'ellipse'), 'the missile wears its ring');
+});
+
+// AIR SEEN BY WHAT IT DOES (operator, 2026-09-16: "Looks too much like shooting stars instead of air
+// movement. Is there some sort of more impressive ripple or bowing effect"). The streaks had bright
+// heads and fading tails -- a meteor's shape. The wind refracts the sky instead, and bows a few
+// broad soft bands of air, and nothing in either has a head.
+test('scorched yard: the wind ripples the sky and bows soft bands, downwind, with no bright points', () => {
+  const h = 600;
+  assert.equal(rippleOffset(100, 0, 0, h), 0, 'still air bends nothing');
+  let peak = 0;
+  for (let x = 0; x < 2000; x += 3) peak = Math.max(peak, Math.abs(rippleOffset(x, 0, 10, h)));
+  assert.ok(peak > 1 && peak <= h * 0.0066, `a gale sways the sky a few pixels, no more (${peak.toFixed(2)}px)`);
+  // the pattern travels the way the wind blows: what was at x is at x + d after the air moves d
+  for (const x of [120, 480, 900]) assert.ok(Math.abs(rippleOffset(x + 40, 40, 6, h) - rippleOffset(x, 0, 6, h)) < 1e-9, 'the ripple moves with the travelled air');
+  // painted as columns of the sky, shifted: drawImage only, one call a column
+  const calls = [];
+  const ctx = { drawImage: (...a) => calls.push(a) };
+  const n = paintRipple(ctx, { width: 1000 }, { sx: 10, sy: 20, scale: 1 }, 600, h, 30, 7);
+  assert.ok(n === calls.length && n >= 100, `the sky is copied across in columns (${n})`);
+  assert.ok(calls.every((c) => c.length === 9), 'each a source rectangle mapped to a shifted destination');
+  assert.equal(paintRipple(ctx, { width: 1000 }, { sx: 0, sy: 0, scale: 1 }, 600, h, 30, 0), 0, 'and nothing at all in still air');
+  // the bands: broad, soft, bowing, stroked lines and nothing round
+  assert.equal(airBands(0, 0, 800, h).length, 0, 'no bands in still air');
+  const bands = airBands(50, 8, 800, h);
+  assert.ok(bands.length >= 4, 'a handful of bands');
+  for (const b of bands) { const ys = b.pts.map((p) => p.y); assert.ok(Math.max(...ys) - Math.min(...ys) > 4, 'each one bows'); assert.ok(b.alpha <= 0.05 && b.width > 10, 'broad and faint'); }
+  const R = recorder();
+  paintAirBands(R.ctx, bands);
+  assert.ok(R.ops.every((o) => o.op === 'stroke'), 'strokes only: no heads, no dots, nothing a meteor is made of');
+  // and the wind plane no longer draws the streaks or the currents
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  const wind = src.slice(src.indexOf('function drawWind('), src.indexOf('\n}\n', src.indexOf('function drawWind(')));
+  assert.ok(!/paintFlow|paintStreamlines/.test(wind), 'the meteor-shaped streaks are gone from the picture');
+  assert.match(wind, /paintRipple\(ctx, sky,/, 'the sky is refracted');
+  assert.match(wind, /paintAirBands\(ctx, airBands\(/, 'and the bands bow across it');
 });

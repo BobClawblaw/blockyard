@@ -285,3 +285,90 @@ export function paintStreamlines(ctx, lines, travel, colour = '206,220,240') {
   ctx.setLineDash([]);
   ctx.lineDashOffset = 0;
 }
+
+// ------------------------------------------------------------------ the air, seen through
+/**
+ * AIR YOU SEE BY WHAT IT DOES (operator, 2026-09-16, with a night capture: "Looks too much like
+ * shooting stars instead of air movement. Is there some sort of more impressive ripple or bowing
+ * effect we might be able to simulate air as fluid dynamics?").
+ *
+ * Every streak we drew had a bright head and a fading tail, which is precisely what a meteor looks
+ * like, so on a starry sky each one read as a meteor. Air itself is invisible: what you see is the
+ * world behind it bending. So the wind now REFRACTS the sky. The sky canvas is copied onto the wind
+ * plane in narrow columns, each lifted or lowered by a travelling wave, so the stars, the moon and
+ * the clouds bow gently in a ripple that rolls downwind at the wind's speed. It sits under the land,
+ * so only the air ripples, never the hills. Nothing is drawn at all in still air.
+ *
+ * The phase is a SIGNED distance the air has travelled, integrated by the caller from the eased
+ * wind, so the ripple only ever moves the way the wind blows and a change of wind bends it round
+ * without a jump.
+ */
+export function rippleOffset(x, travel, wind, h) {
+  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
+  if (strength < 0.03) return 0;
+  const A = h * (0.0015 + 0.005 * strength);            // a sway, not a bob: about four pixels in a gale
+  const u = x - travel;
+  const gust = 0.65 + 0.35 * Math.sin(u * 0.0021 + 0.7);  // a slow swell in the swell
+  return A * gust * (Math.sin(u * 0.0118) * 0.7 + Math.sin(u * 0.0263 + 1.9) * 0.3);
+}
+
+/**
+ * Copy the sky across the wind plane, column by column, each shifted by the ripple. `src` is the
+ * sky canvas and `map` how the wind plane lies over it: { sx, sy, scale } in the sky's pixels.
+ * Columns overlap by a pixel so no seam shows; the source is overscanned top and bottom so a lifted
+ * column never uncovers an edge.
+ */
+export function paintRipple(ctx, src, map, w, h, travel, wind, col = 6) {
+  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
+  if (!src || strength < 0.03 || typeof ctx.drawImage !== 'function') return 0;
+  const pad = Math.ceil(h * 0.012) + 2;
+  let n = 0;
+  for (let x = 0; x < w; x += col) {
+    const dy = rippleOffset(x + col / 2, travel, wind, h);
+    const sx = map.sx + x * map.scale, sy = map.sy + (-pad) * map.scale;
+    const sw = (col + 1) * map.scale, sh = (h + pad * 2) * map.scale;
+    ctx.drawImage(src, sx, sy, sw, sh, x, -pad + dy, col + 1, h + pad * 2);
+    n += 1;
+  }
+  return n;
+}
+
+/**
+ * BANDS OF MOVING AIR: a handful of broad, soft ribbons that bow as they cross, travelling downwind
+ * with the ripple. No head, no tail, no bright point anywhere in them -- a band of slightly paler
+ * sky that undulates, the way wind is drawn in a woodblock print.
+ */
+export function airBands(travel, wind, w, h, count = 5) {
+  const strength = Math.min(1, Math.abs(wind ?? 0) / 10);
+  if (!w || !h || strength < 0.03) return [];
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const y0 = h * (0.1 + 0.105 * i + 0.02 * Math.sin(i * 2.3));
+    const amp = h * (0.012 + 0.028 * strength) * (0.7 + 0.3 * Math.sin(i * 1.7));
+    const k = 0.006 + 0.0022 * i;
+    const lag = 0.75 + 0.1 * i;
+    const pts = [];
+    for (let x = -30; x <= w + 30; x += 18) {
+      const u = x - travel * lag;
+      pts.push({ x, y: y0 + amp * Math.sin(u * k + i * 1.3) + amp * 0.35 * Math.sin(u * k * 2.4 + i) });
+    }
+    out.push({ pts, width: h * (0.03 + 0.02 * ((i * 7) % 3) / 2), alpha: 0.012 + 0.028 * strength });
+  }
+  return out;
+}
+
+export function paintAirBands(ctx, bands, colour = '206,222,246') {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const b of bands) {
+    // twice, wide and faint then narrow and a touch brighter: a soft band with no edge to catch
+    for (const [wk, ak] of [[1, 1], [0.45, 1.1]]) {
+      ctx.strokeStyle = `rgba(${colour},${Math.min(0.08, b.alpha * ak).toFixed(3)})`;
+      ctx.lineWidth = b.width * wk;
+      ctx.beginPath();
+      ctx.moveTo(b.pts[0].x, b.pts[0].y);
+      for (let i = 1; i < b.pts.length; i++) ctx.lineTo(b.pts[i].x, b.pts[i].y);
+      ctx.stroke();
+    }
+  }
+}
