@@ -130,7 +130,7 @@ the rename, then the docs. Each step leaves the suite green and the boards drawi
 ## 7. What is deliberately not in this
 
 * No per-board Earth parameters (a different hour for the candles than for the artillery). One
-  Earth, one Space; a board chooses between them. Scorched Yard's per-round hour is the game's own
+  Earth, one Galaxy; a board chooses between them. Scorched Yard's per-round hour is the game's own
   business and stays.
 * No third sky. The catalogue shape makes adding one a section and a value, later.
 * The internal option name `space` on the Block space board (its deck texture and floor style) is
