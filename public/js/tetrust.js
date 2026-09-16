@@ -9,7 +9,7 @@
 // the same sky (drawSky). The game inherits the framework rather than imitating it.
 import { board3d } from './details3d.js';
 import { newGame, tick, move, rotate, softDrop, hardDrop, tiles, previewTiles, peekNext, gravityMs, PIECES, COLS, ROWS } from './tetris.js';
-import { loadSettings, setSetting, tetrustOptions } from './settings.js';
+import { loadSettings, setSetting, tetrustOptions, nextSky, SKY_LABELS } from './settings.js';
 import * as sound from './tetsound.js';
 
 const SCORES_KEY = 'blockyard.tetrust.scores';
@@ -173,9 +173,20 @@ function drawScores(highlightAt = null) {
 
 // THE GAME'S OWN SWITCHES (operator: "Toggle for each in the game display"): three buttons on the
 // HUD, the same settings the Display panel shows, so a flip in either place is a flip in both
-const SWITCHES = [['tetStars', 'stars'], ['tetGalaxy', 'galaxy'], ['tetMusic', 'music'], ['tetSfx', 'sfx']];
+const SWITCHES = [['tetMusic', 'music'], ['tetSfx', 'sfx']];
+/** The sky button says which sky it is on, and lights up while there is one. */
+function skyButton(id, sky) {
+  const b = el(id);
+  if (!b) return;
+  b.textContent = `\u2600 ${SKY_LABELS[sky] ?? sky}`;
+  b.classList.toggle('on', sky !== 'none');
+  b.setAttribute('aria-pressed', sky !== 'none' ? 'true' : 'false');
+}
 function drawSwitches() {
   const t = tetrustOptions(loadSettings());
+  // ONE SKY BUTTON (docs/PLAN-SKIES.md): Galaxy, Earth or none, round the ring, in place of the old
+  // star field and galaxy pair -- the same setting the Sky tab's table shows for this board
+  skyButton('tetSkySw', t.sky.sky);
   for (const [id, key] of SWITCHES) {
     const b = el(id);
     if (!b) continue;
@@ -194,7 +205,6 @@ function flip(key) {
   setSetting(loadSettings(), `tetrust.${key}`, !cur);
   sound.unlock();
   drawSwitches();
-  if (key === 'stars' || key === 'galaxy') drawSky();
   G.dirty = true;
   if (!G.running || G.paused) draw();
 }
@@ -205,10 +215,7 @@ function drawSky() {
   const t = tetrustOptions(loadSettings());
   board3d(sky, [], {
     ...SKY,
-    stars: t.stars, galaxy: t.stars && t.galaxy, galaxyAt: t.galaxyAt,
-    starDensity: t.starDensity, starBrightness: t.starBrightness,
-    nebulae: t.nebulae, galaxies: t.galaxies, dust: t.dust, clusters: t.clusters, starColours: t.starColours, starGlints: t.starGlints,
-    ...t.sky,
+    ...t.sky,          // which sky this board chose, and what it is made of (settings.js skyFor)
   });
 }
 
@@ -342,6 +349,7 @@ function bind() {
   document.addEventListener('visibilitychange', () => { if (document.hidden && G.running && !G.paused) pause('paused — you looked away'); });
   el('tetResume')?.addEventListener('click', () => resume());
   for (const [id, key] of SWITCHES) el(id)?.addEventListener('click', () => flip(key));
+  el('tetSkySw')?.addEventListener('click', () => { const s = loadSettings(); setSetting(s, 'tetrust.sky', nextSky(tetrustOptions(s).sky.sky)); sound.unlock(); drawSwitches(); drawSky(); draw(); });
 }
 
 export function renderTetrust(s, state, h) {

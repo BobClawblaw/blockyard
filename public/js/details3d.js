@@ -3138,7 +3138,9 @@ const NO_CANVAS = {};
 // this gate turned off the day as well: a blue afternoon and a moonrise were being hidden by a
 // switch about stars. A board that asks for the living sky draws it whatever that switch says;
 // `stars` still decides the star field, which the living sky brings out at night by itself.
-const starsOn = (o) => o.skyType === 'living' || !!(o.stars ?? o.space);
+// the Earth sky (settings.js calls it 'earth'; 'living' was its name for a day and still answers)
+const earthSky = (o) => o.skyType === 'earth' || o.skyType === 'living';
+const starsOn = (o) => earthSky(o) || !!(o.stars ?? o.space);
 // THE GALAXY (operator, 2026-09-12: "I want all the starts slowly rotating to form a spiral
 // galaxy in the background ... Make it a toggle").
 //
@@ -3697,7 +3699,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // THE SKY: the star field, or the living sky (livingsky.js: a real day from the clock, with the
   // star field coming out at night through the same drawStars)
   if (starsOn(opts)) {
-    if (opts.skyType === 'living') drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
+    if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
     else drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
   }
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)

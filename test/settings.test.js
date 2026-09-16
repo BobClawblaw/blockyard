@@ -11,8 +11,7 @@ import { readFileSync } from 'node:fs';
 import {
   DEFAULTS, PANEL, SETTINGS_KEY, SCHEMA_VERSION, normalise, loadSettings, saveSettings, setSetting,
   resetSettings, isDefault, spaceOptions, marketsOptions, tetrustOptions, onSettingsChange,
-  gridColours, courtGridColours, blockanoidOptions, TAB_ROWS,
-} from '../public/js/settings.js';
+  gridColours, courtGridColours, blockanoidOptions, TAB_ROWS, SKY_BOARDS, SKIES } from '../public/js/settings.js';
 import { buildScene } from '../public/js/blockscene3d.js';
 import { starField } from '../public/js/details3d.js';
 
@@ -81,6 +80,7 @@ test('every panel control names a real setting, and every setting has a control'
   for (const g of PANEL) {
     assert.ok(DEFAULTS[g.group], `panel group ${g.group} exists`);
     for (const r of g.rows) {
+      if (r.kind === 'skymap' || r.kind === 'heading') { assert.ok(r.label && r.hint, 'a map or a heading is labelled and explained'); continue; }   // the Sky tab's table and its two headings are not settings
       assert.ok(r.key in DEFAULTS[g.group], `${g.group}.${r.key} is a real setting`);
       assert.ok(r.label && r.hint, `${g.group}.${r.key} is labelled and explained`);
       if (['choice', 'segment', 'cards'].includes(r.kind)) assert.ok(r.options?.length >= 2, 'a choice offers choices');
@@ -165,8 +165,8 @@ test('star density and brightness reach the field itself', () => {
   assert.ok(dense > base * 2, `denser sky: ${base} -> ${dense}`);
   assert.ok(sparse < base / 2, `sparser sky: ${base} -> ${sparse}`);
   assert.deepEqual(starField(1200, 800, 1, 7, 1), starField(1200, 800, 1, 7, 1), 'seeded: the same sky every time');
-  const off = marketsOptions({ markets: { stars: false } });
-  assert.equal(off.stars, false, 'stars off means the board draws none');
+  const off = marketsOptions({ markets: { sky: 'none' } });
+  assert.equal(off.stars, false, 'no sky means the board draws none');
   assert.equal(off.space, true, 'but it is still a space board: the switch is the sky, not the style');
   const dim = marketsOptions({ sky: { brightness: 0.4 } });
   assert.equal(dim.starBrightness, 0.4);
@@ -296,7 +296,8 @@ test('a v1 store keeps the choices it holds when a key moves group', () => {
   const got = loadSettings(s);            // no `version`: that is every store written before v2
   assert.equal(got.sky.density, 2.4, 'the density the operator chose, under its new name');
   assert.equal(got.sky.brightness, 0.6);
-  assert.equal(got.markets.stars, false, 'and the keys that did not move are untouched');
+  assert.equal(got.markets.sky, 'none', 'stars off in a v1 store is no sky in a v6 one (the v5 -> v6 step)');
+  assert.equal(got.markets.stars, undefined, 'and the old key is gone');
   assert.equal(got.markets.glow, undefined, 'markets.glow was dropped at v3; a v1 store does not resurrect it');
   assert.equal(got.space.shadows, false);
   assert.equal(got.markets.starDensity, undefined, 'the old name is gone, not kept as a duplicate');
@@ -518,15 +519,18 @@ test('the parse is memoised, and a write invalidates it', () => {
 test('tetrust: its own group, its own switches on the panel, and tetrustOptions carries the display sky when its stars are on', () => {
   // (operator, 2026-09-12: "Add teh starfield simulation as a toggle for teh game" ... "Tetris music
   // and sound effects ... Toggle for each in the game display")
-  assert.deepEqual(DEFAULTS.tetrust, { stars: true, galaxy: true, galaxyAt: 'center', ghostColour: '#2f2c44', ghostWidth: 0.5, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1, grid: true, gridColour: '#1844bf', gridBrightness: 1.55 }, 'the panel is the sky, galaxy centred behind the title, and the well has its own grid in blue');
+  assert.deepEqual(DEFAULTS.tetrust, { sky: 'galaxy', ghostColour: '#2f2c44', ghostWidth: 0.5, music: true, sfx: true, neon: false, neonSource: 'piece', neonColour: '#3d8bff', neonBrightness: 1, grid: true, gridColour: '#1844bf', gridBrightness: 1.55 }, 'the panel is the Galaxy, and the well has its own grid in blue');
   const rows = PANEL.find((g) => g.group === 'tetrust')?.rows.map((r) => r.key);
-  assert.deepEqual(rows, ['stars', 'galaxy', 'galaxyAt', 'ghostColour', 'ghostWidth', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness', 'grid', 'gridColour', 'gridBrightness']);
-  const off = tetrustOptions({ tetrust: { stars: false, galaxy: false, music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
-  assert.equal(off.stars, false); assert.equal(off.galaxy, false, 'the game decides its own galaxy, not the Sky group'); assert.equal(off.music, false); assert.equal(off.sfx, true);
-  const on = tetrustOptions({ tetrust: { stars: true, galaxyAt: 'top-right' }, sky: { galaxy: false, density: 4, galaxyAt: 'bottom-left', dust: false } });
-  assert.equal(on.stars, true);
-  assert.equal(on.galaxy, true); assert.equal(on.starDensity, 4); assert.equal(on.galaxyAt, 'top-right'); assert.equal(on.dust, false, 'the display sky, layer for layer');
-  assert.equal(normalise({ tetrust: { galaxyAt: 'nowhere' } }).tetrust.galaxyAt, 'center', 'an unknown placement is the default');
+  assert.deepEqual(rows, ['sky', 'ghostColour', 'ghostWidth', 'music', 'sfx', 'neon', 'neonSource', 'neonColour', 'neonBrightness', 'grid', 'gridColour', 'gridBrightness']);
+  // ONE SKY PER BOARD (docs/PLAN-SKIES.md): the game says which sky; the Sky tab says what it is made of
+  const off = tetrustOptions({ tetrust: { sky: 'none', music: false, sfx: true }, sky: { galaxy: true, density: 4 } });
+  assert.equal(off.sky.stars, false, 'no sky: nothing is drawn'); assert.equal(off.music, false); assert.equal(off.sfx, true);
+  const on = tetrustOptions({ tetrust: { sky: 'galaxy' }, sky: { galaxy: false, density: 4, galaxyAt: 'bottom-left', dust: false } });
+  assert.equal(on.sky.stars, true); assert.equal(on.sky.skyType, 'galaxy');
+  assert.equal(on.sky.galaxy, false, 'the spiral arms are the Sky tab\u2019s say, not the game\u2019s'); assert.equal(on.sky.starDensity, 4); assert.equal(on.sky.galaxyAt, 'bottom-left'); assert.equal(on.sky.dust, false, 'the display sky, layer for layer');
+  const earth = tetrustOptions({ tetrust: { sky: 'earth' }, sky: { galaxy: true } });
+  assert.equal(earth.sky.skyType, 'earth'); assert.equal(earth.sky.galaxy, false, 'no spiral over a day');
+  assert.equal(normalise({ tetrust: { sky: 'nowhere' } }).tetrust.sky, 'galaxy', 'an unknown sky is the Galaxy');
   const map = new Map();
   const store = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v), removeItem: (k) => map.delete(k) };
   assert.throws(() => setSetting({}, 'tetrust.volume', 1, store), /unknown setting/);
@@ -542,7 +546,7 @@ test('the shipped look is the one that was chosen, leaf by leaf', () => {
   // Five of them are guarded NOWHERE else -- the tetrust deepEqual above covers four and
   // effects.test.js covers the markets range. Without this a later edit could quietly restore the
   // engine green, or put the star field back behind an opt-in, and the suite would not object.
-  assert.equal(DEFAULTS.space.stars, true, 'the star field ships ON: the board repaints forever, deliberately');
+  assert.equal(DEFAULTS.space.sky, 'galaxy', 'the Galaxy ships behind the board: it repaints forever, deliberately');
   assert.equal(DEFAULTS.sky.density, 3, 'and dense -- the top of the slider range');
   assert.equal(DEFAULTS.sky.galaxy, true, 'the spiral arms ship on');
   assert.equal(DEFAULTS.markets.range, '24', 'markets opens on 24 h');
@@ -717,4 +721,47 @@ test('A SLIDER\'S VALUE NEVER CHANGES WIDTH as it moves, and always fits its box
   assert.equal(formatRangeValue(0.0001, 0.0004), '0.0004');
   assert.equal(formatRangeValue(0.0001, 0), '0.0000', 'zero is as wide as any other Depth');
   assert.equal(formatRangeValue(0.1, 0.30000000000000004), '0.3');
+});
+
+// ONE SKY PER BOARD, AND WHAT A STORED SKY BECOMES (docs/PLAN-SKIES.md §4)
+test('the v5 -> v6 sky step keeps every installation drawing what it drew, and can run twice', () => {
+  const s = store();
+  const v5 = { version: 5, sky: { type: 'living', galaxy: true }, space: { stars: true }, markets: { stars: false }, tetrust: { stars: true, galaxy: false, galaxyAt: 'top-left' }, blockout: { stars: false, galaxy: true }, blockanoid: {}, scorched: { stars: true } };
+  s.setItem(SETTINGS_KEY, JSON.stringify(v5));
+  const got = loadSettings(s);
+  assert.equal(got.space.sky, 'earth', 'stars on under the living sky was the Earth');
+  assert.equal(got.markets.sky, 'none', 'stars off was no sky');
+  assert.equal(got.tetrust.sky, 'earth');
+  assert.equal(got.blockout.sky, 'none');
+  assert.equal(got.blockanoid.sky, 'galaxy', 'a board that never said is the shipped Galaxy');
+  assert.equal(got.scorched.sky, 'earth');
+  assert.equal(got.sky.type, undefined, 'the global switch is gone');
+  assert.equal(got.tetrust.galaxy, undefined, 'and so are the games\u2019 private galaxies');
+  assert.equal(got.sky.galaxy, true, 'the Sky tab\u2019s spiral arms stand');
+  s.setItem(SETTINGS_KEY, JSON.stringify({ version: 5, sky: { type: 'space' }, space: { stars: true }, scorched: { stars: false } }));
+  assert.equal(loadSettings(s).space.sky, 'galaxy', 'stars on under space was the Galaxy');
+  assert.equal(loadSettings(s).scorched.sky, 'none');
+  // idempotent: a store already in the new shape, run through the step again, is unchanged --
+  // settings kept on the server carry no version, so the step runs on every boot
+  const shaped = loadSettings(s);                                          // already in the new shape
+  s.setItem(SETTINGS_KEY, JSON.stringify({ ...shaped, version: 5 }));      // stamped as old, so the step runs again
+  assert.deepEqual(loadSettings(s), shaped, 'the same shape twice over');
+  s.setItem(SETTINGS_KEY, JSON.stringify({ space: { sky: 'earth', stars: false } }));
+  assert.equal(loadSettings(s).space.sky, 'earth', 'a board that already chose keeps its choice whatever an old key says');
+});
+
+test('no sky is ever called Space: the word belongs to Block space', () => {
+  for (const g of PANEL) {
+    for (const r of g.rows) {
+      if (r.kind === 'choice' && r.key === 'sky') assert.deepEqual(r.options.map(([, l]) => l), ['Galaxy', 'Earth', 'None'], `${g.group}.sky offers the two skies by name`);
+      if (g.group === 'sky') assert.ok(!/\bSpace\b/.test(`${r.label} ${r.hint}`), `${r.key}: no sky called Space`);
+    }
+  }
+  const skyGroup = PANEL.find((g) => g.group === 'sky');
+  assert.equal(skyGroup.rows[0].kind, 'skymap', 'the Sky tab opens with which board draws which');
+  assert.deepEqual(skyGroup.rows.filter((r) => r.kind === 'heading').map((r) => r.label), ['The Galaxy', 'The Earth']);
+  assert.deepEqual(SKY_BOARDS.map((b) => b.group), ['space', 'markets', 'tetrust', 'blockout', 'blockanoid', 'scorched'], 'every board with a sky is on the map');
+  for (const b of SKY_BOARDS) assert.ok(SKIES.includes(DEFAULTS[b.group].sky), `${b.group} ships with a sky`);
+  assert.equal(DEFAULTS.scorched.sky, 'earth', 'the artillery under the Earth');
+  assert.ok(SKY_BOARDS.filter((b) => b.group !== 'scorched').every((b) => DEFAULTS[b.group].sky === 'galaxy'), 'and everything else under the Galaxy');
 });

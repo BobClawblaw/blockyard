@@ -11,8 +11,7 @@ import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } fr
 import { viewerIdle } from './details3d.js';
 import {
   loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush,
-  SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue,
-} from './settings.js';
+  SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue, SKY_BOARDS, SKY_CHOICES } from './settings.js';
 // APPEARANCE (2026-09-16): the theme goes on <html> before the first paint, from the browser's copy
 // of the settings, and follows every change after (followTheme); the cards' swatches are painted
 // through the CSSOM because the CSP refuses a style attribute in markup
@@ -1166,6 +1165,23 @@ async function boot() {
         const seg = `<span class="cfgseg" role="radiogroup" aria-label="${r.label}">${r.options.map(([val, label]) =>
           `<button type="button" class="cfgsegbtn${val === v ? ' on' : ''}" role="radio" aria-checked="${val === v}" data-cfgset="${g.group}.${r.key}" data-value="${val}">${label}</button>`).join('')}</span>`;
         return `<div class="cfgrow"><b><label>${r.label}</label></b><span>${seg}</span><i>${r.hint}</i></div>`;
+      }
+      // WHICH SKY, WHERE (docs/PLAN-SKIES.md): the table at the top of the Sky tab. One row per board
+      // that has a sky, each a select on that board's own `sky` key -- the same setting the board's
+      // tab shows, through the same data-cfg path, so a change in either place is one change.
+      if (r.kind === 'skymap') {
+        const rows = SKY_BOARDS.map((b) => {
+          const cur = s[b.group]?.sky ?? 'galaxy';
+          const sel = `<select data-cfg="${b.group}.sky" aria-label="${b.label}: sky">${SKY_CHOICES.map(([val, label]) => `<option value="${val}"${val === cur ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+          return `<tr><th scope="row">${b.label}${b.note ? `<small>${b.note}</small>` : ''}</th><td>${sel}</td></tr>`;
+        }).join('');
+        return `<div class="cfgrow cfgskymap"><b><label>${r.label}</label></b><span><table class="skymap">${rows}</table></span><i>${r.hint}</i></div>`;
+      }
+      // a heading inside a group: the two skies of the Sky tab, each introducing its own rows
+      if (r.kind === 'heading') {
+        const close = open ? '</div>' : '';
+        open = false;
+        return `${close}<div class="cfghead"><b>${r.label}</b><i>${r.hint}</i></div>`;
       }
       if (r.kind === 'cards') {
         const scheme = resolveScheme(s.appearance);

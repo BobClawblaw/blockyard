@@ -848,7 +848,7 @@ It is dimmed on a computer player's turn, so you can read what it is about to do
 The HUD shows whose turn it is, the round, the **wind** (an arrow and its strength: it changes
 every turn, and it bends every shot; you can see it too — streaks of moving air run level across
 the sky behind the land, short and slow in a breeze, long and quick in a gale, in three bands of
-depth so the air has thickness; the pennant on every turret streams downwind; and the Living sky's
+depth so the air has thickness; the pennant on every turret streams downwind; and the Earth sky's
 clouds go with it), your angle, power and weapon with its count, and every
 tank's health. **Fire** on the HUD does what space does. A shell that lands carves a circle out of
 the dirt; the blast itself is drawn the way the fireworks are — a white core, a shockwave, sparks
@@ -863,9 +863,9 @@ score at the end wins, and your score goes in the high-score table, this browser
 
 ### The switches on the panel
 
-**Stars** and **galaxy** are the sky behind the field (its make-up is the **Sky** tab's). They are
-about the star field, so with the Living sky chosen they are not shown: the day draws itself, and
-each round takes its own hour of it, dawn to night, unless **A sky per round** is off. **Music** is a march in D minor on oscillators. **Sound** is the shot, the blast, a hit, a
+**Sky** goes round the Galaxy, the Earth and none: the same choice as the **Sky** tab's map. The
+game ships under the Earth, and each round takes its own hour of it, dawn to night, unless **A sky
+per round** is off. **Music** is a march in D minor on oscillators. **Sound** is the shot, the blast, a hit, a
 fall, a death. **Talk** is what the tanks say when they fire, are hit, or die. **Fast** flies
 shells at three times the pace. **Watch** is the attract mode: the computer takes your chair as
 well, so every seat is a computer player and the war runs on by itself — a round rolls into the
@@ -1325,19 +1325,47 @@ these are the settings that buy it back, roughly most expensive first:
 | **Metallic finish** | *Chrome* mirrors a horizon in every face, and the reflection slides as the blocks move; *satin* is the softer highlight along the lit edge. Needs Metallic sheen on. |
 | **Departures and arrivals** | How blocks leave and rejoin the board on a refresh. |
 | **Depth** | How much height foreshortens, 0 to 0.001. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube's top grows a little wider than its base and a flying block swells slightly as it rises. |
-| **Star field** | On by default. The stars twinkle, so the board keeps repainting while they are on; switch it off to save that. What the stars *look* like is the **Sky** tab. |
+| **Sky** | Which sky stands behind the board: the **Galaxy**, the **Earth**, or none. What each sky is made of is the **Sky** tab; this is only the choice, and the Kiosk's left panel follows it. The Galaxy twinkles, so the board keeps repainting while it is up; none saves that. |
 | **Board curve** | How far the board bows toward you. 0 is flat. |
 | **Light** | Where the lamp hangs: *straight above* (the default) lights the whole board evenly, which keeps the front rows as bright as the middle; a corner shades the far slope of the curve and the sides turned away from it. |
 
 ### Sky
 
-**Sky** chooses between two skies for every board that draws one — Block space, Markets, the
-Kiosk and the games. **Space** is the shipped star field, described below. **Living sky** is a
-real day drawn from this machine's clock: the sun climbs and sets, the dome goes through night,
-dawn, day and dusk by the sun's height, clouds drift lit from the sun's side, the moon rises at
-tonight's phase, and the star field comes out as the sun goes down.
+There are two skies, and every board that has a sky behind it chooses one. The tab opens with the
+map, which is the whole answer to "which settings apply to which panel":
 
-- **Sky clock** — real time, a whole day every 24 minutes (to watch it turn), or a fixed hour to
+| board | draws |
+|---|---|
+| **Block space** (and the Kiosk's left panel) | Galaxy |
+| **Markets & Price** (and the Kiosk's right panel) | Galaxy |
+| **Tetrust**, **Blockout**, **Blockanoid** | Galaxy |
+| **Scorched Yard** | Earth |
+
+Those are the shipped choices; each row is a select with **Galaxy**, **Earth** and **None**, and
+changing it here is the same setting as the **Sky** row at the top of that board's own tab. The
+games also carry a **sky** button on their panels that goes round the three. Below the map, the
+two skies themselves, each with only its own controls; neither is ever dimmed, because any board
+may be using it.
+
+**The Galaxy** is the star field, BlockYard's own sky: one set of stars shared by every board that
+draws it, so the density you choose applies to Block space, the candles and the games alike.
+
+| setting | what it does |
+|---|---|
+| **Spiral arms** | Lays the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about a quarter of an hour. |
+| **Arms centre** | Behind the board, or any of the four corners. A corner crowds the bright nucleus there and sweeps the arms across the panel. |
+| **Star density** / **Star brightness** | How many stars (up to 8x the shipped number) and how strongly they burn. |
+| **Star colours** | Warm old stars in the nucleus, blue-white young ones in the arms. Off is one colour of starlight. |
+| **Star glints** | The halo and cross glint on the brightest stars. |
+| **Nebulae**, **Dust lanes**, **Star clusters**, **Distant galaxies** | The layers of the sky, each its own switch: gas clouds along the arms, dark ribbons on their inner edges, tight knots out in the halo, and small faint galaxies in the deep field behind everything. |
+
+**The Earth** is a real day drawn from this machine's clock: the sun climbs and sets, the dome
+goes through night, dawn, day and dusk by the sun's height, clouds drift lit from the sun's side,
+the moon rises at tonight's phase, and the stars come out as the sun goes down (the Galaxy's
+density and brightness apply to them; its arms and layers do not, since a spiral over a real night
+is wrong).
+
+- **Clock** — real time, a whole day every 24 minutes (to watch it turn), or a fixed hour to
   admire; **Fixed hour** is that hour.
 - **Weather** — clear, scattered cloud, overcast, or a storm with rain and lightning; **Cloud
   cover** overrides the weather's amount, and -1 leaves it to the weather.
@@ -1346,22 +1374,8 @@ tonight's phase, and the star field comes out as the sun goes down.
 - **Sun rays**, **Rainbow** (opposite a low sun, in scattered weather) and **Shooting stars** (now
   and then, at night) are the touches, each a switch.
 
-The star field's own settings below still apply at night. The **Space effects** are off while the
-Living sky is on (a supernova over a blue afternoon is wrong); their switches are kept, and space
-gets them back.
-
-
-One sky, shared by every board that shows stars — so the density you choose applies to Block
-space, Markets and Tetrust alike. Whether a given board shows it stays that board's own switch.
-
-| setting | what it does |
-|---|---|
-| **Star density** / **Star brightness** | How many stars (up to 8x the shipped number) and how strongly they burn. |
-| **Spiral galaxy** | Lays the same stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about a quarter of an hour. |
-| **Galaxy centre** | Behind the board, or any of the four corners. A corner crowds the bright nucleus there and sweeps the arms across the panel. |
-| **Nebulae**, **Dust lanes**, **Star clusters**, **Distant galaxies** | The layers of the sky, each its own switch: gas clouds along the arms, dark ribbons on their inner edges, tight knots out in the halo, and small faint galaxies in the deep field behind everything. |
-| **Star colours** | Warm old stars in the nucleus, blue-white young ones in the arms. Off is one colour of starlight. |
-| **Star glints** | The halo and cross glint on the brightest stars. |
+A board under the Earth plays no idle effects: a supernova over a blue afternoon is wrong, on the
+block board and on the candles alike. Their switches are kept, and the Galaxy gets them back.
 
 ### Space effects and Market effects
 
@@ -1418,7 +1432,7 @@ What the sky is *made of* — density, brightness, nebulae, dust and the rest �
 
 ### Blockanoid
 
-The Arkanoid court. **Star field**, **spiral galaxy**, **neon bricks** and **sound effects** are the
+The Arkanoid court. **Sky** (the Galaxy, the Earth, or none), **neon bricks** and **sound effects** are the
 same switches that sit on the game's own panel. Two more are here only, and they change the *rules*:
 
 | setting | what it does |

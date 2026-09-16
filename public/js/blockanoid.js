@@ -10,7 +10,7 @@ import {
   newGame, advance, step, movePaddle, nudge, launch, fire, tiles, remaining, powers, setOptions,
   COLS, ROWS, LIVES, CAPSULE_LETTER, layoutFor,
 } from './arkanoid.js';
-import { loadSettings, setSetting, blockanoidOptions } from './settings.js';
+import { loadSettings, setSetting, blockanoidOptions, nextSky, SKY_LABELS } from './settings.js';
 import * as sound from './tetsound.js';
 
 const SCORES_KEY = 'blockyard.blockanoid.scores';
@@ -130,9 +130,20 @@ function drawScores(highlightAt = null) {
   if (t.innerHTML !== html) t.innerHTML = html;
 }
 
-const SWITCHES = [['baStars', 'stars'], ['baGalaxy', 'galaxy'], ['baNeon', 'neon'], ['baSfx', 'sfx']];
+const SWITCHES = [['baNeon', 'neon'], ['baSfx', 'sfx']];
+/** The sky button says which sky it is on, and lights up while there is one. */
+function skyButton(id, sky) {
+  const b = el(id);
+  if (!b) return;
+  b.textContent = `\u2600 ${SKY_LABELS[sky] ?? sky}`;
+  b.classList.toggle('on', sky !== 'none');
+  b.setAttribute('aria-pressed', sky !== 'none' ? 'true' : 'false');
+}
 function drawSwitches() {
   const b = blockanoidOptions(loadSettings());
+  // ONE SKY BUTTON (docs/PLAN-SKIES.md): Galaxy, Earth or none, round the ring, in place of the old
+  // star field and galaxy pair -- the same setting the Sky tab's table shows for this board
+  skyButton('baSkySw', b.sky.sky);
   for (const [id, key] of SWITCHES) {
     const btn = el(id);
     if (!btn) continue;
@@ -146,7 +157,6 @@ function flip(key) {
   setSetting(loadSettings(), `blockanoid.${key}`, !cur);
   sound.unlock();
   drawSwitches();
-  if (key === 'stars' || key === 'galaxy') drawSky();
   // capsules and minions change the RULES, so a flip must reach the game IN PLAY, not just the
   // next one -- otherwise the switch does nothing until you lose, which reads as a broken control
   if (G.game) { const b = blockanoidOptions(loadSettings()); setOptions(G.game, { capsules: b.capsules, enemies: b.enemies }); }
@@ -159,11 +169,7 @@ function drawSky() {
   const b = blockanoidOptions(loadSettings());
   board3d(sky, [], {
     ...SKY,
-    stars: b.stars, galaxy: b.stars && b.galaxy, galaxyAt: b.galaxyAt,
-    starDensity: b.starDensity, starBrightness: b.starBrightness,
-    nebulae: b.nebulae, galaxies: b.galaxies, dust: b.dust, clusters: b.clusters,
-    starColours: b.starColours, starGlints: b.starGlints,
-    ...b.sky,
+    ...b.sky,          // which sky this board chose, and what it is made of (settings.js skyFor)
   });
 }
 
@@ -328,6 +334,7 @@ function bind() {
   });
   court?.addEventListener('contextmenu', (e) => { if (G.running) e.preventDefault(); });
   for (const [id, key] of SWITCHES) el(id)?.addEventListener('click', () => flip(key));
+  el('baSkySw')?.addEventListener('click', () => { const s = loadSettings(); setSetting(s, 'blockanoid.sky', nextSky(blockanoidOptions(s).sky.sky)); sound.unlock(); drawSwitches(); drawSky(); draw(); });
 }
 
 export function renderBlockanoid(s, state, h) {

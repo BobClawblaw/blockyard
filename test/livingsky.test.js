@@ -129,30 +129,33 @@ test('a frame draws on a stub context at day, at dusk and at a stormy night with
   for (const bad of [/\.globalAlpha\s*=/, /globalCompositeOperation\s*=/, /shadowBlur\s*=/, /createLinearGradient\(/, /createRadialGradient\(/, /\.clip\(/]) assert.ok(!bad.test(src), `no ${bad}`);
 });
 
-test('the settings reach every board that draws a sky, and the defaults keep space', () => {
+test('the settings reach every board that draws a sky, and each board chooses its own', () => {
   const n = normalise(null);
-  assert.equal(n.sky.type, 'space', 'the shipped sky is the star field');
-  assert.deepEqual(Object.keys(skyExtras(n)), ['skyType', 'skyClock', 'skyHour', 'skyWeather', 'skyCover', 'skyLat', 'skyRays', 'skyRainbow', 'skyShooting']);
+  assert.equal(n.sky.type, undefined, 'there is no global sky any more: each board has a `sky` (docs/PLAN-SKIES.md)');
+  assert.deepEqual(Object.keys(skyExtras(n)), ['skyClock', 'skyHour', 'skyWeather', 'skyCover', 'skyLat', 'skyRays', 'skyRainbow', 'skyShooting']);
   assert.equal(skyExtras(n).skyCover, undefined, '-1 leaves the cover to the weather');
   assert.equal(skyExtras(n).skyLat, undefined, 'no latitude by default');
-  const l = normalise({ sky: { type: 'living', clock: 'fixed', hour: 7, weather: 'storm', cover: 0.5, lat: 40 } });
-  for (const o of [spaceOptions(l), marketsOptions(l)]) { assert.equal(o.skyType, 'living'); assert.equal(o.skyHour, 7); assert.equal(o.skyWeather, 'storm'); assert.equal(o.skyCover, 0.5); assert.equal(o.skyLat, 40); }
-  for (const o of [tetrustOptions(l), blockoutOptions(l), blockanoidOptions(l), scorchedOptions(l)]) { assert.equal(o.sky.skyType, 'living'); assert.equal(o.sky.skyClock, 'fixed'); }
-  assert.equal(normalise({ sky: { type: 'no-such' } }).sky.type, 'space');
+  const l = normalise({ space: { sky: 'earth' }, markets: { sky: 'earth' }, tetrust: { sky: 'earth' }, blockout: { sky: 'earth' }, blockanoid: { sky: 'earth' }, scorched: { sky: 'earth' }, sky: { clock: 'fixed', hour: 7, weather: 'storm', cover: 0.5, lat: 40 } });
+  for (const o of [spaceOptions(l), marketsOptions(l)]) { assert.equal(o.skyType, 'earth'); assert.equal(o.skyHour, 7); assert.equal(o.skyWeather, 'storm'); assert.equal(o.skyCover, 0.5); assert.equal(o.skyLat, 40); }
+  for (const o of [tetrustOptions(l), blockoutOptions(l), blockanoidOptions(l), scorchedOptions(l)]) { assert.equal(o.sky.skyType, 'earth'); assert.equal(o.sky.skyClock, 'fixed'); }
+  assert.equal(normalise({ space: { sky: 'no-such' } }).space.sky, 'galaxy');
   assert.equal(normalise({ sky: { hour: 30 } }).sky.hour, 24, 'clamped to the slider');
   const rows = PANEL.find((g) => g.group === 'sky').rows.map((r) => r.key);
-  for (const k of ['type', 'clock', 'hour', 'weather', 'cover', 'lat', 'rays', 'rainbow', 'shooting']) assert.ok(rows.includes(k), `${k} has a row`);
-  assert.ok(Object.keys(DEFAULTS.sky).includes('type'));
-  // the Space effects go off under the Living sky, and the switches are kept for space
-  const withFx = normalise({ sky: { type: 'living' }, space: { idleFx: true }, effects: { nova: true, ripple: true } });
+  for (const k of ['clock', 'hour', 'weather', 'cover', 'lat', 'rays', 'rainbow', 'shooting']) assert.ok(rows.includes(k), `${k} has a row`);
+  // the Space effects go off under the Earth, and the switches are kept for the Galaxy
+  const withFx = normalise({ space: { sky: 'earth', idleFx: true }, effects: { nova: true, ripple: true } });
   assert.equal(spaceOptions(withFx).idleFx, false, 'no idle effects over a blue afternoon');
   assert.deepEqual(spaceOptions(withFx).fxKinds, [], 'none in the rotation');
   assert.equal(withFx.effects.nova, true, 'the switch itself is untouched');
-  const back = normalise({ ...withFx, sky: { ...withFx.sky, type: 'space' } });
-  assert.equal(spaceOptions(back).idleFx, true, 'space gets them back');
+  const back = normalise({ ...withFx, space: { ...withFx.space, sky: 'galaxy' } });
+  assert.equal(spaceOptions(back).idleFx, true, 'the Galaxy gets them back');
   assert.ok(spaceOptions(back).fxKinds.includes('nova'));
+  assert.deepEqual(marketsOptions(normalise({ markets: { sky: 'earth' }, marketEffects: { firework: true } })).fxKinds, [], 'and the market effects likewise');
+  // one board at a time: the artillery under the Earth while the candles keep the Galaxy
+  const mixed = normalise({ scorched: { sky: 'earth' }, markets: { sky: 'galaxy' } });
+  assert.equal(scorchedOptions(mixed).sky.skyType, 'earth'); assert.equal(marketsOptions(mixed).skyType, 'galaxy'); assert.equal(marketsOptions(mixed).galaxy, true);
   // the renderer draws it in the star field's place and the games pass it to their sky canvases
   const engine = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  assert.match(engine, /opts\.skyType === 'living'\) drawLivingSky/);
+  assert.match(engine, /earthSky\(opts\)\) drawLivingSky/);
   for (const f of ['tetrust.js', 'blockout.js', 'blockanoid.js', 'scorchedyard.js']) assert.match(readFileSync(new URL(`../public/js/${f}`, import.meta.url), 'utf8'), /\.\.\.[tb]\.sky,/, `${f} passes the sky`);
 });

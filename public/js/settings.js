@@ -19,7 +19,7 @@
 // survivable, and `sky` below is the first one to take it.
 
 export const SETTINGS_KEY = 'blockyard.settings';
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const DEFAULTS = Object.freeze({
   // APPEARANCE (operator, 2026-09-16: "add an appearance section in preferences to change the colors
@@ -77,7 +77,7 @@ export const DEFAULTS = Object.freeze({
     // ON (operator, 2026-09-13: "the current settings I have saved out should be the shipping
     // defaults"). It was opt-in because a twinkling field means the board never stops repainting.
     // That cost is now paid deliberately rather than avoided: it is the look that was chosen.
-    stars: true,
+    sky: 'galaxy',        // 'galaxy' | 'earth' | 'none' -- which sky this board draws (docs/PLAN-SKIES.md)
     dome: 5,              // how far the board bows toward the viewer, 0 = flat
     // HEIGHT THAT FORESHORTENS (operator, 2026-09-13: "I'm not seeing the bottom or the front face
     // changing at all during movement ... fix camera stuff"). The oblique camera is parallel: height
@@ -119,14 +119,15 @@ export const DEFAULTS = Object.freeze({
     // unknown choice to this default, so those boards land on 'normal' rather than on nothing.
     departures: 'normal',  // 'normal' | 'arcing'
   }),
-  // THE SKY IS ONE SKY. density and brightness lived under `markets` and were passed only to the
-  // markets board, so the Block space star field -- the same stars, drawn by the same code -- had
-  // no density or brightness control at all. Whether each board shows stars stays per board
-  // (space.stars, markets.stars); what the stars LOOK like belongs to neither.
+  // TWO SKIES, GALAXY AND EARTH (docs/PLAN-SKIES.md; operator, 2026-09-16: "The skybox settings are
+  // not clear in the preferences, for which sky settings apply to which panel"). This group is what
+  // each sky is MADE of. WHICH sky a board draws is that board's own `sky` key -- 'galaxy', 'earth'
+  // or 'none' -- and the Sky tab opens with a table of every board's choice. There is no global
+  // switch any more: the one that was here picked Space or Living for every board at once, beside
+  // six scattered "Star field" toggles, and nobody could tell which board drew what.
   sky: Object.freeze({
-    // THE LIVING SKY (operator, 2026-09-16: "something realistic with blue skies, clouds, the sun,
-    // change of day, night with the moon coming out"; livingsky.js). Space stays the shipped sky.
-    type: 'space',        // 'space' (the star field) | 'living' (a real day from the clock)
+    // THE EARTH SKY (operator: "something realistic with blue skies, clouds, the sun, change of
+    // day, night with the moon coming out"; livingsky.js)
     clock: 'real',        // 'real' (this machine's time) | 'cycle' (a day every 24 minutes) | 'fixed' (the hour below)
     hour: 17.5,           // the hour to admire when the clock is fixed
     weather: 'scattered', // 'clear' | 'scattered' | 'overcast' | 'storm'
@@ -157,7 +158,7 @@ export const DEFAULTS = Object.freeze({
     // of the box, so a fresh monitor makes no outbound connection but to the node. The server
     // reads it from the shared settings file on every market request (http/api.js).
     polling: false,
-    stars: true,
+    sky: 'galaxy',        // 'galaxy' | 'earth' | 'none'
     effects: true,        // the idle effects and the flight when the candles refresh
     // THE TOOLBAR REMEMBERS (operator, 2026-09-12: "We need to remember the user settings for the
     // Markets page"). Which exchange and how many hours were a click that survived until the tab
@@ -247,9 +248,7 @@ export const DEFAULTS = Object.freeze({
   // in another tab, using our engine"). The same shape as the Tetrust group: the game says whether
   // there is a sky and a galaxy; what the sky is MADE of comes from the Sky group.
   blockout: Object.freeze({
-    stars: true,
-    galaxy: true,
-    galaxyAt: 'center',
+    sky: 'galaxy',        // 'galaxy' | 'earth' | 'none'
     neon: false,          // the bricks as dim bodies under lit tubes
     neonSource: 'brick',  // 'brick' (each row's own colour) | 'colour'
     neonColour: '#3d8bff',
@@ -264,9 +263,7 @@ export const DEFAULTS = Object.freeze({
   // engine, and make it a new Diversion called 'Blockanoid'"). Blockout's shape plus the two
   // switches Arkanoid earns: whether capsules fall at all, and whether the minions turn up.
   blockanoid: Object.freeze({
-    stars: true,
-    galaxy: true,
-    galaxyAt: 'center',
+    sky: 'galaxy',        // 'galaxy' | 'earth' | 'none'
     neon: false,
     neonSource: 'brick',  // 'brick' (the brick's own colour) | 'colour'
     neonColour: '#3d8bff',
@@ -283,9 +280,7 @@ export const DEFAULTS = Object.freeze({
   // those settings in the game and have them persistent in settings"). The sky is the panel's own
   // canvas behind the well, so it costs the game nothing per key press.
   tetrust: Object.freeze({
-    stars: true,          // the star field across the whole panel
-    galaxy: true,         // the spiral galaxy in it
-    galaxyAt: 'center',   // where its centre sits: behind the title
+    sky: 'galaxy',        // 'galaxy' | 'earth' | 'none' -- the panel's own canvas behind the well
     // the landing marker's colour (operator: "I want to be able to set the ghost wireframe
     // color"). Its own setting, not the neon tubes': the wireframe is drawn instead of a block,
     // so the neon finish never touches it.
@@ -304,9 +299,7 @@ export const DEFAULTS = Object.freeze({
   // SCORCHED YARD (operator, 2026-09-16; docs/PLAN-SCORCHED-YARD.md): the sky and the sound as the
   // other games have them, and the rules the original exposed in its own menus
   scorched: Object.freeze({
-    stars: true,
-    galaxy: true,
-    galaxyAt: 'top-right',
+    sky: 'earth',         // an artillery duel wants a day and a horizon (docs/PLAN-SKIES.md §3)
     sfx: true,
     music: true,          // the march
     talk: true,           // what the tanks say, over the field
@@ -430,6 +423,22 @@ export const TAB_ROWS = Object.freeze([
   Object.freeze({ label: 'Effects', groups: Object.freeze(['effects', 'marketEffects']) }),
   Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid', 'scorched']) }),
 ]);
+/** The three answers to "which sky": the Galaxy, the Earth, or none. */
+export const SKIES = Object.freeze(['galaxy', 'earth', 'none']);
+export const SKY_CHOICES = Object.freeze([['galaxy', 'Galaxy'], ['earth', 'Earth'], ['none', 'None']]);
+export const SKY_LABELS = Object.freeze({ galaxy: 'Galaxy', earth: 'Earth', none: 'no sky' });
+/** Every board that has a sky behind it, in the order the Sky tab's table lists them. */
+export const SKY_BOARDS = Object.freeze([
+  Object.freeze({ group: 'space', label: 'Block space', note: 'also the Kiosk\u2019s left panel' }),
+  Object.freeze({ group: 'markets', label: 'Markets & Price', note: 'also the Kiosk\u2019s right panel' }),
+  Object.freeze({ group: 'tetrust', label: 'Tetrust', note: '' }),
+  Object.freeze({ group: 'blockout', label: 'Blockout', note: '' }),
+  Object.freeze({ group: 'blockanoid', label: 'Blockanoid', note: '' }),
+  Object.freeze({ group: 'scorched', label: 'Scorched Yard', note: '' }),
+]);
+/** The next sky round the ring, for the games' one-button switch. */
+export function nextSky(v) { return SKIES[(SKIES.indexOf(v) + 1) % SKIES.length]; }
+
 const PANEL_GROUPS = Object.freeze([
   Object.freeze({
     group: 'appearance',
@@ -478,7 +487,7 @@ const PANEL_GROUPS = Object.freeze([
         key: 'sheenStyle', label: 'Metallic finish', kind: 'choice', hint: 'Chrome mirrors a horizon in every face that slides as the blocks move; satin is a softer highlight along the lit edge. Needs Metallic sheen on',
         options: Object.freeze([['chrome', 'Chrome'], ['satin', 'Satin']]),
       }),
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'Stars behind the board. They twinkle, so the board keeps repainting while they are on' }),
+      Object.freeze({ key: 'sky', label: 'Sky', kind: 'choice', hint: 'Which sky stands behind the board: the Galaxy, the Earth, or none. What each sky is made of is the Sky tab\u2019s; this is only the choice. The Kiosk\u2019s left panel is this board', options: SKY_CHOICES }),
       Object.freeze({
         key: 'detail', label: 'Level of detail', kind: 'choice', hint: 'Simpler cubes draw fewer polygons at the same size',
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
@@ -507,40 +516,39 @@ const PANEL_GROUPS = Object.freeze([
   Object.freeze({
     group: 'sky',
     title: 'Sky',
-    note: 'What the sky behind the boards looks like — behind Block space, behind the candles, behind the artillery. Each board decides whether to draw a sky at all; this decides which sky. Space is the star field and its galaxy; the Living sky is a real day and night. Whichever you are not using, its rows below are dimmed.',
+    note: 'Two skies, and which board draws which. The table is the whole map: every board that has a sky behind it, and the sky it is drawing \u2014 change one here or in the board\u2019s own tab, it is the same setting. Below it, what each sky is made of.',
     rows: Object.freeze([
+      Object.freeze({ key: 'map', label: 'Which sky, where', kind: 'skymap', hint: 'Every board with a sky, and the one it draws' }),
+      Object.freeze({ key: 'galaxyHead', label: 'The Galaxy', kind: 'heading', hint: 'The star field: stars on slowly turning spiral arms, with the layers of a real galaxy. BlockYard\u2019s own sky' }),
+      Object.freeze({ key: 'galaxy', label: 'Spiral arms', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes' }),
       Object.freeze({
-        key: 'type', label: 'Sky', kind: 'choice', hint: 'Space is the star field; the living sky is a real day from this machine\u2019s clock \u2014 sun, clouds, dusk, the moon at its phase, and the stars at night',
-        options: Object.freeze([['space', 'Space'], ['living', 'Living sky']]),
+        key: 'galaxyAt', label: 'Arms centre', kind: 'choice',
+        hint: 'Where the middle of the spiral sits. A corner crowds the bright centre there and sweeps the arms across; behind the board shows the whole spiral',
+        options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
+      Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 8, step: 0.1, hint: 'How many stars, against the shipped number. High values are a lot of drawing on a big panel' }),
+      Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
+      Object.freeze({ key: 'colours', label: 'Star colours', kind: 'toggle', hint: 'Warm old stars in the middle, blue-white young ones in the arms. Off is one colour of starlight' }),
+      Object.freeze({ key: 'glints', label: 'Star glints', kind: 'toggle', hint: 'The halo and cross glint on the brightest stars' }),
+      Object.freeze({ key: 'nebulae', label: 'Nebulae', kind: 'toggle', hint: 'Clouds of gas along the spiral arms, in the colours of star-forming lanes' }),
+      Object.freeze({ key: 'dust', label: 'Dust lanes', kind: 'toggle', hint: 'Dark ribbons along the inner edge of each arm, the way a real spiral carries them' }),
+      Object.freeze({ key: 'clusters', label: 'Star clusters', kind: 'toggle', hint: 'Tight knots of stars out in the halo, turning with the arms' }),
+      Object.freeze({ key: 'galaxies', label: 'Distant galaxies', kind: 'toggle', hint: 'Other galaxies, small and faint and far, behind everything else' }),
+      Object.freeze({ key: 'earthHead', label: 'The Earth', kind: 'heading', hint: 'A real day from this machine\u2019s clock: the sun, clouds, dusk, the moon at its phase, and the stars at night' }),
       Object.freeze({
-        key: 'clock', label: 'Sky clock', kind: 'choice', hint: 'What time the living sky shows',
+        key: 'clock', label: 'Clock', kind: 'choice', hint: 'What time the Earth sky shows',
         options: Object.freeze([['real', 'Real time'], ['cycle', 'A day every 24 minutes'], ['fixed', 'A fixed hour']]),
-        dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'hour', label: 'Fixed hour', kind: 'range', min: 0, max: 24, step: 0.25, hint: 'The hour the living sky holds when the clock is fixed; 17.5 is late afternoon', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
+      }),
+      Object.freeze({ key: 'hour', label: 'Fixed hour', kind: 'range', min: 0, max: 24, step: 0.25, hint: 'The hour the Earth sky holds when the clock is fixed; 17.5 is late afternoon' }),
       Object.freeze({
         key: 'weather', label: 'Weather', kind: 'choice', hint: 'How much cloud, and whether it rains',
         options: Object.freeze([['clear', 'Clear'], ['scattered', 'Scattered cloud'], ['overcast', 'Overcast'], ['storm', 'Storm: rain and lightning']]),
-        dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'cover', label: 'Cloud cover', kind: 'range', min: -1, max: 1, step: 0.05, hint: 'Overrides the weather\u2019s cloud amount, 0 to 1; -1 leaves it to the weather', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'lat', label: 'Latitude', kind: 'range', min: -100, max: 90, step: 1, hint: 'Your latitude, for real sunrise and sunset and the season; -100 leaves a six-to-six day', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'rays', label: 'Sun rays', kind: 'toggle', hint: 'Crepuscular rays when the sun is low', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'rainbow', label: 'Rainbow', kind: 'toggle', hint: 'A rainbow opposite a low sun in scattered weather', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'shooting', label: 'Shooting stars', kind: 'toggle', hint: 'Now and then, at night', dimWhen: (v) => v.sky.type !== 'living', dimNote: 'Living sky only' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({
-        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice',
-        hint: 'Where its middle sits. A corner crowds the bright centre there and sweeps the arms across; behind the board shows the whole spiral',
-        options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-        dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({ key: 'nebulae', label: 'Nebulae', kind: 'toggle', hint: 'Clouds of gas along the spiral arms, in the colours of star-forming lanes', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({ key: 'dust', label: 'Dust lanes', kind: 'toggle', hint: 'Dark ribbons along the inner edge of each arm, the way a real spiral carries them', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({ key: 'clusters', label: 'Star clusters', kind: 'toggle', hint: 'Tight knots of stars out in the halo, turning with the galaxy', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({ key: 'galaxies', label: 'Distant galaxies', kind: 'toggle', hint: 'Other galaxies, small and faint and far, behind everything else', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({ key: 'colours', label: 'Star colours', kind: 'toggle', hint: 'Warm old stars in the middle, blue-white young ones in the arms. Off is one colour of starlight' }),
-      Object.freeze({ key: 'glints', label: 'Star glints', kind: 'toggle', hint: 'The halo and cross glint on the brightest stars' }),
-      Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 8, step: 0.1, hint: 'How many stars, against the shipped number. High values are a lot of drawing on a big panel' }),
-      Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
+      }),
+      Object.freeze({ key: 'cover', label: 'Cloud cover', kind: 'range', min: -1, max: 1, step: 0.05, hint: 'Overrides the weather\u2019s cloud amount, 0 to 1; -1 leaves it to the weather' }),
+      Object.freeze({ key: 'lat', label: 'Latitude', kind: 'range', min: -100, max: 90, step: 1, hint: 'Your latitude, for real sunrise and sunset and the season; -100 leaves a six-to-six day' }),
+      Object.freeze({ key: 'rays', label: 'Sun rays', kind: 'toggle', hint: 'Crepuscular rays when the sun is low' }),
+      Object.freeze({ key: 'rainbow', label: 'Rainbow', kind: 'toggle', hint: 'A rainbow opposite a low sun in scattered weather' }),
+      Object.freeze({ key: 'shooting', label: 'Shooting stars', kind: 'toggle', hint: 'Now and then, at night' }),
     ]),
   }),
   Object.freeze({
@@ -564,7 +572,7 @@ const PANEL_GROUPS = Object.freeze([
           + 'five exchanges whenever Overview is open, not only on Markets and Kiosk. '
           + 'Switch it off and the landing page talks to nothing but your node.',
       }),
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The twinkling sky behind the candles' }),
+      Object.freeze({ key: 'sky', label: 'Sky', kind: 'choice', hint: 'Which sky stands behind the candles: the Galaxy, the Earth, or none. The Kiosk\u2019s right panel is this board', options: SKY_CHOICES }),
       Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'The idle effects while the board rests (which of them is the Market effects tab) and the flight when the candles refresh. Off draws the board and leaves it alone' }),
       Object.freeze({
         key: 'exchange', label: 'Exchange', kind: 'choice', hint: 'Whose candles the chart and the 3D board draw. The others stay as overlay lines',
@@ -585,12 +593,7 @@ const PANEL_GROUPS = Object.freeze([
     title: 'Blockout',
     note: 'The Breakout court. These switches are also on the game\u2019s own panel; the sky takes its density, brightness and layers from Sky above.',
     rows: Object.freeze([
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the court' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
-      Object.freeze({
-        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy\u2019s centre sits on the panel',
-        options: Object.freeze([['center', 'Behind the court'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-      }),
+      Object.freeze({ key: 'sky', label: 'Sky', kind: 'choice', hint: 'Which sky stands behind the court: the Galaxy, the Earth, or none. Also a button on the game\u2019s panel', options: SKY_CHOICES }),
       Object.freeze({ key: 'neon', label: 'Neon bricks', kind: 'toggle', hint: 'The wall, the bat and the ball as dim bodies under lit tubes' }),
       Object.freeze({
         key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'Each brick row\u2019s own colour, or all in one colour',
@@ -609,12 +612,7 @@ const PANEL_GROUPS = Object.freeze([
     title: 'Blockanoid',
     note: 'The Arkanoid court: silver bricks that take more than one hit, gold that takes none, and capsules that fall out of what you break. These switches are also on the game’s own panel.',
     rows: Object.freeze([
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the court' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
-      Object.freeze({
-        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy’s centre sits on the panel',
-        options: Object.freeze([['center', 'Behind the court'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-      }),
+      Object.freeze({ key: 'sky', label: 'Sky', kind: 'choice', hint: 'Which sky stands behind the court: the Galaxy, the Earth, or none. Also a button on the game\u2019s panel', options: SKY_CHOICES }),
       Object.freeze({ key: 'neon', label: 'Neon bricks', kind: 'toggle', hint: 'The wall, Vaus and the ball as dim bodies under lit tubes' }),
       Object.freeze({
         key: 'neonSource', label: 'Neon colour from', kind: 'choice', hint: 'Each brick’s own colour, or all in one colour',
@@ -658,12 +656,7 @@ const PANEL_GROUPS = Object.freeze([
     title: 'Tetrust',
     note: 'The game. These switches are also on the game’s own panel; the sky takes the star field’s density, brightness and layers from Sky above.',
     rows: Object.freeze([
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the well' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning' }),
-      Object.freeze({
-        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy’s centre sits on the panel: behind the title, or a corner',
-        options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-      }),
+      Object.freeze({ key: 'sky', label: 'Sky', kind: 'choice', hint: 'Which sky stands behind the well: the Galaxy, the Earth, or none. Also a button on the game\u2019s panel', options: SKY_CHOICES }),
       Object.freeze({ key: 'ghostColour', label: 'Landing marker', kind: 'colour', hint: 'The wireframe on the floor of the well showing where the falling piece will land. Its own colour: the neon finish below never touches it, because the marker is drawn instead of a block rather than over one' }),
       Object.freeze({ key: 'ghostWidth', label: 'Landing marker thickness', kind: 'range', min: 0.3, max: 2.5, step: 0.1, hint: 'How heavy the marker\u2019s lines are. 1 is the shipped weight; below it the outline thins out of the way of the stack behind it' }),
       Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'Korobeiniki, on oscillators' }),
@@ -685,12 +678,7 @@ const PANEL_GROUPS = Object.freeze([
     title: 'Scorched Yard',
     note: 'The artillery game. The switches are also on the game\u2019s own panel; the rules below take effect at the next new game.',
     rows: Object.freeze([
-      Object.freeze({ key: 'stars', label: 'Star field', kind: 'toggle', hint: 'The sky across the whole panel, behind the field', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'The galaxy in that sky, turning', dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
-      Object.freeze({
-        key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice', hint: 'Where the galaxy\u2019s centre sits on the panel',
-        options: Object.freeze([['center', 'Behind the title'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
-        dimWhen: (v) => v.sky.type === 'living', dimNote: 'Star field only' }),
+      Object.freeze({ key: 'sky', label: 'Sky', kind: 'choice', hint: 'Which sky stands behind the field: the Galaxy, the Earth, or none. Earth is the shipped choice here: an artillery duel wants a day and a horizon, and each round draws its own hour of it. Also a button on the game\u2019s panel', options: SKY_CHOICES }),
       Object.freeze({ key: 'sfx', label: 'Sound effects', kind: 'toggle', hint: 'The shot, the blast, a hit, a fall, a death' }),
       Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'A march in D minor, on oscillators' }),
       Object.freeze({ key: 'talk', label: 'Talk', kind: 'toggle', hint: 'What the tanks say when they fire, are hit, or die' }),
@@ -894,6 +882,27 @@ const MIGRATIONS = {
     return { ...raw, space: { ...sp, light: map[sp.light] ?? sp.light } };
   },
 
+  // v5 -> v6: ONE SKY PER BOARD (docs/PLAN-SKIES.md). One global `sky.type` (space | living) plus a
+  // `stars` toggle on each of six boards becomes a `sky` choice on each board (galaxy | earth |
+  // none), and the games' private `galaxy` / `galaxyAt` are dropped in favour of the Sky tab's.
+  // The mapping keeps every installation drawing exactly what it drew.
+  //
+  // IDEMPOTENT ON PURPOSE: settings stored on the server carry no schema version, so this runs on
+  // every boot. It acts only on a board that still has the old key and lacks the new one, and a
+  // store already in the new shape passes through untouched.
+  5: (raw) => {
+    const type = raw.sky && typeof raw.sky === 'object' ? raw.sky.type : undefined;
+    const out = { ...raw };
+    if (out.sky && typeof out.sky === 'object' && 'type' in out.sky) { const { type: _t, ...rest } = out.sky; out.sky = rest; }
+    for (const board of ['space', 'markets', 'tetrust', 'blockout', 'blockanoid', 'scorched']) {
+      const g = raw[board];
+      if (!g || typeof g !== 'object') continue;
+      const { stars, galaxy: _g, galaxyAt: _a, ...rest } = g;
+      if (g.sky === undefined && stars !== undefined) rest.sky = stars === false ? 'none' : type === 'living' ? 'earth' : 'galaxy';
+      out[board] = rest;
+    }
+    return out;
+  },
 };
 
 function migrate(raw) {
@@ -1050,14 +1059,20 @@ export function isDefault(s) {
  * the point of the mode; these are the user's preferences about how it is drawn.
  */
 /** The living sky's settings as board options, for every board that draws a sky. */
+/** Which sky a board draws, from its own key: 'galaxy' | 'earth' | 'none'. */
+export function skyOf(n, board) {
+  const v = n[board]?.sky;
+  return SKIES.includes(v) ? v : 'galaxy';
+}
+
 /**
- * THE DEEP SKY belongs to the star field: a spiral galaxy, nebulae, dust lanes, halo clusters and
- * distant galaxies are wrong over a real day and a real night (operator, 2026-09-16: "It's counter
- * intuitive in the preferences to display a spiral galaxy for a night/day scene"). Gated here like
- * the Space effects, so choosing Space again brings them all back exactly as they were saved.
+ * THE DEEP SKY belongs to the Galaxy: spiral arms, nebulae, dust lanes, halo clusters and distant
+ * galaxies are wrong over a real day and a real night (operator, 2026-09-16: "It's counter
+ * intuitive in the preferences to display a spiral galaxy for a night/day scene"). Gated by the
+ * board's choice, so a board back on the Galaxy gets them all exactly as saved.
  */
-export function deepSky(n) {
-  const off = n.sky.type === 'living';
+export function deepSky(n, sky = 'galaxy') {
+  const off = sky !== 'galaxy';
   return {
     galaxy: n.sky.galaxy && !off,
     galaxyAt: n.sky.galaxyAt,
@@ -1068,12 +1083,33 @@ export function deepSky(n) {
   };
 }
 
+/** The Earth sky's settings as renderer options. */
 export function skyExtras(n) {
   const sky = n.sky;
   return {
-    skyType: sky.type, skyClock: sky.clock, skyHour: sky.hour, skyWeather: sky.weather,
+    skyClock: sky.clock, skyHour: sky.hour, skyWeather: sky.weather,
     skyCover: sky.cover < 0 ? undefined : sky.cover, skyLat: sky.lat <= -95 ? undefined : sky.lat,
     skyRays: sky.rays, skyRainbow: sky.rainbow, skyShooting: sky.shooting,
+  };
+}
+
+/**
+ * ONE ANSWER PER BOARD (docs/PLAN-SKIES.md): everything the renderer needs to draw the sky this
+ * board chose. `sky` is the choice, `stars` whether any sky is drawn at all, `skyType` which one
+ * ('galaxy' or 'earth'); then the Earth's settings and the Galaxy's, the deep layers gated off
+ * under the Earth. Every board's option builder spreads this and nothing else about the sky.
+ */
+export function skyFor(n, board) {
+  const sky = skyOf(n, board);
+  return {
+    sky,
+    stars: sky !== 'none',
+    skyType: sky === 'earth' ? 'earth' : 'galaxy',
+    ...skyExtras(n),
+    starDensity: n.sky.density,
+    starBrightness: n.sky.brightness,
+    starColours: n.sky.colours, starGlints: n.sky.glints,
+    ...deepSky(n, sky),
   };
 }
 
@@ -1086,7 +1122,7 @@ export function spaceOptions(s) {
     // THE SPACE EFFECTS GO OFF UNDER THE LIVING SKY (operator, 2026-09-16: "We have to toggle all
     // the Space effects off when Living Sky is selected"): supernovae and black holes over a blue
     // afternoon are wrong. Gated here, not by flipping the switches, so space gets them back as saved.
-    idleFx: sp.idleFx && n.sky.type !== 'living',
+    idleFx: sp.idleFx && skyOf(n, 'space') !== 'earth',
     grid: sp.grid,
     neon: sp.neon,
     sheen: sp.sheen,
@@ -1094,17 +1130,12 @@ export function spaceOptions(s) {
     // `space` is the board STYLE (no deck texture, a translucent floor); `stars` is the sky. They
     // travel together here, which is the block-space board's shipped behaviour, but they are two
     // options now so the markets board can keep its style while turning its sky off.
-    space: sp.stars,
-    stars: sp.stars,
+    space: skyOf(n, 'space') !== 'none',
     dome: sp.dome,
     facetPx: d.facetPx,
     crownPx: d.crownPx,
-    // the same sky the markets board draws: this board had stars and no way to thin them
-    starDensity: n.sky.density,
-    starBrightness: n.sky.brightness,
-    ...deepSky(n),
-    starColours: n.sky.colours, starGlints: n.sky.glints,
-    ...skyExtras(n),
+    // the sky this board chose, and what it is made of (skyFor): the Kiosk's left panel is this board
+    ...skyFor(n, 'space'),
   };
   // the seam belongs to the Stone edges switch at every level of detail: a control that does
   // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
@@ -1119,7 +1150,7 @@ export function spaceOptions(s) {
   // merged into the camera by details3d (it owns the oblique constants); 0 leaves it exactly as it
   // has always been, so the switch costs nothing until someone moves it
   out.obliqueRise = sp.perspective;
-  out.fxKinds = n.sky.type === 'living' ? [] : enabledEffects(n);
+  out.fxKinds = skyOf(n, 'space') === 'earth' ? [] : enabledEffects(n);
   out.fxNoRepeat = n.effects.noRepeat;
   Object.assign(out, fxCadence(n.effects));
   out.neonSource = sp.neonSource; out.neonColour = sp.neonColour; out.neonBrightness = sp.neonBrightness;
@@ -1155,9 +1186,8 @@ export function enabledEffects(s, group = 'effects') {
 /** Blockout's switches, with the sky's make-up from the Sky group (as tetrustOptions does). */
 export function blockoutOptions(s) {
   const n = normalise(s);
-  const sky = spaceOptions(s);
   return {
-    stars: n.blockout.stars, galaxy: n.blockout.galaxy, galaxyAt: n.blockout.galaxyAt, sfx: n.blockout.sfx,
+    sky: skyFor(n, 'blockout'), sfx: n.blockout.sfx,
     neon: n.blockout.neon,
     // the engine calls the data-coloured source "temperature"; here that is the brick's own row
     neonSource: n.blockout.neonSource === 'colour' ? 'colour' : 'temperature',
@@ -1166,62 +1196,45 @@ export function blockoutOptions(s) {
     // composed here rather than in the screen, so the court needs no new import and the renderer
     // keys stay in one place. 0.18 is the weight this court was hand-tuned at.
     gridOpts: courtGridColours(n.blockout.gridColour, n.blockout.gridBrightness, 0.18),
-    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
-    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
-    starColours: sky.starColours, starGlints: sky.starGlints,
-    sky: skyExtras(n),
   };
 }
 
 /** Blockanoid's switches. Blockout's shape, plus the two that are Arkanoid's own. */
 export function blockanoidOptions(s) {
   const n = normalise(s);
-  const sky = spaceOptions(s);
   return {
-    stars: n.blockanoid.stars, galaxy: n.blockanoid.galaxy, galaxyAt: n.blockanoid.galaxyAt, sfx: n.blockanoid.sfx,
+    sky: skyFor(n, 'blockanoid'), sfx: n.blockanoid.sfx,
     capsules: n.blockanoid.capsules, enemies: n.blockanoid.enemies,
     neon: n.blockanoid.neon,
     neonSource: n.blockanoid.neonSource === 'colour' ? 'colour' : 'temperature',
     neonColour: n.blockanoid.neonColour, neonBrightness: n.blockanoid.neonBrightness,
     grid: n.blockanoid.grid, gridColour: n.blockanoid.gridColour, gridBrightness: n.blockanoid.gridBrightness,
     gridOpts: courtGridColours(n.blockanoid.gridColour, n.blockanoid.gridBrightness, 0.18),
-    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
-    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
-    starColours: sky.starColours, starGlints: sky.starGlints,
-    sky: skyExtras(n),
   };
 }
 
 export function tetrustOptions(s) {
   const n = normalise(s);
-  const sky = spaceOptions(s);
   return {
-    stars: n.tetrust.stars, galaxy: n.tetrust.galaxy, galaxyAt: n.tetrust.galaxyAt, music: n.tetrust.music, sfx: n.tetrust.sfx,
+    sky: skyFor(n, 'tetrust'), music: n.tetrust.music, sfx: n.tetrust.sfx,
     ghostColour: n.tetrust.ghostColour, ghostWidth: n.tetrust.ghostWidth,
     neon: n.tetrust.neon, neonSource: n.tetrust.neonSource === 'colour' ? 'colour' : 'temperature', neonColour: n.tetrust.neonColour, neonBrightness: n.tetrust.neonBrightness,
     grid: n.tetrust.grid, gridColour: n.tetrust.gridColour, gridBrightness: n.tetrust.gridBrightness,
     // 0.06, not 0.18: the well draws its grid fainter than the brick courts do, because the stack
     // sits on top of it. That difference was hardcoded in tetrust.js; it lives here now.
     gridOpts: courtGridColours(n.tetrust.gridColour, n.tetrust.gridBrightness, 0.06),
-    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
-    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
-    sky: skyExtras(n),
   };
 }
 
 /** Scorched Yard's switches and rules, with the sky's make-up from the Sky group. */
 export function scorchedOptions(s) {
   const n = normalise(s);
-  const sky = spaceOptions(s);
   const sc = n.scorched;
   return {
-    stars: sc.stars, galaxy: sc.galaxy, galaxyAt: sc.galaxyAt, sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, cheat: sc.cheat, demo: sc.demo,
+    sky: skyFor(n, 'scorched'), sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, cheat: sc.cheat, demo: sc.demo,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
     opponents: sc.opponents, opponentKind: sc.opponentKind, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,
-    starDensity: sky.starDensity, starBrightness: sky.starBrightness,
-    nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
-    sky: skyExtras(n),
   };
 }
 
@@ -1234,12 +1247,8 @@ export function marketsOptions(s) {
     // as the sky, so driving it from the star switch restyled the whole board when the operator
     // only wanted the stars gone. The sky has its own option now.
     space: true,
-    stars: mk.stars,
-    starDensity: n.sky.density,
-    starBrightness: n.sky.brightness,
-    ...skyExtras(n),
-    ...deepSky(n),
-    starColours: n.sky.colours, starGlints: n.sky.glints,
+    // the sky this board chose (skyFor): the Kiosk's right panel is this board
+    ...skyFor(n, 'markets'),
     // never, at any setting: the halo under the grid lines is not wanted on this board
     neonHalo: 'rgba(0,0,0,0)',
     gridGlow: 'rgba(0,0,0,0)',
@@ -1250,7 +1259,9 @@ export function marketsOptions(s) {
     ...(mk.effects ? {} : { idleFx: false, transition: MOTION.still }),
     // ITS OWN SWITCHES (operator, 2026-09-14: "settings specific to market panel"): the Market
     // effects group, not the block board's
-    fxKinds: enabledEffects(n, 'marketEffects'),
+    // the market effects go off under the Earth the way the Space effects do: a supernova over a
+    // blue afternoon is wrong on this board too
+    fxKinds: skyOf(n, 'markets') === 'earth' ? [] : enabledEffects(n, 'marketEffects'),
     fxNoRepeat: n.marketEffects.noRepeat,
     ...fxCadence(n.marketEffects),
   };

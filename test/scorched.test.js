@@ -336,11 +336,11 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
   assert.match(read('scorchedyard.js'), /hover: false/, 'the field does not light up under the pointer');
   assert.match(read('app.js'), /case 'scorched': renderScorchedYard/, 'the router knows the page');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  for (const id of ['sySky', 'syLand', 'syField', 'syFieldWrap', 'syShop', 'syItems', 'syTalk', 'syMusic', 'syTalkSw', 'syOver', 'syMsg', 'sySub', 'syResume', 'syStats', 'syFire', 'syTanks', 'syScores', 'syStars', 'syGalaxy', 'sySfx', 'syFast']) {
+  for (const id of ['sySky', 'syLand', 'syField', 'syFieldWrap', 'syShop', 'syItems', 'syTalk', 'syMusic', 'syTalkSw', 'syOver', 'syMsg', 'sySub', 'syResume', 'syStats', 'syFire', 'syTanks', 'syScores', 'sySkySw', 'sySfx', 'syFast']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
   }
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
-  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['stars', 'galaxy', 'galaxyAt', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'cheat', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['sky', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'cheat', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
   assert.equal(scorchedOptions(normalise(null)).opponentKind, 'mix');
   assert.equal(scorchedOptions(normalise({ scorched: { opponentKind: 'cyborg' } })).opponentKind, 'cyborg');
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));

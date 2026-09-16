@@ -12,7 +12,7 @@ import {
   newGame, advance, step, movePaddle, nudge, launch, tiles, remaining,
   COLS, ROWS, LIVES,
 } from './breakout.js';
-import { loadSettings, setSetting, blockoutOptions } from './settings.js';
+import { loadSettings, setSetting, blockoutOptions, nextSky, SKY_LABELS } from './settings.js';
 import * as sound from './tetsound.js';
 
 const SCORES_KEY = 'blockyard.blockout.scores';
@@ -145,9 +145,20 @@ function drawScores(highlightAt = null) {
   if (t.innerHTML !== html) t.innerHTML = html;
 }
 
-const SWITCHES = [['boStars', 'stars'], ['boGalaxy', 'galaxy'], ['boNeon', 'neon'], ['boSfx', 'sfx']];
+const SWITCHES = [['boNeon', 'neon'], ['boSfx', 'sfx']];
+/** The sky button says which sky it is on, and lights up while there is one. */
+function skyButton(id, sky) {
+  const b = el(id);
+  if (!b) return;
+  b.textContent = `\u2600 ${SKY_LABELS[sky] ?? sky}`;
+  b.classList.toggle('on', sky !== 'none');
+  b.setAttribute('aria-pressed', sky !== 'none' ? 'true' : 'false');
+}
 function drawSwitches() {
   const b = blockoutOptions(loadSettings());
+  // ONE SKY BUTTON (docs/PLAN-SKIES.md): Galaxy, Earth or none, round the ring, in place of the old
+  // star field and galaxy pair -- the same setting the Sky tab's table shows for this board
+  skyButton('boSkySw', b.sky.sky);
   for (const [id, key] of SWITCHES) {
     const btn = el(id);
     if (!btn) continue;
@@ -161,7 +172,6 @@ function flip(key) {
   setSetting(loadSettings(), `blockout.${key}`, !cur);
   sound.unlock();
   drawSwitches();
-  if (key === 'stars' || key === 'galaxy') drawSky();
   G.dirty = true;
   draw();
 }
@@ -172,11 +182,7 @@ function drawSky() {
   const b = blockoutOptions(loadSettings());
   board3d(sky, [], {
     ...SKY,
-    stars: b.stars, galaxy: b.stars && b.galaxy, galaxyAt: b.galaxyAt,
-    starDensity: b.starDensity, starBrightness: b.starBrightness,
-    nebulae: b.nebulae, galaxies: b.galaxies, dust: b.dust, clusters: b.clusters,
-    starColours: b.starColours, starGlints: b.starGlints,
-    ...b.sky,
+    ...b.sky,          // which sky this board chose, and what it is made of (settings.js skyFor)
   });
 }
 
@@ -330,6 +336,7 @@ function bind() {
   court?.addEventListener('pointermove', onPointer);
   court?.addEventListener('pointerdown', (e) => { onPointer(e); serve(); });
   for (const [id, key] of SWITCHES) el(id)?.addEventListener('click', () => flip(key));
+  el('boSkySw')?.addEventListener('click', () => { const s = loadSettings(); setSetting(s, 'blockout.sky', nextSky(blockoutOptions(s).sky.sky)); sound.unlock(); drawSwitches(); drawSky(); draw(); });
 }
 
 export function renderBlockout(s, state, h) {

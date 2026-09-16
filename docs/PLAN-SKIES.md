@@ -1,5 +1,10 @@
 # Plan: one sky per board — Galaxy or Earth
 
+*Landed 2026-09-16, as scoped, in one change: the schema and its idempotent migration, the Sky tab's
+map and two headings, one Sky choice per board tab, the games' one sky button, the rename, the docs.
+The operator's own installation came forward as every board Galaxy and Scorched Yard none (its
+stars had been off), and was set to Earth through the new map, one click.*
+
 Operator, 2026-09-16: "The skybox settings are not clear in the preferences, for which sky settings
 apply to which panel. eg: I want the sky for Scorched Yard to be the Earth Sky. The Galaxy view
 should be the default background for all other 3D backgrounds."

@@ -1958,6 +1958,14 @@ body { font-variant-numeric: tabular-nums; }
 #syStats b.syval { cursor: text; border-bottom: 1px dotted var(--line); }
 #syStats b.syval:hover { color: var(--accent); }
 .syrestart { width: 100%; margin-top: 6px; }
+/* the Sky tab's map of boards to skies, and the two headings under it (docs/PLAN-SKIES.md) */
+.skymap { border-collapse: collapse; }
+.skymap th { text-align: left; font-weight: 500; padding: 3px 14px 3px 0; white-space: nowrap; }
+.skymap th small { display: block; color: var(--fg-faint); font-size: 11px; font-weight: 400; }
+.skymap td { padding: 3px 0; }
+.cfghead { margin: 18px 0 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.cfghead b { display: block; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.cfghead i { display: block; color: var(--fg-dim); font-style: normal; font-size: 12px; margin-top: 2px; }
 .syedit { width: 5.2em; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 3px; padding: 0 2px; text-align: right; }
 .syfire { width: 100%; margin: 2px 0 10px; }
 .syfire:disabled { opacity: .45; cursor: default; }

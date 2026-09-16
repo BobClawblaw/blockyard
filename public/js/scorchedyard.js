@@ -18,7 +18,7 @@ import {
 } from './scorched.js';
 import { SHOP } from './scorchedshop.js';
 import { decide, prepare, shop as aiShop } from './scorchedai.js';
-import { loadSettings, setSetting, scorchedOptions } from './settings.js';
+import { loadSettings, setSetting, scorchedOptions, nextSky, SKY_LABELS } from './settings.js';
 import * as sound from './tetsound.js';
 
 const SCORES_KEY = 'blockyard.scorched.scores';
@@ -517,16 +517,16 @@ function drawShop() {
   setHtml(box, html, 'shop');
 }
 
-const SWITCHES = [['syStars', 'stars'], ['syGalaxy', 'galaxy'], ['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syCheat', 'cheat'], ['syDemo', 'demo']];
+const SWITCHES = [['syMusic', 'music'], ['sySfx', 'sfx'], ['syTalkSw', 'talk'], ['syFast', 'fast'], ['syCheat', 'cheat'], ['syDemo', 'demo']];
 function drawSwitches() {
   const t = scorchedOptions(loadSettings());
-  const living = t.sky.skyType === 'living';
+  // ONE SKY BUTTON (docs/PLAN-SKIES.md): Galaxy, Earth or none, round the ring, in place of the old
+  // star field and galaxy pair -- the same setting the Sky tab's table shows for this board
+  const sb = el('sySkySw');
+  if (sb) { sb.textContent = `\u2600 ${SKY_LABELS[t.sky.sky] ?? t.sky.sky}`; sb.classList.toggle('on', t.sky.sky !== 'none'); sb.setAttribute('aria-pressed', t.sky.sky !== 'none' ? 'true' : 'false'); }
   for (const [id, key] of SWITCHES) {
     const b = el(id);
     if (!b) continue;
-    // a switch that does nothing is worse than no switch: the star field's two go away while the
-    // living sky is drawing the day
-    if (key === 'stars' || key === 'galaxy') b.classList.toggle('hidden', living);
     b.classList.toggle('on', !!t[key]);
     b.setAttribute('aria-pressed', t[key] ? 'true' : 'false');
   }
@@ -539,7 +539,6 @@ function flip(key) {
   setSetting(loadSettings(), `scorched.${key}`, !cur);
   sound.unlock();
   drawSwitches();
-  if (key === 'stars' || key === 'galaxy') drawSky();
   if (key === 'demo') { clearTimeout(G.demoTimer); G.demoTimer = null; if (G.running) { start(); return; } }
   G.dirty = true;
   if (!G.running || G.paused) draw();
@@ -549,19 +548,14 @@ function drawSky() {
   const sky = el('sySky');
   if (!sky) return;
   const t = scorchedOptions(loadSettings());
-  // Under the LIVING SKY the star field's two switches do not apply: the day draws whatever they
-  // say (the sky was going black with them off), and a spiral galaxy does not belong over it.
-  const living = t.sky.skyType === 'living';
+  const earth = t.sky.skyType === 'earth';
   board3d(sky, [], {
     ...SKY,
-    stars: living || t.stars, galaxy: !living && t.stars && t.galaxy, galaxyAt: t.galaxyAt,
-    starDensity: t.starDensity, starBrightness: t.starBrightness,
-    nebulae: t.nebulae, galaxies: t.galaxies, dust: t.dust, clusters: t.clusters, starColours: t.starColours, starGlints: t.starGlints,
-    ...t.sky,
+    ...t.sky,          // which sky this board chose, and what it is made of (settings.js skyFor)
     // the clouds of the Living sky drift with this round's wind, and turn with it
     skyWind: G.game ? Math.sign(G.game.wind || 1) * (0.4 + Math.abs(G.game.wind) / 4) : 1,
     // and each round draws its own hour of the Living sky (the original's sky changed each round)
-    ...(G.game && t.roundSky && t.sky.skyType === 'living' ? { skyClock: 'fixed', skyHour: ROUND_HOURS[(G.game.seed + G.game.round * 7) % ROUND_HOURS.length] } : {}),
+    ...(G.game && t.roundSky && earth ? { skyClock: 'fixed', skyHour: ROUND_HOURS[(G.game.seed + G.game.round * 7) % ROUND_HOURS.length] } : {}),
   });
 }
 const ROUND_HOURS = [6.6, 9, 12, 15, 17.8, 19, 21.5, 1];
@@ -1015,6 +1009,7 @@ function bind() {
   field?.addEventListener('pointermove', onPointerMove);
   document.addEventListener('pointerup', onPointerUp);
   for (const [id, key] of SWITCHES) el(id)?.addEventListener('click', () => flip(key));
+  el('sySkySw')?.addEventListener('click', () => { const s = loadSettings(); setSetting(s, 'scorched.sky', nextSky(scorchedOptions(s).sky.sky)); sound.unlock(); drawSwitches(); drawSky(); G.dirty = true; if (!G.raf) draw(); });
 }
 
 /** The game on screen, for a tool or a test that drives the page (never the rules' way in). */
