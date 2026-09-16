@@ -1,6 +1,11 @@
 // Login page. Separate file because the page's CSP is script-src 'self' -- an
 // inline <script> would simply not run, and "the button does nothing" is a
 // miserable bug to chase over HTTP.
+// the theme the browser last saw (settings.js keeps a copy under blockyard.settings), so a light
+// theme's sign-in page is light too; a first visit gets the shipped look
+import { followTheme } from './theme.js';
+followTheme();
+
 const err = document.getElementById('err');
 const form = document.getElementById('f');
 const btn = document.getElementById('go');

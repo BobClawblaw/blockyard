@@ -1103,9 +1103,36 @@ same whatever you choose here.
 
 ![Display settings](images/settings.jpg)
 
-The panel is **tabbed** — Block space, Sky, Markets & Price, Blockout, Blockanoid, Space
-effects, Market effects and Tetrust. The two **effects** tabs are lists of switches, so they
+The panel is **tabbed** — Appearance, Block space, Sky, Markets & Price, Blockout, Blockanoid,
+Space effects, Market effects and Tetrust. The two **effects** tabs are lists of switches, so they
 also get **all on** and **all off**; twenty-nine of them is a lot of clicking otherwise.
+
+### Appearance
+
+The colours of the layout: the page, its cards, text, lines, the accent, and the axis text, grid
+lines and tooltips of every chart. The 3D boards are space whatever you choose, and the
+Explorer's block and transaction pages keep their own dark cards.
+
+- **Theme mode** — Light, Dark or System. Every theme has a light face and a dark face; the mode
+  picks which. System follows the operating system's setting and changes with it.
+- **Theme** — a card per theme, each with a strip of its swatches in the face the mode picks:
+  - **BlockYard** — the shipped look, charcoal and bitcoin orange. The default; its dark face is
+    exactly what the monitor drew before this tab existed.
+  - **Mono** — clean grayscale, minimal and focused. The good, warning and bad colours stay, muted.
+  - **Nous** — GitHub's chrome with a Nous blue accent.
+  - **GitHub** — GitHub Light Default and Dark Default.
+  - **Catppuccin** — the soothing pastels, Latte (light) and Mocha (dark).
+  - **Custom** — your own nine colours, from the pickers below the cards.
+- **customise …** — the button beside the cards copies the theme on screen into the nine pickers
+  and selects Custom, so you start from a look rather than from scratch.
+- **The nine pickers** — Page, Panels, Text, Muted text, Accent, Lines, Good, Warning and Bad.
+  Everything else (a raised panel, the softer rules, the fainter text, the darker accent of a
+  pressed button) is derived from them, so a custom theme hangs together whatever you pick.
+  Whether Custom counts as light or dark follows from the Page colour, so a pale page gets dark
+  derived shades and vice versa. The pickers are dimmed until Custom is the theme.
+
+Like every other setting these are saved on the server, so the theme is the same on every screen
+of this monitor; the sign-in page draws in the theme this browser last saw.
 
 ### Block space
 

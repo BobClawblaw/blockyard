@@ -4,6 +4,7 @@
 // crosshair that says exactly what an hour did. This is that chart. The 3D board under it is a
 // view of the same hours, not a substitute for it.
 import { niceTicks } from './charts.js';
+import { INK } from './theme.js';   // the axis, grid and tooltip colours of the chosen theme
 
 export const EX_COLORS = { coinbase: '#4c8dff', kraken: '#a78bfa', bitstamp: '#2ecc8f', bitfinex: '#4dd0e1', okx: '#f0b429' };
 const UP = '#26c281', DOWN = '#ef5350';
@@ -79,7 +80,7 @@ export function drawPriceChart(canvas, { candles = [], overlays = [], name = '',
   if (!canvas?.getContext) return null;
   const { ctx, w, h } = prep(canvas);
   if (!candles.length) {
-    ctx.fillStyle = '#6a7484'; ctx.textAlign = 'center';
+    ctx.fillStyle = INK.text; ctx.textAlign = 'center';
     ctx.fillText('no candles yet', w / 2, h / 2);
     return null;
   }
@@ -92,22 +93,22 @@ export function drawPriceChart(canvas, { candles = [], overlays = [], name = '',
   for (const v of niceTicks(L.lo, L.hi, Math.max(3, Math.floor(L.priceH / 46)))) {
     const y = Math.round(L.Y(v)) + 0.5;
     if (y < PAD.top || y > PAD.top + L.priceH) continue;
-    ctx.strokeStyle = '#1a2029';
+    ctx.strokeStyle = INK.grid;
     ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(right, y); ctx.stroke();
-    ctx.fillStyle = '#7d8898';
+    ctx.fillStyle = INK.axisText;
     ctx.fillText(money(v, 0), right + 7, y);
   }
   // time grid and axis
   ctx.textAlign = 'center';
   for (const tk of timeTicks(L.t0, L.t1, L.plotW)) {
     const x = Math.round(L.XT(tk.t)) + 0.5;
-    ctx.strokeStyle = tk.label.includes(' ') ? '#27303b' : '#161b22';
+    ctx.strokeStyle = tk.label.includes(' ') ? INK.axis : INK.grid;
     ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, L.VY0); ctx.stroke();
-    ctx.fillStyle = tk.label.includes(' ') ? '#b5c0cc' : '#7d8898';
+    ctx.fillStyle = tk.label.includes(' ') ? INK.label : INK.axisText;
     ctx.fillText(tk.label, x, h - PAD.bottom / 2);
   }
   // the pane edges
-  ctx.strokeStyle = '#2a323d';
+  ctx.strokeStyle = INK.axis;
   ctx.beginPath(); ctx.moveTo(right + 0.5, PAD.top); ctx.lineTo(right + 0.5, L.VY0); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(PAD.left, L.VY0 + 0.5); ctx.lineTo(right, L.VY0 + 0.5); ctx.stroke();
 
@@ -119,7 +120,7 @@ export function drawPriceChart(canvas, { candles = [], overlays = [], name = '',
     ctx.fillStyle = k.c >= k.o ? UP_V : DOWN_V;
     ctx.fillRect(L.X(i) - bodyW / 2, L.VY0 - vh, bodyW, vh);
   });
-  ctx.fillStyle = '#56606e'; ctx.textAlign = 'left';
+  ctx.fillStyle = INK.textDim; ctx.textAlign = 'left';
   ctx.fillText('volume', PAD.left + 4, L.VY0 - L.volH + 6);
 
   // the other exchanges, as thin close lines
@@ -152,7 +153,7 @@ export function drawPriceChart(canvas, { candles = [], overlays = [], name = '',
   ctx.beginPath(); ctx.moveTo(PAD.left, ly); ctx.lineTo(right, ly); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = lcol; ctx.fillRect(right + 1, ly - 9, PAD.right - 2, 18);
-  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
+  ctx.fillStyle = INK.bright; ctx.textAlign = 'left';
   ctx.fillText(money(lastK.c), right + 6, ly);
 
   // the crosshair
@@ -161,26 +162,26 @@ export function drawPriceChart(canvas, { candles = [], overlays = [], name = '',
     const i = L.index(hover.x);
     shown = candles[i];
     const x = Math.round(L.X(i)) + 0.5;
-    ctx.strokeStyle = 'rgba(200,215,230,0.45)'; ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = INK.dash; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, L.VY0); ctx.stroke();
     if (hover.y >= PAD.top && hover.y <= PAD.top + L.priceH) {
       const y = Math.round(hover.y) + 0.5;
       ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(right, y); ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = '#3a4452'; ctx.fillRect(right + 1, y - 9, PAD.right - 2, 18);
-      ctx.fillStyle = '#ffffff'; ctx.fillText(money(L.V(hover.y)), right + 6, y);
+      ctx.fillStyle = INK.cursorFill; ctx.fillRect(right + 1, y - 9, PAD.right - 2, 18);
+      ctx.fillStyle = INK.cursorText; ctx.fillText(money(L.V(hover.y)), right + 6, y);
     }
     ctx.setLineDash([]);
   }
   // readout (top-left) and overlay legend (top-right)
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#dfe6ee';
+  ctx.fillStyle = INK.bright;
   ctx.fillText(readout(shown, name), PAD.left + 2, 12);
   ctx.textAlign = 'right';
   let lx = right;
   for (const o of [...overlays].reverse()) {
     const wT = ctx.measureText(o.name).width;
-    ctx.fillStyle = '#9aa5b3'; ctx.fillText(o.name, lx, 12);
+    ctx.fillStyle = INK.label; ctx.fillText(o.name, lx, 12);
     ctx.fillStyle = o.color; ctx.fillRect(lx - wT - 16, 11, 11, 2);
     lx -= wT + 26;
   }

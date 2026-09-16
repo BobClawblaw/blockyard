@@ -12,12 +12,11 @@
 // old chart and calling it current is the same sin as inventing a number, so the
 // pill says how old it is.
 const M = { top: 8, right: 10, bottom: 18, left: 46 };
-const COL = {
-  grid: '#20252d', axis: '#2c323c', text: '#6a7484', textDim: '#4d5665',
-  accent: '#f7931a', ok: '#2ecc8f', warn: '#f0b429', bad: '#ef5a5a',
-  info: '#58a6ff', purple: '#a78bfa', cyan: '#4dd0e1', pink: '#f06ba7',
-};
-const PALETTE = [COL.accent, COL.info, COL.ok, COL.purple, COL.cyan, COL.pink, COL.warn, COL.bad];
+// THE COLOURS COME FROM THE THEME (theme.js, 2026-09-16): COL is the theme module's live object,
+// refilled when the operator picks a theme, and the chrome colours below read INK the same way --
+// a chart painted from literals of the dark look was unreadable on a light card.
+import { COL, INK } from './theme.js';
+const palette = () => [COL.accent, COL.info, COL.ok, COL.purple, COL.cyan, COL.pink, COL.warn, COL.bad];
 
 function prep(canvas) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -64,7 +63,7 @@ export function resetCanvas(canvas) {
 export function empty(canvas, msg = 'no data from the node yet') {
   if (canvas.__hasData) { markStale(canvas, msg); return; }
   const { ctx, w, h } = prep(canvas);
-  ctx.fillStyle = '#4d5665';
+  ctx.fillStyle = INK.textDim;
   ctx.textAlign = 'center';
   ctx.fillText(msg, w / 2, h / 2);
   ctx.textAlign = 'left';
@@ -83,8 +82,8 @@ export function markStale(canvas, msg = 'no fresh samples') {
   const tw = ctx.measureText(label).width;
   const pw = tw + 20;
   const x = Math.max(4, w - pw - 6);
-  ctx.fillStyle = '#12151a';
-  ctx.strokeStyle = '#3d4552';
+  ctx.fillStyle = INK.panel;
+  ctx.strokeStyle = INK.panelLine;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.roundRect(x, 4, pw, 16, 5);
@@ -94,7 +93,7 @@ export function markStale(canvas, msg = 'no fresh samples') {
   ctx.beginPath();
   ctx.arc(x + 9, 12, 3, 0, 7);
   ctx.fill();
-  ctx.fillStyle = '#b9c3d1';
+  ctx.fillStyle = INK.label;
   ctx.textAlign = 'left';
   ctx.fillText(label, x + 15, 12);
 }
@@ -205,7 +204,8 @@ export function lineChart(canvas, series, opts = {}) {
 
   for (let si = 0; si < pts.length; si++) {
     const s = pts[si];
-    const color = s.color ?? PALETTE[si % PALETTE.length];
+    const pal = palette();
+    const color = s.color ?? pal[si % pal.length];
     const yOf = s.axis === 'right' ? Y2 : (opts.logY ? (v) => logY(v, lo, hi, L, plotH) : Y);
     const sorted = s.points.slice().sort((a, b) => a.t - b.t);
 
@@ -318,15 +318,15 @@ function attachLineTip(canvas, opts) {
     if (!rows.length) return hideTip(canvas);
     redraw(canvas);
     const { ctx } = ctxOf(canvas);
-    ctx.strokeStyle = '#ffffff30';
+    ctx.strokeStyle = INK.faintLine;
     ctx.beginPath(); ctx.moveTo(nearX, c.L.top); ctx.lineTo(nearX, c.L.top + c.plotH); ctx.stroke();
     const fmt = opts.fmtTip ?? ((v, s) => short(v));
     const boxW = 118;
     const boxH = 14 + rows.length * 12;
     const bx = Math.min(c.w - boxW - 4, nearX + 8);
     const by = c.L.top + 4;
-    ctx.fillStyle = '#0c0e11e8';
-    ctx.strokeStyle = '#2c323c';
+    ctx.fillStyle = INK.tip;
+    ctx.strokeStyle = INK.tipLine;
     ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 5); ctx.fill(); ctx.stroke();
     ctx.textAlign = 'left';
     ctx.fillStyle = COL.text;
@@ -335,11 +335,11 @@ function attachLineTip(canvas, opts) {
       const y = by + 20 + i * 12;
       ctx.fillStyle = row.color;
       ctx.fillRect(bx + 6, y - 3, 6, 2);
-      ctx.fillStyle = '#c7cfdb';
+      ctx.fillStyle = INK.tipText;
       const label = (row.label || '').slice(0, 12);
       ctx.fillText(label, bx + 16, y - 2);
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#e8edf5';
+      ctx.fillStyle = INK.bright;
       ctx.fillText(fmt(row.v, row), bx + boxW - 6, y - 2);
       ctx.textAlign = 'left';
     });
@@ -512,7 +512,7 @@ export function meter(canvas, { value, max, label, danger = 0.9, fmt }) {
   const a1 = Math.PI * 2;
   ctx.lineWidth = Math.max(7, r * 0.34);
   ctx.lineCap = 'butt';
-  ctx.strokeStyle = '#171b21';
+  ctx.strokeStyle = INK.panel;
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, a1); ctx.stroke();
   // the region past which the node starts feerate-evicting
   ctx.strokeStyle = hexA(COL.bad, 0.5);
@@ -520,7 +520,7 @@ export function meter(canvas, { value, max, label, danger = 0.9, fmt }) {
   const col = pct >= danger ? COL.bad : pct > 0.75 ? COL.warn : COL.ok;
   ctx.strokeStyle = col;
   ctx.beginPath(); ctx.arc(cx, cy, r, a0, a0 + Math.PI * Math.min(1, pct)); ctx.stroke();
-  ctx.fillStyle = '#e8edf5';
+  ctx.fillStyle = INK.bright;
   ctx.textAlign = 'center';
   ctx.font = '600 17px ui-monospace, monospace';
   ctx.fillText(`${((value / max) * 100).toFixed(1)}%`, cx, cy - 4);
@@ -556,12 +556,12 @@ export function stackedBars(canvas, rows, opts = {}) {
     ctx.fillStyle = COL.text;
     ctx.textAlign = 'right';
     ctx.fillText(String(r.label ?? '').slice(0, 20), L.left - 6, y + rowH / 2);
-    ctx.fillStyle = '#12151a';
+    ctx.fillStyle = INK.panel;
     ctx.fillRect(L.left, y + 2, plotW, rowH - 5);
     const bw = (r.value / max) * plotW;
     ctx.fillStyle = r.color ?? COL.accent;
     ctx.fillRect(L.left, y + 2, Math.max(1, bw), rowH - 5);
-    ctx.fillStyle = '#e8edf5';
+    ctx.fillStyle = INK.bright;
     ctx.textAlign = 'left';
     ctx.fillText(String(r.display ?? short(r.value)), L.left + Math.min(bw + 5, plotW - 40), y + rowH / 2);
   });
@@ -632,4 +632,4 @@ function hexA(hex, a) {
 }
 function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-export { COL, PALETTE };
+export { COL, palette };

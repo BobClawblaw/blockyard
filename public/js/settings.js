@@ -22,6 +22,24 @@ export const SETTINGS_KEY = 'blockyard.settings';
 export const SCHEMA_VERSION = 4;
 
 export const DEFAULTS = Object.freeze({
+  // APPEARANCE (operator, 2026-09-16: "add an appearance section in preferences to change the colors
+  // of our layout. Our current scheme should be the default appearance ... as well as options for
+  // configure custom schemes by allowing users to pick colors and save to settings so it sticks").
+  // The faces themselves live in theme.js; this holds the choice and the nine custom colours, whose
+  // defaults are the shipped dark look so that Custom starts where the page starts.
+  appearance: Object.freeze({
+    mode: 'dark',             // 'light' | 'dark' | 'system' -- which face of the theme
+    theme: 'blockyard',       // a preset in theme.js PRESETS, or 'custom'
+    customBg: '#0b0d10',      // the page
+    customPanel: '#12151a',   // cards, the header, the settings sheet
+    customText: '#dfe5ee',
+    customMuted: '#96a0b0',
+    customAccent: '#f7931a',
+    customLine: '#262c36',
+    customOk: '#2ecc8f',
+    customWarn: '#f0b429',
+    customBad: '#ef5a5a',
+  }),
   space: Object.freeze({
     // OFF by default (operator, 2026-09-12: "make simple cubes the default, disable shadows by
     // default"). Shadows are the costliest single thing the board draws -- one per resting stone
@@ -366,6 +384,30 @@ export function fxCadence(g) {
 }
 
 export const PANEL = Object.freeze([
+  Object.freeze({
+    group: 'appearance',
+    title: 'Appearance',
+    note: 'The colours of the layout: the page, its cards, text, lines, accent and charts. The 3D boards are space whatever is chosen here, and the Explorer\u2019s block and transaction pages keep their own dark cards.',
+    rows: Object.freeze([
+      Object.freeze({
+        key: 'mode', label: 'Theme mode', kind: 'segment', hint: 'Light or dark, or whichever the operating system asks for (System follows it as it changes)',
+        options: Object.freeze([['light', 'Light'], ['dark', 'Dark'], ['system', 'System']]),
+      }),
+      Object.freeze({
+        key: 'theme', label: 'Theme', kind: 'cards', hint: 'Each has a light and a dark face; the mode above picks which. Custom is the nine colours below',
+        options: Object.freeze([['blockyard', 'BlockYard'], ['mono', 'Mono'], ['nous', 'Nous'], ['github', 'GitHub'], ['catppuccin', 'Catppuccin'], ['custom', 'Custom']]),
+      }),
+      Object.freeze({ key: 'customBg', label: 'Page', kind: 'colour', hint: 'The colour behind everything. Whether Custom is a light or a dark theme follows from this one: the derived shades go the other way', custom: true }),
+      Object.freeze({ key: 'customPanel', label: 'Panels', kind: 'colour', hint: 'Cards, the header, tables and the settings sheet. Raised panels and hovers are this nudged toward the text colour', custom: true }),
+      Object.freeze({ key: 'customText', label: 'Text', kind: 'colour', hint: 'Body text and figures', custom: true }),
+      Object.freeze({ key: 'customMuted', label: 'Muted text', kind: 'colour', hint: 'Labels, hints and notes. The fainter text is this halfway to the page colour', custom: true }),
+      Object.freeze({ key: 'customAccent', label: 'Accent', kind: 'colour', hint: 'Titles, the active tab, links, buttons and the primary lines of charts', custom: true }),
+      Object.freeze({ key: 'customLine', label: 'Lines', kind: 'colour', hint: 'Card borders and table rules. The softer rules are this halfway to the page colour', custom: true }),
+      Object.freeze({ key: 'customOk', label: 'Good', kind: 'colour', hint: 'Synced, fresh, a block on time', custom: true }),
+      Object.freeze({ key: 'customWarn', label: 'Warning', kind: 'colour', hint: 'Late, stale, a caveat', custom: true }),
+      Object.freeze({ key: 'customBad', label: 'Bad', kind: 'colour', hint: 'Overdue, failed, offline', custom: true }),
+    ]),
+  }),
   Object.freeze({
     group: 'space',
     title: 'Block space',

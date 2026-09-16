@@ -10,15 +10,15 @@
 // gives 500 levels, OKX 5000 -- a percent or two either side) is not extended: its line ends,
 // the end is marked, and the total past it counts only the books that reach.
 import { niceTicks } from './charts.js';
+import { INK } from './theme.js';   // the axis, grid and tooltip colours of the chosen theme
 import { prep } from './pricechart.js';
 
 export const AGOS = [[60, '1m'], [300, '5m'], [600, '10m'], [1800, '30m'], [3600, '1h']];
 export const ZOOMS = [[0.01, '±1%'], [0.025, '±2.5%'], [0.05, '±5%'], [0.1, '±10%']];
 export const DEPTH_MS = 30_000;
 const D = { data: null, at: 0, busy: false, key: null, ago: 600, zoom: 0.05, hover: null, bound: false, error: null };
-const BID = '#3dff7a', ASK = '#ff4545';
-const BID_T = 'rgba(61,255,122,0.32)', ASK_T = 'rgba(255,69,69,0.32)';
-const BID_THEN = 'rgba(61,255,122,0.55)', ASK_THEN = 'rgba(255,69,69,0.55)';
+// the two sides' colours come from the theme's ink (theme.js, 2026-09-16): neon green and red on a
+// dark ground, the theme's own good and bad on a light one, where neon has no contrast
 const PAD_FULL = { top: 28, right: 62, bottom: 22, left: 56 };
 // COMPACT, for the kiosk. The full chart spends 62 px on the right purely to label the change
 // bars' axis and 56 on the left for the cumulative-BTC labels plus a rotated caption -- on a wall
@@ -95,7 +95,7 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
   const PAD = compact ? PAD_COMPACT : PAD_FULL;
   const { ctx, w, h } = prep(canvas);
   if (!ser) {
-    ctx.fillStyle = '#6a7484'; ctx.textAlign = 'center';
+    ctx.fillStyle = INK.text; ctx.textAlign = 'center';
     ctx.fillText(empty ?? 'asking the exchanges for their order books…', w / 2, h / 2);
     return null;
   }
@@ -120,13 +120,13 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
   for (const v of niceTicks(0, vmax, Math.max(3, Math.floor(plotH / 44)))) {
     const y = Math.round(Y(v)) + 0.5;
     if (y < PAD.top) continue;
-    ctx.strokeStyle = '#1a2029'; line(PAD.left, y, w - PAD.right, y);
-    ctx.fillStyle = '#7d8898'; ctx.fillText(btc(v), PAD.left - 6, y);
+    ctx.strokeStyle = INK.grid; line(PAD.left, y, w - PAD.right, y);
+    ctx.fillStyle = INK.axisText; ctx.fillText(btc(v), PAD.left - 6, y);
   }
   if (!compact) {
     ctx.save?.();
     ctx.translate(12, PAD.top + plotH / 2); ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center'; ctx.fillStyle = '#56606e'; ctx.fillText('BTC, cumulative', 0, 0);
+    ctx.textAlign = 'center'; ctx.fillStyle = INK.textDim; ctx.fillText('BTC, cumulative', 0, 0);
     ctx.restore?.();
   }
   ctx.setTransform(Math.min(globalThis.devicePixelRatio || 1, 2), 0, 0, Math.min(globalThis.devicePixelRatio || 1, 2), 0, 0);
@@ -137,10 +137,10 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
       const v = e === 0 ? 0 : Math.sign(e) * 10 ** Math.abs(e);
       const y = Math.round(YC(v)) + 0.5;
       if (!compact) {
-        ctx.fillStyle = '#7d8898';
+        ctx.fillStyle = INK.axisText;
         ctx.fillText(v === 0 ? '0' : `${v > 0 ? '' : '-'}${shortN(Math.abs(v))}`, w - PAD.right + 6, y);
       }
-      if (v === 0) { ctx.strokeStyle = '#2a323d'; line(PAD.left, y, w - PAD.right, y); }
+      if (v === 0) { ctx.strokeStyle = INK.axis; line(PAD.left, y, w - PAD.right, y); }
     }
   }
   // price axis
@@ -148,10 +148,10 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
   for (const p of niceTicks(pmin, pmax, Math.max(3, Math.floor(plotW / 90)))) {
     const x = Math.round(X(p)) + 0.5;
     if (x < PAD.left || x > w - PAD.right) continue;
-    ctx.strokeStyle = '#161b22'; line(x, PAD.top, x, PAD.top + plotH);
-    ctx.fillStyle = '#7d8898'; ctx.fillText(zoom <= 0.01 ? money(p) : kUsd(p), x, h - PAD.bottom / 2);
+    ctx.strokeStyle = INK.grid; line(x, PAD.top, x, PAD.top + plotH);
+    ctx.fillStyle = INK.axisText; ctx.fillText(zoom <= 0.01 ? money(p) : kUsd(p), x, h - PAD.bottom / 2);
   }
-  ctx.strokeStyle = '#2a323d';
+  ctx.strokeStyle = INK.axis;
   line(PAD.left + 0.5, PAD.top, PAD.left + 0.5, PAD.top + plotH);
   line(w - PAD.right + 0.5, PAD.top, w - PAD.right + 0.5, PAD.top + plotH);
   line(PAD.left, PAD.top + plotH + 0.5, w - PAD.right, PAD.top + plotH + 0.5);
@@ -180,15 +180,15 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
     ctx.stroke();
     ctx.setLineDash([]); ctx.lineWidth = 1;
   };
-  for (const e of ser.exchanges) { curve(e.bids, BID_T, 1); curve(e.asks, ASK_T, 1); }
-  if (ser.change) { curve(ser.thenBid, BID_THEN, 1.4, [5, 4]); curve(ser.thenAsk, ASK_THEN, 1.4, [5, 4]); }
+  for (const e of ser.exchanges) { curve(e.bids, INK.bidT, 1); curve(e.asks, INK.askT, 1); }
+  if (ser.change) { curve(ser.thenBid, INK.bidThen, 1.4, [5, 4]); curve(ser.thenAsk, INK.askThen, 1.4, [5, 4]); }
   const only = (arr, part, want) => arr.map((v, i) => (v != null && (part[i] === want || (i > 0 && part[i - 1] === want) || (i < arr.length - 1 && part[i + 1] === want)) ? v : null));
-  curve(only(ser.bid, ser.bidPart, true), 'rgba(61,255,122,0.5)', 2.2, [2, 3]);
-  curve(only(ser.ask, ser.askPart, true), 'rgba(255,69,69,0.5)', 2.2, [2, 3]);
-  curve(only(ser.bid, ser.bidPart, false), BID, 2.2);
-  curve(only(ser.ask, ser.askPart, false), ASK, 2.2);
+  curve(only(ser.bid, ser.bidPart, true), INK.bidHalf, 2.2, [2, 3]);
+  curve(only(ser.ask, ser.askPart, true), INK.askHalf, 2.2, [2, 3]);
+  curve(only(ser.bid, ser.bidPart, false), INK.bid, 2.2);
+  curve(only(ser.ask, ser.askPart, false), INK.ask, 2.2);
   // the mid, and where each shallow book ends
-  ctx.strokeStyle = 'rgba(220,230,240,0.35)';
+  ctx.strokeStyle = INK.dash;
   const xm = Math.round(X(ser.mid)) + 0.5;
   line(xm, PAD.top, xm, PAD.top + plotH);
   ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -197,9 +197,9 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
     for (const p of [r.low, r.high]) {
       if (p == null || p < pmin || p > pmax) continue;
       const x = Math.round(X(p)) + 0.5;
-      ctx.strokeStyle = 'rgba(200,210,225,0.5)'; line(x, PAD.top + plotH - 8, x, PAD.top + plotH);
+      ctx.strokeStyle = INK.dash; line(x, PAD.top + plotH - 8, x, PAD.top + plotH);
       if (!compact) {
-        ctx.fillStyle = '#8994a3'; ctx.textAlign = 'center';
+        ctx.fillStyle = INK.label; ctx.textAlign = 'center';
         ctx.fillText(`${r.name} ends`, x, PAD.top + plotH - 14 - 11 * (lane++ % 3));
       }
     }
@@ -207,14 +207,14 @@ export function drawDepth(canvas, ser, { zoom = 0.05, hover = null, compact = fa
   ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, monospace';
 
   // readout: the pointer's price, or the sums near the mid
-  ctx.textAlign = 'left'; ctx.fillStyle = '#dfe6ee';
+  ctx.textAlign = 'left'; ctx.fillStyle = INK.bright;
   if (hover && hover.x >= PAD.left && hover.x <= w - PAD.right) {
     const p = pmin + ((hover.x - PAD.left) / plotW) * (pmax - pmin);
     const i = Math.max(0, Math.min(ser.prices.length - 1, Math.round((p - ser.prices[0]) / ser.step)));
     const bidSide = ser.prices[i] <= ser.mid;
     const cum = bidSide ? ser.bid[i] : ser.ask[i];
     const per = ser.exchanges.map((e) => [e.name, bidSide ? e.bids[i] : e.asks?.[i]]).filter(([, v]) => v != null).map(([nm, v]) => `${nm} ${btc(v)}`).join(' · ');
-    ctx.strokeStyle = 'rgba(200,215,230,0.5)'; ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = INK.dash; ctx.setLineDash([3, 3]);
     const x = Math.round(X(ser.prices[i])) + 0.5;
     line(x, PAD.top, x, PAD.top + plotH);
     ctx.setLineDash([]);

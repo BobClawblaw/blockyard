@@ -13,6 +13,10 @@ import {
   loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush,
   SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue,
 } from './settings.js';
+// APPEARANCE (2026-09-16): the theme goes on <html> before the first paint, from the browser's copy
+// of the settings, and follows every change after (followTheme); the cards' swatches are painted
+// through the CSSOM because the CSP refuses a style attribute in markup
+import { followTheme, presetFace, resolveScheme, resolveTheme, PRESETS, BASE_KEYS } from './theme.js';
 import { renderExplorer } from './explorer.js';
 import { renderMarkets, summaryHtml as marketsSummaryHtml, REFRESH_MS as MARKETS_REFRESH_MS } from './markets.js';
 import { renderKiosk } from './kiosk.js';
@@ -24,6 +28,8 @@ import { renderDoom } from './doom.js';
 import { renderQuake } from './quake.js';
 import { renderAbout } from './about.js';
 import { renderChain, renderMempool, renderPeers, renderNetwork, renderLogs, renderNode, renderAdmin, ensureLogsLoaded, init as initPanels, initChainDrill } from './panels.js';
+
+followTheme();
 
 // panels.js needs the formatters but must not import them from here (circular);
 // they are injected once at module start instead.
@@ -1147,6 +1153,27 @@ async function boot() {
       const rowsHtml = g.rows.map((r) => {
       const v = s[g.group][r.key];
       const id = `cfg-${g.group}-${r.key}`;
+      // THE APPEARANCE TAB'S OWN CONTROLS: the mode as a segmented row of buttons, the theme as cards
+      // with a swatch strip and a line about each (the shape of every editor's appearance page),
+      // and a "start Custom from this" button under the cards. The swatches' colours are set after
+      // the markup lands (data-swatch), the one way the CSP lets a script colour an element.
+      if (r.kind === 'segment') {
+        const seg = `<span class="cfgseg" role="radiogroup" aria-label="${r.label}">${r.options.map(([val, label]) =>
+          `<button type="button" class="cfgsegbtn${val === v ? ' on' : ''}" role="radio" aria-checked="${val === v}" data-cfgset="${g.group}.${r.key}" data-value="${val}">${label}</button>`).join('')}</span>`;
+        return `<div class="cfgrow"><b><label>${r.label}</label></b><span>${seg}</span><i>${r.hint}</i></div>`;
+      }
+      if (r.kind === 'cards') {
+        const scheme = resolveScheme(s.appearance);
+        const cards = r.options.map(([val, label]) => {
+          const face = val === 'custom' ? resolveTheme(s) : presetFace(val, scheme);
+          const blurb = val === 'custom' ? 'Your own nine colours, below' : PRESETS[val].blurb;
+          const sw = ['bg', 'panel', 'text', 'accent', 'ok', 'warn', 'bad'].map((k) => `<i data-swatch="${face[k]}" title="${k}"></i>`).join('');
+          return `<button type="button" class="thcard${val === v ? ' on' : ''}" role="radio" aria-checked="${val === v}" data-cfgset="${g.group}.${r.key}" data-value="${val}" data-face-bg="${face.bg}" data-face-fg="${face.text}" data-face-line="${face.line}">`
+            + `<span class="thsw">${sw}</span><b>${label}</b><small>${blurb}</small></button>`;
+        }).join('');
+        const from = v === 'custom' ? '' : `<button type="button" class="btn cfgcustomise" data-cfgcustomise="1" title="Copy this theme's colours into the nine pickers below and switch to Custom">customise ${PRESETS[v]?.label ?? 'this'} →</button>`;
+        return `<div class="cfgrow cfgcards"><b><label>${r.label}</label></b><span>${from}</span><span class="thcards" role="radiogroup" aria-label="${r.label}">${cards}</span><i>${r.hint}</i></div>`;
+      }
       const ctl = r.kind === 'toggle'
         ? `<input type="checkbox" id="${id}" data-cfg="${g.group}.${r.key}"${v ? ' checked' : ''}>`
         : r.kind === 'choice'
@@ -1154,10 +1181,13 @@ async function boot() {
           : r.kind === 'colour'
             ? `<input type="color" id="${id}" data-cfg="${g.group}.${r.key}" value="${v}">`
             : `<span class="cfgrange"><input type="range" id="${id}" data-cfg="${g.group}.${r.key}" min="${r.min}" max="${r.max}" step="${r.step}" value="${v}"><span class="val" data-val-for="${g.group}.${r.key}">${formatRangeValue(r.step, v)}</span></span>`;
-      if (compact && r.kind === 'toggle') {
+      // (and the nine custom colours of the Appearance tab the same way: two across, hint as tooltip,
+      // dimmed while another theme is chosen, so the tab is a screen)
+      if ((compact && r.kind === 'toggle') || r.custom) {
         const start = open ? '' : '<div class="cfgrows2">';
         open = true;
-        return `${start}<div class="cfgrow compact" title="${String(r.hint).replace(/"/g, '&quot;')}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span></div>`;
+        const idle = r.custom && s.appearance.theme !== 'custom' ? ' idle' : '';
+        return `${start}<div class="cfgrow compact${idle}" title="${String(r.hint).replace(/"/g, '&quot;')}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span></div>`;
       }
       const close = open ? '</div>' : '';
       open = false;
@@ -1165,6 +1195,10 @@ async function boot() {
       }).join('') + (open ? '</div>' : '');
       return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${bulk}${rowsHtml}</div>`;
     }).join('');
+    for (const el of cfgBody.querySelectorAll('[data-swatch]')) el.style.setProperty('background', el.dataset.swatch);
+    for (const el of cfgBody.querySelectorAll('.thcard')) {
+      el.style.setProperty('--th-bg', el.dataset.faceBg); el.style.setProperty('--th-fg', el.dataset.faceFg); el.style.setProperty('--th-line', el.dataset.faceLine);
+    }
   };
   const openSettings = (open) => {
     cfgWrap.classList.toggle('hidden', !open);
@@ -1185,6 +1219,21 @@ async function boot() {
   cfgBody.addEventListener('click', (e) => {
     const tab = e.target.closest?.('[data-cfgtab]');
     if (tab) { cfgTab = tab.dataset.cfgtab; drawSettings(); return; }
+    // a segment button or a theme card: one value, then the tab redraws so the cards' swatches
+    // show the face the new mode picks
+    const pick = e.target.closest?.('[data-cfgset]');
+    if (pick) { setSetting(loadSettings(), pick.dataset.cfgset, pick.dataset.value); drawSettings(); repaintSoon(); return; }
+    // "customise this": the nine base colours of the theme on screen become the Custom pickers'
+    // values, and Custom is selected, so the pickers start from a look rather than from the shipped one
+    if (e.target.closest?.('[data-cfgcustomise]')) {
+      const face = resolveTheme(loadSettings());
+      let next = loadSettings();
+      const keyOf = { bg: 'customBg', panel: 'customPanel', text: 'customText', muted: 'customMuted', accent: 'customAccent', line: 'customLine', ok: 'customOk', warn: 'customWarn', bad: 'customBad' };
+      for (const k of BASE_KEYS) next = setSetting(next, `appearance.${keyOf[k]}`, face[k]);
+      setSetting(next, 'appearance.theme', 'custom');
+      drawSettings(); repaintSoon();
+      return;
+    }
     const bulk = e.target.closest?.('[data-cfgall], [data-cfgnone]');
     if (!bulk) return;
     const on = bulk.hasAttribute('data-cfgall');

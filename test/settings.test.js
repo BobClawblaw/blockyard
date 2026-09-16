@@ -72,7 +72,7 @@ test('every panel control names a real setting, and every setting has a control'
     for (const r of g.rows) {
       assert.ok(r.key in DEFAULTS[g.group], `${g.group}.${r.key} is a real setting`);
       assert.ok(r.label && r.hint, `${g.group}.${r.key} is labelled and explained`);
-      if (r.kind === 'choice') assert.ok(r.options?.length >= 2, 'a choice offers choices');
+      if (['choice', 'segment', 'cards'].includes(r.kind)) assert.ok(r.options?.length >= 2, 'a choice offers choices');
       if (r.kind === 'range') assert.ok(r.min < r.max && r.step > 0, 'a range has bounds');
       listed.add(`${g.group}.${r.key}`);
     }
@@ -320,8 +320,10 @@ test('the clamp and the slider cannot drift: the bounds have one source', () => 
       assert.equal(normalise({ [g.group]: { [r.key]: mid } })[g.group][r.key], mid,
         `${g.group}.${r.key} stores a value the slider can actually produce`);
     }
-    if (g.rows.some((r) => r.kind === 'choice')) {
-      for (const r of g.rows.filter((x) => x.kind === 'choice')) {
+    // a segmented row and a row of cards are choices drawn differently (the Appearance tab)
+    const CHOICES = ['choice', 'segment', 'cards'];
+    if (g.rows.some((r) => CHOICES.includes(r.kind))) {
+      for (const r of g.rows.filter((x) => CHOICES.includes(x.kind))) {
         for (const [val] of r.options) {
           assert.equal(normalise({ [g.group]: { [r.key]: val } })[g.group][r.key], val,
             `${g.group}.${r.key} accepts ${val}, which its own control offers`);
@@ -553,8 +555,11 @@ test('the neon tubes are tunable: source, one colour (a hex, validated), brightn
   assert.equal(t.neon, true); assert.equal(t.neonSource, 'colour'); assert.equal(t.neonColour, '#123456'); assert.equal(t.neonBrightness, 0.2);
   assert.equal(tetrustOptions({ tetrust: { neonSource: 'piece' } }).neonSource, 'temperature', 'the piece\'s colour is the engine\'s "temperature" source');
   const colourRows = PANEL.flatMap((g) => g.rows.filter((r) => r.kind === 'colour').map((r) => `${g.group}.${r.key}`));
-  assert.deepEqual([...colourRows].sort(), ['blockanoid.gridColour', 'blockanoid.neonColour', 'blockout.gridColour', 'blockout.neonColour', 'space.gridColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.gridColour', 'tetrust.neonColour'],
-    'a colour for each finish and each game, the landing marker, and the grid on every board that draws one');
+  assert.deepEqual([...colourRows].sort(), [
+    // the nine a Custom theme is built from (theme.js, 2026-09-16)
+    'appearance.customAccent', 'appearance.customBad', 'appearance.customBg', 'appearance.customLine', 'appearance.customMuted', 'appearance.customOk', 'appearance.customPanel', 'appearance.customText', 'appearance.customWarn',
+    'blockanoid.gridColour', 'blockanoid.neonColour', 'blockout.gridColour', 'blockout.neonColour', 'space.gridColour', 'space.neonColour', 'tetrust.ghostColour', 'tetrust.gridColour', 'tetrust.neonColour'],
+    'a colour for each finish and each game, the landing marker, the grid on every board that draws one, and the nine of a custom theme');
 });
 
 // THE GRID'S COLOUR (operator, 2026-09-12: "we need to break out the green grid settings per game

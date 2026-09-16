@@ -20,6 +20,7 @@ import { board3d } from './details3d.js';
 import { loadSettings, setSetting, marketsOptions } from './settings.js';
 import { drawPriceChart, readout, EX_COLORS } from './pricechart.js';
 import { niceTicks } from './charts.js';
+import { INK } from './theme.js';
 import { renderDepth } from './depthchart.js';
 
 export const REFRESH_MS = 15_000;
@@ -343,7 +344,7 @@ export function renderMarketsBoard(id, h) {
       const w = cv.clientWidth || 600, hh = cv.clientHeight || 300;
       if (cv.width !== w || cv.height !== hh) { cv.width = w; cv.height = hh; }
       ctx.clearRect(0, 0, w, hh);
-      ctx.fillStyle = '#6a7484'; ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillStyle = INK.text; ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(M.data.polling === false ? 'market polling is off' : 'market data is off on this server', w / 2, hh / 2 - 10);
       if (M.data.polling === false) ctx.fillText('Display settings → Markets & Price → Enable market polling', w / 2, hh / 2 + 12);
     }

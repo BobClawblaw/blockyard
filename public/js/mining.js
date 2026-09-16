@@ -17,6 +17,7 @@
 // monitor already reads, and costs the node no call at all (server/collect/gbt.js).
 
 import { paint, COL, lineChart } from './charts.js';
+import { INK } from './theme.js';   // the pie's labels and slice seams follow the theme
 import { blockTreemap, mempoolTreemap, rateColor as rateBucketColor } from './goggles.js';
 import { loadSettings, spaceOptions } from './settings.js';
 // 2026-09-10: the block and the pool now draw as lit solids on a square-packed
@@ -1326,7 +1327,7 @@ function poolDonut(canvas, pools, F) {
   for (const s of laid) {
     ctx.beginPath(); ctx.arc(cx, cy, R, s.a0, s.a1); ctx.arc(cx, cy, r, s.a1, s.a0, true); ctx.closePath();
     ctx.fillStyle = s.color; ctx.fill();
-    ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = INK.panel; ctx.lineWidth = 1; ctx.stroke();
   }
   // the labels: each side laid out top to bottom, pushed apart to LH
   const side = (dir) => {
@@ -1347,12 +1348,12 @@ function poolDonut(canvas, pools, F) {
       const name = nameOf(l.s.p, maxName);
       ctx.strokeStyle = l.s.color;
       ctx.beginPath(); ctx.moveTo(l.ax, l.ay); ctx.lineTo(edgeX, l.y); ctx.lineTo(labelX - dir * 3, l.y); ctx.stroke();
-      ctx.fillStyle = '#c7c9d1';
+      ctx.fillStyle = INK.label;
       ctx.fillText(name, labelX, l.y);
       // the share, faint, after the name on the right side and before it on the left
       if (withPct) {
         const pct = `${(l.s.p.blocks / total * 100).toFixed(1)}%`;
-        ctx.fillStyle = '#7d8b99'; ctx.font = `${font - 1.5}px ${'var(--mono), monospace'}`;
+        ctx.fillStyle = INK.axisText; ctx.font = `${font - 1.5}px ${'var(--mono), monospace'}`;
         const nameW = ctx.measureText(name).width;
         if (dir > 0) ctx.fillText(pct, labelX + nameW + 8, l.y); else ctx.fillText(pct, labelX - nameW - 8, l.y);
         ctx.font = `${font}px system-ui, sans-serif`;
@@ -1362,7 +1363,7 @@ function poolDonut(canvas, pools, F) {
   ctx.textAlign = 'center';
   ctx.fillStyle = COL.text; ctx.font = `600 ${font + 1}px system-ui, sans-serif`;
   ctx.fillText(`${F.num(total)}`, cx, cy - 7);
-  ctx.font = `${font - 2}px system-ui, sans-serif`; ctx.fillStyle = '#7d8b99';
+  ctx.font = `${font - 2}px system-ui, sans-serif`; ctx.fillStyle = INK.axisText;
   ctx.fillText('blocks', cx, cy + 8);
 }
 

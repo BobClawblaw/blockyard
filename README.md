@@ -32,7 +32,8 @@ Also on board: a sync viewer with an honest ETA, Block flow (projected blocks, t
 being built, recent blocks), mempool and fee charts, a peer table, bandwidth, the node's
 event stream, a provenance table for every figure, a read-only RPC console behind a
 default-deny allowlist, and a tabbed **Display settings** panel (the gear) that tunes every
-board without a reload.
+board without a reload and picks the layout's colours — light or dark, the shipped look, Mono,
+Nous, GitHub, Catppuccin, or nine colours of your own.
 
 ## Quick start
 
@@ -46,7 +47,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 936 unit tests, all built in
+npm test            # optional: 944 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open http://127.0.0.1:21000
 ```
@@ -134,7 +135,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 936 unit tests (node:test, no dependencies)
+npm test             # 944 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -151,7 +152,7 @@ and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
 The test suite is
-comprehensive (936 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (944 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

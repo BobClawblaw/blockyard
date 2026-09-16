@@ -22,6 +22,13 @@
   --purple: #a78bfa;
   --cyan: #4dd0e1;
   --pink: #f06ba7;
+  /* APPEARANCE (theme.js, 2026-09-16): every colour above and these below are rewritten on <html>
+     when a theme is chosen; the values here are the shipped dark look, which is the default theme */
+  --bg-0: #0c0e11;                 /* the well: inputs, bars, code */
+  --accent-ink: #17110a;           /* text on an accent button */
+  --hover: rgba(255, 255, 255, 0.025);
+  --scrim: rgba(2, 5, 9, 0.62);
+  color-scheme: dark;
   --radius: 10px;
   --radius-sm: 6px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -72,13 +79,13 @@ header.top {
 /* THE MONOGRAM. The tile, its gradient and the three courses of blocks along the bottom all
    live in the SVG itself, so the mark is one object and the favicon is the same drawing --
    no CSS needed to make it look right, which is what a favicon cannot have anyway. */
-.brand .mark { width: 22px; height: 22px; display: block; flex: 0 0 auto; border-radius: 6px; box-shadow: 0 0 14px #f7931a44; }
+.brand .mark { width: 22px; height: 22px; display: block; flex: 0 0 auto; border-radius: 6px; box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 27%, transparent); }
 .wordmark { font-weight: 600; letter-spacing: .2px; }
 .wordmark b { font-weight: 750; color: var(--accent); }
 /* The brand is a <button> now (it routes to About), so the browser's button chrome has to go:
    without this the header grows a border, a background and the UA's own font. */
 button.brand { background: none; border: 0; padding: 0; margin: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
-button.brand:hover .wordmark b { color: #ffc061; }
+button.brand:hover .wordmark b { color: color-mix(in srgb, var(--accent) 70%, #fff); }
 button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 
 /* ==========================================================================
@@ -186,7 +193,7 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
   border-radius: var(--radius-sm); padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer;
 }
 .btn:hover { border-color: var(--fg-faint); }
-.btn.primary { background: var(--accent); color: #17110a; border-color: #0000; font-weight: 650; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: #0000; font-weight: 650; }
 .btn.danger { color: var(--bad); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -257,13 +264,13 @@ canvas.chart.short { height: 84px; }
    nothing was happening. Numbers are tabular so the row does not shimmer. */
 .sync {
   grid-column: span 12;
-  background: linear-gradient(180deg, #171b22 0%, #12151a 100%);
+  background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
   border: 1px solid var(--line, #262c35); border-radius: var(--radius);
   padding: 8px 12px 9px; box-shadow: var(--shadow); position: relative;
 }
 .sync::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: var(--radius);
-  background: radial-gradient(140% 220% at 4% -60%, #f7931a16, transparent 55%);
+  background: radial-gradient(140% 220% at 4% -60%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 55%);
 }
 .strip { display: flex; align-items: baseline; gap: 4px 13px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; position: relative; z-index: 1; }
 .sf { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
@@ -276,23 +283,23 @@ canvas.chart.short { height: 84px; }
 .sf.accent b { color: var(--accent); } .sf.ok b { color: var(--ok); } .sf.bad b { color: var(--bad); }
 .sf.warn b { color: var(--warn); }
 .sf.jump { background: none; border: 0; border-left: 1px solid var(--line-soft); padding: 0 0 0 13px; cursor: pointer; font: inherit; }
-.sf.jump b { color: var(--info); text-decoration: underline dotted #58a6ff66; text-underline-offset: 3px; }
-.sf.jump:hover b { color: #cfe4ff; }
+.sf.jump b { color: var(--info); text-decoration: underline dotted color-mix(in srgb, var(--info) 40%, transparent); text-underline-offset: 3px; }
+.sf.jump:hover b { color: color-mix(in srgb, var(--info) 55%, var(--fg)); }
 .strip-tail { margin-left: auto; display: inline-flex; align-items: center; gap: 9px; }
 .sf.note-count { cursor: pointer; }
 .sf.note-count b { text-decoration: underline dotted currentColor; text-underline-offset: 3px; }
 
 .bar {
   margin-top: 7px; height: 6px; border-radius: 4px; position: relative;
-  background: #0c0e11; border: 1px solid var(--line, #262c35); box-shadow: inset 0 1px 2px #000000a0; overflow: hidden;
+  background: var(--bg-0); border: 1px solid var(--line, #262c35); box-shadow: inset 0 1px 2px color-mix(in srgb, var(--bg-0) 60%, #000); overflow: hidden;
 }
 .bar .fill {
   position: absolute; inset: 0 auto 0 0; width: 0;
-  background: linear-gradient(90deg, #b06c10, var(--accent));
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
   transition: width .6s cubic-bezier(.22, .61, .36, 1);
 }
-.bar .fill.done { background: linear-gradient(90deg, #1a8f68, var(--ok)); }
-.bar .fill.stall { background: linear-gradient(90deg, #8f2a2a, var(--bad)); }
+.bar .fill.done { background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 60%, var(--bg)), var(--ok)); }
+.bar .fill.stall { background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 60%, var(--bg)), var(--bad)); }
 /* the node's own difficulty-weighted estimate, as a separate marker: the two
    percentages measure different things and are never merged into one number */
 .bar .vp-tick { position: absolute; top: -1px; bottom: -1px; width: 2px; background: #58a6ffee; box-shadow: 0 0 6px #58a6ff99; }
@@ -303,14 +310,14 @@ canvas.chart.short { height: 84px; }
 
 .caveat {
   margin-top: 6px; padding: 6px 10px; border-radius: var(--radius-sm);
-  background: #1b1a12; border: 1px solid #453a15; color: #f3d38a;
+  background: color-mix(in srgb, var(--warn) 9%, var(--bg-1)); border: 1px solid color-mix(in srgb, var(--warn) 32%, var(--bg-1)); color: color-mix(in srgb, var(--warn) 70%, var(--fg));
   font-size: 11.5px; line-height: 1.45;
 }
-.caveat.bad { background: #1c1214; border-color: #50242a; color: #f0a8ad; }
+.caveat.bad { background: color-mix(in srgb, var(--bad) 9%, var(--bg-1)); border-color: color-mix(in srgb, var(--bad) 32%, var(--bg-1)); color: color-mix(in srgb, var(--bad) 65%, var(--fg)); }
 /* Markets with polling off: the note at the top, the board / chart / depth panel folded away */
 .caveat.mkoff { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 12.5px; padding: 10px 12px; }
 .mkcard.mk-off .mklayout, .mkcard.mk-off .mkchart, .mkcard.mk-off .mksub, .mkcard.mk-off #mkDepthBar, .mkcard.mk-off #mkDepthNote, .mkcard.mk-off .mkbottom { display: none; }
-.caveat b { color: #fff; font-weight: 650; }
+.caveat b { color: var(--fg); font-weight: 650; }
 
 /* status badges (used across every page, not just the sync strip) */
 .badge {
@@ -334,7 +341,7 @@ table.t th {
   position: sticky; top: 0; background: var(--bg-1); z-index: 1;
 }
 table.t td { padding: 4px 7px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); font-variant-numeric: tabular-nums; }
-table.t tr:hover td { background: #ffffff06; }
+table.t tr:hover td { background: var(--hover); }
 table.t td.r { text-align: right; }
 table.t td.w { font-family: var(--sans); }
 
@@ -361,7 +368,7 @@ table.t td.w { font-family: var(--sans); }
      (`peer_live_probe`, `dial_failures`, `check_problems`), so the tag overflowed into
      the text column -- reported as "fields carry over from one column to the next".
      Widened, and allowed to wrap rather than truncate: a clipped kind is a lost fact. */
-.feed .row { display: grid; grid-template-columns: 74px 124px minmax(0, 1fr); gap: 8px; padding: 2.5px 0; border-bottom: 1px solid #ffffff05; align-items: baseline; }
+.feed .row { display: grid; grid-template-columns: 74px 124px minmax(0, 1fr); gap: 8px; padding: 2.5px 0; border-bottom: 1px solid var(--hover); align-items: baseline; }
 .feed .row .ts { color: var(--fg-faint); font-size: 10.5px; }
 .feed .row .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .95; }
 .feed .row .txt { color: var(--fg-dim); min-width: 0; overflow-wrap: anywhere; }
@@ -370,23 +377,23 @@ table.t td.w { font-family: var(--sans); }
    column with overflow-wrap: anywhere). 124 px holds it; anything longer is trimmed with an
    ellipsis and named in full in its title. */
 .feed .row .tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.feed .row.warn .txt { color: #e8c987; }
+.feed .row.warn .txt { color: color-mix(in srgb, var(--warn) 60%, var(--fg)); }
 .feed .row.warn .tag { color: var(--warn); }
 .feed .row.error .txt, .feed .row.error .tag { color: var(--bad); }
 .feed .row.info .tag { color: var(--info); }
 .feed .row.new { animation: flash .9s ease-out; }
-@keyframes flash { from { background: #f7931a22; } to { background: transparent; } }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 13%, transparent); } to { background: transparent; } }
 
 .rowform { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 input.f, select.f, textarea.f {
-  background: #0c0e11; border: 1px solid var(--line, #262c35); color: var(--fg);
+  background: var(--bg-0); border: 1px solid var(--line, #262c35); color: var(--fg);
   border-radius: var(--radius-sm); padding: 5px 8px; font: inherit; font-size: 12px;
 }
 input.f:focus, select.f:focus, textarea.f:focus { outline: none; border-color: var(--accent-dim); }
 textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: vertical; }
 
 .note { font-size: 11.5px; color: var(--fg-dim); line-height: 1.5; }
-.note.warn { color: #e8c987; }
+.note.warn { color: color-mix(in srgb, var(--warn) 60%, var(--fg)); }
 .hr { height: 1px; background: var(--line-soft); margin: 10px 0; }
 
 .toast {
@@ -403,7 +410,7 @@ textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: ve
 
 .offline-bar {
   grid-column: span 12; padding: 9px 12px; border-radius: var(--radius);
-  background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; font-size: 12px;
+  background: color-mix(in srgb, var(--bad) 9%, var(--bg-1)); border: 1px solid color-mix(in srgb, var(--bad) 32%, var(--bg-1)); color: color-mix(in srgb, var(--bad) 65%, var(--fg)); font-size: 12px;
 }
 .hidden { display: none !important; }
 
@@ -420,18 +427,18 @@ textarea.f { width: 100%; min-height: 74px; font-family: var(--mono); resize: ve
 .field { margin-bottom: 10px; }
 .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--fg-faint); margin-bottom: 4px; }
 .field input {
-  width: 100%; background: #0c0e11; border: 1px solid var(--line, #262c35); color: var(--fg);
+  width: 100%; background: var(--bg-0); border: 1px solid var(--line, #262c35); color: var(--fg);
   border-radius: var(--radius-sm); padding: 8px 10px; font: 14px var(--mono);
 }
-.field input:focus { outline: none; border-color: var(--accent-dim); box-shadow: 0 0 0 3px #f7931a1a; }
-.err { background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; }
-.locked { background: #1b1a12; border-color: #453a15; color: #f3d38a; }
+.field input:focus { outline: none; border-color: var(--accent-dim); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+.err { background: color-mix(in srgb, var(--bad) 9%, var(--bg-1)); border: 1px solid color-mix(in srgb, var(--bad) 32%, var(--bg-1)); color: color-mix(in srgb, var(--bad) 65%, var(--fg)); padding: 8px 10px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; }
+.locked { background: color-mix(in srgb, var(--warn) 9%, var(--bg-1)); border-color: color-mix(in srgb, var(--warn) 32%, var(--bg-1)); color: color-mix(in srgb, var(--warn) 70%, var(--fg)); }
 
 
 /* ----------------------------------------------------------------- extras */
 
 .offline-bar { grid-column: span 12; padding: 9px 12px; border-radius: var(--radius);
-  background: #1c1214; border: 1px solid #50242a; color: #f0a8ad; font-size: 12px; }
+  background: color-mix(in srgb, var(--bad) 9%, var(--bg-1)); border: 1px solid color-mix(in srgb, var(--bad) 32%, var(--bg-1)); color: color-mix(in srgb, var(--bad) 65%, var(--fg)); font-size: 12px; }
 .hidden { display: none !important; }
 
 
@@ -473,7 +480,7 @@ canvas.chart.meter { height: 112px; }
 pre.pre-block { margin: 6px 0 0; white-space: pre-wrap; }
 pre.output-box {
   max-height: 260px; overflow: auto; margin: 0; padding: 8px;
-  background: #0c0e11; border: 1px solid var(--line, #262c35); border-radius: var(--radius-sm);
+  background: var(--bg-0); border: 1px solid var(--line, #262c35); border-radius: var(--radius-sm);
   white-space: pre-wrap;
 }
 .btn.block { width: 100%; padding: 9px; }
@@ -1010,7 +1017,7 @@ canvas.chart.xs, .chart.xs { height: 86px }
 }
 .chainlink svg {
   display: block; width: 100%; height: 100%; overflow: visible;
-  filter: drop-shadow(0 0 3px rgba(247, 147, 26, .55)) drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent)) drop-shadow(0 1px 1px rgba(0, 0, 0, .6));
 }
 .chainlink .cl-base, .chainlink .cl-hi { fill: none; stroke-linecap: round; }
 .chainlink .cl-base { stroke: var(--accent-dim); stroke-width: 3.4; }
@@ -1524,14 +1531,14 @@ table.peertbl td { padding: 2px 7px; }
 .mkbar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
 .mkgrp { display: flex; gap: 4px; flex-wrap: wrap; }
 .mkbtn { font: 12px var(--sans); padding: 4px 10px; border-radius: var(--radius-sm); background: var(--bg-2); color: var(--fg-dim); border: 1px solid var(--line); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.mkbtn.on { color: var(--fg); border-color: #4f8f78; background: #12241d; }
+.mkbtn.on { color: var(--fg); border-color: color-mix(in srgb, var(--ok) 55%, var(--line)); background: color-mix(in srgb, var(--ok) 14%, var(--bg-1)); }
 .mkdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #8aa0b4; }
 .mkdot[data-ex="coinbase"] { background: #4c8dff; }
 .mkdot[data-ex="kraken"] { background: #a78bfa; }
 .mkdot[data-ex="bitstamp"] { background: #2ecc8f; }
 .mkdot[data-ex="bitfinex"] { background: #4dd0e1; }
 .mkdot[data-ex="okx"] { background: #f0b429; }
-canvas.mkchart { width: 100%; height: min(54vh, 480px); min-height: 300px; display: block; background: #0b0e12; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); cursor: crosshair; }
+canvas.mkchart { width: 100%; height: min(54vh, 480px); min-height: 300px; display: block; background: var(--bg-0);   /* the theme's well (2026-09-16): the flat chart and the depth chart draw their ink for the theme, so their ground follows too */ border: 1px solid var(--line-soft); border-radius: var(--radius-sm); cursor: crosshair; }
 .mksub { margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .05em; }
 .mksub .faint { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .treemapwrap.mkboard { height: min(40vh, 420px); min-height: 280px; }
@@ -1787,10 +1794,10 @@ body { font-variant-numeric: tabular-nums; }
    it changes, and every control applies live. No inline styles anywhere -- CSP forbids them, and
    the range fills are drawn by the browser's own widget. */
 .cfgwrap { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; }
-.cfgscrim { position: absolute; inset: 0; background: rgba(2, 5, 9, 0.62); }
+.cfgscrim { position: absolute; inset: 0; background: var(--scrim); }
 .cfg {
   position: relative; width: min(470px, 100%); height: 100%; overflow: auto;   /* 470, not 420 (2026-09-15): the hints wrap a line less, the switches two across have room */
-  background: var(--bg-1); border-left: 1px solid var(--line); box-shadow: -18px 0 40px #0008;
+  background: var(--bg-1); border-left: 1px solid var(--line); box-shadow: -18px 0 40px color-mix(in srgb, var(--bg) 55%, transparent);
   padding: 14px 16px 28px;
 }
 .cfg h2 { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; font-size: 13px; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-dim); }
@@ -1802,7 +1809,7 @@ body { font-variant-numeric: tabular-nums; }
 .cfgtab { font: inherit; font-size: 11px; letter-spacing: .04em; padding: 5px 10px; border-radius: 999px;
   border: 1px solid var(--line); background: transparent; color: var(--fg-dim); cursor: pointer; }
 .cfgtab:hover { color: var(--fg); }
-.cfgtab.on { border-color: var(--accent); color: var(--accent); background: rgba(247, 147, 26, 0.1); }
+.cfgtab.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .cfgbulk { display: flex; gap: 6px; margin: 0 0 8px; }
 .cfgbulk .btn { font-size: 10.5px; padding: 3px 8px; }
 .cfggroup { border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 8px 10px 10px; margin-bottom: 10px; background: var(--bg-2); }
@@ -1828,6 +1835,47 @@ body { font-variant-numeric: tabular-nums; }
 .cfgrow .val { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); display: inline-block; width: 6.5ch; text-align: right; font-variant-numeric: tabular-nums; }
 /* the toggle: a checkbox the browser draws, sized up, so it is keyboard-reachable for free */
 .cfgrow input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+/* THE EXPLORER ON A LIGHT THEME (2026-09-16): its block pages are their own dark design, kept as they
+   are; only what sits on the page itself -- the section titles, the hero's id and its back link --
+   takes the theme's ink, and only when the theme is light, so the shipped look is untouched. */
+:root[data-theme="light"] .xhero h1, :root[data-theme="light"] .xsect h2 { color: var(--fg); }
+:root[data-theme="light"] .xhero .xnav { color: var(--fg-dim); border-color: var(--line); }
+:root[data-theme="light"] .xhero .xnav:hover { color: var(--fg); border-color: var(--accent); }
+:root[data-theme="light"] .xid, :root[data-theme="light"] .xblk-h { color: var(--info); }
+:root[data-theme="light"] .xcopy { color: var(--fg-faint); }
+:root[data-theme="light"] .xhero .xdim, :root[data-theme="light"] .xhero .xago, :root[data-theme="light"] .xtot { color: var(--fg-dim); }
+/* THE KIOSK ON A LIGHT THEME: its frames, heads and the price panel take the theme's panel, line and
+   ink (the price loses its neon glow: a yellow that lights up a black panel is unreadable on white);
+   the boards inside stay space. Light only, so the shipped kiosk is untouched. */
+:root[data-theme="light"] .kpanel { background: var(--bg-1); border-color: var(--line); }
+:root[data-theme="light"] .khead { color: var(--fg-dim); }
+:root[data-theme="light"] .kprice { background: var(--bg-1); border-top-color: var(--line); }
+:root[data-theme="light"] .kdepthwrap { background: var(--bg-0); }
+:root[data-theme="light"] .kp-wait, :root[data-theme="light"] .kp-pair { color: var(--fg-dim); }
+:root[data-theme="light"] .kp-price { color: var(--accent); text-shadow: none; }
+/* APPEARANCE (2026-09-16): the mode as a segmented control, the themes as cards -- a swatch strip of
+   the face the mode picks, the name, a line about it -- and the nine custom pickers dimmed until
+   Custom is the theme. Each card carries its face's page, text and line colours as custom properties
+   (set through the CSSOM), so the card previews the theme rather than describing it. */
+.cfgseg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--bg-3); }
+.cfgsegbtn { font: inherit; font-size: 11px; padding: 4px 11px; border: 0; background: transparent; color: var(--fg-dim); cursor: pointer; }
+.cfgsegbtn + .cfgsegbtn { border-left: 1px solid var(--line); }
+.cfgsegbtn:hover { color: var(--fg); }
+.cfgsegbtn.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.cfgrow.cfgcards { grid-template-columns: 1fr auto; }
+.thcards { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 2px 0 1px; }
+.thcard { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; font: inherit; cursor: pointer;
+  padding: 7px 9px 8px; border-radius: var(--radius-sm); border: 1px solid var(--th-line, var(--line)); background: var(--th-bg, var(--bg-3)); color: var(--th-fg, var(--fg)); }
+.thcard:hover { border-color: var(--fg-dim); }
+.thcard.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.thcard b { font-size: 12px; font-weight: 600; }
+.thcard small { font-size: 10.5px; opacity: .72; line-height: 1.3; }
+.thsw { display: inline-flex; gap: 0; border-radius: 4px; overflow: hidden; border: 1px solid var(--th-line, var(--line)); }
+.thsw i { display: block; width: 14px; height: 12px; }
+.cfgcustomise { font-size: 10.5px; padding: 3px 8px; }
+.cfgrows2 .cfgrow.compact input[type="color"] { width: 36px; height: 20px; }
+.cfgrow.idle { opacity: .55; }
+.cfgrow.idle:hover { opacity: 1; }
 /* DIVERSIONS: a pop-down at the end of the nav. The buttons inside are `nav.pages button` like
    every other tab, so they inherit the tab look and only the layout is new. */
 /* PINNED, because the nav SCROLLS. `nav.pages` is overflow-x:auto with its scrollbar hidden, so
@@ -1900,7 +1948,7 @@ body { font-variant-numeric: tabular-nums; }
 .tetwell.idle { visibility: hidden; }
 .tetswitches { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .tetsw { font: inherit; font-size: 11.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--fg-dim); cursor: pointer; }
-.tetsw.on { border-color: var(--accent); color: var(--accent); background: rgba(247, 147, 26, 0.1); }
+.tetsw.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .tetover { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   background: transparent; text-align: center; padding: 20px; }
 .tetover.dim { background: rgba(0, 0, 0, 0.74); }
