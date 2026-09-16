@@ -11,7 +11,7 @@ connection but to your node out of the box, and read-only toward your node by de
 **This is 100% machine-generated code, directed by a human operator.** Every line of the
 server, the browser app, the 3D engine, the tests and these documents was written by an AI
 under a human's direction, and all auditing has been performed by AI and is published in this
-repository ([docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md), [docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md), [docs/DEFECTS.md](docs/DEFECTS.md),
+repository ([docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md), [docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md), [docs/SECURITY-AUDIT-2026-09-16.md](docs/SECURITY-AUDIT-2026-09-16.md), [docs/DEFECTS.md](docs/DEFECTS.md),
 [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md)). It is **experimental pre-release software: expect
 bugs.**
 
@@ -167,9 +167,10 @@ zero. An address's unspent outputs are listed too (for a history of up to 100 tr
 What it does not yet have: an address's mempool transactions.
 
 Everything here was written by an AI directed by a human, and audited by AI:
-[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md) and
-[docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md) are the audits, findings
-and remediation included. The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24);
+[docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md),
+[docs/SECURITY-AUDIT-2026-09-14.md](docs/SECURITY-AUDIT-2026-09-14.md) and
+[docs/SECURITY-AUDIT-2026-09-16.md](docs/SECURITY-AUDIT-2026-09-16.md) are the audits, findings
+and remediation included (the 09-16 findings are still open). The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24);
 a real install has been done on macOS (Core 29.1) and Linux, and Windows has only the test suite.
 [docs/DEFECTS.md](docs/DEFECTS.md) lists five open items, honestly stated, with the
 measurements behind each. Read it before deploying: several are node-capability limits

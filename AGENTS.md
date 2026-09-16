@@ -438,7 +438,7 @@ ones the file cannot answer; it offers to leave the index build to the server's 
 default; and `--workers N` is written into the config as `addressIndexWorkers`, defaulting to at
 most 4, not the 16 a dedicated build takes.)
 
-**Two AI security audits**, both remediated the same day: `docs/SECURITY-AUDIT.md` (09-13, one
+**A third AI security audit, `docs/SECURITY-AUDIT-2026-09-16.md`, is OPEN:** 1 high (a stalled event-stream reader is never dropped, so memory grows without bound), 8 medium (open mode writable by scripts, probe SSRF, the index build deleting its output directory, wallet key reads in the RPC allowlist, no body deadline, audit-trail flushing, private docs in the npm package, an unsandboxed systemd unit), 17 low. **Two earlier AI security audits**, both remediated the same day: `docs/SECURITY-AUDIT.md` (09-13, one
 HIGH: the node-probe credential leak) and `docs/SECURITY-AUDIT-2026-09-14.md` (1 medium: an
 allocation sized by the `page` parameter; 4 low). A re-audit is due now that the installer has landed on the Mac
 (done 2026-09-14 evening). I1 (open mode lets a LAN client save a node URL the cookie will follow) is the
