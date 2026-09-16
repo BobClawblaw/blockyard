@@ -5,7 +5,7 @@
 **npm:** `npm install -g blockyard`
 **Licence:** Apache-2.0
 
-![Overview](IMAGE-URL-FOR:overview.jpg)
+![Overview](https://talkimg.com/images/2026/09/16/UqsmpJ.jpg)
 
 Two days ago we posted 0.0.9, the initial release. This is 0.1.0 — everything since, in one release, and the first one we would call the real starting point. The short version: it ships **hardened by default**, it makes **no outbound connection to anyone but your node** until you say so, every page fits one screen, the layout's colours are yours to choose, the Mining tab is a proper dashboard, and yes, it runs DOOM. Also Wolfenstein 3D and Quake.
 
@@ -33,27 +33,27 @@ The first review of 0.0.9 in this thread pointed out, correctly, that a monitor 
 
 **Block space, in 3D.** The next block's worth of the mempool as a board of glowing stones: area is vbytes, colour is feerate. When the pool changes, the blocks lift, travel in collision-free lanes and land under gravity. At rest the board comes alive with thirty-odd idle effects — ripples, light cycles, ball lightning, a UFO's tractor beam, Missile Command, a centipede, fireworks, a supernova, an x-ray sweep, a spiral galaxy turning behind it — every one a switch, with sliders for how often they play. Neon tubes, metallic and chrome finishes, a movable lamp, perspective, a star field.
 
-![Block space](IMAGE-URL-FOR:block-space-mode1.jpg)
+![Block space](https://talkimg.com/images/2026/09/16/UqsGmm.jpg)
 
 **Mining, the mempool.space way.** New in 0.1.0: reward stats over the last 144 blocks, the difficulty period with the estimated and previous change and the next halving, a week of pools as a labelled pie (every pool named beside its slice with a leader line), a year of hashrate with the difficulty's steps, and the last twelve adjustments — laid out like mempool.space's mining dashboard with a *View more »* on each card that opens it full screen. Every figure comes from your own node's `getblockstats` and block headers; dollar figures appear only if you switched the price feed on.
 
-![Mining](IMAGE-URL-FOR:mining.jpg)
+![Mining](https://talkimg.com/images/2026/09/16/UqsTBv.jpg)
 
 **An explorer that looks the part.** Search a height, a block hash, a txid or an address. Block pages with the full transaction list, fee distribution and miner attribution (151 pools). Transaction pages with fee, fee rate, feature badges (SegWit, Taproot, RBF, consolidation, OP_RETURN, coinbase), a flow diagram from inputs to outputs, and links to where every coin came from and where it went. **Address pages with full history, balance and unspent outputs** — Bitcoin Core has no address index at any setting, so BlockYard builds its own from the node's block and undo files, kept current as blocks arrive, balances checked against `scantxoutset` to the satoshi. It builds in the background the first time you start (a few hours, ~125 GB of disk) while every other page keeps working.
 
-![A transaction](IMAGE-URL-FOR:explorer-tx.jpg)
+![A transaction](https://talkimg.com/images/2026/09/16/UqsC01.jpg)
 
 **Markets (opt-in).** Public prices from Coinbase, Kraken, Bitstamp, Bitfinex and OKX: a 3D candle board on the same engine as the block space with a neon price line and its own effects — a black hole that crosses the chart and bends the price line round it, a supernova, a light saber, a light curtain — a precise flat candlestick chart, an exchange table and a bitcoinity-style order-book depth chart. Fetched by the server only while someone is looking, and only after you tick the switch.
 
-![Markets](IMAGE-URL-FOR:markets.jpg)
+![Markets](https://talkimg.com/images/2026/09/16/UqsPZC.jpg)
 
 **Appearance.** New in 0.1.0: the layout's colours are a setting. Light, Dark or System (follows the OS); five themes as cards with swatches — BlockYard (the shipped look), Mono, Nous, GitHub Light/Dark Default and Catppuccin Latte/Mocha — and Custom: nine colour pickers with the rest of the scheme derived from them, and a *customise* button that copies the current theme into the pickers so you start from a look. The charts' axes, grids and tooltips follow the theme too. Saved on the server, so every screen agrees.
 
-![Display settings](IMAGE-URL-FOR:settings.jpg)
+![Display settings](https://talkimg.com/images/2026/09/16/UqsR3b.jpg)
 
 **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, full screen in one click. Put it on the wall.
 
-![Kiosk](IMAGE-URL-FOR:kiosk.jpg)
+![Kiosk](https://talkimg.com/images/2026/09/16/UqsMJW.jpg)
 
 ## Can it run DOOM?
 
