@@ -393,7 +393,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 965 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 972 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -450,6 +450,14 @@ is BlockYard in prose and `blockyard` only for the repo, paths, service, user an
 Core (`BLOCKYARD_NODE=main node scripts/shots.mjs`); a fresh browser profile defaults to the first
 node in the config, which on this box is the slow Umbrel -- the first pass photographed an empty
 board.
+
+**The Living sky** (`public/js/livingsky.js`, 2026-09-16): a second sky type. `drawLivingSky` is
+called from `paintFrame` in the star field's place when `opts.skyType === 'living'`, with
+`softStops` and a bound `drawStars` handed in (no import cycle); the astronomy is pure and tested
+(`sunPosition` six-to-six or by latitude, `moonPhase` from a known new moon, `skyColours`
+keyframes by altitude, `starVisibility`); the dome is cached on an offscreen canvas per half a
+degree of sun; `skyExtras()` in settings.js carries the `sky.*` settings to every board as
+`sky*` options, and the four games spread `...t.sky` into their sky canvases.
 
 **Effects are checked on the Kiosk too.** Every effect plays on the Kiosk's two small panels as
 well as on its own page, and a size that is fine on the Markets page can be the whole panel
@@ -666,7 +674,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 965 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 972 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

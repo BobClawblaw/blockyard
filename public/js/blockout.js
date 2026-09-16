@@ -176,6 +176,7 @@ function drawSky() {
     starDensity: b.starDensity, starBrightness: b.starBrightness,
     nebulae: b.nebulae, galaxies: b.galaxies, dust: b.dust, clusters: b.clusters,
     starColours: b.starColours, starGlints: b.starGlints,
+    ...b.sky,
   });
 }
 

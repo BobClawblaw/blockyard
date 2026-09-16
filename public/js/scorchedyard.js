@@ -335,6 +335,7 @@ function drawSky() {
     stars: t.stars, galaxy: t.stars && t.galaxy, galaxyAt: t.galaxyAt,
     starDensity: t.starDensity, starBrightness: t.starBrightness,
     nebulae: t.nebulae, galaxies: t.galaxies, dust: t.dust, clusters: t.clusters, starColours: t.starColours, starGlints: t.starGlints,
+    ...t.sky,
   });
 }
 

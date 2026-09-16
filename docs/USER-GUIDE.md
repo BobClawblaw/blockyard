@@ -1260,6 +1260,24 @@ these are the settings that buy it back, roughly most expensive first:
 
 ### Sky
 
+**Sky** chooses between two skies for every board that draws one — Block space, Markets, the
+Kiosk and the games. **Space** is the shipped star field, described below. **Living sky** is a
+real day drawn from this machine's clock: the sun climbs and sets, the dome goes through night,
+dawn, day and dusk by the sun's height, clouds drift lit from the sun's side, the moon rises at
+tonight's phase, and the star field comes out as the sun goes down.
+
+- **Sky clock** — real time, a whole day every 24 minutes (to watch it turn), or a fixed hour to
+  admire; **Fixed hour** is that hour.
+- **Weather** — clear, scattered cloud, overcast, or a storm with rain and lightning; **Cloud
+  cover** overrides the weather's amount, and -1 leaves it to the weather.
+- **Latitude** — with one set, sunrise, sunset and the sun's height follow the real formula for
+  the date (short winter days, the midnight sun); left unset, the day runs six to six.
+- **Sun rays**, **Rainbow** (opposite a low sun, in scattered weather) and **Shooting stars** (now
+  and then, at night) are the touches, each a switch.
+
+The star field's own settings below still apply at night.
+
+
 One sky, shared by every board that shows stars — so the density you choose applies to Block
 space, Markets and Tetrust alike. Whether a given board shows it stays that board's own switch.
 

@@ -123,6 +123,17 @@ export const DEFAULTS = Object.freeze({
   // no density or brightness control at all. Whether each board shows stars stays per board
   // (space.stars, markets.stars); what the stars LOOK like belongs to neither.
   sky: Object.freeze({
+    // THE LIVING SKY (operator, 2026-09-16: "something realistic with blue skies, clouds, the sun,
+    // change of day, night with the moon coming out"; livingsky.js). Space stays the shipped sky.
+    type: 'space',        // 'space' (the star field) | 'living' (a real day from the clock)
+    clock: 'real',        // 'real' (this machine's time) | 'cycle' (a day every 24 minutes) | 'fixed' (the hour below)
+    hour: 17.5,           // the hour to admire when the clock is fixed
+    weather: 'scattered', // 'clear' | 'scattered' | 'overcast' | 'storm'
+    cover: -1,            // cloud cover 0..1; -1 leaves it to the weather
+    lat: -100,            // latitude for real sunrise and season; -100 means "not set": a six-to-six day
+    rays: true,           // crepuscular rays when the sun is low
+    rainbow: true,        // a rainbow opposite a low sun in scattered weather
+    shooting: true,       // shooting stars at night
     density: 3,           // multiplies the star count (0.2 .. 3) -- the shipped look sits at the top of the range
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
     galaxy: true,         // the same stars laid on spiral arms, turning once a quarter hour
@@ -487,6 +498,24 @@ const PANEL_GROUPS = Object.freeze([
     title: 'Sky',
     note: 'The star field itself, wherever it is drawn — behind the Block space board and behind the candles. Each board decides whether to show it; this decides what it looks like.',
     rows: Object.freeze([
+      Object.freeze({
+        key: 'type', label: 'Sky', kind: 'choice', hint: 'Space is the star field; the living sky is a real day from this machine\u2019s clock \u2014 sun, clouds, dusk, the moon at its phase, and the stars at night',
+        options: Object.freeze([['space', 'Space'], ['living', 'Living sky']]),
+      }),
+      Object.freeze({
+        key: 'clock', label: 'Sky clock', kind: 'choice', hint: 'What time the living sky shows',
+        options: Object.freeze([['real', 'Real time'], ['cycle', 'A day every 24 minutes'], ['fixed', 'A fixed hour']]),
+      }),
+      Object.freeze({ key: 'hour', label: 'Fixed hour', kind: 'range', min: 0, max: 24, step: 0.25, hint: 'The hour the living sky holds when the clock is fixed; 17.5 is late afternoon' }),
+      Object.freeze({
+        key: 'weather', label: 'Weather', kind: 'choice', hint: 'How much cloud, and whether it rains',
+        options: Object.freeze([['clear', 'Clear'], ['scattered', 'Scattered cloud'], ['overcast', 'Overcast'], ['storm', 'Storm: rain and lightning']]),
+      }),
+      Object.freeze({ key: 'cover', label: 'Cloud cover', kind: 'range', min: -1, max: 1, step: 0.05, hint: 'Overrides the weather\u2019s cloud amount, 0 to 1; -1 leaves it to the weather' }),
+      Object.freeze({ key: 'lat', label: 'Latitude', kind: 'range', min: -100, max: 90, step: 1, hint: 'Your latitude, for real sunrise and sunset and the season; -100 leaves a six-to-six day' }),
+      Object.freeze({ key: 'rays', label: 'Sun rays', kind: 'toggle', hint: 'Crepuscular rays when the sun is low' }),
+      Object.freeze({ key: 'rainbow', label: 'Rainbow', kind: 'toggle', hint: 'A rainbow opposite a low sun in scattered weather' }),
+      Object.freeze({ key: 'shooting', label: 'Shooting stars', kind: 'toggle', hint: 'Now and then, at night' }),
       Object.freeze({ key: 'galaxy', label: 'Spiral galaxy', kind: 'toggle', hint: 'Lay the stars on slowly turning spiral arms instead of scattering them evenly. One turn takes about fifteen minutes' }),
       Object.freeze({
         key: 'galaxyAt', label: 'Galaxy centre', kind: 'choice',
@@ -992,6 +1021,16 @@ export function isDefault(s) {
  * Merged OVER the caller's own options, so a mode's resolution and slab still win where they are
  * the point of the mode; these are the user's preferences about how it is drawn.
  */
+/** The living sky's settings as board options, for every board that draws a sky. */
+export function skyExtras(n) {
+  const sky = n.sky;
+  return {
+    skyType: sky.type, skyClock: sky.clock, skyHour: sky.hour, skyWeather: sky.weather,
+    skyCover: sky.cover < 0 ? undefined : sky.cover, skyLat: sky.lat <= -95 ? undefined : sky.lat,
+    skyRays: sky.rays, skyRainbow: sky.rainbow, skyShooting: sky.shooting,
+  };
+}
+
 export function spaceOptions(s) {
   const n = normalise(s);
   const sp = n.space;
@@ -1018,6 +1057,7 @@ export function spaceOptions(s) {
     galaxyAt: n.sky.galaxyAt,
     nebulae: n.sky.nebulae, galaxies: n.sky.galaxies, dust: n.sky.dust, clusters: n.sky.clusters,
     starColours: n.sky.colours, starGlints: n.sky.glints,
+    ...skyExtras(n),
   };
   // the seam belongs to the Stone edges switch at every level of detail: a control that does
   // nothing in one mode is worse than no control (operator: "stone edges don't work in flat tile
@@ -1081,6 +1121,7 @@ export function blockoutOptions(s) {
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
     starColours: sky.starColours, starGlints: sky.starGlints,
+    sky: skyExtras(n),
   };
 }
 
@@ -1099,6 +1140,7 @@ export function blockanoidOptions(s) {
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters,
     starColours: sky.starColours, starGlints: sky.starGlints,
+    sky: skyExtras(n),
   };
 }
 
@@ -1115,6 +1157,7 @@ export function tetrustOptions(s) {
     gridOpts: courtGridColours(n.tetrust.gridColour, n.tetrust.gridBrightness, 0.06),
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
+    sky: skyExtras(n),
   };
 }
 
@@ -1130,6 +1173,7 @@ export function scorchedOptions(s) {
     opponents: sc.opponents, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,
     starDensity: sky.starDensity, starBrightness: sky.starBrightness,
     nebulae: sky.nebulae, galaxies: sky.galaxies, dust: sky.dust, clusters: sky.clusters, starColours: sky.starColours, starGlints: sky.starGlints,
+    sky: skyExtras(n),
   };
 }
 
@@ -1145,6 +1189,7 @@ export function marketsOptions(s) {
     stars: mk.stars,
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
+    ...skyExtras(n),
     galaxy: n.sky.galaxy,
     galaxyAt: n.sky.galaxyAt,
     nebulae: n.sky.nebulae, galaxies: n.sky.galaxies, dust: n.sky.dust, clusters: n.sky.clusters,

@@ -19,6 +19,7 @@ import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
 import { AGENTS, isAgent, rng, lensFlare, saucerAbove } from './agents.js';
+import { drawLivingSky } from './livingsky.js';
 
 const STATE = new WeakMap();
 
@@ -3688,7 +3689,12 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   ctx.clearRect(0, 0, pw, ph);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
-  if (starsOn(opts)) drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+  // THE SKY: the star field, or the living sky (livingsky.js: a real day from the clock, with the
+  // star field coming out at night through the same drawStars)
+  if (starsOn(opts)) {
+    if (opts.skyType === 'living') drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
+    else drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+  }
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
   if (!frame.bounds && !opts.oblique) return;
@@ -4104,6 +4110,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
+    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false,
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
