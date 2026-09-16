@@ -366,73 +366,85 @@ Blockanoid's first cut); M2 and M4 are each about that again; M3 and M5 are smal
 6. **v1 roster** as listed in §4, or a shorter first cut (missiles, nukes, MIRV, Funky Bomb,
    Roller, Napalm, Dirt Clod, Riot Bomb, Tracer, Shield, Parachute) to reach M2 sooner.
 
-## 12. A better control system (scoped 2026-09-16, at the operator's ask)
+## 12. A better control system (scoped 2026-09-16; rescoped the same day)
 
-What shipped in M1 works and is faithful, but it is the 1991 keyboard with a mouse bolted on.
-Three things make it tiring now: **the weapon list** (thirty-three of them behind `[` and `]`,
-which is a dozen key presses to reach a Nuke once the shop has been kind), **the numbers** (angle
-a degree at a time, power ten at a time, so crossing the field is a long hold with modifiers
-nobody sees), and **the drag** (it sets the angle but not the power, and it shows nothing while
-you hold it, so a drag is a guess you commit to). Below, in the order they would land.
+The first scope proposed a catapult: press on your tank, pull back, release. The operator's answer
+was that it sucks as a control scheme, and on inspection it does -- the drag that shipped in M1 is
+already that gesture, and it is the weakest thing on the screen:
 
-### C1 — the pull. The one change worth making first
+* **It is coarse.** The field is about 1,300 screen pixels for 1,000 units of power, and the pull
+  only uses the part of it between the tank and the pointer. Four or five units of power per pixel,
+  against the keyboard's one.
+* **It forgets.** Every grab starts from wherever the pointer went down, so the aim you spent the
+  last turn finding is gone the moment you touch the field.
+* **It cannot bracket.** Artillery is not aiming, it is CORRECTING: fire, watch, move the power by
+  half the miss, fire again. That is a sequence of small deltas on a remembered number, which is
+  the one thing a drag gesture is bad at.
 
-Press anywhere on your own tank and **pull back against the direction you want to fire**, as a
-catapult: the angle is the line from the tank to the pointer, the power is the pull's length
-against a fixed reach (a quarter of the field's width = 1000). While the pointer is down:
+So: the keyboard and the readouts are the control system, the pointer picks TARGETS rather than
+setting numbers, and everything below is about making small corrections fast and exact.
 
-* a taut line from the turret to the pointer, drawn on the flat plane the wind uses, so it never
-  cuts into the land;
-* the angle and power as they will be committed, at the turret, in the tank's colour;
-* the barrel turning live, which it already does.
+### C1 — the numbers, fast and exact. The one worth doing first
 
-Release **sets** the shot by default, and **fires** it when Display settings → Scorched Yard →
-*Release fires* is on. Escape or a right-button press cancels the pull and leaves the old aim.
-Touch is the same gesture, which is the whole of the touch story.
+* **Hold to repeat, with a ramp.** A held arrow steps 1, then 2, then 5 after half a second, so
+  crossing 180 degrees takes a second and a half and the last degree still takes one press.
+* **Modifiers that are written down**: Shift fine (1 power, 0.5 degree), Ctrl coarse (100 power,
+  5 degrees). They exist today and nothing says so outside a paragraph of bullets.
+* **`,` and `.` nudge the power by one**, the classic bracket, without a modifier.
+* **The wheel over the field**: power, and with Shift the angle. The pointer is already there.
+* **The readouts become inputs.** Click the angle or the power on the HUD and type the number; the
+  angle and power a player is reading off a previous shot go in directly.
+* **`R` repeats the last shot exactly** -- same angle, same power, same weapon. The most missed
+  convenience in the original.
 
-### C2 — the ranging arc
+### C2 — correcting, which is what the game is actually made of
 
-An optional ghost path from the muzzle under the current angle, power, wind and gravity, drawn as
-dim beads on the flat plane. A setting, because it changes the game: **off** (the original),
-**short** — the first fifth of the flight, enough to read the lean of the shot without giving the
-landing away — or **full**, for a child or a first game. Default **short**. The Spoiler already
-computes the whole flight; this is the same `simulateShot`, truncated, and costs one call per
-change of aim.
+Click a tank (or press `1`..`4`) to mark it as your TARGET. The HUD then shows, under the power,
+**where your last shot landed relative to it**: "12 short" or "5 over". One key, `C`, applies the
+classic halving correction to the power in that direction -- the Tosser's own arithmetic, offered
+to the human. Nothing is solved for you: the correction is from YOUR last shot, so wind changes
+and the hills are still yours to read. Off is a setting for anyone who wants the 1991 experience.
 
-### C3 — the weapon chooser, and the items as buttons
+### C3 — the weapon grid, and the items as buttons
 
 `[` and `]` stay. Beside them:
 
-* **a grid** that drops out of the weapon line on the HUD: what you own, with counts and blast
-  radii, biggest first, click to pick, Escape to close, `W` to open;
-* **1–9** for the nine you own most recently bought, in shop order, which is how a Scorched Earth
-  player actually thinks ("the nukes are on 4");
+* **a grid** dropping out of the weapon line: what you own, counts and blast radii, biggest first,
+  click to pick, `W` to open, Escape to close;
+* **1--9 for the nine you own**, in shop order, which is how a Scorched Earth player thinks ("the
+  nukes are on 4") -- when a target is marked they still pick the target, so weapons take a
+  modifier or their own row: settled at build time, whichever reads better with C2;
 * **`Q` for the last weapon fired**, so a ranging Baby Missile then the real thing is two keys;
-* **the item pills become buttons**. They already say what they are and what key they take; they
-  should take a click as well. Nothing else in BlockYard asks you to remember `T` for a trigger.
+* **the item pills become buttons**. They already name themselves and their key; they should take
+  a click too.
 
-### C4 — the numbers, quickly
+### C4 — the ranging arc, optional
 
-* **Hold to repeat, with acceleration**: a held arrow moves 1, then 2, then 5 a step after half a
-  second, so crossing 180° is a second and a half rather than a marathon.
-* **The wheel** over the field: power; with Shift: angle. The pointer is already there.
-* **`R` repeats the last shot** exactly (the original's most-missed convenience), and `,`/`.`
-  nudge the power by one for the classic bracketing.
-* **The readouts become inputs**: click the angle or the power on the HUD and type a number.
+A ghost path from the muzzle under the current angle, power, wind and gravity, drawn as dim beads
+on the flat plane the wind uses. A setting, because it changes the game: **off** (the original),
+**short** -- the first fifth of the flight, enough to read the lean without giving the landing
+away -- or **full**. Default short. One truncated `simulateShot` per change of aim.
 
 ### C5 — what the panel says
 
 The **fire button carries the weapon and its count** ("fire · Nuke ×1"), so an expensive shot is
-visible before it goes. When the weapon is the last of a one-of-a-kind (a Nuke, a Death's Head),
-the button asks once — a setting, *Confirm the last of a weapon*, on by default; it is the single
-most common regret in the original. The keys legend becomes a two-column table with the modifiers
-written out rather than a paragraph of bullets.
+visible before it goes, and it asks once before the last of a one-of-a-kind (a setting, on by
+default: the most common regret in the original). The keys legend becomes a two-column table with
+the modifiers written out.
+
+### The pointer, after all this
+
+The drag that sets angle and power goes. In its place: **a click on the field marks a target**
+(C2), **a drag with the right button pans nothing and cancels** (there is nothing to pan), and a
+**press on your own tank still turns the barrel** for a coarse first approximation, angle only,
+power untouched -- which is the one part of the gesture that was worth keeping, because the angle
+is the cheap half of the aim and the power is the half you bracket. Touch gets the same, with the
+HUD's fire button and the pills, which are already thumb-sized.
 
 ### Order, size and risk
 
-C1 and C4 are the ones that change how the game feels, and neither touches the rules: both are
-`scorchedyard.js` and its pointer and key handlers, with `aim()` doing the committing as it does
-now. C3 is a panel and a menu. C2 needs a setting and one truncated `simulateShot` per aim. C5 is
-copy and one confirm. Nothing here needs a change in `scorched.js`, so the tests that hold the
-rules keep holding them; the new tests are about the pull's arithmetic (a pointer at a place and a
-tank at a place give this angle and this power, clamped) and about the key map.
+C1 and C2 change how the game feels and neither touches the rules: both are `scorchedyard.js`, its
+key and pointer handlers, and `aim()` doing the committing as it does now. C3 is a menu and some
+buttons. C4 needs a setting and a truncated `simulateShot`. C5 is copy and one confirm. Nothing
+here needs a change in `scorched.js`, so the tests that hold the physics keep holding them; the new
+tests are the key map, the ramp's arithmetic, and the correction C2 applies for a given miss.
