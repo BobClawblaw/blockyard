@@ -482,7 +482,7 @@ function roundOver(e) {
   G.shopping = true;
   draw();
   overlay(
-    w ? `${w.name} holds the field` : 'nobody left standing',
+    w ? `${w.name} ${w.kind === 'human' ? 'hold' : 'holds'} the field` : 'nobody left standing',
     `round ${e.round} of ${g.rounds} is over. ${g.tanks.map((t) => `${t.name} ${t.score}`).join(' · ')}. Spend what you earned, then N or the button for the next round.`,
     'next round',
     true,
@@ -515,7 +515,7 @@ function gameOver() {
   if (rank && you) recordScore({ score: you.score, kills: you.kills, rounds: g.rounds, won: top === you, at });
   drawScores(rank ? at : null);
   overlay(
-    top ? `${top.name} wins the war` : 'a draw',
+    top ? `${top.name} ${top.kind === 'human' ? 'win' : 'wins'} the war` : 'a draw',
     `${g.tanks.map((t) => `${t.name} ${t.score} (${money(t.cash)})`).join(' · ')}${rank ? ` — #${rank} on this browser` : ''}.`,
     'play again',
     true,
