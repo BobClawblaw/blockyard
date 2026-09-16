@@ -1373,6 +1373,12 @@ is wrong).
   the date (short winter days, the midnight sun); left unset, the day runs six to six.
 - **Sun rays**, **Rainbow** (opposite a low sun, in scattered weather) and **Shooting stars** (now
   and then, at night) are the touches, each a switch.
+- **Moon** — up every night, highest at midnight and never thinner than a fat crescent (the
+  shipped choice), or on its real track at its real phase, which some nights means no moon at all.
+
+The sun and the moon are drawn in front of the clouds, so neither is lost behind one, and a board
+whose land fills the lower part of the panel sets its horizon where the land is, so they go down
+behind the hills rather than under them.
 
 A board under the Earth plays no idle effects: a supernova over a blue afternoon is wrong, on the
 block board and on the candles alike. Their switches are kept, and the Galaxy gets them back.

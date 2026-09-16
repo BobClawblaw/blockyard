@@ -132,7 +132,7 @@ test('a frame draws on a stub context at day, at dusk and at a stormy night with
 test('the settings reach every board that draws a sky, and each board chooses its own', () => {
   const n = normalise(null);
   assert.equal(n.sky.type, undefined, 'there is no global sky any more: each board has a `sky` (docs/PLAN-SKIES.md)');
-  assert.deepEqual(Object.keys(skyExtras(n)), ['skyClock', 'skyHour', 'skyWeather', 'skyCover', 'skyLat', 'skyRays', 'skyRainbow', 'skyShooting']);
+  assert.deepEqual(Object.keys(skyExtras(n)), ['skyClock', 'skyHour', 'skyWeather', 'skyCover', 'skyLat', 'skyRays', 'skyRainbow', 'skyShooting', 'skyMoon']);
   assert.equal(skyExtras(n).skyCover, undefined, '-1 leaves the cover to the weather');
   assert.equal(skyExtras(n).skyLat, undefined, 'no latitude by default');
   const l = normalise({ space: { sky: 'earth' }, markets: { sky: 'earth' }, tetrust: { sky: 'earth' }, blockout: { sky: 'earth' }, blockanoid: { sky: 'earth' }, scorched: { sky: 'earth' }, sky: { clock: 'fixed', hour: 7, weather: 'storm', cover: 0.5, lat: 40 } });
@@ -158,4 +158,31 @@ test('the settings reach every board that draws a sky, and each board chooses it
   const engine = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(engine, /earthSky\(opts\)\) drawLivingSky/);
   for (const f of ['tetrust.js', 'blockout.js', 'blockanoid.js', 'scorchedyard.js']) assert.match(readFileSync(new URL(`../public/js/${f}`, import.meta.url), 'utf8'), /\.\.\.[tb]\.sky,/, `${f} passes the sky`);
+});
+
+// THE SUN AND THE MOON ARE THERE TO BE SEEN (operator, 2026-09-16: "so sun and moon any more?")
+test('the horizon can be raised, the discs go over the clouds, and the moon is up every night unless asked otherwise', () => {
+  const w = 800, h = 400;
+  // a board whose land fills the lower third raises the horizon: the same sun sits higher
+  const noon = sunPosition(12);
+  assert.ok(sunScreen(noon, w, h, 62, 0.6).y < sunScreen(noon, w, h, 62, 1).y, 'a raised horizon lifts the whole track');
+  assert.ok(Math.abs(sunScreen(sunPosition(18), w, h, 62, 0.6).y - h * 0.6) < h * 0.12, 'and the sun sets at the horizon the board named, not at the panel\u2019s bottom');
+  // the discs are painted after the clouds: the sun's glow before them, its disc after
+  const src = readFileSync(new URL('../public/js/livingsky.js', import.meta.url), 'utf8');
+  const glow = src.indexOf("paintSun(ctx, pw, ph, s, sun, cols, softStops, 'glow')"), clouds = src.indexOf('paintClouds(ctx, pw, ph, now, opts, sun, s, cols, weather, softStops);'), disc = src.indexOf("paintSun(ctx, pw, ph, s, sun, cols, softStops, 'disc')");
+  assert.ok(glow > 0 && clouds > glow && disc > clouds, 'glow, then clouds, then the disc');
+  assert.ok(src.indexOf('paintMoon(ctx, pw, ph, m, moon, shown, night, cols, softStops);') > clouds, 'the moon over the clouds too');
+  // a new moon at one in the morning: none on the real track, a fat crescent up in the shipped mode
+  const stops = () => {};
+  const ctx = () => ({ fillStyle: '', strokeStyle: '', lineWidth: 1, beginPath() {}, arc() {}, fill() {}, moveTo() {}, lineTo() {}, stroke() {}, closePath() {}, fillRect() {}, clearRect() {}, ellipse() {} });
+  const newMoon = new Date(Date.UTC(2000, 0, 6, 18, 14)).getTime();
+  const real = drawLivingSky(ctx(), w, h, 1, 0, { skyClock: 'fixed', skyHour: 1, skyMoon: 'real', skyNowMs: newMoon }, { softStops: stops, drawStars: null });
+  const nightly = drawLivingSky(ctx(), w, h, 1, 0, { skyClock: 'fixed', skyHour: 1, skyNowMs: newMoon }, { softStops: stops, drawStars: null });
+  assert.equal(real.moon, false, 'the real new moon is not there to be seen');
+  assert.equal(nightly.moon, true, 'the shipped moon is up at one in the morning whatever the calendar says');
+  const noonNightly = drawLivingSky(ctx(), w, h, 1, 0, { skyClock: 'fixed', skyHour: 12, skyNowMs: newMoon }, { softStops: stops, drawStars: null });
+  assert.equal(noonNightly.moon, false, 'and down by day');
+  assert.equal(drawLivingSky(ctx(), w, h, 1, 0, { skyClock: 'fixed', skyHour: 12, skyHorizon: 0.58 }, { softStops: stops, drawStars: null }).horizon, 0.58, 'the horizon the board asked for is the one it drew');
+  const game = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(game, /skyHorizon: 0\.58,/, 'Scorched Yard sets its horizon where its land is');
 });

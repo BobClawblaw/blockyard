@@ -562,6 +562,9 @@ function drawSky() {
   board3d(sky, [], {
     ...SKY,
     ...t.sky,          // which sky this board chose, and what it is made of (settings.js skyFor)
+    // the horizon is where the land is, not the bottom of the panel: the hills fill the lower
+    // third, so the sun and the moon set behind them rather than under them
+    skyHorizon: 0.58,
     // the clouds of the Living sky drift with this round's wind, and turn with it
     skyWind: G.game ? Math.sign(G.game.wind || 1) * (0.4 + Math.abs(G.game.wind) / 4) : 1,
     // and each round draws its own hour of the Living sky (the original's sky changed each round)

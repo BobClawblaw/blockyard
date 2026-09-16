@@ -136,6 +136,7 @@ export const DEFAULTS = Object.freeze({
     rays: true,           // crepuscular rays when the sun is low
     rainbow: true,        // a rainbow opposite a low sun in scattered weather
     shooting: true,       // shooting stars at night
+    moon: 'night',        // 'night' (up every night, highest at midnight) | 'real' (its real track and phase)
     density: 3,           // multiplies the star count (0.2 .. 3) -- the shipped look sits at the top of the range
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
     galaxy: true,         // the same stars laid on spiral arms, turning once a quarter hour
@@ -549,6 +550,10 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'rays', label: 'Sun rays', kind: 'toggle', hint: 'Crepuscular rays when the sun is low' }),
       Object.freeze({ key: 'rainbow', label: 'Rainbow', kind: 'toggle', hint: 'A rainbow opposite a low sun in scattered weather' }),
       Object.freeze({ key: 'shooting', label: 'Shooting stars', kind: 'toggle', hint: 'Now and then, at night' }),
+      Object.freeze({
+        key: 'moon', label: 'Moon', kind: 'choice', hint: 'Up every night, highest at midnight, never thinner than a fat crescent \u2014 or on its real track at its real phase, which some nights means no moon at all',
+        options: Object.freeze([['night', 'Up every night'], ['real', 'Its real track and phase']]),
+      }),
     ]),
   }),
   Object.freeze({
@@ -1089,7 +1094,7 @@ export function skyExtras(n) {
   return {
     skyClock: sky.clock, skyHour: sky.hour, skyWeather: sky.weather,
     skyCover: sky.cover < 0 ? undefined : sky.cover, skyLat: sky.lat <= -95 ? undefined : sky.lat,
-    skyRays: sky.rays, skyRainbow: sky.rainbow, skyShooting: sky.shooting,
+    skyRays: sky.rays, skyRainbow: sky.rainbow, skyShooting: sky.shooting, skyMoon: sky.moon,
   };
 }
 

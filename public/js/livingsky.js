@@ -60,11 +60,19 @@ export function sunPosition(hour, dayOfYear = 172, lat = null) {
   return { alt, frac, rise, set };
 }
 
-/** The sun's place on a canvas: left to right over the day, up by altitude; below the bottom edge at night. */
-export function sunScreen(sun, pw, ph, maxAlt = 62) {
+/**
+ * The sun's place on a canvas: left to right over the day, up by altitude; below the horizon at
+ * night. `horizon` is where the horizon IS, as a share of the panel's height from the top -- 1 is
+ * the bottom edge, which is right for a board with nothing in front of the sky; a board whose land
+ * fills the lower third passes about 0.6, so the sun sets behind the hills and not under them
+ * (operator, 2026-09-16: "so sun and moon any more?" -- at dusk the disc had dropped behind the
+ * terrain long before the sky called it set).
+ */
+export function sunScreen(sun, pw, ph, maxAlt = 62, horizon = 1) {
+  const H = ph * Math.max(0.2, Math.min(1, horizon));
   const x = pw * (0.06 + 0.88 * Math.max(-0.25, Math.min(1.25, sun.frac)));
   const k = Math.max(-0.6, Math.min(1, sun.alt / maxAlt));
-  const y = ph - (0.10 + 0.80 * k) * ph;
+  const y = H - (0.10 + 0.80 * k) * H;
   return { x, y };
 }
 
@@ -199,17 +207,22 @@ function paintTwilight(ctx, pw, ph, sunX, cols, softStops) {
   ], 90);
 }
 
-function paintSun(ctx, pw, ph, s, sun, cols, softStops) {
+// The sun in two passes: its GLOW is painted before the clouds, so they are lit from behind, and
+// its DISC after them, so it is never lost behind one (operator, 2026-09-16: at noon it was a small
+// pale spot under a cloud). And it is half again as big as the first cut: a sun a fiftieth of the
+// panel high is a star, not a sun.
+function paintSun(ctx, pw, ph, s, sun, cols, softStops, pass = 'both') {
   if (sun.alt < -8) return;
   const k = Math.max(0, Math.min(1, sun.alt / 30));
   // THE SUN IS NOT WHITE (operator, 2026-09-16: "The Sun is white?!"). A white disc is what a
   // camera makes of it; the eye, and every painting of a sky, sees gold. Deep orange on the
   // horizon, warm gold overhead -- never past a warm cream, even at noon.
   const c = mix3([255, 120, 60], [255, 212, 116], k);
-  const r = ph * 0.02 * (1 + 0.7 * (1 - k));
+  const r = ph * 0.032 * (1 + 0.7 * (1 - k));
   const glow = 0.3 + 0.35 * (1 - k);
   const vis = sun.alt < 0 ? Math.max(0, 1 + sun.alt / 8) : 1;
-  softStops(ctx, s.x, s.y, ph * 0.5, [[0, rgb(c, glow * 0.7 * vis)], [0.08, rgb(c, glow * 0.45 * vis)], [0.3, rgb(c, glow * 0.12 * vis)], [1, rgb(c, 0)]], 90);
+  if (pass !== 'disc') softStops(ctx, s.x, s.y, ph * 0.5, [[0, rgb(c, glow * 0.7 * vis)], [0.08, rgb(c, glow * 0.45 * vis)], [0.3, rgb(c, glow * 0.12 * vis)], [1, rgb(c, 0)]], 90);
+  if (pass === 'glow') return;
   // the disc, with a soft edge: a few rings from the rim in
   softStops(ctx, s.x, s.y, r * 1.5, [[0, rgb(c, vis)], [0.6, rgb(c, vis)], [1, rgb(c, 0)]], 12);
   softStops(ctx, s.x, s.y, r * 0.9, [[0, rgb([255, 246, 214], 0.92 * k * vis)], [1, rgb([255, 246, 214], 0)]], 8);
@@ -217,22 +230,37 @@ function paintSun(ctx, pw, ph, s, sun, cols, softStops) {
 
 function paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops) {
   if (moon.alt < -3 || phase.lit < 0.03) return;
-  const r = ph * 0.03;
+  const r = ph * 0.038;
   // faint by day (a daytime moon is there, but it is not a lamp), and a thin crescent by day is invisible
   const show = Math.max(0, Math.min(1, (moon.alt + 3) / 6)) * (0.12 + 0.88 * night);
   if (show <= 0.02 || (night < 0.3 && phase.lit < 0.25)) return;
   if (night > 0.3) softStops(ctx, m.x, m.y, r * 5, [[0, rgb([220, 228, 245], 0.25 * night * show)], [0.3, rgb([220, 228, 245], 0.08 * night * show)], [1, rgb([220, 228, 245], 0)]], 40);
+  // ONLY THE LIT PART IS PAINTED. The first cut drew a full disc and then a disc of sky colour over
+  // the dark side; once the moon moved in front of the clouds and the stars, that sky-coloured
+  // disc was a hole punched in them. The lit shape is a polygon: the outer half-circle on the lit
+  // side, and the terminator -- a half-ellipse whose width is the phase -- back along the other.
+  const L = Math.max(0.03, Math.min(1, phase.lit));
+  const side = phase.waxing ? 1 : -1;                     // waxing: lit on the right
+  const a = r * (2 * L - 1);                              // the terminator's half-width: negative bulges into the lit side
+  const N = 28;
   ctx.fillStyle = rgb([236, 238, 244], show);
-  ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.fill();
-  // the seas, faint
-  ctx.fillStyle = rgb([196, 200, 212], show * 0.6);
-  for (const [dx, dy, rr] of [[-0.3, -0.2, 0.28], [0.2, 0.1, 0.2], [-0.05, 0.4, 0.15]]) { ctx.beginPath(); ctx.arc(m.x + dx * r, m.y + dy * r, rr * r, 0, Math.PI * 2); ctx.fill(); }
-  // the phase: a disc of sky over the dark part, offset by the lit fraction (waxing: lit on the right)
-  const skyHere = mix3(cols.horizon, cols.zenith, Math.max(0, Math.min(1, 1 - m.y / ph)));
-  const d = 2 * r * phase.lit;
-  const off = (phase.waxing ? -1 : 1) * d;
-  ctx.fillStyle = rgb(skyHere, 0.93 * show);
-  ctx.beginPath(); ctx.arc(m.x + off, m.y, r * 1.02, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  for (let i = 0; i <= N; i++) {                          // the limb, top to bottom on the lit side
+    const th = -Math.PI / 2 + (i / N) * Math.PI;
+    const px = m.x + side * Math.cos(th) * r, py = m.y + Math.sin(th) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  for (let i = N; i >= 0; i--) {                          // the terminator, bottom to top
+    const th = -Math.PI / 2 + (i / N) * Math.PI;
+    ctx.lineTo(m.x + side * Math.cos(th) * a, m.y + Math.sin(th) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // the seas, faint, only when enough of the face is lit for them to sit inside it
+  if (L > 0.6) {
+    ctx.fillStyle = rgb([196, 200, 212], show * 0.6);
+    for (const [dx, dy, rr] of [[0.3 * side, -0.2, 0.28], [0.45 * side, 0.2, 0.16], [0.2 * side, 0.45, 0.14]]) { ctx.beginPath(); ctx.arc(m.x + dx * r, m.y + dy * r, rr * r, 0, Math.PI * 2); ctx.fill(); }
+  }
 }
 
 function paintClouds(ctx, pw, ph, now, opts, sun, s, cols, weather, softStops) {
@@ -400,7 +428,8 @@ export function drawLivingSky(ctx, pw, ph, dpr, now, opts, helpers) {
   const cols = skyColours(sun.alt);
   const night = starVisibility(sun.alt);
   const weather = WEATHER[opts.skyWeather] ?? WEATHER.scattered;
-  const s = sunScreen(sun, pw, ph, lat == null ? 62 : 90);
+  const horizon = Number.isFinite(opts.skyHorizon) ? opts.skyHorizon : 1;
+  const s = sunScreen(sun, pw, ph, lat == null ? 62 : 90, horizon);
   // the dome, cached until the sun has moved half a degree
   const key = `${pw}x${ph}|${Math.round(sun.alt * 2) / 2}`;
   const painted = domeLayer(ctx, pw, ph, key, (c2) => paintDome(c2, pw, ph, cols));
@@ -410,13 +439,22 @@ export function drawLivingSky(ctx, pw, ph, dpr, now, opts, helpers) {
   paintTwilight(ctx, pw, ph, s.x, cols, softStops);
   if (opts.skyShooting !== false) paintShootingStar(ctx, pw, ph, now, night, dpr);
   const phase = moonPhase(t.date);
-  const moon = moonPosition(t.hour, phase, t.dayOfYear, lat);
-  const m = sunScreen(moon, pw, ph, lat == null ? 62 : 90);
-  paintMoon(ctx, pw, ph, m, moon, phase, night, cols, softStops);
-  paintSun(ctx, pw, ph, s, sun, cols, softStops);
+  // THE MOON EVERY NIGHT (opts.skyMoon 'night', the shipped choice): on the real track a young
+  // crescent sets an hour or two after the sun and a night has no moon in it at all, which is
+  // astronomy and not what anyone looking at a night sky for pleasure expects. 'night' puts it on
+  // the sun's own track twelve hours behind -- highest at midnight -- and never thinner than a
+  // fat crescent; 'real' is the real thing, for the astronomer.
+  const nightly = opts.skyMoon !== 'real';
+  const moon = nightly ? sunPosition(((t.hour + 12) % 24 + 24) % 24, t.dayOfYear, lat) : moonPosition(t.hour, phase, t.dayOfYear, lat);
+  const shown = nightly ? { ...phase, lit: Math.max(phase.lit, 0.4) } : phase;
+  const m = sunScreen(moon, pw, ph, lat == null ? 62 : 90, horizon);
+  paintSun(ctx, pw, ph, s, sun, cols, softStops, 'glow');
   if (opts.skyRays !== false) paintRays(ctx, pw, ph, s, sun, cols);
   paintClouds(ctx, pw, ph, now, opts, sun, s, cols, weather, softStops);
+  // the two discs over the clouds: a sun or a moon lost behind one is a sky with neither
+  paintMoon(ctx, pw, ph, m, moon, shown, night, cols, softStops);
+  paintSun(ctx, pw, ph, s, sun, cols, softStops, 'disc');
   if (opts.skyRainbow && opts.skyWeather === 'scattered') paintRainbow(ctx, pw, ph, s, sun, dpr);
   if (weather.rain) { paintRain(ctx, pw, ph, now, dpr); if (weather.storm) paintLightning(ctx, pw, ph, now, dpr); }
-  return { hour: t.hour, alt: sun.alt, sun: sun.alt >= -8, moon: moon.alt >= -3 && phase.lit >= 0.03, stars: night, weather: opts.skyWeather ?? 'scattered', phase: phase.p };
+  return { hour: t.hour, alt: sun.alt, sun: sun.alt >= -8, moon: moon.alt >= -3 && shown.lit >= 0.03, stars: night, weather: opts.skyWeather ?? 'scattered', phase: phase.p, horizon };
 }

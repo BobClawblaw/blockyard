@@ -4124,7 +4124,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
-    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false,
+    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon,
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
