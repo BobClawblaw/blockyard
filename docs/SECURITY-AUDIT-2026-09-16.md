@@ -12,8 +12,8 @@
 > M7: `package.json` excludes the private notes, and a test holds the pack to tracked files. M8:
 > the shipped unit is sandboxed, and was started under exactly those settings. Each fix has a test
 > in `test/audit-2026-09-16.test.js`. The H1 and M4 tests were run against the old code and failed,
-> and the M3 proof of concept was re-run against the old build, which again deleted the planted file. The Low and Informational findings are still open. The
-> report below is kept as written.
+> and the M3 proof of concept was re-run against the old build, which again deleted the planted file.
+> The Low and Informational findings are still open.
 >
 > Findings are listed most severe first. Each one says whether it was reproduced (**CONFIRMED**) or
 > found by reading the code (**CODE-READ**).
@@ -41,10 +41,10 @@
 
 | verdict | count |
 |---|---|
-| High | **1** |
-| Medium | 8 |
-| Low | 17 |
-| Informational | 6 |
+| High | **1**, fixed |
+| Medium | 8, all fixed |
+| Low | 17, open |
+| Informational | 6, open |
 | Findings from the 2026-09-13 and 2026-09-14 audits | fixed, except the two left open by decision |
 | Test evidence | `npm test` 1013/1013 · targeted chain tests 19/19 · decoder fuzzing, 20,000 inputs per decoder |
 
@@ -53,7 +53,7 @@ per response, turned every markup injection found this time into markup only: no
 ran in a real browser. Escaping is disciplined almost everywhere. The RPC allowlist resisted every
 case, whitespace and batch trick tried. No credential reaches any API response.
 
-The weak points are availability and the "open mode" posture, where accounts are switched off:
+The weak points were availability and the "open mode" posture, where accounts are switched off. All four below are fixed:
 
 - **One High.** A client that opens the live event stream and stops reading is never dropped.
   400 such connections from one address pushed a test instance from 73 MB to 1.5 GB in three
@@ -87,7 +87,9 @@ The weak points are availability and the "open mode" posture, where accounts are
 
 ## High
 
-### H1 — HIGH, CONFIRMED: a stalled event-stream reader is never dropped, so memory grows without bound
+### H1 — HIGH, FIXED, CONFIRMED: a stalled event-stream reader is never dropped, so memory grows without bound
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/http/sse.js`: a client whose socket is full is sent nothing until it drains (the newest snapshot waits); it is dropped at 4 MB buffered or after 60 s blocked. `server/http/server.js`: at most 16 streams per address in open mode, or per account.
 
 **Files:** `server/http/sse.js:76` (reaper), `server/http/sse.js:89-90` (write), `server/http/server.js:62`.
 
@@ -123,7 +125,9 @@ small number, for example 8.
 
 ## Medium
 
-### M1 — MEDIUM, CONFIRMED: in open mode, a non-browser caller can rewrite the node connection and receive the node's cookie
+### M1 — MEDIUM, FIXED, CONFIRMED: in open mode, a non-browser caller can rewrite the node connection and receive the node's cookie
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/http/api.js`: with accounts off, the node connection save and test answer only a loopback socket peer, and never behind `server.trustProxy`; `auth.openNodeConfigFromNetwork` restores the old reach. A save to a different host or port drops `rpcUser`, `rpcPassword` and `cookieFile`.
 
 **Files:** `server/http/api.js:97-99` (`configWriteAllowed`), `server/http/api.js:836-878` (`POST /api/config/node`), `server/http/server.js:240-256` (open-mode cross-site gate).
 
@@ -148,7 +152,9 @@ Medium here because it was reproduced end to end.
 an explicit `allowOpenConfigWrites` option is set. On save, drop `cookieFile`, `rpcUser` and
 `rpcPassword` whenever the `rpcUrl` host changes.
 
-### M2 — MEDIUM, CONFIRMED: the node-connection probe is a server-side request forgery (SSRF) that reflects the response
+### M2 — MEDIUM, FIXED, CONFIRMED: the node-connection probe is a server-side request forgery (SSRF) that reflects the response
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/http/api.js`: a probe of any endpoint but the configured one returns only the kind of failure (timeout, unreachable, not JSON-RPC, RPC error), never the endpoint's reply. The loopback gate from M1 also applies.
 
 **Files:** `server/http/api.js:772-834` (`POST /api/config/node/test`), `server/rpc/client.js:361-366` (error text).
 
@@ -167,7 +173,9 @@ ports are open.
 anonymous double-submit token. Report only `reachable`, `refused`, `timed out` or `not an RPC
 server`, never the body.
 
-### M3 — MEDIUM, CONFIRMED: the index build deletes its output directory recursively with no check
+### M3 — MEDIUM, FIXED, CONFIRMED: the index build deletes its output directory recursively with no check
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/chain/index/build.js`: `checkOutputDir` refuses a symlink, the filesystem root, the home and working directories, the blocks directory or anything containing it, and any directory holding a name an index does not write. The build removes only index entries, never the directory.
 
 **Files:** `server/chain/index/build.js:306-309`, reached from `server/main.js` at startup and from `scripts/index-build.js`.
 
@@ -189,7 +197,9 @@ refuse to build in a non-empty directory that lacks the marker. When clearing, d
 index's own names: `bucket-*.unsorted`, `seg-*`, `manifest.json`, `build-journal.json`, `*.tmp`,
 `live.log`, `layers/`. `lstat` `out` and refuse a symlink.
 
-### M4 — MEDIUM, CODE-READ (classification CONFIRMED): the RPC allowlist admits wallet reads that return private keys
+### M4 — MEDIUM, FIXED, CODE-READ (classification CONFIRMED): the RPC allowlist admits wallet reads that return private keys
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/rpc/allowlist.js`: `WALLET_METHODS`, every method in Core's wallet category plus the legacy wallet methods, is refused by name before any prefix rule.
 
 **File:** `server/rpc/allowlist.js:45` (the `get` and `list` allow prefixes).
 
@@ -206,7 +216,9 @@ that is anyone who can reach the port.
 **Fix:** deny `listdescriptors` and `gethdkeys` by exact name. Better, deny every wallet RPC,
 since the monitor has no use for them, and correct the documentation.
 
-### M5 — MEDIUM, CONFIRMED: no deadline on reading a request body
+### M5 — MEDIUM, FIXED, CONFIRMED: no deadline on reading a request body
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/http/server.js`: `requestTimeout` is 30 s. Measured: a stream outlives the deadline; a trickled body gets 408.
 
 **File:** `server/http/server.js:62` (`server.requestTimeout = 0`).
 
@@ -219,7 +231,9 @@ open after 95 s.
 **Fix:** exempt only the stream, for example with `req.setTimeout(0)` on that socket. Restore a
 finite `requestTimeout`, or add a deadline inside the body reader.
 
-### M6 — MEDIUM, CONFIRMED: the audit trail can be flushed out with oversized RPC method names
+### M6 — MEDIUM, FIXED, CONFIRMED: the audit trail can be flushed out with oversized RPC method names
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `server/main.js`: every string in an audit row is clamped to 1,024 characters; `/api/rpc` clamps the method it audits and echoes to 64.
 
 **Files:** `server/http/api.js:602-611`, `server/main.js:271-283`, `server/config.js:200-201`.
 
@@ -233,7 +247,9 @@ the rows are written the same way, so an anonymous caller can do it too.
 **Fix:** clamp `method` and every other free-form audited field to a short length, for example 128
 characters, before writing.
 
-### M7 — MEDIUM, CONFIRMED: the npm package includes private notes that `.gitignore` excludes
+### M7 — MEDIUM, FIXED, CONFIRMED: the npm package includes private notes that `.gitignore` excludes
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `package.json`: `!docs/STATE-*.md` and `!docs/PRIVATE-*.md`. A test fails if `npm pack` would publish any file git does not track.
 
 **File:** `package.json`, `"files"`: `"docs/*.md"`.
 
@@ -250,7 +266,9 @@ addresses were found in them.
 `docs/PRIVATE-*`. Add a test that runs `npm pack --dry-run --json` and fails on any gitignored path.
 Consider deprecating 0.0.9.
 
-### M8 — MEDIUM, CODE-READ: the shipped systemd unit has almost no sandboxing, and its comment says otherwise
+### M8 — MEDIUM, FIXED, CODE-READ: the shipped systemd unit has almost no sandboxing, and its comment says otherwise
+
+> **FIXED 2026-09-16** (commit `8e9c6a4`, test in `test/audit-2026-09-16.test.js`). `systemd/blockyard.service`: `ProtectSystem=strict` with `ReadWritePaths` for `data/` and `config/`, `ProtectHome=read-only`, `PrivateTmp`, no capabilities, `SystemCallFilter=@system-service`, restricted address families, `UMask=0077`; the misleading comment is replaced. The app was started under exactly these settings as a transient service and served pages and saved settings.
 
 **File:** `systemd/blockyard.service`.
 
@@ -557,6 +575,8 @@ polling off by default, no credential value in any API response.
 - **Supply chain:** zero dependencies, no install step in CI, a read-only workflow token.
 
 ## Recommendations, in priority order
+
+Items 1 to 7 are done (see each finding's FIXED note). Item 8, the Lows, is open.
 
 1. **H1 and M5 together.** Drop backpressured stream clients, cap streams per address, and restore a
    body deadline for everything except the stream. One area of `server/http/`.
