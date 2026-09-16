@@ -14,8 +14,8 @@ import { paintRipple, skyBrightness } from './scorchedwind.js';
 import { makeFluid, stepFluid, setSolid, warmFluid, makeTracers, stepTracers, paintTracers } from './scorchedair.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
-  trajectory, dirtAt, shellLook,
-  WEAPONS, ITEMS, COLS, ROWS, TANK_W,
+  trajectory, dirtAt, shellLook, simulateShot,
+  WEAPONS, WEAPON_ORDER, ITEMS, COLS, ROWS, TANK_W,
 } from './scorched.js';
 import { SHOP } from './scorchedshop.js';
 import { decide, prepare, shop as aiShop } from './scorchedai.js';
@@ -76,6 +76,11 @@ const G = {
   html: {},                             // what each panel last had written into it, so it is not rewritten every frame
   rep: null,                            // the held key's ramp: { key, n, at }
   lastShot: null,                       // what the human fired last, for R
+  lastWeapon: null,                     // the human's last weapon fired, for Q
+  target: null,                         // the tank id the human marked, for the correction helper
+  impact: null,                         // where the human's last shot came down: { x, y, hit, shooterX }
+  confirmAt: 0,                         // when fire was pressed once on the last of a kind
+  weaponsOpen: false,                   // the weapon grid is showing
   editing: null,                        // 'angle' | 'power' while a number is being typed
   paintNow: 0,                          // the instant the overlay layer paints at
   flowAt: 0,                            // the last frame's clock, for the step
@@ -433,9 +438,26 @@ function paintOver(ctx, view, hx) {
   // CHEAT MODE: the firing solution, redrawn every frame the aim moves. Clipped where the shell
   // would meet the dirt or leave the field, so what is drawn is the shot, not a parabola over it.
   const t = current(g);
-  if (t && t.kind === 'human' && g.phase === 'aim' && !G.shopping && scorchedOptions(loadSettings()).cheat) {
-    const sol = solutionOf(g, t);
-    if (sol) paintSolution(ctx, P, U, sol.pts, { colour: '255,224,140', impact: sol.impact });
+  // C4, THE AIM GUIDE: cheat mode draws the whole flight and the landing; otherwise the Aim guide
+  // setting draws the first fifth of it (enough to read the lean), the whole of it, or nothing
+  if (t && t.kind === 'human' && g.phase === 'aim' && !G.shopping) {
+    const o = scorchedOptions(loadSettings());
+    const guide = o.cheat ? 'cheat' : o.aimGuide;
+    if (guide !== 'off') {
+      const sol = solutionOf(g, t);
+      if (sol) {
+        const short = guide === 'short';
+        const pts = short ? sol.pts.slice(0, Math.max(3, Math.ceil(sol.pts.length * 0.2))) : sol.pts;
+        paintSolution(ctx, P, U, pts, { colour: guide === 'cheat' ? '255,224,140' : '220,232,255', impact: short ? null : sol.impact });
+      }
+    }
+    // the marked target: a ring on the ground under it
+    if (o.helper && G.target != null && g.tanks[G.target]?.alive) {
+      const tg = g.tanks[G.target], c = P(tg.x + TANK_W / 2, tg.y + 0.4, 1.2);
+      ctx.strokeStyle = 'rgba(255,120,90,0.85)';
+      ctx.lineWidth = Math.max(1.2, U.x * 0.12);
+      ctx.beginPath(); ctx.ellipse(c.x, c.y, U.x * 1.7, U.y * 0.9, 0, 0, Math.PI * 2); ctx.stroke();
+    }
   }
   // the gauge belongs to whoever is aiming, and only while they are aiming
   if (t && g.phase === 'aim' && !G.shopping) {
@@ -524,12 +546,34 @@ function drawStats() {
       ['weapon', `${w.name} × ${count}`],
       ['cash', money(t.cash)],
     ];
+    // C2: the tank you marked, and how your last shot did against it
+    const opt = scorchedOptions(loadSettings());
+    if (opt.helper && you && G.target != null) {
+      const tg = g.tanks[G.target];
+      if (tg?.alive) {
+        const c = G.impact ? correctionOf({ ...you, x: G.impact.from.x, power: G.impact.from.power }, tg, G.impact) : null;
+        const said = !c ? 'no shot yet' : c.word === 'hit' ? 'hit' : c.word === 'close' ? 'close' : `${Math.abs(c.miss)} ${c.word}`;
+        rows.push(['target', `${tg.name} \u00b7 ${said}`]);
+      }
+    }
   }
   if (G.editing) return;                        // a number is being typed: leave the panel alone
   const html = rows.map(([k, v]) => `<i>${k}</i><b${k === 'angle' || k === 'power' ? ` class="syval" data-edit="${k}" title="click to type it"` : ''}>${v}</b>`).join('');
   setHtml(box, html, 'stats');
   const fireBtn = el('syFire');
-  if (fireBtn) fireBtn.disabled = !humanTurn();
+  if (fireBtn) {
+    fireBtn.disabled = !humanTurn();
+    // C5: the button says what it will send
+    const me = g ? current(g) : null;
+    let label = 'fire';
+    if (me && me.kind === 'human') {
+      const w = WEAPONS[me.weapon];
+      const n = me.weapon === 'babyMissile' ? '\u221e' : String(me.inventory[me.weapon] ?? 0);
+      label = performance.now() - G.confirmAt < 3000 && isLastOfKind(me) ? `confirm \u00b7 your last ${w.name}` : `fire \u00b7 ${w.name} \u00d7 ${n}`;
+    }
+    if (fireBtn.textContent !== label) fireBtn.textContent = label;
+    fireBtn.classList.toggle('syconfirm', label.startsWith('confirm'));
+  }
   drawItems();
 }
 
@@ -547,7 +591,10 @@ function drawItems() {
     const it = ITEMS[id];
     const armed = t.armed?.[id];
     const key = { battery: 'B', shield: 'S', forceShield: 'S', heavyShield: 'S', fuel: 'A D', contactTrigger: 'T', heatGuidance: 'H' }[id];
-    pills.push(`<span class="sypill${armed ? ' on' : ''}" title="${it.name}: ${it.note ?? ''}${key ? ` — ${key}` : ''}">${it.name} × ${n}${armed ? ' ✓' : ''}</span>`);
+    // C3: the pills are buttons -- they already name themselves and their key; they take a click too
+    const use = { battery: 'battery', shield: 'shield', forceShield: 'shield', heavyShield: 'shield', contactTrigger: 'contactTrigger', heatGuidance: 'heatGuidance' }[id];
+    const tag = use ? 'button' : 'span';
+    pills.push(`<${tag}${use ? ` type="button" data-use="${use}"` : ''} class="sypill${armed ? ' on' : ''}${use ? ' sypillbtn' : ''}" title="${it.name}: ${it.note ?? ''}${key ? ` — ${key}` : ''}">${it.name} × ${n}${armed ? ' ✓' : ''}</${tag}>`);
   }
   const html = pills.join('') || '<span class="faint">no items — the shop opens between rounds</span>';
   setHtml(box, html, 'items');
@@ -645,6 +692,38 @@ function drawSky() {
 }
 const ROUND_HOURS = [6.6, 9, 12, 15, 17.8, 19, 21.5, 1];
 
+// ------------------------------------------------------------------ the controls (docs/PLAN-SCORCHED-YARD.md §12)
+/**
+ * C2, THE CORRECTION. Where your last shot came down, against the tank you marked: how far short or
+ * over, along the line from your muzzle to it, and the power that would have carried it the right
+ * distance. Range goes roughly with the square of the power, so the correction scales the power by
+ * the square root of the distance ratio -- your own last shot's arithmetic, nothing solved: the
+ * wind and the hills are unchanged, and a changed angle makes it only an estimate.
+ */
+export function correctionOf(shooter, target, impact) {
+  if (!shooter || !target || !impact) return null;
+  const mx = shooter.x + TANK_W / 2, tx = target.x + TANK_W / 2;
+  const side = tx >= mx ? 1 : -1;
+  const want = Math.abs(tx - mx);
+  const got = (impact.x - mx) * side;
+  if (impact.hit === target.id) return { miss: 0, word: 'hit', power: shooter.power };
+  const miss = Math.round(got - want);
+  const word = Math.abs(miss) <= 1 ? 'close' : miss < 0 ? 'short' : 'over';
+  const power = got > 0.5 ? Math.round(shooter.power * Math.sqrt(Math.max(0.5, want) / got)) : shooter.power + 150;
+  return { miss, word, power: Math.max(50, Math.min(1000, power)) };
+}
+
+/** C3, THE QUICK PICKS: the weapons a tank owns, in the shop's order -- key 1 is the first of them. */
+export function ownedWeapons(tank) {
+  return WEAPON_ORDER.filter((w) => (tank.inventory[w] ?? 0) > 0);
+}
+
+/** C5: is this the last of a weapon sold one at a time (a Nuke, a Death's Head)? */
+export function isLastOfKind(tank, weaponId = tank.weapon) {
+  const w = WEAPONS[weaponId];
+  return !!w && w.pack === 1 && (tank.inventory[weaponId] ?? 0) === 1;
+}
+
 /** The paint order of a resting grid of land cubes under this camera: back rows first, columns outside in. */
 export function landOrder(p, q) {
   const cx = COLS / 2;
@@ -677,6 +756,7 @@ function draw(now = performance.now()) {
   drawStats();
   drawTanks();
   drawShop();
+  drawWeapons();
 }
 
 // ------------------------------------------------------------------ what the tanks say
@@ -860,6 +940,7 @@ function start() {
   // some buried. The key is cleared here, so the first draw of a game always draws its own land.
   G.landKey = '';
   G.aiPlan = null;
+  G.target = null; G.impact = null; G.lastWeapon = null; G.confirmAt = 0; G.weaponsOpen = false;
   G.game = newGame(players(t), { rounds: t.rounds, walls: t.walls, wind: t.wind, gravity: t.gravity, land: t.land, cash: t.cash, interest: t.interest / 100 });
   G.blasts = []; G.fires = []; G.beams = []; G.deaths = []; G.dusts = []; G.falls = new Map(); G.shopping = false;
   G.running = true; G.paused = false; G.last = 0; G.dirty = true; G.aiAt = performance.now();
@@ -951,6 +1032,36 @@ function gameOver() {
   if (demoing()) demoWait(DEMO_WAR_MS, start);               // and the next war begins by itself
 }
 
+// C3, THE WEAPON GRID: what you own, biggest blast first, with counts, radii and the key that picks
+// each; W opens it, a click picks, Escape closes. Thirty-three weapons behind [ and ] was a dozen
+// key presses to reach a Nuke once the shop had been kind.
+function drawWeapons() {
+  const box = el('syWeapons');
+  if (!box) return;
+  const g = G.game, me = g ? current(g) : null;
+  if (!G.weaponsOpen || !me || me.kind !== 'human') { box.classList.add('hidden'); G.html.weapons = null; return; }
+  box.classList.remove('hidden');
+  const owned = ownedWeapons(me);
+  const keyOf = new Map(owned.slice(0, 9).map((w, i) => [w, String(i + 1)]));
+  const rows = [...owned].sort((a, b) => (WEAPONS[b].radius ?? 0) - (WEAPONS[a].radius ?? 0)).map((w) => {
+    const W = WEAPONS[w];
+    const n = w === 'babyMissile' ? '\u221e' : me.inventory[w];
+    return `<button type="button" class="syweapon${w === me.weapon ? ' on' : ''}" data-weapon="${w}"><b>${W.name}</b><span>\u00d7 ${n}</span><i>${W.radius ? `blast ${W.radius.toFixed(1)}` : W.kind}</i>${keyOf.has(w) ? `<kbd>${keyOf.get(w)}</kbd>` : '<kbd></kbd>'}</button>`;
+  }).join('');
+  setHtml(box, `<div class="syweaponshead">weapons <span class="sp"></span><small>W or Esc closes \u00b7 1\u20139 pick \u00b7 Q your last</small></div><div class="syweaponlist">${rows}</div>`, 'weapons');
+}
+function pickWeapon(id) {
+  const g = G.game, me = g ? current(g) : null;
+  if (!me || me.kind !== 'human' || (me.inventory[id] ?? 0) <= 0) return false;
+  me.weapon = id;
+  G.confirmAt = 0;
+  sound.play('rotate');
+  G.dirty = true;
+  drawWeapons();
+  if (!G.raf) draw();
+  return true;
+}
+
 // ------------------------------------------------------------------ input
 // THE HELD KEY'S STEP. The browser repeats a held key for us; what it cannot do is accelerate.
 // Presses of the same key closer together than RAMP_GAP are counted as one hold: the first four
@@ -961,6 +1072,19 @@ function repeatStep(key, now = performance.now()) {
   const r = G.rep;
   if (r && r.key === key && now - r.at < RAMP_GAP) { r.n += 1; r.at = now; } else G.rep = { key, n: 1, at: now };
   return rampStep(G.rep.n);
+}
+
+/** C2: move the power to what the last shot's miss says it should have been. */
+function correctPower(g, t) {
+  if (!scorchedOptions(loadSettings()).helper) return;
+  const tg = G.target != null ? g.tanks[G.target] : null;
+  if (!tg?.alive) { G.h?.toast?.('click an enemy tank to mark it first'); return; }
+  if (!G.impact) { G.h?.toast?.('fire once at it first'); return; }
+  const c = correctionOf({ ...t, x: G.impact.from.x, power: G.impact.from.power }, tg, G.impact);
+  if (!c || c.word === 'hit') return;
+  aim(g, t, { power: c.power });
+  sound.play('soft');
+  G.h?.toast?.(`power ${c.power}, from ${Math.abs(c.miss)} ${c.word}`);
 }
 
 /** The last shot again, exactly: the original's most missed convenience. */
@@ -1035,6 +1159,7 @@ function onKey(e) {
   // die. I have to wait for the AI to finish the game"). A war is five rounds; a player knocked out
   // in round one had nothing to do but watch. F2 and the button start a fresh one from round one.
   if (e.key === 'F2') { e.preventDefault(); restart(); return; }
+  if (e.key === 'Escape' && G.weaponsOpen) { e.preventDefault(); G.weaponsOpen = false; drawWeapons(); return; }
   if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { if (G.running && g?.phase !== 'roundOver') { e.preventDefault(); G.paused ? resume() : pause('paused'); } return; }
   if (!humanTurn()) return;
   const t = current(g);
@@ -1053,6 +1178,14 @@ function onKey(e) {
     case ',': case '<': aim(g, t, { power: t.power - 1 }); sound.play('soft'); break;
     case '.': case '>': aim(g, t, { power: t.power + 1 }); sound.play('soft'); break;
     case 'r': case 'R': repeatShot(g, t); break;
+    case 'w': case 'W': G.weaponsOpen = !G.weaponsOpen; drawWeapons(); break;
+    case 'q': case 'Q': if (!(G.lastWeapon && pickWeapon(G.lastWeapon))) G.h?.toast?.('no weapon fired yet this game'); break;
+    case 'c': case 'C': correctPower(g, t); break;
+    case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
+      const w = ownedWeapons(t)[Number(e.key) - 1];
+      if (w) pickWeapon(w);
+      break;
+    }
     case 'PageUp': case ']': cycleWeapon(t, 1); sound.play('rotate'); break;
     case 'PageDown': case '[': cycleWeapon(t, -1); sound.play('rotate'); break;
     case 'a': case 'A': if (drive(g, t, -1)) { onEvents(step(g, 0), performance.now()); sound.play('move'); } break;
@@ -1071,7 +1204,24 @@ function fireNow() {
   const g = G.game;
   if (!humanTurn()) return;
   const me = current(g);
+  const t = scorchedOptions(loadSettings());
+  // C5, THE LAST OF A KIND ASKS ONCE: the last Nuke is the single most common regret in the original
+  if (t.confirmLast && isLastOfKind(me)) {
+    const now = performance.now();
+    if (now - G.confirmAt > 3000) {
+      G.confirmAt = now;
+      G.h?.toast?.(`your last ${WEAPONS[me.weapon].name} \u2014 fire again to send it`);
+      sound.play('rotate');
+      drawStats();
+      return;
+    }
+  }
+  G.confirmAt = 0;
   G.lastShot = { angle: me.angle, power: me.power, weapon: me.weapon };   // R fires it again
+  G.lastWeapon = me.weapon;                                                // Q picks it again
+  // C2: where this shot will come down, from the rules' own simulation of it, for the correction
+  const sim = simulateShot(g, me, me.angle, me.power);
+  G.impact = sim && !sim.lost ? { x: sim.x, y: sim.y, hit: sim.hit, from: { x: me.x, power: me.power } } : null;
   if (fire(g, me)) {
     onEvents(step(g, 0), performance.now());
     if (g.phase === 'settle') startSettle(performance.now());   // the laser is over at once
@@ -1087,11 +1237,17 @@ function pointerGrid(e) {
   if (!r || !r.width || !r.height) return null;
   return { x: ((e.clientX - r.left) / r.width) * COLS, y: (1 - (e.clientY - r.top) / r.height) * ROWS };
 }
+/** The tank under a point on the field, if any, within a little slack round its hull. */
+function tankUnder(g, p) {
+  return g.tanks.find((k) => k.alive && Math.abs(p.x - (k.x + TANK_W / 2)) <= 2 && p.y >= k.y - 1 && p.y <= k.y + 3) ?? null;
+}
 function onPointerDown(e) {
   if (!humanTurn()) return;
   const p = pointerGrid(e);
   if (!p) return;
-  G.drag = { x0: p.x, y0: p.y, moved: false };
+  const g = G.game, me = current(g), under = tankUnder(g, p);
+  // C1: a press on your own tank turns the barrel and leaves the power alone
+  G.drag = { x0: p.x, y0: p.y, moved: false, angleOnly: under === me, on: under && under !== me ? under.id : null };
 }
 function onPointerMove(e) {
   if (!G.drag || !humanTurn()) return;
@@ -1104,7 +1260,7 @@ function onPointerMove(e) {
   G.drag.moved = true;
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
   const wasAngle = Math.round(t.angle), wasPower = Math.round(t.power);
-  aim(g, t, { angle: Math.max(0, Math.min(180, angle)), power: Math.min(1000, Math.hypot(dx, dy) * 28) });
+  aim(g, t, G.drag.angleOnly ? { angle: Math.max(0, Math.min(180, angle)) } : { angle: Math.max(0, Math.min(180, angle)), power: Math.min(1000, Math.hypot(dx, dy) * 28) });
   // THE CLICKS (operator, 2026-09-16: "I'm not hearing the adjustment clicks when I move with the
   // mouse"). The keys and the wheel clicked; the drag was silent. It clicks now on every whole
   // degree and every ten of power it crosses, no more than a few times a frame's worth apart, so
@@ -1117,7 +1273,18 @@ function onPointerMove(e) {
   G.dirty = true;
   if (!G.raf) draw();
 }
-function onPointerUp() { G.drag = null; }
+function onPointerUp() {
+  // C2: a click that did not drag, on an enemy tank, marks it as your target
+  const d = G.drag;
+  G.drag = null;
+  if (!d || d.moved || d.on == null || !G.game) return;
+  if (!scorchedOptions(loadSettings()).helper) return;
+  G.target = G.target === d.on ? null : d.on;
+  sound.play('rotate');
+  G.h?.toast?.(G.target == null ? 'target cleared' : `targeting ${G.game.tanks[G.target].name}`);
+  G.dirty = true;
+  if (!G.raf) draw();
+}
 
 function onShopClick(e) {
   const b = e.target.closest?.('[data-buy]');
@@ -1136,6 +1303,13 @@ function bind() {
   el('syRestart')?.addEventListener('click', () => restart());
   el('syShop')?.addEventListener('click', onShopClick);
   el('syStats')?.addEventListener('click', onStatsClick);
+  el('syWeapons')?.addEventListener('click', (e) => { const b = e.target.closest?.('[data-weapon]'); if (b && pickWeapon(b.dataset.weapon)) { G.weaponsOpen = false; drawWeapons(); } });
+  el('syItems')?.addEventListener('click', (e) => {
+    const b = e.target.closest?.('[data-use]');
+    if (!b || !humanTurn()) return;
+    const g = G.game, t = current(g);
+    if (useItem(g, t, b.dataset.use)) { onEvents(step(g, 0), performance.now()); sound.play('soft'); G.dirty = true; if (!G.raf) draw(); }
+  });
   el('syField')?.addEventListener('wheel', onWheel, { passive: false });
   const field = el('syField');
   field?.addEventListener('pointerdown', onPointerDown);

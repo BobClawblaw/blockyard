@@ -819,11 +819,32 @@ buy stays with you for the rest of the game.
 **← →** turn the barrel, **↑ ↓** change the power, and a **held key accelerates**: one a step, then
 two, then five, so crossing the whole arc takes about a second and a half and the last degree still
 takes one press. **Shift** is fine (1° and 1), **Ctrl** coarse (100 of power). **, and .** nudge the
-power by one, which is how you bracket a target. The **wheel** over the field changes the power, and
-with **Shift** the angle. **Click the angle or the power** on the panel and type the number. **R**
-fires the last shot again, exactly. **Space** or the fire button sends it; **[ ]** change weapon;
-**A D** drive if you have fuel; **B** battery, **S** shield, **T** contact trigger, **H** heat
-guidance; **P** pauses; **N** starts the next round.
+power by one. The **wheel** over the field changes the power, and with **Shift** the angle. **Click
+the angle or the power** on the panel and type the number. **Drag** on the field to aim; **press on
+your own tank** and drag to turn the barrel without touching the power. **R** fires the last shot
+again, exactly.
+
+**Correcting.** Click an enemy tank to mark it (a red ring goes under it; click it again to clear).
+After your next shot the panel says how it did against that tank — *10 over*, *6 short*, *close*,
+*hit* — and **C** sets your power to what that miss says it should have been. It works from your
+own last shot, so the wind and the hills are still yours to read; change the angle and it is only
+an estimate. Display settings → Scorched Yard → *Correction helper* turns it off.
+
+**Weapons.** **W** opens a grid of what you own, biggest blast first, with counts and the key for
+each; click one or press its number. **1–9** pick the weapons you own in the shop's order, **Q**
+picks the last one you fired, **[ ]** still cycle. The **fire button names what it will send**
+(*fire · Missile × 5*), and the last of a weapon sold one at a time — a Nuke, a Death's Head —
+**asks once**: the button turns red and says so, and a second press within three seconds sends it
+(*Confirm the last of a weapon* in Display settings).
+
+**The aim guide** draws a ghost of the shell's path while you aim, under this round's wind and
+gravity: by default just the first fifth of the flight, enough to read the lean of the shot without
+giving the landing away. *Aim guide* in Display settings chooses short, the whole flight, or off.
+**Cheat mode** draws the whole flight with a ring where it lands.
+
+**Items** are buttons: click a pill to use a battery, raise a shield or arm a trigger, or press
+**B**, **S**, **T**, **H**; **A D** drive if you have fuel. **Space** or the fire button sends the
+shot; **P** pauses; **N** starts the next round.
 
 **Restart** on the panel (or **F2**) starts a fresh war from round one, whatever the board is doing:
 a war is five rounds, and a player knocked out early should not have to watch the computer finish.

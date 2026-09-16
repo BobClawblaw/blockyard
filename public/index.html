@@ -612,6 +612,7 @@
             <canvas class="sywind" id="syWind"></canvas>
             <canvas class="treemap" id="syLand"></canvas>
             <canvas class="treemap" id="syField"></canvas>
+            <div class="syweapons hidden" id="syWeapons"></div>
             <div class="sytalk hidden" id="syTalk"></div>
           </div>
           <div class="tetover" id="syOver">
@@ -631,7 +632,15 @@
           <h3>Tanks</h3>
           <div class="sytanks" id="syTanks"></div>
           <h3>Keys</h3>
-          <div class="tetkeys">← → angle · ↑ ↓ power · hold to go faster · shift fine (1°, 1) · ctrl coarse (100) · , . nudge power by 1 · wheel over the field: power, shift: angle · click the angle or power to type it · R repeats the last shot · [ ] weapon · space fires · drag on the field to aim · A D drive (fuel) · B battery · S shield · T contact trigger · H heat guidance · P pause · N next round · F2 restart</div>
+          <table class="tetkeys sykeys">
+            <tr><th>aim</th><td>← → angle · ↑ ↓ power · held keys speed up · shift fine · ctrl coarse · , . power ±1</td></tr>
+            <tr><th>mouse</th><td>drag the field to aim · press your tank to turn the barrel only · wheel: power, shift+wheel: angle · click a readout to type it</td></tr>
+            <tr><th>target</th><td>click an enemy tank to mark it · C corrects power from your last miss</td></tr>
+            <tr><th>weapons</th><td>W the grid · 1–9 pick · Q your last · [ ] cycle</td></tr>
+            <tr><th>fire</th><td>space or the button · R repeats the last shot</td></tr>
+            <tr><th>items</th><td>click a pill · B battery · S shield · T trigger · H heat guidance · A D drive</td></tr>
+            <tr><th>game</th><td>P pause · N next round · F2 restart</td></tr>
+          </table>
           <h3>Switches</h3>
           <div class="tetswitches">
             <button type="button" class="tetsw" id="sySkySw" aria-pressed="false" title="the sky behind the field: Galaxy, Earth, or none">☀ sky</button>

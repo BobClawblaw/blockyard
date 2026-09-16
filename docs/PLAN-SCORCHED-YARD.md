@@ -366,7 +366,13 @@ Blockanoid's first cut); M2 and M4 are each about that again; M3 and M5 are smal
 6. **v1 roster** as listed in §4, or a shorter first cut (missiles, nukes, MIRV, Funky Bomb,
    Roller, Napalm, Dirt Clod, Riot Bomb, Tracer, Shield, Parachute) to reach M2 sooner.
 
-## 12. A better control system (scoped 2026-09-16; rescoped the same day)
+## 12. A better control system (scoped 2026-09-16; rescoped the same day; landed the same day)
+
+*Landed: C1 (the ramp, the nudges, the wheel, typed numbers, R), then C2 (click a tank to mark it, the
+miss on the panel, C to correct), C3 (the weapon grid on W, 1–9, Q, the item pills as buttons), C4
+(the aim guide, short by default, beside cheat mode) and C5 (the fire button names the weapon, the
+last of a kind asks once, the keys as a table). One change from the scope: the drag on the field
+was kept, since it was in use, with a press on your own tank turning the barrel alone.*
 
 The first scope proposed a catapult: press on your tank, pull back, release. The operator's answer
 was that it sucks as a control scheme, and on inspection it does -- the drag that shipped in M1 is

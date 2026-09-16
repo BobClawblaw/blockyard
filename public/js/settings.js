@@ -307,6 +307,9 @@ export const DEFAULTS = Object.freeze({
     roundSky: true,       // under the Living sky, each round draws its own hour
     fast: false,          // shells fly at three times the pace
     cheat: false,         // cheat mode: the firing solution drawn live, wind and gravity and all
+    aimGuide: 'short',    // 'off' | 'short' (the first fifth of the flight) | 'full': the ranging arc while you aim
+    helper: true,         // mark a target, see how your last shot missed it, and C corrects the power
+    confirmLast: true,    // the last of a one-of-a-kind weapon asks once before it goes
     demo: false,          // attract mode: every seat is a computer player, and it plays on by itself
     grid: false,          // the quiet grid under the field, off: the land is the picture
     gridColour: '#2a5a8f',
@@ -689,6 +692,12 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'talk', label: 'Talk', kind: 'toggle', hint: 'What the tanks say when they fire, are hit, or die' }),
       Object.freeze({ key: 'roundSky', label: 'A sky per round', kind: 'toggle', hint: 'Under the Living sky, each round draws its own hour: dawn, noon, dusk, night' }),
       Object.freeze({ key: 'fast', label: 'Fast shells', kind: 'toggle', hint: 'Shells fly at three times the pace, for the impatient' }),
+      Object.freeze({
+        key: 'aimGuide', label: 'Aim guide', kind: 'choice', hint: 'A ghost of the shell\u2019s path while you aim, under this round\u2019s wind and gravity. Short shows the first fifth of the flight: enough to read the lean of the shot without giving the landing away. Off is the original',
+        options: Object.freeze([['short', 'Short'], ['full', 'The whole flight'], ['off', 'Off']]),
+      }),
+      Object.freeze({ key: 'helper', label: 'Correction helper', kind: 'toggle', hint: 'Click an enemy tank to mark it: the panel then says how far your last shot fell short of it or went over, and C corrects your power from that miss. Nothing is solved for you \u2014 the wind and the hills are still yours to read' }),
+      Object.freeze({ key: 'confirmLast', label: 'Confirm the last of a weapon', kind: 'toggle', hint: 'The last Nuke, the last Death\u2019s Head \u2014 any weapon sold one at a time \u2014 asks once before it goes: press fire again to send it' }),
       Object.freeze({ key: 'cheat', label: 'Cheat mode', kind: 'toggle', hint: 'Draw the firing solution while you aim: the shell\u2019s own path under this round\u2019s wind and the game\u2019s gravity, clipped where it meets the dirt, with a ring where it lands. It moves as you move' }),
       Object.freeze({ key: 'demo', label: 'Attract mode', kind: 'toggle', hint: 'Every seat is a computer player and the war runs on by itself, for a wall display' }),
       Object.freeze({ key: 'grid', label: 'Grid', kind: 'toggle', hint: 'A quiet grid under the field' }),
@@ -1236,7 +1245,7 @@ export function scorchedOptions(s) {
   const n = normalise(s);
   const sc = n.scorched;
   return {
-    sky: skyFor(n, 'scorched'), sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, cheat: sc.cheat, demo: sc.demo,
+    sky: skyFor(n, 'scorched'), sfx: sc.sfx, music: sc.music, talk: sc.talk, roundSky: sc.roundSky, fast: sc.fast, cheat: sc.cheat, aimGuide: sc.aimGuide, helper: sc.helper, confirmLast: sc.confirmLast, demo: sc.demo,
     grid: sc.grid, gridColour: sc.gridColour, gridBrightness: sc.gridBrightness,
     gridOpts: courtGridColours(sc.gridColour, sc.gridBrightness, 0.08),
     opponents: sc.opponents, opponentKind: sc.opponentKind, rounds: sc.rounds, walls: sc.walls, wind: sc.wind, gravity: sc.gravity, land: sc.land, cash: sc.cash, interest: sc.interest,

@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, rampStep, setHtml, landOrder, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, rampStep, setHtml, landOrder, correctionOf, ownedWeapons, isLastOfKind, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { rippleOffset, paintRipple, skyBrightness } from '../public/js/scorchedwind.js';
 import { makeFluid, stepFluid, setSolid, warmFluid, meanFlow, makeTracers, stepTracers, paintTracers } from '../public/js/scorchedair.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
@@ -342,7 +342,7 @@ test('a playfield refuses hover, the page is wired, the settings group is comple
     assert.ok(html.includes(`id="${id}"`), `#${id} is on the page`);
   }
   assert.ok(!/<[^>]+ style="/.test(html.slice(html.indexOf('data-page="scorched"'), html.indexOf('data-page="scorched"') + 4000)), 'no inline styles (CSP)');
-  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['sky', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'cheat', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
+  assert.deepEqual(Object.keys(DEFAULTS.scorched), ['sky', 'sfx', 'music', 'talk', 'roundSky', 'fast', 'cheat', 'aimGuide', 'helper', 'confirmLast', 'demo', 'grid', 'gridColour', 'gridBrightness', 'opponents', 'opponentKind', 'rounds', 'walls', 'wind', 'gravity', 'land', 'cash', 'interest']);
   assert.equal(scorchedOptions(normalise(null)).opponentKind, 'mix');
   assert.equal(scorchedOptions(normalise({ scorched: { opponentKind: 'cyborg' } })).opponentKind, 'cyborg');
   const o = scorchedOptions(normalise({ scorched: { opponents: 9, rounds: 0, walls: 'no-such', gravity: 5 } }));
@@ -890,7 +890,7 @@ test('scorched yard: a held key accelerates, and the numbers can be typed', () =
   assert.match(src, /addEventListener\('wheel', onWheel, \{ passive: false \}\)/, 'the wheel works over the field');
   assert.match(src, /if \(G\.editing\) return;/, 'and the panel holds still while a number is typed');
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.match(html, /hold to go faster/, 'the keys line says the modifiers out loud');
+  assert.match(html, /held keys speed up · shift fine · ctrl coarse/, 'the keys table says the modifiers out loud');
 });
 
 // THE SHOP WAS UNBUYABLE (operator, 2026-09-16: "i can't buy anything in the shop between rounds").
@@ -1278,5 +1278,47 @@ test('scorched yard: a computer player plans against the tanks still standing an
   const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
   assert.match(src, /G\.aiPlan = \{ tank: cur\.id, at: G\.aiAt, from: \{ angle: cur\.angle, power: cur\.power \}, to: decide\(g, cur\) \};/, 'the plan is made as the turn begins, against the tanks alive then');
   assert.match(src, /aim\(g, cur, \{ angle: from\.angle \+ \(to\.angle - from\.angle\) \* e, power: from\.power \+ \(to\.power - from\.power\) \* e \}\);/, 'the barrel swings from the old aim to the new one');
-  assert.match(src, /if \(t && t\.kind === 'human' && g\.phase === 'aim' && !G\.shopping && scorchedOptions\(loadSettings\(\)\)\.cheat\)/, 'cheat mode draws your solution, not the computer\u2019s stale one');
+  assert.match(src, /if \(t && t\.kind === 'human' && g\.phase === 'aim' && !G\.shopping\) \{\n    const o = scorchedOptions\(loadSettings\(\)\);\n    const guide = o\.cheat \? 'cheat' : o\.aimGuide;/, 'the guide and cheat mode draw your solution, never the computer\u2019s stale one');
+});
+
+// THE CONTROLS, THE REST OF THE PLAN (docs/PLAN-SCORCHED-YARD.md §12, C2-C5)
+test('scorched yard: correction, quick weapon picks, the last of a kind, the aim guide and the keys table', () => {
+  // C2: the correction from the last shot, against a marked target
+  const shooter = { x: 10, power: 500 }, target = { id: 3, x: 50 };      // centres 11 and 51: forty cells away
+  const short = correctionOf(shooter, target, { x: 31, hit: null });     // came down twenty cells out
+  assert.equal(short.word, 'short'); assert.equal(short.miss, -20);
+  assert.ok(short.power > 500 && short.power <= 1000, `short means more power (${short.power})`);
+  assert.equal(short.power, Math.round(500 * Math.sqrt(40 / 20)), 'by the square root of the distance ratio: range goes with power squared');
+  const over = correctionOf(shooter, target, { x: 71, hit: null });
+  assert.equal(over.word, 'over'); assert.ok(over.power < 500, 'over means less');
+  assert.equal(correctionOf(shooter, target, { x: 51, hit: 3 }).word, 'hit');
+  assert.equal(correctionOf(shooter, target, { x: 51.5, hit: null }).word, 'close');
+  const leftward = correctionOf({ x: 60, power: 400 }, { id: 1, x: 20 }, { x: 45, hit: null });
+  assert.equal(leftward.word, 'short', 'measured along the line to the target, whichever way it lies');
+  assert.equal(correctionOf({ x: 10, power: 900 }, target, { x: 20, hit: null }).power, 1000, 'never past full power');
+  // C3: the quick picks follow the shop's order among what you own
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 2 });
+  const you = g.tanks[0];
+  you.inventory.nuke = 1; you.inventory.missile = 5; you.inventory.napalm = 2;
+  assert.deepEqual(ownedWeapons(you), WEAPON_ORDER.filter((w) => ['babyMissile', 'missile', 'nuke', 'napalm'].includes(w)), 'key 1 is the first you own in the shop\u2019s order');
+  // C5: the last of a weapon sold one at a time
+  assert.equal(isLastOfKind(you, 'nuke'), true, 'the last nuke');
+  you.inventory.nuke = 2; assert.equal(isLastOfKind(you, 'nuke'), false, 'not while there is another');
+  assert.equal(isLastOfKind(you, 'napalm'), false, 'napalm is sold in tens: never one of a kind');
+  assert.equal(isLastOfKind(you, 'babyMissile'), false);
+  // settings and wiring
+  assert.equal(DEFAULTS.scorched.aimGuide, 'short'); assert.equal(DEFAULTS.scorched.helper, true); assert.equal(DEFAULTS.scorched.confirmLast, true);
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(t\.confirmLast && isLastOfKind\(me\)\) \{/, 'fire asks once before the last of a kind');
+  assert.match(src, /label = performance\.now\(\) - G\.confirmAt < 3000 && isLastOfKind\(me\) \? `confirm/, 'and the button says so');
+  assert.match(src, /`fire \\u00b7 \$\{w\.name\} \\u00d7 \$\{n\}`/, 'the fire button names the weapon and its count');
+  assert.match(src, /case 'w': case 'W': G\.weaponsOpen = !G\.weaponsOpen; drawWeapons\(\); break;/, 'W opens the weapon grid');
+  assert.match(src, /case 'q': case 'Q':/, 'Q picks the last weapon fired');
+  assert.match(src, /case 'c': case 'C': correctPower\(g, t\); break;/, 'C applies the correction');
+  assert.match(src, /const pts = short \? sol\.pts\.slice\(0, Math\.max\(3, Math\.ceil\(sol\.pts\.length \* 0\.2\)\)\) : sol\.pts;/, 'the short guide is the first fifth of the flight');
+  assert.match(src, /G\.drag = \{ x0: p\.x, y0: p\.y, moved: false, angleOnly: under === me,/, 'a press on your own tank turns the barrel only');
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="syWeapons"/, 'the grid is on the page');
+  assert.match(html, /<table class="tetkeys sykeys">/, 'and the keys are a table');
+  for (const k of ['aim', 'mouse', 'target', 'weapons', 'fire', 'items', 'game']) assert.match(html, new RegExp(`<tr><th>${k}</th>`), `a row for ${k}`);
 });

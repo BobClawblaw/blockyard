@@ -1958,6 +1958,23 @@ body { font-variant-numeric: tabular-nums; }
 #syStats b.syval { cursor: text; border-bottom: 1px dotted var(--line); }
 #syStats b.syval:hover { color: var(--accent); }
 .syrestart { width: 100%; margin-top: 6px; }
+/* the controls (docs/PLAN-SCORCHED-YARD.md §12): the confirm state, item buttons, the weapon grid, the keys table */
+.syfire.syconfirm { background: var(--bad); border-color: var(--bad); }
+button.sypillbtn { cursor: pointer; font: inherit; }
+button.sypillbtn:hover { border-color: var(--accent); }
+.syweapons { position: absolute; right: 12px; top: 12px; z-index: 4; width: min(360px, 60%); max-height: 70%; overflow: auto; background: rgba(8, 10, 14, .9); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.syweapons.hidden { display: none; }
+.syweaponshead { display: flex; align-items: baseline; gap: 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-dim); margin-bottom: 6px; }
+.syweaponshead small { text-transform: none; letter-spacing: 0; }
+.syweaponlist { display: grid; gap: 3px; }
+.syweapon { display: grid; grid-template-columns: 1fr auto auto 1.6em; gap: 8px; align-items: baseline; text-align: left; padding: 4px 6px; background: transparent; border: 1px solid transparent; border-radius: 4px; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.syweapon:hover { border-color: var(--line); }
+.syweapon.on { border-color: var(--accent); }
+.syweapon i { color: var(--fg-dim); font-style: normal; font-size: 11px; }
+.syweapon kbd { color: var(--accent); font-family: var(--mono); text-align: center; }
+table.sykeys { border-collapse: collapse; width: 100%; }
+table.sykeys th { text-align: left; vertical-align: top; padding: 2px 8px 2px 0; font-weight: 500; color: var(--fg-dim); white-space: nowrap; }
+table.sykeys td { padding: 2px 0; }
 /* the Sky tab's map of boards to skies, and the two headings under it (docs/PLAN-SKIES.md) */
 .skymap { border-collapse: collapse; }
 .skymap th { text-align: left; font-weight: 500; padding: 3px 14px 3px 0; white-space: nowrap; }
