@@ -29,6 +29,13 @@ function trail(ctx, pts, colour, w) {
   }
 }
 
+// HOW MANY NESTED DISCS A SOFT FILL GETS (operator, 2026-09-16: "performance freezing and jittering
+// when the cubes are being blown up"). softStops picks about one ring a pixel of radius when it is not
+// told, up to 220 -- right for a still sky, ruinous for a nuke, whose smoke is fifty-odd large puffs
+// every frame: thousands of big translucent fills, measured at 50 ms frames. Smoke that is moving,
+// thinning and overlapping its neighbours shows no steps at a dozen rings; a fireball's core, which
+// is brighter and briefer, gets a few more.
+export const RINGS = Object.freeze({ core: 36, glow: 18, smoke: 12 });
 const disc = (ctx, x, y, r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, Math.max(0.4, r), 0, Math.PI * 2); ctx.fill(); };
 const h01 = (n) => { const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
 
@@ -58,7 +65,7 @@ export function paintBlasts(ctx, P, U, blasts, now, { wind = 0, softStops, ms = 
       const core = riot
         ? [[0, `rgba(240,252,255,${(0.95 * fade).toFixed(3)})`], [0.2, `rgba(160,220,255,${(0.85 * fade).toFixed(3)})`], [0.5, `rgba(80,160,230,${(0.45 * fade).toFixed(3)})`], [1, 'rgba(40,90,150,0)']]
         : [[0, `rgba(255,255,240,${(0.98 * fade).toFixed(3)})`], [0.14, `rgba(255,236,170,${(0.92 * fade).toFixed(3)})`], [0.36, `rgba(255,158,64,${(0.66 * fade).toFixed(3)})`], [0.66, `rgba(196,66,26,${(0.3 * fade).toFixed(3)})`], [1, 'rgba(120,30,12,0)']];
-      softStops(ctx, c.x, c.y, fr * 1.9, core);
+      softStops(ctx, c.x, c.y, fr * 1.9, core, RINGS.core);
 
       // --- the shockwave
       // it belongs to the crater, not to the panel: a ring that races three radii out crosses the
@@ -126,8 +133,8 @@ export function paintBlasts(ctx, P, U, blasts, now, { wind = 0, softStops, ms = 
         const al = 0.42 * (1 - uu) * (0.7 + H(4) * 0.5);
         const g0 = Math.round(126 * dark), g1 = Math.round(96 * dark);
         // two offset discs per lump, so a cloud is not a row of circles
-        softStops(ctx, p.x, p.y, rr, [[0, `rgba(${g0 + 24},${g0 + 18},${g0 + 12},${al.toFixed(3)})`], [0.55, `rgba(${g1},${g1 - 4},${g1 - 10},${(al * 0.55).toFixed(3)})`], [1, `rgba(${g1},${g1},${g1},0)`]]);
-        softStops(ctx, p.x + rr * 0.45, p.y - rr * 0.3, rr * 0.7, [[0, `rgba(${g0 + 12},${g0 + 8},${g0},${(al * 0.7).toFixed(3)})`], [1, `rgba(${g1},${g1},${g1},0)`]]);
+        softStops(ctx, p.x, p.y, rr, [[0, `rgba(${g0 + 24},${g0 + 18},${g0 + 12},${al.toFixed(3)})`], [0.55, `rgba(${g1},${g1 - 4},${g1 - 10},${(al * 0.55).toFixed(3)})`], [1, `rgba(${g1},${g1},${g1},0)`]], RINGS.smoke);
+        softStops(ctx, p.x + rr * 0.45, p.y - rr * 0.3, rr * 0.7, [[0, `rgba(${g0 + 12},${g0 + 8},${g0},${(al * 0.7).toFixed(3)})`], [1, `rgba(${g1},${g1},${g1},0)`]], RINGS.smoke);
       }
     }
   }
@@ -144,7 +151,7 @@ export function paintDeaths(ctx, P, U, deaths, now, { softStops, ms = 1100 } = {
     const fade = 1 - t;
     const col = String(d.colour || '#ffd27a').replace('#', '');
     const rgb = [0, 2, 4].map((i) => parseInt(col.slice(i, i + 2), 16) || 200).join(',');
-    softStops(ctx, c.x, c.y, U.x * 4.5 * (0.5 + t), [[0, `rgba(255,255,245,${(0.9 * fade * fade).toFixed(3)})`], [0.25, `rgba(${rgb},${(0.6 * fade).toFixed(3)})`], [1, `rgba(${rgb},0)`]]);
+    softStops(ctx, c.x, c.y, U.x * 4.5 * (0.5 + t), [[0, `rgba(255,255,245,${(0.9 * fade * fade).toFixed(3)})`], [0.25, `rgba(${rgb},${(0.6 * fade).toFixed(3)})`], [1, `rgba(${rgb},0)`]], RINGS.core);
     for (let i = 0; i < 34; i++) {
       const H = (k) => h01(d.id * 53 + i * 11 + k);
       const a = (i / 34) * Math.PI * 2 + H(1);
@@ -170,7 +177,7 @@ export function paintDust(ctx, P, U, dusts, now, { softStops, ms = 700 } = {}) {
       const p = P(d.x + (H(1) - 0.5) * 2.2, d.y + 0.4 + t * 1.2 + H(2) * 0.6, 1.2);
       const r = U.x * (0.5 + 1.5 * t) * (0.6 + H(3) * 0.7);
       const al = 0.34 * (1 - t);
-      softStops(ctx, p.x, p.y, r, [[0, `rgba(196,172,132,${al.toFixed(3)})`], [0.6, `rgba(150,130,100,${(al * 0.5).toFixed(3)})`], [1, 'rgba(140,122,94,0)']]);
+      softStops(ctx, p.x, p.y, r, [[0, `rgba(196,172,132,${al.toFixed(3)})`], [0.6, `rgba(150,130,100,${(al * 0.5).toFixed(3)})`], [1, 'rgba(140,122,94,0)']], RINGS.smoke);
     }
   }
 }
@@ -305,7 +312,7 @@ export function paintShells(ctx, P, U, shells, now, { softStops, looks } = {}) {
     if (g) {
       const pulse = look.trail === 'radio' ? 0.75 + 0.25 * Math.sin(now / 90 + idx) : 1;
       const reach = U.x * look.size * (2.6 + (look.trail === 'radio' ? 1.4 * look.width : 0)) * pulse;
-      softStops(ctx, c.x, c.y, reach, [[0, rgbaOf(g, 0.55)], [0.35, rgbaOf(g, 0.22)], [1, rgbaOf(g, 0)]]);
+      softStops(ctx, c.x, c.y, reach, [[0, rgbaOf(g, 0.55)], [0.35, rgbaOf(g, 0.22)], [1, rgbaOf(g, 0)]], RINGS.glow);
     }
     // the ring of the heavy ones: a thin bright hoop round the ball, turning with the flight
     if (look.ring) {
@@ -331,7 +338,7 @@ export function paintShells(ctx, P, U, shells, now, { softStops, looks } = {}) {
       case 'rainbow': {
         const rate = now / 4 * look.spin;
         for (let i = 0; i < n - 1; i++) { const k = (i + 1) / n; ctx.strokeStyle = hsl((rate + i * (360 / n)) % 360, 100, 60, 0.15 + 0.6 * k); ctx.lineWidth = Math.max(0.6, U.x * look.width * k); ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke(); }
-        softStops(ctx, c.x, c.y, U.x * look.size * 2.4, [[0, hsl(rate % 360, 100, 70, 0.5)], [1, hsl(rate % 360, 100, 70, 0)]]);
+        softStops(ctx, c.x, c.y, U.x * look.size * 2.4, [[0, hsl(rate % 360, 100, 70, 0.5)], [1, hsl(rate % 360, 100, 70, 0)]], RINGS.glow);
         break;
       }
       case 'dash':

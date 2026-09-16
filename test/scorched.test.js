@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, rampStep, setHtml, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, rampStep, setHtml, landOrder, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { noise2, curl, makeFlow, stepFlow, paintFlow, plasmaCells, paintPlasma, airClock, advanceAir, traceStreamlines, paintStreamlines, rippleOffset, paintRipple, airBands, paintAirBands, skyBrightness } from '../public/js/scorchedwind.js';
 import { makeFluid, stepFluid, setSolid, warmFluid, paintFluid, meanFlow, makeTracers, stepTracers, paintTracers } from '../public/js/scorchedair.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
@@ -1325,4 +1325,49 @@ test('scorched yard: the flow is drawn as streaklines carried by the simulated a
   const born = edge.k;
   stepTracers(f, edge, 33); stepTracers(f, edge, 33);
   assert.ok(edge.x[0] > 96 && edge.k === born, 'a tracer crossing the edge runs on, not reborn on the spot');
+});
+
+// NO FREEZE WHEN THE LAND IS BLOWN UP (operator, 2026-09-16: "performance freezing and jittering when
+// the cubes are being blown up"). Measured on a nuke in the browser: 150 ms frames, from the air
+// warming up again on every crater, the land's general paint sort, and the wind plane at sixty.
+test('scorched yard: a blast does not stall the frame', async () => {
+  const { buildScene } = await import('../public/js/blockscene3d.js');
+  // 1. the land in a known order: 'given' keeps the list as sorted, and the sort is back rows first,
+  //    columns outside in -- pixel-identical to the general sort in the browser, and far cheaper
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 4 });
+  const tiles = landTiles(g);
+  const sorted = [...tiles].sort(landOrder);
+  const o = { gridW: 96, gridH: 48, unit: 12, oblique: { ox: 0.10, oy: 0.30, headroom: 3, flight: 0 }, dome: 0, light: 'front', lightHeight: 'low', space: true, edges: true, facetMinUnits: Infinity, crownMinUnits: Infinity };
+  const seen = []; for (const op of buildScene(sorted, { ...o, order: 'given' }).ops) if (seen[seen.length - 1] !== op.txid) seen.push(op.txid);
+  assert.deepEqual([...new Set(seen)], sorted.map((t) => t.txid).filter((id) => seen.includes(id)), 'the given order is the order drawn');
+  for (let i = 1; i < sorted.length; i++) {
+    const p = sorted[i - 1], q = sorted[i];
+    assert.ok(p.y > q.y || (p.y === q.y && Math.abs(p.x + 0.5 - 48) >= Math.abs(q.x + 0.5 - 48)), 'back rows first, then outside in');
+  }
+  const t0 = performance.now(); buildScene(tiles, o); const general = performance.now() - t0;
+  const t1 = performance.now(); buildScene([...tiles].sort(landOrder), { ...o, order: 'given' }); const known = performance.now() - t1;
+  assert.ok(known < general / 2, `the known order builds in well under half the time (${known.toFixed(1)} ms against ${general.toFixed(1)})`);
+  const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(src, /\.sort\(landOrder\), \{ \.\.\.opts\(FIELD\), order: 'given' \}\)/, 'the game draws its land that way');
+  // 2. the air is warmed up and its floor read from the canvas only for NEW land; a crater moves the
+  //    floor from the rules' own column heights
+  const wind = src.slice(src.indexOf('function drawWind('), src.indexOf('\n}\n', src.indexOf('function drawWind(')));
+  assert.match(wind, /const fieldKey = `\$\{game\?\.seed\}\|\$\{game\?\.round\}\|\$\{w\}x\$\{h\}`;/, 'the warm-up is keyed on the game and the round, not on every land change');
+  assert.match(wind, /else if \(game && G\.fluidTops && game\.landVersion !== G\.fluidVersion\)/, 'a crater takes the cheap path');
+  // 3. the wind plane at most thirty times a second, and the effects' soft fills capped
+  assert.match(wind, /if \(now - \(G\.windDrawnAt \?\? 0\) < WIND_MS - 4\) return;/, 'the wind plane is held to thirty a second');
+  const fx = readFileSync(new URL('../public/js/scorchedfx.js', import.meta.url), 'utf8');
+  assert.equal((fx.match(/softStops\(ctx, [^;]*\);/g) || []).filter((c) => !/RINGS\.|, 6\);/.test(c)).length, 0, 'every soft fill in the effects names its ring count');
+  // 4. the flow lines are a few continuous paths, not thousands of segments
+  const f = makeFluid(96, 48, 2);
+  setSolid(f, () => 40);
+  warmFluid(f, 3, 7, { dye: false });
+  const tr = makeTracers(f, 320, 5);
+  for (let i = 0; i < 40; i++) { stepFluid(f, 33, { wind: 7, dye: false }); stepTracers(f, tr, 33); }
+  let moves = 0, lines = 0;
+  const ctx = { set strokeStyle(v) {}, lineCap: '', lineJoin: '', lineWidth: 1, beginPath() {}, moveTo() { moves += 1; }, lineTo() { lines += 1; }, stroke() {} };
+  paintTracers(ctx, f, tr, 1266, 633, { wind: 7 });
+  // the first cut drew 5,479 separate segments here -- about eleven thousand path points
+  assert.ok(lines + moves < 5500, `under half the path points of the first cut (${moves} runs, ${lines} segments)`);
+  assert.ok(lines > moves, 'runs are continuous lines, not lone segments');
 });

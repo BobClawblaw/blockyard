@@ -81,8 +81,10 @@ const G = {
   flowAt: 0,                            // the last frame's clock, for the step
   air: null,                            // the air's own integrated clock { t, drift }
   airTravel: 0,                         // the signed distance the air has run, for the ripple and the bands
+  windDrawnAt: 0,                       // when the wind plane last drew: it is held to thirty a second
   skyLight: 0, skyLightAt: 0,           // how bright the sky behind the air is, sampled now and then
   fluid: null, fluidLand: '', tracers: null,   // the simulated air, the land it was given, and the streaklines carried by it
+  fluidTops: null, fluidRows: null, fluidVersion: -1,   // the land's heights and floor rows when the air last read it, for crater deltas
   windEased: undefined,                 // the wind the flow is actually blowing at: it bends into a change
   windShown: undefined,                 // the last wind the game reported, to date a change
   windAtChange: 0,                      // when it changed, for the banner's brightness
@@ -289,21 +291,29 @@ function fluidFloor(f, land, w, h) {
   try { data = land.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, land.width, land.height).data; } catch { return; }
   const k = land.width / Math.max(1, land.clientWidth || w), LW = land.width, LH = land.height;
   const cellW = w / f.nx, cellH = h / f.ny, S = 1.085;
+  f.floorRow = new Int16Array(f.nx);
   setSolid(f, (x) => {
     const xs = (x + 0.5) * cellW, xc = w / 2 + (xs - w / 2) / S;
+    let row = f.ny;
     for (let y = 0; y < f.ny; y++) {
       const ys = (y + 0.5) * cellH, yc = h - (h - ys) / S;
       const px = Math.round(xc * k), py = Math.round(yc * k);
       if (px < 0 || py < 0 || px >= LW || py >= LH) continue;
-      if (data[(py * LW + px) * 4 + 3] > 60) return y;
+      if (data[(py * LW + px) * 4 + 3] > 60) { row = y; break; }
     }
-    return f.ny;
+    f.floorRow[x] = row;
+    return row;
   });
 }
 
 function drawWind(now) {
   const c = el('syWind');
   if (!c) return;
+  // AT MOST THIRTY TIMES A SECOND (operator, 2026-09-16: "performance freezing and jittering when the
+  // cubes are being blown up"). The field redraws at sixty while a shell flies and a blast plays, and
+  // this plane went with it; the air moves slowly enough that half the frames show nothing new.
+  if (now - (G.windDrawnAt ?? 0) < WIND_MS - 4) return;
+  G.windDrawnAt = now;
   const w = c.clientWidth, h = c.clientHeight;
   if (!w || !h) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -337,20 +347,38 @@ function drawWind(now) {
   if (sky && sky.width) {
     const sr = sky.getBoundingClientRect(), cr = c.getBoundingClientRect();
     const scale = sky.width / Math.max(1, sr.width);
-    paintRipple(ctx, sky, { sx: (cr.left - sr.left) * scale, sy: (cr.top - sr.top) * scale, scale }, w, h, G.airTravel, we);
+    paintRipple(ctx, sky, { sx: (cr.left - sr.left) * scale, sy: (cr.top - sr.top) * scale, scale }, w, h, G.airTravel, we, 12);
   }
   // THE AIR, SIMULATED (scorchedair.js): a small fluid pushed by the wind, with the land as its
-  // solid floor, carrying a faint dye. Its mask is read off the land canvas whenever the land moves.
+  // solid floor, carrying streaklines.
+  //
+  // THE FLOOR WITHOUT A STALL (operator, 2026-09-16: "performance freezing and jittering when the
+  // cubes are being blown up"). Measured on a nuke: every land change re-ran six simulated seconds
+  // of air (73 ms) and read the land canvas back from the GPU (6 ms), on top of the land's own
+  // redraw -- three times per blast, a 150 ms freeze each. Now the canvas is read, and the air warmed
+  // up, only when a NEW land arrives (a new game or a new round, or the panel is resized). A crater
+  // only moves the floor, and that comes from the rules' own column heights, which cost nothing.
   if (!G.fluid) G.fluid = makeFluid(96, 48, 3);
   const land = el('syLand');
-  const landKey = `${G.landKey}|${w}x${h}`;
-  if (land && land.width && G.fluidLand !== landKey) {
-    // new land: take its silhouette, and let the air settle round it before it is seen
+  const game = G.game;
+  const fieldKey = `${game?.seed}|${game?.round}|${w}x${h}`;
+  if (land && land.width && game && G.fluidLand !== fieldKey && G.landKey) {
     fluidFloor(G.fluid, land, w, h);
-    G.fluidLand = landKey;
+    G.fluidLand = fieldKey;
+    G.fluidTops = Int16Array.from(game.tops);
+    G.fluidRows = Int16Array.from(G.fluid.floorRow ?? []);
+    G.fluidVersion = game.landVersion;
     warmFluid(G.fluid, 6, we, { dye: false });
     G.tracers = makeTracers(G.fluid, 320, 5);
     for (let i = 0; i < 40; i++) stepTracers(G.fluid, G.tracers, 33);   // paths already drawn out when first seen
+  } else if (game && G.fluidTops && game.landVersion !== G.fluidVersion) {
+    // a crater, a fall, a pile of dirt: move each column's floor by the change in its height
+    G.fluidVersion = game.landVersion;
+    const rowsPerCell = G.fluid.ny / ROWS;
+    setSolid(G.fluid, (x) => {
+      const base = G.fluidRows[x] ?? G.fluid.ny;
+      return base + Math.round((G.fluidTops[x] - game.tops[x]) * rowsPerCell);
+    });
   }
   stepFluid(G.fluid, dt, { wind: we, dye: false });
   if (G.tracers) stepTracers(G.fluid, G.tracers, dt);
@@ -621,6 +649,12 @@ function drawSky() {
 }
 const ROUND_HOURS = [6.6, 9, 12, 15, 17.8, 19, 21.5, 1];
 
+/** The paint order of a resting grid of land cubes under this camera: back rows first, columns outside in. */
+export function landOrder(p, q) {
+  const cx = COLS / 2;
+  return q.y - p.y || Math.abs(q.x + 0.5 - cx) - Math.abs(p.x + 0.5 - cx) || q.x - p.x;
+}
+
 function draw(now = performance.now()) {
   const g = G.game;
   G.paintNow = now;                       // the overlay paints at the frame's own instant
@@ -632,7 +666,13 @@ function draw(now = performance.now()) {
     const settling = g.falling.length > 0;
     const key = `${g.landVersion}:${settling ? 1 : 0}`;
     if (land && key !== G.landKey) {
-      board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }), opts(FIELD));
+      // THE LAND IN A KNOWN ORDER (operator, 2026-09-16: "performance freezing and jittering when the
+      // cubes are being blown up"). The renderer's general paint order builds an outline for every
+      // cube and tests pairs for overlap: right for blocks in flight, and 43 ms for this grid of
+      // 1,800 identical resting cubes, twice a blast. A resting grid has one correct order, found by
+      // diffing every pixel against the general sort: back rows first, and within a row the columns
+      // from the outside in, the right one first where two tie at the centre. Pixel-identical, 7 ms.
+      board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }).sort(landOrder), { ...opts(FIELD), order: 'given' });
       G.landKey = key;
     }
     drawWind(now);

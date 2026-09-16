@@ -339,34 +339,46 @@ export function paintTracers(ctx, f, tr, w, h, { bright = 0, wind = 0, colour = 
   const lit = Math.max(0, Math.min(1, bright));
   const base = (0.2 + 0.2 * lit) * (0.7 + 0.3 * strength);
   const levels = [0.25, 0.5, 0.75, 1];
+  // ONE CONTINUOUS PATH PER RUN, EVERY OTHER POINT, FLAT CAPS (operator, 2026-09-16: "performance
+  // freezing and jittering when the cubes are being blown up"). Measured with each layer switched
+  // off in turn during a nuke, these lines were the largest single cost: 5,500 separate round-capped
+  // segments a frame. A tracer's consecutive points in the same opacity band are now one polyline,
+  // at half the points -- the paths are smooth, so nothing shows -- with butt caps and round joins.
   const paths = levels.map(() => []);
   for (let i = 0; i < tr.n; i++) {
     const L = tr.len[i];
-    if (L < 3) continue;
+    if (L < 5) continue;
     const fade = Math.min(1, tr.age[i] / 0.5, (tr.life[i] - tr.age[i]) / 0.8);
     if (fade <= 0.05) continue;
-    for (let k = 1; k < L; k++) {
-      const a = (tr.head[i] - L + 1 + k - 1 + TRAIL * 2) % TRAIL, b = (a + 1) % TRAIL;
-      const along = k / L;                                   // 0 at the tail, 1 at the head
+    let run = null, runLv = -1;
+    // point p of the path, 0 the oldest and L-1 the newest, lives at this slot of the ring
+    const slot = (q) => (tr.head[i] - (L - 1) + q + TRAIL * 2) % TRAIL;
+    for (let p0 = 0; p0 < L - 1; p0 += 2) {
+      const p1 = Math.min(p0 + 2, L - 1);
+      const a = slot(p0), b = slot(p1);
+      const ax = tr.hx[i * TRAIL + a], ay = tr.hy[i * TRAIL + a], bx = tr.hx[i * TRAIL + b], by = tr.hy[i * TRAIL + b];
+      const along = (p0 + p1) / 2 / (L - 1);                  // 0 at the tail, 1 at the head
       // and nothing at the edges of the field: each segment fades by how near it is to the left, the
       // right or the top, smoothly, so a line going out of the picture thins away rather than ending
-      const mx = (tr.hx[i * TRAIL + a] + tr.hx[i * TRAIL + b]) * 0.5, my = (tr.hy[i * TRAIL + a] + tr.hy[i * TRAIL + b]) * 0.5;
+      const mx = (ax + bx) * 0.5, my = (ay + by) * 0.5;
       const ex = Math.min(mx / (f.nx * EDGE_FADE), (f.nx - mx) / (f.nx * EDGE_FADE)), ey = my / (f.ny * EDGE_FADE);
       const edge = smooth(Math.max(0, Math.min(1, Math.min(ex, ey))));
       const taper = Math.sin(Math.PI * along) * fade * edge;   // nothing at either end, nothing at the edges
+      if (taper < 0.08) { run = null; runLv = -1; continue; }
       const lv = taper < 0.3 ? 0 : taper < 0.55 ? 1 : taper < 0.8 ? 2 : 3;
-      if (taper < 0.08) continue;
-      paths[lv].push(tr.hx[i * TRAIL + a] * sx, tr.hy[i * TRAIL + a] * sy, tr.hx[i * TRAIL + b] * sx, tr.hy[i * TRAIL + b] * sy);
+      if (lv !== runLv || !run) { run = [ax * sx, ay * sy]; paths[lv].push(run); runLv = lv; }
+      run.push(bx * sx, by * sy);
     }
   }
-  ctx.lineCap = 'round';
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'round';
   ctx.lineWidth = 1.3;
   let strokes = 0;
-  paths.forEach((segs, lv) => {
-    if (!segs.length) return;
+  paths.forEach((runs, lv) => {
+    if (!runs.length) return;
     ctx.strokeStyle = `rgba(${colour},${(base * levels[lv]).toFixed(3)})`;
     ctx.beginPath();
-    for (let j = 0; j < segs.length; j += 4) { ctx.moveTo(segs[j], segs[j + 1]); ctx.lineTo(segs[j + 2], segs[j + 3]); }
+    for (const r of runs) { ctx.moveTo(r[0], r[1]); for (let j = 2; j < r.length; j += 2) ctx.lineTo(r[j], r[j + 1]); }
     ctx.stroke();
     strokes += 1;
   });

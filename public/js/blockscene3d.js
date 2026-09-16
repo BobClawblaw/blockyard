@@ -1300,7 +1300,7 @@ export function buildScene(tiles, o = {}) {
   // among equals the one further from the vanishing point first (its sides
   // lean outward, away from its nearer neighbours).
   const vx0 = o.vanishX ?? 0, vy0 = o.vanishY ?? 0;
-  const ordered = o.oblique && o.order === 'diagonal' ? diagonalOrder(tiles) : o.oblique ? obliqueOrder(tiles, o) : tiles.map((t) => (growth.has(t) ? { ...t, boost: growth.get(t) } : t))
+  const ordered = o.order === 'given' ? tiles.slice() : o.oblique && o.order === 'diagonal' ? diagonalOrder(tiles) : o.oblique ? obliqueOrder(tiles, o) : tiles.map((t) => (growth.has(t) ? { ...t, boost: growth.get(t) } : t))
     .map((t) => { const c = project(t.x + t.s / 2, t.y + t.s / 2, 0, o); return { t, top: (t.z ?? 0) + (t.floor ?? 0) + cubeHeight(t), d: Math.hypot(c.x - vx0, c.y - vy0) }; })
     // Under the oblique camera a cube reaches STRAIGHT UP from its footprint (measured: height
     // moves screen y only, grid x moves screen x only), so it can only cover blocks at smaller
