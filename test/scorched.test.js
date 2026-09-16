@@ -1143,15 +1143,23 @@ test('scorched yard: a mouse drag clicks as it crosses degrees and tens of power
 });
 
 // EVERY SHELL LOOKS LIKE ITSELF (operator, 2026-09-16: "Everything is the same white dot effect for
-// the shot. We need to add some effects and different colors")
-test('scorched yard: each weapon\u2019s shell has its own core, glow and trail', () => {
-  const looks = new Set(WEAPON_ORDER.filter((id) => !['laser', 'riotCharge', 'riotBlast', 'dirtCharge', 'earthDisrupter', 'plasmaBlast'].includes(id)).map((id) => shellLook(id)));
-  assert.ok(looks.size >= 10, `the shells that fly wear at least ten different looks (${looks.size})`);
-  assert.equal(shellLook('nuke'), SHELL_LOOKS.nuke); assert.equal(shellLook('babyNuke'), SHELL_LOOKS.nuke, 'both nukes glow green');
-  assert.notEqual(shellLook('nuke').core, shellLook('babyMissile').core, 'a nuke is not a baby missile');
-  assert.equal(shellLook('funkyBomblet'), SHELL_LOOKS.funky, 'a bomblet is a funky bomb');
+// the shot", then "The missile effect is the same as the baby missile. I said I wanted variance
+// across all shot types")
+test('scorched yard: every weapon that flies has a look of its own', () => {
+  const flies = WEAPON_ORDER.filter((id) => !['laser', 'riotCharge', 'riotBlast', 'dirtCharge', 'earthDisrupter', 'plasmaBlast'].includes(id));
+  assert.equal(flies.length, 27, 'twenty-seven weapons fly');
+  for (const id of flies) assert.ok(SHELL_LOOKS[id], `${id} has its own entry`);
+  assert.ok(SHELL_LOOKS.funkyBomblet, 'and so does the bomblet a Funky Bomb throws');
+  const sig = (id) => { const l = shellLook(id); return `${l.core}|${l.glow}|${l.trail}|${l.size}|${l.len}|${l.count}|${l.width}|${l.ring}|${l.spin}`; };
+  assert.equal(new Set(flies.map(sig)).size, flies.length, 'no two of them share a look');
+  assert.notEqual(shellLook('missile').core, shellLook('babyMissile').core, 'a missile is not a baby missile');
+  assert.ok(shellLook('missile').size > shellLook('babyMissile').size && shellLook('missile').len > shellLook('babyMissile').len, 'it is bigger, with a longer exhaust');
+  assert.ok(shellLook('missile').ring && !shellLook('babyMissile').ring, 'and ringed');
+  assert.ok(shellLook('nuke').size > shellLook('babyNuke').size && shellLook('nuke').count > shellLook('babyNuke').count, 'a nuke over a baby nuke likewise');
+  assert.ok(shellLook('heavyRoller').ring && shellLook('tonOfDirt').ring && shellLook('heavySandhog').ring && shellLook('deathsHead').ring, 'the heavy ones wear a ring');
   assert.equal(shellLook('tracer').glow, null, 'a tracer does not glow: that is the point of a tracer');
-  assert.equal(shellLook('no-such-thing'), SHELL_LOOKS.blast, 'anything unknown flies as a plain blast');
+  assert.equal(shellLook('smokeTracer').trail, 'smoke', 'a smoke tracer smokes');
+  assert.equal(shellLook('no-such-thing'), SHELL_LOOKS.babyMissile, 'anything unknown flies as a baby missile');
   // the tile layer draws the core in the weapon's colour and size
   const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'moron' }], { seed: 5 });
   g.shells.push({ x: 10, y: 20, vx: 5, vy: 5, weapon: 'nuke', owner: 0, path: [{ x: 9, y: 19 }, { x: 10, y: 20 }], t: 0, primary: true });
@@ -1159,16 +1167,13 @@ test('scorched yard: each weapon\u2019s shell has its own core, glow and trail',
   const balls = actorLayer(g, 0).filter((t) => t.txid.startsWith('shell'));
   assert.equal(balls.length, 2);
   assert.notEqual(balls[0].color, balls[1].color); assert.ok(balls[0].s > balls[1].s, 'a nuke is a bigger ball than a tracer');
-  // the painted layer: a glow and a trail per kind, and every kind paints without throwing
-  for (const id of ['babyMissile', 'nuke', 'mirv', 'leapfrog', 'funkyBomb', 'tracer', 'roller', 'riotBomb', 'dirtClod', 'napalm', 'digger', 'sandhog']) {
-    const R = recorder();
-    const path = Array.from({ length: 14 }, (_, i) => ({ x: 10 + i, y: 20 + i * 0.5 }));
-    paintShells(R.ctx, P, U, [{ x: 24, y: 27, vx: 5, vy: 2, weapon: id, path }], 500, { softStops: stops, looks: shellLook });
-    assert.ok(R.ops.length > 0, `${id} paints something in the air`);
-  }
-  const N = recorder(), T = recorder();
-  paintShells(N.ctx, P, U, [{ x: 24, y: 27, vx: 5, vy: 2, weapon: 'nuke', path: [{ x: 23, y: 26 }, { x: 24, y: 27 }] }], 500, { softStops: stops, looks: shellLook });
-  paintShells(T.ctx, P, U, [{ x: 24, y: 27, vx: 5, vy: 2, weapon: 'tracer', path: [{ x: 23, y: 26 }, { x: 24, y: 27 }] }], 500, { softStops: stops, looks: shellLook });
-  assert.ok(N.ops.some((o) => o.op === 'arc' && /150,255,110/.test(String(o.fill))), 'a nuke glows green');
-  assert.ok(!T.ops.some((o) => /255,200,120|150,255,110/.test(String(o.fill))), 'a tracer glows in no colour at all');
+  // the painted layer: every flying weapon paints, and paints differently from its family's baby
+  const ops = (id) => { const R = recorder(); const path = Array.from({ length: 16 }, (_, i) => ({ x: 10 + i, y: 20 + i * 0.5 })); paintShells(R.ctx, P, U, [{ x: 26, y: 28, vx: 5, vy: 2, weapon: id, path }], 500, { softStops: stops, looks: shellLook }); return R.ops; };
+  for (const id of flies) assert.ok(ops(id).length > 0, `${id} paints something in the air`);
+  const count = (id) => ops(id).length;
+  assert.ok(count('missile') > count('babyMissile'), 'a missile paints more than a baby missile');
+  assert.ok(count('nuke') > count('babyNuke') && count('heavyRoller') > count('roller') && count('tonOfDirt') > count('dirtClod'), 'and so on up each family');
+  assert.ok(ops('nuke').some((o) => o.op === 'arc' && /100,255,70/.test(String(o.fill))), 'a nuke glows green');
+  assert.ok(!ops('tracer').some((o) => o.op === 'arc' && /255,205,130|100,255,70/.test(String(o.fill))), 'a tracer glows in no colour at all');
+  assert.ok(ops('missile').some((o) => o.op === 'ellipse'), 'the missile wears its ring');
 });

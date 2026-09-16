@@ -273,72 +273,93 @@ export function paintSolution(ctx, P, U, pts, { colour = '255,216,120', impact =
 
 /**
  * THE SHELLS IN FLIGHT (operator, 2026-09-16: "Everything is the same white dot effect for the
- * shot"). Over each shell's ball: a glow in the weapon's colour and a trail in the weapon's manner,
- * from the last stretch of its own path (scorched.js keeps `path` for the trace).
+ * shot", then "I said I wanted variance across all shot types"). Over each shell's ball: a glow in
+ * the weapon's colour, a trail in the weapon's manner -- at the weapon's own length, count, width
+ * and colour (scorched.js SHELL_LOOKS, one entry per weapon) -- and a ring for the heavy ones.
+ * The trail is the last stretch of the shell's own path, which the rules keep for the trace.
  *
- *   flame    a missile: a short exhaust of hot beads
- *   radio    a nuke: a pulsing green-white glow and a fan of falling sparks
- *   comet    a MIRV or a Leap Frog: a long tapering tail in its colour
- *   rainbow  a Funky Bomb: the hue runs round the wheel along the trail
- *   dash     a tracer: a thin grey dotted line and nothing else, which is the point of a tracer
- *   sparks   a roller: grey, with sparks thrown behind it
- *   wisp     a riot bomb: pale blue wisps
- *   clods    a dirt shell: lumps of earth shed behind it
- *   fire     napalm: a flickering flame tail and dripping embers
- *   drill    a digger or a sandhog: a spinning cross of glints
+ *   flame    exhaust: hot beads, `len` of them, in `col`
+ *   radio    a nuke: a pulsing glow (`width` scales it) and `count` falling sparks
+ *   comet    a tapering tail, `len` long and `width` wide, in the glow colour
+ *   rainbow  the hue runs round the wheel along the trail, `spin` times as fast for a bomblet
+ *   dash     a thin dotted line, `len` long, and no glow -- the point of a tracer
+ *   smoke    grey puffs shed along the path
+ *   sparks   `count` sparks thrown behind, for the rollers
+ *   wisp     pale soft wisps, `len` of them
+ *   clods    `count` lumps of earth shed behind
+ *   drip     droplets falling from a shell of liquid dirt
+ *   fire     a flickering flame tail `len` long in `col`, and dripping embers
+ *   drill    `count` spinning arms of glint, at `spin`
  */
 const hsl = (h, sat, l, a) => `hsla(${Math.round(h)},${sat}%,${l}%,${a.toFixed(3)})`;
+const rgbaOf = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a.toFixed(3)})`;
 export function paintShells(ctx, P, U, shells, now, { softStops, looks } = {}) {
   const lw = ctx.lineWidth;
   shells.forEach((s, idx) => {
     const look = looks(s.weapon);
     const c = P(s.x, s.y, 1.2);
-    const tail = (s.path ?? []).slice(-14);
+    const tail = (s.path ?? []).slice(-Math.max(2, look.len));
     const pts = tail.map((q) => P(q.x, q.y, 1.2));
     const n = pts.length;
     const g = look.glow;
-    // the glow
     if (g) {
       const pulse = look.trail === 'radio' ? 0.75 + 0.25 * Math.sin(now / 90 + idx) : 1;
-      softStops(ctx, c.x, c.y, U.x * look.size * (2.6 + (look.trail === 'radio' ? 1.4 : 0)) * pulse,
-        [[0, `rgba(${g[0]},${g[1]},${g[2]},0.55)`], [0.35, `rgba(${g[0]},${g[1]},${g[2]},0.22)`], [1, `rgba(${g[0]},${g[1]},${g[2]},0)`]]);
+      const reach = U.x * look.size * (2.6 + (look.trail === 'radio' ? 1.4 * look.width : 0)) * pulse;
+      softStops(ctx, c.x, c.y, reach, [[0, rgbaOf(g, 0.55)], [0.35, rgbaOf(g, 0.22)], [1, rgbaOf(g, 0)]]);
+    }
+    // the ring of the heavy ones: a thin bright hoop round the ball, turning with the flight
+    if (look.ring) {
+      ctx.strokeStyle = rgbaOf(look.ring, 0.85);
+      ctx.lineWidth = Math.max(1, U.x * 0.09);
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, U.x * look.size * 0.95, U.y * look.size * (0.55 + 0.4 * Math.abs(Math.sin(now / 240 + idx))), 0, 0, Math.PI * 2);
+      ctx.stroke();
     }
     if (n < 2) return;
     ctx.lineCap = 'round';
+    const col = look.col ?? g ?? [255, 255, 255];
     switch (look.trail) {
       case 'flame':
-        for (let i = Math.max(0, n - 5); i < n; i++) { const k = (i - (n - 5)) / 5; disc(ctx, pts[i].x, pts[i].y, U.x * 0.16 * (0.4 + k), `rgba(255,${Math.round(150 + 90 * k)},80,${(0.25 + 0.5 * k).toFixed(3)})`); }
+        for (let i = 0; i < n; i++) { const k = (i + 1) / n; disc(ctx, pts[i].x, pts[i].y, U.x * 0.16 * (0.4 + k) * (0.8 + look.size * 0.4), `rgba(${col[0]},${Math.round(col[1] * (0.7 + 0.3 * k))},${col[2]},${(0.2 + 0.55 * k).toFixed(3)})`); }
         break;
       case 'radio':
-        for (let i = 0; i < 7; i++) { const h = h01(idx * 31 + i * 7 + Math.floor(now / 120)); const q = pts[Math.max(0, n - 1 - Math.floor(h * 6))]; disc(ctx, q.x + (h01(i * 13 + idx) - 0.5) * U.x * 1.6, q.y + h * U.y * 1.4, U.x * 0.11, `rgba(180,255,140,${(0.4 + 0.5 * h).toFixed(3)})`); }
+        for (let i = 0; i < look.count; i++) { const h = h01(idx * 31 + i * 7 + Math.floor(now / 120)); const q = pts[Math.max(0, n - 1 - Math.floor(h * (n - 1)))]; disc(ctx, q.x + (h01(i * 13 + idx) - 0.5) * U.x * 1.8 * look.size, q.y + h * U.y * 1.6, U.x * 0.11 * (0.8 + look.size * 0.5), rgbaOf(g, 0.4 + 0.5 * h)); }
         break;
       case 'comet':
-        for (let i = 0; i < n - 1; i++) { const k = (i + 1) / n; ctx.strokeStyle = `rgba(${g[0]},${g[1]},${g[2]},${(0.08 + 0.55 * k * k).toFixed(3)})`; ctx.lineWidth = Math.max(0.6, U.x * 0.38 * k); ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke(); }
+        for (let i = 0; i < n - 1; i++) { const k = (i + 1) / n; ctx.strokeStyle = rgbaOf(g, 0.08 + 0.55 * k * k); ctx.lineWidth = Math.max(0.6, U.x * look.width * 1.2 * k); ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke(); }
         break;
-      case 'rainbow':
-        for (let i = 0; i < n - 1; i++) { const k = (i + 1) / n; ctx.strokeStyle = hsl((now / 4 + i * 26) % 360, 100, 60, 0.15 + 0.6 * k); ctx.lineWidth = Math.max(0.6, U.x * 0.3 * k); ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke(); }
-        softStops(ctx, c.x, c.y, U.x * 1.3, [[0, hsl((now / 4) % 360, 100, 70, 0.5)], [1, hsl((now / 4) % 360, 100, 70, 0)]]);
+      case 'rainbow': {
+        const rate = now / 4 * look.spin;
+        for (let i = 0; i < n - 1; i++) { const k = (i + 1) / n; ctx.strokeStyle = hsl((rate + i * (360 / n)) % 360, 100, 60, 0.15 + 0.6 * k); ctx.lineWidth = Math.max(0.6, U.x * look.width * k); ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i + 1].x, pts[i + 1].y); ctx.stroke(); }
+        softStops(ctx, c.x, c.y, U.x * look.size * 2.4, [[0, hsl(rate % 360, 100, 70, 0.5)], [1, hsl(rate % 360, 100, 70, 0)]]);
         break;
+      }
       case 'dash':
         for (let i = 0; i < n; i += 2) disc(ctx, pts[i].x, pts[i].y, U.x * 0.07, 'rgba(200,206,216,0.55)');
         break;
+      case 'smoke':
+        for (let i = 0; i < n; i += 2) { const k = (i + 1) / n; softStops(ctx, pts[i].x + (h01(i + idx) - 0.5) * U.x * 0.4, pts[i].y - (1 - k) * U.y * 0.6, U.x * (0.25 + 0.45 * (1 - k)), [[0, `rgba(170,176,186,${(0.12 + 0.2 * k).toFixed(3)})`], [1, 'rgba(170,176,186,0)']], 6); }
+        break;
       case 'sparks':
-        for (let i = 0; i < 5; i++) { const h = h01(idx * 17 + i * 5 + Math.floor(now / 60)); const q = pts[n - 1]; disc(ctx, q.x - (h * U.x * 1.8) * Math.sign(s.vx || 1), q.y - h01(i + idx) * U.y * 0.8, U.x * 0.07, `rgba(255,${Math.round(180 + 60 * h)},120,${(0.9 - h * 0.6).toFixed(3)})`); }
+        for (let i = 0; i < look.count; i++) { const h = h01(idx * 17 + i * 5 + Math.floor(now / 60)); const q = pts[n - 1]; disc(ctx, q.x - (h * U.x * 2 * look.size) * Math.sign(s.vx || 1), q.y - h01(i + idx) * U.y * 0.9, U.x * 0.07, `rgba(255,${Math.round(180 + 60 * h)},120,${(0.9 - h * 0.6).toFixed(3)})`); }
         break;
       case 'wisp':
-        for (let i = Math.max(0, n - 6); i < n; i++) { const k = (i - (n - 6)) / 6; softStops(ctx, pts[i].x, pts[i].y, U.x * 0.45 * (1 - k * 0.5), [[0, `rgba(190,235,255,${(0.28 * k).toFixed(3)})`], [1, 'rgba(190,235,255,0)']], 6); }
+        for (let i = 0; i < n; i++) { const k = (i + 1) / n; softStops(ctx, pts[i].x, pts[i].y, U.x * 0.5 * look.size * 1.4 * (1 - k * 0.5), [[0, rgbaOf(g, 0.3 * k)], [1, rgbaOf(g, 0)]], 6); }
         break;
       case 'clods':
-        for (let i = 0; i < 4; i++) { const h = h01(idx * 23 + i * 9 + Math.floor(now / 150)); const q = pts[Math.max(0, n - 1 - i * 2)]; ctx.fillStyle = `rgba(${140 + Math.round(40 * h)},${95 + Math.round(30 * h)},50,${(0.5 + 0.4 * h).toFixed(3)})`; ctx.fillRect(q.x + (h - 0.5) * U.x, q.y + h * U.y * 0.6, U.x * 0.16, U.y * 0.16); }
+        for (let i = 0; i < look.count; i++) { const h = h01(idx * 23 + i * 9 + Math.floor(now / 150)); const q = pts[Math.max(0, n - 1 - i)]; ctx.fillStyle = `rgba(${140 + Math.round(40 * h)},${95 + Math.round(30 * h)},50,${(0.5 + 0.4 * h).toFixed(3)})`; const sz = U.x * (0.12 + 0.1 * look.size); ctx.fillRect(q.x + (h - 0.5) * U.x * look.size * 1.4, q.y + h * U.y * 0.7, sz, sz); }
+        break;
+      case 'drip':
+        for (let i = 0; i < look.count; i++) { const h = h01(idx * 19 + i * 11 + Math.floor(now / 90)); const q = pts[Math.max(0, n - 1 - i)]; disc(ctx, q.x + (h - 0.5) * U.x * 0.6, q.y + h * U.y * 1.8, U.x * (0.06 + 0.05 * (1 - h)), `rgba(120,85,45,${(0.9 - 0.6 * h).toFixed(3)})`); }
         break;
       case 'fire':
-        for (let i = Math.max(0, n - 7); i < n; i++) { const k = (i - (n - 7)) / 7; const fl = 0.7 + 0.3 * Math.sin(now / 35 + i); disc(ctx, pts[i].x + (h01(i + Math.floor(now / 50)) - 0.5) * U.x * 0.4, pts[i].y, U.x * 0.2 * (0.3 + k) * fl, `rgba(255,${Math.round(90 + 120 * k)},30,${(0.3 + 0.6 * k).toFixed(3)})`); }
-        for (let i = 0; i < 3; i++) { const h = h01(idx * 7 + i * 3 + Math.floor(now / 100)); disc(ctx, c.x + (h - 0.5) * U.x * 1.2, c.y + h * U.y * 1.6, U.x * 0.08, `rgba(255,140,40,${(0.8 - h * 0.5).toFixed(3)})`); }
+        for (let i = 0; i < n; i++) { const k = (i + 1) / n; const fl = 0.7 + 0.3 * Math.sin(now / 35 + i); disc(ctx, pts[i].x + (h01(i + Math.floor(now / 50)) - 0.5) * U.x * 0.4, pts[i].y, U.x * 0.2 * (0.3 + k) * fl * (0.8 + look.size * 0.5), `rgba(${col[0]},${Math.round(col[1] * (0.6 + 0.4 * k))},${col[2]},${(0.3 + 0.6 * k).toFixed(3)})`); }
+        for (let i = 0; i < 3; i++) { const h = h01(idx * 7 + i * 3 + Math.floor(now / 100)); disc(ctx, c.x + (h - 0.5) * U.x * 1.2, c.y + h * U.y * 1.6, U.x * 0.08, rgbaOf(col, 0.8 - h * 0.5)); }
         break;
       case 'drill': {
-        const a = now / 60 + idx;
-        ctx.strokeStyle = 'rgba(255,220,170,0.85)'; ctx.lineWidth = Math.max(1, U.x * 0.1);
-        for (let i = 0; i < 2; i++) { const ang = a + i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(c.x - Math.cos(ang) * U.x * 0.55, c.y - Math.sin(ang) * U.x * 0.55); ctx.lineTo(c.x + Math.cos(ang) * U.x * 0.55, c.y + Math.sin(ang) * U.x * 0.55); ctx.stroke(); }
+        const a = now / 60 * look.spin + idx;
+        ctx.strokeStyle = rgbaOf(g ?? [255, 220, 170], 0.85); ctx.lineWidth = Math.max(1, U.x * 0.1);
+        for (let i = 0; i < look.count; i++) { const ang = a + i * Math.PI / look.count; const r = U.x * look.size * 1.1; ctx.beginPath(); ctx.moveTo(c.x - Math.cos(ang) * r, c.y - Math.sin(ang) * r); ctx.lineTo(c.x + Math.cos(ang) * r, c.y + Math.sin(ang) * r); ctx.stroke(); }
         break;
       }
       default: break;

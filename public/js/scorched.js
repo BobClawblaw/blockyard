@@ -904,30 +904,50 @@ export function leader(g) {
 
 // ------------------------------------------------------------------- the picture
 // WHAT EACH SHELL LOOKS LIKE IN THE AIR (operator, 2026-09-16: "Everything is the same white dot
-// effect for the shot. We need to add some effects and different colors ... to the different
-// types of projectiles"). The core is the ball the tile layer draws; the glow and the trail are
-// painted over it by scorchedfx.js. Keyed by the weapon's BEHAVIOUR, with the two nukes and the
-// two sandhogs singled out because they are the ones a player most needs to see coming.
+// effect for the shot"; then "The missile effect is the same as the baby missile. I said I wanted
+// variance across all shot types"). One entry PER WEAPON that flies, twenty-seven of them: the
+// core is the ball the tile layer draws, in its own colour and size; the glow, the trail's manner
+// and length, its colour, and a ring for the heavy ones are painted over it by scorchedfx.js.
+// Within a family the baby is small and pale, the plain one middling, the heavy one big, dark
+// and ringed -- so a player can tell what is coming before it lands.
+const L = (core, glow, trail, size, o = {}) => Object.freeze({ core, glow, trail, size, len: 6, count: 4, width: 0.3, col: glow, ring: null, spin: 1, ...o });
 export const SHELL_LOOKS = Object.freeze({
-  blast: Object.freeze({ core: '#fff2c8', glow: [255, 200, 120], trail: 'flame', size: 0.5 }),
-  nuke: Object.freeze({ core: '#e6ffc4', glow: [150, 255, 110], trail: 'radio', size: 0.7 }),
-  mirv: Object.freeze({ core: '#ecdcff', glow: [190, 150, 255], trail: 'comet', size: 0.55 }),
-  leapfrog: Object.freeze({ core: '#d2ffc8', glow: [120, 255, 150], trail: 'comet', size: 0.55 }),
-  funky: Object.freeze({ core: '#ffffff', glow: null, trail: 'rainbow', size: 0.5 }),
-  tracer: Object.freeze({ core: '#c9ced8', glow: null, trail: 'dash', size: 0.3 }),
-  roller: Object.freeze({ core: '#9aa2ad', glow: [200, 200, 215], trail: 'sparks', size: 0.6 }),
-  riot: Object.freeze({ core: '#c0f2ff', glow: [150, 220, 255], trail: 'wisp', size: 0.55 }),
-  dirt: Object.freeze({ core: '#b07a40', glow: [180, 130, 80], trail: 'clods', size: 0.6 }),
-  napalm: Object.freeze({ core: '#ffb347', glow: [255, 120, 40], trail: 'fire', size: 0.5 }),
-  digger: Object.freeze({ core: '#ff9a3c', glow: [255, 150, 60], trail: 'drill', size: 0.5 }),
-  sandhog: Object.freeze({ core: '#ff7a3c', glow: [255, 110, 60], trail: 'drill', size: 0.55 }),
+  // the blasts
+  babyMissile: L('#fff2c8', [255, 205, 130], 'flame', 0.42, { len: 4, col: [255, 180, 90] }),
+  missile: L('#ffd27a', [255, 150, 60], 'flame', 0.6, { len: 9, col: [255, 110, 40], ring: [255, 120, 40] }),
+  babyNuke: L('#e6ffc4', [150, 255, 110], 'radio', 0.6, { count: 5 }),
+  nuke: L('#ccff99', [100, 255, 70], 'radio', 0.82, { count: 11, width: 1.5, ring: [160, 255, 120] }),
+  // the ones that do something first
+  leapfrog: L('#d2ffc8', [120, 255, 150], 'comet', 0.55, { len: 8, width: 0.3 }),
+  funkyBomb: L('#ffffff', null, 'rainbow', 0.55, { len: 12, spin: 1 }),
+  funkyBomblet: L('#ffffff', null, 'rainbow', 0.34, { len: 6, spin: 2.5 }),
+  mirv: L('#ecdcff', [190, 150, 255], 'comet', 0.55, { len: 10, width: 0.38 }),
+  deathsHead: L('#2b1d3a', [255, 60, 90], 'comet', 0.72, { len: 14, width: 0.5, ring: [255, 220, 230] }),
+  napalm: L('#ffb347', [255, 120, 40], 'fire', 0.5, { len: 7, col: [255, 120, 30] }),
+  hotNapalm: L('#ffffff', [120, 180, 255], 'fire', 0.58, { len: 10, col: [90, 150, 255], ring: [200, 230, 255] }),
+  tracer: L('#c9ced8', null, 'dash', 0.3, { len: 14 }),
+  smokeTracer: L('#b8bcc4', null, 'smoke', 0.36, { len: 12 }),
+  babyRoller: L('#b5bcc6', [200, 200, 215], 'sparks', 0.45, { count: 3 }),
+  roller: L('#8f98a4', [220, 210, 200], 'sparks', 0.6, { count: 5 }),
+  heavyRoller: L('#5b6470', [255, 160, 90], 'sparks', 0.82, { count: 9, ring: [255, 140, 70] }),
+  // dirt, off and on
+  riotBomb: L('#c0f2ff', [150, 220, 255], 'wisp', 0.55, { len: 6 }),
+  heavyRiotBomb: L('#7fd0ff', [90, 180, 255], 'wisp', 0.78, { len: 11, ring: [170, 220, 255] }),
+  dirtClod: L('#b07a40', [180, 130, 80], 'clods', 0.5, { count: 3 }),
+  dirtBall: L('#8f6234', [160, 115, 70], 'clods', 0.7, { count: 5 }),
+  tonOfDirt: L('#5e4023', [130, 90, 50], 'clods', 1.05, { count: 9, ring: [110, 80, 45] }),
+  liquidDirt: L('#7c5a35', [150, 110, 60], 'drip', 0.55, { count: 5 }),
+  // the diggers
+  babyDigger: L('#ffb36b', [255, 170, 90], 'drill', 0.4, { count: 2, spin: 1 }),
+  digger: L('#ff9a3c', [255, 150, 60], 'drill', 0.52, { count: 2, spin: 1.6 }),
+  heavyDigger: L('#e06a1c', [255, 120, 50], 'drill', 0.68, { count: 3, spin: 1.3, ring: [255, 170, 100] }),
+  babySandhog: L('#ff9a7a', [255, 140, 120], 'drill', 0.45, { count: 2, spin: 2 }),
+  sandhog: L('#ff7a3c', [255, 110, 60], 'drill', 0.56, { count: 3, spin: 2 }),
+  heavySandhog: L('#c83c1c', [255, 70, 40], 'drill', 0.74, { count: 4, spin: 1.7, ring: [255, 120, 90] }),
 });
+/** The look for a weapon id; anything unknown flies as a baby missile. */
 export function shellLook(weaponId) {
-  if (weaponId === 'nuke' || weaponId === 'babyNuke') return SHELL_LOOKS.nuke;
-  if (weaponId === 'funkyBomblet') return SHELL_LOOKS.funky;
-  if (weaponId === 'liquidDirt') return SHELL_LOOKS.dirt;
-  const kind = WEAPONS[weaponId]?.kind;
-  return SHELL_LOOKS[kind] ?? SHELL_LOOKS.blast;
+  return SHELL_LOOKS[weaponId] ?? SHELL_LOOKS.babyMissile;
 }
 const strataColour = (y, top, x) => {
   const f = top > 0 ? (y + 0.5) / top : 0;
