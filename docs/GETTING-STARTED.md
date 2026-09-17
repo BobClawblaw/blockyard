@@ -165,7 +165,7 @@ it is not echoed.
 npm start
 ```
 
-The log says `BlockYard 0.1.1 listening on https://127.0.0.1:21000` (its own self-signed
+The log says `BlockYard 0.1.2 listening on https://127.0.0.1:21000` (its own self-signed
 certificate, made on this first start; the browser warns once and remembers it), then `created the
 first admin account (admin)` with a generated password **shown once** — copy it, or set
 `BLOCKYARD_ADMIN_PASSWORD` before the first start to choose it — then `address index: building

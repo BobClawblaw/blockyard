@@ -1,13 +1,13 @@
-# [ANN] BlockYard 0.1.1 — a third security audit with every finding fixed, a resumable address index, one sky per board, and Scorched Yard
+# [ANN] BlockYard 0.1.2 — a third security audit with every finding fixed, a resumable address index, one sky per board, and Scorched Yard
 
 **Repository:** https://github.com/BobClawblaw/blockyard
-**Release:** https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.1
+**Release:** https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.2
 **npm:** `npm install -g blockyard`
 **Licence:** Apache-2.0
 
 ![Overview](IMAGE-URL-FOR:overview.jpg)
 
-A day after 0.1.0, here is 0.1.1. It is mostly a hardening release. We ran a **third security audit** over the whole codebase and **fixed every finding it made, the same day**, each with a test that holds the fix. The **address index** now resumes an interrupted build instead of starting its hours-long read again, and the test suite checks it against a second, deliberately simple implementation. Every board **picks its own sky**, and the Earth sky gained a warm sun, a glowing moon with its real phases, and softer clouds. And there is a new Diversion: **Scorched Yard**, Scorched Earth on the block engine.
+A day after 0.1.0, here is 0.1.2. It is mostly a hardening release. We ran a **third security audit** over the whole codebase and **fixed every finding it made, the same day**, each with a test that holds the fix. The **address index** now resumes an interrupted build instead of starting its hours-long read again, and the test suite checks it against a second, deliberately simple implementation. Every board **picks its own sky**, and the Earth sky gained a warm sun, a glowing moon with its real phases, and softer clouds. And there is a new Diversion: **Scorched Yard**, Scorched Earth on the block engine.
 
 If you are new here: BlockYard is a self-hosted web app you point at **your own Bitcoin Core node**. You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, and a kiosk view. It is plain JavaScript on Node.js with **zero dependencies** and **zero telemetry**, read-only toward your node, and it ships hardened: bound to this machine, sign-in on, HTTPS with a certificate it makes itself.
 
@@ -15,7 +15,7 @@ If you are new here: BlockYard is a self-hosted web app you point at **your own 
 
 The first two audits were on 09-13 and 09-14. For the third, four AI auditors worked in parallel, one each on the network-facing server, the chain parsing and data stores, the browser code, and the scripts and supply chain. They ran hostile fake nodes, a real headless browser, fuzzers over the block and undo file decoders, and proofs of concept against throwaway instances. The full report, with every proof and every fix, is in the repo.
 
-It found **1 high, 8 medium, 17 low and 6 informational** issues. All of them are fixed in 0.1.1, and 55 new tests cover the fixes. The tests for the high and for the wallet fix were run against the old code and failed. For the index build, we re-ran the proof of concept against the old build, and it deleted the planted file again. What it found, in short:
+It found **1 high, 8 medium, 17 low and 6 informational** issues. All of them are fixed in 0.1.2, and 55 new tests cover the fixes. The tests for the high and for the wallet fix were run against the old code and failed. For the index build, we re-ran the proof of concept against the old build, and it deleted the planted file again. What it found, in short:
 
 - **High: a stalled stream reader was never dropped.** A client that opened the live update stream and stopped reading kept every update queued in the server's memory. 400 such connections took a test instance from 73 MB to 1.5 GB in three minutes. Now a client whose connection is full is sent nothing more until it catches up. It is dropped at 4 MB behind or after a minute blocked, and one address holds at most 16 streams.
 - **Open mode was safe only against browsers.** With sign-in switched off, the check that refuses cross-site requests stops a browser, never a script. A script on the LAN could repoint the saved node connection, so the node's RPC cookie would go to it after the next restart. It could also use the connection test to read internal web pages through the server. With sign-in off, the node connection form now answers only on the machine itself.
@@ -56,6 +56,8 @@ What we added:
   - A restart button for when you are knocked out in round one.
 - **Cheat mode:** draws the firing solution live as you aim, under this round's wind and gravity.
 - **Wind is a real fluid simulation.** A small Stable Fluids solver runs behind the land, which acts as the solid floor, so the air rises over the hills and curls into eddies behind them. What you see are flow lines carried by that air. The direction holds for a round, and the strength changes every turn.
+- **Opponents you can read at a glance.** Each game deals a fresh mix of personalities, and each personality wears its own colour: the Shooter blue, the Chooser purple, the Spoiler red, and so on.
+- **Opponents that aim like people.** They work out the shot, then miss by an error that grows with distance and shrinks each time they fire at you. About one Shooter shot in four lands first time, two in five for a Chooser, and four in five for a Spoiler.
 - **Attract mode:** hands your seat to a computer player, for a wall screen.
 
 ## One sky per board
@@ -85,7 +87,7 @@ Until now there was one global sky switch and six "star field" switches scattere
 - **Games load when first opened.** The seven games no longer load with every page. What loads at startup went from 39 modules and 1.42 MB to 21 modules and 1.09 MB.
 - **`blockyard setup`** no longer echoes the RPC password. It also takes the password from a file or from stdin.
 - **CI actions are pinned to commit hashes**, and the game files have a hash manifest.
-- **1,068 tests**, up from 945. They still need nothing but Node.
+- **1,070 tests**, up from 945. They still need nothing but Node.
 
 ## Upgrading from 0.1.0
 
@@ -104,7 +106,7 @@ As before, **every line was written by an AI, directed by a human.** That includ
 ## Links
 
 - Source: https://github.com/BobClawblaw/blockyard
-- Release 0.1.1: https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.1
+- Release 0.1.2: https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.2
 - Changelog: https://github.com/BobClawblaw/blockyard/blob/main/CHANGELOG.md
 - The audit: https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY-AUDIT-2026-09-16.md
 - Security: https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY.md

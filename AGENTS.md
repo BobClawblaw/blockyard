@@ -385,11 +385,13 @@ does not specialise goes through `step()`. What will bite:
 
 ## Current state (2026-09-17)
 
-**0.1.1, prepared 2026-09-17** (`CHANGELOG.md` under 0.1.1, with an "Upgrading from 0.1.0" list):
+**0.1.2, released 2026-09-17** (`CHANGELOG.md` under 0.1.2, with an "Upgrading from 0.1.0" list):
 the third AI security audit with every finding fixed, the resumable and reference-checked address
 index, the undo-decoder fixes, one sky per board with the Earth sky's sun and moon, lazy-loaded
-games, and Scorched Yard. Node 22.2 is now the minimum. Not tagged or published until the
-operator says release; the tarball is built from a `git archive` of the release commit.
+games, and Scorched Yard (opponents shuffled each game, a colour per personality, human-sized aim).
+Node 22.2 is now the minimum. A 0.1.1 went to npm earlier the same day; 0.1.2 replaces it (npm
+cannot reuse a version), its GitHub release was turned back into a draft and its tag removed, and
+the changelog has no 0.1.1 section. The announcement is `docs/announcement/0.1.2/`.
 
 **0.1.0, the first minor release**, tagged `v0.1.0` on 2026-09-16: everything since 0.0.9 in one
 release (the 0.0.10 that was prepared on 09-15 was never published; its GitHub draft was removed

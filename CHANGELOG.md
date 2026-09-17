@@ -6,12 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-- **Fixed: Scorched Yard's Shooter and Chooser were far too accurate.** Both fired the exact shot the physics search found, with no error: over 200 simulated games the Shooter hit with 60% of its first shots and the Chooser with 95%, as often as the Spoiler the manual calls nearly perfect. Every personality that searches now aims the way a person does, off by an error that grows with the distance and shrinks with each shot at the same target. First-shot hit rates now: Moron and Tosser about 5%, Shooter and Poolshark about 23%, Chooser about 43%, Spoiler about 84%, Cyborg about 76%, and the Shooter closes from 23% to 32% by its third shot. A test holds the order and the bands
-- **Scorched Yard: each personality has its own colour.** A tank took its colour from its seat, so the first opponent was blue and the second green whatever played there. Now You are orange, the Moron yellow, the Shooter blue, the Poolshark cyan, the Tosser green, the Chooser purple, the Spoiler red, the Cyborg pink and the Unknown grey (which gives nothing away about the personality it draws), and a second or third of one kind is a lighter or darker shade. The scoreboard's dot follows the tank's colour too; it had been a colour per seat, so a red Spoiler was listed with a blue dot
-
-- **Scorched Yard's opponents are shuffled every game.** With the shipped mix, the seats were filled from a fixed list in order, so two opponents were a Shooter and a Tosser in every game. Each new game now deals the six personalities (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark) in a fresh order: two opponents are a different pair each time, up to six are all different kinds, and a seventh starts a new deal. Naming one kind in *Their kind* still fills every seat with it
-
-## [0.1.1] — 2026-09-17
+## [0.1.2] — 2026-09-17
 
 A day of hardening, and a new game. The headline is the **third AI security audit**, run on
 2026-09-16 over the whole codebase by four auditors in parallel, and every one of its findings
@@ -23,9 +18,10 @@ implementation; property tests over Bitcoin Core's file formats found and fixed 
 reading undo data. The **skies** were made clear: every board picks the Galaxy or the Earth sky in
 one place, and the Earth sky gained a warm sun with a halo, a moon that glows through its real
 phases, and softer clouds. And under Diversions, **Scorched Yard**: Scorched Earth on the block
-engine, with the manual's weapons and computer players, up to eight tanks, a cheat mode that draws
+engine, with the manual's weapons and computer players who each wear their own colour and aim like
+people, up to eight tanks, a cheat mode that draws
 the firing solution, and wind that is a real fluid simulation flowing over the hills. The games now
-load only when their page is first opened. 1,068 tests, from 945.
+load only when their page is first opened. 1,070 tests, from 945.
 
 ### Upgrading from 0.1.0
 
@@ -78,6 +74,9 @@ load only when their page is first opened. 1,068 tests, from 945.
 
 ### Scorched Yard
 
+- **Fixed: Scorched Yard's Shooter and Chooser were far too accurate.** Both fired the exact shot the physics search found, with no error: over 200 simulated games the Shooter hit with 60% of its first shots and the Chooser with 95%, as often as the Spoiler the manual calls nearly perfect. Every personality that searches now aims the way a person does, off by an error that grows with the distance and shrinks with each shot at the same target. First-shot hit rates now: Moron and Tosser about 5%, Shooter and Poolshark about 23%, Chooser about 43%, Spoiler about 84%, Cyborg about 76%, and the Shooter closes from 23% to 32% by its third shot. A test holds the order and the bands
+- **Scorched Yard: each personality has its own colour.** A tank took its colour from its seat, so the first opponent was blue and the second green whatever played there. Now You are orange, the Moron yellow, the Shooter blue, the Poolshark cyan, the Tosser green, the Chooser purple, the Spoiler red, the Cyborg pink and the Unknown grey (which gives nothing away about the personality it draws), and a second or third of one kind is a lighter or darker shade. The scoreboard's dot follows the tank's colour too; it had been a colour per seat, so a red Spoiler was listed with a blue dot
+- **Scorched Yard's opponents are shuffled every game.** With the shipped mix, the seats were filled from a fixed list in order, so two opponents were a Shooter and a Tosser in every game. Each new game now deals the six personalities (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark) in a fresh order: two opponents are a different pair each time, up to six are all different kinds, and a seventh starts a new deal. Naming one kind in *Their kind* still fills every seat with it
 - **Scorched Yard: the rest of the control plan.** *Correcting*: click an enemy tank to mark it; after your shot the panel says how it did against it (*10 over*, *6 short*, *close*, *hit*) and **C** sets the power that miss implies, from your own last shot. *Weapons*: **W** opens a grid of what you own, biggest blast first, with counts and keys; **1–9** pick in the shop's order; **Q** picks your last weapon; the item pills are buttons. *The aim guide*: a ghost of the first fifth of the flight while you aim, or the whole flight, or off. *The fire button* names what it will send, and the last of a weapon sold one at a time asks once before it goes. A press on your own tank turns the barrel without touching the power. The keys are a table. Three new settings: Aim guide, Correction helper, Confirm the last of a weapon
 - **Scorched Yard: the old wind code is gone.** The four earlier wind pictures (marching particles, dashed currents, a plasma wash, bowing bands), the smoke dye the fluid first carried, and the air clock only they used are deleted, with the tests that covered only them: the wind module drops from about 400 lines to 69, and the air module loses its dye grid. What is drawn is unchanged — the simulated air, its flow lines, and the sky's faint ripple
 - **Fixed: Scorched Yard's computer players seemed to aim at tanks already destroyed.** A computer player chose its shot only when its thinking pause ran out, so for the whole pause its gauge (and, in cheat mode, its trajectory) still showed its previous shot, usually aimed at the tank it had just destroyed. It now plans the moment its turn begins, against the tanks alive then, and its barrel and power ease from the old aim to the new one while it thinks. Cheat mode draws only your own firing solution. And the random shot that the Moron fires, and that the Shooter and Poolshark fall back on, heads toward a living enemy instead of the middle of the field, which had kept shelling the empty half once the tanks there were gone: in 4,357 simulated shots none now fires away from every tank still standing, against 20 before

@@ -146,7 +146,7 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.1.1** (2026-09-17) — a hardening release after 0.1.0: the third security audit with
+Version **0.1.2** (2026-09-17) — a hardening release after 0.1.0: the third security audit with
 every finding fixed, a resumable address index build, and Scorched Yard. Pre-release software: the
 word is meant literally. Releases are published on [npm](https://www.npmjs.com/package/blockyard)
 as `blockyard`, as [GitHub releases](https://github.com/BobClawblaw/blockyard/releases),
