@@ -5,11 +5,13 @@
 **npm:** `npm install -g blockyard`
 **Licence:** Apache-2.0
 
-![Overview](IMAGE-URL-FOR:overview.jpg)
+![Overview](https://talkimg.com/images/2026/09/17/UqfTta.jpg)
 
 A day after 0.1.0, here is 0.1.2. It is mostly a hardening release. We ran a **third security audit** over the whole codebase and **fixed every finding it made, the same day**, each with a test that holds the fix. The **address index** now resumes an interrupted build instead of starting its hours-long read again, and the test suite checks it against a second, deliberately simple implementation. Every board **picks its own sky**, and the Earth sky gained a warm sun, a glowing moon with its real phases, and softer clouds. And there is a new Diversion: **Scorched Yard**, Scorched Earth on the block engine.
 
 If you are new here: BlockYard is a self-hosted web app you point at **your own Bitcoin Core node**. You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, and a kiosk view. It is plain JavaScript on Node.js with **zero dependencies** and **zero telemetry**, read-only toward your node, and it ships hardened: bound to this machine, sign-in on, HTTPS with a certificate it makes itself.
+
+![Block space](https://talkimg.com/images/2026/09/17/UqftLo.jpg)
 
 ## The third security audit, and every finding fixed
 
@@ -36,7 +38,7 @@ It found **1 high, 8 medium, 17 low and 6 informational** issues. All of them ar
 
 The report says plainly what was *not* found too: the fixes from both earlier audits held, the RPC allowlist resisted every case, whitespace and batch trick tried, and no credential reaches any response.
 
-![Scorched Yard](IMAGE-URL-FOR:scorched.jpg)
+![Scorched Yard](https://talkimg.com/images/2026/09/17/UqfRaN.jpg)
 
 ## Scorched Yard
 

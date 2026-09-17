@@ -4,9 +4,10 @@ For the bitcointalk thread (https://bitcointalk.org/index.php?topic=5594141): a 
 0.1.2, a day after 0.1.0.
 
 `blockyard-0.1.2-announcement.txt` is the post in Markdown; `blockyard-0.1.2-announcement.bbcode`
-is the same post in BBCode for the forum. It has three pictures, each a placeholder
-`IMAGE-URL-FOR:<file>` to replace with the uploaded address: `overview.jpg`, `scorched.jpg` and
-`settings-sky.jpg`. The other screenshots are here too, for the thread.
+is the same post in BBCode for the forum. Its pictures on talkimg.com, uploaded by the operator on
+2026-09-17: `overview.jpg` (UqfTta), `block-space-mode1.jpg` (UqftLo, beside the paragraph for
+newcomers) and `scorched.jpg` (UqfRaN). `settings-sky.jpg` is not uploaded yet: its place in the
+sky section is still the placeholder `IMAGE-URL-FOR:settings-sky.jpg`. The other screenshots are here too, for the thread.
 
 Every picture was shot at 0.1.2 on 2026-09-17 against the local Core node with
 `scripts/shots.mjs`, and is a copy of `docs/images/`, except `settings-sky.jpg`, which is Display
