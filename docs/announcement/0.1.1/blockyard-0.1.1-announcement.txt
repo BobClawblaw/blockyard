@@ -1,0 +1,114 @@
+# [ANN] BlockYard 0.1.1 — a third security audit with every finding fixed, a resumable address index, one sky per board, and Scorched Yard
+
+**Repository:** https://github.com/BobClawblaw/blockyard
+**Release:** https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.1
+**npm:** `npm install -g blockyard`
+**Licence:** Apache-2.0
+
+![Overview](IMAGE-URL-FOR:overview.jpg)
+
+A day after 0.1.0, here is 0.1.1. It is mostly a hardening release. We ran a **third security audit** over the whole codebase and **fixed every finding it made, the same day**, each with a test that holds the fix. The **address index** now resumes an interrupted build instead of starting its hours-long read again, and the test suite checks it against a second, deliberately simple implementation. Every board **picks its own sky**, and the Earth sky gained a warm sun, a glowing moon with its real phases, and softer clouds. And there is a new Diversion: **Scorched Yard**, Scorched Earth on the block engine.
+
+If you are new here: BlockYard is a self-hosted web app you point at **your own Bitcoin Core node**. You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, and a kiosk view. It is plain JavaScript on Node.js with **zero dependencies** and **zero telemetry**, read-only toward your node, and it ships hardened: bound to this machine, sign-in on, HTTPS with a certificate it makes itself.
+
+## The third security audit, and every finding fixed
+
+The first two audits were on 09-13 and 09-14. For the third, four AI auditors worked in parallel, one each on the network-facing server, the chain parsing and data stores, the browser code, and the scripts and supply chain. They ran hostile fake nodes, a real headless browser, fuzzers over the block and undo file decoders, and proofs of concept against throwaway instances. The full report, with every proof and every fix, is in the repo.
+
+It found **1 high, 8 medium, 17 low and 6 informational** issues. All of them are fixed in 0.1.1, and 55 new tests cover the fixes. The tests for the high and for the wallet fix were run against the old code and failed. For the index build, we re-ran the proof of concept against the old build, and it deleted the planted file again. What it found, in short:
+
+- **High: a stalled stream reader was never dropped.** A client that opened the live update stream and stopped reading kept every update queued in the server's memory. 400 such connections took a test instance from 73 MB to 1.5 GB in three minutes. Now a client whose connection is full is sent nothing more until it catches up. It is dropped at 4 MB behind or after a minute blocked, and one address holds at most 16 streams.
+- **Open mode was safe only against browsers.** With sign-in switched off, the check that refuses cross-site requests stops a browser, never a script. A script on the LAN could repoint the saved node connection, so the node's RPC cookie would go to it after the next restart. It could also use the connection test to read internal web pages through the server. With sign-in off, the node connection form now answers only on the machine itself.
+- **The RPC console allowed two wallet reads that return private keys**, `listdescriptors` and `gethdkeys`, through its `list` and `get` rules. Every wallet method is now refused by name.
+- **The address index build deleted its output directory without checking it**, so a mistyped path such as a home directory would have been wiped. It now refuses any directory that holds files an index does not write, and only ever removes its own.
+- **The rest of the mediums:**
+  - Request bodies had no time limit.
+  - A 900 KB RPC method name, sent sixty times, could push real events out of the audit log.
+  - The npm package included two private notes. 0.0.9 on npm still does, and they hold internal paths, no credentials.
+  - The shipped systemd unit had almost no sandbox.
+- **The lows,** among them:
+  - A redirect after sign-in that could leave the site.
+  - A few node values shown as HTML rather than text. A hostile node could inject markup, but the security policy stopped any script from running.
+  - A coinbase byte that stalled pool attribution.
+  - An exchange order book that could freeze the server.
+  - A log line that took minutes to parse.
+  - A sign-in lockout that one address could use to lock out everyone.
+
+The report says plainly what was *not* found too: the fixes from both earlier audits held, the RPC allowlist resisted every case, whitespace and batch trick tried, and no credential reaches any response.
+
+![Scorched Yard](IMAGE-URL-FOR:scorched.jpg)
+
+## Scorched Yard
+
+Scorched Earth, the 1991 artillery game, on BlockYard's block engine, under the Diversions menu. The field is dirt cubes that fall when the ground under them is blown away. The rules follow the original manual:
+
+- **The shop:** the manual's thirty-three weapons at the manual's prices, packs and blast radii, with the original behaviours. Leap Frog's three growing warheads, the Funky Bomb, the MIRV, the diggers, napalm and the rest.
+- **Shells:** each of the twenty-seven that fly looks like itself.
+- **Computer players:** the manual's eight personalities, from Moron to Spoiler.
+- **Tanks:** up to eight at the table.
+
+What we added:
+
+- **Controls built for a mouse and a keyboard:**
+  - An aim gauge over your tank, and keys that accelerate as you hold them.
+  - Click an enemy to mark it. After your shot, the panel says how far over or short you were, and **C** sets the power that miss implies.
+  - A weapon grid on **W**.
+  - A restart button for when you are knocked out in round one.
+- **Cheat mode:** draws the firing solution live as you aim, under this round's wind and gravity.
+- **Wind is a real fluid simulation.** A small Stable Fluids solver runs behind the land, which acts as the solid floor, so the air rises over the hills and curls into eddies behind them. What you see are flow lines carried by that air. The direction holds for a round, and the strength changes every turn.
+- **Attract mode:** hands your seat to a computer player, for a wall screen.
+
+## One sky per board
+
+Until now there was one global sky switch and six "star field" switches scattered across the board tabs, and nothing said which board drew which sky. Now *Display settings → Sky* is a map: every board that draws a sky, and a choice beside it of **Galaxy**, **Earth** or none. Below the map, one section describes each sky. Existing settings are migrated, so every board keeps what it drew.
+
+![Which sky, where](IMAGE-URL-FOR:settings-sky.jpg)
+
+**The Galaxy** is BlockYard's star field with its turning spiral arms, and is the default everywhere except Scorched Yard. **The Earth sky** is a real day from the machine's clock, and it got a lot of attention this release:
+
+- **The sun** is warm gold overhead and deep orange at the horizon, not white, with a soft halo.
+- **The moon** glows, stronger the fuller it is, and follows the real calendar through its phases.
+- **The clouds:** high cirrus is soft gas, no longer a row of discs.
+- **Scorched Yard** draws each round at its own hour.
+
+## The address index
+
+- **An interrupted build resumes.** The first build reads about 880 GB of block files and runs for hours. Stopping BlockYard, Ctrl-C in the installer, a crash or a reboot used to throw all of it away. The build now keeps a checksummed journal of what it has proven done. Block files are checkpointed at most a minute apart, and each sorted bucket is recorded as it finishes. A restart picks up from there and writes the same index, byte for byte. A journal that is torn or edited, or that doesn't match the chain, is discarded, and the log says why.
+- **Checked against a second implementation.** The suite builds a seeded synthetic chain: 301 blocks, 6,346 transactions and 384 addresses across eight script types, with obfuscated block and undo files. It then compares every address's balance and full history with a deliberately naive replay of the UTXO set that shares no code with the index. It checks again after the live follower folds in more blocks, and after a reorganisation and a restart. It found no discrepancy, and it fails on each of five deliberately introduced faults.
+- **Three flaws in reading Core's undo files, found by property tests.** Thousands of seeded encodings, truncated and byte-flipped, now check the decoders against the file formats as Core writes them.
+  - An output amount above about 10 million BTC was read slightly wrong. No real output comes close.
+  - An undo record cut short in its last script was accepted as whole.
+  - A corrupt number could decode as an enormous block height.
+
+## Smaller things
+
+- **Games load when first opened.** The seven games no longer load with every page. What loads at startup went from 39 modules and 1.42 MB to 21 modules and 1.09 MB.
+- **`blockyard setup`** no longer echoes the RPC password. It also takes the password from a file or from stdin.
+- **CI actions are pinned to commit hashes**, and the game files have a hash manifest.
+- **1,068 tests**, up from 945. They still need nothing but Node.
+
+## Upgrading from 0.1.0
+
+`npm install -g blockyard` (or `git pull`), then restart. Things you may notice:
+
+- **Node.js 22.2 or newer** is now required, up from 22.0.
+- **With sign-in off, the node connection form only works from the machine itself.** Set `auth.openNodeConfigFromNetwork: true` to allow it from anywhere again. With sign-in on, an admin can use it from anywhere, as before.
+- **The RPC console refuses every wallet method**, reads included.
+- **The systemd unit is sandboxed.** If you install it again, edit its `ReadWritePaths=` lines to your install's `data` and `config` directories, and add your index directory.
+- **Point `addressIndex` at a new or empty directory**, or at an existing index. The build refuses anything else.
+
+## How it was made
+
+As before, **every line was written by an AI, directed by a human.** That includes the audit, the fixes, the fluid simulation, the tests and this post. The operator decided what mattered, what was wrong and what looked bad, and never typed a line of it. It is still **experimental pre-release software**. Expect bugs, and tell us what broke.
+
+## Links
+
+- Source: https://github.com/BobClawblaw/blockyard
+- Release 0.1.1: https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.1
+- Changelog: https://github.com/BobClawblaw/blockyard/blob/main/CHANGELOG.md
+- The audit: https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY-AUDIT-2026-09-16.md
+- Security: https://github.com/BobClawblaw/blockyard/blob/main/docs/SECURITY.md
+- Getting started: https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md
+- User guide: https://github.com/BobClawblaw/blockyard/blob/main/docs/USER-GUIDE.md
+
+Apache-2.0. Run your own node.

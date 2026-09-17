@@ -243,6 +243,12 @@ if (doing('scorched')) {
     await metrics(1000);
     await evl(`document.getElementById('syResume')?.click()`);
     await sleep(1500);
+    // A DAYTIME ROUND (2026-09-17). Each round draws its sky hour from the seed (scorchedyard.js
+    // ROUND_HOURS[(seed + round*7) % 8]), so a shot taken at whatever the seed gave was as likely
+    // night as day; the Earth sky's sun, clouds and the wind's flow lines read best at 15:00 (index 3).
+    // The land is already generated, so only the sky's hour follows the new seed.
+    await evl(`import('/js/scorchedyard.js').then((m) => { const g = m.currentGame(); if (g) g.seed = g.seed - ((g.seed + g.round * 7) % 8 + 8) % 8 + 3; })`);
+    await sleep(2500);
     await evl(`import('/js/scorchedyard.js').then(async (m) => { const g = m.currentGame(); const t = g.tanks[0]; const ai = await import('/js/scorchedai.js'); const target = ai.nearest(g, t); t.inventory.nuke = 1; t.weapon = 'nuke'; const s = ai.spoiler(g, t, () => 0.9, target); t.angle = s.angle; t.power = s.power; })`);
     await sleep(300);
     await evl(`document.getElementById('syFire')?.click()`);
