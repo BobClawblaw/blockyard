@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { wallTiles, mazeOrder, currentPlay, frameStats } from '../public/js/blockmanview.js';
+import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats } from '../public/js/blockmanview.js';
 import * as fx from '../public/js/blockmanfx.js';
 import { parseMaze, OPEN } from '../public/js/blockmanmaze.js';
 
@@ -96,7 +96,18 @@ test('the page carries the two canvases, the panel and the menu entry, and the g
   assert.match(read('public/css/app.css'), /\.bmwell/, 'the well has an aspect ratio');
 });
 
+test('the panel says what the keys do, and the screen has its overlay', () => {
+  const html = read('public/index.html');
+  for (const id of ['bmOver', 'bmMsg', 'bmSub', 'bmResume', 'bmWho']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /← → ↑ ↓ or WASD/, 'the move keys');
+  assert.match(html, /P pause · F2 restart · Enter plays/, 'and the game keys');
+  assert.equal(/\(M2\)/.test(html), false, 'nothing on the panel is still promised');
+  // the four pursuers are named on the panel, and named the same in the rules
+  for (const name of ['Chaser', 'Ambusher', 'Flanker', 'Wanderer']) assert.match(html, new RegExp(`<th>${name}</th>`));
+});
+
 test('the play state and the frame times are readable, for the tests and the measurement', () => {
+  assert.equal(currentGame(), null, 'no game until the page opens one');
   const play = currentPlay();
   assert.ok(play && 'maze' in play && 'man' in play && 'pursuers' in play);
   const st = frameStats();

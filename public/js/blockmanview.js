@@ -12,15 +12,10 @@
 //     which is what Scorched Yard does for shells and blasts.
 import { board3d } from './details3d.js';
 import { parseMaze, OPEN } from './blockmanmaze.js';
-import { paintDots, paintBlockMan, paintPursuers } from './blockmanfx.js';
+import { paintDots, paintBlockMan, paintPursuers, paintPops } from './blockmanfx.js';
+import { newGame, stepGame, restart, remaining, DIRS } from './blockman.js';
 
 const WALL_COLOUR = '#2a3ac8';          // the maze's own blue; one colour a level later (M5)
-const PURSUERS = Object.freeze([
-  Object.freeze({ id: 'chaser', name: 'Chaser', colour: '#ef4b4b' }),
-  Object.freeze({ id: 'ambusher', name: 'Ambusher', colour: '#ff8ccf' }),
-  Object.freeze({ id: 'flanker', name: 'Flanker', colour: '#46d7e4' }),
-  Object.freeze({ id: 'wanderer', name: 'Wanderer', colour: '#ffa63d' }),
-]);
 
 const BOARD = {
   // THE PLAY LAYER IS TRANSPARENT (2026-09-17): the renderer fills a board's canvas with
@@ -33,9 +28,8 @@ const BOARD = {
 };
 
 const G = {
-  maze: null, dots: null, pellets: null,
-  man: null, pursuers: [],
-  raf: null, last: 0, mazeKey: null,
+  maze: null, game: null, board: { dots: [], pellets: [] }, pops: [],
+  raf: null, last: 0, mazeKey: null, paused: false, bound: false,
   frames: 0, frameMs: [], paintNow: 0,
   h: null, state: null,
 };
@@ -69,48 +63,47 @@ export function mazeOrder(a, b) {
   return b.x - a.x;
 }
 
-// ------------------------------------------------------------------ the scripted walk (M1 only)
-const DIRS = Object.freeze([{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]);
-const free = (m, x, y) => m.at(((x % m.w) + m.w) % m.w, y) === OPEN;
+// ------------------------------------------------------------------------------ the game and keys
+const KEYS = Object.freeze({
+  ArrowLeft: DIRS.left, ArrowRight: DIRS.right, ArrowUp: DIRS.up, ArrowDown: DIRS.down,
+  a: DIRS.left, d: DIRS.right, w: DIRS.up, s: DIRS.down,
+});
 
-function walk(a, m, dtMs, rnd) {
-  const speed = a.speed * dtMs / 1000;
-  let left = speed;
-  while (left > 0) {
-    const step = Math.min(left, 0.34);
-    const nx = a.x + a.dir.x * step, ny = a.y + a.dir.y * step;
-    const tile = { x: Math.round(nx - 0.5), y: Math.round(ny - 0.5) };
-    const ahead = { x: tile.x + a.dir.x, y: tile.y + a.dir.y };
-    const centred = Math.abs(nx - (tile.x + 0.5)) < 0.06 && Math.abs(ny - (tile.y + 0.5)) < 0.06;
-    if (centred && !free(m, ahead.x, ahead.y)) {
-      // a wall ahead: turn to a free way, preferring not to double back
-      const options = DIRS.filter((d) => free(m, tile.x + d.x, tile.y + d.y) && !(d.x === -a.dir.x && d.y === -a.dir.y));
-      a.dir = options.length ? options[Math.floor(rnd() * options.length)] : { x: -a.dir.x, y: -a.dir.y };
-      a.x = tile.x + 0.5; a.y = tile.y + 0.5;
-    } else if (centred && rnd() < 0.12) {
-      const options = DIRS.filter((d) => free(m, tile.x + d.x, tile.y + d.y) && !(d.x === -a.dir.x && d.y === -a.dir.y));
-      if (options.length > 1) a.dir = options[Math.floor(rnd() * options.length)];
-      a.x = nx; a.y = ny;
-    } else {
-      a.x = nx; a.y = ny;
-    }
-    if (a.x < 0) a.x += m.w; else if (a.x >= m.w) a.x -= m.w;      // the tunnel wraps
-    left -= step;
-  }
+function start() {
+  G.game = newGame({ maze: G.maze ?? (G.maze = parseMaze()) });
+  G.pops = []; G.paused = false;
+  refreshBoard();
+  overlay(null);
 }
 
-let seed = 1;
-const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+function refreshBoard() { G.board = G.game ? remaining(G.game) : { dots: [], pellets: [] }; }
 
-function reset() {
-  const m = G.maze ?? (G.maze = parseMaze());
-  G.dots = m.dots.map((d) => ({ ...d }));
-  G.pellets = m.pellets.map((p) => ({ ...p }));
-  G.man = { x: m.start.x, y: m.start.y + 0.5, dir: { x: -1, y: 0 }, speed: 8 };
-  G.pursuers = PURSUERS.map((p, i) => ({
-    ...p, x: m.door.x + (i - 1.5) * 0.9, y: m.door.y + 1.5, dir: { x: i % 2 ? 1 : -1, y: 0 }, speed: 7.2, state: 'chase',
-  }));
-  G.frames = 0; G.frameMs = [];
+function overlay(msg, sub = '', button = null) {
+  const box = el('bmOver'), m = el('bmMsg'), s2 = el('bmSub'), b = el('bmResume');
+  if (!box) return;
+  box.classList.toggle('hidden', !msg);
+  if (m && msg) m.textContent = msg;
+  if (s2) s2.textContent = msg ? sub : '';
+  if (b) b.textContent = button ?? 'play';
+}
+
+function onKey(e) {
+  if (!document.querySelector('section.page[data-page="blockman"]:not(.hidden)')) return;
+  const want = KEYS[e.key] ?? KEYS[String(e.key).toLowerCase()];
+  if (want && G.game) { G.game.man.want = want; e.preventDefault(); return; }
+  if (e.key === 'p' || e.key === 'P') { G.paused = !G.paused; overlay(G.paused ? 'Paused' : null, 'P to go on', 'go on'); e.preventDefault(); }
+  else if (e.key === 'F2') { if (G.game) restart(G.game); else start(); G.paused = false; refreshBoard(); overlay(null); e.preventDefault(); }
+  else if (e.key === 'Enter' && (!G.game || G.game.phase === 'over')) { start(); e.preventDefault(); }
+}
+
+function bind() {
+  if (G.bound) return;
+  G.bound = true;
+  document.addEventListener('keydown', onKey);
+  el('bmResume')?.addEventListener('click', () => {
+    if (!G.game || G.game.phase === 'over') start();
+    else { G.paused = false; overlay(null); }
+  });
 }
 
 // ------------------------------------------------------------------------------ the painted layer
@@ -120,9 +113,12 @@ function paintPlay(ctx, view, hx) {
   const P = (x, y, z = 1.1) => hx.project(x, y, z, view);
   const o0 = P(0, 0), ox = P(1, 0), oy = P(0, 1);
   const U = { x: Math.abs(ox.x - o0.x) || 8, y: Math.abs(oy.y - o0.y) || 8 };
-  paintDots(ctx, P, U, { dots: G.dots, pellets: G.pellets, now: G.paintNow });
-  paintPursuers(ctx, P, U, G.pursuers, { now: G.paintNow });
-  paintBlockMan(ctx, P, U, G.man, { now: G.paintNow });
+  const g = G.game;
+  paintDots(ctx, P, U, { dots: G.board.dots, pellets: G.board.pellets, now: G.paintNow });
+  if (!g) return;
+  paintPursuers(ctx, P, U, g.pursuers.filter((p) => p.state !== 'pen' || true), { now: G.paintNow });
+  if (g.phase !== 'dying' || Math.floor(G.paintNow / 120) % 2 === 0) paintBlockMan(ctx, P, U, g.man, { now: G.paintNow });
+  paintPops(ctx, P, U, G.pops, G.paintNow);
 }
 
 function draw(now = performance.now()) {
@@ -137,9 +133,15 @@ function draw(now = performance.now()) {
   G.paintNow = now;
   board3d(play, [], { ...opts, background: 'rgba(0,0,0,0)', spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)', overlay: paintPlay });
   const hud = el('bmStats');
-  if (hud) {
+  const g = G.game;
+  if (hud && g) {
     const fps = G.frameMs.length > 8 ? Math.round(1000 / (G.frameMs.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, G.frameMs.length))) : null;
-    const html = `<dt>dots left</dt><dd>${G.dots.length}</dd><dt>pursuers</dt><dd>${G.pursuers.length}</dd><dt>frames</dt><dd>${G.frames}${fps ? ` · ${fps} fps` : ''}</dd>`;
+    const html = `<dt>score</dt><dd>${g.score.toLocaleString('en-GB')}</dd>`
+      + `<dt>lives</dt><dd>${'▮'.repeat(Math.max(0, g.lives))}${g.lives ? '' : '—'}</dd>`
+      + `<dt>level</dt><dd>${g.level}</dd>`
+      + `<dt>dots left</dt><dd>${g.dots.size + g.pellets.size}</dd>`
+      + (g.frightenedMs ? `<dt>frightened</dt><dd>${(g.frightenedMs / 1000).toFixed(1)}s</dd>` : '')
+      + `<dt>frames</dt><dd>${G.frames}${fps ? ` · ${fps} fps` : ''}</dd>`;
     if (hud.__html !== html) { hud.innerHTML = html; hud.__html = html; }
   }
 }
@@ -150,20 +152,34 @@ function frame(now) {
   if (G.frameMs.length > 240) G.frameMs.shift();
   G.last = now;
   G.frames += 1;
-  walk(G.man, G.maze, dt, rnd);
-  for (const p of G.pursuers) walk(p, G.maze, dt, rnd);
-  // the scripted walk eats what it drives over, so the dot layer shrinks the way a real game's does
-  const mx = Math.floor(G.man.x), my = Math.floor(G.man.y);
-  const before = G.dots.length;
-  G.dots = G.dots.filter((d) => d.x !== mx || d.y !== my);
-  G.pellets = G.pellets.filter((d) => d.x !== mx || d.y !== my);
-  if (!G.dots.length && before) reset();                     // a cleared maze starts again
+  const g = G.game;
+  if (g && !G.paused) {
+    const before = g.dots.size + g.pellets.size;
+    stepGame(g, dt);
+    if (g.dots.size + g.pellets.size !== before) refreshBoard();
+    drain(g, now);
+  }
   draw(now);
   G.raf = requestAnimationFrame(frame);
 }
 
+/** What the rules said happened this frame: the screen's business (the sounds are M5's). */
+function drain(g, now) {
+  if (!g.events.length) return;
+  for (const e of g.events) {
+    if (e.kind === 'ate') G.pops.push({ x: e.x, y: e.y, text: e.points, t0: now });
+    else if (e.kind === 'level') { refreshBoard(); overlay(`Level ${e.level} cleared`, 'the maze fills again, and everyone is faster'); }
+    else if (e.kind === 'caught') overlay(g.lives > 0 ? 'Caught' : 'Game over', g.lives > 0 ? `${g.lives} to go` : 'F2 or the button to play again', g.lives > 0 ? 'go on' : 'again');
+    else if (e.kind === 'over') overlay('Game over', `${g.score.toLocaleString('en-GB')} · F2 or the button to play again`, 'again');
+  }
+  g.events.length = 0;
+  G.pops = G.pops.filter((p) => now - p.t0 < 900);
+  if (g.phase === 'play') overlay(null);
+}
+
 /** For the tests and the measurement script: the walk's state, and the frame times it has seen. */
-export function currentPlay() { return { maze: G.maze, man: G.man, pursuers: G.pursuers, dots: G.dots, pellets: G.pellets }; }
+export function currentPlay() { return { maze: G.maze, game: G.game, man: G.game?.man ?? null, pursuers: G.game?.pursuers ?? [], dots: G.board.dots, pellets: G.board.pellets }; }
+export function currentGame() { return G.game; }
 export function frameStats() {
   const ms = G.frameMs.slice().sort((a, b) => a - b);
   return { frames: G.frames, medianMs: ms.length ? ms[ms.length >> 1] : null, worstMs: ms.length ? ms[ms.length - 1] : null };
@@ -172,9 +188,11 @@ export function stop() { if (G.raf) cancelAnimationFrame(G.raf); G.raf = null; G
 
 export function renderBlockMan(s, state, h) {
   G.state = state; G.h = h;
-  if (!G.maze) { G.maze = parseMaze(); reset(); }
+  if (!G.maze) G.maze = parseMaze();
+  bind();
   const wrap = el('bmWrap');
-  if (wrap) wrap.classList.remove('idle');
+  if (wrap) wrap.classList.toggle('idle', !G.game);
+  if (!G.game) overlay('BlockMan', 'clear the maze, keep away from the four: ← → ↑ ↓ or WASD to turn, P pauses, F2 starts again. Enter or the button to play.', 'play');
   if (!G.raf && globalThis.requestAnimationFrame) { G.last = 0; G.raf = requestAnimationFrame(frame); }
   else draw();
 }
