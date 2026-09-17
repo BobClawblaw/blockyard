@@ -84,11 +84,26 @@ play layer at 60 fps is the first milestone (M1), because the whole design rests
   Our own layouts; the grid size is arithmetic, not expression.
 - **Coordinates:** tiles of 8 × 8 game units, actors positioned in units, so cornering and the
   half-tile offsets of a centre line come out naturally. Speeds in units per second.
-- **Layouts:** four of our own, cycling by level, each hand-drawn under the rules the genre needs:
-  one connected corridor network, no 2 × 2 open squares, four pellets away from the corners' dead
-  ends, a pen in the middle with one gate, one wrap tunnel on each side, and two "no upward turn"
-  spots above the pen (which is how the original made pursuers commit to a route without extra AI).
-  A layout is a text block in the source, 28 characters per row, so a new one is a paste and a test.
+- **One maze, ours, for every level** (operator, 2026-09-17: "keep it one beautiful maze, like the
+  original"). The 1980 game had one layout and it is remembered tile by tile; a game that reshuffles
+  its maze every level is a different kind of game, because nobody ever learns it. So BlockMan gets a
+  single hand-drawn layout, and the levels get harder through the speed and wave tables (§5), not
+  through new geometry.
+
+  It is drawn to the rules the genre needs and then tuned by play: one connected corridor network;
+  no 2 × 2 open square anywhere (open squares let a pursuer be shaken off, and they read as a room
+  rather than a corridor); a pen in the middle with one gate; one wrap tunnel on each side at the
+  pen's height, so a chase can be escaped by leaving the screen; four pellets in the outer quarters,
+  each a short run from a junction so a pellet is a decision and not a reflex; a long outer loop that
+  can be run indefinitely, and enough dead ends that it cannot be run safely; symmetry left to right,
+  because a maze that reads as a picture is remembered, and asymmetry would make one side the good
+  side; and two "no upward turn" tiles above the pen, which is how the original made pursuers commit
+  to a route without extra AI. Between 240 and 250 dots, so the dot-count events (fruit, Chaser's
+  speed steps) land where the tables expect.
+
+  The layout is a text block in the source, 28 characters a row, and `test/blockman-maze.test.js`
+  holds every rule above, so tuning it is an edit and a test run rather than a leap of faith. The
+  format allows a second layout later; the game ships one.
 - **Look:** walls are cubes in the board's own palette (the Blockout/Tetrust neon family), one colour
   a level; dots are pale discs, pellets are bigger and pulse; the tunnel mouths are dimmer walls.
 
@@ -172,8 +187,9 @@ Mirroring Scorched Yard's split, which the audit and the performance work both v
 5. **M5 — sound and the look.** Our own pieces, the dot-count pulse, the level-clear flash, the
    death animation as the cubes fall apart (the block engine's own death effect, as Scorched Yard
    does for a tank).
-6. **M6 — the trimmings.** Attract mode for a wall screen, high scores, the four layouts, difficulty,
-   the user guide's section, the changelog.
+6. **M6 — the trimmings.** Attract mode for a wall screen, high scores, difficulty, the maze's final
+   tuning pass by play (dot count, pellet placement, the tunnel's height), the user guide's section,
+   the changelog.
 
 Each milestone leaves the suite green and the game playable.
 
@@ -183,5 +199,6 @@ Each milestone leaves the suite green and the game playable.
 - **No ROM, no emulator.** BlockYard's DOS Diversions run real shareware because those releases
   permit it. This game ships no third-party asset at all.
 - **No original maze, characters, sounds or name**, for the reasons in §1.
-- **No multiplayer, no level editor** in the first cut. The layout format is text, so an editor is a
-  later evening's work if it is ever wanted.
+- **No second maze, no level editor, no multiplayer.** One layout is the design, not a shortcut: the
+  levels differ by speed and rhythm. The format is text, so another layout or an editor is possible
+  later without touching the rules.
