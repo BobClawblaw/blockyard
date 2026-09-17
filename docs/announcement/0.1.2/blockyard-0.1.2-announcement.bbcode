@@ -5,13 +5,13 @@
 [b]npm:[/b] [tt]npm install -g blockyard[/tt]
 [b]Licence:[/b] Apache-2.0
 
-[img height=1776]https://talkimg.com/images/2026/09/17/UqfTta.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/17/UqfTta.jpg[/img]
 
 A day after 0.1.0, here is 0.1.2. It is mostly a hardening release. We ran a [b]third security audit[/b] over the whole codebase and [b]fixed every finding it made, the same day[/b], each with a test that holds the fix. The [b]address index[/b] now resumes an interrupted build instead of starting its hours-long read again, and the test suite checks it against a second, deliberately simple implementation. Every board [b]picks its own sky[/b], and the Earth sky gained a warm sun, a glowing moon with its real phases, and softer clouds. And there is a new Diversion: [b]Scorched Yard[/b], Scorched Earth on the block engine.
 
 If you are new here: BlockYard is a self-hosted web app you point at [b]your own Bitcoin Core node[/b]. You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, and a kiosk view. It is plain JavaScript on Node.js with [b]zero dependencies[/b] and [b]zero telemetry[/b], read-only toward your node, and it ships hardened: bound to this machine, sign-in on, HTTPS with a certificate it makes itself.
 
-[img height=1000]https://talkimg.com/images/2026/09/17/UqftLo.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/17/UqftLo.jpg[/img]
 
 [size=12pt][b]The third security audit, and every finding fixed[/b][/size]
 
@@ -46,7 +46,7 @@ It found [b]1 high, 8 medium, 17 low and 6 informational[/b] issues. All of them
 
 The report says plainly what was [i]not[/i] found too: the fixes from both earlier audits held, the RPC allowlist resisted every case, whitespace and batch trick tried, and no credential reaches any response.
 
-[img height=1000]https://talkimg.com/images/2026/09/17/UqfRaN.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/17/UqfRaN.jpg[/img]
 
 [size=12pt][b]Scorched Yard[/b][/size]
 
