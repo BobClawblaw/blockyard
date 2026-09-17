@@ -39,17 +39,9 @@ export const THEME_SCORCHED = Object.freeze([
   ['C5', 1], ['BB4', 1], ['A4', 1], ['G4', 1],
   ['F4', 1], ['E4', 1], ['D4', 2],
 ]);
-// BLOCKMAN'S MARCH: ours, a four-bar figure in A minor that sits under a chase without racing it.
-export const THEME_BLOCKMAN = Object.freeze([
-  ['A4', 0.5], ['E4', 0.5], ['A4', 0.5], ['C5', 0.5], ['B4', 1], ['R', 0.5],
-  ['G4', 0.5], ['D4', 0.5], ['G4', 0.5], ['B4', 0.5], ['A4', 1], ['R', 0.5],
-  ['F4', 0.5], ['C5', 0.5], ['E5', 0.5], ['C5', 0.5], ['B4', 1], ['R', 0.5],
-  ['E4', 0.5], ['G4', 0.5], ['B4', 0.5], ['E5', 0.5], ['A4', 1.5], ['R', 0.5],
-]);
 export const THEMES = Object.freeze({
   tetrust: { notes: THEME, bpm: BPM },
   scorched: { notes: THEME_SCORCHED, bpm: 112 },
-  blockman: { notes: THEME_BLOCKMAN, bpm: 132 },
 });
 
 // the effects: [frequency from, frequency to, seconds, wave, gain]

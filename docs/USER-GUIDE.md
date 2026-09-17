@@ -21,7 +21,6 @@ are node actions, which are off unless an operator explicitly enables them (see
 - [Blockout](#blockout)
 - [Blockanoid](#blockanoid)
 - [Scorched Yard](#scorched-yard)
-- [BlockMan](#blockman)
 - [Wolfenstein 3D](#wolfenstein-3d)
 - [DOOM](#doom)
 - [Quake](#quake)
@@ -916,86 +915,6 @@ shot; every turn, which is the original's and can turn right around between two 
 or none), **gravity**, the **landscape** the rounds are drawn from (hills, mountains, a valley,
 flat), the **starting cash** and the **interest** rate. They take effect at the next new game.
 
-## BlockMan
-
-A maze chase on the block engine, under **Diversions**, after Scorched Yard. It is the genre the
-1980 arcade game invented — one maze, dots to clear, four pursuers with a rule each, and four
-pellets that turn the chase round for a few seconds — built here from scratch. Nothing in it was
-taken from that game: the maze was drawn for this project, the characters are cubes, the sounds are
-computed here, and the names are ours, so BlockMan ships under the same Apache 2.0 licence as the
-rest of BlockYard. `docs/PLAN-BLOCKMAN.md` is the plan, and says where that line runs.
-
-The maze is 28 by 28 tiles: 264 dots, four pellets out in the quarters, a pen in the middle, and a
-tunnel out each side that brings you in the other one. It is built once as 498 cubes and kept for
-every level, as the original kept its own, and everything that moves is painted over those cubes in
-the same light. **No tile in it is a dead end** — every one has at least two ways out, so a wrong
-turn is never fatal by itself; the layout is drawn on a lattice of corridors three tiles apart and
-then has passages closed one at a time, each closure kept only if no dead end, no open room and no
-cut-off corner appears, which is where the varied block shapes come from. **Nor does any lane run
-end to end**: the top row is broken in four places and the bottom in two, because a corridor the
-full width of the board is a free lap with nothing to decide on it. The two side columns are whole,
-so there is still a lap to run when it is safe to — and every band of wall is crossed in at least
-four places, so no part of the maze has only one way in and out. The maze does not change; the pursuers get faster and bolder, and from level five
-they are quick enough that the pellets are the only way through.
-
-### Playing
-
-| Keys | |
-|---|---|
-| **←** **→** **↑** **↓** or **W** **A** **S** **D** | the way to go — pressed early, the turn is taken at the next corner |
-| **P** or **Esc** | pause |
-| **R** | a new game |
-| **T** | cheat mode: a ring on each pursuer's target tile, and a line to it |
-| **M** | the music |
-
-A turn queued before a corner is taken *at* the corner, and a turn into an open way is taken
-immediately, cutting the corner slightly — which is how the genre has always felt, and is the
-difference between escaping a pursuer and not.
-
-### The four pursuers
-
-Each one has a single rule, and all four run the same code: head for a tile, and at every junction
-take the way that gets closest to it. The rules are the interesting part of the genre and are
-nobody's property; watch them with **T** on.
-
-| pursuer | its rule |
-|---|---|
-| **Chaser** (red) | straight at the tile you are on. It leaves the pen first and never stops coming. |
-| **Ambusher** (pink) | four tiles ahead of you, the way you are facing — so it cuts you off rather than following. |
-| **Flanker** (cyan) | the point twice as far as Chaser's line through two tiles ahead of you: with Chaser behind you it arrives from the front. |
-| **Wanderer** (orange) | at you while it is more than eight tiles away, and off to its own corner once it is closer, so it drifts in and out of the hunt. |
-
-They scatter to their corners and hunt in turn, eight waves a level — four of each, the last chase
-running to the end of it — and every change of wave turns all of them around where they stand. The
-scatters get shorter each level, so the pauses dry up. Chaser gets two speed steps as the board
-empties, and with ten dots left it is faster than you are. In the tunnels they slow to about
-three-fifths speed, which is the one place they can be shaken off.
-
-Eat a pellet and they turn blue, slow down and run from you for a few seconds — less each level,
-and by level nineteen not at all. Eaten, a pursuer becomes a pair of eyes that crosses the maze at
-speed, waits a moment in the pen and rejoins whichever wave is running. The four in one pellet are
-worth 200, 400, 800 and 1,600.
-
-### Scoring
-
-| | |
-|---|---|
-| a dot | 10 |
-| a pellet | 50 |
-| the pursuers in one pellet | 200, 400, 800, 1,600 |
-| the fruit | 100 to 5,000, by level |
-| an extra life | at 10,000 points |
-
-The fruit appears twice a level, below the pen, at 70 and 170 dots eaten, and keeps for nine and a
-half seconds. The top eight games are kept in the browser, with the level and the date.
-
-### The switches on the panel
-
-**Cheat** draws each pursuer's target, **sound** and **music** are the game's own, and **attract
-mode** hands the keys to the computer: it plays itself, badly but watchably, and does not touch the
-high-score table. All four are also in **Display settings → BlockMan**, and a change in either
-place shows in both.
-
 ## Wolfenstein 3D
 
 The shareware episode of Wolfenstein 3D, **Escape from Wolfenstein**, under **Diversions**, first of
@@ -1579,13 +1498,3 @@ shows in both. The rest are here only:
 
 What the sky is *made of* — density, brightness, nebulae, dust and the rest — comes from the
 **Sky** tab, which every board shares.
-
-### BlockMan
-
-The game's own settings. **Cheat mode**, **attract mode**, **music** and **sound effects** are the
-same switches that sit on the game's own panel. Two more are here only, and they change the game:
-
-| setting | what it does |
-|---|---|
-| **Lives** | How many tries a game gives you, from one to five. An extra one still arrives at 10,000 points whatever this says. |
-| **Difficulty** | The scale on every speed in the table: **gentle** takes a seventh off the pursuers, **hard** adds a seventh. It takes effect at the next new game. |

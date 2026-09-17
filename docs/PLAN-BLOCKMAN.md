@@ -1,5 +1,12 @@
 # Plan: BlockMan — a maze chase on the block engine
 
+> **STATUS: DROPPED, 2026-09-17.** The game was built to M6 and then removed from the app at the
+> operator's word ("Just remove Blockman from the list. It sucks."). Nothing of it ships: the code
+> and its tests live on the `blockman` branch, and the only piece kept in the app is the three-voice
+> wavetable synth it produced, now `public/js/wavesound.js` and used by whatever board wants it.
+> This document stays for the part that outlives the game -- §1, where the line runs between a
+> genre's mechanics and one company's expression -- and as the record of what was measured.
+
 Operator, 2026-09-17: "Scope out a game called BlockMan that is a faithful legal recreation of the
 pacman game, using our block engine."
 

@@ -21,7 +21,7 @@ test('the games live in the menu, at the end of the nav, and nowhere else', () =
   const pop = html.match(/<div class="navmenu-pop[\s\S]*?<\/div>/)?.[0] ?? '';
   assert.ok(pop, 'the panel exists');
   const inPop = [...pop.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(inPop, ['tetrust', 'blockout', 'blockanoid', 'scorched', 'blockman', 'wolf3d', 'doom', 'quake'], 'every game is in it');
+  assert.deepEqual(inPop, ['tetrust', 'blockout', 'blockanoid', 'scorched', 'wolf3d', 'doom', 'quake'], 'every game is in it');
   // exactly once in the whole page: they were moved, not copied
   for (const page of inPop) {
     assert.equal(html.match(new RegExp(`<button data-page="${page}"`, 'g')).length, 1, `${page} has one nav button`);
@@ -75,4 +75,25 @@ test('the menu is outside the scrolling nav, and its panel escapes the clipping'
   assert.ok(!/\.navmenu-pop \{[^}]*transform:/.test(css),
     'no transform either: the left edge is measured and set, not pulled back by translateX');
   assert.ok(!/navmenu-pop[^>]*style="/.test(html), 'no style attribute: the CSP forbids them');
+});
+
+test('every game stops when you leave its page: the guard BlockMan was missing', () => {
+  // WHY THIS TEST EXISTS. BlockMan's loop had no page check, so its attract mode went on playing --
+  // sound and all -- while you were reading the Mempool page (operator, 2026-09-17: "blockman keeps
+  // playing attract mode in the background. WTF is that"). Every other game already paused itself;
+  // the game that did not was the one written last. So the rule is asserted rather than remembered.
+  const games = {
+    'public/js/tetrust.js': 'tetrust',
+    'public/js/blockout.js': 'blockout',
+    'public/js/blockanoid.js': 'blockanoid',
+    'public/js/scorchedyard.js': 'scorched',
+    'public/js/dosgame.js': 'spec.page',          // the three DOS games share one runner
+  };
+  for (const [file, page] of Object.entries(games)) {
+    const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.match(src, /document\.hidden/, `${file} notices a hidden tab`);
+    const guard = new RegExp(`G\\.state\\?\\.page !== ${page.startsWith('spec') ? 'spec\\.page' : `'${page}'`}`);
+    assert.match(src, guard, `${file} stops its loop when its page is not the one on screen`);
+    assert.match(src, /visibilitychange/, `${file} pauses when the tab goes away`);
+  }
 });

@@ -100,7 +100,6 @@
     <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
     <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
     <button data-page="scorched" role="menuitem" title="Scorched Yard: artillery on a deformable block landscape">Scorched Yard</button>
-    <button data-page="blockman" role="menuitem" title="BlockMan: a maze chase on the block engine">BlockMan</button>
     <button data-page="wolf3d" role="menuitem" title="Wolfenstein 3D: the shareware WOLF3D.EXE on an emulated PC">Wolfenstein 3D</button>
     <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
     <button data-page="quake" role="menuitem" title="Quake: the shareware QUAKE.EXE on an emulated PC">Quake</button>
@@ -658,51 +657,6 @@
       </div>
     </section>
 
-    <!-- BLOCKMAN (public/js/blockmanview.js, docs/PLAN-BLOCKMAN.md): a maze chase. The maze is a
-         block layer built once; the dots and the actors are painted over it every frame, because a
-         cube per moving thing through the scene builder measured 15 fps and a cube per arcade pixel
-         1.4 fps (PLAN §2). Two canvases, the way Scorched Yard splits its land from its actors. -->
-    <section class="page" data-page="blockman">
-      <div class="tetrust" id="blockman">
-        <div class="card tetcard">
-          <h3>BlockMan <span class="sp"></span><span class="src">a maze chase on the block space — ours, not theirs</span></h3>
-          <div class="treemapwrap tetwell bmwell idle" id="bmWrap">
-            <canvas class="treemap" id="bmMaze"></canvas>
-            <canvas class="treemap" id="bmPlay"></canvas>
-          </div>
-          <div class="tetover hidden" id="bmOver">
-            <div class="tetmsg" id="bmMsg">BlockMan</div>
-            <div class="tetsub" id="bmSub"></div>
-            <button type="button" class="btn primary" id="bmResume">play</button>
-          </div>
-        </div>
-        <div class="card tethud">
-          <h3>This level</h3>
-          <div class="tetstats" id="bmStats"></div>
-          <h3>Keys</h3>
-          <table class="tetkeys">
-            <tr><th>move</th><td>← → ↑ ↓ or WASD — a turn pressed early is taken at the junction</td></tr>
-            <tr><th>game</th><td>P pause · F2 or R a new game · Enter plays · T shows what they are chasing · M music</td></tr>
-          </table>
-          <h3>Switches</h3>
-          <div class="tetswitches">
-            <button type="button" class="tetsw" id="bmTargets" aria-pressed="false" title="cheat mode: a ring on each pursuer's target tile, which is how the four rules can be told apart">◎ targets</button>
-            <button type="button" class="tetsw" id="bmSfx" aria-pressed="true" title="ours, on oscillators: the eat, the pellet, the pulse whose tempo follows what is left, the death">♫ sound</button>
-            <button type="button" class="tetsw" id="bmMusic" aria-pressed="false" title="a march in A minor, on oscillators">♪ music</button>
-            <button type="button" class="tetsw" id="bmDemo" aria-pressed="false" title="attract mode: nobody at the keys, the game plays itself for a wall screen">▶ watch</button>
-          </div>
-          <h3>High scores <span class="sp"></span><span class="src">this browser</span></h3>
-          <table class="tetscores" id="bmScores"></table>
-          <h3>The pursuers</h3>
-          <table class="tetkeys" id="bmWho">
-            <tr><th>Chaser</th><td>straight at you</td></tr>
-            <tr><th>Ambusher</th><td>four tiles ahead of you</td></tr>
-            <tr><th>Flanker</th><td>Chaser’s line through you, doubled</td></tr>
-            <tr><th>Wanderer</th><td>at you from afar, its own corner when close</td></tr>
-          </table>
-        </div>
-      </div>
-    </section>
 
     <!-- WOLFENSTEIN 3D (public/js/wolf3d.js): the shareware WOLF3D.EXE v1.4 from games/wolf3d_dos/,
          unmodified, on the same emulated PC -- this time in real mode, as a 16-bit DOS program. -->

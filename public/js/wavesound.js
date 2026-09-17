@@ -1,19 +1,24 @@
-// BLOCKMAN'S SOUND: A THREE-VOICE WAVETABLE GENERATOR (docs/PLAN-BLOCKMAN.md §6).
+// A THREE-VOICE WAVETABLE SYNTH, for any board here that wants one.
 //
-// WHAT IS TAKEN, AND WHAT IS NOT. The 1980 arcade board made its sound with a three-voice wavetable
+// WHERE IT CAME FROM. It was written for a maze game that was dropped from the app on 2026-09-17
+// (the game is gone; docs/PLAN-BLOCKMAN.md and the `blockman` branch keep the record), and the
+// operator kept the sound engine: "keep the updated sound engine tho". It is the piece worth
+// keeping, because it is how the arcade era actually made sound and it is a hundred lines of Web
+// Audio with no dependency.
+//
+// WHAT IS TAKEN, AND WHAT IS NOT. The boards of 1980 made their sound with a three-voice wavetable
 // generator: three channels, each stepping through a short table of levels at a rate set by a
 // frequency register. That TECHNIQUE is engineering, not expression, and it is what gives the era
-// its character -- so BlockMan's sound is built the same way, three voices over 32-entry tables,
-// and it belongs in a zero-dependency project because it is a hundred lines of Web Audio.
+// its character -- so this is built the same way, three voices over 32-entry tables.
 //
-// What is NOT taken is the expression: their waveform ROM's contents, their melodies, their siren,
-// their eat, their jingle. Every table here is computed from a formula in this file (square, pulse,
-// a folded triangle, a soft bass, a rasp), and every patch below is our own choice of pitches and
-// shapes. A transcription of their audio would be a copy however it was synthesised, which is the
-// whole reason this file exists rather than a sampler.
+// What is NOT taken is any of the expression: nobody's waveform ROM, nobody's melodies, nobody's
+// jingle. Every table here is computed from a formula in this file (square, pulse, a folded
+// triangle, a soft bass, a rasp), and every patch below is our own choice of pitches and shapes. A
+// transcription of someone's audio would be a copy however it was synthesised, which is the whole
+// reason this file exists rather than a sampler.
 //
 // Zero dependencies, and no AudioContext until a sound is actually asked for: a page that never
-// opens BlockMan never opens an audio device (operator's rule for every board here).
+// plays anything never opens an audio device (operator's rule for every board here).
 
 /** One cycle of each voice's timbre, 32 levels, computed -- never a table lifted from anywhere. */
 export const TABLE_LEN = 32;
@@ -41,11 +46,11 @@ function table(f) {
  * slide between two), a length, and a level. Two or three of them at once is a chord, which is all
  * the polyphony three voices allows and exactly the constraint that makes this era's sound.
  *
- * The notes are ours. The eat is a fifth apart (A5 to E5) so a corridor alternates a bright interval
- * rather than one note; the pellet warbles up a minor third; eating a pursuer runs up an arpeggio;
- * the fruit is a major sixth; the death slides two octaves down through the rasp; and the pulse is a
- * bass fifth whose TEMPO carries how much is left (blockmanfx.pulseMs), which is the one idea from
- * the genre worth keeping and is a mechanic rather than a melody.
+ * The notes are ours, and the set is a starter kit rather than one game's: two blips a fifth apart
+ * (dotA/dotB) so a run of them alternates an interval rather than repeating a note, a warble that
+ * swells, an arpeggio for taking something, a bright two-tone, a long fall for a death, a fanfare
+ * for a level and a life, a low tick meant to be scheduled faster as a game tightens, and a start
+ * chord. A board wanting its own sound adds a patch here rather than reaching for an oscillator.
  */
 export const PATCHES = Object.freeze({
   dotA: [{ wave: 'pulse', from: 880, to: 830, ms: 40, gain: 0.05 }],
@@ -171,7 +176,7 @@ export function stopAll() {
 export function unlock() { const c = context(); if (c?.state === 'suspended') c.resume?.(); return !!c; }
 export function state() { return { on: S.on, live: !!S.ctx, voices: S.voices.length }; }
 
-/** For the tests: play into a stand-in context and report what each patch asked the hardware for. */
+/** For the tests: report what each patch asks the hardware for, without an audio device. */
 export function renderPatch(name, ctx) {
   const patch = PATCHES[name];
   if (!patch) return [];

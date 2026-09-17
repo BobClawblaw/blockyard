@@ -31,7 +31,6 @@ const GAMES = Object.freeze({
   blockout: () => import('./blockout.js').then((m) => m.renderBlockout),
   blockanoid: () => import('./blockanoid.js').then((m) => m.renderBlockanoid),
   scorched: () => import('./scorchedyard.js').then((m) => m.renderScorchedYard),
-  blockman: () => import('./blockmanview.js').then((m) => m.renderBlockMan),
   wolf3d: () => import('./wolf3d.js').then((m) => m.renderWolf3d),
   doom: () => import('./doom.js').then((m) => m.renderDoom),
   quake: () => import('./quake.js').then((m) => m.renderQuake),
@@ -548,7 +547,7 @@ export function render() {
     case 'explorer': renderExplorer(s, state, helpers); break;
     case 'markets': renderMarkets(s, state, helpers); break;
     case 'kiosk': renderKiosk(s, state, helpers); break;
-    case 'tetrust': case 'blockout': case 'blockanoid': case 'scorched': case 'blockman': case 'wolf3d': case 'doom': case 'quake':
+    case 'tetrust': case 'blockout': case 'blockanoid': case 'scorched': case 'wolf3d': case 'doom': case 'quake':
       renderGame(state.page, s);
       break;
     case 'about': renderAbout(s, state, helpers); break;
@@ -940,7 +939,7 @@ function shortBuild(build) {
 // subroutes; they stay on the URL so every explorer page is a link.
 // The games live behind the Diversions pop-down at the end of the nav; the menu shows as the
 // active tab while one of them is open, since its own button is out of sight inside the popup.
-const DIVERSION_PAGES = ['tetrust', 'blockout', 'blockanoid', 'scorched', 'blockman', 'wolf3d', 'doom', 'quake'];
+const DIVERSION_PAGES = ['tetrust', 'blockout', 'blockanoid', 'scorched', 'wolf3d', 'doom', 'quake'];
 
 function setPage(route) {
   const [page, ...rest] = String(route).split('/');
