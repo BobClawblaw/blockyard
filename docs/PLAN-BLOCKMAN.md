@@ -174,7 +174,7 @@ Mirroring Scorched Yard's split, which the audit and the performance work both v
 
 ## 8. Milestones
 
-*M1 to M4 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
+*M1 to M6 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
 two tunnels), the block layer of 262 cubes built once, the painted play layer, and the measurement
 it exists for -- **60 fps steady in the browser, median frame 16.7 ms**, with everything moving. M2:
 the rules, played by 15 scripted tests, and a screen that plays them (keys, pause, restart, HUD).
@@ -191,7 +191,18 @@ rejoins whatever the wave says; the fruit appears twice a level below the pen, k
 half seconds and is worth from 100 to 5,000 by level. Two more findings: the greedy targeting rule
 that is right for a hunt made the eyes flip-flop between two equally distant tiles for ever, so the
 walk home follows a distance field measured once per maze; and the fruit first sat on his respawn
-tile, which handed him a free one every time he was caught.*
+tile, which handed him a free one every time he was caught.
+
+M5: the death as the cubes coming apart, the level-clear flash through five wall colours, the
+dot-count pulse, and -- after the first pass borrowed the shared blip table -- a THREE-VOICE
+WAVETABLE GENERATOR of its own (`public/js/blockmansound.js`), which is the era's own technique
+(three channels stepping a short table at a rate set by a frequency register) with every table
+computed from a formula in the file and every patch our own pitches. M6: three difficulties as one
+scale over the speed table, the top eight games kept in the browser, an attract mode that plays
+itself, the `blockman` settings group with its switches mirrored on the game's panel, the user
+guide's section and the changelog. One finding in M6: the attract player walked into a pursuer
+because its danger rule was a cliff and equal ways broke to the first of them, so danger is now a
+slope.*
 
 
 1. **M1 — the play layer, measured.** A static maze block layer plus 240 painted dots and five
@@ -204,10 +215,10 @@ tile, which handed him a free one every time he was caught.*
    target tile.
 4. **M4 — frightened, eaten, fruit.** Pellet timing by level, the 200–1600 ladder, the return to the
    pen, fruit at two dot counts, the extra life.
-5. **M5 — sound and the look.** Our own pieces, the dot-count pulse, the level-clear flash, the
+5. **M5 — sound and the look.** *(landed)* Our own pieces, the dot-count pulse, the level-clear flash, the
    death animation as the cubes fall apart (the block engine's own death effect, as Scorched Yard
    does for a tank).
-6. **M6 — the trimmings.** Attract mode for a wall screen, high scores, difficulty, the maze's final
+6. **M6 — the trimmings.** *(landed)* Attract mode for a wall screen, high scores, difficulty, the maze's final
    tuning pass by play (dot count, pellet placement, the tunnel's height), the user guide's section,
    the changelog.
 

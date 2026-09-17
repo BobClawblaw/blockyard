@@ -31,8 +31,8 @@ const CONTACT = 0.7;                 // tiles: how close a pursuer has to be to 
 const READY_MS = 1600, DYING_MS = 1300, LEVEL_MS = 1400;
 
 /** Our own speed table: level 1 gentle, level 5 onward full pace. Tiles a second. */
-export function speedsFor(level) {
-  const k = Math.min(1, 0.8 + (level - 1) * 0.05);
+export function speedsFor(level, difficulty = 1) {
+  const k = Math.min(1, 0.8 + (level - 1) * 0.05) * (Number.isFinite(difficulty) ? Math.max(0.6, Math.min(1.4, difficulty)) : 1);
   // `eaten` is the walk home, and it is fast: a pair of eyes crossing the maze is not a threat, and
   // watching it trundle back at chase speed is dead time in a game of seconds.
   return { man: 9.4 * k, pursuer: 8.8 * k, tunnel: 5.4 * k, frightened: 5.8 * k, eaten: 16 };
@@ -99,14 +99,15 @@ export const PURSUERS = Object.freeze([
 ]);
 
 /** A new game. `maze` is parsed once and shared; the dots are this game's own. */
-export function newGame({ level = 1, lives = LIVES, maze = parseMaze(), seed = 1 } = {}) {
+export function newGame({ level = 1, lives = LIVES, maze = parseMaze(), seed = 1, difficulty = 1, auto = false } = {}) {
   const g = {
     maze, level, lives, score: 0, phase: 'ready', phaseMs: READY_MS,
+    difficulty, auto,
     dots: new Set(maze.dots.map((d) => key(d.x, d.y))),
     pellets: new Set(maze.pellets.map((d) => key(d.x, d.y))),
     eaten: 0, chain: 0, frightenedMs: 0, events: [],
     fruit: null, fruitShown: 0,
-    rnd: rng(seed), speeds: speedsFor(level),
+    rnd: rng(seed), speeds: speedsFor(level, difficulty),
     man: null, pursuers: [],
   };
   place(g);
@@ -171,6 +172,7 @@ export function exitsFrom(m, tile, dir, { noUp = null, ghost = false } = {}) {
  */
 export function stepGame(g, dtMs, { input = null } = {}) {
   if (input) g.man.want = input;
+  if (g.auto && g.phase === 'play') g.man.want = autoTurn(g) ?? g.man.want;
   const dt = Math.max(0, Math.min(60, dtMs));
   if (g.phase === 'ready' || g.phase === 'dying' || g.phase === 'level') {
     g.phaseMs -= dt;
@@ -580,7 +582,7 @@ export function nextLevel(g) {
   g.level += 1;
   g.dots = new Set(g.maze.dots.map((d) => key(d.x, d.y)));
   g.pellets = new Set(g.maze.pellets.map((d) => key(d.x, d.y)));
-  g.speeds = speedsFor(g.level);
+  g.speeds = speedsFor(g.level, g.difficulty);
   g.frightenedMs = 0; g.chain = 0;
   g.fruit = null; g.fruitShown = 0; g.eaten = 0;
   place(g);
@@ -593,6 +595,68 @@ export function restart(g) {
   const fresh = newGame({ maze: g.maze });
   Object.assign(g, fresh);
   return g;
+}
+
+/**
+ * ATTRACT MODE'S PLAYER (M6). Nobody at the keys, so something has to choose: at each junction it
+ * scores every way out and takes the best. Not a solver -- a plausible player, which is what an
+ * attract screen needs:
+ *
+ *   * a way that leads into a pursuer within a few tiles is refused outright, unless they are
+ *     frightened, in which case it is the best way there is;
+ *   * otherwise the nearest dot along that way counts for it, and a nearby pursuer against it;
+ *   * a pellet is worth going for when they are close, and worth little when they are not;
+ *   * and it will not turn round unless every other way is refused, because a player that
+ *     dithers on the spot looks broken rather than hunted.
+ */
+export function autoTurn(g) {
+  const m = g.maze, man = g.man;
+  const tile = tileOf(man);
+  if (!centred(man, 0.3)) return null;                      // decide at junctions, not mid-corridor
+  const ways = DIR_LIST.filter((d) => free(m, tile.x + d.x, tile.y + d.y));
+  if (!ways.length) return null;
+  const threat = g.pursuers.filter((p) => p.state === 'chase' || p.state === 'scatter');
+  const prey = g.pursuers.filter((p) => p.state === 'frightened');
+  let best = null, bestScore = -Infinity;
+  for (const d of ways) {
+    const nx = ((tile.x + d.x) % m.w + m.w) % m.w, ny = tile.y + d.y;
+    let score = 0;
+    const near = (list) => list.reduce((acc, p) => Math.min(acc, Math.hypot(((p.x - 0.5) - nx + m.w * 1.5) % m.w - m.w * 0.5, (p.y - 0.5) - ny)), Infinity);
+    // DANGER IS A SLOPE, NOT A CLIFF. With a flat "closer than two tiles is refused", two bad ways
+    // scored the same and the first one won -- which is how the attract player walked into a
+    // pursuer standing next to it. Now every extra tile of distance is worth something.
+    const danger = near(threat);
+    if (danger < 1.2) score -= 4000;                        // touching one: never
+    score -= Math.max(0, 6 - danger) ** 2 * 30;
+    score += Math.min(danger, 10) * 6;
+    const chase = near(prey);
+    if (prey.length && chase < 9) score += (10 - chase) * 14;   // frightened: go and get them
+    const dot = nearestDot(g, { x: nx, y: ny });
+    score += dot == null ? 0 : (22 - Math.min(dot, 20)) * 2;
+    if (g.pellets.size && threat.length && danger < 6) {
+      const pellet = nearest(g.pellets, { x: nx, y: ny }, m);
+      if (pellet != null) score += (18 - Math.min(pellet, 18)) * 3;
+    }
+    if (opposite(d, man.dir)) score -= 40;                  // dithering looks broken
+    if (score > bestScore) { bestScore = score; best = d; }
+  }
+  return best;
+}
+
+const nearestDot = (g, from) => {
+  const a = nearest(g.dots, from, g.maze);
+  const b = nearest(g.pellets, from, g.maze);
+  return a == null ? b : (b == null ? a : Math.min(a, b));
+};
+function nearest(set, from, m) {
+  let out = null;
+  for (const k of set) {
+    const [x, y] = k.split(',').map(Number);
+    const dx = Math.abs(x - from.x), dy = Math.abs(y - from.y);
+    const d = Math.min(dx, m.w - dx) + dy;
+    if (out == null || d < out) out = d;
+  }
+  return out;
 }
 
 /** The dots and pellets still on the board, for the screen to paint. */

@@ -6,7 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets, setSound, setTune, wallColourFor, WALL_COLOURS, FLASH_COLOUR, SOUND_OF } from '../public/js/blockmanview.js';
-import { SFX, THEMES } from '../public/js/tetsound.js';
+import { THEMES } from '../public/js/tetsound.js';
+import { PATCHES, WAVES, TABLE_LEN, VOICES, renderPatch, play, setSound as soundOn, state as soundState } from '../public/js/blockmansound.js';
 import * as fx from '../public/js/blockmanfx.js';
 import { parseMaze, OPEN } from '../public/js/blockmanmaze.js';
 
@@ -141,21 +142,44 @@ test('the play state and the frame times are readable, for the tests and the mea
 });
 
 // ------------------------------------------------------------------------ M5: the sound and the look
-test('M5: every event the rules raise has a sound of ours, and none of them is theirs', () => {
+test('M5: every event has a patch of ours on the three-voice wavetable generator', () => {
   for (const [kind, name] of Object.entries(SOUND_OF)) {
-    assert.ok(SFX[name], `${kind} has a sound (${name})`);
-    const [from, to, secs, wave, gain] = SFX[name];
-    assert.ok(from > 20 && from < 8000 && to > 20 && to < 8000, `${name} is audible`);
-    assert.ok(secs > 0 && secs < 1.2, `${name} is short`);
-    assert.ok(['square', 'triangle', 'sawtooth', 'sine'].includes(wave));
-    assert.ok(gain > 0 && gain <= 0.12, `${name} is not louder than the rest of the app`);
+    const patch = PATCHES[name];
+    assert.ok(Array.isArray(patch) && patch.length, `${kind} has a patch (${name})`);
+    for (const step of patch) {
+      assert.ok(WAVES[step.wave], `${name} names a table we computed (${step.wave})`);
+      assert.ok(step.from > 20 && step.from < 8000, `${name} is audible`);
+      assert.ok(step.ms > 0 && step.ms <= 900, `${name} is short`);
+      assert.ok((step.gain ?? 0.06) <= 0.09, `${name} is no louder than the rest of the app`);
+    }
+    assert.ok(patch.length <= VOICES, `${name} fits the three voices`);
   }
-  // the dot alternates, the pulse and the opening exist, and the march is ours
-  for (const name of ['bmDotA', 'bmDotB', 'bmPulse', 'bmStart']) assert.ok(SFX[name], name);
-  assert.notEqual(SFX.bmDotA[0], SFX.bmDotB[0], 'two blips, not one repeated note');
-  assert.ok(THEMES.blockman?.notes?.length >= 16, 'a march of its own');
-  assert.ok(THEMES.blockman.bpm > 90 && THEMES.blockman.bpm < 180);
+  for (const name of ['dotA', 'dotB', 'pulse', 'start']) assert.ok(PATCHES[name], name);
+  assert.notEqual(PATCHES.dotA[0].from, PATCHES.dotB[0].from, 'two blips, not one repeated note');
+  assert.ok(THEMES.blockman?.notes?.length >= 16, 'and a march of its own on the music switch');
   assert.doesNotThrow(() => { setSound(true); setSound(false); setTune(true); setTune(false); }, 'the switches work without a DOM');
+});
+
+test('M5: the wavetables are computed here, three voices at a time, pitch as a read rate', () => {
+  assert.equal(Object.keys(WAVES).length >= 4, true, 'a handful of timbres');
+  for (const [name, t] of Object.entries(WAVES)) {
+    assert.equal(t.length, TABLE_LEN, `${name} is one cycle of ${TABLE_LEN}`);
+    assert.ok(t.every((v) => Number.isFinite(v) && v >= -1 && v <= 1), `${name} stays in range`);
+    assert.ok(Math.max(...t) > 0.2 && Math.min(...t) < -0.2, `${name} actually swings`);
+    assert.equal(Object.isFrozen(t), true, 'and it is a constant');
+  }
+  assert.equal(VOICES, 3, 'three voices, as the hardware of the era had');
+  // a wavetable's pitch is its read rate: one cycle per period
+  const steps = renderPatch('start', { sampleRate: 48_000 });
+  assert.equal(steps.length, PATCHES.start.length);
+  assert.ok(Math.abs(steps[0].rate - (392 * TABLE_LEN) / 48_000) < 1e-9, 'rate = freq x table length / sample rate');
+  assert.deepEqual(renderPatch('nothing-like-this'), []);
+  // with no audio device in a test process, playing is a silent no-op rather than a throw
+  soundOn(true);
+  assert.equal(play('dotA'), false, 'no AudioContext here');
+  assert.equal(soundState().live, false);
+  soundOn(false);
+  assert.equal(play('dotA'), false, 'and nothing plays with the switch off');
 });
 
 test('M5: the pulse gets faster as the board empties', () => {
@@ -194,6 +218,10 @@ test('M5: his death is the cube coming apart, and it ends', () => {
 test('M5: the panel carries the sound switches', () => {
   const html = read('public/index.html');
   for (const id of ['bmSfx', 'bmMusic']) assert.match(html, new RegExp(`id="${id}"`));
+  // the sound module says plainly what it took from the era and what it did not
+  const src = read('public/js/blockmansound.js');
+  assert.match(src, /TECHNIQUE is engineering, not expression/);
+  assert.match(src, /What is NOT taken/);
   assert.match(html, /M music/, 'and the key is in the table');
   assert.match(html, /on oscillators/, 'the sounds are ours, made here');
 });

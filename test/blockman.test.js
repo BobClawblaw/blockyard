@@ -6,7 +6,7 @@
 // pursuers round, a life lost on contact, and a level that ends when the last dot goes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, stepGame, place, nextLevel, restart, remaining, exitsFrom, chooseExit, targetFor, penReleased, atHome, homeField, stepHome, elroyGain, wavesFor, speedsFor, frightenedMsFor, fruitFor, DIRS, SCORE, LIVES, CORNER, EAT_PENALTY_MS, ELROY, PEN_DOTS, PEN_IDLE_MS, REJOIN_MS, FRUIT_AT, FRUIT_MS, FRUIT } from '../public/js/blockman.js';
+import { newGame, stepGame, place, nextLevel, restart, remaining, exitsFrom, chooseExit, targetFor, penReleased, atHome, homeField, stepHome, autoTurn, elroyGain, wavesFor, speedsFor, frightenedMsFor, fruitFor, DIRS, SCORE, LIVES, CORNER, EAT_PENALTY_MS, ELROY, PEN_DOTS, PEN_IDLE_MS, REJOIN_MS, FRUIT_AT, FRUIT_MS, FRUIT } from '../public/js/blockman.js';
 import { parseMaze, OPEN } from '../public/js/blockmanmaze.js';
 
 const maze = parseMaze();
@@ -526,4 +526,68 @@ test('M4: the walk home is downhill on a distance field, so it cannot flip-flop'
     }
   }
   assert.ok(reachable > 300, `${reachable} tiles measured`);
+});
+
+// ------------------------------------------------------------------ M6: difficulty, attract mode
+test('M6: difficulty scales every speed, and nothing else', () => {
+  const gentle = speedsFor(1, 0.85), normal = speedsFor(1, 1), hard = speedsFor(1, 1.15);
+  for (const k of ['man', 'pursuer', 'tunnel', 'frightened']) {
+    assert.ok(gentle[k] < normal[k] && normal[k] < hard[k], `${k} scales`);
+  }
+  assert.equal(speedsFor(1, 5).man, speedsFor(1, 1.4).man, 'and it is clamped');
+  assert.equal(speedsFor(1, 0).man, speedsFor(1, 0.6).man);
+  // the rules do not change with it
+  const a = newGame({ maze, difficulty: 0.85 }), b = newGame({ maze, difficulty: 1.15 });
+  assert.equal(a.dots.size, b.dots.size);
+  assert.deepEqual(wavesFor(1), wavesFor(1));
+  assert.ok(a.speeds.man < b.speeds.man);
+  // a new level keeps the difficulty
+  nextLevel(a);
+  assert.ok(a.speeds.man < speedsFor(2, 1).man, 'gentle stays gentle at level two');
+});
+
+test('M6: attract mode plays a plausible game by itself', () => {
+  const g = newGame({ maze, auto: true });
+  play(g, 1700);
+  assert.equal(g.phase, 'play');
+  // it turns at junctions, eats, and does not sit still
+  const start = { ...g.man };
+  play(g, 4000);
+  assert.ok(Math.hypot(g.man.x - start.x, g.man.y - start.y) > 3 || g.score > 0, 'it went somewhere');
+  assert.ok(g.score > 0, `it ate something (${g.score})`);
+  // it refuses a way that walks into a pursuer, and takes one that walks into a frightened one
+  const t = { x: 6, y: 9 };
+  g.man.x = t.x + 0.5; g.man.y = t.y + 0.5; g.man.dir = DIRS.left;
+  const ways = exitsFrom(maze, t, { x: 0, y: 0 });
+  assert.ok(ways.length >= 2, 'a junction to choose at');
+  for (const p of g.pursuers) { p.state = 'pen'; }
+  const hunter = g.pursuers[0];
+  hunter.state = 'chase';
+  hunter.x = t.x + ways[0].x + 0.5; hunter.y = t.y + ways[0].y + 0.5;
+  const away = autoTurn(g);
+  assert.ok(away, 'it chose');
+  assert.ok(!(away.x === ways[0].x && away.y === ways[0].y), 'not into the one chasing it');
+  hunter.state = 'frightened';
+  const toward = autoTurn(g);
+  assert.deepEqual(toward, ways[0], 'straight at the frightened one');
+  // and with nowhere to go it says so rather than throwing
+  assert.equal(autoTurn({ ...g, man: { ...g.man, x: 0.5, y: 0.5 }, maze }), null);
+});
+
+test('M6: an attract game is the same game, played without hands', () => {
+  const g = newGame({ maze, auto: true, difficulty: 1 });
+  play(g, 1700);
+  let caught = 0, ate = 0, levels = 0;
+  for (let t = 0; t < 60_000; t += 16) {
+    stepGame(g, 16);
+    for (const e of g.events) {
+      if (e.kind === 'caught') caught += 1;
+      else if (e.kind === 'ate' || e.kind === 'ateFruit') ate += 1;
+      else if (e.kind === 'level') levels += 1;
+    }
+    g.events.length = 0;
+    if (g.phase === 'over') break;
+  }
+  assert.ok(g.score > 500, `a minute of attract mode scores something (${g.score}, ${caught} deaths, ${ate} eaten, ${levels} levels)`);
+  assert.ok(g.dots.size < maze.dots.length, 'and the board empties');
 });

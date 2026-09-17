@@ -263,6 +263,16 @@ export const DEFAULTS = Object.freeze({
   // BLOCKANOID (operator, 2026-09-12: "Take blockout, and make rip off of Arkanoid using our
   // engine, and make it a new Diversion called 'Blockanoid'"). Blockout's shape plus the two
   // switches Arkanoid earns: whether capsules fall at all, and whether the minions turn up.
+  // BLOCKMAN (docs/PLAN-BLOCKMAN.md): a maze chase on the block engine. No sky: the maze fills its
+  // own panel and there is nothing behind it to see.
+  blockman: Object.freeze({
+    lives: 3,             // 1 to 5
+    difficulty: 'normal', // 'gentle' | 'normal' | 'hard': the scale on every speed in the table
+    targets: false,       // cheat mode: a ring on each pursuer's target tile
+    demo: false,          // attract mode: nobody at the keys, for a wall screen
+    sfx: true,
+    music: false,
+  }),
   blockanoid: Object.freeze({
     sky: 'galaxy',        // 'galaxy' | 'earth' | 'none'
     neon: false,
@@ -425,7 +435,7 @@ export function fxCadence(g) {
 export const TAB_ROWS = Object.freeze([
   Object.freeze({ label: 'Boards', groups: Object.freeze(['appearance', 'space', 'sky', 'markets']) }),
   Object.freeze({ label: 'Effects', groups: Object.freeze(['effects', 'marketEffects']) }),
-  Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid', 'scorched']) }),
+  Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid', 'scorched', 'blockman']) }),
 ]);
 /** The three answers to "which sky": the Galaxy, the Earth, or none. */
 export const SKIES = Object.freeze(['galaxy', 'earth', 'none']);
@@ -724,6 +734,23 @@ const PANEL_GROUPS = Object.freeze([
       }),
       Object.freeze({ key: 'cash', label: 'Starting cash', kind: 'range', min: 0, max: 100000, step: 5000, hint: 'What every tank has to spend at the first shop; damage and kills earn more' }),
       Object.freeze({ key: 'interest', label: 'Interest', kind: 'range', min: 0, max: 25, step: 1, hint: 'Per cent paid on unspent cash between rounds' }),
+    ]),
+  }),
+  Object.freeze({
+    group: 'blockman',
+    title: 'BlockMan',
+    note: 'A maze chase on the block space, ours rather than anyone else\u2019s: one maze, four pursuers with a rule each, and a pellet that turns the chase round. These switches are also on the game\u2019s own panel.',
+    rows: Object.freeze([
+      Object.freeze({ key: 'lives', label: 'Lives', kind: 'range', min: 1, max: 5, step: 1, hint: 'How many tries a game gives you. An extra one arrives at 10,000 points whatever this says' }),
+      Object.freeze({
+        key: 'difficulty', label: 'Difficulty', kind: 'choice',
+        hint: 'The scale on every speed in the table: how fast you go, how fast they go, how fast they crawl in the tunnel. The rules, the waves and the pen counters are the same at every setting',
+        options: Object.freeze([['gentle', 'Gentle'], ['normal', 'Normal'], ['hard', 'Hard']]),
+      }),
+      Object.freeze({ key: 'targets', label: 'Show what they chase', kind: 'toggle', hint: 'Cheat mode: a ring on each pursuer\u2019s target tile and a line to it. The four rules are hard to tell apart until you can see them' }),
+      Object.freeze({ key: 'demo', label: 'Attract mode', kind: 'toggle', hint: 'Nobody at the keys: the game plays itself, for a wall screen. It is the same game, played by something that refuses a way that walks into a pursuer' }),
+      Object.freeze({ key: 'sfx', label: 'Sound', kind: 'toggle', hint: 'Ours, on oscillators: two blips that alternate as you eat, a pellet that swells, and a pulse whose tempo follows how much is left' }),
+      Object.freeze({ key: 'music', label: 'Music', kind: 'toggle', hint: 'A march in A minor, on oscillators' }),
     ]),
   }),
 ]);
@@ -1214,6 +1241,19 @@ export function blockoutOptions(s) {
 }
 
 /** Blockanoid's switches. Blockout's shape, plus the two that are Arkanoid's own. */
+/** BlockMan's settings, as the game reads them (difficulty is a number by the time it arrives). */
+export function blockmanOptions(s) {
+  const n = normalise(s);
+  const scale = { gentle: 0.85, normal: 1, hard: 1.15 };
+  return {
+    lives: n.blockman.lives,
+    difficulty: scale[n.blockman.difficulty] ?? 1,
+    difficultyName: n.blockman.difficulty,
+    targets: n.blockman.targets, demo: n.blockman.demo,
+    sfx: n.blockman.sfx, music: n.blockman.music,
+  };
+}
+
 export function blockanoidOptions(s) {
   const n = normalise(s);
   return {

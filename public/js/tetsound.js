@@ -98,22 +98,7 @@ export const SFX = Object.freeze({
   gold: [240, 210, 0.07, 'square', 0.05],
   capsule: [620, 1560, 0.22, 'triangle', 0.075],
   laser: [1200, 420, 0.05, 'sawtooth', 0.045],
-  enemy: [380, 140, 0.12, 'sawtooth', 0.06],
-  // BLOCKMAN (docs/PLAN-BLOCKMAN.md §6). OURS, not the 1980 game's: no opening jingle of theirs, no
-  // siren, no wakka. The eat is two blips that alternate, so a corridor has a rhythm rather than one
-  // repeated note; the pulse is a low bass tick whose TEMPO carries how much is left (the view
-  // schedules it); a pellet swells; eating a pursuer rises; the fruit is a bright two-tone; and the
-  // death falls a long way.
-  bmDotA: [740, 700, 0.028, 'square', 0.035],
-  bmDotB: [590, 560, 0.028, 'square', 0.035],
-  bmPellet: [180, 520, 0.22, 'triangle', 0.07],
-  bmAte: [420, 1560, 0.26, 'square', 0.075],
-  bmFruit: [880, 1320, 0.18, 'triangle', 0.08],
-  bmDeath: [520, 60, 0.85, 'sawtooth', 0.085],
-  bmLevel: [523, 1568, 0.36, 'square', 0.08],
-  bmLife: [784, 1568, 0.3, 'triangle', 0.07],
-  bmPulse: [98, 88, 0.07, 'triangle', 0.055],
-  bmStart: [392, 784, 0.3, 'square', 0.07]
+  enemy: [380, 140, 0.12, 'sawtooth', 0.06]
 });
 
 const S = { ctx: null, music: false, sfx: false, timer: null, at: 0, i: 0, gain: null, live: new Set() };

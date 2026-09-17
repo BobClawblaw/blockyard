@@ -14,7 +14,11 @@ import { board3d } from './details3d.js';
 import { parseMaze, OPEN } from './blockmanmaze.js';
 import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets, paintFruit, paintDeath, pulseMs } from './blockmanfx.js';
 import { newGame, stepGame, restart, remaining, DIRS } from './blockman.js';
-import { play, setSfx, setMusic, unlock } from './tetsound.js';
+// BlockMan's own three-voice wavetable generator (blockmansound.js), not the shared blip table: a
+// maze chase wants the era's timbre, and this one is ours, computed in that file (§6).
+import { play, setSound as soundOn, unlock } from './blockmansound.js';
+import { setMusic } from './tetsound.js';
+import { loadSettings, setSetting, blockmanOptions } from './settings.js';
 
 // ONE COLOUR A LEVEL (M5), round a ring of five: the maze is the same maze every level, and its
 // colour is how a player knows how deep they are without reading the panel.
@@ -40,12 +44,36 @@ const BOARD = {
 const G = {
   maze: null, game: null, board: { dots: [], pellets: [] }, pops: [],
   raf: null, last: 0, mazeKey: null, paused: false, bound: false, targets: false,
-  death: null, dotFlip: false, pulseAt: 0, sfx: true, music: false,
+  death: null, dotFlip: false, pulseAt: 0, sfx: true, music: false, demo: false, demoTimer: null,
   frames: 0, frameMs: [], paintNow: 0,
   h: null, state: null,
 };
 
 const el = (id) => document.getElementById(id);
+
+// HIGH SCORES, IN THIS BROWSER (M6). The same shape Scorched Yard uses: a short list in local
+// storage, which is nobody's business but this machine's -- the server never sees a score.
+const SCORES_KEY = 'blockyard.blockman.scores';
+const KEEP = 8;
+export function loadScores(storage = globalThis.localStorage) {
+  try {
+    const raw = storage?.getItem(SCORES_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list.filter((r) => r && Number.isFinite(r.score)).slice(0, KEEP) : [];
+  } catch { return []; }
+}
+export function recordScore(entry, storage = globalThis.localStorage) {
+  const list = [...loadScores(storage), { score: entry.score, level: entry.level, at: entry.at ?? Date.now() }]
+    .sort((a, b) => b.score - a.score || b.level - a.level)
+    .slice(0, KEEP);
+  try { storage?.setItem(SCORES_KEY, JSON.stringify(list)); } catch { /* private mode, quota */ }
+  return list;
+}
+export function rankOf(score, list) {
+  const i = list.findIndex((r) => score > r.score);
+  if (i >= 0) return i + 1;
+  return list.length < KEEP ? list.length + 1 : null;
+}
 
 /** Every wall tile as a cube for the scene builder; the pen's box included, its interior darker. */
 export function wallTiles(m, level = 1, flash = false) {
@@ -83,10 +111,15 @@ const KEYS = Object.freeze({
 });
 
 function start() {
-  G.game = newGame({ maze: G.maze ?? (G.maze = parseMaze()) });
+  const o = blockmanOptions(loadSettings());
+  G.game = newGame({
+    maze: G.maze ?? (G.maze = parseMaze()),
+    lives: o.lives, difficulty: o.difficulty, auto: o.demo, seed: (Date.now() >>> 0) || 1,
+  });
   G.pops = []; G.paused = false; G.death = null; G.pulseAt = 0;
-  setSfx(G.sfx);
-  play('bmStart');
+  G.sfx = o.sfx; G.music = o.music; G.demo = o.demo;
+  setSound(o.sfx); setTune(o.music); setTargets(o.targets); setDemo(o.demo, false);
+  play('start');
   refreshBoard();
   overlay(null);
 }
@@ -113,25 +146,54 @@ function onKey(e) {
   else if (e.key === 'm' || e.key === 'M') { setTune(!G.music); e.preventDefault(); }
 }
 
+/** Attract mode: nobody at the keys. The switch remembers itself, like every other board's. */
+export function setDemo(on, persist = true) {
+  G.demo = !!on;
+  if (G.game) G.game.auto = G.demo;
+  if (persist) { try { setSetting('blockman', 'demo', G.demo); } catch { /* storage refused */ } }
+  const b = typeof document === 'undefined' ? null : el('bmDemo');
+  if (b) { b.setAttribute('aria-pressed', String(G.demo)); b.classList.toggle('on', G.demo); }
+}
+
+/** The high-score table on the panel. */
+function drawScores(mark = null) {
+  const t = typeof document === 'undefined' ? null : el('bmScores');
+  if (!t) return;
+  const list = loadScores();
+  const html = list.length
+    ? '<tr><th>#</th><th>score</th><th>level</th><th>when</th></tr>' + list.map((r, i) => `<tr${mark === i ? ' class="now"' : ''}><td>${i + 1}</td><td>${r.score.toLocaleString('en-GB')}</td><td>${r.level}</td><td class="faint">${new Date(r.at).toISOString().slice(0, 10)}</td></tr>`).join('')
+    : '<tr><td class="faint">no games yet</td></tr>';
+  if (t.__html !== html) { t.innerHTML = html; t.__html = html; }
+}
+
 /** The sound and the music switches; the panel buttons and the keys are the same thing. */
-export function setSound(on) {
+export function setSound(on, persist = true) {
   G.sfx = !!on;
-  setSfx(G.sfx);
+  soundOn(G.sfx);
+  if (persist) { try { setSetting('blockman', 'sfx', G.sfx); } catch { /* storage refused */ } }
   const b = typeof document === 'undefined' ? null : el('bmSfx');
   if (b) { b.setAttribute('aria-pressed', String(G.sfx)); b.classList.toggle('on', G.sfx); }
 }
-export function setTune(on) {
+export function setTune(on, persist = true) {
   G.music = !!on;
   setMusic(G.music, 'blockman');
+  if (persist) { try { setSetting('blockman', 'music', G.music); } catch { /* storage refused */ } }
   const b = typeof document === 'undefined' ? null : el('bmMusic');
   if (b) { b.setAttribute('aria-pressed', String(G.music)); b.classList.toggle('on', G.music); }
 }
 
 /** Cheat mode: draw each pursuer's target tile. The switch and the T key are the same thing. */
-export function setTargets(on) {
+export function setTargets(on, persist = true) {
   G.targets = !!on;
+  if (persist) { try { setSetting('blockman', 'targets', G.targets); } catch { /* storage refused */ } }
   const b = typeof document === 'undefined' ? null : el('bmTargets');   // the tests have no DOM
   if (b) { b.setAttribute('aria-pressed', String(G.targets)); b.classList.toggle('on', G.targets); }
+}
+
+/** Attract mode's pause between games. */
+function demoWait(ms) {
+  clearTimeout(G.demoTimer);
+  G.demoTimer = setTimeout(() => { G.demoTimer = null; if (G.demo) start(); }, ms);
 }
 
 function bind() {
@@ -141,6 +203,7 @@ function bind() {
   el('bmTargets')?.addEventListener('click', () => setTargets(!G.targets));
   el('bmSfx')?.addEventListener('click', () => { unlock(); setSound(!G.sfx); });
   el('bmMusic')?.addEventListener('click', () => { unlock(); setTune(!G.music); });
+  el('bmDemo')?.addEventListener('click', () => { setDemo(!G.demo); if (G.demo && (!G.game || G.game.phase === 'over')) start(); });
   document.addEventListener('keydown', () => unlock(), { once: true });      // audio needs a gesture
   el('bmResume')?.addEventListener('click', () => {
     if (!G.game || G.game.phase === 'over') start();
@@ -213,7 +276,7 @@ function frame(now) {
     if (g.phase === 'play') {
       const total = G.maze.dots.length + G.maze.pellets.length;
       const every = pulseMs(g.dots.size + g.pellets.size, total);
-      if (now - G.pulseAt >= every) { G.pulseAt = now; play('bmPulse'); }
+      if (now - G.pulseAt >= every) { G.pulseAt = now; play('pulse'); }
     }
   }
   draw(now);
@@ -223,11 +286,11 @@ function frame(now) {
 // WHAT EACH EVENT SOUNDS LIKE (M5, §6). Ours, on the tone generator the other games use: the dot
 // alternates two blips so a corridor has a rhythm rather than one repeated note.
 export const SOUND_OF = Object.freeze({
-  dot: 'bmDotA', pellet: 'bmPellet', ate: 'bmAte', ateFruit: 'bmFruit',
-  caught: 'bmDeath', level: 'bmLevel', life: 'bmLife',
+  dot: 'dotA', pellet: 'pellet', ate: 'ate', ateFruit: 'fruit',
+  caught: 'death', level: 'level', life: 'life',
 });
 function sound(e) {
-  if (e.kind === 'dot') { play(G.dotFlip ? 'bmDotB' : 'bmDotA'); G.dotFlip = !G.dotFlip; return; }
+  if (e.kind === 'dot') { play(G.dotFlip ? 'dotB' : 'dotA'); G.dotFlip = !G.dotFlip; return; }
   const name = SOUND_OF[e.kind];
   if (name) play(name);
 }
@@ -241,7 +304,15 @@ function drain(g, now) {
     if (e.kind === 'ate' || e.kind === 'ateFruit') G.pops.push({ x: e.x + (e.kind === 'ateFruit' ? 0.5 : 0), y: e.y, text: e.points, t0: now });
     else if (e.kind === 'level') { refreshBoard(); overlay(`Level ${e.level} cleared`, 'the maze fills again, and everyone is faster'); }
     else if (e.kind === 'caught') overlay(g.lives > 0 ? 'Caught' : 'Game over', g.lives > 0 ? `${g.lives} to go` : 'F2 or the button to play again', g.lives > 0 ? 'go on' : 'again');
-    else if (e.kind === 'over') overlay('Game over', `${g.score.toLocaleString('en-GB')} · F2 or the button to play again`, 'again');
+    else if (e.kind === 'over') {
+      // ATTRACT MODE PLAYS ON, and its games are not scores: a wall screen would fill the table
+      if (g.auto) { demoWait(2200); overlay('Game over', 'attract mode: the next game starts by itself', 'again'); }
+      else {
+        const list = recordScore({ score: g.score, level: g.level });
+        drawScores(rankOf(g.score, list) ? rankOf(g.score, list) - 1 : null);
+        overlay('Game over', `${g.score.toLocaleString('en-GB')} · F2 or the button to play again`, 'again');
+      }
+    }
   }
   g.events.length = 0;
   G.pops = G.pops.filter((p) => now - p.t0 < 900);
@@ -261,9 +332,13 @@ export function renderBlockMan(s, state, h) {
   G.state = state; G.h = h;
   if (!G.maze) G.maze = parseMaze();
   bind();
-  setTargets(G.targets);
-  setSound(G.sfx);
-  setTune(G.music);
+  const o = blockmanOptions(loadSettings());
+  setTargets(o.targets, false);
+  setSound(o.sfx, false);
+  setTune(o.music, false);
+  setDemo(o.demo, false);
+  drawScores();
+  if (o.demo && !G.game) start();
   const wrap = el('bmWrap');
   if (wrap) wrap.classList.toggle('idle', !G.game);
   if (!G.game) overlay('BlockMan', 'clear the maze, keep away from the four: ← → ↑ ↓ or WASD to turn, P pauses, F2 starts again. Enter or the button to play.', 'play');

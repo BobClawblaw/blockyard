@@ -70,7 +70,7 @@ test('the tabs come in labelled rows, every group in exactly one row, the Divers
   assert.deepEqual([...rowed].sort(), Object.keys(DEFAULTS).sort(), 'every group is in a row, and no row names a group that is not a setting');
   assert.equal(new Set(rowed).size, rowed.length, 'no group is in two rows');
   assert.deepEqual(PANEL.map((g) => g.group), rowed, 'the sheet shows the groups row by row');
-  assert.deepEqual(TAB_ROWS.at(-1).groups, ['tetrust', 'blockout', 'blockanoid', 'scorched'], 'the games are the last row');
+  assert.deepEqual(TAB_ROWS.at(-1).groups, ['tetrust', 'blockout', 'blockanoid', 'scorched', 'blockman'], 'the games are the last row');
   assert.equal(TAB_ROWS[0].groups[0], 'appearance', 'Appearance is the first tab');
   for (const r of TAB_ROWS) assert.ok(r.label, 'each row is labelled');
 });
