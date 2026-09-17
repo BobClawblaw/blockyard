@@ -101,7 +101,7 @@ export const PURSUERS = Object.freeze([
 /** A new game. `maze` is parsed once and shared; the dots are this game's own. */
 export function newGame({ level = 1, lives = LIVES, maze = parseMaze(), seed = 1, difficulty = 1, auto = false } = {}) {
   const g = {
-    maze, level, lives, score: 0, phase: 'ready', phaseMs: READY_MS,
+    maze, level, lives, startLives: lives, score: 0, phase: 'ready', phaseMs: READY_MS,
     difficulty, auto,
     dots: new Set(maze.dots.map((d) => key(d.x, d.y))),
     pellets: new Set(maze.pellets.map((d) => key(d.x, d.y))),
@@ -591,8 +591,11 @@ export function nextLevel(g) {
 }
 
 /** Start again from level one, keeping nothing but the maze. */
+// A RESTART KEEPS WHAT THE GAME WAS SET UP WITH. It used to call newGame() bare, which quietly put
+// the lives back to three, the difficulty back to normal and attract mode off -- so F2 in a hard
+// five-life game handed you a normal three-life one (found in the browser, 2026-09-17).
 export function restart(g) {
-  const fresh = newGame({ maze: g.maze });
+  const fresh = newGame({ maze: g.maze, lives: g.startLives ?? g.lives, difficulty: g.difficulty, auto: g.auto, seed: (Date.now() >>> 0) || 1 });
   Object.assign(g, fresh);
   return g;
 }

@@ -574,6 +574,20 @@ test('M6: attract mode plays a plausible game by itself', () => {
   assert.equal(autoTurn({ ...g, man: { ...g.man, x: 0.5, y: 0.5 }, maze }), null);
 });
 
+test('M6: a restart keeps the lives, the difficulty and attract mode the game was set up with', () => {
+  const g = newGame({ lives: 5, difficulty: 1.15, auto: true });
+  const hard = g.speeds.pursuer;
+  g.lives = 1; g.score = 4200; g.level = 3;
+  restart(g);
+  assert.equal(g.lives, 5, 'the five lives it was given, not the default three');
+  assert.equal(g.difficulty, 1.15);
+  assert.equal(g.speeds.pursuer, hard, 'and still hard');
+  assert.equal(g.auto, true, 'attract mode stays on, so a wall screen keeps playing');
+  assert.equal(g.score, 0);
+  assert.equal(g.level, 1);
+  assert.equal(g.dots.size, 250, 'a full board again');
+});
+
 test('M6: an attract game is the same game, played without hands', () => {
   const g = newGame({ maze, auto: true, difficulty: 1 });
   play(g, 1700);

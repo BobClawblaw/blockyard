@@ -47,7 +47,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1124 unit tests, all built in
+npm test            # optional: 1126 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -136,7 +136,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1124 unit tests (node:test, no dependencies)
+npm test             # 1126 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -157,7 +157,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1124 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1126 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

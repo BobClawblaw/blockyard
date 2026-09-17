@@ -5,7 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets, setSound, setTune, wallColourFor, WALL_COLOURS, FLASH_COLOUR, SOUND_OF } from '../public/js/blockmanview.js';
+import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets, setSound, setTune, setDemo, wallColourFor, WALL_COLOURS, FLASH_COLOUR, SOUND_OF } from '../public/js/blockmanview.js';
+import { loadSettings } from '../public/js/settings.js';
 import { THEMES } from '../public/js/tetsound.js';
 import { PATCHES, WAVES, TABLE_LEN, VOICES, renderPatch, play, setSound as soundOn, state as soundState } from '../public/js/blockmansound.js';
 import * as fx from '../public/js/blockmanfx.js';
@@ -102,7 +103,7 @@ test('the panel says what the keys do, and the screen has its overlay', () => {
   const html = read('public/index.html');
   for (const id of ['bmOver', 'bmMsg', 'bmSub', 'bmResume', 'bmWho']) assert.match(html, new RegExp(`id="${id}"`));
   assert.match(html, /← → ↑ ↓ or WASD/, 'the move keys');
-  assert.match(html, /P pause · F2 restart · Enter plays/, 'and the game keys');
+  assert.match(html, /P pause · F2 or R a new game · Enter plays/, 'and the game keys');
   assert.equal(/\(M2\)/.test(html), false, 'nothing on the panel is still promised');
   // the four pursuers are named on the panel, and named the same in the rules
   for (const name of ['Chaser', 'Ambusher', 'Flanker', 'Wanderer']) assert.match(html, new RegExp(`<th>${name}</th>`));
@@ -213,6 +214,34 @@ test('M5: his death is the cube coming apart, and it ends', () => {
   assert.equal(ops.length, before, 'and it is over by then');
   fx.paintDeath(ctx, P, U, null, 300);
   assert.equal(ops.length, before, 'nothing to draw without a death');
+});
+
+test('M6: each switch on the panel persists, with the settings call the rest of the app uses', () => {
+  // A STUB localStorage, so the run never touches the operator's own settings file.
+  const store = new Map();
+  const before = globalThis.localStorage;
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  try {
+    setTargets(true); setSound(false); setTune(true); setDemo(true);
+    const saved = loadSettings().blockman;
+    assert.deepEqual(
+      { targets: saved.targets, sfx: saved.sfx, music: saved.music, demo: saved.demo },
+      { targets: true, sfx: false, music: true, demo: true },
+      'all four came back from storage',
+    );
+    setTargets(false); setDemo(false);
+    assert.equal(loadSettings().blockman.targets, false);
+    assert.equal(loadSettings().blockman.demo, false);
+    // and a switch asked not to persist leaves what is stored alone
+    setTargets(true, false);
+    assert.equal(loadSettings().blockman.targets, false, 'persist=false is for reading the settings back in');
+  } finally {
+    if (before === undefined) delete globalThis.localStorage; else globalThis.localStorage = before;
+  }
 });
 
 test('M5: the panel carries the sound switches', () => {

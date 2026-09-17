@@ -13,7 +13,7 @@
 import { board3d } from './details3d.js';
 import { parseMaze, OPEN } from './blockmanmaze.js';
 import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets, paintFruit, paintDeath, pulseMs } from './blockmanfx.js';
-import { newGame, stepGame, restart, remaining, DIRS } from './blockman.js';
+import { newGame, stepGame, remaining, DIRS } from './blockman.js';
 // BlockMan's own three-voice wavetable generator (blockmansound.js), not the shared blip table: a
 // maze chase wants the era's timbre, and this one is ours, computed in that file (§6).
 import { play, setSound as soundOn, unlock } from './blockmansound.js';
@@ -140,17 +140,26 @@ function onKey(e) {
   const want = KEYS[e.key] ?? KEYS[String(e.key).toLowerCase()];
   if (want && G.game) { G.game.man.want = want; e.preventDefault(); return; }
   if (e.key === 'p' || e.key === 'P') { G.paused = !G.paused; overlay(G.paused ? 'Paused' : null, 'P to go on', 'go on'); e.preventDefault(); }
-  else if (e.key === 'F2') { if (G.game) restart(G.game); else start(); G.paused = false; refreshBoard(); overlay(null); e.preventDefault(); }
+  // F2 AND R BOTH START A NEW GAME FROM THE SETTINGS AS THEY STAND. Going through start() rather
+  // than the rules' restart() is what makes a change to lives or difficulty take effect on the next
+  // game rather than the next page load; R was in the panel's key list but bound to nothing at all
+  // (found in the browser, 2026-09-17).
+  else if (e.key === 'F2' || e.key === 'r' || e.key === 'R') { start(); G.paused = false; refreshBoard(); overlay(null); e.preventDefault(); }
   else if (e.key === 'Enter' && (!G.game || G.game.phase === 'over')) { start(); e.preventDefault(); }
   else if (e.key === 't' || e.key === 'T') { setTargets(!G.targets); e.preventDefault(); }
   else if (e.key === 'm' || e.key === 'M') { setTune(!G.music); e.preventDefault(); }
 }
 
+// NO try/catch ROUND THESE WRITES. setSetting persists through saveSettings, which already swallows
+// a storage that refuses (private mode, quota); the one thing it throws for is a path that names no
+// setting, and swallowing THAT is how all four of these switches came to persist nothing at all:
+// they were called setSetting('blockman', 'demo', v), when the first argument is the settings object
+// and the second is "group.key" (found in the browser, 2026-09-17).
 /** Attract mode: nobody at the keys. The switch remembers itself, like every other board's. */
 export function setDemo(on, persist = true) {
   G.demo = !!on;
   if (G.game) G.game.auto = G.demo;
-  if (persist) { try { setSetting('blockman', 'demo', G.demo); } catch { /* storage refused */ } }
+  if (persist) setSetting(loadSettings(), 'blockman.demo', G.demo);
   const b = typeof document === 'undefined' ? null : el('bmDemo');
   if (b) { b.setAttribute('aria-pressed', String(G.demo)); b.classList.toggle('on', G.demo); }
 }
@@ -170,14 +179,14 @@ function drawScores(mark = null) {
 export function setSound(on, persist = true) {
   G.sfx = !!on;
   soundOn(G.sfx);
-  if (persist) { try { setSetting('blockman', 'sfx', G.sfx); } catch { /* storage refused */ } }
+  if (persist) setSetting(loadSettings(), 'blockman.sfx', G.sfx);
   const b = typeof document === 'undefined' ? null : el('bmSfx');
   if (b) { b.setAttribute('aria-pressed', String(G.sfx)); b.classList.toggle('on', G.sfx); }
 }
 export function setTune(on, persist = true) {
   G.music = !!on;
   setMusic(G.music, 'blockman');
-  if (persist) { try { setSetting('blockman', 'music', G.music); } catch { /* storage refused */ } }
+  if (persist) setSetting(loadSettings(), 'blockman.music', G.music);
   const b = typeof document === 'undefined' ? null : el('bmMusic');
   if (b) { b.setAttribute('aria-pressed', String(G.music)); b.classList.toggle('on', G.music); }
 }
@@ -185,7 +194,7 @@ export function setTune(on, persist = true) {
 /** Cheat mode: draw each pursuer's target tile. The switch and the T key are the same thing. */
 export function setTargets(on, persist = true) {
   G.targets = !!on;
-  if (persist) { try { setSetting('blockman', 'targets', G.targets); } catch { /* storage refused */ } }
+  if (persist) setSetting(loadSettings(), 'blockman.targets', G.targets);
   const b = typeof document === 'undefined' ? null : el('bmTargets');   // the tests have no DOM
   if (b) { b.setAttribute('aria-pressed', String(G.targets)); b.classList.toggle('on', G.targets); }
 }
@@ -245,6 +254,12 @@ function draw(now = performance.now()) {
   }
   G.paintNow = now;
   board3d(play, [], { ...opts, background: 'rgba(0,0,0,0)', spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)', overlay: paintPlay });
+  // THE WELL IS HIDDEN UNTIL THERE IS A GAME (.tetwell.idle { visibility: hidden }), as the other
+  // boards' wells are, and it is cleared HERE rather than only where the page is rendered: pressing
+  // Enter built and painted both canvases and left them invisible, so the board was a black square
+  // beside a live scoreboard (found in the browser, 2026-09-17).
+  const wrap = el('bmWrap');
+  if (wrap) wrap.classList.toggle('idle', !G.game);
   const hud = el('bmStats');
   const g = G.game;
   if (hud && g) {
