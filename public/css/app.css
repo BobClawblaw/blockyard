@@ -2098,5 +2098,5 @@ table.sykeys td { padding: 2px 0; }
 /* BLOCKMAN (docs/PLAN-BLOCKMAN.md): the maze layer and the painted play layer, stacked like
    Scorched Yard's land and actors. The well is taller than it is wide: the maze is 28 x 28 tiles
    drawn in the board's oblique projection, so the panel keeps the board's own aspect. */
-.bmwell { aspect-ratio: 28 / 30; }
+.tetcard .treemapwrap.tetwell.bmwell { aspect-ratio: 1 / 1; }   /* the maze is 28 x 28 tiles: the board draws square */
 .bmwell canvas { position: absolute; inset: 0; width: 100%; height: 100%; }

@@ -23,7 +23,10 @@ const PURSUERS = Object.freeze([
 ]);
 
 const BOARD = {
-  oblique: { ox: 0.08, oy: 0.26, headroom: 2, flight: 0 },
+  // THE PLAY LAYER IS TRANSPARENT (2026-09-17): the renderer fills a board's canvas with
+  // `background` before it draws, so the layer laid over the maze has to ask for nothing --
+  // otherwise it paints the maze out, which is exactly what the first run did.
+  oblique: { ox: 0.08, oy: 0.26, headroom: 0, flight: 0 },
   dome: 0,
   light: 'front', lightHeight: 'low', lightGain: 1.6, topLight: 0.5,
   grid: false, stars: false, still: true,
@@ -128,11 +131,11 @@ function draw(now = performance.now()) {
   if (!m || !maze || !play) return;
   const opts = { ...BOARD, gridW: m.w, gridH: m.h };
   if (G.mazeKey !== `${m.w}x${m.h}`) {                       // the maze is built once
-    board3d(maze, wallTiles(m).sort(mazeOrder), { ...opts, order: 'given' });
+    board3d(maze, wallTiles(m).sort(mazeOrder), { ...opts, order: 'given', background: '#05080f' });
     G.mazeKey = `${m.w}x${m.h}`;
   }
   G.paintNow = now;
-  board3d(play, [], { ...opts, spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)', overlay: paintPlay });
+  board3d(play, [], { ...opts, background: 'rgba(0,0,0,0)', spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)', overlay: paintPlay });
   const hud = el('bmStats');
   if (hud) {
     const fps = G.frameMs.length > 8 ? Math.round(1000 / (G.frameMs.slice(-30).reduce((a, b) => a + b, 0) / Math.min(30, G.frameMs.length))) : null;
