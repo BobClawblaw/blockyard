@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Written by umbrel/entrypoint.js on every container start, from the environment the",
+    "Umbrel bitcoin app exports. Editing this file inside the container is pointless: the",
+    "next start overwrites it. Display settings are NOT here -- they live beside this file",
+    "in blockyard.json, which the entrypoint never touches."
+  ],
+  "nodes": [
+    {
+      "id": "main",
+      "label": "${NODE_LABEL}",
+      "rpcUrl": "http://${APP_BITCOIN_NODE_IP}:${APP_BITCOIN_RPC_PORT}",
+      "rpcUser": "${APP_BITCOIN_RPC_USER}",
+      "rpcPassword": "${APP_BITCOIN_RPC_PASS}",
+      "datadir": "${NODE_DATADIR}",
+      "chainHint": "${NODE_CHAIN}",
+      "cookieFile": null,
+      "logFile": null,
+      "color": "#f7931a",
+      "addressIndex": "/app/data/index",
+      "addressIndexBuild": "manual"
+    }
+  ]
+}

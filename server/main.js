@@ -214,9 +214,20 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     // with a reason rather than kept as a permanently-offline panel. A wrong
     // "offline" is worse than an absent one: it invites someone to go fix a node
     // that is running fine.
-    if (nodeCfg.datadir && !nodeCfg.cookieFile && !fs.existsSync(nodeCfg.datadir)) {
+    //
+    // UNLESS THE CONFIG CARRIES THE CREDENTIALS. resolveCookie() falls through to
+    // rpcUser/rpcPassword when no cookie file can be read, so for such a node the
+    // datadir is only where the address index gets built from -- losing it costs the
+    // index, not the connection, and dropping the whole node would be the wrong
+    // trade. Found packaging this for Umbrel (2026-09-17), where the datadir is a
+    // read-only mount and the credentials come from the node app's exports: a mount
+    // that had not appeared took the monitor's only node with it.
+    if (nodeCfg.datadir && !nodeCfg.cookieFile && !nodeCfg.rpcUser && !fs.existsSync(nodeCfg.datadir)) {
       app.log({ level: nodeCfg.optional ? 'info' : 'warn', msg: `skipping node "${nodeCfg.id}": datadir ${nodeCfg.datadir} does not exist, so its RPC cookie cannot be read (remove it from config.nodes or point it at a live node)` });
       continue;
+    }
+    if (nodeCfg.datadir && nodeCfg.rpcUser && !fs.existsSync(nodeCfg.datadir)) {
+      app.log({ level: 'warn', msg: `node "${nodeCfg.id}": datadir ${nodeCfg.datadir} does not exist -- RPC works (the config carries the credentials), but the address index cannot be built from block files that are not there` });
     }
     const m = new NodeMonitor(nodeCfg, { rpc: cfg.rpc, poll: cfg.poll, store: cfg.store, log: app.log, history: app.history, logCfg: cfg.log, miningCfg: {
       // Two cheap reads per block on the shared lane (measured 2026-09-09: 8 ms + 63 ms).
@@ -531,6 +542,10 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
         app.log({ level: 'warn', msg: `address index ${dir}: not built, and addressIndexBuild is "manual" -- run node scripts/index-build.js --out ${dir}` });
       } else if (!m.cfg?.datadir) {
         app.log({ level: 'warn', msg: `address index ${dir}: not built, and node ${m.id} has no datadir to build it from` });
+      } else if (!fs.existsSync(path.join(m.cfg.datadir, 'blocks'))) {
+        // Say it once, plainly, rather than start a build that dies on its first read:
+        // a node reached over RPC alone, or one whose datadir mount did not appear.
+        app.log({ level: 'warn', msg: `address index ${dir}: not built, and ${path.join(m.cfg.datadir, 'blocks')} is not there to build it from -- address pages stay unavailable for node ${m.id}` });
       } else build(dir, m).catch((err) => app.log({ level: 'warn', msg: `address index ${dir}: ${err.message}` }));
     }
   }

@@ -1,0 +1,68 @@
+# The container image behind the Umbrel App Store package (umbrel/README.md).
+#
+# Manual only. The store needs a multi-arch image on a public registry, pinned by digest,
+# before a PR can be opened -- and nothing else in this project publishes anything on a
+# push, so neither does this.
+#
+# arm64 is not optional: an Umbrel is usually a Raspberry Pi. It is built under QEMU here,
+# which is slow but correct for an image that installs nothing and compiles nothing.
+name: publish umbrel image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'image tag (match package.json version, e.g. 0.1.2)'
+        required: true
+      latest:
+        description: 'also push :latest'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned by commit for the same reason tests.yml pins: a tag can be moved to other
+      # code by whoever controls the action's repository, a full SHA cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: the tag matches package.json
+        run: |
+          have=$(node -p "require('./package.json').version")
+          want='${{ inputs.version }}'
+          test "$have" = "$want" || { echo "package.json says $have, you asked for $want"; exit 1; }
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: umbrel/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false   # the store's linter reads a plain manifest list
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/blockyard:${{ inputs.version }}
+            ${{ inputs.latest && format('ghcr.io/{0}/blockyard:latest', github.repository_owner) || '' }}
+
+      # This is the number that goes into umbrel/blockyard/docker-compose.yml.
+      - name: the digest to pin
+        run: |
+          echo "### pin this in umbrel/blockyard/docker-compose.yml" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "    image: ghcr.io/${{ github.repository_owner }}/blockyard:${{ inputs.version }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "NOTE: the package must be made PUBLIC once, at ghcr.io -- a private package cannot be installed by an Umbrel." >> "$GITHUB_STEP_SUMMARY"

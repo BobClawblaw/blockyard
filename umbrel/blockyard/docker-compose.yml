@@ -1,0 +1,46 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: blockyard_app_1
+      APP_PORT: 21000
+
+  app:
+    # Pinned by digest, as the store requires. Replace after each
+    # publish-umbrel-image.yml run; the workflow prints the manifest digest.
+    image: ghcr.io/bobclawblaw/blockyard:0.1.2@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    restart: on-failure
+    stop_grace_period: 1m
+    user: "1000:1000"
+    volumes:
+      # Everything BlockYard writes lives under here: the rendered config, the
+      # user accounts, the history, and the address index if it is ever built.
+      - ${APP_DATA_DIR}:/app/data
+      # Read-only, and only for the address index, which reads <datadir>/blocks
+      # directly. Same pattern as electrs, ordinals, ride-the-lightning, sv2-ui.
+      - ${APP_BITCOIN_DATA_DIR}:/var/lib/bitcoind:ro
+    environment:
+      # The node, from the bitcoin app's exports. The entrypoint renders these
+      # into /app/data/local.json on every start, so a change to the node's RPC
+      # credentials is picked up by restarting this app.
+      APP_BITCOIN_NODE_IP: ${APP_BITCOIN_NODE_IP}
+      APP_BITCOIN_RPC_PORT: ${APP_BITCOIN_RPC_PORT}
+      APP_BITCOIN_RPC_USER: ${APP_BITCOIN_RPC_USER}
+      APP_BITCOIN_RPC_PASS: ${APP_BITCOIN_RPC_PASS}
+      APP_BITCOIN_NETWORK: ${APP_BITCOIN_NETWORK}
+      # Listen on every interface: app_proxy reaches this container over the
+      # app network, and BlockYard binds 127.0.0.1 unless told otherwise.
+      BLOCKYARD_BIND: "0.0.0.0"
+      BLOCKYARD_PORT: "21000"
+      # HTTPS with a self-made certificate is the default. app_proxy speaks
+      # HTTP to the app and terminates TLS itself, so this must be 0.
+      BLOCKYARD_TLS: "0"
+      BLOCKYARD_AUTH: "1"
+      # The log follower does not understand Bitcoin Core's log format and would
+      # misdate every event. Off, explicitly. See AGENTS.md in the repository.
+      BLOCKYARD_LOG_SOURCE: "0"
+      BLOCKYARD_DATA: /app/data/state
+      BLOCKYARD_CONFIG: /app/data/local.json
+      # Umbrel shows this to the user as the app's password.
+      BLOCKYARD_ADMIN_PASSWORD: ${APP_PASSWORD}
