@@ -174,6 +174,14 @@ Mirroring Scorched Yard's split, which the audit and the performance work both v
 
 ## 8. Milestones
 
+*M1 and M2 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
+two tunnels), the block layer of 262 cubes built once, the painted play layer, and the measurement
+it exists for -- **60 fps steady in the browser, median frame 16.7 ms**, with everything moving. M2:
+the rules, played by 15 scripted tests, and a screen that plays them (keys, pause, restart, HUD).
+Two bugs the measurement found: the play layer painted the maze out, because the renderer fills a
+board's canvas before drawing; and a dot under a stopped BlockMan was never eaten.*
+
+
 1. **M1 — the play layer, measured.** A static maze block layer plus 240 painted dots and five
    painted actors moving on a script, and a frame-rate reading in a real browser. If this does not
    hold 60 fps, the design changes here and not later.
