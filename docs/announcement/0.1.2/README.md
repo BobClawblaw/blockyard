@@ -6,12 +6,10 @@ For the bitcointalk thread (https://bitcointalk.org/index.php?topic=5594141): a 
 `blockyard-0.1.2-announcement.txt` is the post in Markdown; `blockyard-0.1.2-announcement.bbcode`
 is the same post in BBCode for the forum. Its pictures on talkimg.com, uploaded by the operator on
 2026-09-17: `overview.jpg` (UqfTta), `block-space-mode1.jpg` (UqftLo, beside the paragraph for
-newcomers) and `scorched.jpg` (UqfRaN). `settings-sky.jpg` is not uploaded yet: its place in the
-sky section is still the placeholder `IMAGE-URL-FOR:settings-sky.jpg`. The other screenshots are here too, for the thread.
+newcomers) and `scorched.jpg` (UqfRaN). The other screenshots are here too, for the thread.
 
 Every picture was shot at 0.1.2 on 2026-09-17 against the local Core node with
-`scripts/shots.mjs`, and is a copy of `docs/images/`, except `settings-sky.jpg`, which is Display
-settings open on the Sky tab and exists only here. The Scorched Yard shot is a daytime round on
+`scripts/shots.mjs`, and is a copy of `docs/images/`. The Scorched Yard shot is a daytime round on
 the Earth sky: the script now picks the round's hour, so the sun, clouds and flow lines show.
 
 The post leads with the third security audit and its fixes, then Scorched Yard, one sky per board,

@@ -66,8 +66,6 @@ What we added:
 
 Until now there was one global sky switch and six "star field" switches scattered across the board tabs, and nothing said which board drew which sky. Now *Display settings → Sky* is a map: every board that draws a sky, and a choice beside it of **Galaxy**, **Earth** or none. Below the map, one section describes each sky. Existing settings are migrated, so every board keeps what it drew.
 
-![Which sky, where](IMAGE-URL-FOR:settings-sky.jpg)
-
 **The Galaxy** is BlockYard's star field with its turning spiral arms, and is the default everywhere except Scorched Yard. **The Earth sky** is a real day from the machine's clock, and it got a lot of attention this release:
 
 - **The sun** is warm gold overhead and deep orange at the horizon, not white, with a soft halo.
