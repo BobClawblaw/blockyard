@@ -679,3 +679,19 @@ would have saved the hour — and is the first thing to run against a slow node,
 with everything else stopped. The throttling stays, because it is right on a
 shared disk; it was simply not the fault. Rule 1 says measure before choosing a
 number; this is its sibling: measure before choosing a culprit.
+
+## A screen that is not on screen does nothing
+
+**From:** BlockMan's attract mode, 2026-09-17, playing itself with sound while the operator was
+on another page ("WTF is that"). Every other game here already stopped itself; the one added last
+did not, and nothing in the suite noticed for a day.
+
+Any page here that runs an animation frame loop, a timer or audio checks two things inside the
+loop and stops if either holds: `document.hidden` (the tab is away) and `G.state?.page !== '<its
+own page>'` (the router is showing something else). Both, not one: a hidden tab and a switched
+page are different events and only the second happens while the window is in front of you.
+
+**In practice:** `test/nav-menu.test.js` asserts the guard in every game module by reading the
+source, so a new board cannot ship without it. The cost of getting this wrong is not a wasted
+frame -- it is sound coming out of a page the person is not looking at, which reads as a bug in
+the whole application rather than in one game.

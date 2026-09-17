@@ -1399,3 +1399,39 @@ timedemo 93.3 vs 93.0 M a second, Quake 126.3 vs 127.7. Quake lock-stepped ident
 instructions, memory equal. DOOM lock-steps identical to 175 M and then differs, by design: at 173 M it
 copies between VGA pages in write mode 1, which the previous build wrote as plain data, and reads the
 planes back.
+
+## 37. What the log parser actually parses, against both node builds (2026-09-17)
+
+Taken before scoping the log-source work, by running the shipped `parseLine` over a tail of each
+node's real log on this box. Method: `node --input-type=module` importing
+`server/collect/logparse.js`, one call per line, counting `kind: 'raw'` as unparsed and grouping
+the misses by shape (hashes to `H`, digits to `N`).
+
+| log | lines | parsed | note |
+|---|---|---|---|
+| experimental build, run 26 | 39,113 | **20,555 (52.6%)** | the grammar these rules were written for |
+| Bitcoin Core (the oracle) | 112,170 | **0 (0.0%)** | every line `kind: 'raw'`, no fields |
+
+Three things follow, and they shape the work rather than describing it:
+
+1. **Core's events would be misdated, not merely thin.** `parseLine` on a real Core line returns
+   `{ kind: 'raw', ts: <the time of reading> }` -- the `2026-09-17T21:57:41Z` in the line is never
+   read, because the timestamp rule wants `YYYY-MM-DD HH:MM:SS.mmm `. An event feed stamped with
+   read time is worse than no feed, which is the substance of the standing refusal to support Core.
+2. **The experimental build's coverage has drifted from ~96% to 52.6% and nothing noticed**, because
+   the `log-unparsed` flag only fires below 5%. The single biggest miss is `[idx] fold N..N: …` at
+   10,001 lines -- a quarter of the whole log -- followed by `[utxo_live] merge of N run(s)
+   deferred`, `[addrhist] passN bucket`, `[txospender] run`, `[txindex] run` and `[dial] memory:`.
+   A coverage figure with a 5% floor is a smoke alarm wired to a furnace.
+3. **Throughput is not a constraint and never was**: 163,300 lines a second for the experimental log
+   and 221,582 for Core's, single-threaded, with all ~60 rules tried per line. Whatever the design
+   costs, it is not this. (It is worth saying because the rules are run unanchored on the main
+   thread, which the 2026-09-16 audit's L6 findings were about.)
+
+What is in Core's log that RPC cannot answer, from the same tail: `Saw new header hash=… peer=N`
+and `Saw new cmpctblock header …` (which peer announced a block first), every `received:`/`sending:`
+line with a byte count and a peer id (per-peer traffic), `Received addr: N addresses (N processed, N
+rate-limited)`, socket resets and nodestate clears, `Potential stale tip detected`, and
+`CreateNewBlock(): block weight: N txs: N fees: N sigops N`. The byte-count lines are `[net]`
+category and exist only because this node runs `debug=net`; a default install has the rest but not
+those, so per-peer bytes must be reported as present-or-absent rather than as zero.

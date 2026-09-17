@@ -814,3 +814,40 @@ Kept as checked rather than deleted, so nobody re-derives them.
 - Production node's `[check] block data is NOT laid out monotonically (first
   break at height 964924)` warning, present repeatedly in its log: the node itself
   says truncation and pruning will refuse to run. Surfaced as `archive-hole`.
+
+## Found 2026-09-17, in a game that was then dropped (BlockMan, `blockman` branch)
+
+Kept because four of the six are about the app's own conventions, not that game, and the next
+board added here can repeat every one of them.
+
+- **A game whose loop has no page check plays on in the background**, sound and all, while you
+  read another page (operator: "blockman keeps playing attract mode in the background. WTF is
+  that"). Every other game already had `if (document.hidden || G.state?.page !== '<page>')
+  pause(...)`; the one written last did not. Now asserted for all five game modules in
+  `test/nav-menu.test.js` -- see docs/RULES.md.
+- **`setSetting('group', 'key', value)` throws, and a `catch` swallowed it.** The signature is
+  `setSetting(currentSettings, 'group.key', value)`, so all four of that game's switches
+  persisted nothing for a day while the buttons moved and looked saved. The only thing
+  `setSetting` throws for is a path naming no setting; swallowing that is never right, and the
+  `try`/`catch` was removed rather than corrected.
+- **A board whose wrap keeps the `idle` class is painted and invisible.** `.tetwell.idle` is
+  `visibility: hidden`, and the class was cleared only where the page was rendered, not where the
+  game starts -- so pressing Enter built the scene, painted both canvases and showed a black
+  square beside a live scoreboard. Cleared per frame now, where the game either exists or does not.
+- **A key advertised on the panel and bound to nothing.** The keys table offered R for a new game;
+  no handler took it. A panel's key list is a claim and nothing tested it.
+- **A restart that calls `newGame()` bare forgets the settings the game was set up with** -- lives
+  back to three, difficulty back to normal, attract mode off.
+- **An attract player that steers by straight-line distance walks into walls.** It scored a
+  direction by the Manhattan distance to the nearest dot, which is a line through the maze's
+  walls, so in a corridor with exits only at its ends it paced back and forth, eating nothing,
+  until it was caught. Replaced by a flood from every remaining dot along the corridors. The
+  general form: a heuristic measured through geometry the actor cannot cross is not a heuristic.
+
+## Measured 2026-09-17: the log source parses one dialect of two
+
+Not a node defect but the standing debt, with numbers, so the next session starts from fact:
+Core's `debug.log` parses at **0%** and every event is stamped with the time it was read rather
+than the time in the line; the experimental build's own log, whose grammar these rules were
+written for, parses at **52.6%** on a fresh tail against ~96% on the frozen fixtures. The drift
+is invisible because `log-unparsed` only fires below 5% coverage. See docs/MEASUREMENTS.md.
