@@ -81,10 +81,6 @@ if (isMain) {
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, text, { mode: 0o600 });
 
-  // /app/games is a symlink to here (see the Dockerfile): the DOS Diversions look for
-  // game files the image cannot ship, and this is where someone can put their own.
-  try { fs.mkdirSync(path.join(path.dirname(out), 'games'), { recursive: true }); } catch { /* read-only volume: the Diversions just stay empty */ }
-
   console.log(`blockyard: wrote ${out} for ${process.env.APP_BITCOIN_NODE_IP}:${process.env.APP_BITCOIN_RPC_PORT}`);
 
   // Hand the server the argv it expects. server/main.js boots only when it decides it is

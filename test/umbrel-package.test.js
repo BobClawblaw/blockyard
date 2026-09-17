@@ -21,7 +21,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const UMBREL_ENV = {
-  APP_BITCOIN_NODE_IP: '10.21.0.2',
+  APP_BITCOIN_NODE_IP: '192.0.2.10',
   APP_BITCOIN_RPC_PORT: '8332',
   APP_BITCOIN_RPC_USER: 'umbrel',
   APP_BITCOIN_RPC_PASS: 'secret',
@@ -32,7 +32,7 @@ test('the entrypoint renders a config the server can load', () => {
   const cfg = JSON.parse(renderConfig(UMBREL_ENV));
   assert.equal(cfg.nodes.length, 1);
   const n = cfg.nodes[0];
-  assert.equal(n.rpcUrl, 'http://10.21.0.2:8332');
+  assert.equal(n.rpcUrl, 'http://192.0.2.10:8332');
   assert.equal(n.rpcUser, 'umbrel');
   assert.equal(n.rpcPassword, 'secret');
   assert.equal(n.datadir, MOUNT);
@@ -94,13 +94,23 @@ test('the package keeps everything it writes inside the Umbrel data volume', () 
   assert.equal(JSON.parse(renderConfig(UMBREL_ENV)).nodes[0].addressIndex.startsWith('/app/data/'), true);
 });
 
-test('the image ships neither the games nor anybody\'s config', () => {
+test('the image ships nobody\'s config, and no deployment\'s state', () => {
   const ignored = read('.dockerignore').split('\n').map((l) => l.trim());
-  // The DOS Diversions run shareware files that are not ours to redistribute, and
-  // config/local.json holds an RPC password.
-  for (const p of ['games', 'config/local.json', 'data', 'worklog']) {
+  // config/local.json holds an RPC password; data/ is one deployment's users, sessions
+  // and history; worklog/ is notes that are never published at all.
+  for (const p of ['config/local.json', 'config/blockyard.json', 'data', 'worklog']) {
     assert.ok(ignored.includes(p), `.dockerignore should exclude ${p}`);
   }
+});
+
+test('the image DOES ship the Diversions, each package whole with its own licence', () => {
+  // The shareware terms permit free electronic redistribution of the package as a whole,
+  // and Quake's section 6 requires its agreement to travel with it. That condition is met
+  // by copying each game directory entire -- so nothing here may start filtering them.
+  assert.match(read('umbrel/Dockerfile'), /^COPY games \.\/games$/m);
+  const ignored = read('.dockerignore').split('\n').map((l) => l.trim());
+  assert.ok(!ignored.some((l) => l === 'games' || l.startsWith('games/')), 'games/ must not be excluded from the image');
+  assert.ok(fs.existsSync(path.join(ROOT, 'games/quake_dos/SLICNSE.TXT')), "Quake's licence must be in the tree that gets copied");
 });
 
 test('the manifest names the port the store gave us, and the container keeps its own', () => {

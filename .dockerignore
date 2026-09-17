@@ -1,13 +1,13 @@
-# The image ships what package.json's `files` list ships, and this is the other half of
-# saying so. Two things in particular must never end up in a published image:
-#   games/          the DOS Diversions -- shareware, not ours to redistribute
-#   config/local.json  a deployment's RPC password
+# What must never end up in a published image -- above all config/local.json, which holds a
+# deployment's RPC password.
+#
+# games/ is NOT excluded: the DOS Diversions' shareware files ship, as they do in this
+# repository, and each package travels whole with its own licence text. See umbrel/Dockerfile.
 .git
 .github
 node_modules
 data
 worklog
-games
 test
 umbrel/blockyard
 config/local.json

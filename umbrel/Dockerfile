@@ -24,17 +24,19 @@ COPY config/pool-map.json ./config/pool-map.json
 COPY docs ./docs
 COPY CHANGELOG.md SECURITY.md NOTICE LICENSE README.md ./
 COPY umbrel/entrypoint.js umbrel/local.json.template ./umbrel/
+# The DOS Diversions' game files: shareware DOOM, Quake and Wolfenstein 3D, 26 MB, exactly
+# as this repository already carries them. They are here rather than left out because each
+# is shareware whose terms permit free electronic redistribution of the whole package, and
+# because the whole package is what travels: Quake's SLICNSE.TXT is in games/quake_dos/ and
+# is COPYed with the rest, which is the condition its section 6 sets ("so long as this
+# Agreement accompanies the Software at all times"). An Umbrel install is the same app as
+# any other install, and it can run DOOM.
+COPY games ./games
 
 # The mount points. Both are volumes at runtime -- creating them here means the container
 # starts correctly even when run by hand with neither mounted.
 RUN mkdir -p /app/data /var/lib/bitcoind && chown -R 1000:1000 /app/data
 
-# games/ is NOT in the image: the DOS Diversions run shareware DOOM, Quake and Wolfenstein
-# 3D from files that are not ours to redistribute. The directory the server looks in is a
-# symlink into the data volume instead, so anyone who owns those files can drop them in
-# under the app's data directory and the Diversions find them. Until then each one shows
-# its own "these files are missing" panel, which is the behaviour it already has.
-RUN ln -s /app/data/games /app/games
 
 ENV NODE_ENV=production \
     BLOCKYARD_BIND=0.0.0.0 \

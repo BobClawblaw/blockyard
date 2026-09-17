@@ -14,7 +14,7 @@ by a normal `npm start` install; the repository is the source, this directory is
 | `umbrel/Dockerfile` | no | builds the image the compose file names |
 | `umbrel/entrypoint.js` | no | renders `local.json` from the node's env, then starts the server |
 | `umbrel/local.json.template` | no | that config, with `${VAR}` holes |
-| `.dockerignore` (repo root) | no | keeps `games/`, `data/`, `worklog/` and any `config/local.json` out of the image |
+| `.dockerignore` (repo root) | no | keeps `data/`, `worklog/` and any `config/local.json` out of the image |
 | `.github/workflows/publish-umbrel-image.yml` | no | the multi-arch GHCR build |
 
 The store forbids `build:` in a compose file, so the image must exist on a public registry,
@@ -62,7 +62,25 @@ docker build -f umbrel/Dockerfile -t blockyard:dev .
 4. Open the PR with screenshots and a logo in the body. The Umbrel team adds the icon and
    gallery images before merging.
 
-## Two things a reviewer will ask about
+## The Diversions ship
+
+The image carries `games/` — shareware DOOM, Quake and Wolfenstein 3D, 26 MB — exactly as
+this repository does. Each is shareware whose terms allow free electronic redistribution of
+the package as a whole, and each directory is copied entire, so the terms travel with the
+software: Quake's `SLICNSE.TXT` §6 makes that an explicit condition ("so long as this
+Agreement accompanies the Software at all times"), and it is met.
+
+Two things to know before the PR:
+
+- **The DOOM and Wolfenstein copies in this repository carry no licence text.** Quake's
+  does. id's `LICENSE.DOC`/`VENDOR.DOC` and Apogee's `VENDOR.DOC` were in the original
+  archives and are missing from ours. That is worth fixing in the repository itself,
+  independently of Umbrel, since the repository redistributes them too.
+- **A store reviewer will notice** that a Bitcoin node monitor's image contains `DOOM.EXE`.
+  It is a headline feature of the app rather than a stowaway (see the README), so the PR
+  body should say so plainly rather than let it be discovered.
+
+## Two other things a reviewer will ask about
 
 **The address index is expensive.** A full mainnet index is ~124 GB written, ~2.5 GB of RAM
 per worker, up to four workers. On a Raspberry Pi with an SD card that is not something to
