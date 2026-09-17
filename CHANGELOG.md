@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+- **Scoped: BlockMan**, a maze chase on the block engine (`docs/PLAN-BLOCKMAN.md`). The plan draws the line between the genre's mechanics, which anyone may implement, and one company's expression, which nobody may copy: our own maze layouts, cubes for characters, our own sounds and names, no ROM anywhere near it, so the whole thing stays Apache 2.0. It also measures what the engine can draw: a block per arcade pixel is 64,512 blocks at 1.4 frames a second, so the maze is a block layer redrawn once a level and everything that moves is painted over it through the renderer's overlay hook, the way Scorched Yard paints its shells
+
 - **Fixed: the Peers page could stay blank for a minute or more after a restart.** Each node gets one RPC call at a time, and with the log source off the peer table comes from the 15-second tier. The 15-minute tier's first batch started 2.6 s after boot, and on the bench node it once took 68 s, so the peer poll waited behind it. That batch now starts only after the first 15-second run has answered, gives up after 10 s (its calls normally answer in under a second), and a run that timed out tries again a minute later instead of fifteen
 
 ## [0.1.2] — 2026-09-17
