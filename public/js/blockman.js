@@ -33,7 +33,32 @@ const READY_MS = 1600, DYING_MS = 1300, LEVEL_MS = 1400;
 /** Our own speed table: level 1 gentle, level 5 onward full pace. Tiles a second. */
 export function speedsFor(level) {
   const k = Math.min(1, 0.8 + (level - 1) * 0.05);
-  return { man: 9.4 * k, pursuer: 8.8 * k, tunnel: 5.4 * k, frightened: 5.8 * k };
+  // `eaten` is the walk home, and it is fast: a pair of eyes crossing the maze is not a threat, and
+  // watching it trundle back at chase speed is dead time in a game of seconds.
+  return { man: 9.4 * k, pursuer: 8.8 * k, tunnel: 5.4 * k, frightened: 5.8 * k, eaten: 16 };
+}
+
+// THE FRUIT (M4). Twice a level, at these dot counts, for this long, worth this much: ours, in the
+// genre's shape -- a reason to leave the safe corner twice a level, and the score that makes a
+// dangerous run worth it. The colours are the board's own.
+export const FRUIT_AT = Object.freeze([70, 170]);
+export const FRUIT_MS = 9500;
+export const FRUIT = Object.freeze([
+  Object.freeze({ level: 1, points: 100, colour: '#ff5c7a' }),
+  Object.freeze({ level: 2, points: 300, colour: '#ff9f43' }),
+  Object.freeze({ level: 3, points: 500, colour: '#ffd23f' }),
+  Object.freeze({ level: 5, points: 700, colour: '#6ce5b1' }),
+  Object.freeze({ level: 7, points: 1000, colour: '#46d7e4' }),
+  Object.freeze({ level: 9, points: 2000, colour: '#c78bff' }),
+  Object.freeze({ level: 11, points: 3000, colour: '#ff8ccf' }),
+  Object.freeze({ level: 13, points: 5000, colour: '#f2f6ff' }),
+]);
+
+/** What a fruit is worth at this level: the last entry the level has reached. */
+export function fruitFor(level) {
+  let out = FRUIT[0];
+  for (const f of FRUIT) if (level >= f.level) out = f;
+  return out;
 }
 
 const key = (x, y) => `${x},${y}`;
@@ -80,6 +105,7 @@ export function newGame({ level = 1, lives = LIVES, maze = parseMaze(), seed = 1
     dots: new Set(maze.dots.map((d) => key(d.x, d.y))),
     pellets: new Set(maze.pellets.map((d) => key(d.x, d.y))),
     eaten: 0, chain: 0, frightenedMs: 0, events: [],
+    fruit: null, fruitShown: 0,
     rnd: rng(seed), speeds: speedsFor(level),
     man: null, pursuers: [],
   };
@@ -169,6 +195,7 @@ export function stepGame(g, dtMs, { input = null } = {}) {
   }
   waves(g, dt);
   g.sinceDotMs = (g.sinceDotMs ?? 0) + dt;
+  fruitClock(g, dt);
   moveMan(g, dt);
   for (const p of g.pursuers) movePursuer(g, p, dt);
   contact(g);
@@ -265,6 +292,39 @@ export function chooseExit(m, tile, dir, target, opts = {}) {
   return best;
 }
 
+/**
+ * THE FRUIT APPEARS TWICE A LEVEL, at FRUIT_AT dots eaten, and keeps for FRUIT_MS. It sits on the
+ * corridor below the pen -- reachable from anywhere, and exactly where the pursuers come out, which
+ * is what makes going for it a decision rather than a free hundred points.
+ */
+/** Where the fruit sits: the first corridor tile below the pen, and never where he respawns. */
+export function fruitTile(m) {
+  const x = Math.floor(m.door.x);
+  for (let y = m.door.y + 2; y < m.h - 1; y++) {
+    if (m.at(x, y) !== OPEN) continue;
+    if (Math.abs(y - m.start.y) < 1) continue;          // his own tile is not a shop window
+    return { x, y };
+  }
+  return { x, y: Math.floor(m.start.y) - 2 };
+}
+
+function fruitClock(g, dt) {
+  if (g.fruit) {
+    g.fruit.leftMs -= dt;
+    if (g.fruit.leftMs <= 0) { g.events.push({ kind: 'fruitGone' }); g.fruit = null; }
+    return;
+  }
+  const next = FRUIT_AT[g.fruitShown];
+  if (next == null || g.eaten < next) return;
+  const f = fruitFor(g.level);
+  const m = g.maze;
+  // NOT ON HIS RESPAWN TILE (2026-09-17): the first cut put the fruit where he starts, so being
+  // caught handed him a free fruit on the way back in. It sits on the corridor just below the pen.
+  g.fruit = { ...fruitTile(m), points: f.points, colour: f.colour, leftMs: FRUIT_MS };
+  g.fruitShown += 1;
+  g.events.push({ kind: 'fruit', points: f.points, x: g.fruit.x, y: g.fruit.y });
+}
+
 function moveMan(g, dt) {
   const m = g.maze, man = g.man;
   // THE TILE HE IS ON IS EATEN WHETHER HE MOVES OR NOT. The first cut ate only after a step, so a
@@ -299,6 +359,12 @@ function moveMan(g, dt) {
 
 function eat(g, tile) {
   const k = key(tile.x, tile.y);
+  if (g.fruit && g.fruit.x === tile.x && Math.abs(g.fruit.y - (tile.y + 0.5)) < 1) {
+    g.score += g.fruit.points;
+    g.events.push({ kind: 'ateFruit', points: g.fruit.points, x: tile.x, y: tile.y });
+    g.fruit = null;
+    extraLife(g);
+  }
   if (g.dots.delete(k)) {
     g.score += SCORE.dot;
     g.eaten += 1;
@@ -315,7 +381,7 @@ function eat(g, tile) {
     g.chain = 0;
     g.frightenedMs = frightenedMsFor(g.level);
     for (const p of g.pursuers) {
-      if (p.state === 'chase' || p.state === 'scatter' || p.state === 'frightened') {
+      if (p.state === 'chase' || p.state === 'scatter' || p.state === 'frightened') {   // never 'eaten'
         p.state = 'frightened';
         p.frightenedLeftMs = g.frightenedMs;
         p.dir = { x: -p.dir.x, y: -p.dir.y };                 // a pellet turns them round
@@ -349,12 +415,21 @@ function movePursuer(g, p, dt) {
     p.penMs = (p.penMs ?? 0) + dt;
     if (penReleased(g, p)) {
       p.state = g.mode; p.x = m.door.x; p.y = m.door.y + 0.5; p.dir = DIRS.up; p.penMs = 0;
+      p.rejoin = false;
       g.events.push({ kind: 'out', who: p.id });
     }
     return;
   }
   p.target = targetFor(g, p);
-  const speed = p.state === 'frightened' ? g.speeds.frightened
+  if (p.state === 'eaten' && atHome(m, p)) {
+    // home: it waits a moment inside the pen and comes straight back out, whatever the counters say
+    p.state = 'pen'; p.penMs = 0; p.rejoin = true;
+    p.x = m.door.x; p.y = m.door.y + 1.5; p.dir = DIRS.up;
+    g.events.push({ kind: 'home', who: p.id });
+    return;
+  }
+  const speed = p.state === 'eaten' ? g.speeds.eaten
+    : p.state === 'frightened' ? g.speeds.frightened
     : (inTunnel(m, p) ? g.speeds.tunnel : g.speeds.pursuer * elroyGain(g, p));
   let left = speed * dt / 1000;
   let guard = 0;
@@ -370,7 +445,9 @@ function movePursuer(g, p, dt) {
     if (!freeG(m, at.x + p.dir.x, at.y + p.dir.y)) {
       p.x = at.x + 0.5; p.y = at.y + 0.5;
       const noUp0 = g.noUpSet ?? (g.noUpSet = new Set(m.noUp.map((t) => key(t.x, t.y))));
-      const pick0 = chooseExit(m, at, p.dir, p.target, { noUp: noUp0, ghost: true });
+      const pick0 = p.state === 'eaten'
+        ? (stepHome(m, at, p.dir) ?? chooseExit(m, at, p.dir, p.target, { noUp: noUp0, ghost: true }))
+        : chooseExit(m, at, p.dir, p.target, { noUp: noUp0, ghost: true });
       const back = { x: -p.dir.x, y: -p.dir.y };
       p.dir = pick0 ?? (freeG(m, at.x + back.x, at.y + back.y) ? back : p.dir);
       p.justReversed = false;
@@ -391,7 +468,9 @@ function movePursuer(g, p, dt) {
     const how = { noUp, ghost: true };
     const pick = p.state === 'frightened'
       ? (() => { const es = exitsFrom(m, tile, p.dir, how); return es.length ? es[Math.floor(g.rnd() * es.length)] : null; })()
-      : chooseExit(m, tile, p.dir, p.target, how);
+      : p.state === 'eaten'
+        ? (stepHome(m, tile, p.dir) ?? chooseExit(m, tile, p.dir, p.target, how))
+        : chooseExit(m, tile, p.dir, p.target, how);
     p.dir = pick ?? { x: -p.dir.x, y: -p.dir.y };        // a dead end: turn round
   }
 }
@@ -404,10 +483,62 @@ export function nextCentre(pos, d) {
   return here < pos - 1e-9 ? here : here - 1;
 }
 
-/** Out of the pen when its own dot counter is met, or BlockMan has stopped eating for long enough. */
+/**
+ * THE WALK HOME FOLLOWS A DISTANCE FIELD, NOT THE GREEDY RULE (2026-09-17, M4). Choosing the exit
+ * nearest the target is right for a hunt and wrong for a journey: a pair of eyes in the top corridor
+ * flip-flopped between two tiles for ever, because both were equally far from the pen and neither
+ * was a way down. So the distance to the pen's door is measured once per maze, by flood fill over
+ * the pursuers' own grid, and an eaten pursuer simply steps downhill. It always arrives.
+ */
+export function homeField(m) {
+  if (m.__home) return m.__home;
+  const d = new Int32Array(m.w * m.h).fill(-1);
+  const door = { x: Math.floor(m.door.x), y: m.door.y + 1 };
+  const q = [door];
+  d[door.y * m.w + door.x] = 0;
+  while (q.length) {
+    const { x, y } = q.shift();
+    const here = d[y * m.w + x];
+    for (const dir of DIR_LIST) {
+      const nx = ((x + dir.x) % m.w + m.w) % m.w, ny = y + dir.y;
+      if (ny < 0 || ny >= m.h) continue;
+      if (m.atG(nx, ny) !== OPEN || d[ny * m.w + nx] >= 0) continue;
+      d[ny * m.w + nx] = here + 1;
+      q.push({ x: nx, y: ny });
+    }
+  }
+  m.__home = d;
+  return d;
+}
+
+/** The step an eaten pursuer takes from this tile: downhill on the distance field. */
+export function stepHome(m, tile, dir) {
+  const d = homeField(m);
+  const here = d[tile.y * m.w + tile.x];
+  let best = null, bestD = here < 0 ? Infinity : here;
+  for (const cand of exitsFrom(m, tile, dir, { ghost: true })) {
+    const nx = ((tile.x + cand.x) % m.w + m.w) % m.w, ny = tile.y + cand.y;
+    if (ny < 0 || ny >= m.h) continue;
+    const dd = d[ny * m.w + nx];
+    if (dd >= 0 && dd < bestD) { bestD = dd; best = cand; }
+  }
+  return best;
+}
+
+/** True once an eaten pursuer has reached the pen's door on its way home. */
+export function atHome(m, p) {
+  return Math.abs(p.x - m.door.x) < 0.6 && Math.abs(p.y - (m.door.y + 1)) < 1.1;
+}
+
+/**
+ * Out of the pen when its own dot counter is met, or BlockMan has stopped eating for long enough --
+ * and at once (after a moment's pause) for one that has just been eaten and walked home, whose
+ * counter is long past.
+ */
+export const REJOIN_MS = 900;
 export function penReleased(g, p) {
-  const eatenSoFar = g.eaten;
-  if (eatenSoFar >= (PEN_DOTS[p.id] ?? 0)) return true;
+  if (p.rejoin) return (p.penMs ?? 0) >= REJOIN_MS;
+  if (g.eaten >= (PEN_DOTS[p.id] ?? 0)) return true;
   return g.sinceDotMs >= PEN_IDLE_MS;
 }
 
@@ -427,11 +558,12 @@ function contact(g) {
     if (p.state === 'pen' || p.state === 'eaten') continue;
     if (Math.abs(p.x - g.man.x) + Math.abs(p.y - g.man.y) > CONTACT) continue;
     if (p.state === 'frightened') {
-      // M4 gives this its ladder and the walk home; M2 scores it and sends it back to the pen
+      // IT WALKS HOME AS A PAIR OF EYES (M4). Being eaten does not put it back in the pen: it has to
+      // cross the maze to the pen's door at eye speed, which is the window a player has bought.
       g.chain = Math.min(g.chain + 1, SCORE.pursuer.length);
       const pts = SCORE.pursuer[g.chain - 1];
       g.score += pts;
-      p.state = 'pen'; p.penMs = 0; p.x = g.maze.door.x; p.y = g.maze.door.y + 1.5; p.frightenedLeftMs = 0;
+      p.state = 'eaten'; p.frightenedLeftMs = 0; p.penMs = 0;
       g.events.push({ kind: 'ate', who: p.id, points: pts, x: p.x, y: p.y });
       extraLife(g);
       continue;
@@ -450,6 +582,7 @@ export function nextLevel(g) {
   g.pellets = new Set(g.maze.pellets.map((d) => key(d.x, d.y)));
   g.speeds = speedsFor(g.level);
   g.frightenedMs = 0; g.chain = 0;
+  g.fruit = null; g.fruitShown = 0; g.eaten = 0;
   place(g);
   g.phase = 'ready'; g.phaseMs = READY_MS;
   return g;

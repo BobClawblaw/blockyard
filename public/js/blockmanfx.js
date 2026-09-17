@@ -91,8 +91,9 @@ export function paintPursuers(ctx, P, U, list, { now = 0 } = {}) {
     const frightened = g.state === 'frightened';
     const flashing = frightened && (g.frightenedLeftMs ?? 9999) < 2000 && Math.floor(now / 220) % 2 === 0;
     const colour = frightened ? (flashing ? '#f2f6ff' : '#5566cc') : g.colour;
-    cube(ctx, P, U, { x: g.x, y: g.y, colour, size: 1.5 });
-    if (g.state === 'eaten') continue;                       // on its way home: eyes only
+    // EATEN IS EYES ONLY: it is crossing the maze to the pen and it is not a threat, so it has no
+    // body at all -- the clearest way to say "that one is out of the game for a few seconds".
+    if (g.state !== 'eaten') cube(ctx, P, U, { x: g.x, y: g.y, colour, size: 1.5 });
     const dir = g.dir ?? { x: 0, y: -1 };
     const eye = Math.min(U.x, U.y) * 0.16;
     for (const side of [-1, 1]) {

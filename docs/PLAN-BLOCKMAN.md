@@ -174,7 +174,7 @@ Mirroring Scorched Yard's split, which the audit and the performance work both v
 
 ## 8. Milestones
 
-*M1, M2 and M3 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
+*M1 to M4 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
 two tunnels), the block layer of 262 cubes built once, the painted play layer, and the measurement
 it exists for -- **60 fps steady in the browser, median frame 16.7 ms**, with everything moving. M2:
 the rules, played by 15 scripted tests, and a screen that plays them (keys, pause, restart, HUD).
@@ -185,7 +185,13 @@ and idle timer, Chaser's two speed steps, and cheat mode (T) ringing each target
 all found by the tests: the pen's gate was a wall to the pursuers as well as to him, so Chaser
 began level one inside a wall; a reversal was undone at the junction it happened on; and a
 quarter-tile step could skip a junction, which sent an Ambusher into the wall above the shaft. The
-pursuers now stop on every tile centre and decide there, and they have a grid of their own.*
+pursuers now stop on every tile centre and decide there, and they have a grid of their own. M4: an
+eaten pursuer crosses the maze as a pair of eyes at eye speed, waits a moment in the pen and
+rejoins whatever the wave says; the fruit appears twice a level below the pen, keeps for nine and a
+half seconds and is worth from 100 to 5,000 by level. Two more findings: the greedy targeting rule
+that is right for a hunt made the eyes flip-flop between two equally distant tiles for ever, so the
+walk home follows a distance field measured once per maze; and the fruit first sat on his respawn
+tile, which handed him a free one every time he was caught.*
 
 
 1. **M1 — the play layer, measured.** A static maze block layer plus 240 painted dots and five

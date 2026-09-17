@@ -6,7 +6,7 @@
 // pursuers round, a life lost on contact, and a level that ends when the last dot goes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, stepGame, place, nextLevel, restart, remaining, exitsFrom, chooseExit, targetFor, penReleased, elroyGain, wavesFor, speedsFor, frightenedMsFor, DIRS, SCORE, LIVES, CORNER, EAT_PENALTY_MS, ELROY, PEN_DOTS, PEN_IDLE_MS } from '../public/js/blockman.js';
+import { newGame, stepGame, place, nextLevel, restart, remaining, exitsFrom, chooseExit, targetFor, penReleased, atHome, homeField, stepHome, elroyGain, wavesFor, speedsFor, frightenedMsFor, fruitFor, DIRS, SCORE, LIVES, CORNER, EAT_PENALTY_MS, ELROY, PEN_DOTS, PEN_IDLE_MS, REJOIN_MS, FRUIT_AT, FRUIT_MS, FRUIT } from '../public/js/blockman.js';
 import { parseMaze, OPEN } from '../public/js/blockmanmaze.js';
 
 const maze = parseMaze();
@@ -133,7 +133,7 @@ test('a pellet scores fifty, frightens the pursuers and turns them round', () =>
   assert.equal(frightenedMsFor(19), 0);
 });
 
-test('a frightened pursuer is eaten for the 200-1600 ladder, and goes back to the pen', () => {
+test('a frightened pursuer is eaten for the 200-1600 ladder, and starts walking home', () => {
   const g = started();
   g.frightenedMs = 5000;
   for (const q of g.pursuers) { q.state = 'frightened'; q.frightenedLeftMs = 5000; }
@@ -146,7 +146,7 @@ test('a frightened pursuer is eaten for the 200-1600 ladder, and goes back to th
     const ate = g.events.find((e) => e.kind === 'ate');
     assert.ok(ate, 'it was eaten');
     scores.push(ate.points);
-    assert.equal(q.state, 'pen', 'and it is back inside');
+    assert.equal(q.state, 'eaten', 'and it is walking home as eyes (M4)');
   }
   assert.deepEqual(scores, SCORE.pursuer, 'the ladder doubles: 200, 400, 800, 1600');
 });
@@ -233,6 +233,7 @@ test('a whole level can be cleared by script, and nothing ends up inside a wall'
   const g = newGame({ maze });
   play(g, 1700);
   // drive him tile to tile along a route that visits every dot: a flood order is enough
+  g.fruitShown = FRUIT_AT.length;            // no fruit in this one: it is about the board and the score
   const order = remaining(g).dots.concat(remaining(g).pellets);
   for (const d of order) {
     g.man.x = d.x + 0.5; g.man.y = d.y + 0.5;
@@ -413,4 +414,116 @@ test('M3: they actually close in, and nothing ends up inside a wall', () => {
   }
   const after = Math.hypot(chaser.x - g.man.x, chaser.y - g.man.y);
   assert.ok(after < before || g.phase === 'dying', `Chaser closed in (${before.toFixed(1)} -> ${after.toFixed(1)})`);
+});
+
+// ------------------------------------------------------------------ M4: the walk home, and the fruit
+test('M4: an eaten pursuer crosses the maze as eyes, waits a moment and rejoins', () => {
+  const g = started();
+  out(g);
+  g.frightenedMs = 6000;
+  const p = g.pursuers.find((q) => q.id === 'chaser');
+  for (const q of g.pursuers) { q.state = 'frightened'; q.frightenedLeftMs = 6000; }
+  // put it somewhere far from the pen and walk it into him
+  g.man.x = 1.5; g.man.y = 1.5;
+  p.x = 1.5; p.y = 1.5;
+  g.events.length = 0;
+  stepGame(g, 16);
+  assert.equal(p.state, 'eaten');
+  assert.ok(g.events.some((e) => e.kind === 'ate' && e.who === 'chaser'));
+  assert.deepEqual(targetFor(g, p), { x: Math.floor(maze.door.x), y: maze.door.y + 1 }, 'it heads for the pen');
+  assert.ok(g.speeds.eaten > g.speeds.pursuer, 'and it goes home faster than it hunted');
+  // it cannot be caught on the way, and a second pellet does not re-frighten it
+  g.man.x = p.x; g.man.y = p.y;
+  const lives = g.lives;
+  stepGame(g, 16);
+  assert.equal(g.lives, lives, 'a pair of eyes is not a threat');
+  assert.equal(p.state, 'eaten', 'and it is not eaten twice');
+  // it arrives, waits, and comes back out in the wave's own mode
+  for (let t = 0; t < 4000 && p.state === 'eaten'; t += 16) stepGame(g, 16);
+  assert.equal(p.state, 'pen', `it reached the pen (${p.x.toFixed(1)},${p.y.toFixed(1)})`);
+  assert.ok(g.events.some((e) => e.kind === 'home' && e.who === 'chaser'));
+  assert.ok(atHome(maze, { x: maze.door.x, y: maze.door.y + 1 }));
+  assert.equal(penReleased(g, p), false, 'not the instant it lands');
+  p.penMs = REJOIN_MS + 1;
+  assert.equal(penReleased(g, p), true, 'a moment later, whatever its dot counter says');
+  for (let t = 0; t < 1500 && p.state === 'pen'; t += 16) stepGame(g, 16);
+  assert.equal(p.state, g.mode, 'and it is hunting again');
+  assert.equal(p.rejoin, false, 'the flag is spent');
+});
+
+test('M4: the fruit appears twice a level, keeps for a while, and scores', () => {
+  const g = started();
+  assert.equal(g.fruit, null, 'nothing on the floor to start with');
+  assert.deepEqual([...FRUIT_AT], [70, 170], 'twice, at these counts');
+  g.eaten = FRUIT_AT[0];
+  g.events.length = 0;
+  stepGame(g, 16);
+  assert.ok(g.fruit, 'the first fruit is out');
+  assert.equal(g.fruitShown, 1);
+  assert.equal(g.events.filter((e) => e.kind === 'fruit').length, 1);
+  assert.equal(maze.at(g.fruit.x, Math.floor(g.fruit.y)), OPEN, 'on a tile he can reach');
+  assert.ok(Math.abs(g.fruit.y - maze.start.y) >= 1, 'and not on the tile he respawns on');
+  assert.ok(g.fruit.y > maze.door.y, 'below the pen, where they come out: going for it is a decision');
+  const worth = g.fruit.points;
+  assert.equal(worth, fruitFor(g.level).points);
+  // eating it scores and clears it
+  g.man.x = g.fruit.x + 0.5; g.man.y = g.fruit.y;
+  const before = g.score;
+  g.events.length = 0;
+  stepGame(g, 16);
+  assert.equal(g.score - before >= worth, true, 'it scored');
+  assert.equal(g.fruit, null, 'and it is gone');
+  assert.equal(g.events.filter((e) => e.kind === 'ateFruit').length, 1);
+  // the second comes at the second count, and no third (he steps off the spot first, or he eats it
+  // the instant it lands -- which is itself how the first one went)
+  g.man.x = 1.5; g.man.y = 1.5;
+  g.eaten = FRUIT_AT[1];
+  stepGame(g, 16);
+  assert.ok(g.fruit, 'the second fruit');
+  assert.equal(g.fruitShown, 2);
+  // left alone, it times out
+  g.man.x = 1.5; g.man.y = 1.5;
+  g.events.length = 0;
+  // nobody moves: he cannot wander onto it, and they cannot catch him and walk him into it
+  g.speeds = { ...g.speeds, man: 0, pursuer: 0, frightened: 0, eaten: 0 };
+  for (let t = 0; t < FRUIT_MS + 200 && g.fruit; t += 16) stepGame(g, 16);
+  assert.equal(g.fruit, null, 'it does not wait for ever');
+  assert.equal(g.events.filter((e) => e.kind === 'fruitGone').length, 1);
+  g.eaten = 400;
+  stepGame(g, 16);
+  assert.equal(g.fruit, null, 'twice a level and no more');
+  // and a new level starts the count again
+  nextLevel(g);
+  assert.equal(g.fruitShown, 0);
+  assert.equal(g.eaten, 0);
+});
+
+test('M4: the fruit is worth more as the levels climb', () => {
+  const values = [1, 2, 3, 5, 9, 13, 30].map((l) => fruitFor(l).points);
+  for (let i = 1; i < values.length; i++) assert.ok(values[i] >= values[i - 1], `level ${i} is worth at least the one before (${values.join(', ')})`);
+  assert.equal(fruitFor(1).points, FRUIT[0].points);
+  assert.equal(fruitFor(30).points, FRUIT[FRUIT.length - 1].points, 'and it tops out');
+  for (const f of FRUIT) assert.match(f.colour, /^#[0-9a-f]{6}$/i);
+});
+
+test('M4: the walk home is downhill on a distance field, so it cannot flip-flop', () => {
+  const d = homeField(maze);
+  const door = { x: Math.floor(maze.door.x), y: maze.door.y + 1 };
+  assert.equal(d[door.y * maze.w + door.x], 0, 'the door is zero');
+  // every tile a pursuer may stand on has a finite distance, and every step downhill is a step nearer
+  let reachable = 0;
+  for (let y = 0; y < maze.h; y++) {
+    for (let x = 0; x < maze.w; x++) {
+      if (maze.atG(x, y) !== OPEN) continue;
+      const here = d[y * maze.w + x];
+      assert.ok(here >= 0, `${x},${y} can reach home`);
+      reachable += 1;
+      const step = stepHome(maze, { x, y }, DIRS.up);
+      if (here > 0 && step) {
+        const nx = ((x + step.x) % maze.w + maze.w) % maze.w;
+        assert.ok(d[(y + step.y) * maze.w + nx] < here, `${x},${y} steps nearer`);
+      }
+    }
+  }
+  assert.ok(reachable > 300, `${reachable} tiles measured`);
 });

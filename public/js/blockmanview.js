@@ -12,7 +12,7 @@
 //     which is what Scorched Yard does for shells and blasts.
 import { board3d } from './details3d.js';
 import { parseMaze, OPEN } from './blockmanmaze.js';
-import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets } from './blockmanfx.js';
+import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets, paintFruit } from './blockmanfx.js';
 import { newGame, stepGame, restart, remaining, DIRS } from './blockman.js';
 
 const WALL_COLOUR = '#2a3ac8';          // the maze's own blue; one colour a level later (M5)
@@ -125,7 +125,8 @@ function paintPlay(ctx, view, hx) {
   const g = G.game;
   paintDots(ctx, P, U, { dots: G.board.dots, pellets: G.board.pellets, now: G.paintNow });
   if (!g) return;
-  paintPursuers(ctx, P, U, g.pursuers.filter((p) => p.state !== 'pen' || true), { now: G.paintNow });
+  if (g.fruit) paintFruit(ctx, P, U, { x: g.fruit.x + 0.5, y: g.fruit.y + 0.5, colour: g.fruit.colour });
+  paintPursuers(ctx, P, U, g.pursuers, { now: G.paintNow });
   if (G.targets) paintTargets(ctx, P, U, g.pursuers);
   if (g.phase !== 'dying' || Math.floor(G.paintNow / 120) % 2 === 0) paintBlockMan(ctx, P, U, g.man, { now: G.paintNow });
   paintPops(ctx, P, U, G.pops, G.paintNow);
@@ -151,6 +152,7 @@ function draw(now = performance.now()) {
       + `<dt>level</dt><dd>${g.level}</dd>`
       + `<dt>dots left</dt><dd>${g.dots.size + g.pellets.size}</dd>`
       + (g.frightenedMs ? `<dt>frightened</dt><dd>${(g.frightenedMs / 1000).toFixed(1)}s</dd>` : '')
+      + (g.fruit ? `<dt>fruit</dt><dd>${g.fruit.points} · ${(g.fruit.leftMs / 1000).toFixed(1)}s</dd>` : '')
       + `<dt>frames</dt><dd>${G.frames}${fps ? ` · ${fps} fps` : ''}</dd>`;
     if (hud.__html !== html) { hud.innerHTML = html; hud.__html = html; }
   }
@@ -177,7 +179,7 @@ function frame(now) {
 function drain(g, now) {
   if (!g.events.length) return;
   for (const e of g.events) {
-    if (e.kind === 'ate') G.pops.push({ x: e.x, y: e.y, text: e.points, t0: now });
+    if (e.kind === 'ate' || e.kind === 'ateFruit') G.pops.push({ x: e.x + (e.kind === 'ateFruit' ? 0.5 : 0), y: e.y, text: e.points, t0: now });
     else if (e.kind === 'level') { refreshBoard(); overlay(`Level ${e.level} cleared`, 'the maze fills again, and everyone is faster'); }
     else if (e.kind === 'caught') overlay(g.lives > 0 ? 'Caught' : 'Game over', g.lives > 0 ? `${g.lives} to go` : 'F2 or the button to play again', g.lives > 0 ? 'go on' : 'again');
     else if (e.kind === 'over') overlay('Game over', `${g.score.toLocaleString('en-GB')} · F2 or the button to play again`, 'again');
