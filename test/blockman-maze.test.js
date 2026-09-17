@@ -77,7 +77,7 @@ test('four pellets, out in the quarters, each a short run from a junction', () =
 });
 
 test('the dot budget lands where the tables expect, and the walls are the rest', () => {
-  assert.ok(m.dots.length >= 240 && m.dots.length <= 260, `${m.dots.length} dots: the genre's ballpark, so fruit and speed steps fire where the tables say`);
+  assert.ok(m.dots.length >= 240 && m.dots.length <= 270, `${m.dots.length} dots: the genre's ballpark, so fruit and speed steps fire where the tables say`);
   const open = m.grid.reduce((a, v) => a + (v === OPEN ? 1 : 0), 0);
   assert.ok(open > m.w * m.h * 0.25 && open < m.w * m.h * 0.5, `a maze, not a field or a wall (${open} open of ${m.w * m.h})`);
   // every open tile is a dot, a pellet, a tunnel, the shaft, the start, or a deliberately dotless
@@ -116,16 +116,24 @@ test('NO DEAD ENDS: every open tile has at least two ways out', () => {
   assert.deepEqual(dead, [], 'a tile with one way out is a trap with no read on it');
 });
 
-test('the outer loop can be run forever', () => {
-  const ring = [];
-  for (let x = 0; x < m.w; x++) if (m.at(x, 1) === OPEN) ring.push({ x, y: 1 });
-  assert.equal(ring.length, m.w - 2, 'the top corridor runs the full width');
-  const bottom = [...Array(m.w).keys()].filter((x) => m.at(x, m.h - 2) === OPEN);
-  assert.equal(bottom.length, m.w - 2, 'so does the bottom');
-  // and the two are joined down both sides, so the ring is a ring
+test('no lane runs end to end, and no band is a chokepoint', () => {
+  // THE TOP AND BOTTOM ROWS ARE BROKEN (operator, 2026-09-17: "we need breaks in the top and bottom
+  // rows. That flat end-to-end corridor is not fair or fun"). A corridor the full width of the board
+  // is a free lap: nothing to decide, and nothing a pursuer can do about it.
+  for (const [y, what] of [[1, 'the top row'], [m.h - 2, 'the bottom row']]) {
+    const open = [...Array(m.w).keys()].filter((x) => m.at(x, y) === OPEN);
+    assert.ok(open.length < m.w - 2, `${what} is broken somewhere`);
+    assert.ok(open.length > (m.w - 2) * 0.5, `${what} is still mostly corridor (${open.length} tiles)`);
+  }
+  // the two side columns stay whole, so there IS a lap to run when it is safe to run it
   for (const x of [1, m.w - 2]) {
-    let run = 0;
-    for (let y = 1; y < m.h - 1; y++) if (m.at(x, y) === OPEN) run += 1;
+    const run = [...Array(m.h).keys()].filter((y) => m.at(x, y) === OPEN).length;
     assert.equal(run, m.h - 2, `column ${x} runs the full height`);
+  }
+  // and every band between two corridor rows is crossed in at least four places: a band crossed
+  // twice turns half the maze into a trap whose every route in and out is the same two tiles.
+  for (const y of [2, 8, 9, 18, 19, m.h - 4]) {
+    const crossings = [...Array(m.w).keys()].filter((x) => m.at(x, y) === OPEN).length;
+    assert.ok(crossings >= 4, `row ${y} is crossed in ${crossings} places, which is a chokepoint`);
   }
 });

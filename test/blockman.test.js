@@ -556,10 +556,18 @@ test('M6: attract mode plays a plausible game by itself', () => {
   assert.ok(Math.hypot(g.man.x - start.x, g.man.y - start.y) > 3 || g.score > 0, 'it went somewhere');
   assert.ok(g.score > 0, `it ate something (${g.score})`);
   // it refuses a way that walks into a pursuer, and takes one that walks into a frightened one
-  const t = { x: 6, y: 9 };
+  // FOUND, NOT HARDCODED. This named tile (6,9), which the maze redrawn on 2026-09-17 turned into
+  // a wall -- a test about choosing should pick any tile with a choice at it.
+  let t = null;
+  for (let y = 2; y < maze.h - 2 && !t; y++) {
+    for (let x = 2; x < maze.w - 2; x++) {
+      if (exitsFrom(maze, { x, y }, { x: 0, y: 0 }).length >= 3) { t = { x, y }; break; }
+    }
+  }
+  assert.ok(t, 'the maze has a junction in it');
   g.man.x = t.x + 0.5; g.man.y = t.y + 0.5; g.man.dir = DIRS.left;
   const ways = exitsFrom(maze, t, { x: 0, y: 0 });
-  assert.ok(ways.length >= 2, 'a junction to choose at');
+  assert.ok(ways.length >= 2, `a junction to choose at (${t.x},${t.y})`);
   for (const p of g.pursuers) { p.state = 'pen'; }
   const hunter = g.pursuers[0];
   hunter.state = 'chase';
@@ -585,7 +593,7 @@ test('M6: a restart keeps the lives, the difficulty and attract mode the game wa
   assert.equal(g.auto, true, 'attract mode stays on, so a wall screen keeps playing');
   assert.equal(g.score, 0);
   assert.equal(g.level, 1);
-  assert.equal(g.dots.size, 258, 'a full board again');
+  assert.equal(g.dots.size, 264, 'a full board again');
 });
 
 test('M6: an attract game is the same game, played without hands', () => {

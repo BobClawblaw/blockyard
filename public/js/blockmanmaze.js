@@ -17,7 +17,12 @@
 //     lattice of corridors three tiles apart and then has passages CLOSED, one at a time, each
 //     closure kept only if the result still has no dead end, no 2x2 room and nothing cut off --
 //     which is what gives the varied block sizes without the pockets;
-//   * a long outer loop that can be run forever, and enough junctions that it cannot be run safely;
+//   * NO LANE THAT RUNS END TO END. The top and bottom rows are BROKEN -- four breaks across the top,
+//     two across the bottom -- because a corridor the full width of the board is a free lap with
+//     nothing to decide on it (operator, 2026-09-17: "that flat end-to-end corridor is not fair or
+//     fun"). The two side columns stay whole, so there is still a lap to run when it is safe to;
+//   * NO CHOKEPOINTS: every band between two corridor rows is crossed in at least four places, or
+//     half the maze is a trap whose every route in and out runs through the same two tiles;
 //   * left-to-right symmetry, so the maze reads as a picture and neither side is the good side;
 //   * two "no upward turn" tiles above the pen: the cheapest way to make a pursuer commit to a route.
 //
@@ -33,15 +38,15 @@
 //      the pursuers rise out of the pen along the seam -- the 2x2 rule exempts exactly these tiles
 const HALF = Object.freeze([
   '##############',
-  '#.............',
-  '#.############',
-  '#.############',
-  '#o.........###',
-  '#.##.#####.###',
-  '#.##.#####.###',
-  '#.##....##....',
+  '#....##....###',
+  '#.##.##.##.###',
+  '#.##.##.##.###',
+  '#o...##.##....',
   '#.#####.######',
   '#.#####.######',
+  '#..........###',
+  '#.########.###',
+  '#.########.###',
   '#.##....##..^E',
   '#.##.##.##.##E',
   '#.##.##.##.##-',
@@ -50,15 +55,15 @@ const HALF = Object.freeze([
   '#.##.##.##.GGG',
   '#.##.##.##.###',
   '#.##....##...S',
-  '#.#####.####.#',
-  '#.#####.####.#',
-  '#....##.##....',
   '#.##.##.##.###',
   '#.##.##.##.###',
-  '#o##.......###',
-  '#.############',
-  '#.############',
-  '#.............',
+  '#....##....###',
+  '#.########.###',
+  '#.########.###',
+  '#o...##.......',
+  '#.##.##.##.###',
+  '#.##.##.##.###',
+  '#.......##....',
   '##############',
 ]);
 

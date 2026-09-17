@@ -250,7 +250,7 @@ function draw(now = performance.now()) {
   const maze = el('bmMaze'), play = el('bmPlay');
   if (!m || !maze || !play) return;
   const opts = { ...BOARD, gridW: m.w, gridH: m.h };
-  // BUILT ONCE A LEVEL, and once per frame of the level-clear flash: 504 cubes at about 20 ms is
+  // BUILT ONCE A LEVEL, and once per frame of the level-clear flash: 498 cubes at about 20 ms is
   // affordable a few times a second and not affordable sixty times.
   const level = G.game?.level ?? 1;
   const flash = G.game?.phase === 'level' && Math.floor(now / 180) % 2 === 0;

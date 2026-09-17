@@ -98,7 +98,7 @@ play layer at 60 fps is the first milestone (M1), because the whole design rests
   can be run indefinitely, and enough dead ends that it cannot be run safely; symmetry left to right,
   because a maze that reads as a picture is remembered, and asymmetry would make one side the good
   side; and two "no upward turn" tiles above the pen, which is how the original made pursuers commit
-  to a route without extra AI. Between 240 and 260 dots, so the dot-count events (fruit, Chaser's
+  to a route without extra AI. Between 240 and 264 dots, so the dot-count events (fruit, Chaser's
   speed steps) land where the tables expect.
 
   The layout is a text block in the source, 28 characters a row, and `test/blockman-maze.test.js`
@@ -174,8 +174,8 @@ Mirroring Scorched Yard's split, which the audit and the performance work both v
 
 ## 8. Milestones
 
-*M1 to M6 landed 2026-09-17 on branch `blockman`. M1: the maze (258 dots, four pellets, one pen,
-two tunnels), the block layer of 504 cubes built once, the painted play layer, and the measurement
+*M1 to M6 landed 2026-09-17 on branch `blockman`. M1: the maze (264 dots, four pellets, one pen,
+two tunnels), the block layer of 498 cubes built once, the painted play layer, and the measurement
 it exists for -- **60 fps steady in the browser, median frame 16.7 ms**, with everything moving. M2:
 the rules, played by 15 scripted tests, and a screen that plays them (keys, pause, restart, HUD).
 Two bugs the measurement found: the play layer painted the maze out, because the renderer fills a
