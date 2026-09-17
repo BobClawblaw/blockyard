@@ -14,7 +14,7 @@ import { paintRipple, skyBrightness } from './scorchedwind.js';
 import { makeFluid, stepFluid, setSolid, warmFluid, makeTracers, stepTracers, paintTracers } from './scorchedair.js';
 import {
   newGame, current, aim, fire, step, settled, nextRound, cycleWeapon, useItem, drive, landTiles, actorTiles, leader, buy,
-  trajectory, dirtAt, shellLook, simulateShot,
+  trajectory, dirtAt, shellLook, simulateShot, colourFor,
   WEAPONS, WEAPON_ORDER, ITEMS, COLS, ROWS, TANK_W,
 } from './scorched.js';
 import { SHOP } from './scorchedshop.js';
@@ -923,7 +923,7 @@ export function shuffled(list, rnd = Math.random) {
   return a;
 }
 export function players(t = scorchedOptions(loadSettings()), rnd = Math.random) {
-  const list = t.demo ? [] : [{ name: 'You', kind: 'human' }];
+  const list = t.demo ? [] : [{ name: 'You', kind: 'human', colour: colourFor('human') }];
   const seen = {};
   const seats = t.opponents + (t.demo ? 1 : 0);
   let deck = [];
@@ -931,7 +931,7 @@ export function players(t = scorchedOptions(loadSettings()), rnd = Math.random) 
     if (t.opponentKind === 'mix' && deck.length === 0) deck = shuffled(MIX, rnd);
     const kind = t.opponentKind === 'mix' ? deck.shift() : t.opponentKind;
     seen[kind] = (seen[kind] ?? 0) + 1;
-    list.push({ name: seen[kind] > 1 ? `${NAMES[kind] ?? kind} ${seen[kind]}` : (NAMES[kind] ?? kind), kind });
+    list.push({ name: seen[kind] > 1 ? `${NAMES[kind] ?? kind} ${seen[kind]}` : (NAMES[kind] ?? kind), kind, colour: colourFor(kind, seen[kind]) });
   }
   return list;
 }

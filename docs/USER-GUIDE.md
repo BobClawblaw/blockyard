@@ -724,7 +724,8 @@ Scorched Earth, the 1991 DOS artillery game, on the block engine: a landscape of
 craters and falls, tanks that aim by angle and power, wind, and a round that ends when one tank is
 left. Under **Diversions**, after Blockanoid. You play against two computer opponents out of the
 box (**Display settings → Scorched Yard → Computer players** fields up to seven, for the original's
-eight seats; every tank has its own colour).
+eight seats). Every personality has its own colour, so you can see who you are up against; a second
+or third of one kind is a lighter or darker shade of it.
 
 The rules are the original's (docs/PLAN-SCORCHED-YARD.md is the whole plan): the manual's roster
 of thirty-three weapons and eleven accessories at the manual's prices, packs and blast radii,
@@ -792,16 +793,22 @@ to six opponents are all different kinds (a seventh starts a new deal). **Displa
 → Their kind** fields one kind in every seat instead. They are the manual's eight, and they
 behave as it says:
 
-| kind | how it plays |
-|---|---|
-| Moron | picks an angle and a power, and shoots; buys at random |
-| Shooter | takes low, straight shots when it has a line of fire, and shoots like a Moron when it does not |
-| Poolshark | a Shooter, except that under rubber or spring walls it looks for the bank shot too |
-| Tosser | lobs high, then corrects its power from each miss, by halves, until it hits |
-| Chooser | tries the straight shot, the lob and the bank, and takes whichever lands closest |
-| Spoiler | works the shot out from the wind and gravity and is nearly perfect, with a wobble now and then |
-| Cyborg | a Spoiler with a grudge: it fires at whoever hit it last, else at the weakest, else at the leader |
-| Unknown | one of the others, drawn afresh each round and never announced |
+| kind | colour | how it plays |
+|---|---|---|
+| Moron | yellow | picks an angle and a power, and shoots; buys at random |
+| Shooter | blue | takes low, straight shots when it has a line of fire, and shoots like a Moron when it does not; its aim is rough at first and closes in on the same target |
+| Poolshark | cyan | a Shooter, except that under rubber or spring walls it looks for the bank shot too |
+| Tosser | green | lobs high, then corrects its power from each miss, by halves, until it hits |
+| Chooser | purple | tries the straight shot, the lob and the bank, and takes whichever lands closest; a steadier hand than the Shooter's, not a perfect one |
+| Spoiler | red | works the shot out from the wind and gravity and is nearly perfect |
+| Cyborg | pink | a Spoiler with a grudge: it fires at whoever hit it last, else at the weakest, else at the leader |
+| Unknown | grey | one of the others, drawn afresh each round and never announced |
+
+How often each lands its first shot at a target, measured over hundreds of simulated games: the
+Moron and the Tosser about one in twenty, the Shooter and the Poolshark about one in four, the
+Chooser about two in five, and the Spoiler and the Cyborg about four in five. The Shooter, the
+Poolshark, the Chooser, the Spoiler and the Cyborg aim better with each shot at the same target and
+start afresh each round; the Tosser corrects in its own way. You are orange.
 
 All but the Moron use a battery when hurt and raise a shield before firing, and each shops to its
 own taste between rounds: Shooters buy missiles, Tossers MIRVs and Funky Bombs, Cyborgs the

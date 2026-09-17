@@ -77,6 +77,48 @@ function pickWeapon(tank, target, { thrifty = false } = {}) {
   return owned.sort((a, b) => WEAPONS[b].damage - WEAPONS[a].damage)[0];
 }
 
+// ------------------------------------------------------------------- the aim, as a person aims
+/**
+ * HOW WELL EACH OF THEM AIMS (operator, 2026-09-17: "Chooser and Shoot are both too fucking accurate").
+ * The search above finds the shot the physics says lands closest, and the Shooter and the Chooser
+ * fired exactly that: measured over 200 games, the Shooter hit with 60% of its first shots (every
+ * miss was a game with no low line of fire) and the Chooser with 95%, more than the Spoiler the
+ * manual calls the one that "gets a perfect shot almost every time". So each personality now
+ * aims the way a person does: the found angle and power, off by an error drawn from the game's own
+ * stream. The error grows with the distance to the target and shrinks with every shot at the same
+ * target, down to a floor, so they close in on you instead of starting perfect.
+ *
+ *   angle   standard deviation of the angle error, degrees, at middle distance
+ *   power   standard deviation of the power error, as a fraction of the power
+ *   learn   how much of the error each earlier shot at this target removes
+ *   floor   the least of the error that remains, however many shots
+ *
+ * Tuned by simulation to first-shot hit rates of about 5% Moron and Tosser, 25-30% Shooter and
+ * Poolshark, 40% Chooser and 85% Spoiler and Cyborg (test/scorched.test.js holds the bands).
+ */
+export const AIM = Object.freeze({
+  shooter:   Object.freeze({ angle: 3.5, power: 0.07, learn: 0.22, floor: 0.35 }),
+  poolshark: Object.freeze({ angle: 3.5, power: 0.07, learn: 0.22, floor: 0.35 }),
+  chooser:   Object.freeze({ angle: 2.9, power: 0.055, learn: 0.25, floor: 0.3 }),
+  spoiler:   Object.freeze({ angle: 0.5, power: 0.008, learn: 0.3, floor: 0.4 }),
+});
+function gauss(rnd) {
+  let u = 0;
+  while (u === 0) u = rnd();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rnd());
+}
+/** `shot` as this tank would really fire it at `target`, with its personality's error; counts the shot. */
+export function aimed(g, tank, target, shot, profile, rnd = g.rnd) {
+  if (!profile) return shot;
+  const dist = Math.abs(centreX(target) - centreX(tank)) / COLS;               // 0 .. 1
+  const before = tank.aimAt?.target === target.id ? tank.aimAt.shots : 0;
+  tank.aimAt = { target: target.id, shots: before + 1 };
+  const scale = (0.5 + dist) * Math.max(profile.floor, 1 - profile.learn * before);
+  const angle = Math.max(0, Math.min(180, shot.angle + gauss(rnd) * profile.angle * scale));
+  const power = Math.max(50, Math.min(1000, Math.round(shot.power * (1 + gauss(rnd) * profile.power * scale))));
+  return { ...shot, angle, power };
+}
+
 // ------------------------------------------------------------------- the personalities
 /** The Moron: "pick an angle and power, and shoot". Whatever it happens to own. */
 export function moron(g, tank, rnd = g.rnd) {
@@ -98,7 +140,7 @@ export function shooter(g, tank, rnd = g.rnd) {
   if (!target) return moron(g, tank, rnd);
   const best = solve(g, tank, target, [12, 20, 28, 36], 25);
   if (!best || best.miss > 12) return { ...moron(g, tank, rnd), weapon: 'babyMissile', fallback: true };   // no line of fire: a Moron's shot
-  return { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target, { thrifty: best.miss > 4 }) };
+  return aimed(g, tank, target, { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target, { thrifty: best.miss > 4 }) }, AIM.shooter, rnd);
 }
 
 /** The Poolshark: a Shooter, unless the walls rebound -- then it looks for the bank shot as well. */
@@ -111,7 +153,7 @@ export function poolshark(g, tank, rnd = g.rnd) {
   const bank = solve(g, tank, target, [110, 125, 140, 155], 25);
   const best = [direct, bank].filter(Boolean).sort((a, b) => a.miss - b.miss)[0];
   if (!best || best.miss > 12) return { ...moron(g, tank, rnd), weapon: 'babyMissile', fallback: true };
-  return { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target, { thrifty: best.miss > 4 }) };
+  return aimed(g, tank, target, { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target, { thrifty: best.miss > 4 }) }, AIM.poolshark, rnd);
 }
 
 /**
@@ -147,7 +189,7 @@ export function chooser(g, tank, rnd = g.rnd) {
   const bank = (g.walls === 'rubber' || g.walls === 'spring') ? solve(g, tank, target, [115, 135, 155], 25) : null;
   const best = [low, lob, bank].filter(Boolean).sort((a, b) => a.miss - b.miss)[0];
   if (!best) return moron(g, tank, rnd);
-  return { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target) };
+  return aimed(g, tank, target, { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target) }, AIM.chooser, rnd);
 }
 
 /** The Spoiler: "taking into account the wind factor and gravity, they will get a perfect shot almost every time". */
@@ -156,9 +198,8 @@ export function spoiler(g, tank, rnd = g.rnd, target = nearest(g, tank)) {
   const coarse = solve(g, tank, target, [15, 25, 35, 45, 55, 65, 75], 20);
   const best = coarse ? refine(g, tank, target, coarse) : null;
   if (!best) return moron(g, tank, rnd);
-  // "almost": a degree or two of error, drawn from the game's own stream
-  const wobble = rnd() < 0.15 ? (rnd() - 0.5) * 4 : 0;
-  return { angle: Math.max(0, Math.min(180, best.angle + wobble)), power: best.power, weapon: pickWeapon(tank, target) };
+  // "almost": a small error, drawn from the game's own stream, that tightens as it keeps firing at you
+  return aimed(g, tank, target, { angle: best.angle, power: best.power, weapon: pickWeapon(tank, target) }, AIM.spoiler, rnd);
 }
 
 /** The Cyborg: a Spoiler that "attacks tanks who are weakened, winning, or have attacked them". */

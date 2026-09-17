@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   COLS, ROWS, WEAPONS, WEAPON_ORDER, ITEMS, START_INVENTORY, START_CASH, TANK_W, TANK_H, MAX_HEALTH, V_MAX, GRAVITY, MAX_STEP, DEATH_BLAST,
-  newGame, generateLand, topOf, dirtAt, current, alive, aim, fire, step, settled, explode, settleDirt, landTanks, nextTurn, nextRound,
+  newGame, startRound, generateLand, topOf, dirtAt, current, alive, aim, fire, step, settled, explode, settleDirt, landTanks, nextTurn, nextRound,
   cycleWeapon, muzzle, trajectory, tiles, landTiles, leader, rng, useItem, drive, buy, applyDamage, raiseShield, addDirt,
-  simulateShot, PERSONALITIES, TANK_COLOURS, SHELL_LOOKS, shellLook,
+  simulateShot, PERSONALITIES, TANK_COLOURS, PERSONA_COLOURS, colourFor, SHELL_LOOKS, shellLook,
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
@@ -715,7 +715,10 @@ test('the personalities: the Spoiler and the Cyborg land on their target, the Ch
   // the Cyborg picks its own target (the leader, here), so its miss is measured against whichever tank it chose
   const cyborgMisses = [1, 2, 3, 4, 5, 6].map((seed) => { const { g, t } = seatAI('cyborg', seed); const d = cyborg(g, t); const r = simulateShot(g, t, d.angle, d.power); return r.hit != null && r.hit !== t.id ? 0 : Math.min(...g.tanks.filter((k) => k !== t).map((k) => Math.abs(r.x - (k.x + TANK_W / 2)))); });
   assert.ok(cyborgMisses.filter((m) => m <= 1.5).length >= 5, `so is the Cyborg (${cyborgMisses.map((m) => m.toFixed(1)).join(', ')})`);
-  const chooserMisses = hits(chooser, [1, 2, 3, 4, 5, 6]);
+  // the Chooser's SEARCH finds a line most of the time; how well it then aims is the next test's.
+  // A stream of 0.25 draws no aim error at all (the normal draw is cos(2π·0.25) = 0).
+  const exact = () => 0.25;
+  const chooserMisses = hits((g, t) => chooser(g, t, exact), [1, 2, 3, 4, 5, 6]);
   assert.ok(chooserMisses.filter((m) => m <= 3).length >= 4, `the Chooser finds a line most of the time (${chooserMisses.map((m) => m.toFixed(1)).join(', ')})`);
   const moronMisses = hits(moron, [1, 2, 3, 4, 5, 6]);
   assert.ok(moronMisses.filter((m) => m > 3).length >= 4, `the Moron mostly misses (${moronMisses.map((m) => m.toFixed(1)).join(', ')})`);
@@ -735,10 +738,10 @@ test('the personalities: the Spoiler and the Cyborg land on their target, the Ch
   assert.ok(Math.min(...misses.slice(1)) < Math.max(misses[0], 2), `it corrects (${misses.map((m) => m.toFixed(1)).join(' -> ')})`);
   // the Poolshark banks off a rubber wall when that is the better line, and plays a Shooter otherwise
   const bank = seatAI('poolshark', 11, { walls: 'rubber' });
-  const db = poolshark(bank.g, bank.t);
+  const db = poolshark(bank.g, bank.t, exact);
   assert.ok(missOf(bank.g, bank.t, bank.target, db) <= 3, 'a line, off the wall or not');
   const wall = seatAI('poolshark', 11, { walls: 'concrete' });
-  const pw = poolshark(wall.g, wall.t), sw = shooter(wall.g, wall.t);
+  const pw = poolshark(wall.g, wall.t, exact), sw = shooter(wall.g, wall.t, exact);
   if (!pw.fallback && !sw.fallback) assert.deepEqual(pw, sw, 'no rebound to play: a Shooter');
   else assert.equal(!!pw.fallback, !!sw.fallback, 'both without a line of fire');
   // the Cyborg's grudge: whoever hit it last is the target
@@ -876,6 +879,42 @@ test('scorched yard: attract mode fields no human', () => {
   assert.equal(scorchedOptions(normalise({ scorched: { demo: true } })).demo, true);
 });
 
+// HOW WELL THEY AIM (operator, 2026-09-17: "Chooser and Shoot are both too fucking accurate"): the
+// Shooter hit with 60% of its first shots and the Chooser with 95%, as often as the Spoiler. Each now
+// aims with its personality's error (scorchedai.js AIM), and the manual's ladder holds.
+test('scorched yard: the personalities aim from Moron to Spoiler, and tighten at the same target', () => {
+  const N = 60;
+  const rate = (kind, fn, shots = 1) => {
+    const hit = new Array(shots).fill(0);
+    for (let i = 0; i < N; i++) {
+      const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind }, { name: 'B', kind: 'tosser' }], { rounds: 1, walls: 'none', wind: 'round', seed: 7000 + i });
+      const t = g.tanks[1];
+      for (let s = 0; s < shots; s++) {
+        const d = fn(g, t);
+        const r = simulateShot(g, t, d.angle, d.power);
+        if (r.hit != null && r.hit !== t.id) hit[s] += 1;
+      }
+    }
+    return hit.map((h) => h / N);
+  };
+  const [mo] = rate('moron', moron), [sh] = rate('shooter', shooter), [ch] = rate('chooser', chooser), [sp] = rate('spoiler', spoiler);
+  const shown = `Moron ${mo.toFixed(2)}, Shooter ${sh.toFixed(2)}, Chooser ${ch.toFixed(2)}, Spoiler ${sp.toFixed(2)}`;
+  assert.ok(mo <= 0.15, `the Moron mostly misses (${shown})`);
+  assert.ok(sh >= 0.1 && sh <= 0.45, `the Shooter hits now and then (${shown})`);
+  assert.ok(ch >= 0.25 && ch <= 0.65, `the Chooser about half as often as the Spoiler (${shown})`);
+  assert.ok(sp >= 0.7, `the Spoiler almost every time (${shown})`);
+  assert.ok(mo < sh && sh < ch && ch < sp, `in the manual's order (${shown})`);
+  const shooterRun = rate('shooter', shooter, 3);
+  assert.ok(shooterRun[2] > shooterRun[0], `the Shooter closes in on the same target (${shooterRun.map((x) => x.toFixed(2)).join(' -> ')})`);
+  // the error is counted per target and forgotten at a new round
+  const g = newGame([{ name: 'You', kind: 'human' }, { name: 'A', kind: 'spoiler' }], { seed: 3, walls: 'none', rounds: 3 });
+  const t = g.tanks[1];
+  spoiler(g, t); spoiler(g, t);
+  assert.deepEqual(t.aimAt, { target: 0, shots: 2 }, 'two shots at You');
+  startRound(g);
+  assert.equal(t.aimAt, null, 'a new round starts its aim afresh');
+});
+
 // THE MIX IS SHUFFLED EACH GAME (operator, 2026-09-17: "the enemies I play against in Scorched Yard
 // are always the same and never randomized"): it used to be Shooter and Tosser in every game.
 test('scorched yard: the mix deals its opponents in a new order every game', () => {
@@ -899,6 +938,16 @@ test('scorched yard: the mix deals its opponents in a new order every game', () 
   assert.deepEqual(six.map((p) => p.kind).sort(), [...pool].sort());
   const seven = players({ ...base, opponents: 7 }).filter((p) => p.kind !== 'human');
   assert.equal(new Set(seven.map((p) => p.name)).size, 7);
+  // A COLOUR FOR EACH PERSONALITY (operator, 2026-09-17): the colour says who you face, not which seat
+  for (let i = 0; i < 20; i++) {
+    for (const p of players({ ...base, opponents: 6 })) assert.equal(p.colour, PERSONA_COLOURS[p.kind], `${p.name} wears its kind's colour`);
+  }
+  assert.equal(new Set(Object.values(PERSONA_COLOURS)).size, Object.keys(PERSONA_COLOURS).length, 'every kind, You and the Unknown their own');
+  assert.ok(PERSONALITIES.every((k) => PERSONA_COLOURS[k]), 'all eight of the manual');
+  const trio = players({ opponents: 3, opponentKind: 'spoiler', demo: false }).map((p) => p.colour);
+  assert.equal(new Set(trio).size, 4, 'a second and third of one kind are shades of its colour, told apart');
+  assert.equal(trio[1], PERSONA_COLOURS.spoiler);
+  assert.match(colourFor('spoiler', 2), /^#[0-9a-f]{6}$/);
   // a named kind still fills every seat, unshuffled
   assert.deepEqual(players({ opponents: 2, opponentKind: 'cyborg', demo: false }).map((p) => p.name), ['You', 'Cyborg', 'Cyborg 2']);
   // shuffled() keeps every element and leaves its input alone

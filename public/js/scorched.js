@@ -34,6 +34,25 @@ const UNKNOWN_POOL = Object.freeze(['moron', 'shooter', 'poolshark', 'tosser', '
 // EIGHT SEATS, EIGHT COLOURS (operator, 2026-09-16: "I would like to add up to 8 players total like
 // the original"). Distinct at a glance on dirt, and none of them the dirt's own browns.
 export const TANK_COLOURS = Object.freeze(['#f7931a', '#4d8dff', '#2ecc8f', '#ef5a5a', '#c78bff', '#f0c419', '#32d4e0', '#ff86b8']);
+// A COLOUR FOR EACH PERSONALITY (operator, 2026-09-17: "assign a color to each personality"). A tank
+// used to take its colour from its seat, so the first opponent was blue and the second green whatever
+// played there. Now the colour says who you are up against: you are BlockYard orange, and each of
+// the manual's eight has its own. The Unknown has one too, so its colour gives nothing away about
+// the personality it draws each round. A second or third of one kind is a lighter, then a darker,
+// shade of the same colour.
+export const PERSONA_COLOURS = Object.freeze({
+  human: '#f7931a', moron: '#f0c419', shooter: '#4d8dff', poolshark: '#32d4e0', tosser: '#2ecc8f',
+  chooser: '#c78bff', spoiler: '#ef5a5a', cyborg: '#ff86b8', unknown: '#b7c0cc',
+});
+const mixHex = (hex, to, k) => `#${[1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - k) + to * k).toString(16).padStart(2, '0')).join('')}`;
+/** The colour of the `nth` tank (1 = the first) of a kind: its own colour, then shades of it. */
+export function colourFor(kind, nth = 1) {
+  const base = PERSONA_COLOURS[kind] ?? TANK_COLOURS[0];
+  if (nth <= 1) return base;
+  const shades = [[255, 0.35], [0, 0.35], [255, 0.6], [0, 0.55], [255, 0.8], [0, 0.7]];
+  const [to, k] = shades[(nth - 2) % shades.length];
+  return mixHex(base, to, k);
+}
 export const MAX_PLAYERS = 8;
 export const MAX_HEALTH = 100;
 export const V_MAX = 56;              // cells/s at power 1000
@@ -192,6 +211,7 @@ export function newGame(players, opts = {}) {
       kills: 0, score: 0, cash: Number.isFinite(opts.cash) ? opts.cash : START_CASH, damageDealt: 0,
       lastHitBy: null,                    // who hurt this tank last (the Cyborg holds a grudge)
       memory: null,                       // a computer player's last shot at its target, for correcting
+      aimAt: null,                        // a computer player's shots so far at one target: its aim tightens (scorchedai.js AIM)
       persona: p.kind ?? 'human',         // what an Unknown is playing as this round
     })),
     round: 1, rounds: Math.max(1, Math.round(opts.rounds ?? 5)),
@@ -216,7 +236,7 @@ export function startRound(g) {
   placeTanks(g);
   for (const t of g.tanks) {
     t.health = MAX_HEALTH; t.alive = true; t.shield = null; t.armed = { contactTrigger: false, heatGuidance: false };
-    t.lastHitBy = null; t.memory = null;
+    t.lastHitBy = null; t.memory = null; t.aimAt = null;
     // an Unknown is one of the others, drawn each round and never announced (the manual)
     t.persona = t.kind === 'unknown' ? UNKNOWN_POOL[Math.floor(g.rnd() * UNKNOWN_POOL.length)] : t.kind;
   }
