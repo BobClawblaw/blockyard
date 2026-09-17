@@ -174,12 +174,18 @@ Mirroring Scorched Yard's split, which the audit and the performance work both v
 
 ## 8. Milestones
 
-*M1 and M2 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
+*M1, M2 and M3 landed 2026-09-17 on branch `blockman`. M1: the maze (250 dots, four pellets, one pen,
 two tunnels), the block layer of 262 cubes built once, the painted play layer, and the measurement
 it exists for -- **60 fps steady in the browser, median frame 16.7 ms**, with everything moving. M2:
 the rules, played by 15 scripted tests, and a screen that plays them (keys, pause, restart, HUD).
 Two bugs the measurement found: the play layer painted the maze out, because the renderer fills a
-board's canvas before drawing; and a dot under a stopped BlockMan was never eaten.*
+board's canvas before drawing; and a dot under a stopped BlockMan was never eaten. M3: the four
+targets, the junction choice, the scatter/chase waves with their reversal, the pen's dot counters
+and idle timer, Chaser's two speed steps, and cheat mode (T) ringing each target. Three more bugs,
+all found by the tests: the pen's gate was a wall to the pursuers as well as to him, so Chaser
+began level one inside a wall; a reversal was undone at the junction it happened on; and a
+quarter-tile step could skip a junction, which sent an Ambusher into the wall above the shaft. The
+pursuers now stop on every tile centre and decide there, and they have a grid of their own.*
 
 
 1. **M1 — the play layer, measured.** A static maze block layer plus 240 painted dots and five
