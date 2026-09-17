@@ -75,6 +75,10 @@ export function parseMaze(half = HALF) {
   const rows = mazeRows(half);
   const h = rows.length, w = rows[0].length;
   const grid = new Uint8Array(w * h);
+  // THE PEN AND ITS GATE ARE SOLID TO BLOCKMAN AND OPEN TO THE PURSUERS (2026-09-17, M3): they come
+  // out through the gate and an eaten one goes back in, and he can do neither. So the maze carries
+  // two grids -- his, and theirs -- rather than one with a special case at every call site.
+  const gridG = new Uint8Array(w * h);
   const dots = [], pellets = [], tunnels = [], pen = [], noUp = [], exit = [];
   const starts = [];
   let gate = null;
@@ -83,6 +87,7 @@ export function parseMaze(half = HALF) {
       const c = rows[y][x];
       const solid = c === '#' || c === 'G' || c === '-';
       grid[y * w + x] = solid ? WALL : OPEN;
+      gridG[y * w + x] = (solid && c !== 'G' && c !== '-') ? WALL : OPEN;
       if (c === '.') dots.push({ x, y });
       else if (c === 'o') pellets.push({ x, y });
       else if (c === 'T') tunnels.push({ x, y });
@@ -100,10 +105,12 @@ export function parseMaze(half = HALF) {
   const penXs = pen.length ? pen.map((p) => p.x) : [];
   const door = pen.length ? { x: (Math.min(...penXs) + Math.max(...penXs) + 1) / 2, y: penTop } : null;
   return {
-    w, h, grid, rows, dots, pellets, tunnels, pen, gate, door, noUp, exit,
+    w, h, grid, gridG, rows, dots, pellets, tunnels, pen, gate, door, noUp, exit,
     // the mirror writes S twice, one either side of the seam: the start is between them
     start: starts.length ? { x: starts.reduce((a, s2) => a + s2.x, 0) / starts.length + 0.5, y: starts[0].y } : (door ? { x: door.x, y: door.y + 6 } : { x: 1, y: 1 }),
     at: (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? WALL : grid[y * w + x]),
+    /** The same question for a pursuer, which may cross the pen and its gate. */
+    atG: (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? WALL : gridG[y * w + x]),
   };
 }
 

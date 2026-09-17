@@ -12,7 +12,7 @@
 //     which is what Scorched Yard does for shells and blasts.
 import { board3d } from './details3d.js';
 import { parseMaze, OPEN } from './blockmanmaze.js';
-import { paintDots, paintBlockMan, paintPursuers, paintPops } from './blockmanfx.js';
+import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets } from './blockmanfx.js';
 import { newGame, stepGame, restart, remaining, DIRS } from './blockman.js';
 
 const WALL_COLOUR = '#2a3ac8';          // the maze's own blue; one colour a level later (M5)
@@ -29,7 +29,7 @@ const BOARD = {
 
 const G = {
   maze: null, game: null, board: { dots: [], pellets: [] }, pops: [],
-  raf: null, last: 0, mazeKey: null, paused: false, bound: false,
+  raf: null, last: 0, mazeKey: null, paused: false, bound: false, targets: false,
   frames: 0, frameMs: [], paintNow: 0,
   h: null, state: null,
 };
@@ -94,12 +94,21 @@ function onKey(e) {
   if (e.key === 'p' || e.key === 'P') { G.paused = !G.paused; overlay(G.paused ? 'Paused' : null, 'P to go on', 'go on'); e.preventDefault(); }
   else if (e.key === 'F2') { if (G.game) restart(G.game); else start(); G.paused = false; refreshBoard(); overlay(null); e.preventDefault(); }
   else if (e.key === 'Enter' && (!G.game || G.game.phase === 'over')) { start(); e.preventDefault(); }
+  else if (e.key === 't' || e.key === 'T') { setTargets(!G.targets); e.preventDefault(); }
+}
+
+/** Cheat mode: draw each pursuer's target tile. The switch and the T key are the same thing. */
+export function setTargets(on) {
+  G.targets = !!on;
+  const b = typeof document === 'undefined' ? null : el('bmTargets');   // the tests have no DOM
+  if (b) { b.setAttribute('aria-pressed', String(G.targets)); b.classList.toggle('on', G.targets); }
 }
 
 function bind() {
   if (G.bound) return;
   G.bound = true;
   document.addEventListener('keydown', onKey);
+  el('bmTargets')?.addEventListener('click', () => setTargets(!G.targets));
   el('bmResume')?.addEventListener('click', () => {
     if (!G.game || G.game.phase === 'over') start();
     else { G.paused = false; overlay(null); }
@@ -117,6 +126,7 @@ function paintPlay(ctx, view, hx) {
   paintDots(ctx, P, U, { dots: G.board.dots, pellets: G.board.pellets, now: G.paintNow });
   if (!g) return;
   paintPursuers(ctx, P, U, g.pursuers.filter((p) => p.state !== 'pen' || true), { now: G.paintNow });
+  if (G.targets) paintTargets(ctx, P, U, g.pursuers);
   if (g.phase !== 'dying' || Math.floor(G.paintNow / 120) % 2 === 0) paintBlockMan(ctx, P, U, g.man, { now: G.paintNow });
   paintPops(ctx, P, U, G.pops, G.paintNow);
 }
@@ -190,6 +200,7 @@ export function renderBlockMan(s, state, h) {
   G.state = state; G.h = h;
   if (!G.maze) G.maze = parseMaze();
   bind();
+  setTargets(G.targets);
   const wrap = el('bmWrap');
   if (wrap) wrap.classList.toggle('idle', !G.game);
   if (!G.game) overlay('BlockMan', 'clear the maze, keep away from the four: ← → ↑ ↓ or WASD to turn, P pauses, F2 starts again. Enter or the button to play.', 'play');

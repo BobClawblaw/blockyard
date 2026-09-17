@@ -40,7 +40,32 @@ const key = (x, y) => `${x},${y}`;
 const tileOf = (a) => ({ x: Math.floor(a.x), y: Math.floor(a.y) });
 const centred = (a, tol = 0.08) => Math.abs(a.x - (Math.floor(a.x) + 0.5)) < tol && Math.abs(a.y - (Math.floor(a.y) + 0.5)) < tol;
 
-/** The four pursuers: their names, colours and scatter corners. Their rules arrive in M3. */
+// THE WAVES (M3). Scatter, then chase, alternating; the scatter periods shorten by level until the
+// chase is permanent. Ours, in the shape the genre uses: the numbers are what makes level 1 a
+// stroll and level 15 a hunt, and they are tuned by play rather than copied.
+export function wavesFor(level) {
+  const k = Math.max(0.25, 1 - (level - 1) * 0.06);
+  return Object.freeze([
+    { mode: 'scatter', ms: Math.round(7000 * k) },
+    { mode: 'chase', ms: 20_000 },
+    { mode: 'scatter', ms: Math.round(7000 * k) },
+    { mode: 'chase', ms: 20_000 },
+    { mode: 'scatter', ms: Math.round(5000 * k) },
+    { mode: 'chase', ms: 20_000 },
+    { mode: 'scatter', ms: Math.round(5000 * k) },
+    { mode: 'chase', ms: Infinity },
+  ]);
+}
+
+// CHASER SPEEDS UP AS THE BOARD EMPTIES, in two steps: the genre's "cruise" behaviour, and the
+// reason a nearly-clear level is frantic rather than a victory lap.
+export const ELROY = Object.freeze([{ left: 20, gain: 1.05 }, { left: 10, gain: 1.11 }]);
+
+// WHEN EACH ONE LEAVES THE PEN: its own dot counter, and a timer in case BlockMan stops eating.
+export const PEN_DOTS = Object.freeze({ chaser: 0, ambusher: 0, flanker: 30, wanderer: 60 });
+export const PEN_IDLE_MS = 4000;
+
+/** The four pursuers: their names, colours and scatter corners. */
 export const PURSUERS = Object.freeze([
   Object.freeze({ id: 'chaser', name: 'Chaser', colour: '#ef4b4b', corner: { x: 26, y: 1 } }),
   Object.freeze({ id: 'ambusher', name: 'Ambusher', colour: '#ff8ccf', corner: { x: 1, y: 1 } }),
@@ -71,25 +96,45 @@ function rng(seed) {
 export function place(g) {
   const m = g.maze;
   g.man = { x: m.start.x, y: m.start.y + 0.5, dir: DIRS.left, want: null, stopped: false, eatMs: 0 };
+  // WHERE THEY START, AND IT HAS TO BE A TILE THEY MAY STAND ON (2026-09-17). The first cut put
+  // Chaser at the door's height minus a tile and a half, which is the wall beside the shaft: it
+  // began every level inside a wall and walked out through it. Chaser starts in the shaft above the
+  // pen, the other three inside the pen, all of which are theirs to cross (gridG).
+  const shaftTop = m.exit.length ? Math.min(...m.exit.map((t) => t.y)) : m.door.y - 2;
+  const penRow = m.door.y + 1;
+  const seats = [
+    { x: m.door.x, y: shaftTop + 0.5 },
+    { x: m.door.x, y: penRow + 0.5 },
+    { x: m.door.x - 1.5, y: penRow + 0.5 },
+    { x: m.door.x + 1.5, y: penRow + 0.5 },
+  ];
   g.pursuers = PURSUERS.map((p, i) => ({
     ...p,
-    x: m.door.x + (i - 1.5) * 1, y: m.door.y + (i === 0 ? -1.5 : 1.5),
+    x: seats[i].x, y: seats[i].y,
     dir: i === 0 ? DIRS.left : (i % 2 ? DIRS.right : DIRS.left),
-    state: i === 0 ? 'chase' : 'pen', patrol: i, frightenedLeftMs: 0,
+    // Chaser starts outside; the others wait for their dot counter (PEN_DOTS) or the idle timer
+    state: PEN_DOTS[p.id] === 0 && i === 0 ? 'scatter' : 'pen',
+    patrol: i, frightenedLeftMs: 0, penMs: 0, target: null,
   }));
+  g.wave = 0; g.waveMs = wavesFor(g.level)[0].ms; g.mode = 'scatter'; g.sinceDotMs = 0;
 }
 
 const free = (m, x, y) => m.at(((x % m.w) + m.w) % m.w, y) === OPEN;
+// A PURSUER'S OWN IDEA OF FREE: the pen and its gate are open to it and solid to him
+// (blockmanmaze.js keeps the second grid). Chaser began level one inside the wall beside the shaft
+// before this existed, and walked out through it.
+const freeG = (m, x, y) => m.atG(((x % m.w) + m.w) % m.w, y) === OPEN;
 const wrap = (m, a) => { if (a.x < 0) a.x += m.w; else if (a.x >= m.w) a.x -= m.w; };
 const opposite = (a, b) => a && b && a.x === -b.x && a.y === -b.y;
 
 /** The ways out of a tile, in the genre's tie-break order, never straight back. */
-export function exitsFrom(m, tile, dir, { noUp = null } = {}) {
+export function exitsFrom(m, tile, dir, { noUp = null, ghost = false } = {}) {
   const banUp = noUp?.has?.(key(tile.x, tile.y));
+  const open = ghost ? freeG : free;                 // `ghost` is a pursuer: the pen is its own
   return DIR_LIST.filter((d) => {
     if (opposite(d, dir)) return false;
     if (banUp && d === DIRS.up) return false;
-    return free(m, tile.x + d.x, tile.y + d.y);
+    return open(m, tile.x + d.x, tile.y + d.y);
   });
 }
 
@@ -118,10 +163,12 @@ export function stepGame(g, dtMs, { input = null } = {}) {
     for (const p of g.pursuers) {
       if (p.state === 'frightened') {
         p.frightenedLeftMs = g.frightenedMs;
-        if (!g.frightenedMs) { p.state = 'chase'; g.chain = 0; }
+        if (!g.frightenedMs) { p.state = g.mode; g.chain = 0; }
       }
     }
   }
+  waves(g, dt);
+  g.sinceDotMs = (g.sinceDotMs ?? 0) + dt;
   moveMan(g, dt);
   for (const p of g.pursuers) movePursuer(g, p, dt);
   contact(g);
@@ -147,6 +194,75 @@ function tryTurn(g, man) {
   man.dir = d; man.want = null;
   if (d.x) man.y = tile.y + 0.5; else man.x = tile.x + 0.5;
   return true;
+}
+
+/**
+ * SCATTER AND CHASE (M3). The wave runs the clock only while they are chasing: a pellet's fright
+ * pauses it, as the genre does, so a long fright does not eat a whole chase. On a change of wave
+ * every pursuer outside the pen turns round where it stands -- that reversal is the tell that the
+ * wave changed, and it is what gives a player the moment to escape a corner.
+ */
+function waves(g, dt) {
+  if (g.frightenedMs > 0) return;
+  const table = wavesFor(g.level);
+  const w = table[Math.min(g.wave, table.length - 1)];
+  g.waveMs -= dt;
+  if (g.waveMs > 0) { g.mode = w.mode; return; }
+  g.wave = Math.min(g.wave + 1, table.length - 1);
+  const next = table[g.wave];
+  g.mode = next.mode;
+  g.waveMs = next.ms;
+  for (const p of g.pursuers) {
+    if (p.state === 'pen' || p.state === 'eaten' || p.state === 'frightened') continue;
+    p.state = next.mode;
+    p.dir = { x: -p.dir.x, y: -p.dir.y };
+    p.turnedBy = 'wave'; p.justReversed = true;
+  }
+  g.events.push({ kind: 'wave', mode: next.mode, wave: g.wave });
+}
+
+/**
+ * WHERE EACH ONE IS HEADED. One rule each, and the whole difference between them (§4):
+ *   Chaser    straight at BlockMan's tile.
+ *   Ambusher  four tiles ahead of him, the way he is facing.
+ *   Flanker   the point twice as far as Chaser's line through two tiles ahead of him: it comes
+ *             round the other side, and it is the one that traps a player in a corridor.
+ *   Wanderer  at him while more than eight tiles away, to its own corner once closer -- so it
+ *             drifts off exactly when it would have been dangerous.
+ * Scattering, each heads for its own corner. Frightened, it has no target and wanders.
+ */
+export function targetFor(g, p) {
+  const man = g.man, tile = tileOf(man);
+  if (p.state === 'scatter') return { ...p.corner };
+  if (p.state === 'eaten') return { x: Math.floor(g.maze.door.x), y: g.maze.door.y + 1 };
+  if (p.state === 'frightened' || p.state === 'pen') return null;
+  const ahead = (n) => ({ x: tile.x + man.dir.x * n, y: tile.y + man.dir.y * n });
+  if (p.id === 'chaser') return { ...tile };
+  if (p.id === 'ambusher') return ahead(4);
+  if (p.id === 'flanker') {
+    const a = ahead(2), chaser = g.pursuers.find((q) => q.id === 'chaser');
+    const c = chaser ? tileOf(chaser) : { ...tile };
+    return { x: a.x * 2 - c.x, y: a.y * 2 - c.y };
+  }
+  // Wanderer
+  const dx = tile.x - Math.floor(p.x), dy = tile.y - Math.floor(p.y);
+  return Math.hypot(dx, dy) > 8 ? { ...tile } : { ...p.corner };
+}
+
+/** The exit that ends up nearest the target, ties broken up, left, down, right (exitsFrom's order). */
+export function chooseExit(m, tile, dir, target, opts = {}) {
+  const exits = exitsFrom(m, tile, dir, opts);
+  if (!exits.length) return null;
+  if (!target) return exits[0];
+  let best = null, bestD = Infinity;
+  for (const d of exits) {
+    const nx = tile.x + d.x, ny = tile.y + d.y;
+    // the tunnel wraps, so the near way round is the one that counts
+    const ddx = Math.min(Math.abs(target.x - nx), m.w - Math.abs(target.x - nx));
+    const dd = ddx * ddx + (target.y - ny) * (target.y - ny);
+    if (dd < bestD) { bestD = dd; best = d; }
+  }
+  return best;
 }
 
 function moveMan(g, dt) {
@@ -186,6 +302,7 @@ function eat(g, tile) {
   if (g.dots.delete(k)) {
     g.score += SCORE.dot;
     g.eaten += 1;
+    g.sinceDotMs = 0;
     g.man.eatMs = EAT_PENALTY_MS;
     g.events.push({ kind: 'dot', x: tile.x, y: tile.y, left: g.dots.size + g.pellets.size });
     extraLife(g);
@@ -194,6 +311,7 @@ function eat(g, tile) {
   if (g.pellets.delete(k)) {
     g.score += SCORE.pellet;
     g.eaten += 1;
+    g.sinceDotMs = 0;
     g.chain = 0;
     g.frightenedMs = frightenedMsFor(g.level);
     for (const p of g.pursuers) {
@@ -201,7 +319,7 @@ function eat(g, tile) {
         p.state = 'frightened';
         p.frightenedLeftMs = g.frightenedMs;
         p.dir = { x: -p.dir.x, y: -p.dir.y };                 // a pellet turns them round
-        p.turnedBy = 'pellet';                                // and says so, for the tests
+        p.turnedBy = 'pellet'; p.justReversed = true;        // and says so, for the tests
       }
     }
     g.events.push({ kind: 'pellet', x: tile.x, y: tile.y, ms: g.frightenedMs });
@@ -222,39 +340,84 @@ function extraLife(g) {
   }
 }
 
-// M2: THE PURSUERS WALK A PATROL. Their four rules are M3's; until then each takes the first way out
-// in a fixed rotation, which is enough to make them move through the maze, leave the pen and be run
-// into. The pen release is a simple stagger; the dot counters arrive with the rules.
+// EACH ONE WALKS TOWARD ITS OWN TARGET (M3). At a tile centre it takes the exit that ends up
+// nearest the target, never straight back, and never upward on the marked tiles above the pen.
+// Frightened, it has no target and picks at random. The patrol of M2 is gone.
 function movePursuer(g, p, dt) {
   const m = g.maze;
   if (p.state === 'pen') {
     p.penMs = (p.penMs ?? 0) + dt;
-    if (p.penMs > 900 * (p.patrol + 1)) { p.state = 'chase'; p.x = m.door.x; p.y = m.door.y + 0.5; p.dir = DIRS.up; }
+    if (penReleased(g, p)) {
+      p.state = g.mode; p.x = m.door.x; p.y = m.door.y + 0.5; p.dir = DIRS.up; p.penMs = 0;
+      g.events.push({ kind: 'out', who: p.id });
+    }
     return;
   }
-  const speed = p.state === 'frightened' ? g.speeds.frightened : (inTunnel(m, p) ? g.speeds.tunnel : g.speeds.pursuer);
+  p.target = targetFor(g, p);
+  const speed = p.state === 'frightened' ? g.speeds.frightened
+    : (inTunnel(m, p) ? g.speeds.tunnel : g.speeds.pursuer * elroyGain(g, p));
   let left = speed * dt / 1000;
-  while (left > 1e-6) {
-    const step = Math.min(left, 0.25);
-    const tile = tileOf(p);
-    if (centred(p, 0.12)) {
-      const exits = exitsFrom(m, tile, p.dir, { noUp: g.noUpSet ?? (g.noUpSet = new Set(m.noUp.map((t) => key(t.x, t.y)))) });
-      if (exits.length) {
-        const pick = p.state === 'frightened'
-          ? exits[Math.floor(g.rnd() * exits.length)]
-          : exits[(p.patrol + tile.x + tile.y) % exits.length];
-        p.dir = pick;
-      } else {
-        p.dir = { x: -p.dir.x, y: -p.dir.y };
-      }
-      p.x = tile.x + 0.5; p.y = tile.y + 0.5;
+  let guard = 0;
+  // IT STOPS ON EVERY TILE CENTRE AND DECIDES THERE. The first cut stepped a quarter-tile at a time
+  // and tested "am I near a centre", so at speed a junction could pass between two samples: an
+  // Ambusher rose out of the shaft and walked into the wall above it, because the corridor it should
+  // have turned into was never sampled. Now the step is cut short at the next centre, always.
+  while (left > 1e-6 && guard++ < 64) {
+    // THE WAY AHEAD IS CHECKED BEFORE MOVING, NOT ONLY AT CENTRES. A direction that points into a
+    // wall -- after a reversal into a dead end, or whatever the caller set -- used to be walked
+    // along regardless, and a pursuer ended up inside the border (found at tile 1,0).
+    const at = { x: Math.floor(p.x), y: Math.floor(p.y) };
+    if (!freeG(m, at.x + p.dir.x, at.y + p.dir.y)) {
+      p.x = at.x + 0.5; p.y = at.y + 0.5;
+      const noUp0 = g.noUpSet ?? (g.noUpSet = new Set(m.noUp.map((t) => key(t.x, t.y))));
+      const pick0 = chooseExit(m, at, p.dir, p.target, { noUp: noUp0, ghost: true });
+      const back = { x: -p.dir.x, y: -p.dir.y };
+      p.dir = pick0 ?? (freeG(m, at.x + back.x, at.y + back.y) ? back : p.dir);
+      p.justReversed = false;
+      if (!freeG(m, at.x + p.dir.x, at.y + p.dir.y)) break;      // walled in: stay put
     }
-    const ahead = { x: tileOf(p).x + p.dir.x, y: tileOf(p).y + p.dir.y };
-    if (!free(m, ahead.x, ahead.y) && centred(p, 0.12)) { left -= step; continue; }
+    const centre = { x: nextCentre(p.x, p.dir.x), y: nextCentre(p.y, p.dir.y) };
+    const dist = Math.abs(p.dir.x ? centre.x - p.x : centre.y - p.y);
+    const step = Math.min(left, dist);
     p.x += p.dir.x * step; p.y += p.dir.y * step;
     wrap(m, p);
     left -= step;
+    if (step < dist - 1e-9) break;                       // short of the centre: next frame decides
+    // on the centre: which way now
+    const tile = { x: Math.floor(p.x), y: Math.floor(p.y) };
+    p.x = tile.x + 0.5; p.y = tile.y + 0.5;
+    if (p.justReversed) { p.justReversed = false; continue; }
+    const noUp = g.noUpSet ?? (g.noUpSet = new Set(m.noUp.map((t) => key(t.x, t.y))));
+    const how = { noUp, ghost: true };
+    const pick = p.state === 'frightened'
+      ? (() => { const es = exitsFrom(m, tile, p.dir, how); return es.length ? es[Math.floor(g.rnd() * es.length)] : null; })()
+      : chooseExit(m, tile, p.dir, p.target, how);
+    p.dir = pick ?? { x: -p.dir.x, y: -p.dir.y };        // a dead end: turn round
   }
+}
+
+/** The next tile centre along one axis, in the direction `d` (0 leaves the coordinate alone). */
+export function nextCentre(pos, d) {
+  if (!d) return pos;
+  const here = Math.floor(pos) + 0.5;
+  if (d > 0) return here > pos + 1e-9 ? here : here + 1;
+  return here < pos - 1e-9 ? here : here - 1;
+}
+
+/** Out of the pen when its own dot counter is met, or BlockMan has stopped eating for long enough. */
+export function penReleased(g, p) {
+  const eatenSoFar = g.eaten;
+  if (eatenSoFar >= (PEN_DOTS[p.id] ?? 0)) return true;
+  return g.sinceDotMs >= PEN_IDLE_MS;
+}
+
+/** Chaser's two speed steps, as the board empties (ELROY). One tenth faster at the end is plenty. */
+export function elroyGain(g, p) {
+  if (p.id !== 'chaser') return 1;
+  const left = g.dots.size + g.pellets.size;
+  let gain = 1;
+  for (const step of ELROY) if (left <= step.left) gain = step.gain;
+  return gain;
 }
 
 const inTunnel = (m, a) => m.tunnels.some((t) => t.y === Math.floor(a.y) && Math.abs(t.x - Math.floor(a.x)) < 1);

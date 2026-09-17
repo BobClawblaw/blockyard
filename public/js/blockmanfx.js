@@ -123,3 +123,28 @@ export function paintPops(ctx, P, U, pops, now) {
     ctx.fillText(String(p.text), c.x, c.y);
   }
 }
+
+/**
+ * CHEAT MODE: where each pursuer is headed (docs/PLAN-BLOCKMAN.md §6). A ring on its target tile in
+ * its own colour and a thin line to it, which is the only way to SEE that the four rules differ --
+ * Ambusher's ring runs ahead of BlockMan, Flanker's swings round the far side, Wanderer's flicks to
+ * its corner the moment you get close. It doubled as the way the rules were debugged.
+ */
+export function paintTargets(ctx, P, U, pursuers) {
+  for (const p of pursuers) {
+    if (!p.target || p.state === 'pen' || p.state === 'frightened') continue;
+    const a = P(p.x, p.y), b = P(p.target.x + 0.5, p.target.y + 0.5);
+    ctx.strokeStyle = `rgba(${rgbOf(p.colour)},0.55)`;
+    ctx.lineWidth = Math.max(1, U.x * 0.08);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.strokeStyle = `rgba(${rgbOf(p.colour)},0.95)`;
+    ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(2, Math.min(U.x, U.y) * 0.42), 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+/** `#rrggbb` as "r,g,b", for an rgba() fill (no globalAlpha on these canvases). */
+export function rgbOf(hex) {
+  const s = String(hex).replace('#', '');
+  const n = parseInt(s.length === 3 ? [...s].map((c) => c + c).join('') : s, 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}

@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats } from '../public/js/blockmanview.js';
+import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets } from '../public/js/blockmanview.js';
 import * as fx from '../public/js/blockmanfx.js';
 import { parseMaze, OPEN } from '../public/js/blockmanmaze.js';
 
@@ -43,7 +43,7 @@ test('the maze draws in a known order: back rows first, columns outside in', () 
 
 test('the painted layer obeys the canvas rules', () => {
   // the code, not its comments: both files explain WHY these calls are banned
-  const strip = (t) => t.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n');
+  const strip = (t) => t.split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l)).join('\n');
   const src = strip(read('public/js/blockmanfx.js')) + strip(read('public/js/blockmanview.js'));
   for (const banned of ['ctx.clip(', 'globalAlpha', 'globalCompositeOperation', 'createLinearGradient', 'createRadialGradient', 'filter =']) {
     assert.equal(src.includes(banned), false, `${banned} is not allowed on these canvases`);
@@ -104,6 +104,30 @@ test('the panel says what the keys do, and the screen has its overlay', () => {
   assert.equal(/\(M2\)/.test(html), false, 'nothing on the panel is still promised');
   // the four pursuers are named on the panel, and named the same in the rules
   for (const name of ['Chaser', 'Ambusher', 'Flanker', 'Wanderer']) assert.match(html, new RegExp(`<th>${name}</th>`));
+});
+
+test('cheat mode draws each pursuer\u2019s target, in its own colour', () => {
+  const ops = [];
+  const ctx = {
+    fillStyle: '', strokeStyle: '', lineWidth: 1,
+    beginPath: () => {}, closePath: () => {}, moveTo: () => {}, lineTo: () => {}, arc: () => {},
+    fill: () => {}, stroke: () => ops.push(ctx.strokeStyle),
+  };
+  const four = [
+    { id: 'chaser', colour: '#ef4b4b', state: 'chase', x: 5, y: 5, target: { x: 14, y: 19 } },
+    { id: 'ambusher', colour: '#ff8ccf', state: 'chase', x: 6, y: 5, target: { x: 10, y: 19 } },
+    { id: 'penned', colour: '#46d7e4', state: 'pen', x: 14, y: 14, target: null },
+    { id: 'scared', colour: '#ffa63d', state: 'frightened', x: 3, y: 3, target: { x: 1, y: 1 } },
+  ];
+  fx.paintTargets(ctx, (x, y) => ({ x: x * 10, y: y * 10 }), { x: 10, y: 10 }, four);
+  assert.equal(ops.length, 4, 'a line and a ring for each of the two that are chasing, and none for the pen or the frightened');
+  assert.ok(ops.every((c) => /^rgba\(\d+,\d+,\d+,/.test(c)), `plain rgba strokes: ${ops.join(' ')}`);
+  assert.equal(fx.rgbOf('#ef4b4b'), '239,75,75');
+  // the switch and the T key are the same thing, and the page carries the button
+  assert.match(read('public/index.html'), /id="bmTargets"/);
+  assert.match(read('public/index.html'), /T shows what they are chasing/);
+  assert.doesNotThrow(() => setTargets(true));
+  assert.doesNotThrow(() => setTargets(false));
 });
 
 test('the play state and the frame times are readable, for the tests and the measurement', () => {
