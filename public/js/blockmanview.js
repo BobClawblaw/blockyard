@@ -12,10 +12,20 @@
 //     which is what Scorched Yard does for shells and blasts.
 import { board3d } from './details3d.js';
 import { parseMaze, OPEN } from './blockmanmaze.js';
-import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets, paintFruit } from './blockmanfx.js';
+import { paintDots, paintBlockMan, paintPursuers, paintPops, paintTargets, paintFruit, paintDeath, pulseMs } from './blockmanfx.js';
 import { newGame, stepGame, restart, remaining, DIRS } from './blockman.js';
+import { play, setSfx, setMusic, unlock } from './tetsound.js';
 
-const WALL_COLOUR = '#2a3ac8';          // the maze's own blue; one colour a level later (M5)
+// ONE COLOUR A LEVEL (M5), round a ring of five: the maze is the same maze every level, and its
+// colour is how a player knows how deep they are without reading the panel.
+export const WALL_COLOURS = Object.freeze(['#2a3ac8', '#1f8f6b', '#a3357f', '#b4761c', '#3c3f8f']);
+export const FLASH_COLOUR = '#f2f6ff';
+export function wallColourFor(level) { return WALL_COLOURS[(Math.max(1, level) - 1) % WALL_COLOURS.length]; }
+/** `#rrggbb` darkened, for the border's own shade of the level's colour. */
+function shadeHex(hex, k) {
+  const n = parseInt(String(hex).replace('#', ''), 16);
+  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v * k).toString(16).padStart(2, '0')).join('')}`;
+}
 
 const BOARD = {
   // THE PLAY LAYER IS TRANSPARENT (2026-09-17): the renderer fills a board's canvas with
@@ -30,6 +40,7 @@ const BOARD = {
 const G = {
   maze: null, game: null, board: { dots: [], pellets: [] }, pops: [],
   raf: null, last: 0, mazeKey: null, paused: false, bound: false, targets: false,
+  death: null, dotFlip: false, pulseAt: 0, sfx: true, music: false,
   frames: 0, frameMs: [], paintNow: 0,
   h: null, state: null,
 };
@@ -37,8 +48,10 @@ const G = {
 const el = (id) => document.getElementById(id);
 
 /** Every wall tile as a cube for the scene builder; the pen's box included, its interior darker. */
-export function wallTiles(m) {
+export function wallTiles(m, level = 1, flash = false) {
   const out = [];
+  const wall = flash ? FLASH_COLOUR : wallColourFor(level);
+  const rim = flash ? FLASH_COLOUR : shadeHex(wall, 0.7);
   const penSet = new Set(m.pen.map((p) => `${p.x},${p.y}`));
   for (let y = 0; y < m.h; y++) {
     for (let x = 0; x < m.w; x++) {
@@ -47,7 +60,7 @@ export function wallTiles(m) {
       const edge = x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1;
       out.push({
         txid: `w${x}:${y}`, x, y, s: 1, tall: pen ? 0.5 : 1,
-        color: pen ? '#141a3c' : (edge ? '#1d2790' : WALL_COLOUR),
+        color: pen ? '#141a3c' : (edge ? rim : wall),
       });
     }
   }
@@ -71,7 +84,9 @@ const KEYS = Object.freeze({
 
 function start() {
   G.game = newGame({ maze: G.maze ?? (G.maze = parseMaze()) });
-  G.pops = []; G.paused = false;
+  G.pops = []; G.paused = false; G.death = null; G.pulseAt = 0;
+  setSfx(G.sfx);
+  play('bmStart');
   refreshBoard();
   overlay(null);
 }
@@ -95,6 +110,21 @@ function onKey(e) {
   else if (e.key === 'F2') { if (G.game) restart(G.game); else start(); G.paused = false; refreshBoard(); overlay(null); e.preventDefault(); }
   else if (e.key === 'Enter' && (!G.game || G.game.phase === 'over')) { start(); e.preventDefault(); }
   else if (e.key === 't' || e.key === 'T') { setTargets(!G.targets); e.preventDefault(); }
+  else if (e.key === 'm' || e.key === 'M') { setTune(!G.music); e.preventDefault(); }
+}
+
+/** The sound and the music switches; the panel buttons and the keys are the same thing. */
+export function setSound(on) {
+  G.sfx = !!on;
+  setSfx(G.sfx);
+  const b = typeof document === 'undefined' ? null : el('bmSfx');
+  if (b) { b.setAttribute('aria-pressed', String(G.sfx)); b.classList.toggle('on', G.sfx); }
+}
+export function setTune(on) {
+  G.music = !!on;
+  setMusic(G.music, 'blockman');
+  const b = typeof document === 'undefined' ? null : el('bmMusic');
+  if (b) { b.setAttribute('aria-pressed', String(G.music)); b.classList.toggle('on', G.music); }
 }
 
 /** Cheat mode: draw each pursuer's target tile. The switch and the T key are the same thing. */
@@ -109,6 +139,9 @@ function bind() {
   G.bound = true;
   document.addEventListener('keydown', onKey);
   el('bmTargets')?.addEventListener('click', () => setTargets(!G.targets));
+  el('bmSfx')?.addEventListener('click', () => { unlock(); setSound(!G.sfx); });
+  el('bmMusic')?.addEventListener('click', () => { unlock(); setTune(!G.music); });
+  document.addEventListener('keydown', () => unlock(), { once: true });      // audio needs a gesture
   el('bmResume')?.addEventListener('click', () => {
     if (!G.game || G.game.phase === 'over') start();
     else { G.paused = false; overlay(null); }
@@ -128,7 +161,8 @@ function paintPlay(ctx, view, hx) {
   if (g.fruit) paintFruit(ctx, P, U, { x: g.fruit.x + 0.5, y: g.fruit.y + 0.5, colour: g.fruit.colour });
   paintPursuers(ctx, P, U, g.pursuers, { now: G.paintNow });
   if (G.targets) paintTargets(ctx, P, U, g.pursuers);
-  if (g.phase !== 'dying' || Math.floor(G.paintNow / 120) % 2 === 0) paintBlockMan(ctx, P, U, g.man, { now: G.paintNow });
+  if (g.phase === 'dying') paintDeath(ctx, P, U, G.death, G.paintNow);
+  else paintBlockMan(ctx, P, U, g.man, { now: G.paintNow });
   paintPops(ctx, P, U, G.pops, G.paintNow);
 }
 
@@ -137,9 +171,14 @@ function draw(now = performance.now()) {
   const maze = el('bmMaze'), play = el('bmPlay');
   if (!m || !maze || !play) return;
   const opts = { ...BOARD, gridW: m.w, gridH: m.h };
-  if (G.mazeKey !== `${m.w}x${m.h}`) {                       // the maze is built once
-    board3d(maze, wallTiles(m).sort(mazeOrder), { ...opts, order: 'given', background: '#05080f' });
-    G.mazeKey = `${m.w}x${m.h}`;
+  // BUILT ONCE A LEVEL, and once per frame of the level-clear flash: 262 cubes at about 10 ms is
+  // affordable a few times a second and not affordable sixty times.
+  const level = G.game?.level ?? 1;
+  const flash = G.game?.phase === 'level' && Math.floor(now / 180) % 2 === 0;
+  const wantKey = `${m.w}x${m.h}:${level}:${flash ? 1 : 0}`;
+  if (G.mazeKey !== wantKey) {
+    board3d(maze, wallTiles(m, level, flash).sort(mazeOrder), { ...opts, order: 'given', background: '#05080f' });
+    G.mazeKey = wantKey;
   }
   G.paintNow = now;
   board3d(play, [], { ...opts, background: 'rgba(0,0,0,0)', spaceFloor: 'rgba(0,0,0,0)', neonCell: 'rgba(0,0,0,0)', overlay: paintPlay });
@@ -170,15 +209,35 @@ function frame(now) {
     stepGame(g, dt);
     if (g.dots.size + g.pellets.size !== before) refreshBoard();
     drain(g, now);
+    // THE PULSE: a low tick whose tempo follows how much is left on the board (blockmanfx.pulseMs)
+    if (g.phase === 'play') {
+      const total = G.maze.dots.length + G.maze.pellets.length;
+      const every = pulseMs(g.dots.size + g.pellets.size, total);
+      if (now - G.pulseAt >= every) { G.pulseAt = now; play('bmPulse'); }
+    }
   }
   draw(now);
   G.raf = requestAnimationFrame(frame);
 }
 
-/** What the rules said happened this frame: the screen's business (the sounds are M5's). */
+// WHAT EACH EVENT SOUNDS LIKE (M5, §6). Ours, on the tone generator the other games use: the dot
+// alternates two blips so a corridor has a rhythm rather than one repeated note.
+export const SOUND_OF = Object.freeze({
+  dot: 'bmDotA', pellet: 'bmPellet', ate: 'bmAte', ateFruit: 'bmFruit',
+  caught: 'bmDeath', level: 'bmLevel', life: 'bmLife',
+});
+function sound(e) {
+  if (e.kind === 'dot') { play(G.dotFlip ? 'bmDotB' : 'bmDotA'); G.dotFlip = !G.dotFlip; return; }
+  const name = SOUND_OF[e.kind];
+  if (name) play(name);
+}
+
+/** What the rules said happened this frame: the screen's business. */
 function drain(g, now) {
   if (!g.events.length) return;
   for (const e of g.events) {
+    sound(e);
+    if (e.kind === 'caught') G.death = { x: g.man.x, y: g.man.y, t0: now };
     if (e.kind === 'ate' || e.kind === 'ateFruit') G.pops.push({ x: e.x + (e.kind === 'ateFruit' ? 0.5 : 0), y: e.y, text: e.points, t0: now });
     else if (e.kind === 'level') { refreshBoard(); overlay(`Level ${e.level} cleared`, 'the maze fills again, and everyone is faster'); }
     else if (e.kind === 'caught') overlay(g.lives > 0 ? 'Caught' : 'Game over', g.lives > 0 ? `${g.lives} to go` : 'F2 or the button to play again', g.lives > 0 ? 'go on' : 'again');
@@ -203,6 +262,8 @@ export function renderBlockMan(s, state, h) {
   if (!G.maze) G.maze = parseMaze();
   bind();
   setTargets(G.targets);
+  setSound(G.sfx);
+  setTune(G.music);
   const wrap = el('bmWrap');
   if (wrap) wrap.classList.toggle('idle', !G.game);
   if (!G.game) overlay('BlockMan', 'clear the maze, keep away from the four: ← → ↑ ↓ or WASD to turn, P pauses, F2 starts again. Enter or the button to play.', 'play');

@@ -5,7 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets } from '../public/js/blockmanview.js';
+import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets, setSound, setTune, wallColourFor, WALL_COLOURS, FLASH_COLOUR, SOUND_OF } from '../public/js/blockmanview.js';
+import { SFX, THEMES } from '../public/js/tetsound.js';
 import * as fx from '../public/js/blockmanfx.js';
 import { parseMaze, OPEN } from '../public/js/blockmanmaze.js';
 
@@ -137,4 +138,62 @@ test('the play state and the frame times are readable, for the tests and the mea
   const st = frameStats();
   assert.equal(st.frames, 0, 'nothing has been drawn in a test process');
   assert.equal(st.medianMs, null);
+});
+
+// ------------------------------------------------------------------------ M5: the sound and the look
+test('M5: every event the rules raise has a sound of ours, and none of them is theirs', () => {
+  for (const [kind, name] of Object.entries(SOUND_OF)) {
+    assert.ok(SFX[name], `${kind} has a sound (${name})`);
+    const [from, to, secs, wave, gain] = SFX[name];
+    assert.ok(from > 20 && from < 8000 && to > 20 && to < 8000, `${name} is audible`);
+    assert.ok(secs > 0 && secs < 1.2, `${name} is short`);
+    assert.ok(['square', 'triangle', 'sawtooth', 'sine'].includes(wave));
+    assert.ok(gain > 0 && gain <= 0.12, `${name} is not louder than the rest of the app`);
+  }
+  // the dot alternates, the pulse and the opening exist, and the march is ours
+  for (const name of ['bmDotA', 'bmDotB', 'bmPulse', 'bmStart']) assert.ok(SFX[name], name);
+  assert.notEqual(SFX.bmDotA[0], SFX.bmDotB[0], 'two blips, not one repeated note');
+  assert.ok(THEMES.blockman?.notes?.length >= 16, 'a march of its own');
+  assert.ok(THEMES.blockman.bpm > 90 && THEMES.blockman.bpm < 180);
+  assert.doesNotThrow(() => { setSound(true); setSound(false); setTune(true); setTune(false); }, 'the switches work without a DOM');
+});
+
+test('M5: the pulse gets faster as the board empties', () => {
+  const full = fx.pulseMs(250, 250), half = fx.pulseMs(125, 250), last = fx.pulseMs(5, 250);
+  assert.ok(full > half && half > last, `it speeds up (${full} -> ${half} -> ${last})`);
+  assert.ok(full <= 600 && last >= 120, 'and it stays musical at both ends');
+  assert.equal(fx.pulseMs(0, 0), 520, 'no board: the slow tick');
+});
+
+test('M5: the maze takes a colour a level, and flashes white when a level is cleared', () => {
+  assert.equal(new Set(WALL_COLOURS).size, WALL_COLOURS.length, 'all different');
+  for (const c of [...WALL_COLOURS, FLASH_COLOUR]) assert.match(c, /^#[0-9a-f]{6}$/i);
+  assert.equal(wallColourFor(1), WALL_COLOURS[0]);
+  assert.equal(wallColourFor(WALL_COLOURS.length + 1), WALL_COLOURS[0], 'round the ring');
+  const a = wallTiles(m, 1).find((t) => t.color !== '#141a3c');
+  const b = wallTiles(m, 2).find((t) => t.color !== '#141a3c');
+  assert.notEqual(a.color, b.color, 'level two is another colour');
+  const flashed = wallTiles(m, 1, true).filter((t) => t.color === FLASH_COLOUR);
+  assert.ok(flashed.length > 200, 'the flash takes the whole maze');
+});
+
+test('M5: his death is the cube coming apart, and it ends', () => {
+  const ops = [];
+  const ctx = { fillStyle: '', beginPath: () => {}, closePath: () => {}, moveTo: () => {}, lineTo: () => {}, arc: () => {}, fill: () => ops.push(ctx.fillStyle) };
+  const P = (x, y) => ({ x: x * 10, y: y * 10 });
+  const U = { x: 10, y: 10 };
+  fx.paintDeath(ctx, P, U, { x: 14, y: 19, t0: 0 }, 300);
+  assert.ok(ops.length >= 8 * 3, `eight pieces, three faces each (${ops.length} fills)`);
+  const before = ops.length;
+  fx.paintDeath(ctx, P, U, { x: 14, y: 19, t0: 0 }, 2000);
+  assert.equal(ops.length, before, 'and it is over by then');
+  fx.paintDeath(ctx, P, U, null, 300);
+  assert.equal(ops.length, before, 'nothing to draw without a death');
+});
+
+test('M5: the panel carries the sound switches', () => {
+  const html = read('public/index.html');
+  for (const id of ['bmSfx', 'bmMusic']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /M music/, 'and the key is in the table');
+  assert.match(html, /on oscillators/, 'the sounds are ours, made here');
 });

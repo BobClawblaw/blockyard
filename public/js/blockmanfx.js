@@ -149,3 +149,33 @@ export function rgbOf(hex) {
   const n = parseInt(s.length === 3 ? [...s].map((c) => c + c).join('') : s, 16);
   return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
 }
+
+/**
+ * HIS DEATH (M5): the cube comes apart. Eight pieces fly out along the diagonals and the axes,
+ * spinning and falling under gravity, in his own colour going grey -- the block engine's own idea of
+ * a death (Scorched Yard does the same for a tank), rather than the original's spiral.
+ */
+export function paintDeath(ctx, P, U, death, now, { ms = 1300, colour = '#ffd23f' } = {}) {
+  if (!death) return;
+  const t = (now - death.t0) / ms;
+  if (t < 0 || t > 1) return;
+  const pieces = 8;
+  for (let i = 0; i < pieces; i++) {
+    const a = (i / pieces) * Math.PI * 2;
+    const r = t * 2.2;
+    const x = death.x + Math.cos(a) * r;
+    const y = death.y + Math.sin(a) * r * 0.7 + t * t * 2.4;      // out, then down
+    const fade = 1 - t;
+    cube(ctx, P, U, { x, y, colour: shade(colour, 0.5 + fade * 0.6), size: 0.7 * fade + 0.15 });
+  }
+}
+
+/**
+ * THE PULSE'S TEMPO CARRIES HOW MUCH IS LEFT (M5, §6): a low tick every `pulseMs`, which falls from
+ * about half a second on a full board to a hammer at the end. It is the genre's own trick for making
+ * the last twenty dots frightening without changing anything about the chase.
+ */
+export function pulseMs(left, total) {
+  const done = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 0;
+  return Math.round(520 - 340 * done);
+}
