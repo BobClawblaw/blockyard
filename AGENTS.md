@@ -383,7 +383,13 @@ does not specialise goes through `step()`. What will bite:
   registers and flags every 10,000, memory identical at the end -- and the native fuzzer re-run through
   `run(1)` (118k instructions, 0 mismatches). `cpu.step()` in the API is the interpreter alone.
 
-## Current state (2026-09-16)
+## Current state (2026-09-17)
+
+**0.1.1, prepared 2026-09-17** (`CHANGELOG.md` under 0.1.1, with an "Upgrading from 0.1.0" list):
+the third AI security audit with every finding fixed, the resumable and reference-checked address
+index, the undo-decoder fixes, one sky per board with the Earth sky's sun and moon, lazy-loaded
+games, and Scorched Yard. Node 22.2 is now the minimum. Not tagged or published until the
+operator says release; the tarball is built from a `git archive` of the release commit.
 
 **0.1.0, the first minor release**, tagged `v0.1.0` on 2026-09-16: everything since 0.0.9 in one
 release (the 0.0.10 that was prepared on 09-15 was never published; its GitHub draft was removed

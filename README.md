@@ -146,9 +146,10 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.1.0** — the first minor release, two days after the initial 0.0.9, and pre-release
-software: the word is meant literally. Published 2026-09-16: on [npm](https://www.npmjs.com/package/blockyard)
-as `blockyard`, as a [GitHub release](https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.0),
+Version **0.1.1** (2026-09-17) — a hardening release after 0.1.0: the third security audit with
+every finding fixed, a resumable address index build, and Scorched Yard. Pre-release software: the
+word is meant literally. Releases are published on [npm](https://www.npmjs.com/package/blockyard)
+as `blockyard`, as [GitHub releases](https://github.com/BobClawblaw/blockyard/releases),
 and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
