@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+- **Scorched Yard's opponents are shuffled every game.** With the shipped mix, the seats were filled from a fixed list in order, so two opponents were a Shooter and a Tosser in every game. Each new game now deals the six personalities (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark) in a fresh order: two opponents are a different pair each time, up to six are all different kinds, and a seventh starts a new deal. Naming one kind in *Their kind* still fills every seat with it
+
 ## [0.1.1] — 2026-09-17
 
 A day of hardening, and a new game. The headline is the **third AI security audit**, run on

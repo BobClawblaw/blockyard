@@ -13,7 +13,7 @@ import {
 } from '../public/js/scorched.js';
 import { SHOP, ITEM_ORDER, CASH_PER_DAMAGE, KILL_BONUS, SURVIVOR_BONUS, payInterest } from '../public/js/scorchedshop.js';
 import { decide, moron, shooter, poolshark, tosser, chooser, spoiler, cyborg, solve, nearest, prepare, shop as aiShop } from '../public/js/scorchedai.js';
-import { players, rampStep, setHtml, landOrder, correctionOf, ownedWeapons, isLastOfKind, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
+import { players, shuffled, rampStep, setHtml, landOrder, correctionOf, ownedWeapons, isLastOfKind, actorLayer, fallingCells, fireTiles, beamTiles, deathTiles, fallingTanks, windBanner, paintBanner, solutionOf, loadScores, recordScore, rankOf } from '../public/js/scorchedyard.js';
 import { rippleOffset, paintRipple, skyBrightness } from '../public/js/scorchedwind.js';
 import { makeFluid, stepFluid, setSolid, warmFluid, meanFlow, makeTracers, stepTracers, paintTracers } from '../public/js/scorchedair.js';
 import { paintBlasts, paintDeaths, paintDust, paintAim, paintSolution, paintShells } from '../public/js/scorchedfx.js';
@@ -874,6 +874,37 @@ test('scorched yard: attract mode fields no human', () => {
   assert.match(html, /id="syDemo"/);
   assert.equal(DEFAULTS.scorched.demo, false, 'off until it is asked for');
   assert.equal(scorchedOptions(normalise({ scorched: { demo: true } })).demo, true);
+});
+
+// THE MIX IS SHUFFLED EACH GAME (operator, 2026-09-17: "the enemies I play against in Scorched Yard
+// are always the same and never randomized"): it used to be Shooter and Tosser in every game.
+test('scorched yard: the mix deals its opponents in a new order every game', () => {
+  const base = { opponents: 2, opponentKind: 'mix', demo: false };
+  const pool = ['shooter', 'tosser', 'chooser', 'spoiler', 'cyborg', 'poolshark'];
+  const pairs = new Set();
+  for (let i = 0; i < 200; i++) {
+    const seats = players(base).filter((p) => p.kind !== 'human');
+    assert.equal(seats.length, 2);
+    assert.ok(seats.every((p) => pool.includes(p.kind)), 'drawn from the mix, which has no Moron');
+    assert.notEqual(seats[0].kind, seats[1].kind, 'two seats, two different kinds');
+    pairs.add(seats.map((p) => p.kind).join('+'));
+  }
+  assert.ok(pairs.size >= 10, `two hundred games seat many different pairs, not one (got ${pairs.size})`);
+  // a seeded draw is repeatable, and the first seat is not always the same
+  const seq = (seed) => { let x = seed; return () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648); };
+  assert.deepEqual(players(base, seq(7)).map((p) => p.kind), players(base, seq(7)).map((p) => p.kind));
+  assert.ok(new Set([1, 2, 3, 4, 5, 6, 7, 8, 9].map((s) => players(base, seq(s))[1].kind)).size > 1);
+  // six opponents are the six kinds; a seventh starts a new deal, and every name is still unique
+  const six = players({ ...base, opponents: 6 }).filter((p) => p.kind !== 'human');
+  assert.deepEqual(six.map((p) => p.kind).sort(), [...pool].sort());
+  const seven = players({ ...base, opponents: 7 }).filter((p) => p.kind !== 'human');
+  assert.equal(new Set(seven.map((p) => p.name)).size, 7);
+  // a named kind still fills every seat, unshuffled
+  assert.deepEqual(players({ opponents: 2, opponentKind: 'cyborg', demo: false }).map((p) => p.name), ['You', 'Cyborg', 'Cyborg 2']);
+  // shuffled() keeps every element and leaves its input alone
+  const src = [1, 2, 3, 4, 5];
+  assert.deepEqual(shuffled(src).sort(), [1, 2, 3, 4, 5]);
+  assert.deepEqual(src, [1, 2, 3, 4, 5]);
 });
 
 // THE CONTROLS (the scope's C1): the ramp, the nudges, the wheel, R, and the typed numbers

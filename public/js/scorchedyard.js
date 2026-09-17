@@ -902,8 +902,14 @@ function frame(t) {
   if (g.phase !== 'over') G.raf = requestAnimationFrame(frame);
 }
 
-// THE OPPONENTS (M3): a mix climbs from the easy ones -- Shooter, Tosser, Chooser, Spoiler,
-// Cyborg -- or every seat the one kind the setting names. Named for what they are, the manual's way.
+// THE OPPONENTS (M3): a mix of the manual's personalities, or every seat the one kind the setting
+// names. Named for what they are, the manual's way.
+//
+// THE MIX IS SHUFFLED EACH GAME (operator, 2026-09-17: "the enemies I play against in Scorched Yard
+// are always the same and never randomized"). It used to fill the seats from this list in order, so
+// the shipped two opponents were a Shooter and a Tosser in every game ever played. Now each new game
+// deals the six in a fresh order: the first seats get six different kinds, and a table bigger than
+// the pool deals again from a new shuffle.
 const MIX = ['shooter', 'tosser', 'chooser', 'spoiler', 'cyborg', 'poolshark'];
 const NAMES = { moron: 'Moron', shooter: 'Shooter', poolshark: 'Poolshark', tosser: 'Tosser', chooser: 'Chooser', spoiler: 'Spoiler', cyborg: 'Cyborg', unknown: 'Unknown' };
 /**
@@ -911,12 +917,19 @@ const NAMES = { moron: 'Moron', shooter: 'Shooter', poolshark: 'Poolshark', toss
  * taken by another computer player, so the war plays itself on a wall. Everything else is the
  * same game: the same shop, the same rounds, the same rules.
  */
-export function players(t = scorchedOptions(loadSettings())) {
+export function shuffled(list, rnd = Math.random) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+export function players(t = scorchedOptions(loadSettings()), rnd = Math.random) {
   const list = t.demo ? [] : [{ name: 'You', kind: 'human' }];
   const seen = {};
   const seats = t.opponents + (t.demo ? 1 : 0);
+  let deck = [];
   for (let i = 0; i < seats; i++) {
-    const kind = t.opponentKind === 'mix' ? MIX[i % MIX.length] : t.opponentKind;
+    if (t.opponentKind === 'mix' && deck.length === 0) deck = shuffled(MIX, rnd);
+    const kind = t.opponentKind === 'mix' ? deck.shift() : t.opponentKind;
     seen[kind] = (seen[kind] ?? 0) + 1;
     list.push({ name: seen[kind] > 1 ? `${NAMES[kind] ?? kind} ${seen[kind]}` : (NAMES[kind] ?? kind), kind });
   }

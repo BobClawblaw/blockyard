@@ -786,8 +786,9 @@ and 5% interest, which the settings allow.
 
 ![Scorched Yard](images/scorched.jpg)
 
-Out of the box you face a **mix**, climbing from the easy ones: a Shooter and a Tosser, then a
-Chooser, a Spoiler, a Cyborg and a Poolshark as you add seats. **Display settings → Scorched Yard
+Out of the box you face a **mix**: every new game deals a Shooter, a Tosser, a Chooser, a Spoiler,
+a Cyborg and a Poolshark in a fresh order, so two opponents are a different pair each time, and up
+to six opponents are all different kinds (a seventh starts a new deal). **Display settings → Scorched Yard
 → Their kind** fields one kind in every seat instead. They are the manual's eight, and they
 behave as it says:
 

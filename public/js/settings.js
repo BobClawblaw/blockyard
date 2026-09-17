@@ -315,7 +315,7 @@ export const DEFAULTS = Object.freeze({
     gridColour: '#2a5a8f',
     gridBrightness: 1,
     opponents: 2,         // computer players against the one human; up to seven, for the original's eight seats
-    opponentKind: 'mix',  // 'mix' (Shooter, Tosser, Chooser, Spoiler, Cyborg, Poolshark in turn) or one of the manual's eight
+    opponentKind: 'mix',  // 'mix' (Shooter, Tosser, Chooser, Spoiler, Cyborg and Poolshark, shuffled each game) or one of the manual's eight
     rounds: 5,
     walls: 'none',        // the manual's default: 'none' | 'concrete' | 'padded' | 'rubber' | 'spring' | 'wrap'
     wind: 'round',        // 'round' (one wind a round, the shipped mode) | 'turn' | 'shot' | 'none'
@@ -705,7 +705,7 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'gridBrightness', label: 'Grid intensity', kind: 'range', min: 0, max: 2, step: 0.05, hint: 'How strongly the grid shows; 0 hides it' }),
       Object.freeze({ key: 'opponents', label: 'Computer players', kind: 'range', min: 1, max: 7, step: 1, hint: 'How many tanks the computer fields against you. Two is the shipped game; seven fills the original\u2019s eight seats' }),
       Object.freeze({
-        key: 'opponentKind', label: 'Their kind', kind: 'choice', hint: 'The manual\u2019s personalities: a mix climbs from the easy ones, or every seat the one you name. Moron fires at random; Shooter takes straight shots; Poolshark banks off rubber walls; Tosser lobs and corrects; Chooser picks its method; Spoiler nearly never misses; Cyborg is a Spoiler with a grudge; Unknown is one of them, drawn each round',
+        key: 'opponentKind', label: 'Their kind', kind: 'choice', hint: 'The manual\u2019s personalities: a mix dealt in a new order every game, or every seat the one you name. Moron fires at random; Shooter takes straight shots; Poolshark banks off rubber walls; Tosser lobs and corrects; Chooser picks its method; Spoiler nearly never misses; Cyborg is a Spoiler with a grudge; Unknown is one of them, drawn each round',
         options: Object.freeze([['mix', 'A mix'], ['moron', 'Morons'], ['shooter', 'Shooters'], ['poolshark', 'Poolsharks'], ['tosser', 'Tossers'], ['chooser', 'Choosers'], ['spoiler', 'Spoilers'], ['cyborg', 'Cyborgs'], ['unknown', 'Unknowns']]),
       }),
       Object.freeze({ key: 'rounds', label: 'Rounds', kind: 'range', min: 1, max: 10, step: 1, hint: 'A game is this many rounds; the highest score at the end wins' }),
