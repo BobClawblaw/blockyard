@@ -948,6 +948,12 @@ test('scorched yard: the mix deals its opponents in a new order every game', () 
   assert.equal(new Set(trio).size, 4, 'a second and third of one kind are shades of its colour, told apart');
   assert.equal(trio[1], PERSONA_COLOURS.spoiler);
   assert.match(colourFor('spoiler', 2), /^#[0-9a-f]{6}$/);
+  // the scoreboard's dot is the tank's own colour, not a class per seat (2026-09-17: a red Spoiler listed with a blue dot)
+  const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
+  assert.ok(!/\.sydot-\d/.test(css), 'no seat-numbered dot colours left in the stylesheet');
+  const yard = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
+  assert.match(yard, /class="sydot" data-tank=/);
+  assert.match(yard, /setProperty\?\.\('background-color', colour\)/);
   // a named kind still fills every seat, unshuffled
   assert.deepEqual(players({ opponents: 2, opponentKind: 'cyborg', demo: false }).map((p) => p.name), ['You', 'Cyborg', 'Cyborg 2']);
   // shuffled() keeps every element and leaves its input alone

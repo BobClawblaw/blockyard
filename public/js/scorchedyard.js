@@ -605,11 +605,21 @@ function drawTanks() {
   if (!box) return;
   const html = g ? g.tanks.map((t) => {
     const cur = g.phase !== 'over' && current(g) === t;
-    return `<div class="sytank${t.alive ? '' : ' dead'}${cur ? ' now' : ''}"><i class="sydot sydot-${t.id}"></i><b>${t.name}</b>`
+    return `<div class="sytank${t.alive ? '' : ' dead'}${cur ? ' now' : ''}"><i class="sydot" data-tank="${t.id}"></i><b>${t.name}</b>`
       + `<meter min="0" max="100" low="34" high="67" optimum="100" value="${t.health}" title="${t.health} health"></meter>`
       + `<span>${t.alive ? `${t.health}${t.shield ? '🛡' : ''}` : '☠'}</span><small>${t.score} pts · ${t.kills} kills · ${money(t.cash)}</small></div>`;
   }).join('') : '';
   setHtml(box, html, 'tanks');
+  // THE DOT IS THE TANK'S OWN COLOUR (operator, 2026-09-17, with a capture: the red Spoiler listed
+  // with a blue dot). The CSP forbids a style attribute in markup, so the colour was a class per
+  // SEAT, which kept painting the seat's old colour once colours followed the personality. The
+  // CSSOM is allowed, and it is the tank's colour whatever seat it sits in.
+  if (g && box.querySelectorAll) {
+    for (const dot of box.querySelectorAll('.sydot[data-tank]')) {
+      const colour = g.tanks[Number(dot.dataset.tank)]?.colour;
+      if (colour && dot.dataset.colour !== colour) { dot.style?.setProperty?.('background-color', colour); dot.dataset.colour = colour; }
+    }
+  }
 }
 
 function drawScores(highlightAt = null) {

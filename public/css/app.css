@@ -2001,8 +2001,8 @@ table.sykeys td { padding: 2px 0; }
   padding: 4px 9px; border-radius: 10px; background: rgba(14, 16, 22, .88); border: 1px solid var(--line); color: var(--fg);
   font-size: 12px; white-space: nowrap; pointer-events: none; }
 .sytalk.hidden { display: none; }
-.sydot-0 { background: #f7931a; } .sydot-1 { background: #4d8dff; } .sydot-2 { background: #2ecc8f; }
-.sydot-3 { background: #ef5a5a; } .sydot-4 { background: #c78bff; } .sydot-5 { background: #f0c419; }
+/* each dot takes its tank's own colour, set through the CSSOM by scorchedyard.js drawTanks (the
+   colour follows the personality, and a class per seat painted the seat's old colour instead) */
 /* the items line: pills, lit when armed */
 .syitems { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; font-size: 11px; min-height: 18px; }
 .sypill { padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--fg-dim); }
