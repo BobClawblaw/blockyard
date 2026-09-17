@@ -48,6 +48,21 @@ export const chainName = (v) => (typeof v === 'string' && /^[a-z0-9_-]{1,24}$/i.
 export const boolOrNull = (v) => (typeof v === 'boolean' ? v : null);
 export const countOrNull = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
 
+// The rare tier's calls. Every one answers in well under a second on a healthy node.
+const RARE_CALLS = Object.freeze([
+  { method: 'getpeerinfo' },
+  { method: 'getdeploymentinfo' },
+  { method: 'getrpcinfo' },
+  // Both are cheap (11 ms / 3 ms measured) and both say something the log
+  // only hints at: getaddrmaninfo is the peer book by network (production:
+  // 52,877 tried, ipv4 36,482 / ipv6 9,046 / onion 6,304 / i2p 1,045), and
+  // listbanned is the node's own ban table.
+  { method: 'getaddrmaninfo' },
+  { method: 'listbanned' },
+]);
+export const RARE_TIMEOUT_MS = 10_000;   // the rare tier's own time limit (tier_rare)
+export const RETRY_SOON_MS = 60_000;     // how soon a tier that timed out tries again
+
 export class NodeMonitor extends EventEmitter {
   constructor(nodeCfg, { rpc, poll, store, log, history, logCfg, miningCfg }) {
     super();
@@ -229,17 +244,27 @@ export class NodeMonitor extends EventEmitter {
     // Stagger the first runs so boot is not a thundering herd on a
     // single-threaded server: fast, then mid, then slow, each offset.
     this.runTier('fast').finally(() => this.scheduleTier('fast'));
-    setTimeout(() => this.runTier('mid').finally(() => this.scheduleTier('mid')), 700);
+    // THE RARE TIER WAITS FOR THE FIRST MID RUN (operator, 2026-09-17: the Peers page blank for a
+    // minute or more after every restart). There is one call in flight per node, and in RPC-only
+    // mode the peer table comes from the mid tier. Measured after a restart: the rare batch on the
+    // bench node took 68 s, and the mid tier's getpeerinfo waited behind it the whole time. So the
+    // rare tier's first run starts only once the first mid run has answered.
+    const firstMid = new Promise((resolve) => {
+      const t = setTimeout(() => this.runTier('mid').finally(() => { this.scheduleTier('mid'); resolve(); }), 700);
+      t.unref?.();
+    });
     setTimeout(() => this.runTier('pool').finally(() => this.scheduleTier('pool')), 1200);
     setTimeout(() => this.runTier('slow').finally(() => this.scheduleTier('slow')), 1600);
-    setTimeout(() => this.runTier('rare').finally(() => this.scheduleTier('rare')), 2600);
+    setTimeout(() => firstMid.then(() => { if (!this.stopped) this.runTier('rare').finally(() => this.scheduleTier('rare')); }), 2600);
     return this;
   }
 
   scheduleTier(name) {
     if (this.stopped) return;
-    const ms = this.effectiveTierMs(name);
+    let ms = this.effectiveTierMs(name);
     if (!ms) return;
+    // a tier that gave up on a slow node tries again in a minute, not at its full cadence
+    if (this.retrySoon?.[name]) { ms = Math.min(ms, RETRY_SOON_MS); this.retrySoon[name] = false; }
     this.tierIntervalMs[name] = ms;
     const t = setTimeout(() => {
       this.runTier(name).finally(() => this.scheduleTier(name));
@@ -701,17 +726,21 @@ export class NodeMonitor extends EventEmitter {
   }
 
   async tier_rare() {
-    const m = await this.callList([
-      { method: 'getpeerinfo' },
-      { method: 'getdeploymentinfo' },
-      { method: 'getrpcinfo' },
-      // Both are cheap (11 ms / 3 ms measured) and both say something the log
-      // only hints at: getaddrmaninfo is the peer book by network (production:
-      // 52,877 tried, ipv4 36,482 / ipv6 9,046 / onion 6,304 / i2p 1,045), and
-      // listbanned is the node's own ban table.
-      { method: 'getaddrmaninfo' },
-      { method: 'listbanned' },
-    ], { key: `${this.id}:rare`, priority: 7 });
+    // A TIME LIMIT OF ITS OWN (2026-09-17). Every call here answers in well under a second on a
+    // healthy node (bench node: getpeerinfo 6 ms, the others about 250 ms), yet one batch took 68 s
+    // after a restart and held the node's only lane for all of it. The rare tier now gives up after
+    // RARE_TIMEOUT_MS, and a timed-out run is retried in a minute instead of fifteen.
+    let m;
+    try {
+      m = await this.callList(RARE_CALLS, { key: `${this.id}:rare`, priority: 7, timeoutMs: RARE_TIMEOUT_MS });
+    } catch (err) {
+      if (err?.kind === 'timeout') { this.retrySoon = this.retrySoon ?? {}; this.retrySoon.rare = true; }
+      throw err;
+    }
+    return this.absorbRare(m);
+  }
+
+  absorbRare(m) {
     const ok = (k) => { const v = m.get(k); return v instanceof RpcError || v === undefined ? null : v; };
     this.absorbPeerInfo(ok('getpeerinfo'));
     const addrman = ok('getaddrmaninfo');

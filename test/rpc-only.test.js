@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { NodeMonitor } from '../server/collect/monitor.js';
+import { NodeMonitor, RARE_TIMEOUT_MS, RETRY_SOON_MS } from '../server/collect/monitor.js';
 import { History } from '../server/store/history.js';
 import { loadConfig } from '../server/config.js';
 import { classifyMethod } from '../server/rpc/allowlist.js';
@@ -296,4 +296,42 @@ test('provenance strings describe the mode and the gate, never what a build will
   });
   assert.match(off.measured.source, /while that counter moves/, 'names the gate, not a prophecy');
   assert.doesNotMatch(off.measured.source, /deployed build counts|0 bytes, so/, 'no assertion about what this build will answer');
+});
+
+// THE PEERS PAGE AFTER A RESTART (2026-09-17). One call in flight per node, and the peer table comes
+// from the mid tier in RPC-only mode; a rare batch that took 68 s on the bench node held it back.
+test('the rare tier has its own time limit, and a timed-out run tries again in a minute', async () => {
+  const m = makeMonitor({ logFile: null });
+  let seenOpts = null;
+  m.rpc.batch = async (calls, opts) => { seenOpts = opts; return calls.map((c) => ({ ok: true, method: c.method, result: c.method === 'getpeerinfo' ? [] : {} })); };
+  await m.tier_rare();
+  assert.equal(seenOpts.timeoutMs, RARE_TIMEOUT_MS);
+  assert.ok(RARE_TIMEOUT_MS <= 15_000, 'far below the 90 s ceiling a healthy call never needs here');
+  m.rpc.batch = async () => { const e = new Error('rpc timeout after 10000ms'); e.kind = 'timeout'; throw e; };
+  await assert.rejects(m.tier_rare(), /timeout/);
+  assert.equal(m.retrySoon.rare, true);
+  m.stopped = false;
+  m.scheduleTier('rare');
+  assert.equal(m.tierIntervalMs.rare, RETRY_SOON_MS, 'retried in a minute, not at the 15-minute cadence');
+  assert.equal(m.retrySoon.rare, false, 'once');
+  m.scheduleTier('rare');
+  assert.equal(m.tierIntervalMs.rare, 900000);
+  await m.stop();
+});
+
+test('the rare tier first runs only after the first mid run has answered', async () => {
+  const m = makeMonitor({ logFile: null });
+  const order = [];
+  m.scheduleTier = () => {};
+  m.runTier = async (name) => {
+    order.push(`${name}:start`);
+    if (name === 'mid') await new Promise((r) => setTimeout(r, 2600));
+    order.push(`${name}:end`);
+    return {};
+  };
+  await m.start();
+  await new Promise((r) => setTimeout(r, 4200));
+  const midEnd = order.indexOf('mid:end'), rareStart = order.indexOf('rare:start');
+  assert.ok(midEnd >= 0 && rareStart > midEnd, `rare waited for mid (${order.join(' ')})`);
+  await m.stop();
 });

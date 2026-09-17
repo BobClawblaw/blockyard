@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+- **Fixed: the Peers page could stay blank for a minute or more after a restart.** Each node gets one RPC call at a time, and with the log source off the peer table comes from the 15-second tier. The 15-minute tier's first batch started 2.6 s after boot, and on the bench node it once took 68 s, so the peer poll waited behind it. That batch now starts only after the first 15-second run has answered, gives up after 10 s (its calls normally answer in under a second), and a run that timed out tries again a minute later instead of fifteen
+
 ## [0.1.2] — 2026-09-17
 
 A day of hardening, and a new game. The headline is the **third AI security audit**, run on
