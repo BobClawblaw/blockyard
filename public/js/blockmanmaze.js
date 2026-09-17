@@ -11,7 +11,13 @@
 //   * a pen in the middle with one gate, and a start below it;
 //   * one wrap tunnel each side at the pen's height, so a chase can be escaped off-screen;
 //   * four pellets out in the quarters, each a short run from a junction, so taking one is a choice;
-//   * a long outer loop that can be run forever, and dead ends enough that it cannot be run safely;
+//   * NO DEAD ENDS. Every open tile has at least two ways out, so a wrong turn is never fatal on its
+//     own -- the first draft had twenty of them and played badly for it (operator, 2026-09-17:
+//     "that maze sucks. Dead ends? a block that prevents passage?"). The layout is drawn on a
+//     lattice of corridors three tiles apart and then has passages CLOSED, one at a time, each
+//     closure kept only if the result still has no dead end, no 2x2 room and nothing cut off --
+//     which is what gives the varied block sizes without the pockets;
+//   * a long outer loop that can be run forever, and enough junctions that it cannot be run safely;
 //   * left-to-right symmetry, so the maze reads as a picture and neither side is the good side;
 //   * two "no upward turn" tiles above the pen: the cheapest way to make a pursuer commit to a route.
 //
@@ -28,30 +34,30 @@
 const HALF = Object.freeze([
   '##############',
   '#.............',
-  '#.####.##.####',
-  '#o####.##.####',
-  '#.####.##.####',
   '#.############',
-  '#.....#.......',
-  '#.####.##.####',
-  '#.####.##.####',
-  '#............^',
-  '#.#### ## ###E',
-  '#.#### ## ###E',
-  '###### ## ###-',
-  'TTTTTT ## GGGG',
-  '###### ## GGGG',
-  '###### ## ####',
-  '#............^',
-  '#.####.##.####',
-  '#.####.##.####',
-  '#.....#......S',
-  '#.####.##.####',
-  '#o####.##.####',
-  '#.####.##.####',
-  '#.............',
-  '#.####.##.####',
-  '#.####.##.####',
+  '#.############',
+  '#o.........###',
+  '#.##.#####.###',
+  '#.##.#####.###',
+  '#.##....##....',
+  '#.#####.######',
+  '#.#####.######',
+  '#.##....##..^E',
+  '#.##.##.##.##E',
+  '#.##.##.##.##-',
+  '#.##.##.##.GGG',
+  'TTTTTT.....GGG',
+  '#.##.##.##.GGG',
+  '#.##.##.##.###',
+  '#.##....##...S',
+  '#.#####.####.#',
+  '#.#####.####.#',
+  '#....##.##....',
+  '#.##.##.##.###',
+  '#.##.##.##.###',
+  '#o##.......###',
+  '#.############',
+  '#.############',
   '#.............',
   '##############',
 ]);

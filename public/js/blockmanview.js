@@ -22,6 +22,13 @@ import { loadSettings, setSetting, blockmanOptions } from './settings.js';
 
 // ONE COLOUR A LEVEL (M5), round a ring of five: the maze is the same maze every level, and its
 // colour is how a player knows how deep they are without reading the panel.
+// ROW 0 IS THE TOP ROW OF THE MAZE. The renderer lays row 0 at the BOTTOM of a board (right for a
+// well that pieces fall into, wrong for a maze read off a grid), so every grid row is mapped through
+// screenRow() before it is drawn -- otherwise the maze is upside down and pressing up walks him down
+// the screen (reported by the operator, 2026-09-17: "up and down are reversed"). The rules keep
+// their own y, which grows downward; only the drawing is flipped, in these two places.
+export const screenRow = (m, y) => m.h - y;
+
 export const WALL_COLOURS = Object.freeze(['#2a3ac8', '#1f8f6b', '#a3357f', '#b4761c', '#3c3f8f']);
 export const FLASH_COLOUR = '#f2f6ff';
 export function wallColourFor(level) { return WALL_COLOURS[(Math.max(1, level) - 1) % WALL_COLOURS.length]; }
@@ -87,7 +94,7 @@ export function wallTiles(m, level = 1, flash = false) {
       const pen = penSet.has(`${x},${y}`);
       const edge = x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1;
       out.push({
-        txid: `w${x}:${y}`, x, y, s: 1, tall: pen ? 0.5 : 1,
+        txid: `w${x}:${y}`, x, y: screenRow(m, y) - 1, s: 1, tall: pen ? 0.5 : 1,
         color: pen ? '#141a3c' : (edge ? rim : wall),
       });
     }
@@ -224,8 +231,8 @@ function bind() {
 function paintPlay(ctx, view, hx) {
   const m = G.maze;
   if (!m) return;
-  const P = (x, y, z = 1.1) => hx.project(x, y, z, view);
-  const o0 = P(0, 0), ox = P(1, 0), oy = P(0, 1);
+  const P = (x, y, z = 1.1) => hx.project(x, screenRow(m, y), z, view);
+  const o0 = P(0, 0), ox = P(1, 0), oy = P(0, 1);   // |oy - o0| is one tile, sign and all
   const U = { x: Math.abs(ox.x - o0.x) || 8, y: Math.abs(oy.y - o0.y) || 8 };
   const g = G.game;
   paintDots(ctx, P, U, { dots: G.board.dots, pellets: G.board.pellets, now: G.paintNow });
@@ -243,7 +250,7 @@ function draw(now = performance.now()) {
   const maze = el('bmMaze'), play = el('bmPlay');
   if (!m || !maze || !play) return;
   const opts = { ...BOARD, gridW: m.w, gridH: m.h };
-  // BUILT ONCE A LEVEL, and once per frame of the level-clear flash: 262 cubes at about 10 ms is
+  // BUILT ONCE A LEVEL, and once per frame of the level-clear flash: 504 cubes at about 20 ms is
   // affordable a few times a second and not affordable sixty times.
   const level = G.game?.level ?? 1;
   const flash = G.game?.phase === 'level' && Math.floor(now / 180) % 2 === 0;

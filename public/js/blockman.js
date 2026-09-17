@@ -612,6 +612,43 @@ export function restart(g) {
  *   * and it will not turn round unless every other way is refused, because a player that
  *     dithers on the spot looks broken rather than hunted.
  */
+/**
+ * HOW FAR THE FOOD IS, ALONG THE CORRIDORS (M6, fixed 2026-09-17). The attract player used to score
+ * a way by the MANHATTAN distance to the nearest dot, which is a straight line through walls: in the
+ * eight-tile run under the pen -- exits at its two ends only -- the food it was steering for was on
+ * the other side of a wall, both ways scored alike and it paced back and forth until it was caught,
+ * three lives in half a minute, eating nothing (operator saw it: "that maze sucks"). This is a
+ * multi-source flood from every remaining dot, so a way is worth taking when it gets NEARER the food
+ * by the route a walker can actually take. 784 tiles, rebuilt only when the board changes.
+ */
+export function foodField(g) {
+  const m = g.maze;
+  const stamp = g.dots.size * 8 + g.pellets.size;
+  if (g.__food && g.__foodAt === stamp) return g.__food;
+  const d = new Int32Array(m.w * m.h).fill(-1);
+  const q = [];
+  for (const set of [g.dots, g.pellets]) {
+    for (const k of set) {
+      const [x, y] = k.split(',').map(Number);
+      d[y * m.w + x] = 0;
+      q.push({ x, y });
+    }
+  }
+  for (let i = 0; i < q.length; i++) {
+    const { x, y } = q[i];
+    const here = d[y * m.w + x];
+    for (const dir of DIR_LIST) {
+      const nx = ((x + dir.x) % m.w + m.w) % m.w, ny = y + dir.y;
+      if (ny < 0 || ny >= m.h) continue;
+      if (!free(m, nx, ny) || d[ny * m.w + nx] >= 0) continue;
+      d[ny * m.w + nx] = here + 1;
+      q.push({ x: nx, y: ny });
+    }
+  }
+  g.__food = d; g.__foodAt = stamp;
+  return d;
+}
+
 export function autoTurn(g) {
   const m = g.maze, man = g.man;
   const tile = tileOf(man);
@@ -634,23 +671,20 @@ export function autoTurn(g) {
     score += Math.min(danger, 10) * 6;
     const chase = near(prey);
     if (prey.length && chase < 9) score += (10 - chase) * 14;   // frightened: go and get them
-    const dot = nearestDot(g, { x: nx, y: ny });
-    score += dot == null ? 0 : (22 - Math.min(dot, 20)) * 2;
+    // TOWARD THE FOOD ALONG THE CORRIDORS, not as the crow flies
+    const food = foodField(g);
+    const there = food[ny * m.w + nx];
+    score += there < 0 ? -200 : (40 - Math.min(there, 40)) * 4;
     if (g.pellets.size && threat.length && danger < 6) {
       const pellet = nearest(g.pellets, { x: nx, y: ny }, m);
       if (pellet != null) score += (18 - Math.min(pellet, 18)) * 3;
     }
-    if (opposite(d, man.dir)) score -= 40;                  // dithering looks broken
+    if (opposite(d, man.dir)) score -= 120;                 // dithering looks broken, and it starves
     if (score > bestScore) { bestScore = score; best = d; }
   }
   return best;
 }
 
-const nearestDot = (g, from) => {
-  const a = nearest(g.dots, from, g.maze);
-  const b = nearest(g.pellets, from, g.maze);
-  return a == null ? b : (b == null ? a : Math.min(a, b));
-};
 function nearest(set, from, m) {
   let out = null;
   for (const k of set) {

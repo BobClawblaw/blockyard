@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets, setSound, setTune, setDemo, wallColourFor, WALL_COLOURS, FLASH_COLOUR, SOUND_OF } from '../public/js/blockmanview.js';
+import { screenRow, wallTiles, mazeOrder, currentPlay, currentGame, frameStats, setTargets, setSound, setTune, setDemo, wallColourFor, WALL_COLOURS, FLASH_COLOUR, SOUND_OF } from '../public/js/blockmanview.js';
 import { loadSettings } from '../public/js/settings.js';
 import { THEMES } from '../public/js/tetsound.js';
 import { PATCHES, WAVES, TABLE_LEN, VOICES, renderPatch, play, setSound as soundOn, state as soundState } from '../public/js/blockmansound.js';
@@ -26,7 +26,12 @@ test('the maze layer is every wall as a cube, and nothing else', () => {
     assert.match(t.color, /^#[0-9a-f]{6}$/i);
   }
   // the pen's box is lower than the walls, so the pursuers inside it can be seen
-  const pen = new Set(m.pen.map((p) => `${p.x},${p.y}`));
+  // THE LAYER CARRIES SCREEN ROWS. The renderer puts row 0 at the bottom of a board, so the view
+  // flips every grid row on its way in (screenRow) -- the maze is read off a grid and has to be
+  // drawn the way it is written, or up walks him down the screen.
+  assert.equal(screenRow(m, 0) - 1, m.h - 1, 'the maze’s top row is drawn as the board’s top row');
+  assert.equal(screenRow(m, m.h - 1) - 1, 0, 'and its bottom row at the bottom');
+  const pen = new Set(m.pen.map((p) => `${p.x},${screenRow(m, p.y) - 1}`));
   const inside = tiles.filter((t) => pen.has(`${t.x},${t.y}`));
   assert.equal(inside.length, m.pen.length);
   for (const t of inside) assert.ok(t.tall < 1, 'the pen floor is not a wall');

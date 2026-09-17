@@ -925,10 +925,13 @@ taken from that game: the maze was drawn for this project, the characters are cu
 computed here, and the names are ours, so BlockMan ships under the same Apache 2.0 licence as the
 rest of BlockYard. `docs/PLAN-BLOCKMAN.md` is the plan, and says where that line runs.
 
-The maze is 28 by 28 tiles: 250 dots, four pellets in the corners, a pen in the middle, and a
-tunnel out each side that brings you in the other one. It is built once as 262 cubes and kept for
+The maze is 28 by 28 tiles: 258 dots, four pellets out in the quarters, a pen in the middle, and a
+tunnel out each side that brings you in the other one. It is built once as 504 cubes and kept for
 every level, as the original kept its own, and everything that moves is painted over those cubes in
-the same light. The maze does not change; the pursuers get faster and bolder, and from level five
+the same light. **No tile in it is a dead end** — every one has at least two ways out, so a wrong
+turn is never fatal by itself; the layout is drawn on a lattice of corridors three tiles apart and
+then has passages closed one at a time, each closure kept only if no dead end, no open room and no
+cut-off corner appears, which is where the varied block shapes come from. The maze does not change; the pursuers get faster and bolder, and from level five
 they are quick enough that the pellets are the only way through.
 
 ### Playing

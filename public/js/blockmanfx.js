@@ -53,14 +53,24 @@ export function paintDots(ctx, P, U, { dots, pellets, now = 0, colour = '#ffe9a8
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
   }
   ctx.fill();                                   // one path for every dot: one fill a frame
-  const beat = 0.75 + 0.25 * Math.sin(now / 260);
+  // A PELLET HAS TO BE UNMISTAKABLE (operator, 2026-09-17: "the power pellets need to be WAY MORE
+  // OBVIOUS"). It was a dot two and a half times the size, which at this board's scale read as a
+  // slightly fat dot. Now it is nearly a whole tile across, white-hot in the middle, ringed, and it
+  // BLINKS between two sizes on a half-second beat -- the four of them are the first thing the eye
+  // lands on, which is the point: they are the only choice the maze offers.
+  const beat = Math.floor(now / 260) % 2 === 0 ? 1 : 0.76;
+  const halo = Math.min(U.x, U.y) * 0.92 * beat;
   for (const p0 of pellets) {
     const p = P(p0.x + 0.5, p0.y + 0.5);
-    const R = Math.min(U.x, U.y) * 0.42 * beat;
-    for (const [k, a] of [[1, 0.28], [0.7, 0.5], [0.45, 1]]) {
-      ctx.fillStyle = `rgba(255,236,170,${a})`;
-      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, R * k), 0, Math.PI * 2); ctx.fill();
+    // nested discs, outside in: a wide soft glow, the body, then a hot core (no gradients here)
+    for (const [k, fill] of [[1, 'rgba(255,214,120,0.22)'], [0.78, 'rgba(255,226,150,0.45)'],
+      [0.6, 'rgba(255,238,190,0.85)'], [0.36, 'rgba(255,255,255,0.95)']]) {
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, halo * k), 0, Math.PI * 2); ctx.fill();
     }
+    ctx.strokeStyle = 'rgba(255,248,214,0.9)';
+    ctx.lineWidth = Math.max(1, U.x * 0.08);
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, halo * 0.86), 0, Math.PI * 2); ctx.stroke();
   }
 }
 

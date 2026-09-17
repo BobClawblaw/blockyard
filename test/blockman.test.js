@@ -525,7 +525,7 @@ test('M4: the walk home is downhill on a distance field, so it cannot flip-flop'
       }
     }
   }
-  assert.ok(reachable > 300, `${reachable} tiles measured`);
+  assert.ok(reachable > 250, `${reachable} tiles measured`);
 });
 
 // ------------------------------------------------------------------ M6: difficulty, attract mode
@@ -585,7 +585,7 @@ test('M6: a restart keeps the lives, the difficulty and attract mode the game wa
   assert.equal(g.auto, true, 'attract mode stays on, so a wall screen keeps playing');
   assert.equal(g.score, 0);
   assert.equal(g.level, 1);
-  assert.equal(g.dots.size, 250, 'a full board again');
+  assert.equal(g.dots.size, 258, 'a full board again');
 });
 
 test('M6: an attract game is the same game, played without hands', () => {
