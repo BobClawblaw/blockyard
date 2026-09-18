@@ -1347,6 +1347,13 @@ export class NodeMonitor extends EventEmitter {
   // (`txindex`, `txospender`, `addr_hist`). Several log lines from two different
   // writers describe the same index, so they share one accessor -- the same shape as
   // peerRecord above, for the same reason.
+  /** The current start's boot record, created if a boot line arrives without the first one (a log read from the middle). */
+  bootRecord(ts) {
+    const ls = this.state.logState;
+    ls.boot = ls.boot ?? { startedAt: ts, via: null, steps: [], dnsSeeds: [], inProgress: null };
+    return ls.boot;
+  }
+
   indexRecord(name, ts) {
     const ls = this.state.logState;
     ls.indexes = ls.indexes ?? {};
@@ -1666,6 +1673,38 @@ export class NodeMonitor extends EventEmitter {
         // 2,349 lines in one run.
         ls.utxoMergeDeferred = { at: ev.ts, runs: ev.runs, applyLag: ev.applyLag, waitsUnder: ev.waitsUnder };
         return [];
+      // THE BOOT SEQUENCE (logparse.js, "the boot sequence"): state, one record per start, reset
+      // by the start's first line. Only the finished boot reaches the feed: one line per start,
+      // where the other twenty-four would be noise.
+      case 'boot_start':
+        ls.boot = { startedAt: ev.ts, via: ev.via, steps: [], dnsSeeds: [], inProgress: null };
+        return [];
+      case 'boot_chain': Object.assign(this.bootRecord(ev.ts), { chain: ev.chain, port: ev.port, dnsseed: ev.dnsseed }); return [];
+      case 'boot_config': this.bootRecord(ev.ts).config = ev.settings; return [];
+      case 'boot_step_begin': this.bootRecord(ev.ts).inProgress = ev.step; return [];
+      case 'boot_step': {
+        const b = this.bootRecord(ev.ts);
+        if (b.steps.length < 32) b.steps.push({ step: ev.step, sec: ev.sec, detail: ev.detail, note: ev.note });
+        if (ev.tip != null) b.archiveTip = ev.tip;
+        if (ev.blocksWritten != null) b.catchUpBlocks = ev.blocksWritten;
+        b.inProgress = null;
+        return [];
+      }
+      case 'boot_genesis': this.bootRecord(ev.ts).genesisSeeded = { chain: ev.chain, height: ev.height, note: ev.note }; return [];
+      case 'boot_catchup_setting': this.bootRecord(ev.ts).bootCatchup = ev.bootCatchup; return [];
+      case 'boot_pid': this.bootRecord(ev.ts).pid = ev.pid; return [];
+      case 'boot_dns_seed': {
+        const b = this.bootRecord(ev.ts);
+        if (b.dnsSeeds.length < 32) b.dnsSeeds.push({ seed: ev.seed, peers: ev.peers });
+        return [];
+      }
+      case 'boot_discovered': this.bootRecord(ev.ts).discovered = { added: ev.added, total: ev.total, file: ev.file }; return [];
+      case 'boot_candidates': this.bootRecord(ev.ts).candidates = ev.candidates; return [];
+      case 'boot_complete': {
+        const b = this.bootRecord(ev.ts);
+        b.completeSec = ev.sec; b.completedAt = ev.ts; b.inProgress = null;
+        return [ev];
+      }
       case 'dial_memory':
         ls.dialMemory = { at: ev.ts, remembered: ev.remembered, skippedBackoff: ev.skippedBackoff, blocksClaimed: ev.blocksClaimed, duplicateFetchesAvoided: ev.duplicateFetchesAvoided };
         return [];
@@ -2331,6 +2370,8 @@ export class NodeMonitor extends EventEmitter {
         orphans: s.logState.orphans ?? null,
         orphanDetail: s.logState.orphanDetail ?? null,
         connBudget: s.logState.connBudget ?? null,
+        // the node's last start, from its [boot] lines: steps and times, config, seeds, the total
+        boot: s.logState.boot ?? null,
         backfilled: this.logBackfilled,
         // What the log-health timer concluded, not what we hope. `ratio` is the
         // share of lines a parser actually claimed over the last window, and

@@ -1,0 +1,25 @@
+2026-09-18 19:15:29.106 [boot] logging to /mnt/nvme8tb/bench/run27/data/main/debug.log (debuglogfile)
+2026-09-18 19:15:29.106 [boot] chain=main datadir=/mnt/nvme8tb/bench/run27/data/main port=8462 dnsseed=1
+2026-09-18 19:15:29.223 [boot] tx-validation snapshot ready (0.00s) -- inbound peers inherit it
+2026-09-18 19:15:29.235 [boot] main genesis seeded at height 0 (empty archive)
+2026-09-18 19:15:29.235 [boot] config: datadir=/mnt/nvme8tb/bench/run27/data/main port=8462 (bitcoin.conf) listen=1 nwant=3 catchup_workers=8 (bmc.catchupworkers) dialratelimit=0/s (off) downloadratelimit=0KB/s (off) uploadratelimit=0KB/s (off)
+2026-09-18 19:15:29.235 [boot] loading chain archive from disk...
+2026-09-18 19:15:29.235 [boot] chain archive loaded: tip=0 (0.00s)
+2026-09-18 19:15:29.235 [boot] archive check clean (0.00s)
+2026-09-18 19:15:29.235 [boot] checking for archive gaps / missing blocks...
+2026-09-18 19:15:29.235 [boot] bmc.bootcatchup=0 -- skipping the boot catch-up; the worker's far-behind trigger will run it if needed
+2026-09-18 19:15:29.235 [boot] catch-up check done: 0 block(s) written (0.00s)
+2026-09-18 19:15:29.235 [boot] building hash index...
+2026-09-18 19:15:29.299 [boot] hash index build done (0.06s)
+2026-09-18 19:15:29.304 [boot] boot phase complete (0.07s total)
+2026-09-18 19:15:29.317 [boot] pid 1394725 written to bmcbitcoind.pid
+2026-09-18 19:15:29.746 [boot] seed.bitcoin.sipa.be -> +25 peers (dns)
+2026-09-18 19:15:29.786 [boot] dnsseed.bluematt.me -> +21 peers (dns)
+2026-09-18 19:15:29.786 [boot] seed.bitcoinstats.com -> +24 peers (dns)
+2026-09-18 19:15:29.786 [boot] seed.bitcoin.jonasschnelli.ch -> +24 peers (dns)
+2026-09-18 19:15:29.786 [boot] seed.btc.petertodd.net -> +24 peers (dns)
+2026-09-18 19:15:29.829 [boot] seed.bitcoin.wiz.biz -> +1 peers (dns)
+2026-09-18 19:15:29.829 [boot] dnsseed.bitcoin.dashjr.org -> +22 peers (dns)
+2026-09-18 19:15:29.851 [boot] seed.bitnodes.io -> +2 peers (dns)
+2026-09-18 19:15:29.851 [boot] discovered +143 peers (peers2.dat now 143)
+2026-09-18 19:15:29.851 [boot] 64 public peer candidate(s) in pool

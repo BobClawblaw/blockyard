@@ -1030,6 +1030,103 @@ const RULES = [
       return { kind: 'index_trail', indexes };
     },
   },
+
+  // --------------------------------------------------- the boot sequence
+  // WHAT THE NODE SAYS AS IT STARTS (2026-09-18: the monitor flagged "[boot] has 25 line(s) no
+  // rule claims" on run 27's first start). Twenty-five lines, once per start, in 25 shapes: where
+  // it logs, its chain and effective config, each boot step with its time, the DNS seeds and what
+  // they gave, and the total. One of them is news -- the boot finished, in how long, at what tip
+  // -- and goes to the feed; the rest is state (monitor.js `ls.boot`), the same rule as §39's
+  // chatty lines. A rule per shape rather than one `[boot] .*` catch-all, so a new boot line is
+  // still reported as unread instead of being claimed without being read.
+  //
+  // [boot] logging to /…/debug.log (debuglogfile) -- the first line of every start
+  {
+    name: 'bootLogging',
+    re: /\[boot\]\s*logging to (\S+) \((\w+)\)$/,
+    apply: (m) => ({ kind: 'boot_start', logFile: m[1], via: m[2] }),
+  },
+  // [boot] chain=main datadir=/… port=8462 dnsseed=1
+  {
+    name: 'bootChain',
+    re: /\[boot\]\s*chain=(\S+) datadir=\S+ port=(\d+) dnsseed=(\d+)$/,
+    apply: (m) => ({ kind: 'boot_chain', chain: m[1], port: +m[2], dnsseed: m[3] === '1' }),
+  },
+  // [boot] config: datadir=/… port=8462 (bitcoin.conf) listen=1 nwant=3 catchup_workers=8 (bmc.catchupworkers) dialratelimit=0/s (off) …
+  // Every key=value, with the source or state the node puts in brackets after it. The datadir
+  // is left out: it is a path on the node's machine, and the monitor already knows it.
+  {
+    name: 'bootConfig',
+    re: /\[boot\]\s*config:\s*(.+)$/,
+    apply(m) {
+      const settings = {};
+      for (const [, k, v, note] of m[1].matchAll(/(\w+)=(\S+)(?:\s+\(([^)]*)\))?/g)) {
+        if (k === 'datadir') continue;
+        settings[k] = note ? { value: v, note } : { value: v };
+      }
+      return Object.keys(settings).length ? { kind: 'boot_config', settings } : null;
+    },
+  },
+  // [boot] boot phase complete (0.07s total) -- the news: before the timed-step rule, which would claim it
+  {
+    name: 'bootComplete',
+    re: /\[boot\]\s*boot phase complete \((\d+(?:\.\d+)?)s total\)$/,
+    apply: (m) => ({ kind: 'boot_complete', sec: +m[1] }),
+  },
+  // [boot] chain archive loaded: tip=0 (0.00s) · archive check clean (0.00s) · catch-up check done: 0 block(s) written (0.00s)
+  // [boot] hash index build done (0.06s) · tx-validation snapshot ready (0.00s) -- inbound peers inherit it
+  {
+    name: 'bootStep',
+    re: /\[boot\]\s*(.+?)\s*\((\d+(?:\.\d+)?)s\)(?:\s*--\s*(.+))?$/,
+    apply(m) {
+      const tip = m[1].match(/\btip=(-?\d+)/);
+      const written = m[1].match(/(\d+) block\(s\) written/);
+      return { kind: 'boot_step', step: m[1].replace(/:\s*.*$/, '').trim(), detail: m[1].trim(), sec: +m[2], note: m[3]?.trim() ?? null,
+        tip: tip ? +tip[1] : null, blocksWritten: written ? +written[1] : null };
+    },
+  },
+  // [boot] loading chain archive from disk... · checking for archive gaps / missing blocks... · building hash index...
+  {
+    name: 'bootStepBegin',
+    re: /\[boot\]\s*(.+?)\.\.\.$/,
+    apply: (m) => ({ kind: 'boot_step_begin', step: m[1].trim() }),
+  },
+  // [boot] main genesis seeded at height 0 (empty archive)
+  {
+    name: 'bootGenesis',
+    re: /\[boot\]\s*(\w+) genesis seeded at height (\d+)(?:\s*\(([^)]*)\))?$/,
+    apply: (m) => ({ kind: 'boot_genesis', chain: m[1], height: +m[2], note: m[3] ?? null }),
+  },
+  // [boot] bmc.bootcatchup=0 -- skipping the boot catch-up; the worker's far-behind trigger will run it if needed
+  {
+    name: 'bootCatchupSetting',
+    re: /\[boot\]\s*bmc\.bootcatchup=(\d+)\s*--\s*(.+)$/,
+    apply: (m) => ({ kind: 'boot_catchup_setting', bootCatchup: m[1] === '1', note: m[2].trim() }),
+  },
+  // [boot] pid 1394725 written to bmcbitcoind.pid
+  {
+    name: 'bootPid',
+    re: /\[boot\]\s*pid (\d+) written to (\S+)$/,
+    apply: (m) => ({ kind: 'boot_pid', pid: +m[1], file: m[2] }),
+  },
+  // [boot] seed.bitcoin.sipa.be -> +25 peers (dns)
+  {
+    name: 'bootDnsSeed',
+    re: /\[boot\]\s*(\S+) -> \+(\d+) peers \(dns\)$/,
+    apply: (m) => ({ kind: 'boot_dns_seed', seed: m[1], peers: +m[2] }),
+  },
+  // [boot] discovered +143 peers (peers2.dat now 143)
+  {
+    name: 'bootDiscovered',
+    re: /\[boot\]\s*discovered \+(\d+) peers \((\S+) now (\d+)\)$/,
+    apply: (m) => ({ kind: 'boot_discovered', added: +m[1], file: m[2], total: +m[3] }),
+  },
+  // [boot] 64 public peer candidate(s) in pool
+  {
+    name: 'bootCandidates',
+    re: /\[boot\]\s*(\d+) public peer candidate\(s\) in pool$/,
+    apply: (m) => ({ kind: 'boot_candidates', candidates: +m[1] }),
+  },
 ];
 
 // Which measurements must keep arriving, and how long a silence counts as a format
