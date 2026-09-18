@@ -231,6 +231,46 @@ Two corrections to this plan, made because the code disagreed with it:
    performance knob is an acknowledgement people learn to click through, which spends the
    attention the mechanism is there to buy.
 
+## 11. Releases, while this is being built
+
+*Operator, 2026-09-18: "Nobody should ever use the wallet build for now, and we should
+exclude it from shipping entirely. It will need a lot of work before it's ready to ship
+publicly."*
+
+**The rule: releases continue as normal, and they are read-only releases.** Nothing about
+the release process changes, because the suite is excluded from every artifact rather than
+held on a branch that someone has to remember not to merge.
+
+Four exclusions, each of which fails on its own:
+
+| artifact | what excludes the suite |
+|---|---|
+| npm tarball (`npm pack`, `npm publish`) | `package.json` `files`, with `!` negations for every path in `ADMIN_PATHS` |
+| container image (Umbrel) | `.dockerignore` — Docker never reads `files`, and `umbrel/Dockerfile` does `COPY server ./server` |
+| a built edition | `scripts/build-edition.js` refuses `--edition admin` without `--unreleased` |
+| the registry | the admin artifact is marked `private: true`, which `npm publish` refuses outright |
+
+`ADMIN_PATHS` in `scripts/build-edition.js` is the single definition, and
+`test/release-guard.test.js` fails if any of the four drifts from it — including a new file
+that *looks* like suite code but sits outside the listed paths, which is how
+`server/rpc/admin-allowlist.js` was caught shipping.
+
+**What a released build does when someone asks for the suite.** It says the suite is not in
+this build and names the edition that has it (`server/edition.js`, `server/admin-gate.js` —
+both ship for exactly this reason). A setting that is silently ignored teaches people the
+switch is broken; one that explains itself teaches them it is absent.
+
+**What ships today**, with M0–M3 merged: nothing user-visible. The gate chain and the
+elevation machinery are on `main`, excluded from artifacts, default-off, and inert — a
+released `blockyard` behaves exactly as it did before this work started, which is the
+property `test/admin-disabled.test.js` exists to hold.
+
+**Before it can ship publicly**, at minimum: M8's security audit over the whole surface;
+the operator's own use of it on a real wallet for long enough to trust it; the open
+decisions in §10; and a deliberate decision about whether it ships as a second artifact at
+all or stays a private build. None of that is close, and the exclusions above mean none of
+it is blocking a release of the monitor.
+
 ## 9. Non-goals
 
 No seed generation, no key display, no `dumpprivkey`, no `sethdseed`, ever. No wallet backup

@@ -59,10 +59,14 @@ test('the read-only build does not contain the suite, at all', () => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); __resetEditionCache(); }
 });
 
+// `unreleased: true` throughout: building the admin edition takes a deliberate
+// acknowledgement that it is not fit to ship (scripts/build-edition.js, and
+// test/release-guard.test.js holds the refusal). A test is exactly the caller that should
+// pass it -- it is building an artifact to inspect, not to release.
 test('the administrative build contains it, and says so', () => {
   const dir = tmp();
   try {
-    const out = buildEdition({ edition: EDITIONS.ADMIN, outDir: dir, root: ROOT });
+    const out = buildEdition({ edition: EDITIONS.ADMIN, outDir: dir, root: ROOT, unreleased: true });
     assert.ok(out.adminFiles.length >= 1);
     assert.equal(fs.existsSync(path.join(dir, 'server/admin/index.js')), true);
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
@@ -76,7 +80,7 @@ test('the administrative build contains it, and says so', () => {
 test('neither build ships a deployment\'s secrets, state or somebody else\'s games', () => {
   const dir = tmp();
   try {
-    buildEdition({ edition: EDITIONS.ADMIN, outDir: dir, root: ROOT });
+    buildEdition({ edition: EDITIONS.ADMIN, outDir: dir, root: ROOT, unreleased: true });
     for (const p of ['config/local.json', 'config/blockyard.json', 'data', 'worklog', 'games', 'test', '.git']) {
       assert.equal(fs.existsSync(path.join(dir, p)), false, `${p} must never be in an artifact`);
     }
@@ -105,7 +109,7 @@ test('on the read-only build the gate refuses before it even looks at the settin
 test('a build that claims the suite but lacks the files is called broken, not disabled', () => {
   const dir = tmp();
   try {
-    buildEdition({ edition: EDITIONS.ADMIN, outDir: dir, root: ROOT });
+    buildEdition({ edition: EDITIONS.ADMIN, outDir: dir, root: ROOT, unreleased: true });
     fs.rmSync(path.join(dir, 'server/admin'), { recursive: true, force: true });
     __resetEditionCache();
     const ed = edition(dir);

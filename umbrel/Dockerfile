@@ -17,6 +17,10 @@ WORKDIR /app
 
 COPY package.json ./
 COPY bin ./bin
+# `server` and `public` are copied whole, MINUS whatever .dockerignore drops -- which is
+# where the administrative suite is excluded. Docker does not read package.json's `files`
+# list, so that exclusion has to exist separately, and test/release-guard.test.js checks
+# that both say the same thing.
 COPY server ./server
 COPY public ./public
 COPY scripts ./scripts

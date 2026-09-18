@@ -8,6 +8,17 @@ JSON-RPC (a log follower exists, but it does not understand Core's log -- see be
 serves charts plus a live event feed to several users at once. This box watches the node configured in `config/local.json` / the unit's
 `BLOCKYARD_NODE_*` environment.
 
+## Releases while the wallet is unfinished
+
+The administrative suite (`server/admin/`, `docs/PLAN-ADMIN-SUITE.md`) **does not ship**.
+It can spend money and has not had a security review, so every release artifact excludes it
+and `test/release-guard.test.js` fails if one stops doing so. Release the monitor as normal:
+`npm pack` produces the read-only edition, the container image excludes the suite through
+`.dockerignore`, and `scripts/build-edition.js --edition admin` refuses to build without
+`--unreleased` (and marks what it builds `private`, so it cannot be published). A released
+build that is asked for the suite explains that it is not in this build rather than
+ignoring the setting.
+
 ## Run it
 
 ```bash
@@ -401,7 +412,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1168 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1175 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -686,7 +697,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1168 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1175 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

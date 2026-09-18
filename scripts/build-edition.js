@@ -30,7 +30,16 @@ const ALWAYS_EXCLUDE = ['data', 'worklog', 'games', 'node_modules', '.git', 'tes
   'config/local.json', 'config/blockyard.json', '.claude'];
 
 // THE SPLIT. Everything the administrative suite is, listed once.
-export const ADMIN_PATHS = ['server/admin', 'server/admin-gate.js', 'public/js/admin'];
+export const ADMIN_PATHS = [
+  'server/admin',
+  'server/admin-gate.js',
+  // Added 2026-09-18 after test/release-guard.test.js found it: the suite's RPC capability
+  // list lives under server/rpc/ rather than server/admin/, so the directory exclusion
+  // missed it and it was shipping in both the npm tarball and the container image. It is
+  // imported only from server/admin/, so excluding it costs a read-only build nothing.
+  'server/rpc/admin-allowlist.js',
+  'public/js/admin',
+];
 
 // admin-gate.js is deliberately NOT in that list -- see below. It is core: a read-only
 // build still has to be able to say "this build does not carry the suite" when someone
@@ -68,9 +77,20 @@ function copyTree(from, to, { exclude = [], rel = '' } = {}) {
  * The package is renamed for the administrative edition, because two artifacts that
  * install to the same name would be one artifact with a surprise in it.
  */
-export function buildEdition({ edition = EDITIONS.READONLY, outDir, root = ROOT } = {}) {
+export function buildEdition({ edition = EDITIONS.READONLY, outDir, root = ROOT, unreleased = false } = {}) {
   if (edition !== EDITIONS.READONLY && edition !== EDITIONS.ADMIN) {
     throw new Error(`edition must be "${EDITIONS.READONLY}" or "${EDITIONS.ADMIN}", not ${edition}`);
+  }
+  // THE ADMINISTRATIVE EDITION IS NOT RELEASABLE, and saying so at the point of building it
+  // is worth more than saying so in a document (operator, 2026-09-18: "Nobody should ever
+  // use the wallet build for now... It will need a lot of work before it's ready to ship
+  // publicly"). Building one for a development machine is deliberate and takes a flag; the
+  // artifact it produces is marked `private` so `npm publish` refuses it outright, rather
+  // than relying on whoever runs the release to remember.
+  if (edition === EDITIONS.ADMIN && !unreleased) {
+    throw new Error('the administrative edition is not fit to ship: it can spend money and has not had its '
+      + 'security review (docs/PLAN-ADMIN-SUITE.md M8). Pass --unreleased to build one for a development '
+      + 'machine, which marks the package private so it cannot be published.');
   }
   if (!outDir) throw new Error('an --out directory is required');
   fs.rmSync(outDir, { recursive: true, force: true });
@@ -100,7 +120,12 @@ export function buildEdition({ edition = EDITIONS.READONLY, outDir, root = ROOT 
   pkg.blockyardEdition = edition;
   if (edition === EDITIONS.ADMIN) {
     pkg.name = 'blockyard-admin';
-    pkg.description = `${pkg.description} — administrative edition: wallet, config and daemon control`;
+    pkg.description = `${pkg.description} — administrative edition: UNRELEASED, development only`;
+    // npm refuses to publish a package marked private. That is the backstop: the exclusion
+    // lists, the flag above and this each fail independently, and a release has to defeat
+    // all three to put a wallet on a registry.
+    pkg.private = true;
+    pkg.blockyardUnreleased = true;
   }
   fs.writeFileSync(path.join(outDir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
   files.push('package.json');
@@ -112,9 +137,10 @@ const isMain = process.argv[1] && fileURLToPath(import.meta.url) === fs.realpath
 if (isMain) {
   const edition = arg('edition', EDITIONS.READONLY);
   const outDir = arg('out', path.join(ROOT, 'build', `blockyard-${edition}`));
-  const out = buildEdition({ edition, outDir });
+  const out = buildEdition({ edition, outDir, unreleased: args.includes('--unreleased') });
   process.stdout.write(`${out.edition} edition: ${out.files.length} files -> ${out.outDir}\n`);
   process.stdout.write(out.edition === EDITIONS.READONLY
     ? `  the administrative suite is NOT in it (${ADMIN_PATHS.join(', ')} were not copied)\n`
-    : `  including ${out.adminFiles.length} file(s) of the administrative suite\n`);
+    : `  including ${out.adminFiles.length} file(s) of the administrative suite\n`
+      + '  UNRELEASED: marked private, not publishable, not for a machine holding real funds\n');
 }

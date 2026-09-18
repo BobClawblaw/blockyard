@@ -3,6 +3,20 @@
 #
 # games/ is NOT excluded: the DOS Diversions' shareware files ship, as they do in this
 # repository, and each package travels whole with its own licence text. See umbrel/Dockerfile.
+#
+# THE ADMINISTRATIVE SUITE IS EXCLUDED, and this is the layer that does it for container
+# images. package.json's `files` list keeps it out of the npm tarball, but Docker has never
+# heard of `files` -- `COPY server ./server` takes the directory whole -- so without these
+# three lines the Umbrel image would carry a wallet that can spend money, in a build nobody
+# is supposed to be running yet (operator, 2026-09-18: "Nobody should ever use the wallet
+# build for now, and we should exclude it from shipping entirely").
+#
+# These paths are the same list as ADMIN_PATHS in scripts/build-edition.js, and
+# test/release-guard.test.js fails if the two ever disagree.
+server/admin
+server/rpc/admin-allowlist.js
+public/js/admin
+public/css/admin.css
 .git
 .github
 node_modules
