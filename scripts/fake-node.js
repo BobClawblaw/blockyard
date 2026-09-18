@@ -77,7 +77,30 @@ const WALLET_METHODS_FAKE = {
       })),
     };
   },
-  getaddressinfo: (w, p) => ({ address: p[0], ismine: true, solvable: true, labels: [] }),
+  getaddressinfo: (w, p) => ({
+    address: p[0],
+    // A wallet knows its own addresses; anything else is not ours, and the suite has to
+    // behave differently for the two. `w.foreign` lets a test name one.
+    ismine: !(w.foreign ?? []).includes(p[0]),
+    solvable: true,
+    labels: [],
+  }),
+  getnewaddress: (w, p, name) => {
+    w.derived = (w.derived ?? 0) + 1;
+    const label = p[0] ?? '';
+    const type = p[1] ?? 'bech32m';
+    const addr = `bcrt1q${name}${type.replace(/[^a-z0-9]/g, '')}${String(w.derived).padStart(4, '0')}`;
+    (w.labels ??= {});
+    if (label) (w.labels[label] ??= []).push(addr);
+    return addr;
+  },
+  setlabel: (w, p) => {
+    const [addr, label] = p;
+    (w.labels ??= {});
+    for (const key of Object.keys(w.labels)) w.labels[key] = w.labels[key].filter((a) => a !== addr);
+    if (label) (w.labels[label] ??= []).push(addr);
+    return null;
+  },
 };
 
 export class FakeNode {
