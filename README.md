@@ -55,6 +55,34 @@ look-alike that happens to work:
   ([bmc PR #263](https://github.com/BobClawblaw/bitcoinmachinecode/pull/263)) and ~77% fewer index
   log lines ([bmc PR #265](https://github.com/BobClawblaw/bitcoinmachinecode/pull/265)).
 
+### mempool.space, out of the box
+
+bmc is built to run [mempool.space](https://github.com/mempool/mempool) with **nothing else
+beside it**: no Electrum server (electrs, Fulcrum), no separate indexer, no patch to mempool, and
+no rebuild once the node is synced.
+
+- **Everything mempool needs comes from the node process.** mempool's backend wants a
+  Core-compatible JSON-RPC server and, in its `esplora` mode, an Esplora REST API for blocks,
+  transactions and addresses. On Core that REST API is a second program with an index of its own —
+  hundreds of GB and days of building. bmc serves both itself: the RPC server, and an
+  Esplora-contract listener (`bmc.esploraport`) answering from the same dispatch — blocks,
+  transactions with fees and prevouts, outspends, merkle proofs, the mempool, fee estimates, and
+  address pages including unconfirmed activity.
+- **Its indexes are built during the initial sync, not after it.** `txindex`,
+  `txospenderindex`, `blockfilterindex`, `coinstatsindex` and the address history (`addrindex`,
+  about 200 GB on mainnet) are sorted runs that trail the chain as it syncs. A node that reaches
+  the tip has them all and is ready for mempool.space that minute. Undo data is kept for the whole
+  chain, so every block's fees and prevouts are there for mempool's block indexer too.
+- **mempool is configured, not modified**: `"BACKEND": "esplora"`, `CORE_RPC` pointed at the node,
+  `ESPLORA.REST_API_URL` at the listener. On the box BlockYard is developed on, mempool.space runs
+  against bmc this way today.
+
+Two things to know: the index options (`addrindex=1` above all) go in the node's config **before
+its first sync** — bmc will not switch the address index on for an already-synced chain, because
+the spends it would need are gone, and offers a one-off whole-chain build instead — and
+`/scripthash` routes are refused (501) for now. The full recipe is bmc's
+[docs/MEMPOOL_SPACE.md](https://github.com/BobClawblaw/bitcoinmachinecode/blob/main/docs/MEMPOOL_SPACE.md).
+
 Everything else in BlockYard works the same against Bitcoin Core; bmc is where it is proven first.
 
 ## Highlights
