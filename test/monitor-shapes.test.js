@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { NodeMonitor } from '../server/collect/monitor.js';
+import { parseLine } from '../server/collect/logparse.js';
 import { History } from '../server/store/history.js';
 
 function makeMonitor({ blockMapCap, state = {} } = {}) {
@@ -182,10 +183,17 @@ test('restarts age out of the window instead of accumulating forever', () => {
 
 // ------------------------------------------------------------- unseen log tags
 
+// THESE EVENTS COME FROM parseLine, NOT FROM A HAND-WRITTEN LITERAL (2026-09-18).
+// Every test here used to build `{ text: '[migratetx] …' }` -- a shape the real parser
+// never produces, because it strips the tag into `ev.tag` and leaves `text` without it.
+// So the census read '(untagged)' for every tagged line in production while these tests
+// passed. Building the events through parseLine is what makes the test able to fail.
+const rawEvent = (line) => parseLine(line);
+
 test('lines no rule claims are counted by tag, with a sample', () => {
   const m = makeMonitor();
   const now = Date.now();
-  for (let i = 0; i < 30; i++) m.onLogEvents([{ rule: null, kind: 'raw', severity: 'info', ts: now - i * 100, text: `[migratetx] sweeping 484 indexes (pass ${i})` }]);
+  for (let i = 0; i < 30; i++) m.onLogEvents([rawEvent(`2026-09-18 03:00:0${i % 10}.000 [migratetx] sweeping 484 indexes (pass ${i})`)]);
   const census = m.tagCensus();
   const top = census.tags[0];
   assert.equal(top.tag, '[migratetx]');
@@ -198,23 +206,53 @@ test('lines no rule claims are counted by tag, with a sample', () => {
 
 test('an untagged format change is counted too, not dropped', () => {
   const m = makeMonitor();
-  const now = Date.now();
-  for (let i = 0; i < 5; i++) m.onLogEvents([{ rule: null, kind: 'raw', severity: 'info', ts: now, text: 'no tag at all, new format' }]);
+  for (let i = 0; i < 5; i++) m.onLogEvents([rawEvent('2026-09-18 03:00:00.000 no tag at all, new format')]);
   assert.equal(m.tagCensus().tags[0].tag, '(untagged)');
   assert.equal(m.tagCensus().tags[0].lines, 5);
+});
+
+test('the census names the subsystem, which is the whole point of it', () => {
+  // The failure this replaces: [utxo_live] lines -- 5,280 of them on this box, plus
+  // [idx]'s ten thousand in the same bucket -- were all reported as '(untagged)',
+  // because the tag was re-derived from a text parseLine had already stripped it from.
+  const m = makeMonitor();
+  for (let i = 0; i < 30; i++) {
+    m.onLogEvents([rawEvent(`2026-09-18 03:00:00.000 [utxo_live] merge of ${i} run(s) deferred: the apply is 67491 blocks behind the archive`)]);
+  }
+  const top = m.tagCensus().tags[0];
+  assert.equal(top.tag, '[utxo_live]', 'the flag must name the subsystem, not shrug');
+  assert.equal(top.lines, 30);
+  assert.match(m.quality.find((q) => q.key === 'log-new-tag').text, /\[utxo_live\] has 30 line/);
+});
+
+test('a tag the parser could not claim is still named, from the text', () => {
+  // TAG_RE is [a-z0-9_]+, so a hyphenated tag is left in the text -- and naming it is
+  // how [coinstats-hist] was found and fixed upstream. The text fallback keeps that.
+  const m = makeMonitor();
+  for (let i = 0; i < 5; i++) m.onLogEvents([rawEvent('2026-09-18 03:00:00.000 [coinstats-hist] pass1 w0 10000/120922 (0s)')]);
+  assert.equal(m.tagCensus().tags[0].tag, '[coinstats-hist]');
+});
+
+test('sixteen download workers are one entry, not sixteen', () => {
+  // unseenTags holds 40 and evicts the oldest; per-worker tags would push real news out.
+  const m = makeMonitor();
+  for (let w = 0; w < 16; w++) m.onLogEvents([rawEvent(`2026-09-18 03:00:00.000 [dl:${w}] something new per worker`)]);
+  const tags = m.tagCensus().tags.map((t) => t.tag);
+  assert.deepEqual(tags, ['[dl]']);
+  assert.equal(m.tagCensus().tags[0].lines, 16);
 });
 
 test('a single unknown line does not raise a flag', () => {
   const m = makeMonitor();
   const now = Date.now();
-  m.onLogEvents([{ rule: null, kind: 'raw', severity: 'info', ts: now, text: '[novelty] one line' }]);
+  m.onLogEvents([rawEvent('2026-09-18 03:00:00.000 [novelty] one line')]);
   assert.equal(m.quality.find((q) => q.key === 'log-new-tag'), undefined,
     'one line is not a subsystem; the gate exists so the flag means something');
 });
 
 test('the log block carries the census so the panel can draw it', () => {
   const m = makeMonitor();
-  m.onLogEvents([{ rule: null, kind: 'raw', severity: 'info', ts: Date.now(), text: '[weird] hi' }]);
+  m.onLogEvents([rawEvent('2026-09-18 03:00:00.000 [weird] hi')]);
   const s = m.snapshot({ seriesRanges: {} });
   assert.ok(Array.isArray(s.log.unclaimed.tags));
   assert.equal(s.log.unclaimed.tags[0].tag, '[weird]');

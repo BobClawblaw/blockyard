@@ -1876,15 +1876,29 @@ export class NodeMonitor extends EventEmitter {
    *
    * `log.health.ratio` says coverage fell; it does not say what arrived, which is
    * the difference between "go read 5,000 lines" and "the node started printing
-   * `[migratetx]`". The tag is the first `[...]` on the line, kept verbatim, plus
-   * one sample so a new node feature is identifiable from the dashboard. Lines with
-   * no tag at all are counted under '(untagged)' rather than dropped -- an
-   * untagged format change is exactly as much news as a new tag.
+   * `[migratetx]`". The tag names the subsystem, plus one sample so a new node
+   * feature is identifiable from the dashboard. Lines with no tag at all are counted
+   * under '(untagged)' rather than dropped -- an untagged format change is exactly as
+   * much news as a new tag.
+   *
+   * THE TAG COMES FROM THE EVENT, NOT FROM ITS TEXT (fixed 2026-09-18). This used to
+   * re-derive the tag by matching `^[...]` against `ev.text` -- but parseLine has
+   * already STRIPPED the tag from that text, so the match never fired and every
+   * unparsed line in the world was filed under '(untagged)'. The census could
+   * therefore never do the one thing it exists for: name the subsystem. On this box
+   * that read "(untagged) has 5,280 line(s)" for lines plainly tagged `[utxo_live]`,
+   * with `[idx]`'s ten thousand silently added into the same bucket.
+   *
+   * The text fallback stays, and is not dead code: a tag TAG_RE cannot claim (a
+   * hyphen in it, say) is left in the text by design, and naming it is exactly how
+   * `[coinstats-hist]` was found. Grouping is by `tagBase`, so sixteen download
+   * workers are one entry rather than sixteen competing for the 40 the map holds.
    */
   noteUnseenTag(ev, now) {
     const text = String(ev.text ?? '');
     const m = text.match(/^\s*\[([^\]]{1,24})\]/);
-    const tag = m ? `[${m[1]}]` : '(untagged)';
+    const named = ev.tagBase ?? ev.tag ?? null;
+    const tag = named ? `[${named}]` : m ? `[${m[1]}]` : '(untagged)';
     const rec = this.unseenTags.get(tag) ?? { tag, lines: 0, firstAt: ev.ts ?? now, lastAt: ev.ts ?? now, sample: text.slice(0, 160) };
     rec.lines += 1;
     rec.lastAt = Math.max(rec.lastAt, ev.ts ?? now);
