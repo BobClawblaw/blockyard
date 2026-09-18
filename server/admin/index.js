@@ -13,10 +13,30 @@ globalThis.__blockyardAdminLoaded = true;
 import { HttpError } from '../http/api.js';
 import { adminGate, adminGateLine } from '../admin-gate.js';
 import { elevate, dropElevation, elevationState, elevationLabel, requireElevation } from './elevation.js';
+import { capabilitySummary } from '../rpc/admin-allowlist.js';
+import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels } from './wallet.js';
 
 /** The suite's own refusal: an HttpError the server turns into a JSON envelope. */
 function refuseWith(err) {
   throw new HttpError(err.status ?? 403, err.message, { code: err.code ?? 'admin-refused' });
+}
+
+/**
+ * Wrap a read handler so the wallet gates run first, in one place.
+ *
+ * Order matters and is the order of the plan's gate chain: hold the grant, then name a
+ * wallet the operator opted in. A caller that skipped either would be one `await` away
+ * from reading someone's balances without the grant.
+ */
+function walletRead(handler) {
+  return async (ctx, app) => {
+    try {
+      requireWalletAccess(app, ctx.user);
+      const wallet = requireNamedWallet(app, ctx.query?.wallet ?? namedWallets(app)[0]);
+      const node = ctx.query?.node ?? [...app.monitors.keys()][0];
+      return await handler(ctx, app, { wallet, node });
+    } catch (err) { refuseWith(err); }
+  };
 }
 
 /**
@@ -68,7 +88,9 @@ export function adminRoutes(app) {
           },
           // What this build can actually do, read by the UI rather than guessed from a
           // version number. Each milestone adds its own name here as it lands.
-          capabilities: ['elevation'],
+          capabilities: ['elevation', 'wallet.read'],
+          rpc: capabilitySummary(),
+          wallets: namedWallets(app),
           // This session's elevation, never the grant itself.
           elevation: elevationState(ctx.session?.tokenHash ?? null),
           you: {
@@ -131,6 +153,42 @@ export function adminRoutes(app) {
         });
         return { ok: true, user: out };
       }, { what: 'granting or revoking wallet access' }),
+    },
+
+    // ------------------------------------------------------------- the wallet, read-only
+    // Every one of these is a read. The capability they go through
+    // (server/rpc/admin-allowlist.js, `wallet.read`) contains no method that writes,
+    // derives a key or unlocks anything, so this whole block cannot change the wallet
+    // even if a handler below is wrong.
+    //
+    // They need the grant but NOT an elevation: re-asking for a password to look at a
+    // balance would train the operator to type it without reading the prompt, which is
+    // the habit the spend screen depends on them not having.
+    {
+      method: 'GET', path: '/api/admin/wallet', auth: 'admin',
+      handler: walletRead(async (ctx, app, { wallet, node }) => ({ ok: true, ...(await walletOverview(app, { node, wallet })) })),
+    },
+    {
+      method: 'GET', path: '/api/admin/wallet/utxos', auth: 'admin',
+      handler: walletRead(async (ctx, app, { wallet, node }) => ({
+        ok: true, wallet, utxos: await walletUtxos(app, { node, wallet, minconf: ctx.query?.minconf }),
+      })),
+    },
+    {
+      method: 'GET', path: '/api/admin/wallet/history', auth: 'admin',
+      handler: walletRead(async (ctx, app, { wallet, node }) => ({
+        ok: true, wallet, transactions: await walletHistory(app, { node, wallet, count: ctx.query?.count, skip: ctx.query?.skip }),
+      })),
+    },
+    {
+      method: 'GET', path: '/api/admin/wallet/descriptors', auth: 'admin',
+      // PUBLIC descriptors. `listdescriptors true` returns xprvs and is refused by the
+      // allowlist's argument rule, so there is no path from this route to a private key.
+      handler: walletRead(async (ctx, app, { wallet, node }) => ({ ok: true, ...(await walletDescriptors(app, { node, wallet })) })),
+    },
+    {
+      method: 'GET', path: '/api/admin/wallet/labels', auth: 'admin',
+      handler: walletRead(async (ctx, app, { wallet, node }) => ({ ok: true, wallet, labels: await walletLabels(app, { node, wallet }) })),
     },
   ];
 }

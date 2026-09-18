@@ -299,7 +299,7 @@ export class RpcClient {
 
   // Raw HTTP. Deliberately no keep-alive: holding the socket would hold the
   // server's single service slot between our own requests.
-  _raw(bodyStr, { timeoutMs, allowRetry = true } = {}) {
+  _raw(bodyStr, { timeoutMs, allowRetry = true, walletPath = '' } = {}) {
     const { mod, port } = this._transport();
     // With no credential we still send (some setups run RPC without auth), but a
     // 401 below is then reported as "no credential found", not as a mystery.
@@ -317,7 +317,17 @@ export class RpcClient {
         hostname: this.url.hostname,
         port,
         method: 'POST',
-        path: this.url.pathname === '/' ? '/' : this.url.pathname,
+        // WHICH WALLET (2026-09-18, the administrative suite). Bitcoin Core addresses a
+        // loaded wallet by URL path -- POST /wallet/<name> -- and with no path the call
+        // lands on the node's DEFAULT wallet, whichever that happens to be. A suite that
+        // means to read one wallet and silently reads another is a bug; a suite that
+        // means to SPEND from one and spends from another is a different word. So the
+        // path is per call, the caller names the wallet, and nothing here guesses.
+        //
+        // It goes through the same client, and therefore the same lane, breaker and rate
+        // limit: a second client per wallet would bypass the concurrency control that
+        // exists because this node services one RPC at a time.
+        path: (this.url.pathname === '/' ? '' : this.url.pathname) + walletPath || '/',
         agent: false,
         headers,
         setNoDelay: true,
@@ -352,7 +362,7 @@ export class RpcClient {
   // `key` makes this poll-coalescable: pass the same key for a recurring tier so
   // a fresh request supersedes one still waiting. Never pass a key for a
   // user-initiated call -- those must each be answered.
-  async batch(calls, { timeoutMs, heavy = false, key = null, maxWaitMs = null, priority = 5 } = {}) {
+  async batch(calls, { timeoutMs, heavy = false, key = null, maxWaitMs = null, priority = 5, walletPath = '' } = {}) {
     if (!calls.length) return [];
     const idOf = (i) => `c${i}`;
     const payload = calls.map((c, i) => ({ jsonrpc: '1.0', id: idOf(i), method: c.method, params: c.params ?? [] }));
@@ -364,7 +374,7 @@ export class RpcClient {
       const to = timeoutMs ?? (heavy ? this.cfg.heavyTimeoutMs : this.cfg.timeoutMs);
       let res;
       try {
-        res = await this._raw(body, { timeoutMs: to });
+        res = await this._raw(body, { timeoutMs: to, walletPath });
       } catch (err) {
         this.lastError = { at: Date.now(), message: err.message, kind: err.kind };
         this.lane.noteFailure(Math.round(performance.now() - t0), calls.length);
@@ -375,7 +385,7 @@ export class RpcClient {
         // Cookie likely rotated under us (a restart). Re-read once, then retry.
         const fresh = this._credentials(true);
         if (fresh) {
-          const retry = await this._raw(body, { timeoutMs: to });
+          const retry = await this._raw(body, { timeoutMs: to, walletPath });
           if (retry.status !== 401) { res = retry; }
           else {
             this.lastError = { at: Date.now(), message: 'RPC 401 unauthorized (cookie rejected after refresh)', kind: 'auth' };
