@@ -1,0 +1,23 @@
+2026-09-16 21:10:55.278 [idx] fold 0..0: read=1 present=1 new=1 dup=0 short=0 err=0 r=0 folded_to=0 slots=65536
+2026-09-16 21:10:55.278 [idx] chain view open: stored tip=0, by-hash table 65536 slots
+2026-09-16 21:12:57.731 [idx] table full; grew to 131072 slots, reload 0..967325: present=67081 new=67081 r=0 folded_to=67080
+2026-09-16 23:51:36.862 [utxo_live] merge of 2 run(s) deferred: the apply is 533584 blocks behind the archive (waits under 24 runs)
+2026-09-17 16:47:04.127 [dial] memory: 3 address(es) remembered, 0 candidate(s) skipped under backoff; blocks: 0 claimed, 0 duplicate fetch(es) avoided
+2026-09-17 17:02:56.018 [tip] 75.157.152.207:8333 announced block 00000000.. by headers: its pass runs next
+2026-09-16 21:29:45.189 [tip] 38.15.35.109:8333 announced block 00000000.. by inv: its pass runs next
+2026-09-17 17:37:29.103 [tip] 86.127.254.44:8333 announced block 00000000.. by a compact block off our tip: its pass runs next
+2026-09-16 21:12:23.512 [cmpct] 38.15.35.109:8333 accepts compact blocks: requesting MSG_CMPCT_BLOCK on this leg from now on
+2026-09-17 16:47:50.435 [cmpct] 86.127.254.44:8333 delivered a block: high-bandwidth compact blocks from this leg from now on (Core: the last 3 block sources)
+2026-09-17 17:52:20.631 [cmpct] 86.127.254.44:8333 back to low-bandwidth compact blocks (the high-bandwidth set holds 3)
+2026-09-17 16:47:50.196 [cmpct] reconstructed 6 block(s) from the mempool (6 needed a getblocktxn round trip, 0 fell back to a full block)
+2026-09-17 16:47:50.196 [cmpct] block 967440 (86.127.254.44:8333): 26 tx: 0 from the mempool (0.0%), 1 prefilled, 25 fetched by getblocktxn (3889 KB): 25 never announced, 0 announced not requested, 0 requested no reply, 0 orphans, 0 rejected by policy
+2026-09-17 17:02:57.188 [cmpct] block 967441 hash=000000000000000000018830868dac1af50d132bdf71d9707b9fe7271998bfc8 (86.127.254.44:8333): 4297 tx: 2912 from the mempool (67.8%), 1 prefilled, 1384 fetched by getblocktxn (448 KB): 1348 never announced, 0 announced not requested, 5 requested no reply, 18 orphans, 13 rejected by policy
+2026-09-17 16:47:07.616 [dl] outbound top-up: 1 dial(s) not started, first 141.239.119.165:8333: no dial helper free
+2026-09-16 21:10:55.300 [pool] 0 peer(s) sampled from the book: ipv4 0, ipv6 0, onion 0, i2p 0, cjdns 0 (book has 0/0/0/0/0 dialable)
+[coinstats-hist] pass1 w0 10000/120922 (0s)
+2026-09-17 16:47:04.143 [txrelay] orphan drops: 647 ttl, 0 evicted, 0 rejected | parents requested 1453, notfound 661, re-requested after timeout 1292, retried on another peer 318, drained 4242 (gave up 3257, in flight 34), sync deferred 0
+2026-09-18 04:00:00.000 [idx] fold 967400..967440: read=4096 present=120 new=0 dup=0 short=0 err=0 r=0 folded_to=967399 slots=4194304  <-- PRESENT BUT NOT INSERTED
+2026-09-18 04:05:00.000 [idx] fold 967440..967441: read=4096 present=8 new=8 dup=0 short=0 err=0 r=0 folded_to=967440 slots=4194304  (+412 quiet pass(es), read=1687552)
+2026-09-18 04:06:00.000 [idx] fold 967441..967442: read=4096 present=40 new=38 dup=0 short=2 err=1 r=0 folded_to=967441 slots=4194304
+2026-09-18 04:07:00.000 [idx] grow to 8388608 slots FAILED (malloc)
+2026-09-18 04:08:00.000 [coinstats_hist] pass1 w0 10000/120922 (0s)

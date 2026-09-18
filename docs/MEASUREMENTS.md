@@ -1489,3 +1489,50 @@ existing rule, all seven old ones are not, and the `[dl:0]`/`[mux:10]` worker fo
 pinned in `test/logparse.test.js`. Widening this reader to accept a hyphen was the alternative and
 was deliberately not taken: a tag that stops matching is a fact worth surfacing, and one reader
 quietly tolerating the drift is why the other six went unreported.
+
+## 39. The rest of the bmc log, once its grammar settled (2026-09-18)
+
+§37 measured the gap, §38 closed the index family, and this closes most of what was left —
+after the operator confirmed bmc's log grammar is final and run 27 will carry it.
+
+| | run 26's log (42,804 lines) |
+|---|---|
+| parsed before §38 | 22,614 (52.8%) |
+| parsed after §38 | 25,481 (59.5%) |
+| **parsed now** | **39,942 (93.3%)** |
+
+Five shapes carried 93% of what was unread, and the biggest was not fixed here at all:
+
+| lines | shape | what happened |
+|---|---|---|
+| 10,039 | `[idx] fold …` | **fixed upstream** (bmc PR #265): ~77% fewer lines in run 27 |
+| 2,349 | `[utxo_live] merge of N run(s) deferred` | rule |
+| 500 | `[dial] memory: …` | rule |
+| 498 | `[txrelay] orphan drops: …` | **an existing rule that had drifted** |
+| 369 | `[tip] … announced block … by …` | rule |
+
+**The drift is the one worth keeping.** `orphan drops:` had a rule; the node started
+writing `retried on another peer 318, drained 4242 (gave up …)` — one new field inside a
+line that already parsed — and the rule silently stopped matching 498 lines. Nothing
+failed, no test noticed, and the coverage figure moved by 1%. That is precisely the class
+§37 predicted, caught this time only because the whole remainder was being enumerated.
+The field is now optional, so both spellings parse.
+
+**`[idx]` went upstream rather than into a rule**, because reading it here would have been
+reading noise: 79.1% of the fold lines reported `present=0 new=0`, `err` and `short` were
+non-zero **zero** times in 30 hours, and 61% did not advance `folded_to`. bmc now throttles
+an idle fold into a five-minute heartbeat that carries how many quiet passes it stands for,
+and never throttles trouble or the present-but-not-inserted anomaly — which was also a
+latent bug there: the old condition dropped a non-zero `err` that landed inside the 5 s
+window. The rule here reads the new tails, so "nothing happened 412 times" is a figure
+rather than a silence.
+
+**Throughput is unchanged**: 178,124 lines/s before, 177,605 after, on the same 42,804
+lines. Fifteen more rules cost nothing measurable because each one matches on a tag that
+fails in the first few characters for every line that is not its own.
+
+**What is still unread** is now a long tail: 205 distinct shapes, none above 65 lines —
+`[dl:N] connection closed`, `[dl] filled outbound`, `[dlc] stalling the window`,
+`[addrindex] journal rotated`, `[mux:N] no dial helper free`, `[addrself] external address
+confirmed`, and 28 one-shot `[boot]` lines. Worth doing when a panel needs one of them, not
+before.
