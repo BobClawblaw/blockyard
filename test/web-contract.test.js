@@ -268,3 +268,22 @@ test('the cards rewritten from the render path are reachable by id, not by trave
   assert.ok(ids.includes('ovFeesCard'), 'and the page carries that id');
   assert.doesNotMatch(shell.js, /\.closest\('\.card'\)/, 'no walking up from a child in the render path');
 });
+
+test('every id a page renderer writes is on the page', () => {
+  // Operator, 2026-09-18: "why is throughput missing?" The Throughput card moved from the
+  // Overview to the Network page with its Overview ids, its writer stayed behind in
+  // renderOverview, and renderNetwork wrote ntIn / ntInChart -- ids nothing carried. Nothing
+  // failed: setText and paint on a missing element are silent by design. The same sweep found
+  // two more: the Overview's connections chart, whose canvas had moved to the Peers page, and a
+  // Peers note cleared into nowhere. An id written from code must exist in the markup, or in
+  // markup the code itself builds (an id="..." inside a template string).
+  const html = read('index.html');
+  const known = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+  for (const f of ['js/app.js', 'js/panels.js']) {
+    const src = read(f);
+    for (const m of src.matchAll(/id="([A-Za-z0-9_-]+)"/g)) known.add(m[1]);   // built by the code itself
+    const written = [...src.matchAll(/(?:setText|canvas|getElementById)\(\s*'([A-Za-z0-9_-]+)'/g)].map((m) => m[1]);
+    const missing = [...new Set(written)].filter((id) => !known.has(id));
+    assert.deepEqual(missing, [], `${f} writes ids the page does not have`);
+  }
+});

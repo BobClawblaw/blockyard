@@ -335,3 +335,26 @@ test('the rare tier first runs only after the first mid run has answered', async
   assert.ok(midEnd >= 0 && rareStart > midEnd, `rare waited for mid (${order.join(' ')})`);
   await m.stop();
 });
+
+test('a synced node\'s idle downloader does not hide the traffic getnettotals counts', async () => {
+  // Operator, 2026-09-18: "why is throughput missing?" BMC's getnettotals counts every byte, and
+  // the log's [dlc] tick reports only the block downloader -- 0 on a synced node while relay moved
+  // ~19 KB/s. The log's rate was made to win when getnettotals answered 0/0, so it wrote that 0
+  // over the RPC rate and into the chart. It now counts only while RPC cannot see the traffic.
+  const m = makeMonitor({ logFile: null });
+  Object.assign(m.state.net, { totalRecv: 1_011_501_229, totalSent: 94_365_296, inBps: 19_000, outBps: 1_300, uploadtarget: null });
+  m.onLogEvents([{ kind: 'bandwidth', ts: Date.now(), netRate: 0, netTotal: 5e9, diskRate: 0, diskTotal: 7e11 }]);
+  let s = m.snapshot({});
+  assert.equal(s.net.inBps, 19_000, 'the RPC rate stands');
+  assert.equal(s.net.inSource, 'rpc');
+  const pts = m.history.ring('net').raw.rows.filter((r) => r.node === m.id);
+  assert.ok(pts.every((r) => r.inBps !== 0), 'and no 0 from the log goes into the chart');
+  assert.ok(pts.some((r) => r.diskTotal === 7e11), 'while the disk figures, which only the log has, still do');
+  // blind RPC: the log's rate is the figure
+  Object.assign(m.state.net, { totalRecv: 0, totalSent: 0, inBps: null, outBps: null });
+  m.onLogEvents([{ kind: 'bandwidth', ts: Date.now(), netRate: 11.2e6, netTotal: 47e9 }]);
+  s = m.snapshot({});
+  assert.equal(s.net.inBps, 11.2e6, 'with getnettotals blind, the log\'s download rate is used');
+  assert.equal(s.net.inSource, 'log');
+  await m.stop();
+});

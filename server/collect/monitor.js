@@ -529,6 +529,12 @@ export class NodeMonitor extends EventEmitter {
     return { ok: true };
   }
 
+  /** getnettotals counts real traffic: a non-zero receive counter and a rate derived from it. */
+  rpcSeesTraffic() {
+    const n = this.state.net;
+    return n.totalRecv != null && n.totalRecv > 0 && n.inBps != null;
+  }
+
   async tier_mid() {
     // Five estimatesmartfee targets in ONE batch. callList() keys by method name,
     // which would collapse the five into one, so this tier reads the batch
@@ -1378,12 +1384,20 @@ export class NodeMonitor extends EventEmitter {
           ls.bannedOf = ev.bannedOf;
           this.history.record('peers', { banned: ev.banned, connections: this.state.peers.connections ?? null, in: this.state.peers.in ?? null, out: this.state.peers.out ?? null });
         }
-        this.state.net.inBps = ev.netRate ?? this.state.net.inBps;
+        // THE LOG'S RATE IS THE DOWNLOADER'S, AND ONLY STANDS IN FOR A BLIND RPC (operator,
+        // 2026-09-18: "why is throughput missing?"). `[dlc] tick` reports the block download
+        // worker's traffic. It was made to win because the builds of 2026-09-08 answered
+        // getnettotals with 0/0, so it was the only real figure. BMC's getnettotals counts every
+        // byte now, and on a synced node the downloader idles at 0 while relay moves ~19 KB/s:
+        // writing that 0 over the RPC rate showed an idle node, and recording it put zeros in
+        // the chart between the real points. The log's rate now counts only while RPC cannot
+        // see the traffic (rpcSeesTraffic); the disk figures, which only the log has, always do.
+        const rpcSees = this.rpcSeesTraffic();
         this.state.net.logNetTotal = ev.netTotal;
-        this.state.net.outBps = this.state.net.outBps ?? null;
+        if (!rpcSees) this.state.net.inBps = ev.netRate ?? this.state.net.inBps;
         this.history.record('net', {
-          inBps: ev.netRate ?? null, outBps: this.state.net.outBps ?? null,
-          diskWriteBps: ev.diskRate ?? null, inTotal: ev.netTotal ?? null, diskTotal: ev.diskTotal ?? null,
+          ...(rpcSees ? {} : { inBps: ev.netRate ?? null, outBps: this.state.net.outBps ?? null, inTotal: ev.netTotal ?? null }),
+          diskWriteBps: ev.diskRate ?? null, diskTotal: ev.diskTotal ?? null,
         });
         return [];
       }
@@ -2265,9 +2279,11 @@ export class NodeMonitor extends EventEmitter {
         // moved ~47 GB). 0 B/s on a chart reads as "an idle node", which is a claim
         // about the network, not an absence. Symmetric with uploadMeasured below, and
         // the log rate still wins when the tail is on, because it is a real number.
-        inBps: s.logState.inBps ?? ((s.net.totalRecv ?? 0) > 0 ? s.net.inBps : null),
-        downloadMeasured: s.logState.inBps != null
-          || (s.net.totalRecv != null && s.net.totalRecv > 0 && s.net.inBps != null),
+        // The RPC rate when RPC counts the traffic (every byte, relay included); the log's
+        // download rate only when it cannot (see rpcSeesTraffic and the [dlc] tick handler).
+        inBps: this.rpcSeesTraffic() ? s.net.inBps : (s.logState.inBps ?? null),
+        inSource: this.rpcSeesTraffic() ? 'rpc' : (s.logState.inBps != null ? 'log' : null),
+        downloadMeasured: this.rpcSeesTraffic() || s.logState.inBps != null,
         outBps: s.net.outBps ?? null,
         netTotalLog: s.net.logNetTotal ?? null,
         diskWriteBps: s.logState.diskWriteBps ?? null,

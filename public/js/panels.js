@@ -322,8 +322,6 @@ export function renderPeers(s, state, h) {
     ? 'loading the peer table…'
     : `<span class="warn">getpeerinfo returns no rows</span> while getconnectioncount reports ${fmt.num(p.connections ?? 0)} connections — this build keeps its peer table in the forked download worker and publishes nothing per-peer over RPC. Peer identity, transport, user agent and per-peer bytes are therefore not shown anywhere in this monitor, and are not guessed from any other source.`);
 
-  h.setText('prNet', '');
-
 }
 
 // THE PEER TABLE (operator, 2026-09-11: "Doesn't the node's rpc pull more info for peers
@@ -373,13 +371,31 @@ export function renderNetwork(s, state, h) {
   const fmt = F();
   const net = s.net ?? {};
   const ser = state.series?.net ?? {};
+  // THE THROUGHPUT CARD IS DRAWN HERE, ON THE PAGE IT IS ON (operator, 2026-09-18: "why is
+  // throughput missing?"). It moved from the Overview to this page with its Overview ids
+  // (ovNetIn, ovNetChart), and its only writer stayed in renderOverview -- which runs while the
+  // Overview is on screen, when this card is not -- while this function wrote ntIn and
+  // ntInChart, ids nothing carried. So nobody drew it. Now it has this page's ids and this
+  // page's writer, and the network-in figure is whichever source counts the traffic
+  // (inSource: getnettotals when it sees every byte, the node log's download rate when not).
   h.setText('ntIn', net.inBps == null ? '–' : fmt.short(net.inBps));
-  h.setText('ntInTotals', net.netTotalLog != null ? `${fmt.bytes(net.netTotalLog)} received since the last log tick reset` : 'no totals yet');
-  h.setText('ntDisk', net.diskWriteBps == null ? '–' : fmt.short(net.diskWriteBps));
-  h.setText('ntDiskTotals', net.diskTotal != null ? `${fmt.bytes(net.diskTotal)} written to the block archive` : 'no totals yet');
-
-  drawFromSeries(h, 'ntInChart', ser.inHour, COL.cyan, (v) => fmt.short(v) + 'B/s', { fmtTip: (v) => fmt.rate(v) });
-  drawFromSeries(h, 'ntDiskChart', ser.diskHour, COL.purple, (v) => fmt.short(v) + 'B/s', { fmtTip: (v) => fmt.rate(v) });
+  h.setText('ntInU', net.inBps == null ? '' : 'B/s');
+  h.setText('ntInSrc', net.inSource === 'log' ? 'node log [dlc]' : 'getnettotals (RPC)');
+  const inSub = [
+    net.outBps != null ? `out ${fmt.short(net.outBps)}B/s` : null,
+    net.totalRecvRpc > 0 ? `${fmt.bytes(net.totalRecvRpc)} received since the node started` : net.netTotalLog != null ? `${fmt.bytes(net.netTotalLog)} received since the last log tick reset` : null,
+    net.diskWriteBps != null ? `disk write ${fmt.short(net.diskWriteBps)}B/s` : null,
+  ].filter(Boolean);
+  h.setText('ntInSub', inSub.length ? inSub.join(' · ') : 'no totals yet');
+  const diskS = (ser.diskHour ?? []).some((p) => p.v) ? ser.diskHour : [];   // only the log has it; all-zero on a synced node
+  paint(h.canvas('ntInChart'), {
+    when: (ser.inHour ?? []).length > 1,
+    draw: (c) => lineChart(c, [
+      { label: 'network in', color: COL.cyan, points: ser.inHour, area: true },
+      ...(diskS.length ? [{ label: 'disk write', color: COL.purple, points: diskS, area: false }] : []),
+    ], { fmtY: (v) => fmt.short(v) + 'B/s', fmtTip: (v) => fmt.rate(v), legend: diskS.length > 0 }),
+    placeholder: 'waiting for samples',
+  });
 
   // One note covers both directions: the reason is one mechanism (the peer byte
   // counters live in the forked download worker), and the honest sentence differs only

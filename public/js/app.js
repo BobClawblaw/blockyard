@@ -372,16 +372,6 @@ function renderOverview(s) {
   // overview mini charts
   const ser = state.series?.mempool ?? {};
   miniLine('ovMpChart', ser.hour, COL.accent);
-  const netS = state.series?.net ?? {};
-  const inSeries = netS.inHour ?? [];
-  paint(canvas('ovNetChart'), {
-    when: inSeries.length > 1,
-    draw: (c) => lineChart(c, [
-      { label: 'network in', color: COL.cyan, points: inSeries, area: true },
-      { label: 'disk write', color: COL.purple, points: netS.diskHour ?? [], area: false },
-    ], { fmtY: (v) => F.short(v), fmtTip: (v) => F.short(v) + 'B/s' }),
-    placeholder: 'no bandwidth ticks in the log yet',
-  });
 
   const feeS = state.series?.fees ?? {};
   paint(canvas('ovFeeChart'), {
@@ -394,15 +384,6 @@ function renderOverview(s) {
     placeholder: 'the fee estimator has no data yet',
   });
 
-  const peerS = state.series?.peers ?? {};
-  paint(canvas('ovPeerChart'), {
-    when: (peerS.connections ?? []).length > 1,
-    draw: (c) => lineChart(c, [
-      { label: 'connections', color: COL.ok, points: peerS.connections, area: true },
-      { label: 'peers relaying', color: COL.info, points: peerS.relay ?? [] },
-    ], { fmtY: (v) => F.short(v), zeroBase: false }),
-    placeholder: 'no connection samples yet',
-  });
 
   // blocks table
   const tb = document.querySelector('#ovBlocks tbody');
