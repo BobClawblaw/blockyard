@@ -58,6 +58,12 @@ export class UserStore {
       id: u.id, username: u.username, role: u.role, createdAt: u.createdAt,
       updatedAt: u.updatedAt, lastLoginAt: u.lastLoginAt ?? null, disabled: !!u.disabled,
       scheme: u.params?.scheme ?? 'scrypt',
+      // THE WALLET GRANT (docs/PLAN-ADMIN-SUITE.md §2.4). Separate from `role` on purpose:
+      // "can administer this monitor" and "can spend from a wallet" are different
+      // questions, and an administrator who has not been given this cannot send. Absent
+      // means false for every account that existed before the grant did, including the
+      // bootstrap admin -- there is no account anywhere that acquires it by default.
+      walletAccess: !!u.walletAccess,
       // Visible so raising auth.scrypt is a change with an observable effect: the
       // admin page can say "2 of 5 accounts still use N=16384" instead of the
       // operator wondering whether the new number took.
@@ -168,6 +174,23 @@ export class UserStore {
     user.updatedAt = Date.now();
     await this.save();
     return { id: user.id, username: user.username };
+  }
+
+  /**
+   * Grant or revoke the wallet capability.
+   *
+   * Deliberately NOT bundled into setRole: promoting someone to administrator must not
+   * hand them the wallet as a side effect of a different decision. There is no
+   * "refusing to revoke the last one" guard here, unlike the admin-role guards below --
+   * a monitor with nobody who can spend is a safe state, not a lockout.
+   */
+  async setWalletAccess(username, walletAccess) {
+    const user = this.find(username);
+    if (!user) throw new Error(`no such user: ${username}`);
+    user.walletAccess = !!walletAccess;
+    user.updatedAt = Date.now();
+    await this.save();
+    return { id: user.id, username: user.username, role: user.role, walletAccess: user.walletAccess };
   }
 
   async setRole(username, role) {
