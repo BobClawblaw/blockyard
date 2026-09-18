@@ -1006,6 +1006,7 @@ function setPage(route) {
   if (page === 'logs') ensureLogsLoaded(state, helpers);
   if (page === 'chain') initChainDrill(helpers);
   if (page === 'admin') renderAdmin(state.snap, state, helpers, true);
+  if (page === 'wallet') state.adminSuite?.render();
   render();
 }
 
@@ -1047,6 +1048,18 @@ async function boot() {
     pill.title = 'No account is required: anyone who can reach this monitor reads it as role "viewer" (reads only — user admin, the audit trail and node writes stay closed). Start the server with BLOCKYARD_AUTH=1 to require sign-in.';
   }
   document.getElementById('navAdmin').hidden = me.user.role !== 'admin';
+  // THE ADMINISTRATIVE SUITE, if this build has it and its gates opened
+  // (docs/PLAN-ADMIN-SUITE.md). An import() rather than a static import, for the same
+  // reason the server side is a dynamic import: a monitor that is not running the suite
+  // must not execute a line of it. On a read-only build the file is not on the server at
+  // all and the fetch below 404s, which is the quiet, correct outcome.
+  if (me.user.role === 'admin') {
+    api('/api/admin/status')
+      .then((st) => (st?.enabled ? import('./admin/suite.js') : null))
+      .then((mod) => mod?.initAdminSuite({ api, toast, state }))
+      .then((suite) => { if (suite) state.adminSuite = suite; })
+      .catch(() => { /* not this build, or not this configuration */ });
+  }
   const [nodes, cfg, saved] = await Promise.all([
     api('/api/nodes'),
     api('/api/config'),

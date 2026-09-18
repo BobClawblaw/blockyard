@@ -122,7 +122,6 @@ test('every admin path the split names is real, so the list cannot rot', () => {
   // A path listed here that no longer exists would exclude nothing, and the read-only
   // build would start carrying whatever moved.
   for (const p of ADMIN_PATHS) {
-    if (p === 'public/js/admin') continue; // arrives with the M1 UI
     assert.equal(fs.existsSync(path.join(ROOT, p)), true, `ADMIN_PATHS names ${p}, which does not exist`);
   }
 });

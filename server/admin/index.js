@@ -16,6 +16,7 @@ import { elevate, dropElevation, elevationState, elevationLabel, requireElevatio
 import { capabilitySummary } from '../rpc/admin-allowlist.js';
 import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels } from './wallet.js';
 import { newAddress, labelAddress } from './receive.js';
+import { buildSpend, confirmSpend, pendingFor } from './send.js';
 
 /** The suite's own refusal: an HttpError the server turns into a JSON envelope. */
 function refuseWith(err) {
@@ -107,7 +108,7 @@ export function adminRoutes(app) {
           },
           // What this build can actually do, read by the UI rather than guessed from a
           // version number. Each milestone adds its own name here as it lands.
-          capabilities: ['elevation', 'wallet.read', 'wallet.receive'],
+          capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend'],
           rpc: capabilitySummary(),
           wallets: namedWallets(app),
           // This session's elevation, never the grant itself.
@@ -230,10 +231,44 @@ export function adminRoutes(app) {
         return { ok: true, wallet, ...out };
       }), { what: 'labelling an address' }),
     },
+    // --------------------------------------------------------------------------- send
+    // Two steps, and the second acts on what the first built. See server/admin/send.js
+    // for why that is not one step with a confirmation flag.
+    //
+    // BUILD is elevated but not consuming: it signs nothing, unlocks nothing and can move
+    // nothing -- it asks the node what a transaction would look like. Gating it at all is
+    // so that an attacker with a session cannot enumerate the wallet's coin selection.
+    {
+      method: 'POST', path: '/api/admin/wallet/send/build', auth: 'admin', csrf: true, body: true,
+      handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => {
+        const summary = await buildSpend(app, ctx, {
+          node, wallet,
+          address: ctx.body?.address,
+          amountSat: ctx.body?.amountSat,
+          feeRate: ctx.body?.feeRate ?? null,
+          subtractFee: ctx.body?.subtractFee === true,
+        });
+        await app.audit({
+          type: 'admin-spend-built', username: ctx.user?.username ?? null,
+          wallet, node, to: summary.to, sendingSat: summary.sendingSat, feeSat: summary.feeSat,
+        });
+        return { ok: true, build: summary };
+      }), { what: 'building a transaction' }),
+    },
+    // CONFIRM consumes the elevation: one password, one spend.
+    {
+      method: 'POST', path: '/api/admin/wallet/send/confirm', auth: 'admin', csrf: true, body: true,
+      handler: walletWrite(async (ctx, app) => {
+        try {
+          return await confirmSpend(app, ctx, {
+            id: ctx.body?.id, phrase: ctx.body?.phrase, passphrase: ctx.body?.passphrase,
+          });
+        } catch (err) { refuseWith(err); }
+      }),
+    },
+    {
+      method: 'GET', path: '/api/admin/wallet/send/pending', auth: 'admin',
+      handler: async (ctx) => ({ ok: true, builds: pendingFor(ctx) }),
+    },
   ];
-}
-
-/** Thrown by later milestones when a gate that is checked per request refuses. */
-export function refuse(message) {
-  throw new HttpError(403, message, { code: 'admin-refused' });
 }
