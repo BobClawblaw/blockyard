@@ -66,6 +66,79 @@ function addrParts(s) {
   return { host: s, port: null, addr: s };
 }
 
+// THE AUXILIARY INDEX FAMILY (2026-09-18). Three index builders -- `txindex`,
+// `txospender` and `addr_hist` -- and the `[trail]` line that reports all three at once.
+// Together they are 1,866 of 40,478 tagged lines in run 26's log, and every one of them
+// was `raw` before these rules.
+//
+// TWO SPELLINGS, TWO WRITERS, ONE SUBSYSTEM. The daemon writes `[txindex]`,
+// `[txospender]` and `[addr_hist]` with a timestamp; the child processes it forks to
+// build a run write `[txindex]`, `[txospender]` and `[addrhist]` -- note the missing
+// underscore -- with NO TIMESTAMP AT ALL, because they are separate programs
+// (`bmc_build_tx_index` and friends) whose output is redirected into the same file.
+// 40% of these lines are the child's. `index` normalises the spelling; `tsFallback`
+// (parseLine) marks the ones whose time is the time we read them, which is the honest
+// answer and the one the feed needs so it does not order them as if they were stamped.
+//
+// A number followed by a word is the grammar these builders share: `20136 records`,
+// `77 funds, 0 spendrefs`, `22 keys, 87 events`. Rather than one regex per noun --
+// which is how a parser ends up 52% -- the count list is scanned pair by pair, so a
+// builder that starts reporting a new noun is read rather than dropped, the way
+// `dlcProgressFields` already handles the download ticks.
+const INDEX_NAMES = { txindex: 'txindex', txospender: 'txospender', addr_hist: 'addr_hist', addrhist: 'addr_hist' };
+
+/**
+ * "20136 records, 79 sparse, 0.00 GB, 0s" or "22 keys, 87 events (77 funds, 10
+ * spends), to height 19999, 0.00 GB, 0s" -> { counts, bytes, secs, height, extra }.
+ * Every `<number> <noun>` pair becomes a count; the sizes, the seconds and a stated
+ * height are pulled out by shape. What matched nothing is kept verbatim in `extra`,
+ * so an unread segment is visible instead of silently gone.
+ */
+export function parseCountList(text) {
+  const out = { counts: {}, bytes: null, secs: null, height: null, from: null, to: null, extra: [] };
+  if (!text) return out;
+  // The parenthesised breakdown ("(77 funds, 10 spends)") is a list in its own right.
+  // `heights [0,119999]` splits on its own comma into "heights [0" and "119999]",
+  // which is why each half is recognised separately below rather than as one range.
+  for (const part of String(text).replace(/[()]/g, ', ').split(',')) {
+    const seg = part.trim();
+    if (!seg) continue;
+    let m;
+    if ((m = seg.match(/^(\d*\.\d+|\d+)\s*(B|KB|MB|GB|TB|PB)$/i))) { out.bytes = parseSize(seg); continue; }
+    if ((m = seg.match(/^(\d+(?:\.\d+)?)s$/))) { out.secs = parseFloat(m[1]); continue; }
+    if ((m = seg.match(/^to height (\d+)$/))) { out.height = +m[1]; continue; }
+    if ((m = seg.match(/^heights \[(-?\d+)$/))) { out.from = +m[1]; continue; }
+    if ((m = seg.match(/^(-?\d+)\]$/))) { out.to = +m[1]; continue; }
+    if ((m = seg.match(/^(-?\d+)\s+([a-z][a-z_ ]*)$/i))) { out.counts[m[2].trim().replace(/ /g, '_')] = +m[1]; continue; }
+    out.extra.push(seg);
+  }
+  return out;
+}
+
+/**
+ * One `[trail]` segment: "txindex: runs reach 179999; the next run starts once 7623
+ * more heights are ready". The three states seen are waiting, building and merging;
+ * anything else is kept as its own text rather than dropped.
+ */
+function trailSegment(seg) {
+  const at = seg.indexOf(':');
+  if (at < 0) return null;
+  const name = seg.slice(0, at).trim();
+  const rest = seg.slice(at + 1).trim();
+  const index = INDEX_NAMES[name] ?? name;
+  let m;
+  if ((m = rest.match(/^runs reach (-?\d+); the next run starts once (\d+) more heights are ready$/))) {
+    return [index, { state: 'waiting', reach: +m[1], needMore: +m[2] }];
+  }
+  if ((m = rest.match(/^building run \[(\d+),(\d+)\] \(pid (\d+)\)$/))) {
+    return [index, { state: 'building', from: +m[1], to: +m[2], pid: +m[3] }];
+  }
+  if ((m = rest.match(/^merging (\d+) runs \(pid (\d+)\)$/))) {
+    return [index, { state: 'merging', runs: +m[1], pid: +m[2] }];
+  }
+  return [index, { state: 'other', text: rest }];
+}
+
 // 2026-09-16 (audit L6): a `\s*` in front of a capture such as `([^,]+)` that can itself
 // start with a space lets the engine split one run of spaces between the two in every
 // possible way -- quadratic on a long run, and each rule pays it on every line. Those
@@ -666,6 +739,151 @@ const RULES = [
       return { kind: 'network_note', note: m[1], caveat: (m[3] || '').trim() || null, severity: 'info' };
     },
   },
+
+  // ---------------------------------------------------------- the index builders
+  // The tag alternation is spelled out in each rule rather than built from
+  // INDEX_NAMES: a literal regex is what every other rule in this file is, and a
+  // constructed one would be the only thing here that cannot be read at a glance.
+
+  // [txindex] run txindex.r000000000-000019999.dat: 20136 records, heights [0,19999]
+  // The run inventory, re-listed whenever the set changes: 760 of the family's lines.
+  // State, not feed.
+  {
+    name: 'indexRunListed',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*run (\S+\.dat):\s*(\d+) ([a-z]+), heights \[(-?\d+),(-?\d+)\]/,
+    apply: (m) => ({ kind: 'index_run_listed', index: INDEX_NAMES[m[1]], file: m[2], rows: +m[3], noun: m[4], from: +m[5], to: +m[6] }),
+  },
+  // [txindex] trail: building run [0,19999] with /…/bmc_build_tx_index (pid 1669405)
+  {
+    name: 'indexRunStart',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*trail: building run \[(\d+),(\d+)\] with (\S+) \(pid (\d+)\)/,
+    apply: (m) => ({ kind: 'index_run_start', index: INDEX_NAMES[m[1]], from: +m[2], to: +m[3], tool: m[4], pid: +m[5] }),
+  },
+  // [txindex] run [0,19999] built by pid 1669405 in 2s (1 runs so far)
+  {
+    name: 'indexRunBuilt',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*run \[(\d+),(\d+)\] built by pid (\d+) in (\d+)s \((\d+) runs so far\)/,
+    apply: (m) => ({ kind: 'index_run_built', index: INDEX_NAMES[m[1]], from: +m[2], to: +m[3], pid: +m[4], secs: +m[5], runs: +m[6] }),
+  },
+  // [txindex] trail: merging 6 runs with /…/bmc_merge_index_runs (pid 1677449)
+  {
+    name: 'indexMergeStart',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*trail: merging (\d+) runs with (\S+) \(pid (\d+)\)/,
+    apply: (m) => ({ kind: 'index_merge_start', index: INDEX_NAMES[m[1]], runs: +m[2], tool: m[3], pid: +m[4] }),
+  },
+  // [addr_hist] runs merged by pid 1677451 in 3s (1 merges so far)
+  {
+    name: 'indexMerged',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*runs merged by pid (\d+) in (\d+)s \((\d+) merges so far\)/,
+    apply: (m) => ({ kind: 'index_merged', index: INDEX_NAMES[m[1]], pid: +m[2], secs: +m[3], merges: +m[4] }),
+  },
+  // [txindex] tail rotated: 20136 records folded into runs (to 19999), 965 kept
+  {
+    name: 'indexTailRotated',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*tail rotated:\s*(\d+) ([a-z]+) folded into runs \(to (\d+)\), (\d+) kept/,
+    apply: (m) => ({ kind: 'index_tail_rotated', index: INDEX_NAMES[m[1]], folded: +m[2], noun: m[3], to: +m[4], kept: +m[5] }),
+  },
+  // [txindex] tail active: base to=319999 covered=321800 (backfilled 0)
+  // `covered` above `base to` is the live tail carrying the index past its last run,
+  // which is the only line that says the index is usable ahead of its runs.
+  {
+    name: 'indexTailActive',
+    // `base to=-1` is a real value, not a typo: it is what an index with no run yet
+    // reports, and a `\d+` here read the empty index as "base to=1" for four lines of
+    // every run before the first fold.
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*tail active: base to=(-?\d+) covered=(\d+) \(backfilled (\d+)\)/,
+    apply: (m) => ({ kind: 'index_tail_active', index: INDEX_NAMES[m[1]], baseTo: +m[2], covered: +m[3], backfilled: +m[4] }),
+  },
+  // [txindex] dir=/…/main tip=967325 range=[0,19999]
+  // [addrhist] dir=/…/main tip=967325 range=[0,19999] (run: spends from undo) -> addr_hist.r000000000-000019999.dat
+  // The child's first line. No timestamp: see the note above INDEX_NAMES.
+  {
+    name: 'indexScanStart',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*dir=(\S+) tip=(\d+) range=\[(\d+),(\d+)\](?:\s*\(run: ([^)]*)\))?(?:\s*->\s*(\S+))?/,
+    apply: (m) => ({ kind: 'index_scan_start', index: INDEX_NAMES[m[1]], dir: m[2], tip: +m[3], from: +m[4], to: +m[5], note: m[6] ?? null, file: m[7] ?? null }),
+  },
+  // [txindex] pass1 0/19999 (1 txs, 0s)   |   [addrhist] pass3 bucket 0/256 (0 keys, 0s)
+  {
+    name: 'indexPass',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*pass(\d+)(?: (bucket))? (\d+)\/(\d+) \(([^)]*)\)/,
+    apply(m) {
+      const list = parseCountList(m[6]);
+      return { kind: 'index_pass', index: INDEX_NAMES[m[1]], pass: +m[2], unit: m[3] ? 'bucket' : 'height', done: +m[4], of: +m[5], counts: list.counts, secs: list.secs };
+    },
+  },
+  // [txindex] pass1 done: 20136 transactions in 0s   |   [addrhist] pass1 done: 77 funds, 0 spendrefs, 0s
+  // Two spellings of the same line ("… in 0s" and "…, 0s"), so the seconds are read
+  // from either by putting both through the count list.
+  {
+    name: 'indexPassDone',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*pass(\d+) done:\s*(.+)$/,
+    apply(m) {
+      const list = parseCountList(m[3].replace(/\s+in\s+(\d+(?:\.\d+)?s)$/, ', $1'));
+      return { kind: 'index_pass_done', index: INDEX_NAMES[m[1]], pass: +m[2], counts: list.counts, secs: list.secs, extra: list.extra };
+    },
+  },
+  // [txindex] DONE: 20136 records, 79 sparse, 0.00 GB, 0s
+  // [addrhist] DONE: 22 keys, 87 events (77 funds, 10 spends), to height 19999, 0.00 GB, 0s
+  {
+    name: 'indexDone',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*DONE:\s*(.+)$/,
+    apply(m) {
+      const list = parseCountList(m[2]);
+      return { kind: 'index_done', index: INDEX_NAMES[m[1]], counts: list.counts, bytes: list.bytes, secs: list.secs, height: list.height, extra: list.extra };
+    },
+  },
+  // [txindex] merge: 6 runs, 435480 records, heights [0,119999] -> txindex.r000000000-000119999.dat
+  {
+    name: 'indexMergeRows',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*merge:\s*(\d+) runs,\s*(\d+) ([a-z]+), heights \[(-?\d+),(-?\d+)\]\s*->\s*(\S+)/,
+    apply: (m) => ({ kind: 'index_merge_rows', index: INDEX_NAMES[m[1]], runs: +m[2], rows: +m[3], noun: m[4], from: +m[5], to: +m[6], file: m[7] }),
+  },
+  // [txindex] merge DONE: 435480 records, 1702 sparse, 0.01 GB, 0s
+  {
+    name: 'indexMergeDone',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*merge DONE:\s*(.+)$/,
+    apply(m) {
+      const list = parseCountList(m[2]);
+      return { kind: 'index_merge_done', index: INDEX_NAMES[m[1]], counts: list.counts, bytes: list.bytes, secs: list.secs, extra: list.extra };
+    },
+  },
+  // [txindex] 1425612630 records, heights [0,964174]
+  // [txospender] 3486631449 records, to height 966038
+  // What a FINISHED index reports: the totals, once, rather than a run's progress.
+  // Seen only on the synced production node, which is why it is last -- every rule
+  // above names its own line, and this one takes what is left that begins with a count.
+  {
+    name: 'indexSummary',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*(\d+ [a-z][a-z_ ]*(?:,.*)?)$/,
+    apply(m) {
+      const list = parseCountList(m[2]);
+      if (!Object.keys(list.counts).length) return null;
+      return { kind: 'index_summary', index: INDEX_NAMES[m[1]], counts: list.counts, height: list.height, from: list.from, to: list.to, bytes: list.bytes };
+    },
+  },
+  // [txindex] no run yet -- the tail starts at genesis; the trailing builder folds it into runs
+  // The state an index is in before its first run exists, printed once per boot.
+  {
+    name: 'indexNoRuns',
+    re: /\[(txindex|txospender|addr_hist|addrhist)\]\s*no run yet\s*--\s*(.+)$/,
+    apply: (m) => ({ kind: 'index_no_runs', index: INDEX_NAMES[m[1]], note: m[2].trim() }),
+  },
+  // [trail] txindex: runs reach 179999; … | txospender: building run [200000,219999] (pid 1749252) | addr_hist: …
+  // One line, every builder's state, every couple of minutes. The whole point of it is
+  // that the three are read together, so it parses to a map rather than three events.
+  {
+    name: 'indexTrail',
+    re: /\[trail\]\s*(.+)$/,
+    apply(m) {
+      const indexes = {};
+      for (const seg of m[1].split('|')) {
+        const parsed = trailSegment(seg.trim());
+        if (parsed) indexes[parsed[0]] = parsed[1];
+      }
+      if (!Object.keys(indexes).length) return null;
+      return { kind: 'index_trail', indexes };
+    },
+  },
 ];
 
 // Which measurements must keep arriving, and how long a silence counts as a format
@@ -749,12 +967,22 @@ export function parseLine(line) {
   const trimmed = line.replace(/\r$/, '');
   if (!trimmed.trim()) return null;
 
+  // A LINE WITH NO TIMESTAMP IS STAMPED NOW, AND SAYS SO (2026-09-18). The fallback
+  // was always here; what was missing is that the event never admitted to it, so a
+  // line the parser dated itself was indistinguishable in the feed from one the node
+  // dated. That matters for real lines, not just for Core: the index builders' child
+  // processes write ~750 untimestamped lines per run into this same log, and they
+  // arrive in the feed at the moment they were READ. `tsFallback` lets the consumer
+  // order, gate or mark them differently; nothing here decides that for it.
   let ts = Date.now();
+  let tsFallback = false;
   let rest = trimmed;
   const tsm = trimmed.match(TS_RE);
   if (tsm) {
     ts = localFromLogTs(tsm[1], tsm[2]);
     rest = trimmed.slice(tsm[0].length);
+  } else {
+    tsFallback = true;
   }
 
   let tag = null;
@@ -768,6 +996,7 @@ export function parseLine(line) {
       const out = rule.apply(m);
       if (out) {
         out.ts = ts;
+        if (tsFallback) out.tsFallback = true;
         out.tag = tag;
         out.tagBase = tagBase;
         out.text = rest.trim();
@@ -782,6 +1011,7 @@ export function parseLine(line) {
   return {
     kind: 'raw',
     ts,
+    ...(tsFallback ? { tsFallback: true } : {}),
     tag,
     tagBase,
     text: rest.trim(),

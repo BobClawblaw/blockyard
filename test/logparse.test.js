@@ -192,3 +192,41 @@ test('uptime DD:HH:MM:SS converts to milliseconds', () => {
   assert.equal(parseUptime('00:14:15:21'), (14 * 3600 + 15 * 60 + 21) * 1000); // 51321s, matching the node's uptime RPC
   assert.equal(parseUptime('nonsense'), null);
 });
+
+// THE TAG GRAMMAR IS A CONTRACT WITH THE NODE, and this is BlockYard's half of it.
+//
+// A tag this reader cannot claim does not merely look odd: no rule can key on it, the
+// line falls into the unstructured bucket, keeps no figures, and takes a timestamp at
+// read time. The subsystem disappears from every panel fed by the log, silently.
+//
+// `[coinstats-hist]` was found that way on 2026-09-18 while measuring what the index
+// rules left unread. It went upstream, where it turned out to be seven tags rather than
+// one (bitcoinmachinecode PR #263: cmpct-dbg, coinstats-hist, get-miss,
+// get-slen-anomaly, server-test, txr-dump, walk-miss -- 7 hyphenated out of 105 in that
+// source, and 0 of the 48 in a real log, so they were outliers in their own codebase).
+// They were renamed to underscores there, which is why nothing changed here.
+//
+// The tempting alternative was to widen this reader to accept a hyphen. It is not done,
+// deliberately: the node owns its grammar, one reader quietly tolerating a drift is how
+// the other six went unreported for as long as they did, and a tag that no longer
+// matches is a fact worth surfacing rather than absorbing.
+test('the seven renamed tags are claimable, and their old spellings are not', () => {
+  const renamed = ['cmpct_dbg', 'coinstats_hist', 'get_miss', 'get_slen_anomaly', 'server_test', 'txr_dump', 'walk_miss'];
+  for (const t of renamed) {
+    const ev = parseLine(`2026-09-18 03:00:00.000 [${t}] something the node had to say`);
+    assert.equal(ev.tag, t, `[${t}] must be claimable by a rule`);
+    assert.equal(ev.text, 'something the node had to say', 'the tag is stripped from the text');
+  }
+  for (const t of renamed) {
+    const ev = parseLine(`2026-09-18 03:00:00.000 [${t.replace(/_/g, '-')}] something the node had to say`);
+    assert.equal(ev.tag, null, `[${t.replace(/_/g, '-')}] is unclaimable -- if this ever passes, the reader was widened and the docs in both repositories are stale`);
+  }
+});
+
+test('a worker suffix is part of the tag, not a break in it', () => {
+  // [dl:0] and [mux:10] are the same subsystem per worker, and PR #263 checked this
+  // form against the grammar too. tagBase is what a rule groups on.
+  const ev = parseLine('2026-09-18 03:00:00.000 [mux:10] leg replaced: connected next pool peer 192.0.2.10:8333 (fd 30) addrv2=1');
+  assert.equal(ev.tag, 'mux:10');
+  assert.equal(ev.tagBase, 'mux');
+});

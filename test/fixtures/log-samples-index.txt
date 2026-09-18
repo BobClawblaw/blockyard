@@ -1,0 +1,52 @@
+[addr_hist] merge DONE: 294357 keys, 965838 events, 0.03 GB, 0s
+[addr_hist] merge: 6 runs, 965838 events, heights [0,119999] -> addr_hist.r000000000-000119999.dat
+2026-09-16 21:12:36.640 [addr_hist] run [0,19999] built by pid 1669407 in 2s (1 runs so far)
+2026-09-16 21:13:37.171 [addr_hist] runs merged by pid 1677451 in 3s (1 merges so far)
+2026-09-16 21:12:34.452 [addr_hist] trail: building run [0,19999] with /home/node/bmc-run26/bmc_build_addr_hist (pid 1669407)
+2026-09-16 21:13:34.385 [addr_hist] trail: merging 6 runs with /home/node/bmc-run26/bmc_merge_index_runs (pid 1677451)
+[addrhist] DONE: 22 keys, 87 events (77 funds, 10 spends), to height 19999, 0.00 GB, 0s
+[addrhist] dir=/home/node/bmc-run26/main tip=967325 range=[0,19999] (run: spends from undo) -> addr_hist.r000000000-000019999.dat
+[addrhist] pass1 0/19999 (0 funds, 0 spendrefs, 0s)
+[addrhist] pass1 done: 77 funds, 0 spendrefs, 0s
+[addrhist] pass2 done: 10 spends, 0 unmatched (non-standard prevouts are expected here), 0s
+[addrhist] pass3 bucket 0/256 (0 keys, 0s)
+2026-09-16 21:22:39.486 [trail] txindex: building run [200000,219999] (pid 1749251) | txospender: building run [200000,219999] (pid 1749252) | addr_hist: building run [200000,219999] (pid 1749253)
+2026-09-17 10:48:16.149 [trail] txindex: merging 6 runs (pid 4110124) | txospender: merging 6 runs (pid 4111573) | addr_hist: building run [800000,819999] (pid 4092439)
+2026-09-16 21:12:25.677 [trail] txindex: runs reach -1; the next run starts once 15943 more heights are ready | txospender: runs reach -1; the next run starts once 15943 more heights are ready | addr_hist: runs reach -1; the next run starts once 15943 more heights are ready
+2026-09-16 21:17:39.777 [trail] txindex: runs reach 179999; the next run starts once 7623 more heights are ready | txospender: runs reach 179999; the next run starts once 7623 more heights are ready | addr_hist: runs reach 179999; the next run starts once 7623 more heights are ready
+2026-09-16 21:54:26.486 [trail] txindex: runs reach 319999; the next run starts once 18303 more heights are ready | txospender: runs reach 319999; the next run starts once 18303 more heights are ready | addr_hist: merging 6 runs (pid 2087590)
+2026-09-16 23:31:48.147 [trail] txindex: runs reach 419999; the next run starts once 16312 more heights are ready | txospender: runs reach 419999; the next run starts once 16312 more heights are ready | addr_hist: building run [400000,419999] (pid 2851523)
+2026-09-17 02:19:29.779 [trail] txindex: runs reach 539999; the next run starts once 19406 more heights are ready | txospender: building run [520000,539999] (pid 111583) | addr_hist: building run [520000,539999] (pid 111584)
+2026-09-17 07:14:21.957 [trail] txindex: runs reach 719999; the next run starts once 18314 more heights are ready | txospender: merging 6 runs (pid 2402285) | addr_hist: building run [700000,719999] (pid 2388474)
+2026-09-15 15:27:28.394 [txindex] 1425612630 records, heights [0,964174]
+[txindex] DONE: 20136 records, 79 sparse, 0.00 GB, 0s
+[txindex] dir=/home/node/bmc-run26/main tip=967325 range=[0,19999]
+[txindex] merge DONE: 435480 records, 1702 sparse, 0.01 GB, 0s
+[txindex] merge: 6 runs, 435480 records, heights [0,119999] -> txindex.r000000000-000119999.dat
+2026-09-16 21:10:55.278 [txindex] no run yet -- the tail starts at genesis; the trailing builder folds it into runs
+[txindex] pass1 0/19999 (1 txs, 0s)
+[txindex] pass1 done: 20136 transactions in 0s
+2026-09-16 21:12:36.637 [txindex] run [0,19999] built by pid 1669405 in 2s (1 runs so far)
+2026-09-16 21:12:36.637 [txindex] run txindex.r000000000-000019999.dat: 20136 records, heights [0,19999]
+2026-09-16 21:13:37.165 [txindex] runs merged by pid 1677449 in 3s (1 merges so far)
+2026-09-16 21:10:55.278 [txindex] tail active: base to=-1 covered=0 (backfilled 1)
+2026-09-16 21:49:48.241 [txindex] tail active: base to=319999 covered=321800 (backfilled 0)
+2026-09-16 21:12:36.638 [txindex] tail rotated: 20136 records folded into runs (to 19999), 965 kept
+2026-09-16 21:12:34.393 [txindex] trail: building run [0,19999] with /home/node/bmc-run26/bmc_build_tx_index (pid 1669405)
+2026-09-16 21:13:34.308 [txindex] trail: merging 6 runs with /home/node/bmc-run26/bmc_merge_index_runs (pid 1677449)
+2026-09-15 13:44:16.891 [txospender] 3486631449 records, to height 966038
+[txospender] DONE: 1157 records, 5 sparse, 0.00 GB, 0s
+[txospender] dir=/home/node/bmc-run26/main tip=967325 range=[0,19999]
+[txospender] merge DONE: 503831 records, 1969 sparse, 0.01 GB, 0s
+[txospender] merge: 6 runs, 503831 records, heights [0,119999] -> txospender.r000000000-000119999.dat
+2026-09-16 21:10:55.278 [txospender] no run yet -- the tail starts at genesis; the trailing builder folds it into runs
+[txospender] pass1 0/19999 (0 spends, 0s)
+[txospender] pass1 done: 1157 spends in 0s
+2026-09-16 21:12:36.638 [txospender] run [0,19999] built by pid 1669406 in 2s (1 runs so far)
+2026-09-16 21:12:36.638 [txospender] run txospender.r000000000-000019999.dat: 1157 records, heights [0,19999]
+2026-09-16 21:13:37.167 [txospender] runs merged by pid 1677450 in 3s (1 merges so far)
+2026-09-16 21:10:55.278 [txospender] tail active: base to=-1 covered=0 (backfilled 1)
+2026-09-16 21:49:48.281 [txospender] tail active: base to=319999 covered=321800 (backfilled 0)
+2026-09-16 21:12:36.640 [txospender] tail rotated: 1157 records folded into runs (to 19999), 114 kept
+2026-09-16 21:12:34.423 [txospender] trail: building run [0,19999] with /home/node/bmc-run26/bmc_build_txospender_index (pid 1669406)
+2026-09-16 21:13:34.337 [txospender] trail: merging 6 runs with /home/node/bmc-run26/bmc_merge_index_runs (pid 1677450)

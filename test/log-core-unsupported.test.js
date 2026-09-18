@@ -31,7 +31,12 @@ const CORE_LINES = [
   '2026-09-13T01:30:05Z socket recv error Connection reset by peer (104)',
 ];
 
-const BORING = new Set(['kind', 'ts', 'severity', 'text', 'tag', 'tagBase', 'raw', 'rule']);
+// `tsFallback` is here because it is not a figure read out of the line -- it is the
+// parser saying it had to date the line itself, which is the misdating this whole file
+// is about. It arrived on 2026-09-18 with the index-builder rules, whose child
+// processes write untimestamped lines for the same reason Core lines end up here:
+// TS_RE does not match what they wrote.
+const BORING = new Set(['kind', 'ts', 'tsFallback', 'severity', 'text', 'tag', 'tagBase', 'raw', 'rule']);
 
 test('Core debug.log lines yield no structured figures -- only raw rows', () => {
   for (const line of CORE_LINES) {
@@ -57,6 +62,10 @@ test('and their timestamps are NOT read from the line, which is why the feed wou
     + 'understood, the "misdates the event feed" warning in the docs is stale');
   // The line says 2026-09-13T01:30:00Z. If it were parsed, ts would be that instant.
   assert.notEqual(ev.ts, Date.parse('2026-09-13T01:30:00Z'));
+  // And the event now SAYS the time is ours, rather than leaving a reader of the feed
+  // to discover it from the docs. A Core rule set that taught TS_RE the ISO shape would
+  // drop this flag, which is the signal the docs have to change.
+  assert.equal(ev.tsFallback, true);
 });
 
 test('the same parser DOES extract figures from the format it was built for', () => {
