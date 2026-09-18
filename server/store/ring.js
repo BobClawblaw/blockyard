@@ -11,9 +11,20 @@ export class Ring {
 
   push(row) {
     if (row == null || !Number.isFinite(row.t)) return;
-    // Append-only assumption: collectors are the only writers and always move
-    // forward in time, so a binary search is safe and keeps `since` cheap.
-    this.rows.push(row);
+    // SORTED, NOT MERELY APPENDED. `since`, `series` and `pruneBefore` binary-search
+    // the rows, which is only right while they are in time order. Most rings are
+    // stamped with the collection time and do only ever move forward, but the
+    // `blocks` ring is stamped with each block's own time and is shared by every
+    // node: a node in initial sync writes blocks from a year ago after another
+    // node's current ones, and the restart backfill writes blocks from hours ago
+    // after rows already there. Appended, that unsorted tail sent the search to
+    // the end, so the 30-second prune deleted the whole ring -- every node's
+    // block charts blank (operator, 2026-09-18: "Why is this info blank when BMC
+    // has everything it needs at 100% sync?"). A late row now goes where its time
+    // puts it: after any row with the same t, so equal times keep arrival order.
+    const last = this.rows[this.rows.length - 1];
+    if (!last || row.t >= last.t) this.rows.push(row);
+    else this.rows.splice(upperBound(this.rows, row.t), 0, row);
     if (this.rows.length > this.capacity) this.rows.splice(0, this.rows.length - this.capacity);
   }
 
@@ -102,7 +113,13 @@ export class Ring {
   }
 
   toJSON() { return { capacity: this.capacity, rows: this.rows }; }
-  static fromJSON(o, capacity) { const r = new Ring(capacity ?? o?.capacity ?? 20000); if (o?.rows) r.rows = o.rows.slice(-1 * (capacity ?? o.capacity ?? 20000)); return r; }
+  static fromJSON(o, capacity) {
+    const r = new Ring(capacity ?? o?.capacity ?? 20000);
+    // a file saved before push kept rows in order may not be sorted: sort once on load
+    // (stable, so equal times keep their order), then keep the newest `capacity`
+    if (o?.rows) r.rows = o.rows.filter((x) => x && Number.isFinite(x.t)).sort((a, b) => a.t - b.t).slice(-1 * (capacity ?? o.capacity ?? 20000));
+    return r;
+  }
 }
 
 function aggregate(kind, acc) {
@@ -119,6 +136,17 @@ function aggregate(kind, acc) {
   }
 }
 
+
+// the first row with a time after t: where a row at t goes to keep equal times in arrival order
+export function upperBound(rows, t) {
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (rows[mid].t <= t) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
 
 export function lowerBound(rows, t) {
   let lo = 0;

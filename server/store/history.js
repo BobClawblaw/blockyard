@@ -94,9 +94,16 @@ export class History {
 
   record(name, row) {
     const ring = this.ring(name);
-    ring.push({ t: row.t ?? Date.now(), ...row });
+    const t = row.t ?? Date.now();
+    // Older than the retention window: the next prune would delete it, and no chart
+    // draws that far back. This is what a node in initial sync writes to `blocks`
+    // (each row stamped with its block's time, a year old), so it is dropped here
+    // rather than stored, sorted into place and pruned again thirty seconds later.
+    if (t < Date.now() - this.cfg.retentionHours * 3600 * 1000) return null;
+    const stored = { t, ...row };
+    ring.push(stored);
     this.dirtySince ||= Date.now();
-    return ring.last();
+    return stored;
   }
 
   addEvent(ev) {

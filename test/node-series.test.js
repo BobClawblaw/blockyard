@@ -136,3 +136,36 @@ test('ring capacity is shared, and that trade-off is a stated decision', () => {
   ring.push({ t: now + 6000, node: 'a', v: 99 });
   assert.equal(ring.length, 6, 'capacity evicts across both nodes, oldest first');
 });
+
+test('a node in initial sync cannot wipe another node\'s block history', () => {
+  // Operator, 2026-09-18: "Why is this info blank when BMC has everything it needs at 100%
+  // sync?" The `blocks` ring is stamped with each block's own time and shared by every node.
+  // A second node in initial sync appended year-old blocks after the synced node's current
+  // ones; the unsorted tail sent the binary search to the end, so the series read came back
+  // empty and the 30-second prune deleted the whole ring.
+  const h = mkHistory();
+  const bmc = h.forNode('bmc');
+  const ibd = h.forNode('ibd');
+  const now = Date.now();
+  const YEAR = 348 * 86400_000;
+  for (let i = 0; i < 30; i++) {
+    bmc.record('blocks', { t: now - (30 - i) * 600_000, txs: 3000 + i });
+    ibd.record('blocks', { t: now - YEAR + i * 600_000, txs: 1000 + i });   // a year old, interleaved
+  }
+  // the restart backfill: blocks from hours ago, written after rows already there
+  bmc.record('blocks', { t: now - 40 * 600_000, txs: 2999 });
+  const ring = h.ring('blocks');
+  for (let i = 1; i < ring.rows.length; i++) assert.ok(ring.rows[i].t >= ring.rows[i - 1].t, 'the ring stays in time order');
+  assert.equal(ring.nodes().includes('ibd'), false, 'rows older than the retention window are not stored at all');
+  const read = () => bmc.ring('blocks').series('txs', { since: now - 24 * 3600_000 });
+  assert.equal(read().length, 31, 'the synced node\'s last day reads back whole');
+  h.prune();
+  assert.equal(read().length, 31, 'and survives the prune');
+  assert.equal(read()[0].v, 2999, 'the late backfilled block sits in its place, first');
+});
+
+test('a ring saved out of order is sorted when it is loaded', () => {
+  const r = Ring.fromJSON({ capacity: 10, rows: [{ t: 5 }, { t: 1 }, { t: 9 }, { t: 3 }] });
+  assert.deepEqual(r.rows.map((x) => x.t), [1, 3, 5, 9]);
+  assert.deepEqual(r.since(4).map((x) => x.t), [5, 9], 'so its binary search is right from the first read');
+});
