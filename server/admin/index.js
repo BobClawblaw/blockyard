@@ -17,6 +17,8 @@ import { capabilitySummary } from '../rpc/admin-allowlist.js';
 import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels } from './wallet.js';
 import { newAddress, labelAddress } from './receive.js';
 import { buildSpend, confirmSpend, pendingFor } from './send.js';
+import { daemonActions, daemonStop } from './daemon.js';
+import { readNodeConf, writeNodeConf, readOwnConfig, writeOwnConfig, LOCKED_BLOCKS } from './config-edit.js';
 
 /** The suite's own refusal: an HttpError the server turns into a JSON envelope. */
 function refuseWith(err) {
@@ -66,7 +68,15 @@ function walletWrite(handler) {
  */
 function elevated(handler, { consume = false, what = 'this action' } = {}) {
   return async (ctx, app) => {
-    try { requireElevation(ctx, { consume, what }); } catch (err) { refuseWith(err); }
+    try { requireElevation(ctx, { consume: false, what }); } catch (err) { refuseWith(err); }
+    // CONSUMED AT THE POINT OF NO RETURN, NOT ON ARRIVAL (fixed 2026-09-18, found by
+    // test/admin-daemon.test.js). Consuming here, before the handler validates anything,
+    // means a mistyped confirmation costs the operator their elevation: they type a
+    // password, get told the confirmation was wrong, and have to type the password again
+    // to try. Worse, it trains exactly the reflex this whole mechanism depends on them not
+    // having. The handler calls ctx.consumeElevation() itself, immediately before the
+    // irreversible step.
+    if (consume) ctx.consumeElevation = () => dropElevation(ctx.session?.tokenHash ?? null);
     return handler(ctx, app);
   };
 }
@@ -108,7 +118,8 @@ export function adminRoutes(app) {
           },
           // What this build can actually do, read by the UI rather than guessed from a
           // version number. Each milestone adds its own name here as it lands.
-          capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend'],
+          capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend', 'node.control', 'config.edit'],
+          lockedConfigBlocks: LOCKED_BLOCKS,
           rpc: capabilitySummary(),
           wallets: namedWallets(app),
           // This session's elevation, never the grant itself.
@@ -269,6 +280,63 @@ export function adminRoutes(app) {
     {
       method: 'GET', path: '/api/admin/wallet/send/pending', auth: 'admin',
       handler: async (ctx) => ({ ok: true, builds: pendingFor(ctx) }),
+    },
+    // ------------------------------------------------------------------ the daemon
+    // No wallet grant here: stopping a node is an administrator's business, not a
+    // spender's, and the two are separate questions throughout this suite.
+    {
+      method: 'GET', path: '/api/admin/node/actions', auth: 'admin',
+      handler: async (ctx, app) => {
+        try { return { ok: true, ...daemonActions(app, ctx.query?.node ?? [...app.monitors.keys()][0]) }; }
+        catch (err) { refuseWith(err); }
+      },
+    },
+    {
+      method: 'POST', path: '/api/admin/node/stop', auth: 'admin', csrf: true, body: true,
+      // Consuming: one password, one stop. Stopping a node twice by accident is a
+      // different kind of expensive from spending twice, but it is still expensive.
+      handler: elevated(async (ctx, app) => {
+        try {
+          return await daemonStop(app, ctx, {
+            node: ctx.body?.node ?? [...app.monitors.keys()][0],
+            restart: ctx.body?.restart === true,
+            confirm: ctx.body?.confirm,
+          });
+        } catch (err) { refuseWith(err); }
+      }, { consume: true, what: 'stopping the node' }),
+    },
+    // ---------------------------------------------------------------- the configs
+    // Two files, two dangers: bitcoin.conf can lock the operator out of their node, and
+    // BlockYard's own config holds the block that restrains this suite -- which is why
+    // that block is not writable from here at all (server/admin/config-edit.js).
+    {
+      method: 'GET', path: '/api/admin/config/node', auth: 'admin',
+      handler: async (ctx, app) => {
+        try { return { ok: true, ...(await readNodeConf(app, ctx.query?.node ?? [...app.monitors.keys()][0])) }; }
+        catch (err) { refuseWith(err); }
+      },
+    },
+    {
+      method: 'POST', path: '/api/admin/config/node', auth: 'admin', csrf: true, body: true,
+      handler: elevated(async (ctx, app) => {
+        try {
+          return await writeNodeConf(app, ctx, ctx.body?.node ?? [...app.monitors.keys()][0], {
+            changes: ctx.body?.changes ?? [],
+            acknowledge: ctx.body?.acknowledge ?? [],
+          });
+        } catch (err) { refuseWith(err); }
+      }, { what: 'editing the node configuration' }),
+    },
+    {
+      method: 'GET', path: '/api/admin/config/self', auth: 'admin',
+      handler: async (ctx, app) => ({ ok: true, ...readOwnConfig(app) }),
+    },
+    {
+      method: 'POST', path: '/api/admin/config/self', auth: 'admin', csrf: true, body: true,
+      handler: elevated(async (ctx, app) => {
+        try { return await writeOwnConfig(app, ctx, { patch: ctx.body?.patch }); }
+        catch (err) { refuseWith(err); }
+      }, { what: 'editing this monitor\'s configuration' }),
     },
   ];
 }

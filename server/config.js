@@ -82,6 +82,12 @@ const DEFAULTS = {
       rpcUrl: 'http://127.0.0.1:8332',
       datadir: '/home/bitcoin/.bitcoin',
       chainHint: 'main',
+      // WHO RESTARTS THIS NODE, if anyone (docs/PLAN-ADMIN-SUITE.md §6). BlockYard never
+      // starts a node and cannot see a unit file; this is the operator telling it what to
+      // expect, so that the administrative suite can refuse to call something a restart
+      // when nothing is configured to restart it. "systemd:bitcoind", "docker:bitcoin",
+      // "supervisor:bitcoind", or "none" (the default).
+      supervisor: 'none',
       cookieFile: null, // derived from datadir+chainHint when null
       rpcUser: null,
       rpcPassword: null,
