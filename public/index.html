@@ -1017,7 +1017,7 @@
           <h3>RPC etiquette <span class="sp"></span><span class="src">what this app asks of the node</span></h3>
           <dl class="kv two" id="ndRpc"></dl>
           <canvas class="chart short" id="ndLatChart"></canvas>
-          <div class="note tiny faint">The node's RPC server services one connection at a time on a single thread. This app keeps one request in flight, spaces them, batches multiple methods per connection, and drops a poll that could not answer in time to be true.</div>
+          <div class="note tiny faint">This app keeps up to four requests in flight per node (one, for a node set to single-threaded), spaces their starts so it never asks for more calls a second, batches multiple methods per connection, and drops a poll that could not answer in time to be true.</div>
         </div>
             <div class="card">
           <h3>Data quality <span class="sp"></span><span class="src">known gaps, stated</span></h3>

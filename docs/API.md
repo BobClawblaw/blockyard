@@ -1095,7 +1095,7 @@ The order books as cumulative depth on a fixed price grid, plus the snapshot fro
 
 ### `POST /api/rpc`
 
-Auth `any`, with CSRF when accounts are on. Runs one **read-only** RPC method against the node, through the same serialized lane as the collectors.
+Auth `any`, with CSRF when accounts are on. Runs one **read-only** RPC method against the node, through the same lane as the collectors.
 
 | Body field | Type | Meaning |
 |---|---|---|
@@ -1407,7 +1407,7 @@ The effective, non-secret configuration and the access posture.
 ```json
 {
   "poll": { "fastMs": 4000, "midMs": 15000, "poolMs": 20000, "slowMs": 60000, "rareMs": 900000, "blockBackfill": 30 },
-  "rpc": { "maxInFlight": 1, "minIntervalMs": 250, "maxRatePerSec": 4, "timeoutMs": 90000 },
+  "rpc": { "maxInFlight": 4, "minIntervalMs": 250, "maxRatePerSec": 4, "timeoutMs": 90000 },
   "allowlist": { "denyExactCount": 68, "allowPrefixes": [ "analyzepsbt", "convertbits", "..." ],
                  "denyPrefixes": [ "generate", "..." ], "defaultDecision": "deny" },
   "actions": { "enabled": false, "allow": [] },

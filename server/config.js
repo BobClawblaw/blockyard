@@ -145,12 +145,15 @@ const DEFAULTS = {
     },
   */
   rpc: {
-    // The node's RPC server accepts and services ONE connection at a time on a
-    // single thread (docs/RPC_LIVE_NODE.md, slice 11). One browser tab polling
-    // eight methods is polite; forty tabs is a denial of service against our own
-    // node. So: one in-flight request globally, a floor between requests, and
-    // every poll tier sized so the node is never the bottleneck for itself.
-    maxInFlight: 1,
+    // FOUR IN FLIGHT, SPACED (2026-09-18). The first node this was written for served ONE
+    // connection at a time on a single thread (docs/RPC_LIVE_NODE.md, slice 11), so the lane
+    // ran one call at a time. Neither node here does now: 8 getblockstats at once ran 4.9x the
+    // throughput of one at a time on BMC run 26 and 4.5x on Core 31.1, whose default is four
+    // RPC threads (docs/MEASUREMENTS.md section 40). Four matches that default. The rate
+    // ceiling below still spaces the STARTS, so this does not ask a node for more calls a
+    // second -- it stops one slow call holding every other one behind it. A single-threaded
+    // node sets `"rpc": { "maxInFlight": 1 }` on its own entry.
+    maxInFlight: 4,
     minIntervalMs: 250,
     // Measured on this box: a bare getblockcount against the bench node took
     // 40.4s while it was doing initial block download, and 7s once against the

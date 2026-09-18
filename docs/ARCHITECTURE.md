@@ -32,7 +32,7 @@ browsers:
 ```mermaid
 flowchart LR
   subgraph node["Bitcoin node (one per configured node)"]
-    RPC["JSON-RPC server<br/>single connection, single thread"]
+    RPC["JSON-RPC server<br/>(Core: 4 threads; BMC: concurrent since run 26)"]
     LOG["log file<br/>(optional)"]
   end
 
@@ -138,7 +138,7 @@ server/
   main.js            boot, wiring, shutdown, logger
   config.js          defaults + config/local.json + BLOCKYARD_* env overrides, validation
   netinfo.js         bind planning, CIDR parsing and membership
-  rpc/client.js      the serialized RPC lane and the JSON-RPC client
+  rpc/client.js      the RPC lane (bounded concurrency, spaced) and the JSON-RPC client
   rpc/allowlist.js   which RPC methods the web UI may call; gated node actions
   collect/monitor.js NodeMonitor: poll tiers, log absorption, read model
   collect/sync.js    the sync bar's data contract (pure)
@@ -353,9 +353,11 @@ removes the feed altogether.
 
 ### 2.4 The RPC lane (`server/rpc/client.js`)
 
-**The central constraint:** the node's RPC server services **one connection at a
-time on one thread**. A bare `getblockcount` has been measured at 40 s on a node
-doing initial block download (MEASUREMENTS 1). A dashboard where every tab polls
+**The central constraint:** the node's RPC server is a shared, finite resource. The
+first node this was written for serviced **one connection at a time on one thread**,
+and a bare `getblockcount` has been measured at 40 s on a node doing initial block
+download (MEASUREMENTS 1); Core and BMC run 26 now serve calls in parallel
+(MEASUREMENTS 40), which the lane uses, up to `rpc.maxInFlight`. A dashboard where every tab polls
 on its own would be a denial of service against the node it exists to watch. So
 every RPC request, from every poll tier, every user, the explorer and the console,
 goes through **one `Lane` per node**.
@@ -376,7 +378,7 @@ flowchart TD
   CO -->|yes| SUP["older job rejected as stale<br/>newest wins"]
   CO -->|no| PEND["pending Map"]
   SUP --> PEND
-  PEND --> D["_drain: lowest priority number first,<br/>insertion order within a priority"]
+  PEND --> D["_drain: while a slot is free (rpc.maxInFlight),<br/>lowest priority number first,<br/>insertion order within a priority"]
   D --> B2{"breaker open now?"}
   B2 -->|yes| REJ
   B2 -->|no| ST{"waited longer than its budget?"}
@@ -388,9 +390,13 @@ flowchart TD
 
 Properties:
 
-- **One in flight.** `busy` gates `_drain()`. The node could not use more than one
-  connection anyway, and a second request would only queue inside the node, where
-  the monitor cannot see or cancel it.
+- **Up to `rpc.maxInFlight` in flight** (default 4). `_drain()` starts the next job
+  while a slot is free. Until 2026-09-18 a boolean gated it to one: the node it was
+  written for could not use more than one connection, and a second request only
+  queued inside the node, where the monitor cannot see or cancel it. Core (four RPC
+  threads) and BMC run 26 both serve calls in parallel (MEASUREMENTS 40), and one
+  slow call no longer holds every tier behind it. A single-threaded node sets
+  `"rpc": { "maxInFlight": 1 }` on its own entry and gets the old lane exactly.
 - **Minimum spacing.** `spacingMs = max(rpc.minIntervalMs, 1000 / rpc.maxRatePerSec)`.
   The defaults (250 ms, 4 per second) both come to 250 ms between request starts.
 - **Batching.** `RpcClient.batch(calls)` sends a JSON array, which the node

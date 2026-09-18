@@ -148,3 +148,45 @@ test('cadence recovers on its own once the node answers quickly again', () => {
 test('an unknown tier asks for nothing', () => {
   assert.equal(monitorWith(10).effectiveTierMs('nonsense'), null);
 });
+
+test('maxInFlight is read: that many calls run at once, and 1 is still one at a time', async () => {
+  // Operator, 2026-09-18: "Didn't we dramatically improve concurrency for RPC?" The lane gated on
+  // a boolean and never read maxInFlight (measured 2026-09-13: peak 1 at 1, 4 and 8). Both nodes
+  // here now serve calls in parallel (docs/MEASUREMENTS.md section 40).
+  const peakAt = async (maxInFlight) => {
+    const lane = new Lane({ ...cfg, maxInFlight, staleDropMs: 5000 });
+    let now = 0, peak = 0;
+    const job = async () => { now += 1; peak = Math.max(peak, now); await sleep(30); now -= 1; };
+    const t0 = Date.now();
+    await Promise.all(Array.from({ length: 8 }, () => lane.submit(job)));
+    return { peak, ms: Date.now() - t0, reported: lane.peakInFlight };
+  };
+  const one = await peakAt(1), four = await peakAt(4);
+  assert.equal(one.peak, 1, 'one: one at a time, as before');
+  assert.equal(four.peak, 4, 'four: four at once');
+  assert.equal(four.reported, 4, 'and the lane reports its peak');
+  assert.ok(four.ms < one.ms * 0.6, `eight 30 ms calls: ${four.ms} ms with four slots against ${one.ms} ms with one`);
+});
+
+test('with slots scarce, the free slot still goes to the highest priority', async () => {
+  const lane = new Lane({ ...cfg, maxInFlight: 2, staleDropMs: 5000 });
+  const order = [];
+  let release; const gate = new Promise((r) => { release = r; });
+  let startedCount = 0, bothStarted; const holding = new Promise((r) => { bothStarted = r; });
+  const hold = () => lane.submit(async () => { if (++startedCount === 2) bothStarted(); await gate; }, { priority: 9 });
+  const h = [hold(), hold()];
+  await holding;                                          // both slots taken
+  const low = lane.submit(async () => { order.push('low'); }, { priority: 8 });
+  const high = lane.submit(async () => { order.push('high'); }, { priority: 0 });
+  release();
+  await Promise.all([...h, low, high]);
+  assert.deepEqual(order, ['high', 'low']);
+});
+
+test('concurrency does not raise the call rate: starts stay spaced by the rate ceiling', async () => {
+  const lane = new Lane({ ...cfg, maxInFlight: 4, minIntervalMs: 0, maxRatePerSec: 20, staleDropMs: 5000 });   // 50 ms apart
+  const starts = [];
+  await Promise.all(Array.from({ length: 4 }, () => lane.submit(async () => { starts.push(Date.now()); await sleep(200); })));
+  for (let i = 1; i < starts.length; i++) assert.ok(starts[i] - starts[i - 1] >= 45, `start ${i} came ${starts[i] - starts[i - 1]} ms after the one before`);
+  assert.ok(starts.at(-1) - starts[0] < 200, 'yet all four were running before the first finished');
+});

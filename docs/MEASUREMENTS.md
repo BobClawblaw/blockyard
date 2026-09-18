@@ -18,6 +18,11 @@ being wrong.
 
 ## 1. The RPC server is single-connection, single-thread
 
+> **Superseded for current builds (2026-09-18, §40).** This was true of the node measured on
+> 2026-09-08. BMC run 26 and Core 31.1 both serve RPC calls concurrently, and the lane now keeps
+> up to `rpc.maxInFlight` (default 4) in flight. The consequences below still hold -- the long
+> timeout, the stretching tiers, coalescing and stale drops -- they no longer imply one at a time.
+
 Confirmed by the node's own `docs/RPC_LIVE_NODE.md` (slice 11), which also
 explains why its `waitforblock` refuses to wait indefinitely and why
 `rescanblockchain` blocks every other RPC while it runs.
@@ -1536,3 +1541,47 @@ fails in the first few characters for every line that is not its own.
 `[addrindex] journal rotated`, `[mux:N] no dial helper free`, `[addrself] external address
 confirmed`, and 28 one-shot `[boot]` lines. Worth doing when a panel needs one of them, not
 before.
+
+## 40. RPC concurrency, measured again: both nodes serve calls in parallel (2026-09-18)
+
+§1 said the RPC server was single-connection, single-thread, and the lane was built on it:
+one call in flight, whatever `rpc.maxInFlight` said (it was not read; measured 2026-09-13, peak
+concurrency 1 at 1, 4 and 8). Asked again by the operator ("Didn't we dramatically improve
+concurrency for RPC?"), timed on the two synced nodes: one call alone (best of three), then 2, 4
+and 8 identical calls at once. A single-threaded server answers N at once in N times one call;
+anything under that is the server working in parallel.
+
+`getblockstats <tip>` -- the node computes the answer:
+
+| node | one call | 2 at once | 4 at once | 8 at once | 8 vs one at a time |
+|---|---|---|---|---|---|
+| BMC run 26 (`127.0.0.1:8463`) | 20 ms | 27 ms | 30 ms | 33 ms | **4.9x** |
+| Core v31.1 (`127.0.0.1:8335`) | 9 ms | 15 ms | 12 ms | 15 ms | **4.5x** |
+
+`getblock <tip> 0` -- mostly moving 1.6 MB of hex:
+
+| node | one call | 2 at once | 4 at once | 8 at once | 8 vs one at a time |
+|---|---|---|---|---|---|
+| BMC run 26 | 11 ms | 16 ms | 29 ms | 50 ms | 1.7x |
+| Core v31.1 | 55 ms | 60 ms | 70 ms | 60 ms | 7.3x |
+
+So BMC is no longer single-threaded: computed reads scale like Core's. Raw block reads scale less
+on BMC (writing the reply looks partly serialised there), though each is five times faster than
+Core's to begin with.
+
+Reproduce (cookie auth; `<url>` and `<datadir>` from `config/local.json`):
+
+```bash
+A=$(cat <datadir>/main/.cookie)
+H=$(curl -s --user "$A" <url> -d '{"method":"getbestblockhash","params":[]}' | sed 's/.*"result":"\([0-9a-f]*\)".*/\1/')
+q() { curl -s -o /dev/null --user "$A" <url> -d "{\"method\":\"getblockstats\",\"params\":[\"$H\"]}"; }
+time q                                                  # one call
+time (for i in 1 2 3 4 5 6 7 8; do q & done; wait)     # eight at once
+```
+
+What changed because of it: the lane reads `rpc.maxInFlight` (`server/rpc/client.js`), default
+**4**, matching Core's four RPC threads. Starts are still spaced by `minIntervalMs` and
+`maxRatePerSec`, so the monitor asks no node for more calls a second than before -- concurrency
+only stops one slow call (a mempool read, a block drill-down) holding every other tier behind it.
+A node that does service one connection at a time sets `"rpc": { "maxInFlight": 1 }` on its own
+entry. The Node & RPC page shows in flight now, the ceiling, and the peak since start.

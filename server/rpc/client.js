@@ -16,12 +16,16 @@
 // in ~106 ms. A node entry can now carry its own `rpc` block (see monitor.js), so this is a
 // default, not an assumption.
 //
-// So every request from every user and every poll tier goes through ONE serialized lane with:
-//   - one call in flight             (by construction: Lane gates on a boolean, and `maxInFlight`
-//                                     in the config is advisory -- it is reported but NOT read.
-//                                     Measured 2026-09-13 at 1, 4 and 8: peak concurrency 1 every
-//                                     time. Making it real is a change to this file, not config.)
-//   - a floor between request starts (minIntervalMs)
+// So every request from every user and every poll tier goes through ONE lane per node with:
+//   - at most `maxInFlight` calls in flight. This was advisory until 2026-09-18 -- the lane gated
+//     on a boolean and never read it (measured 2026-09-13 at 1, 4 and 8: peak concurrency 1 every
+//     time). It is read now (operator, 2026-09-18: "Didn't we dramatically improve concurrency for
+//     RPC?"): measured that day, 8 getblockstats at once took 33 ms on BMC run 26 against 20 ms
+//     for one -- 4.9x the throughput of one at a time -- and 4.5x on Core 31.1, whose default is
+//     four RPC threads (docs/MEASUREMENTS.md section 40). A node that really is single-threaded
+//     sets `"rpc": { "maxInFlight": 1 }` on its own entry and gets the old lane back exactly.
+//   - a floor between request STARTS (minIntervalMs): concurrency does not raise the call rate
+//     this monitor asks of a node, it only stops one slow call from holding everything behind it
 //   - a global calls/second ceiling
 //   - a circuit breaker that backs off instead of pile-driving a busy node
 //
@@ -72,15 +76,17 @@ export class RpcError extends Error {
   }
 }
 
-// A serialized lane: one call at a time, spaced, rate-capped, with a breaker.
+// A lane: up to `maxInFlight` calls at a time, their starts spaced, rate-capped, with a breaker.
 export class Lane {
   constructor(cfg) {
     this.cfg = cfg;
-    // Honour the rate ceiling for real: with one slot in flight, spacing is the
-    // lever that sets calls/second, so take whichever floor is stricter.
+    // Honour the rate ceiling for real: spacing between STARTS is the lever that sets
+    // calls/second, whatever the concurrency, so take whichever floor is stricter.
     this.spacingMs = Math.max(cfg.minIntervalMs, cfg.maxRatePerSec ? Math.ceil(1000 / cfg.maxRatePerSec) : 0);
+    this.maxInFlight = Math.max(1, Math.floor(Number(cfg.maxInFlight) || 1));
     this.pending = new Map();
-    this.busy = false;
+    this.active = 0;                     // calls started and not yet settled
+    this.peakInFlight = 0;
     this.lastStartAt = 0;
     this.openUntil = 0;
     this.consecutive = 0;
@@ -93,6 +99,7 @@ export class Lane {
   }
 
   get breakerOpen() { return Date.now() < this.openUntil; }
+  get busy() { return this.active >= this.maxInFlight; }
 
   // `priority` orders the queue, lowest first. Without it every tier shared one
   // FIFO lane, and a measured 69-second getchaintxstats batch left the cheap
@@ -134,7 +141,11 @@ export class Lane {
   }
 
   _drain() {
-    if (this.busy) return;
+    // one start per free slot, each through the same checks
+    while (this.active < this.maxInFlight && this.pending.size) this._startNext();
+  }
+
+  _startNext() {
     // Highest priority first, insertion order within a priority (Map preserves
     // it, and the filter keeps that order).
     let first = null;
@@ -154,7 +165,6 @@ export class Lane {
         `RPC circuit breaker open; retry in ${Math.ceil((this.openUntil - now) / 1000)}s${this.openedBy ? ` (opened by ${this.openedBy.label}, ${this.openedBy.kind})` : ''} — this call was already queued when it opened`,
         { kind: 'breaker' },
       ));
-      if (this.pending.size) this._drain();
       return;
     }
 
@@ -164,12 +174,13 @@ export class Lane {
     if (now - first.enqueuedAt > first.budget) {
       first.reject(new RpcError(`dropped: waited ${now - first.enqueuedAt}ms for a lane free enough to answer meaningfully`, { kind: 'stale' }));
       this.stats.staleDropped += 1;
-      if (this.pending.size) this._drain();
       return;
     }
 
+    // spaced from the previous START, which may itself still be waiting for its turn
     const wait = Math.max(0, this.spacingMs - (now - this.lastStartAt));
-    this.busy = true;
+    this.active += 1;
+    this.peakInFlight = Math.max(this.peakInFlight, this.active);
     this.lastStartAt = now + wait;
 
     setTimeout(() => {
@@ -197,7 +208,7 @@ export class Lane {
           first.reject(err);
         })
         .finally(() => {
-          this.busy = false;
+          this.active -= 1;
           if (this.pending.size) this._drain();
         });
     }, wait);
@@ -445,6 +456,9 @@ export class RpcClient {
       breakerOpen: this.lane.breakerOpen,
       breaker: this.lane.breakerState(),
       queued: this.lane.queued,
+      inFlight: this.lane.active,
+      maxInFlight: this.lane.maxInFlight,
+      peakInFlight: this.lane.peakInFlight,
       recent: this.recent,
       ...this.lane.stats,
     };

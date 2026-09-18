@@ -105,9 +105,10 @@ The last enabled admin cannot be demoted, disabled or deleted.
   return private keys), spending, peer-control, chain-mutating and very heavy methods are refused
   by name — including `getnewaddress` and
   `getrawchangeaddress`, which start with "get" but create keys. Unknown methods are refused.
-- **One request at a time.** The node's RPC server is single-threaded, so the monitor runs a
-  single serialized request lane with a minimum spacing, batching, priorities and a stale-drop
-  rule. It cannot be used to flood your node. The one exception is the address index build,
+- **A bounded lane per node.** At most `rpc.maxInFlight` requests at once (four by default, one
+  for a node configured as single-threaded), their starts spaced by a minimum interval and a
+  calls-per-second ceiling, with batching, priorities and a stale-drop rule. It cannot be used to
+  flood your node. The one exception is the address index build,
   which makes its few cheap calls (block hashes) over a second connection so that the pages are
   not queued behind it — and which pauses itself whenever the first lane sees the node failing
   or answering slowly.

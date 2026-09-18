@@ -200,7 +200,7 @@ limits protect the node from the monitor. They apply to each node separately.
 
 | key | default | meaning |
 |---|---|---|
-| `rpc.maxInFlight` | `1` | Requests outstanding at once. **Currently advisory:** the lane is serialised by construction and does not read this value (measured 2026-09-13 at 1, 4 and 8 -- peak concurrency was 1 in every case). It must still be at least 1. |
+| `rpc.maxInFlight` | `4` | Requests outstanding at once, per node. Read by the lane since 2026-09-18 (until then it was advisory: peak concurrency measured 1 at 1, 4 and 8). Four matches Bitcoin Core's default of four RPC threads; BMC run 26 serves calls in parallel too (MEASUREMENTS 40). Starts stay spaced by `minIntervalMs` / `maxRatePerSec`, so this does not raise the call rate, it stops one slow call holding the rest. For a node that services one connection at a time, set `"rpc": { "maxInFlight": 1 }` on its own entry. At least 1. |
 | `rpc.minIntervalMs` | `250` | Minimum gap between the start of one request and the next. |
 | `rpc.maxRatePerSec` | `4` | Hard ceiling on requests per second, whatever the poll tiers ask for. |
 | `rpc.timeoutMs` | `90000` | Timeout for ordinary calls. It is deliberately generous, because a busy but healthy node can take tens of seconds to answer. |

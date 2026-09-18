@@ -103,10 +103,11 @@ checks against every configured node and prints how long each call took — `get
 `getblock <tip> 3` and a verbose `getrawmempool` among them. A `getblock 3` over 5 s or a mempool
 read over 10 s is marked slow there, with what it will mean for the pages.
 
-The monitor runs **one** request at a time, always. `rpc.maxInFlight` exists in the config and
-is reported by `/api/config`, but the lane is serialised by construction and does not read it --
-measured 2026-09-13 at 1, 4 and 8: four 200 ms jobs took ~807 ms with peak concurrency 1 in every
-case. Treat it as documentation of intent, not a tuning knob. (The address index build has a
+The monitor runs up to **`rpc.maxInFlight`** requests at once per node -- four by default since
+2026-09-18, when both nodes here were measured serving calls in parallel (MEASUREMENTS 40); until
+then the lane ran one at a time whatever the setting said. The Node & RPC page shows how many are
+in flight now, the ceiling, and the peak. If a node answers slower with more in flight -- one that
+services a single connection at a time will -- set `"rpc": { "maxInFlight": 1 }` on its entry. (The address index build has a
 second connection of its own for its few cheap calls; it is paced by the first lane's telemetry
 and adds nothing while the node is slow.)
 
