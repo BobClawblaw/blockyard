@@ -1476,5 +1476,16 @@ this remains three orders of magnitude clear of the constraint.
 in **3 shapes**, of which `fold N..N: read=… folded_to=… slots=…` is 10,008 -- still the biggest
 single win available anywhere in the parser), `[utxo_live]` at 2,509 (mostly `merge of N run(s)
 deferred`), `[boot]` at 616, `[dl]` at 445, `[txrelay] orphan drops:` at 398, `[dial] memory:` at
-380, `[cmpct]` at 324. Also noted: `[coinstats-hist]` cannot be tagged at all, because `TAG_RE` is
-`[a-z0-9_]+` and that tag has a hyphen in it.
+380, `[cmpct]` at 324.
+
+Also noted, and since resolved upstream: `[coinstats-hist]` could not be tagged **at all**, because
+`TAG_RE` is `[a-z0-9_]+` and that tag has a hyphen. Reported to the node, where it turned out to be
+seven tags rather than one -- `[cmpct-dbg]` `[coinstats-hist]` `[get-miss]` `[get-slen-anomaly]`
+`[server-test]` `[txr-dump]` `[walk-miss]`, 7 hyphenated of 105 distinct tags in that source and 0
+of the 48 in a real log, so outliers in their own codebase rather than a style anyone chose
+(bitcoinmachinecode PR #263, 33 string literals across five files). They were renamed to
+underscores there, so **nothing changed here**: all seven new spellings are claimable by the
+existing rule, all seven old ones are not, and the `[dl:0]`/`[mux:10]` worker form still matches --
+pinned in `test/logparse.test.js`. Widening this reader to accept a hyphen was the alternative and
+was deliberately not taken: a tag that stops matching is a fact worth surfacing, and one reader
+quietly tolerating the drift is why the other six went unreported.
