@@ -260,12 +260,16 @@ const RULES = [
   // [txrelay] orphan drops: 54714 ttl, 0 evicted, 2 rejected | parents requested 76410, notfound 60971, re-requested after timeout 16714, retried on another peer 532026 (gave up 132632, in flight 379), sync deferred 15150
   {
     name: 'orphanDetail',
-    re: /\[txrelay\]\s*orphan drops:\s*(\d+)\s*ttl,\s*(\d+)\s*evicted,\s*(\d+)\s*rejected\s*\|\s*parents requested\s*(\d+),\s*notfound\s*(\d+),\s*re-requested after timeout\s*(\d+),\s*retried on another peer\s*(\d+)\s*\(gave up\s*(\d+),\s*in flight\s*(\d+)\)(?:,\s*sync deferred\s*(\d+))?/,
+    // `drained N` was inserted before the parenthesis by the node at some point after
+    // 2026-09-08, and this rule stopped matching: 498 lines of run 26, silently raw,
+    // exactly the drift MEASUREMENTS 37 is about. Optional, so both spellings parse.
+    re: /\[txrelay\]\s*orphan drops:\s*(\d+)\s*ttl,\s*(\d+)\s*evicted,\s*(\d+)\s*rejected\s*\|\s*parents requested\s*(\d+),\s*notfound\s*(\d+),\s*re-requested after timeout\s*(\d+),\s*retried on another peer\s*(\d+)(?:,\s*drained\s*(\d+))?\s*\(gave up\s*(\d+),\s*in flight\s*(\d+)\)(?:,\s*sync deferred\s*(\d+))?/,
     apply(m) {
       return {
         kind: 'orphan_detail', ttl: +m[1], evicted: +m[2], rejected: +m[3], requested: +m[4],
-        notfound: +m[5], reRequested: +m[6], retriedOtherPeer: +m[7], gaveUp: +m[8], inFlight: +m[9],
-        syncDeferred: m[10] == null ? null : +m[10],
+        notfound: +m[5], reRequested: +m[6], retriedOtherPeer: +m[7],
+        drained: m[8] == null ? null : +m[8], gaveUp: +m[9], inFlight: +m[10],
+        syncDeferred: m[11] == null ? null : +m[11],
       };
     },
   },
@@ -738,6 +742,148 @@ const RULES = [
     apply(m) {
       return { kind: 'network_note', note: m[1], caveat: (m[3] || '').trim() || null, severity: 'info' };
     },
+  },
+
+  // ------------------------------------------------- the chain view's fold (run 27)
+  // A QUARTER OF THE NODE'S LOG, and until 2026-09-18 none of it was read. Reported
+  // upstream from here with the numbers (24.0% of run 26; 79.1% of the fold lines said
+  // present=0 new=0; err and short were non-zero ZERO times in 30 hours), and the node
+  // changed rather than this parser: bitcoinmachinecode PR #265 split one throttle into
+  // two, so run 27 writes ~77% fewer fold lines. The shape is the same, with two new
+  // optional tails -- the anomaly marker, and a count of the quiet passes a heartbeat
+  // stands for. Both are read here, because "nothing happened 412 times" is a figure.
+  {
+    name: 'idxFold',
+    re: /\[idx\]\s*fold (-?\d+)\.\.(-?\d+):\s*read=(\d+) present=(\d+) new=(\d+) dup=(\d+) short=(\d+) err=(\d+) r=(-?\d+) folded_to=(-?\d+) slots=(\d+)(\s+<-- PRESENT BUT NOT INSERTED)?(?:\s+\(\+(\d+) quiet pass\(es\), read=(\d+)\))?/,
+    apply(m) {
+      const err = +m[8], short = +m[7];
+      const anomaly = m[12] != null;
+      return {
+        kind: 'index_fold', from: +m[1], to: +m[2], read: +m[3], present: +m[4], added: +m[5],
+        dup: +m[6], short, err, r: +m[9], foldedTo: +m[10], slots: +m[11],
+        // The node never throttles trouble or the anomaly now, so either reaching us
+        // means it happened rather than that it happened to fall outside a window.
+        anomaly, quietPasses: m[13] == null ? null : +m[13], quietRead: m[14] == null ? null : +m[14],
+        severity: err > 0 || short > 0 || anomaly ? 'warn' : 'info',
+      };
+    },
+  },
+  // [idx] chain view open: stored tip=967325, by-hash table 65536 slots
+  {
+    name: 'idxViewOpen',
+    re: /\[idx\]\s*chain view open:\s*stored tip=(-?\d+), by-hash table (\d+) slots/,
+    apply: (m) => ({ kind: 'index_view_open', tip: +m[1], slots: +m[2] }),
+  },
+  // [idx] table full; grew to 131072 slots, reload 0..967325: present=67081 new=67081 r=0 folded_to=67080
+  {
+    name: 'idxTableGrew',
+    re: /\[idx\]\s*table full; grew to (\d+) slots, reload (-?\d+)\.\.(-?\d+):\s*present=(\d+) new=(\d+) r=(-?\d+) folded_to=(-?\d+)/,
+    apply: (m) => ({ kind: 'index_table_grew', slots: +m[1], from: +m[2], to: +m[3], present: +m[4], added: +m[5], r: +m[6], foldedTo: +m[7] }),
+  },
+  // [idx] grow to 262144 slots FAILED (malloc)
+  // Never seen in any run; it is the branch the two above exist to avoid, so it is read
+  // as a warning rather than left to arrive as an unstructured row on the day it happens.
+  {
+    name: 'idxGrowFailed',
+    re: /\[idx\]\s*grow to (\d+) slots FAILED \(([^)]*)\)/,
+    apply: (m) => ({ kind: 'index_grow_failed', slots: +m[1], why: m[2], severity: 'warn' }),
+  },
+
+  // --------------------------------------------------- the rest of run 26's remainder
+  // [utxo_live] merge of 2 run(s) deferred: the apply is 533584 blocks behind the archive (waits under 24 runs)
+  // The second biggest unread shape (2,349 lines). It is the reason the run count sits
+  // above its threshold during catch-up, so it explains a number the page already shows.
+  {
+    name: 'utxoMergeDeferred',
+    re: /\[utxo_live\]\s*merge of (\d+) run\(s\) deferred:\s*the apply is (-?\d+) blocks behind the archive \(waits under (\d+) runs\)/,
+    apply: (m) => ({ kind: 'utxo_merge_deferred', runs: +m[1], applyLag: +m[2], waitsUnder: +m[3] }),
+  },
+  // [dial] memory: 3 address(es) remembered, 0 candidate(s) skipped under backoff; blocks: 0 claimed, 0 duplicate fetch(es) avoided
+  {
+    name: 'dialMemory',
+    re: /\[dial\]\s*memory:\s*(\d+) address\(es\) remembered, (\d+) candidate\(s\) skipped under backoff; blocks:\s*(\d+) claimed, (\d+) duplicate fetch\(es\) avoided/,
+    apply: (m) => ({ kind: 'dial_memory', remembered: +m[1], skippedBackoff: +m[2], blocksClaimed: +m[3], duplicateFetchesAvoided: +m[4] }),
+  },
+  // [tip] 75.157.152.207:8333 announced block 00000000.. by headers: its pass runs next
+  // WHICH PEER TOLD US FIRST, and how. RPC has no equivalent; `block_stored` names who
+  // served a block, this names who announced it, which is a different peer's credit.
+  {
+    name: 'tipAnnounced',
+    re: /\[tip\]\s*(\S+?)\s+announced block\s+([0-9a-f]{2,}\.\.)\s+by\s+(.+?):\s*its pass runs next/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return { kind: 'tip_announced', addr: a?.addr ?? m[1], host: a?.host ?? m[1], hashPrefix: m[2].replace(/\.+$/, ''), via: m[3].trim() };
+    },
+  },
+  // [cmpct] 38.15.35.109:8333 accepts compact blocks: requesting MSG_CMPCT_BLOCK on this leg from now on
+  {
+    name: 'cmpctAccepts',
+    re: /\[cmpct\]\s*(\S+?)\s+accepts compact blocks:\s*(.+)$/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return { kind: 'cmpct_peer', addr: a?.addr ?? m[1], host: a?.host ?? m[1], note: m[2].trim() };
+    },
+  },
+  // [cmpct] 86.127.254.44:8333 delivered a block: high-bandwidth compact blocks from this leg from now on (Core: the last 3 block sources)
+  // [cmpct] 86.127.254.44:8333 back to low-bandwidth compact blocks (the high-bandwidth set holds 3)
+  {
+    name: 'cmpctBandwidth',
+    re: /\[cmpct\]\s*(\S+?)\s+(?:delivered a block:\s*(high)-bandwidth compact blocks|back to (low)-bandwidth compact blocks)(?:.*?holds (\d+))?/,
+    apply(m) {
+      const a = addrParts(m[1]);
+      return { kind: 'cmpct_bandwidth', addr: a?.addr ?? m[1], host: a?.host ?? m[1], mode: m[2] ?? m[3], setSize: m[4] == null ? null : +m[4] };
+    },
+  },
+  // [cmpct] reconstructed 6 block(s) from the mempool (6 needed a getblocktxn round trip, 0 fell back to a full block)
+  {
+    name: 'cmpctReconstructed',
+    re: /\[cmpct\]\s*reconstructed (\d+) block\(s\) from the mempool \((\d+) needed a getblocktxn round trip, (\d+) fell back to a full block\)/,
+    apply: (m) => ({ kind: 'cmpct_reconstructed', blocks: +m[1], roundTrips: +m[2], fellBack: +m[3] }),
+  },
+  // [cmpct] block 967440 (86.127.254.44:8333): 26 tx: 0 from the mempool (0.0%), 1 prefilled, 25 fetched by getblocktxn (3889 KB): 25 never announced, ...
+  // How much of a block the mempool already held is the compact-block hit rate, and the
+  // KB fetched is bandwidth this node spent because it did not.
+  {
+    name: 'cmpctBlock',
+    re: /\[cmpct\]\s*block (\d+)(?:\s+hash=([0-9a-f]{6,}))?\s*\((\S+?)\):\s*(\d+) tx:\s*(\d+) from the mempool \(([\d.]+)%\), (\d+) prefilled, (\d+) fetched by getblocktxn \(([\d.]+) ([KMG]?B)\)/,
+    apply(m) {
+      const a = addrParts(m[3]);
+      return {
+        kind: 'cmpct_block', height: +m[1], hashPrefix: m[2] ?? null, addr: a?.addr ?? m[3], host: a?.host ?? m[3],
+        txs: +m[4], fromMempool: +m[5], hitPct: +m[6], prefilled: +m[7], fetched: +m[8], fetchedBytes: parseSize(`${m[9]}${m[10]}`),
+      };
+    },
+  },
+  // [dl] outbound top-up: 1 dial(s) not started, first 141.239.119.165:8333: no dial helper free
+  // The node saying it WANTED a peer and could not start the dial -- which is why a
+  // connection count sits below its target, and is not visible anywhere else.
+  {
+    name: 'dlTopUpBlocked',
+    // `(\S+)` greedy, not `(\S+?)`: the address carries its own colon, and a lazy
+    // capture stopped at it -- addr "141.239.119.165", reason "8333: no dial helper free".
+    re: /\[dl\]\s*outbound top-up:\s*(\d+) dial\(s\) not started, first (\S+):\s*(.+)$/,
+    apply(m) {
+      const a = addrParts(m[2]);
+      return { kind: 'dial_failures', notStarted: +m[1], addr: a?.addr ?? m[2], host: a?.host ?? m[2], reason: m[3].trim(), severity: 'info' };
+    },
+  },
+  // [pool] 0 peer(s) sampled from the book: ipv4 0, ipv6 0, onion 0, i2p 0, cjdns 0 (book has 0/0/0/0/0 dialable)
+  {
+    name: 'poolSample',
+    re: /\[pool\]\s*(\d+) peer\(s\) sampled from the book:\s*ipv4 (\d+), ipv6 (\d+), onion (\d+), i2p (\d+), cjdns (\d+)\s*\(book has (\d+)\/(\d+)\/(\d+)\/(\d+)\/(\d+) dialable\)/,
+    apply: (m) => ({
+      kind: 'pool_sample', sampled: +m[1],
+      byFamily: { ipv4: +m[2], ipv6: +m[3], onion: +m[4], i2p: +m[5], cjdns: +m[6] },
+      dialable: { ipv4: +m[7], ipv6: +m[8], onion: +m[9], i2p: +m[10], cjdns: +m[11] },
+    }),
+  },
+  // [coinstats_hist] pass1 w0 10000/120922 (0s)
+  // Both spellings: the tag was `[coinstats-hist]` until PR #263 renamed it, and a
+  // hyphenated tag is one TAG_RE cannot claim, so it is still sitting in the text.
+  {
+    name: 'coinstatsHistPass',
+    re: /\[coinstats[-_]hist\]\s*pass(\d+)(?:\s+w(\d+))? (\d+)\/(\d+) \((\d+(?:\.\d+)?)s\)/,
+    apply: (m) => ({ kind: 'coinstats_hist_pass', pass: +m[1], worker: m[2] == null ? null : +m[2], done: +m[3], of: +m[4], secs: +m[5] }),
   },
 
   // ---------------------------------------------------------- the index builders

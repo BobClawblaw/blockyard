@@ -1614,6 +1614,84 @@ export class NodeMonitor extends EventEmitter {
         });
         return [];
       }
+      // ------------------------------------------- the chain view, and the remainder
+      // FEED POLICY FIRST, because the default here is `return [ev]` and `index_fold`
+      // was a quarter of run 26's log. A fold that did something is state; a fold that
+      // reports trouble (err/short) or the present-but-not-inserted anomaly is an event,
+      // and the node never throttles those now, so one arriving means one happened.
+      case 'index_fold': {
+        ls.chainView = {
+          at: ev.ts, from: ev.from, to: ev.to, read: ev.read, present: ev.present, added: ev.added,
+          dup: ev.dup, foldedTo: ev.foldedTo, slots: ev.slots,
+          // A heartbeat stands for passes that did nothing; counting them is the
+          // difference between a quiet subsystem and a stopped one.
+          quietPasses: ev.quietPasses ?? 0, quietRead: ev.quietRead ?? 0,
+        };
+        if (ev.err > 0 || ev.short > 0) {
+          this.flagQuality('index-fold-trouble', `the chain view's fold reported ${ev.err} error(s) and ${ev.short} short read(s) folding ${ev.from}..${ev.to}`, 'warn');
+        } else if (ev.anomaly) {
+          this.flagQuality('index-fold-anomaly', `the chain view read ${ev.present} record(s) at ${ev.from}..${ev.to} and inserted none of them`, 'warn');
+        } else {
+          this.clearQuality('index-fold-trouble');
+          this.clearQuality('index-fold-anomaly');
+        }
+        return ev.err > 0 || ev.short > 0 || ev.anomaly ? [ev] : [];
+      }
+      case 'index_view_open':
+        ls.chainView = { ...(ls.chainView ?? {}), at: ev.ts, openTip: ev.tip, slots: ev.slots };
+        return [ev];
+      case 'index_table_grew':
+        // Rare (3 times in 30 hours) and it costs a full reload, so it is worth a row.
+        ls.chainView = { ...(ls.chainView ?? {}), at: ev.ts, slots: ev.slots, lastGrewAt: ev.ts };
+        return [ev];
+      case 'index_grow_failed':
+        this.flagQuality('index-grow-failed', `the chain view could not grow to ${ev.slots} slots (${ev.why}); it is running full`, 'warn');
+        return [ev];
+      case 'utxo_merge_deferred':
+        // Why the run count sits above its threshold during catch-up. State, not feed:
+        // 2,349 lines in one run.
+        ls.utxoMergeDeferred = { at: ev.ts, runs: ev.runs, applyLag: ev.applyLag, waitsUnder: ev.waitsUnder };
+        return [];
+      case 'dial_memory':
+        ls.dialMemory = { at: ev.ts, remembered: ev.remembered, skippedBackoff: ev.skippedBackoff, blocksClaimed: ev.blocksClaimed, duplicateFetchesAvoided: ev.duplicateFetchesAvoided };
+        return [];
+      case 'tip_announced': {
+        // Who told us about a block FIRST, which is a different peer's credit from who
+        // served it (`block_stored`). Kept per peer, and out of the feed: one per block
+        // per announcing peer is several hundred rows a day.
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.announcedTips = (rec.announcedTips ?? 0) + 1;
+        rec.lastAnnouncedAt = ev.ts;
+        rec.lastAnnouncedVia = ev.via;
+        return [];
+      }
+      case 'cmpct_peer': {
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.compactBlocks = true;
+        return [];
+      }
+      case 'cmpct_bandwidth': {
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.compactBandwidth = ev.mode;
+        return [];
+      }
+      case 'cmpct_reconstructed':
+        ls.cmpct = { ...(ls.cmpct ?? {}), at: ev.ts, blocks: ev.blocks, roundTrips: ev.roundTrips, fellBack: ev.fellBack };
+        return ev.fellBack > 0 ? [ev] : [];
+      case 'cmpct_block': {
+        // The compact-block hit rate: how much of the block the mempool already held,
+        // and the bytes spent fetching the rest.
+        ls.cmpct = { ...(ls.cmpct ?? {}), at: ev.ts, lastBlock: { height: ev.height, txs: ev.txs, fromMempool: ev.fromMempool, hitPct: ev.hitPct, prefilled: ev.prefilled, fetched: ev.fetched, fetchedBytes: ev.fetchedBytes } };
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.compactBlocksDelivered = (rec.compactBlocksDelivered ?? 0) + 1;
+        return [];
+      }
+      case 'pool_sample':
+        ls.poolSample = { at: ev.ts, sampled: ev.sampled, byFamily: ev.byFamily, dialable: ev.dialable };
+        return [];
+      case 'coinstats_hist_pass':
+        ls.coinstatsHist = { at: ev.ts, pass: ev.pass, worker: ev.worker, done: ev.done, of: ev.of, secs: ev.secs };
+        return [];
       // ---------------------------------------------------- the auxiliary indexes
       // THREE INDEXES THE NODE BUILDS BESIDE THE CHAIN (2026-09-18): txindex,
       // txospender and addr_hist, each assembled as fixed-height "runs" that are

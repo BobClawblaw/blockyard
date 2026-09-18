@@ -228,9 +228,14 @@ test('the census names the subsystem, which is the whole point of it', () => {
 test('a tag the parser could not claim is still named, from the text', () => {
   // TAG_RE is [a-z0-9_]+, so a hyphenated tag is left in the text -- and naming it is
   // how [coinstats-hist] was found and fixed upstream. The text fallback keeps that.
+  //
+  // The example is deliberately a line NO rule claims. It was `[coinstats-hist] pass1
+  // ...` until 2026-09-18, when a rule for that line landed and the census stopped
+  // seeing it -- the test then failed, correctly, having been written against a line
+  // whose whole point was that nothing read it.
   const m = makeMonitor();
-  for (let i = 0; i < 5; i++) m.onLogEvents([rawEvent('2026-09-18 03:00:00.000 [coinstats-hist] pass1 w0 10000/120922 (0s)')]);
-  assert.equal(m.tagCensus().tags[0].tag, '[coinstats-hist]');
+  for (let i = 0; i < 5; i++) m.onLogEvents([rawEvent('2026-09-18 03:00:00.000 [some-future-thing] a shape no rule claims')]);
+  assert.equal(m.tagCensus().tags[0].tag, '[some-future-thing]');
 });
 
 test('sixteen download workers are one entry, not sixteen', () => {
