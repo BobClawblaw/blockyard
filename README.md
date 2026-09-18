@@ -1,7 +1,9 @@
 # BlockYard
 
 A live, multi-user web monitor and block explorer for
-[Bitcoin Core](https://github.com/bitcoin/bitcoin).
+[Bitcoin Core](https://github.com/bitcoin/bitcoin) — and the first-class companion to
+[**Bitcoin Machine Code**](https://github.com/BobClawblaw/bitcoinmachinecode), an experimental,
+Core-compatible Bitcoin node written in x86-64 assembly.
 
 Point it at your node and open a browser: live charts, a 3D block-space viewer,
 a block / transaction / address explorer, exchange prices with order-book depth, and a
@@ -16,6 +18,44 @@ repository ([docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md), [docs/SECURITY-AUD
 bugs.**
 
 ![Overview](docs/images/overview.jpg)
+
+## Built alongside Bitcoin Machine Code
+
+[**Bitcoin Machine Code**](https://github.com/BobClawblaw/bitcoinmachinecode) (`bmc`) is a full
+validating Bitcoin node for Linux x86-64, written in NASM assembly with a C orchestration layer —
+and, like BlockYard, every line of it is AI-authored. It verifies the chain from genesis, keeps a
+UTXO set proven byte-identical to Bitcoin Core's (MuHash-exact), follows mainnet live, runs a
+Core-policy mempool and relay, and serves most of Core's JSON-RPC surface, including
+`getblocktemplate`, `submitblock` and `scantxoutset`, plus `txindex`, `coinstatsindex`,
+`blockfilterindex` and an address index of its own.
+
+> **An academic, experimental development build — not ready for primetime.** bmc has had internal
+> and external security review but no independent human audit of its consensus and cryptographic
+> assembly. Run it to study and evaluate, on a machine you can afford to lose, with no funds near
+> it; for a production node, run [Bitcoin Core](https://bitcoincore.org). It is getting more solid
+> every day — and BlockYard is how that is watched, measured and shown.
+
+BlockYard was built side by side with it, and bmc is a first-class citizen here, not a Core
+look-alike that happens to work:
+
+- **Its log is read, not just its RPC.** bmc's log grammar is parsed line by line — 93% of a
+  mainnet IBD run's log ([MEASUREMENTS 39](docs/MEASUREMENTS.md)) — so the sync view shows the
+  download window (in flight, landed, the oldest gap), the index builders (`txindex`,
+  `txospender`, the address history), UTXO merges, the orphan pool and 1-parent-1-child relay,
+  and which peer announced each block: things no RPC call returns.
+- **Its concurrency is used.** bmc serves RPC calls in parallel — 8 `getblockstats` at once ran at
+  4.9× the throughput of one at a time, on a par with Core ([MEASUREMENTS 40](docs/MEASUREMENTS.md))
+  — and the RPC lane keeps up to four in flight per node.
+- **Its own indexes are asked first.** The explorer tries the node's address index before
+  anything else; bmc has one, Core does not.
+- **Side by side with Core.** Configure a bmc node and a Core node together and switch between
+  them from the header; the same pages, the same figures, the same chain — the quickest way to see
+  where the new node matches Core and where it does not yet.
+- **Findings go upstream.** Measuring bmc from here has turned into fixes there — renamed log tags
+  ([bmc PR #263](https://github.com/BobClawblaw/bitcoinmachinecode/pull/263)) and ~77% fewer index
+  log lines ([bmc PR #265](https://github.com/BobClawblaw/bitcoinmachinecode/pull/265)).
+
+Everything else in BlockYard works the same against Bitcoin Core; bmc is where it is proven first.
 
 ## Highlights
 
@@ -37,7 +77,9 @@ Nous, GitHub, Catppuccin, or nine colours of your own.
 
 ## Quick start
 
-You need **Node.js 22.2 or newer** and a running **Bitcoin Core 25.0 or later** with `server=1`
+You need **Node.js 22.2 or newer** and a running **Bitcoin Core 25.0 or later** (or a
+[Bitcoin Machine Code](https://github.com/BobClawblaw/bitcoinmachinecode) node — experimental, see
+above) with `server=1`
 and `txindex=1`, **on the same machine** — BlockYard reads the node's block files to build the
 explorer's address index, and a node on another machine is not supported. Without `txindex` the
 explorer cannot look a confirmed transaction up by id; everything else works without it (see
