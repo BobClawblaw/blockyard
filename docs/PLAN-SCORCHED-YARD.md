@@ -1,6 +1,7 @@
 # Scorched Yard — a plan for a Scorched Earth Diversion
 
-*Scoped 2026-09-16, before any code. Operator: "Scope out a plan for re-creating the classic PC
+*Scoped 2026-09-16; M1–M5 and the control rework (§12) landed the same day, and it shipped in
+0.1.2.* *Operator: "Scope out a plan for re-creating the classic PC
 DOS game Scorched Earth using our engine. I suggest using blocks to generate the deformable
 landscape unless you have a better idea. Make it at least 3 player. 1 Human Player and 2 AI
 Players. Try to reproduce it as faithfully as possible, but make it look fabulous as an
@@ -347,7 +348,7 @@ Each milestone is playable at its end and lands as its own commit set, tests inc
 |---|---|---|
 | M0 | this plan, signed off: name, defaults, v1 roster, sky default | — |
 | M1 | **the core**: landscape, tanks, Baby Missile → Nuke, craters, settling, falls, damage, death, turns, one human vs two Morons, keys and mouse, plain flash and ring, the panel | a full round |
-| M2 | **the roster**: every v1 weapon and item, the walls, wind modes, fuel, the checked price table, the shop between rounds, cash and interest, a game of N rounds, the scoreboard, high scores | the game — *landed 2026-09-16; the price table is as remembered, not yet checked against SCORCH.DOC* |
+| M2 | **the roster**: every v1 weapon and item, the walls, wind modes, fuel, the checked price table, the shop between rounds, cash and interest, a game of N rounds, the scoreboard, high scores | the game — *landed 2026-09-16; the price table is the manual's (SCORCH.DOC)* |
 | M3 | **the AI**: Shooter, Tosser, Poolshark, Chooser, Spoiler, Cyborg, Unknown, AI shopping | a real opponent — *landed 2026-09-16* |
 | M4 | **fabulous**: strata, day skies and weather, the tank models, the blast treatments, dirt dust, death fireworks, traces, sound and music, talk | the look — *landed 2026-09-16 (the Living sky serves as the day sky, with an hour per round)* |
 | M5 | **finish**: the settings tab, Kiosk attract mode (if wanted), docs, the full test set, `counts:fix`, screenshots for the guide and the announcement | ship — *landed 2026-09-16; the attract mode is the game's own **watch** switch rather than a Kiosk panel: the Kiosk is the two boards and the chain, and a game among them would have pushed one of those off the wall* |

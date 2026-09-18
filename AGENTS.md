@@ -168,7 +168,7 @@ server/
   netinfo.js         bind planning AND CIDR membership (parseIp/parseCidr/ipDecision)
   store/audit.js     the audit trail: size-triggered rotation, chain-aware reader, stats
   config.js          defaults (wired to this box) + env overrides + validation
-  rpc/client.js      THE serialized RPC lane: 1 in flight, spaced, coalesced, breaker
+  rpc/client.js      THE RPC lane per node: up to rpc.maxInFlight in flight (4 by default), starts spaced, coalesced, breaker
   rpc/allowlist.js   which RPCs the web UI may call; default deny
   collect/monitor.js tiers -> state -> read model; the log-derived sources
   collect/sync.js    the sync bar's whole data contract (pure, tested)
@@ -216,9 +216,11 @@ silently ate another test's result line — rule 22.
 
 ## The things that will bite you
 
-1. **The node's RPC server services one connection at a time, on one thread.**
-   Never add a concurrent or per-user poll. Everything goes through
-   `server/rpc/client.js`'s lane. Measured cost of getting this wrong: a bare
+1. **Everything goes through `server/rpc/client.js`'s lane, one per node.** Never add a
+   poll outside it, and never a per-user one. The lane keeps at most `rpc.maxInFlight`
+   calls in flight (4 by default; both Core and bmc serve calls in parallel, MEASUREMENTS
+   §40), with starts spaced. A node that really is single-threaded sets
+   `"rpc": {"maxInFlight": 1}` on its own entry. Measured cost of getting this wrong: a bare
    `getblockcount` took **40.4 s** during initial block download.
 2. **The node's log is a primary source, not a fallback — and it is also how you
    know whether the RPC can be trusted.** Re-measured four times on 2026-09-08; the
@@ -426,12 +428,12 @@ its pictures are in `docs/announcement/`). `main` is a few docs commits ahead of
 (screenshots re-shot at 0.0.9, uninstall for every layout, the settings panel's note); the next
 version is the operator's call. Everything below is committed, tested (862) and live on this box.
 
-**Scope, settled.** BlockYard supports **Bitcoin Core on the machine that runs it**. The
-experimental node this repo was first written against is not supported (its measurements are
-kept as records), and neither is reading a node elsewhere over RPC alone: the Umbrel-on-the-LAN
-path was tried on 09-13 and dropped, because real-time explorer data over RPC was a failed idea.
-`docs/DEFECTS.md` opens with that decision; entries whose only subject was one of those are
-closed with it. Five open items remain.
+**Scope, settled** (2026-09-14; revised 2026-09-18). BlockYard supports **Bitcoin Core, or
+Bitcoin Machine Code (bmc), on the machine that runs it**. bmc, the experimental node this repo
+was first written against, is first-class again. What is not supported is reading a node
+elsewhere over RPC alone: the Umbrel-on-the-LAN path was tried on 09-13 and dropped, because
+real-time explorer data over RPC was a failed idea. `docs/DEFECTS.md` opens with that decision;
+entries whose only subject was that are closed with it. Five open items remain.
 
 **The address index** (`server/chain/`): Core has no address index, so the explorer's address
 page reads one built from the node's own blk/rev files -- 21-byte rows, 256 sorted segments with

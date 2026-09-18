@@ -32,7 +32,8 @@ two more differ only by fields of Core's unreleased development build
 ([MEASUREMENTS 41](docs/MEASUREMENTS.md)) — including `getblocktemplate`, `submitblock` and
 `scantxoutset`, plus `txindex`, `coinstatsindex`, `blockfilterindex` and an address index of its
 own. What is left is a short, stated list: a few methods it refuses by design (no OpenRPC
-description, no asmap, no assumeutxo, and what its separate download process owns) and a
+description, no asmap, no assumeutxo, no secure-allocator statistics from `getmemoryinfo`, and
+what its separate download process owns) and a
 handful of `getpeerinfo` fields.
 
 > **An academic, experimental development build — not ready for primetime.** bmc has had internal
@@ -173,8 +174,10 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
 
 - **Read-only by default.** The monitor never writes to your node unless you enable
   individual actions, with accounts on and a typed confirmation per call.
-- **A good guest.** Every request goes through one serialized, prioritised, batched lane,
-  so the monitor never opens a burst of parallel calls against your node's RPC threads.
+- **A good guest.** Every request goes through one prioritised, batched lane per node. It
+  keeps at most `rpc.maxInFlight` calls in flight (four by default; set
+  `"rpc": {"maxInFlight": 1}` on a node that really is single-threaded), with their starts
+  spaced and a calls-per-second ceiling, so the monitor never floods your node's RPC threads.
   It would rather skip a poll than slow your node down.
 - **Honest data.** A missing figure is shown as missing, never as zero; stale data looks
   stale; inferred numbers are labelled as inferences; every figure's source is listed on

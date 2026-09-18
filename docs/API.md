@@ -29,13 +29,13 @@ Contents
 
 ### Base URL
 
-The server listens on port `21000` by default (`BLOCKYARD_PORT`), on the addresses in `server.host` / `BLOCKYARD_BIND`. The examples below use:
+The server listens on port `21000` by default (`BLOCKYARD_PORT`), on the addresses in `server.host` / `BLOCKYARD_BIND`. HTTPS is on by default (`server.tls.enabled`), with a certificate the server makes for itself under `<data>/tls/` unless `BLOCKYARD_TLS_CERT` + `BLOCKYARD_TLS_KEY` name your own. `BLOCKYARD_TLS=0` serves plain HTTP behind a TLS-terminating proxy. The examples below use:
 
 ```
 http://127.0.0.1:21000
 ```
 
-When TLS is configured (`BLOCKYARD_TLS_CERT` + `BLOCKYARD_TLS_KEY`), every listener speaks HTTPS and the scheme becomes `https`. `/api/build` and `/api/health` report which one is in effect (`scheme`, `tls`).
+Against a default install use `https://` (and `curl --cacert`, or `-k` for the self-signed certificate). `/api/build` and `/api/health` report which one is in effect (`scheme`, `tls`).
 
 ### JSON everywhere
 
@@ -249,7 +249,7 @@ What the About page shows: the monitor's version and live build, and the **shape
 
 `auth: any` rather than `none`, unlike `/api/health` and `/api/build`: a version string answers "is my tab running current code", which a login page legitimately needs, whereas the host's processor and memory should not be readable before sign-in when accounts are on.
 
-It reports **no hostname, no username, no network addresses and no environment**. This monitor is open-access by default, so everything here is readable by anyone who can reach the port; the operating system and processor describe a machine's shape, not its owner. A test pins those absences.
+It reports **no hostname, no username, no network addresses and no environment**. In open mode (`BLOCKYARD_AUTH=0`) everything here is readable by anyone who can reach the port; the operating system and processor describe a machine's shape, not its owner. A test pins those absences.
 
 ### `GET /api/build`
 
@@ -529,7 +529,7 @@ Every transaction in the next block's worth of the pool, richest feerate first: 
 
 ## 7. Blocks and transactions (drill-down)
 
-These go through the same serialized RPC lane as the collectors. They never request `getblock` verbosity 2, and never return transaction hex. For richer pages use the explorer (section 8).
+These go through the same RPC lane as the collectors (up to `rpc.maxInFlight` at once, starts spaced). They never request `getblock` verbosity 2, and never return transaction hex. For richer pages use the explorer (section 8).
 
 ### `GET /api/blocks`
 
@@ -1126,7 +1126,7 @@ The allowlist refused the method (HTTP 403):
              "kind": "api", "code": "rpc_denied" } }
 ```
 
-`note` is set for methods the node itself documents as refused or worker-owned, so an error there is expected: `loadtxoutset`, `getopenrpcinfo`, `rpc.discover`, `exportasmap`, `enumeratesigners`, `walletdisplayaddress`, `getmempoolcluster`, `getblockfrompeer`, `preciousblock`, `pruneblockchain`, `submitheader`, `getblockfilter`.
+`note` is set for methods the node itself documents as refused or worker-owned, so an error there is expected: `loadtxoutset`, `getopenrpcinfo`, `rpc.discover`, `exportasmap`, `getmemoryinfo`, `getblockfrompeer`, `preciousblock`, `pruneblockchain`, `submitheader`.
 
 Every call, allowed or denied, is written to the audit log (method name, node, duration, and the error if any). Parameters are not recorded.
 
@@ -1157,7 +1157,7 @@ Consequences worth knowing:
 - The list is fixed in code, and no setting widens it.
 - Wallet RPCs are refused by name, reads included (`getbalance`, `listunspent`, `listdescriptors`, `gethdkeys`, …): some of them return private keys, and the monitor has no use for a wallet.
 - `createrawtransaction` is allowed: it only builds an unsigned transaction and changes nothing.
-- `/api/config` → `allowlist` publishes a summary: the prefixes, the size of the deny list and the default decision.
+- `/api/config` → `allowlist` publishes a summary: the prefixes, the size of the deny list, the number of wallet methods refused, and the default decision.
 
 Node writes never go through this endpoint. They are separate, opt-in actions (next section).
 
@@ -1385,7 +1385,8 @@ The monitor's own health: process, RPC client, log tail, stream clients and the 
     { "id": "main",
       "rpc": { "nodeId": "main", "url": "http://127.0.0.1:8332", "cookieSource": "...", "online": true,
                "lastGoodAt": 1789155699000, "lastError": null, "breakerOpen": false, "breaker": {},
-               "queued": 0, "calls": 12345, "batches": 2345, "methods": {}, "errors": 3, "timeouts": 0,
+               "queued": 0, "inFlight": 0, "maxInFlight": 4, "peakInFlight": 2, "recent": [ "..." ],
+               "calls": 12345, "batches": 2345, "methods": {}, "errors": 3, "timeouts": 0,
                "authRetries": 0, "breakerTrips": 1, "lastLatencyMs": 8, "avgLatencyMs": 40,
                "maxLatencyMs": 4200, "ratePerSec": 1.8, "busyMsPerSec": 90, "staleDropped": 0 },
       "log": { "exists": false },
@@ -1400,6 +1401,8 @@ The monitor's own health: process, RPC client, log tail, stream clients and the 
 }
 ```
 
+In `nodes[].rpc`, `inFlight` is calls outstanding now, `maxInFlight` the lane's limit, and `peakInFlight` the most seen at once (the Node & RPC page shows `N of M (peak P)`).
+
 ### `GET /api/config`
 
 The effective, non-secret configuration and the access posture.
@@ -1408,22 +1411,22 @@ The effective, non-secret configuration and the access posture.
 {
   "poll": { "fastMs": 4000, "midMs": 15000, "poolMs": 20000, "slowMs": 60000, "rareMs": 900000, "blockBackfill": 30 },
   "rpc": { "maxInFlight": 4, "minIntervalMs": 250, "maxRatePerSec": 4, "timeoutMs": 90000 },
-  "allowlist": { "denyExactCount": 68, "allowPrefixes": [ "analyzepsbt", "convertbits", "..." ],
+  "allowlist": { "denyExactCount": 68, "walletDenied": 73, "allowPrefixes": [ "analyzepsbt", "convertbits", "..." ],
                  "denyPrefixes": [ "generate", "..." ], "defaultDecision": "deny" },
   "actions": { "enabled": false, "allow": [] },
   "retention": { "hours": 72, "ringCapacity": 20000, "events": 5000 },
-  "access": { "mode": "open", "anonymous": true, "role": "viewer", "writesAllowed": false },
+  "access": { "mode": "accounts", "anonymous": false },
   "log": { "enabled": false },
   "sources": [ { "panel": "sync bar", "source": "getblockchaininfo blocks/headers + verificationprogress",
                  "note": "kept as two separate figures (rule 9)" } ]
 }
 ```
 
-With accounts on, `access` is `{ "mode": "accounts", "anonymous": false }`. `sources` states which data source backs each dashboard panel in the current mode (log tail on or off). The numbers above are the shipped defaults.
+In open mode (`BLOCKYARD_AUTH=0`), `access` is `{ "mode": "open", "anonymous": true, "role": "viewer", "writesAllowed": false }`. `sources` states which data source backs each dashboard panel in the current mode (log tail on or off). The numbers above are the shipped defaults.
 
 ### `POST /api/config/node/test` and `POST /api/config/node`
 
-The Node connection form on Node & RPC. Auth `any` + CSRF; with accounts on, both need the `admin` role. Both take the same body and accept **only four fields** — `rpcUrl` (required, `http(s)://host:port`), `datadir`, `chainHint` (default: the current node's, else `main`) and `label`. `rpcUser`, `rpcPassword` and `cookieFile` are refused: authentication is the datadir cookie, and a password is not taken over an endpoint that is open by default. Without a `datadir` (given or already configured) and with no `cookieFile` configured, the answer is `400 need_datadir`; a bad URL is `400 bad_rpc_url`.
+The Node connection form on Node & RPC. Auth `any` + CSRF; with accounts on, both need the `admin` role. Both take the same body and accept **only four fields** — `rpcUrl` (required, `http(s)://host:port`), `datadir`, `chainHint` (default: the current node's, else `main`) and `label`. `rpcUser`, `rpcPassword` and `cookieFile` are refused: authentication is the datadir cookie, and a password is not taken over an endpoint that can be run open. Without a `datadir` (given or already configured) and with no `cookieFile` configured, the answer is `400 need_datadir`; a bad URL is `400 bad_rpc_url`.
 
 `/test` writes nothing. It probes `getblockchaininfo` with a throwaway client on its own lane (timeout at most 8 s). **Credentials go to one endpoint only**: the cookie is sent when `rpcUrl` equals the endpoint this monitor is already configured for, and to any other address the probe carries no `Authorization` header at all — a `401` from a new endpoint is reported as `ok: true, reachable: true, authenticated: false` with a `note`, since it proves an RPC server answered.
 

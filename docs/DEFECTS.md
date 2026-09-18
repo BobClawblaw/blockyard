@@ -3,15 +3,17 @@
 Open items, honestly stated. Checked items keep their entry so the reasoning is
 not re-litigated.
 
-**Scope, settled 2026-09-14.** BlockYard supports **Bitcoin Core, on the machine that runs it**:
-the explorer's address index is built from the node's block files, so the monitor lives next
-to the node. Two things this register was written against are therefore no longer supported and
-no longer defects here: the **experimental node** whose RPC surface, log grammar and counters
-several entries below were measured on (its measurements are kept, as records), and **reading a
+**Scope, settled 2026-09-14; revised 2026-09-18.** BlockYard supports **Bitcoin Core, or
+Bitcoin Machine Code (bmc), on the machine that runs it**: against Core, the explorer's address
+index is built from the node's block files, so the monitor lives next to the node (bmc keeps an
+address index of its own, which the explorer asks first). bmc is the experimental node
+whose RPC surface, log grammar and counters several entries below were measured on; it was
+dropped on 2026-09-14 and is supported again as a first-class node (README, "Built alongside
+Bitcoin Machine Code"). What is no longer supported, and no longer a defect here, is **reading a
 node elsewhere over RPC alone** -- a node appliance on the LAN, tried on 2026-09-13 and dropped,
 because real-time explorer data over RPC was a failed idea (INSTALL, "It runs on the node's
-machine"). Entries whose only subject was one of those are closed below with that reason, and
-the record says which.
+machine"). Entries whose only subject was that, or bmc while it was unsupported, are closed below
+with that reason, and the record says which.
 
 ## Done since the first draft
 
@@ -848,6 +850,8 @@ board added here can repeat every one of them.
 
 Not a node defect but the standing debt, with numbers, so the next session starts from fact:
 Core's `debug.log` parses at **0%** and every event is stamped with the time it was read rather
-than the time in the line; the experimental build's own log, whose grammar these rules were
-written for, parses at **52.6%** on a fresh tail against ~96% on the frozen fixtures. The drift
+than the time in the line. bmc's own log, whose grammar these rules were written for, parsed at
+52.6% on a fresh tail on 2026-09-17 (against ~96% on the frozen fixtures). Since 2026-09-18 it
+parses at **93.3%** (MEASUREMENTS §38-39, run 26's 42,804 lines). Core's `debug.log` is still
+at 0%. The drift
 is invisible because `log-unparsed` only fires below 5% coverage. See docs/MEASUREMENTS.md.

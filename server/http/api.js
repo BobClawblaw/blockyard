@@ -127,7 +127,7 @@ function nodeConfigAllowed(app, ctx) {
 
 // What a form may set, and nothing else. Credentials come from the datadir's .cookie
 // (config.js resolveCookie), so rpcUser / rpcPassword / cookieFile are NOT accepted here: taking a
-// password over an endpoint that is open by default is not a thing to add quietly.
+// password over an endpoint that can be run open is not a thing to add quietly.
 function candidateNode(app, body) {
   const cur = app.cfg.nodes?.[0] ?? {};
   const rpcUrl = String(body?.rpcUrl ?? '').trim();
@@ -236,8 +236,8 @@ export const routes = [
   // processor and memory should not be readable before sign-in. /api/build and /api/health are
   // 'none' because a version string answers "is my tab current", which a login page needs.
   //
-  // What is deliberately NOT here: hostname, username, network addresses, environment. This
-  // monitor is open-access by default, so anything on this route is readable by anyone who can
+  // What is deliberately NOT here: hostname, username, network addresses, environment. In open
+  // mode (BLOCKYARD_AUTH=0) anything on this route is readable by anyone who can
   // reach the port -- and those four are precisely what test/privacy.test.js exists to keep out
   // of published artefacts. The OS and the processor identify a machine's SHAPE, not its owner.
   {

@@ -11,7 +11,7 @@ machines you choose. Every setting mentioned here is described in full in
 - [5. First run](#5-first-run)
 - [6. Run it as a service](#6-run-it-as-a-service)
 - [7. Decide who can reach it](#7-decide-who-can-reach-it)
-- [8. Accounts (optional)](#8-accounts-optional)
+- [8. Accounts (on by default)](#8-accounts-on-by-default)
 - [9. HTTPS (on by default)](#9-https-on-by-default)
 - [10. Behind a reverse proxy (optional)](#10-behind-a-reverse-proxy-optional)
 - [11. Updating](#11-updating)
@@ -173,7 +173,8 @@ npm test
 npm run dev
 ```
 
-This starts the monitor on <http://127.0.0.1:18088> against a built-in fake node that
+This starts the monitor on <https://127.0.0.1:18088> (with its own self-signed certificate, as in
+section 9) against a built-in fake node that
 simulates a node syncing, with no configuration file read. It is the quickest way to see
 every page, and it is what the test suite uses. Stop it with `Ctrl-C`.
 
@@ -261,7 +262,7 @@ rpcservertimeout=120   # keeps the node from closing a connection under a slow c
 | `coinstatsindex=1` | **Optional.** The Chain page's UTXO figures come from `gettxoutsetinfo muhash`; unindexed, that call walks the whole UTXO set (41 s measured), so on a node that reports no synced `coinstatsindex` the monitor does not ask for them at all, leaves the figures blank and flags `utxo-unindexed`. The index **rebuilds from genesis** and takes hours -- until it finishes those figures stay unavailable and the rebuild competes with everything else for the disk. |
 | `dbcache=4096` | Measured 2026-09-13 on one Core 31.1.0 node that shipped with 450 MB: raised to 4096 together with the RPC settings here, the slowest call went from 4.0-4.5 s to 488-565 ms and the monitor's lane stopped timing out. Which line deserved the credit was not isolated, so they are recommended together. |
 | `rpcservertimeout=120` | The monitor's own ceilings are 90 s ordinary / 300 s heavy, so this only matters on a heavily loaded node. |
-| `rpcthreads`, `rpcworkqueue` | **Not for us:** this monitor issues one RPC at a time, so extra node threads do not speed it up. They matter where other software (Electrs, LND) shares the same bitcoind. |
+| `rpcthreads`, `rpcworkqueue` | **Not for us:** this monitor has at most `rpc.maxInFlight` calls in flight (four by default). That matches Core's default of four RPC threads, so raising them does not speed the monitor up. They matter where other software (Electrs, LND) shares the same bitcoind. |
 | `rest=1` | **Nothing.** This monitor makes no REST calls; it is JSON-RPC only. |
 
 Restart the node after changing these: `bitcoin.conf` is read at start-up. `peerinfo-partial` is
@@ -497,7 +498,7 @@ have open is older than the server.
 
 **Updating from 0.0.9.** The defaults hardened in 0.1.0, and a `config/local.json` written by
 0.0.9's installer does not name them, so the first start after the update behaves like a fresh
-install in three ways:
+install in four ways:
 
 - **HTTPS.** The monitor makes itself a self-signed certificate under `data/tls/` and serves
   HTTPS on the same port; `http://…:21000` stops answering. Open `https://`, accept the

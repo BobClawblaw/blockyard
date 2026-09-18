@@ -65,7 +65,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 | Item | What it tells you |
 |---|---|
 | **BlockYard v… · build** | The version and build this tab is running. |
-| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The three games live at the end, under the **Diversions** pop-down. |
+| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The seven games live at the end, under the **Diversions** pop-down: Tetrust, Blockout, Blockanoid, Scorched Yard, Wolfenstein 3D, DOOM and Quake. |
 | **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. |
 | **stream** | The live link to the server. `connecting` on load, then `live`. `reconnecting` means the link dropped and the browser is retrying. `stale` means the link is up but no fresh data has arrived for more than 90 seconds. |
 | **rpc** | The node's last RPC round-trip time. It turns red when the average climbs above five seconds. |
@@ -249,7 +249,8 @@ trimming one board's effects leaves the other's alone.
 
 They are decoration only: they carry no data, they never play during a refresh, and they
 are switched off entirely under `prefers-reduced-motion`. The Block space list is every effect
-but the two drawn on a price line (**Energy pulse**, **Pipe bulge**). The Markets board is eight
+but the five drawn on a price line (**Energy pulse**, **Pipe bulge**, **Breathe**, **Light saber**,
+**Black hole**). The Markets board is eight
 units deep and as wide as the hours, so everything there moves **along the hours, left or right,
 never toward you**, and lights the candles or the line. Its list is the **sixteen** that
 translate to a chart: **Ripple**, **Outline sweep**, **Tide**, **Cascade**, **Twinkle**, **Scan
@@ -295,6 +296,11 @@ cards three to a row.
 | **Block drill-down** | Type a height or block hash, or leave the box blank for the tip, and press **inspect** or Enter. It shows the header and statistics plus the block's txids as buttons. Click one to decode that transaction. Both views link into the explorer. |
 | **Indexes** | Each index the node keeps, its height, and whether it is synced. |
 | **Chain tips** | `getchaintips`: height, branch length, status. |
+
+On a node in initial block download there is no last 24 hours of blocks. **Block interval**,
+**Block size**, **Fees per block** and **Transactions per block** then draw the latest blocks the
+node applied (about 40), at each block's own time, and the card's label says
+`latest N blocks applied · at block time`.
 
 ---
 
@@ -1162,8 +1168,9 @@ The block under construction and who has been mining. The layout follows mempool
 | **Attribution** | How many blocks have been attributed, the height window, how many labels matched, where the label map came from, and the cost of the block template. |
 | **Detailed** (click to expand) | What this node can and cannot answer about mining, and why. |
 
-The block template is requested only while a page that shows it is open, because
-answering it takes the node over a second of its single RPC thread.
+The block being built is assembled by the monitor from the verbose mempool it already
+reads (`getrawmempool true`). It costs the node no call of its own, and the monitor never
+calls `getblocktemplate`.
 
 ---
 
@@ -1172,7 +1179,7 @@ answering it takes the node over a second of its single RPC thread.
 The monitor's own event stream: what it observed and decided, such as blocks stored,
 reorgs, stalls and nodes becoming unreachable. Node log lines are not shown here. Events of
 kind `index` mark the start, finish or failure of an address index build; those three are also
-shown as a notification in every open tab, because a build takes half an hour.
+shown as a notification in every open tab, because a build takes a few hours.
 
 - **Filter text** matches the event text, tag, kind and address.
 - **Severity** (`info`, `warn`, `error`) and **kind** drop-downs narrow the list.
@@ -1187,7 +1194,7 @@ How the monitor treats your node, and where every number comes from.
 
 | Panel | What it shows |
 |---|---|
-| **RPC etiquette** | The endpoint, calls per second, totals, batches, latency (last, average, slowest), how busy the RPC lane is, errors and timeouts, polls dropped as stale, circuit-breaker trips, and the queue. The monitor keeps one request in flight at a time, because the node's RPC server handles one connection at a time. |
+| **RPC etiquette** | The endpoint, calls per second, totals, batches, latency (last, average, slowest), how busy the RPC lane is, errors and timeouts, polls dropped as stale, circuit-breaker trips, and the queue. The monitor runs up to `rpc.maxInFlight` requests at once (four by default), with their starts still spaced out. **in flight** shows how many are running now, the ceiling and the peak: `N of M (peak P)`. For a node that serves one connection at a time, set `"rpc": { "maxInFlight": 1 }` on its entry. |
 | **Poll cadence** | Each polling tier's configured interval against its actual interval. If the node is slow, tiers deliberately poll less often and the page says **Cadence is stretched**. |
 | **Data quality** | Every known gap, with when it was flagged. The `rpc-slow` and `rpc-timeouts` flags describe what was measured and do not assert a cause; when an address index build is running on this machine they say so, because it shares the node's disk and pauses while the node is slow. |
 | **Monitor self-telemetry** | The monitor's own memory, CPU and client counts. |
@@ -1274,6 +1281,8 @@ can bookmark it or send it to someone who can reach the same monitor:
 | Tetrust | `#tetrust` |
 | Blockout | `#blockout` |
 | Blockanoid | `#blockanoid` |
+| Scorched Yard | `#scorched` |
+| Wolfenstein 3D | `#wolf3d` |
 | DOOM | `#doom` |
 | Quake | `#quake` |
 | Peers | `#peers` |
@@ -1282,6 +1291,7 @@ can bookmark it or send it to someone who can reach the same monitor:
 | Events | `#logs` |
 | Node & RPC | `#node` |
 | Admin | `#admin` |
+| About | `#about` |
 
 The browser's back and forward buttons move between explorer pages as you would
 expect. The selected node is not part of the URL: a shared link opens on whichever
@@ -1317,7 +1327,7 @@ same whatever you choose here.
 
 The panel is **tabbed**, in three labelled rows: **Boards** (Appearance, Block space, Sky,
 Markets & Price), **Effects** (Space effects, Market effects) and **Diversions** (Tetrust,
-Blockout, Blockanoid). The two **effects** tabs are lists of switches, so they also get **all
+Blockout, Blockanoid, Scorched Yard). The two **effects** tabs are lists of switches, so they also get **all
 on** and **all off**; twenty-nine of them is a lot of clicking otherwise.
 
 ### Appearance

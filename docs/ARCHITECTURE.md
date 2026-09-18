@@ -235,7 +235,7 @@ Lower priority numbers run first.
 | `fast` | 4 s | `getblockchaininfo`, `getmempoolinfo`, `getconnectioncount`, `getnettotals`, `uptime` | 0 | sync bar, tip, mempool counters, bandwidth rate, new-tip detection, reorg detection |
 | `mid` | 15 s | `getnetworkinfo`, `getmininginfo`, `getchaintips`, `estimatesmartfee` for 1/2/6/24/144 blocks, plus `getpeerinfo` in RPC-only mode | 2 | network info, fees, side tips |
 | `pool` | 20 s | `getrawmempool true` (heavy timeout) | 6 | mempool distribution and cells, the dense next-block set |
-| `slow` | 60 s | `getindexinfo`, `getchaintxstats 120`, and `gettxoutsetinfo muhash` **only for a node whose `getindexinfo` reports a synced `coinstatsindex`** (the first run asks `getindexinfo` alone, so the answer is known before the question is put; without the index that call walks the whole UTXO set — 41 s measured, every minute, on the node's one RPC thread — so the figures are flagged `utxo-unindexed` instead) | 5 | UTXO set, indexes, tx rate |
+| `slow` | 60 s | `getindexinfo`, `getchaintxstats 120`, and `gettxoutsetinfo muhash` **only for a node whose `getindexinfo` reports a synced `coinstatsindex`** (the first run asks `getindexinfo` alone, so the answer is known before the question is put; without the index that call walks the whole UTXO set — 41 s measured, every minute, holding one of the node's RPC threads — so the figures are flagged `utxo-unindexed` instead) | 5 | UTXO set, indexes, tx rate |
 | `rare` | 15 min | `getpeerinfo`, `getdeploymentinfo`, `getrpcinfo`, `getaddrmaninfo`, `listbanned` | 7 | peer table, deployments, address book, ban table |
 
 Some reads are not on a timer:
@@ -420,8 +420,9 @@ Properties:
   measurements rather than guesses (RULES 1). Failures and timeouts are also timed,
   so a node that stalls for 90 s shows up in the latency statistics that adaptive
   cadence reads.
-- **No keep-alive.** Holding a socket open between requests would hold the node's
-  only service slot.
+- **No keep-alive.** Holding a socket open between requests would hold one of the
+  node's RPC service slots (and, on a node that serves one connection at a time,
+  its only one).
 - **Cookie auth.** Credentials are resolved lazily and re-read once on a 401,
   because the node regenerates its cookie every time it starts.
 
@@ -555,7 +556,7 @@ flowchart LR
 Bitcoin Core cannot answer "which transactions touched this address": the
 insight-style `getaddresstxids` and `getaddressbalance` are refused at every
 setting, and `scantxoutset` reads the whole UTXO set for a balance only
-(measured: 26.5 s for 40 addresses, holding the node's one RPC thread). So
+(measured: 26.5 s for 40 addresses, holding one of the node's RPC threads). So
 BlockYard builds the index itself, the way `electrs` does, from the node's own
 files. The numbers are in `docs/MEASUREMENTS.md` §28-30 and the history in
 `docs/DEFECTS.md`.
@@ -618,8 +619,8 @@ files. The numbers are in `docs/MEASUREMENTS.md` §28-30 and the history in
   `addressIndexBuild: "manual"`. Workers: `addressIndexWorkers` if set, else half
   of `defaultWorkers()` (`cpus − 4`, one per ~2.5 GB, at most 16) capped at 4,
   because the node shares the disk. The build has its own `RpcClient` on a second
-  lane — on the monitor's one-in-flight lane its `getblockhash` batches sat
-  behind multi-second mempool and block reads and both starved. It is **paced by
+  lane — when the monitor's lane ran one call at a time (before 2026-09-18), its
+  `getblockhash` batches sat behind multi-second mempool and block reads and both starved. It is **paced by
   the node's own answers**: `rpcPacer` reads the monitor lane's telemetry before
   each file is handed to a worker, holds (re-checking every 10 s) while the node
   is failing, its breaker is open or its average latency is above
@@ -686,7 +687,7 @@ loaded from the same origin. There is no build step and no framework.
 | `settings.js` | display settings: `DEFAULTS`, the `PANEL` rows of the settings dialog, `normalise()`, and the option builders (`spaceOptions`, `enabledEffects`, ...) the boards read; stored on the server (`/api/settings`) with a `localStorage` copy |
 | `about.js` | the About page (version, system and node info) |
 | `tetris.js` / `tetrust.js`, `breakout.js` / `blockout.js`, `arkanoid.js` / `blockanoid.js`, `tetsound.js`, `wavesound.js` | the Diversions: pure game rules in the first file of each pair, the tab drawn on the 3D engine in the second, then two sound files -- `tetsound.js`, the oscillator blips and the music the boards use today, and `wavesound.js`, a three-voice wavetable synth (32-entry computed tables, pitch as a read rate, three voices with oldest-steals) kept from a maze game dropped on 2026-09-17 and available to any board that wants a sound of its own |
-| `x86.js`, `dospc.js`, `soundcard.js`, `dosworker.js`, `dosaudio.js`, `dosio.js`, `dosgame.js`, `doom.js`, `quake.js` | the DOS Diversions: an i386 interpreter, the PC around it (DOS/4GW for DOOM, the go32 stub and CWSDPMI for Quake), a Sound Blaster Pro 2 with an OPL3, the worker the machine runs in, the AudioWorklet it plays through, the pure keyboard/config/text-mode helpers, the shared tab, and each game's own few lines (section 3.4) |
+| `x86.js`, `dospc.js`, `soundcard.js`, `dosworker.js`, `dosaudio.js`, `dosio.js`, `dosgame.js`, `wolf3d.js`, `doom.js`, `quake.js` | the DOS Diversions: an i386 interpreter (with a real mode for Wolfenstein 3D), the PC around it (plain DOS for Wolfenstein 3D, DOS/4GW for DOOM, the go32 stub and CWSDPMI for Quake), a Sound Blaster Pro 2 with an OPL3, the worker the machine runs in, the AudioWorklet it plays through, the pure keyboard/config/text-mode helpers, the shared tab, and each game's own few lines (section 3.4) |
 | `fmt.js` | formatters: decimal units (as the node prints them), `–` for anything absent |
 | `login.js` | the login page (a separate file because of the CSP) |
 

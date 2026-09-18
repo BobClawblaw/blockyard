@@ -71,11 +71,8 @@ tag     v0.0.9, v0.1.0, ...
 The updater does a **shallow tag fetch** (`git fetch --tags --depth=1 origin`) — the repository is
 14 MB today, but a user's machine should not pay for history it will never read.
 
-> **Blocker for public use:** the repository is **private**. `git fetch` from a user's deployment
-> needs credentials that do not exist. On this box it works only because `gh` puts a `GH_TOKEN` in
-> the environment — there is no credential helper configured. **The updater is unusable by anyone
-> else until the repository is public**, and no amount of design fixes that. This is the first
-> thing to resolve before implementing.
+The repository is public, so `git fetch` and `ls-remote` from a user's deployment need no
+credentials.
 
 ## 4. Mechanism
 
@@ -236,8 +233,8 @@ an unsigned tag must fail closed.
 
 ## 10. Prerequisites before implementation
 
-1. **Make the repository public**, or document that auto-update requires a token. Today it is
-   private (still so on 2026-09-14) and the feature cannot work for anyone else.
+1. ~~**Make the repository public.**~~ **Done:** the repository is public, so the release channel
+   needs no token.
 2. ~~**Fix the version scheme.**~~ **Done 2026-09-13, renumbered 2026-09-14.** `package.json` and
    `server/main.js` said **0.0.9** while `CHANGELOG.md` said **[0.9.0]** and **[0.1.0]**; any "is
    this newer?" comparison would have been wrong, and that field is what the whole feature

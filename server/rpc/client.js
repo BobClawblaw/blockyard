@@ -308,8 +308,9 @@ export class RpcClient {
     return { mod, port: this.url.port ? Number(this.url.port) : (this.url.protocol === 'https:' ? 443 : 80) };
   }
 
-  // Raw HTTP. Deliberately no keep-alive: holding the socket would hold the
-  // server's single service slot between our own requests.
+  // Raw HTTP. Deliberately no keep-alive: holding the socket would hold one of the
+  // server's RPC service slots between our own requests (on a node that serves one
+  // connection at a time, its only one).
   _raw(bodyStr, { timeoutMs, allowRetry = true, walletPath = '' } = {}) {
     const { mod, port } = this._transport();
     // With no credential we still send (some setups run RPC without auth), but a

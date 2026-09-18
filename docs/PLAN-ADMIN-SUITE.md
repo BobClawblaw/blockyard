@@ -1,6 +1,10 @@
 # The Administrative Suite — a plan for running the node from the web
 
-*Scoped 2026-09-18, before any code. Operator: "I want us to build an entire node and wallet
+*Scoped 2026-09-18. M0–M3 (the gates and two editions, elevation, the read-only wallet, receive)
+are merged to main, where they stay in git only. The suite is excluded from the npm tarball and
+the Docker image, and `build-edition.js` refuses `--edition admin` without `--unreleased`, so
+released builds are read-only. M4 to M7 are on the `admin-m4-send` branch, not merged; M8 is not
+started (§8a, §11).* *Operator: "I want us to build an entire node and wallet
 management interface into blockyard. It would have to be explicitly enabled and not default
 behavior at all, and should require https and user authentication, unless the user explicitly
 disables it. Let's add a complete user interface and required tabs, to support wallet and
@@ -214,7 +218,7 @@ M0–M3 are merged to main; M4, M6 and M7 are on `admin-m4-send` and wait for a 
 | M2 wallet, read-only | **merged** | `server/admin/wallet.js`, `server/rpc/admin-allowlist.js` |
 | M3 receive | **merged** | `server/admin/receive.js` |
 | M4 send | **branch** | `server/admin/send.js` + a regtest end-to-end test |
-| M5 transaction tools | not started | — |
+| M5 transaction tools | **branch** | `server/admin/txtools.js` + a regtest test |
 | M6 daemon control | **branch** | `server/admin/daemon.js` |
 | M7 config editors | **branch** | `server/admin/config-edit.js` |
 | M8 security audit | not started, deliberately | to be read awake |

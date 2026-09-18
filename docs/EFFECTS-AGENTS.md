@@ -47,12 +47,12 @@ keys it does not know, so a `config/blockyard.json` naming a removed effect simp
 
 ## What separates an agent effect from what we already have
 
-The board has thirty idle effects (when this was written, twenty-six). Twenty-three of them are
+The board has thirty-four idle effects (when this was written, twenty-six). Twenty-seven of them are
 **fields**: pure functions of a tile's position and the effect's clock,
 `fxAt(tile, fx) -> {glow, outline, lift, color}`. A field effect has no location of its own — it
 is a pattern evaluated everywhere at once. Plasma, aurora, checker, ripple, quake: every one is a
-formula over `(cx, cy, u)`. (Two of them, `pulse` and `bulge`, play on the Markets price line
-rather than on cubes.)
+formula over `(cx, cy, u)`. (Five of them, `pulse`, `bulge`, `breathe`, `saber` and
+`blackhole`, play on the Markets price line rather than on cubes.)
 
 Seven are **agents** — the table above; when this was written there were two, `lightcycle` and
 `ball`, plus a `packetPaths` primitive no effect uses. An agent has a *position*, a *route it has
@@ -80,7 +80,7 @@ The existing machinery for agents:
 **Two hard rules any new effect must satisfy**, both enforced by tests:
 
 1. `effects.test.js` plays every `FX_KINDS` entry through `fxAt` and demands it lights something
-   (`worst > 0.3`). Only `pulse` and `bulge` are exempt, because they draw on the price line. **So every new
+   (`worst > 0.3`). Only `pulse`, `bulge`, `breathe`, `saber` and `blackhole` are exempt, because they draw on the price line. **So every new
    agent must publish `fx.heads`** and join the heads branch — which is also what makes it feel
    connected to the board rather than painted over it.
 2. `viewer-canvas-rules.test.js`: no `ctx.clip()`, no `globalAlpha`, no composite modes, no
@@ -431,7 +431,7 @@ If the point is to blow people away rather than to add length to a list:
 
 That is six effects covering all five families, each with a different motion vocabulary. Beyond
 that the list has more ideas than the board has seconds to show them: at one effect every 5-9 s
-plus its own run time, thirty kinds means any given one appears a few times an hour.
+plus its own run time, thirty-four kinds means any given one appears a few times an hour.
 
 ## Costs and constraints to respect when building these
 

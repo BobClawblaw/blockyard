@@ -72,10 +72,11 @@ Agreement accompanies the Software at all times"), and it is met.
 
 Two things to know before the PR:
 
-- **The DOOM and Wolfenstein copies in this repository carry no licence text.** Quake's
-  does. id's `LICENSE.DOC`/`VENDOR.DOC` and Apogee's `VENDOR.DOC` were in the original
-  archives and are missing from ours. That is worth fixing in the repository itself,
-  independently of Umbrel, since the repository redistributes them too.
+- **Each copy carries its own terms, as its official release shipped them.** Wolfenstein
+  3D ships Apogee's `VENDOR.DOC` (with `ORDER.FRM`, `W3DHELP.EXE` and `FILE_ID.DIZ`, from
+  3D Realms' `1wolf14.zip`). DOOM is id's `doom19s.zip` whole, with its terms in
+  `README.TXT`. Quake ships `SLICNSE.TXT`. `NOTICE` names each game's terms, and
+  `test/shareware.test.js` pins every file to its official release hash.
 - **A store reviewer will notice** that a Bitcoin node monitor's image contains `DOOM.EXE`.
   It is a headline feature of the app rather than a stowaway (see the README), so the PR
   body should say so plainly rather than let it be discovered.

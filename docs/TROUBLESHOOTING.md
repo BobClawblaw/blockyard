@@ -191,7 +191,7 @@ so far and an ETA; the address page repeats it. Things it says, and what they me
 
 ## "getrawmempool verbose dropped as stale" in Events, and the mempool panels look old
 
-The monitor keeps one RPC request in flight and serves the live polls first; the full-pool poll is
+The monitor runs a few RPC requests at once (`rpc.maxInFlight`, four by default) and serves the live polls first; the full-pool poll is
 the lowest priority, so when the node's RPC is slow it waits behind them and, past its freshness
 budget, is dropped rather than shown as current. A streak of drops is one warning event when it
 starts, a counter on **Node & RPC → data quality** while it lasts, and one event when the poll
@@ -315,7 +315,8 @@ exchanges unreachable, pages show BTC figures only — never a guessed price.
 
 Browsers allow full screen only after a click on the page, and some embedded or kiosk-mode
 browsers refuse it entirely. Use the browser's own full-screen key (F11) instead, or start the
-browser in kiosk mode pointed at `http://<host>:21000/#kiosk`.
+browser in kiosk mode pointed at `https://<host>:21000/#kiosk` (`http://` only if you set
+`BLOCKYARD_TLS=0`).
 
 ## Sign-in problems
 

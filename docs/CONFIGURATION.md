@@ -18,6 +18,7 @@ a stock local Bitcoin Core node, though, so most deployments want at least a
   - [store](#store)
   - [auth](#auth)
   - [actions](#actions)
+  - [admin](#admin)
   - [log](#log)
   - [markets](#markets)
 - [Environment variables](#environment-variables)
@@ -134,6 +135,7 @@ node gets its own charts and event stream.
 | `optional` | `false` | Marks a node whose absence is expected, such as a test or benchmark node. Its failures are logged at a lower severity, a missing datadir is reported at `info` instead of `warn`, and it does not count as a required node in `/api/health`. |
 | `color` | `"#f7931a"` | Accent colour for this node in the UI. |
 | `systemdUnit` | *(see defaults)* | Name of the node's systemd unit. It is informational and not currently used by the server. |
+| `rpc` | none | Per-node override of the [`rpc`](#rpc) block, for example `{ "maxInFlight": 1 }` for a node that serves one connection at a time. |
 
 **Credentials.** A node needs **either** a cookie path (`datadir`, optionally with `chainHint`,
 or an explicit `cookieFile`) **or** `rpcUser` + `rpcPassword`. Cookie auth is the usual case on the
@@ -194,9 +196,11 @@ entry; either one wins over both.
 
 ### rpc
 
-The node's RPC server handles one connection at a time on a single thread.
-BlockYard therefore sends requests one at a time, in priority order, and these
-limits protect the node from the monitor. They apply to each node separately.
+Bitcoin Core serves RPC on four threads by default, and BMC run 26 serves calls in
+parallel too (MEASUREMENTS 40). BlockYard keeps up to `rpc.maxInFlight` requests
+outstanding per node. It starts them in priority order, spaced by `minIntervalMs` /
+`maxRatePerSec`, and these limits protect the node from the monitor. They apply to
+each node separately.
 
 | key | default | meaning |
 |---|---|---|
@@ -205,7 +209,7 @@ limits protect the node from the monitor. They apply to each node separately.
 | `rpc.maxRatePerSec` | `4` | Hard ceiling on requests per second, whatever the poll tiers ask for. |
 | `rpc.timeoutMs` | `90000` | Timeout for ordinary calls. It is deliberately generous, because a busy but healthy node can take tens of seconds to answer. |
 | `rpc.heavyTimeoutMs` | `300000` | Timeout for calls that are known to be expensive (UTXO-set statistics and similar). |
-| `rpc.staleDropMs` | `12000` | A poll answer that arrives later than this after it was requested is thrown away, not shown as current state. |
+| `rpc.staleDropMs` | `12000` | A queued request still waiting for the lane after this long is dropped without being sent, because its answer would describe a moment that has passed. |
 | `rpc.slowLatencyMs` | `5000` | Above this average latency, the UI says the node is slow instead of implying the monitor is broken. The background address index build holds above it and eases off above 40% of it (see `addressIndexBuild` under [nodes](#nodes)). |
 | `rpc.breakerThreshold` | `3` | Consecutive failures before the circuit breaker opens and the monitor stops sending requests for a while. |
 | `rpc.breakerCooldownMs` | `30000` | How long the breaker stays open before the next attempt. |
@@ -219,7 +223,7 @@ heavy tiers are thinned while the node is slow.
 | key | default | what it reads |
 |---|---|---|
 | `poll.fastMs` | `4000` | Chain info, mempool info, connection count, network totals, uptime. It must be at least 1000. |
-| `poll.midMs` | `15000` | Mining info, fee estimates, chain tips, mempool transaction ids. |
+| `poll.midMs` | `15000` | Network info, mining info, chain tips, fee estimates for 1/2/6/24/144 blocks, and peer info in RPC-only mode (the default). |
 | `poll.poolMs` | `20000` | The verbose mempool, which feeds the block-space viewer and the mempool map. If it is missing, `slowMs` is used. |
 | `poll.slowMs` | `60000` | Index info, UTXO-set info, chain transaction statistics. |
 | `poll.rareMs` | `900000` | Peer info, deployment info, RPC server info. |
@@ -240,8 +244,9 @@ heavy tiers are thinned while the node is slow.
 
 ### auth
 
-Accounts are **off by default**. With accounts off, anyone who can reach a listen
-address reads the monitor without signing in, as role `viewer`: charts, event feed,
+Accounts are **on by default** (since 2026-09-15; 0.0.9 shipped open).
+`auth.enabled: false` (`BLOCKYARD_AUTH=0`) turns on open mode: anyone who can reach a
+listen address reads the monitor without signing in, as role `viewer`: charts, event feed,
 peer and mempool detail, and the read-only RPC console. User administration, the
 audit trail and password changes stay closed. Node writes stay closed unless
 [`actions`](#actions) explicitly opens them. A warning at every startup names the
@@ -328,6 +333,26 @@ Available actions:
 | `testmempoolaccept` | `testmempoolaccept` (a dry run, changes nothing) | `viewer` |
 | `verifychain_l1` | `verifychain` at check level 2, depth 6 | `admin` |
 
+### admin
+
+`admin.*` configures the administrative suite ([PLAN-ADMIN-SUITE.md](PLAN-ADMIN-SUITE.md)).
+The suite exists in git only. Released builds (npm, Docker, `scripts/build-edition.js`
+without `--unreleased`) are read-only and do not contain its code, so on them these keys
+only produce the startup line `administrative suite: NOT IN THIS BUILD`.
+
+| key | default | meaning |
+|---|---|---|
+| `admin.enabled` | `false` | Loads the suite. Off, its modules are not imported at all. |
+| `admin.allowInsecure` | `false` | Allow the suite over plain HTTP. Without it the suite needs TLS or `server.trustProxy`. |
+| `admin.allowWithoutAuth` | `false` | Allow the suite while accounts are off. |
+| `admin.allowPublicBind` | `false` | Allow the suite while bound to an address other than this machine. |
+| `admin.wallets` | `[]` | Wallets the suite may load, list or spend from. A wallet not named here is refused. |
+| `admin.elevationMs` | `300000` (5 min) | How long a password re-entry lasts before the next state change asks again. |
+| `admin.spend.capSat` | `null` | Per-spend cap in satoshis. There is no default: no spend is allowed until it is set. |
+| `admin.spend.capSat24h` | `null` | Cap on spends over 24 hours, in satoshis. |
+| `admin.spend.mainnetPhrase` | `true` | A first spend on mainnet asks for a differently worded confirmation. |
+| `admin.addressBook` | `[]` | Known destinations. Others need a typed confirmation. |
+
 ### log
 
 | key | default | meaning |
@@ -398,7 +423,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_NODE_LABEL` | `nodes[0].label` | string | `Bitcoin Core (mainnet)` | Display name of the first node, shown in the header. Setting `BLOCKYARD_NODE_URL` to a *different* address without this renames the node to `node @ host:port`, so a redirected instance cannot keep a built-in name that would describe the wrong node. Restating the address the node already had renames nothing. |
 | `BLOCKYARD_RPC_TIMEOUT` | `rpc.timeoutMs` | number | `90000` | RPC timeout for ordinary calls. |
 | `BLOCKYARD_RPC_MIN_INTERVAL` | `rpc.minIntervalMs` | number | `250` | Minimum gap between RPC requests. |
-| `BLOCKYARD_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop poll answers older than this. |
+| `BLOCKYARD_RPC_STALE_DROP` | `rpc.staleDropMs` | number | `12000` | Drop queued requests that have waited longer than this. |
 | `BLOCKYARD_DATA` | `store.dir` | path | `<repo>/data` | Data directory. Also the default `auth.dataDir`. |
 | `BLOCKYARD_RETENTION_HOURS` | `store.retentionHours` | number | `72` | Chart history retention. |
 | `BLOCKYARD_AUTH` | `auth.enabled` | boolean | `true` | Accounts; `0` is open mode. |
@@ -408,6 +433,11 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_ENABLE_ACTIONS` | `actions.enabled` | boolean | `false` | Master switch for node writes. |
 | `BLOCKYARD_ACTIONS` | `actions.allow` | list | *(empty)* | Actions to enable, for example `testmempoolaccept,savemempool`. |
 | `BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH` | `actions.allowWritesWithoutAuth` | boolean | `false` | Permit actions while accounts are off. |
+| `BLOCKYARD_ADMIN` | `admin.enabled` | boolean | `false` | Load the administrative suite (see [admin](#admin); git only). |
+| `BLOCKYARD_ADMIN_ALLOW_INSECURE` | `admin.allowInsecure` | boolean | `false` | Allow the suite over plain HTTP. |
+| `BLOCKYARD_ADMIN_ALLOW_WITHOUT_AUTH` | `admin.allowWithoutAuth` | boolean | `false` | Allow the suite while accounts are off. |
+| `BLOCKYARD_ADMIN_ALLOW_PUBLIC_BIND` | `admin.allowPublicBind` | boolean | `false` | Allow the suite on a non-local listen address. |
+| `BLOCKYARD_ADMIN_WALLETS` | `admin.wallets` | list | *(empty)* | Wallets the suite may use. |
 | `BLOCKYARD_LOG_SOURCE` | `log.enabled` | boolean | `false` | `1` tails node log files; `0` (or unset) runs on RPC alone. |
 | `BLOCKYARD_LOG_LEVEL` | `log.level` | string | `info` | `debug`, `info`, `warn` or `error`. |
 | `BLOCKYARD_MARKETS` | `markets.enabled` | boolean | `true` | `0` removes the Markets feed; the polling checkbox then cannot turn it on. |
