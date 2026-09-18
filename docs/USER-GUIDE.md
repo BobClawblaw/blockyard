@@ -918,7 +918,8 @@ flat), the **starting cash** and the **interest** rate. They take effect at the 
 ## Wolfenstein 3D
 
 The shareware episode of Wolfenstein 3D, **Escape from Wolfenstein**, under **Diversions**, first of
-the three DOS games. It is id Software's own `WOLF3D.EXE` v1.4 and its `.WL1` data files, unmodified,
+the three DOS games. It is id Software's own `WOLF3D.EXE` v1.4, an Apogee game (Apogee published the
+shareware), and its `.WL1` data files, unmodified,
 on the same PC BlockYard emulates for DOOM and Quake. Where those two were 32-bit programs, Wolfenstein
 3D is a 16-bit **real-mode** DOS program from 1992, so here the emulated processor runs the way a PC
 started up: segments and offsets, DOS's own memory, the interrupt table at the bottom of memory. AdLib
@@ -935,6 +936,11 @@ The game's files live on the server in `games/wolf3d_dos/`: `WOLF3D.EXE`, and th
 it cannot start without (`AUDIOHED`, `AUDIOT`, `GAMEMAPS`, `MAPHEAD`, `VGADICT`, `VGAGRAPH`,
 `VGAHEAD`, `VSWAP`). `CONFIG.WL1`, its settings and high scores, is optional. The page names a missing
 file instead of starting.
+
+The rest of the folder completes Apogee's shareware package, kept whole because its licence requires
+it: `VENDOR.DOC` (the distribution terms), `W3DHELP.EXE`, `ORDER.FRM` and `FILE_ID.DIZ`, as installed
+from the release 3D Realms distributed at `ftp.3drealms.com/share/1wolf14.zip`. The game does not read
+them. The terms of all three games are listed in `NOTICE`.
 
 ### Playing
 

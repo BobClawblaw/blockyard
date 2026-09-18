@@ -2,3 +2,34 @@ BlockYard
 Copyright 2026 BobClawblaw and contributors
 
 This product is licensed under the Apache License, Version 2.0.
+
+----------------------------------------------------------------------
+THIRD-PARTY SHAREWARE UNDER games/ -- NOT COVERED BY THE APACHE LICENSE
+----------------------------------------------------------------------
+
+The games/ directory holds three shareware releases, redistributed free of
+charge, unmodified and complete, under their own terms. The Apache License
+above does not apply to them, and nothing in BlockYard grants any right in
+them. BlockYard is free and will not be sold, rented or offered on a
+pay-per-play basis, and neither may these games be.
+
+  games/wolf3d_dos/  Wolfenstein 3D v1.4, shareware episode 1
+                     Copyright 1992 id Software. Published by Apogee
+                     Software, Ltd. An Apogee game. Terms: VENDOR.DOC
+                     (Apogee's shareware distribution licence). Files as
+                     installed from 1wolf14.zip, the release Apogee /
+                     3D Realms distributed at ftp.3drealms.com/share/.
+
+  games/doom_dos/    DOOM v1.9 shareware
+                     Copyright 1993-1995 id Software. Files as released
+                     in id's doom19s.zip, as shareware ("PLEASE
+                     DISTRIBUTE!!!"); see README.TXT and ORDER.FRM.
+
+  games/quake_dos/   Quake v1.06 shareware
+                     Copyright 1996 id Software. Files as released in
+                     id's quake106.zip. Terms: SLICNSE.TXT (the
+                     shareware end-user licence) and LICINFO.TXT.
+
+Wolfenstein 3D, DOOM and Quake are trademarks of their owners; Apogee and
+the Apogee comet logo are trademarks of Apogee Software, Ltd. Their use
+here is only to name the games; no endorsement is implied.

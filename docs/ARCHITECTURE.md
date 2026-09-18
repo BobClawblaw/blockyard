@@ -900,13 +900,15 @@ never executed on the server:
 
 | Directory | Release | Its own terms, as shipped |
 |---|---|---|
-| `games/wolf3d_dos/` | Wolfenstein 3D v1.4 shareware (Apogee Software, 1992) | none beyond `file_id.diz`: the release's shareware licence text is not bundled |
-| `games/doom_dos/` | DOOM v1.9 shareware (id Software; `DOOM1.WAD`) | `README.TXT`, `ORDER.FRM`, the DOOM FAQ v6.666 |
-| `games/quake_dos/` | Quake v1.06 shareware (id Software, 1 October 1996) | `LICINFO.TXT`, `SLICNSE.TXT`, `READV106.TXT` |
+| `games/wolf3d_dos/` | Wolfenstein 3D v1.4 shareware (id Software, published by Apogee, 1992), as installed from 3D Realms' `ftp.3drealms.com/share/1wolf14.zip` | `VENDOR.DOC` (Apogee's distribution licence), `W3DHELP.EXE`, `ORDER.FRM`, `FILE_ID.DIZ` |
+| `games/doom_dos/` | DOOM v1.9 shareware (id Software; `DOOM1.WAD`), id's `doom19s.zip` | `README.TXT`, `ORDER.FRM`, the DOOM FAQ v6.666 |
+| `games/quake_dos/` | Quake v1.06 shareware (id Software, 1 October 1996), id's `quake106.zip` | `LICINFO.TXT`, `SLICNSE.TXT`, `READV106.TXT` |
 
 `games/SHA256SUMS` lists the SHA-256 of every tracked file under `games/` (`cd games && sha256sum -c
 SHA256SUMS`), and `test/audit-2026-09-16-low-scripts.test.js` recomputes them, so a changed game file
-is a failing test rather than an unnoticed one.
+is a failing test rather than an unnoticed one. `test/shareware.test.js` holds the other half: each file is pinned to the hash of the official
+release it came from, the package must be complete (Wolfenstein 3D's list is read out of its own
+`VENDOR.DOC`), and `NOTICE` must name each game's terms.
 
 ## 4. The 3D engine
 

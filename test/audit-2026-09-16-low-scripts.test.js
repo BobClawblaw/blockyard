@@ -187,5 +187,6 @@ test('I6: games/SHA256SUMS matches every tracked game file that is present', () 
   }
   for (const rel of manifest.keys()) assert.ok(tracked.includes(rel), `games/SHA256SUMS lists ${rel}, which is not tracked`);
   assert.ok(checked > 0 || !fs.existsSync(path.join(ROOT, 'games', 'doom_dos')), 'at least one file was hashed');
-  assert.match(read('docs/ARCHITECTURE.md'), /Wolfenstein 3D v1\.4 shareware[\s\S]{0,200}file_id\.diz/, 'the provenance note names the release and the missing licence text');
+  // the licence text is no longer missing (2026-09-18): Apogee's VENDOR.DOC ships, and the note names it
+  assert.match(read('docs/ARCHITECTURE.md'), /Wolfenstein 3D v1\.4 shareware[\s\S]{0,300}VENDOR\.DOC/, 'the provenance note names the release and its licence');
 });
