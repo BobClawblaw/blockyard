@@ -15,6 +15,7 @@ import { adminGate, adminGateLine } from '../admin-gate.js';
 import { elevate, dropElevation, elevationState, elevationLabel, requireElevation } from './elevation.js';
 import { capabilitySummary } from '../rpc/admin-allowlist.js';
 import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels } from './wallet.js';
+import { newAddress, labelAddress } from './receive.js';
 
 /** The suite's own refusal: an HttpError the server turns into a JSON envelope. */
 function refuseWith(err) {
@@ -34,6 +35,24 @@ function walletRead(handler) {
       requireWalletAccess(app, ctx.user);
       const wallet = requireNamedWallet(app, ctx.query?.wallet ?? namedWallets(app)[0]);
       const node = ctx.query?.node ?? [...app.monitors.keys()][0];
+      return await handler(ctx, app, { wallet, node });
+    } catch (err) { refuseWith(err); }
+  };
+}
+
+/**
+ * The same gates as walletRead, for a handler that changes something.
+ *
+ * The wallet name comes from the body rather than the query string: a state change should
+ * not be expressible as a URL somebody can be talked into clicking, even with CSRF in the
+ * way. (CSRF is in the way -- this is belt and braces, and cheap.)
+ */
+function walletWrite(handler) {
+  return async (ctx, app) => {
+    try {
+      requireWalletAccess(app, ctx.user);
+      const wallet = requireNamedWallet(app, ctx.body?.wallet ?? namedWallets(app)[0]);
+      const node = ctx.body?.node ?? [...app.monitors.keys()][0];
       return await handler(ctx, app, { wallet, node });
     } catch (err) { refuseWith(err); }
   };
@@ -88,7 +107,7 @@ export function adminRoutes(app) {
           },
           // What this build can actually do, read by the UI rather than guessed from a
           // version number. Each milestone adds its own name here as it lands.
-          capabilities: ['elevation', 'wallet.read'],
+          capabilities: ['elevation', 'wallet.read', 'wallet.receive'],
           rpc: capabilitySummary(),
           wallets: namedWallets(app),
           // This session's elevation, never the grant itself.
@@ -189,6 +208,27 @@ export function adminRoutes(app) {
     {
       method: 'GET', path: '/api/admin/wallet/labels', auth: 'admin',
       handler: walletRead(async (ctx, app, { wallet, node }) => ({ ok: true, wallet, labels: await walletLabels(app, { node, wallet }) })),
+    },
+
+    // ------------------------------------------------------------------------ receive
+    // The first write in this suite. Elevated, because it changes the wallet; NOT
+    // consuming, because a receive screen derives several addresses in a sitting and one
+    // password per address would be a password typed without reading it.
+    {
+      method: 'POST', path: '/api/admin/wallet/address', auth: 'admin', csrf: true, body: true,
+      handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => {
+        const out = await newAddress(app, { node, wallet, label: ctx.body?.label, type: ctx.body?.type ?? null });
+        await app.audit({ type: 'admin-wallet-address', username: ctx.user?.username ?? null, wallet, address: out.address, label: out.label });
+        return { ok: true, wallet, ...out };
+      }), { what: 'deriving a new address' }),
+    },
+    {
+      method: 'POST', path: '/api/admin/wallet/label', auth: 'admin', csrf: true, body: true,
+      handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => {
+        const out = await labelAddress(app, { node, wallet, address: ctx.body?.address, label: ctx.body?.label });
+        await app.audit({ type: 'admin-wallet-label', username: ctx.user?.username ?? null, wallet, address: out.address, label: out.label });
+        return { ok: true, wallet, ...out };
+      }), { what: 'labelling an address' }),
     },
   ];
 }
