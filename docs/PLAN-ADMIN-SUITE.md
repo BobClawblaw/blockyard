@@ -33,12 +33,44 @@ reason the milestones below start with the refusals rather than the features.
 What does *not* change: the default. A BlockYard that nobody configured is exactly what it is
 today, and M0's job is to prove that with tests before any capability exists.
 
+## 2a. Two builds, not one build with a switch
+
+*Added 2026-09-18, after the first cut of §2. Operator: "we really need to think about
+security for this. Im thinking we have two different builds entirely that get loaded. You
+can either run the read only build like it is now, or you can run a full administrative
+build. It should default to the read only build by default."*
+
+There are two artifacts:
+
+| | |
+|---|---|
+| `blockyard` | **read-only, the default.** `server/admin/` and `public/js/admin/` are **not in it** |
+| `blockyard-admin` | the same monitor, plus the suite |
+
+`scripts/build-edition.js` builds either; `npm pack` produces the read-only one, because
+`package.json`'s `files` list carries `!server/admin/` and `!public/js/admin/`. The artifact
+declares itself in `package.json` as `blockyardEdition`, which `server/edition.js` reads,
+and which is **condition zero** of the gate chain below — checked before `admin.enabled`,
+so an operator who sets `BLOCKYARD_ADMIN=1` on the read-only build is told the suite is not
+*in* this build and what to install, rather than that it is switched off.
+
+Why this and not only the runtime gate: a gate is code declining to run other code that is
+sitting right there, one bug or one confused-deputy request away from running it. Code that
+was never copied onto the disk has no such distance to travel. The runtime gate stays as
+well — a git checkout has every file present, which is how the suite gets developed and
+tested — so the two mechanisms cover different machines rather than duplicating each other.
+
+`test/edition.test.js` builds both editions into a temp directory and reads back what
+landed, rather than trusting this section.
+
 ## 2. The gate chain
 
 Six conditions, every one of which must hold before a spend, a config write or a daemon action
 executes. They are listed in the order the server checks them, and each has its own refusal
 message naming the setting that would change it.
 
+0. **The edition carries the suite at all** (§2a) — on the read-only build the rest of this
+   list is moot, because there is nothing to load.
 1. **`admin.enabled: false`** — a new config block, separate from `actions`, off by default.
 2. **HTTPS** — refused over plain HTTP unless `admin.allowInsecure: true` is set deliberately.
    The reason is specific, not ritual: a wallet passphrase and an elevation password cross this
