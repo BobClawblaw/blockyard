@@ -1,0 +1,45 @@
+manifestVersion: 1
+id: blockyard
+category: bitcoin
+name: BlockYard
+version: "0.1.2"
+tagline: Live monitor, 3D block-space viewer and explorer for your Bitcoin node
+description: >-
+  BlockYard is a live web monitor for your Bitcoin node.
+
+
+  It shows sync and mempool charts, a real-time event feed, a 3D view of the
+  block being built, a block/transaction/address explorer and a markets view —
+  for several people at once, each with their own sign-in and their own display
+  settings.
+
+
+  It reads your node over JSON-RPC and, for the address explorer, reads the
+  block files directly (read-only). Your node needs no extra configuration:
+  txindex is already on by default in Umbrel's Bitcoin app, and BlockYard never
+  writes to the node's data directory.
+
+
+  The address explorer needs an index built from the block files. Building it
+  writes roughly 124 GB and takes about half an hour on a fast disk, so it is
+  NOT started automatically — start it yourself when you want it, from a
+  terminal in the app's container. Everything else works without it.
+
+
+  There is no telemetry and no outbound connection except the optional markets
+  view, which you can turn off.
+releaseNotes: >-
+  First release on the Umbrel App Store.
+developer: BobClawblaw
+website: https://github.com/BobClawblaw/blockyard
+repo: https://github.com/BobClawblaw/blockyard
+support: https://github.com/BobClawblaw/blockyard/issues
+port: 21010
+gallery: []
+path: ""
+defaultUsername: "admin"
+deterministicPassword: true
+submitter: BobClawblaw
+submission: https://github.com/getumbrel/umbrel-apps/pull/TODO
+dependencies:
+  - bitcoin

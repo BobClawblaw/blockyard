@@ -1,0 +1,24 @@
+# What must never end up in a published image -- above all config/local.json, which holds a
+# deployment's RPC password.
+#
+# games/ is NOT excluded: the DOS Diversions' shareware files ship, as they do in this
+# repository, and each package travels whole with its own licence text. See umbrel/Dockerfile.
+.git
+.github
+node_modules
+data
+worklog
+test
+umbrel/blockyard
+config/local.json
+config/local.json.bak-*
+config/blockyard.json
+docs/STATE-*.md
+docs/PRIVATE-*.md
+docs/images
+*.log
+*.tmp
+.DS_Store
+._*
+*.swp
+.claude
