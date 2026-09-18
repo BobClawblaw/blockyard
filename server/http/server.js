@@ -28,7 +28,11 @@ function compile(routesTable) {
 }
 
 export function createAppServer(app) {
-  const compiled = compile(routes);
+  // The administrative suite's routes exist only when its gate opened at boot
+  // (server/admin-gate.js). On a default install `app.adminRoutes` is undefined because
+  // the module that would have produced it was never imported -- so this is not a filter
+  // that could be got wrong, it is an empty list with nothing behind it.
+  const compiled = compile(app.adminRoutes?.length ? [...routes, ...app.adminRoutes] : routes);
   const hstsMs = app.cfg.server.tls?.hstsMs ?? 0;
   // Accounts off => every request below is served as `viewer` with no session.
   const openAccess = !app.cfg.auth.enabled;
@@ -154,6 +158,15 @@ export function createAppServer(app) {
         if (!openAccess && !resolveSession(req, app)) return sendJson(req, res, 401, { error: { message: 'authentication required', kind: 'auth' }, login: '/login' });
         const done = await serveGame(req, res, path, app.gamesDir, { tls: app.tls, hstsMs });
         if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
+      }
+      // The suite's own client code is not served when its gate is shut. The files sit in
+      // public/ like everything else and are part of the build digest, but a monitor that
+      // is not running the suite hands out none of its UI -- there is nothing on the other
+      // end of it, and an admin screen that renders and then fails every call is a worse
+      // answer than a 404. (The server-side modules are not merely unserved, they are
+      // unloaded; see server/admin-gate.js.)
+      if (!app.adminEnabled && (path.startsWith('/js/admin/') || path === '/admin' || path.startsWith('/admin/'))) {
+        return serveStaticError(req, res, statics, path, 404, H());
       }
       const out = await statics.serve(req, res, path);
       if (out?.error) return serveStaticError(req, res, statics, path, out.error, H());

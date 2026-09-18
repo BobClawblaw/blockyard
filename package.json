@@ -30,7 +30,9 @@
   "files": [
     "bin/",
     "server/",
+    "!server/admin/",
     "public/",
+    "!public/js/admin/",
     "scripts/",
     "config/pool-map.json",
     "systemd/",
@@ -53,7 +55,9 @@
     "counts:check": "node scripts/doc-counts.js --check",
     "counts:fix": "node scripts/doc-counts.js --fix",
     "smoke": "bash scripts/smoke.sh",
-    "render:live": "node scripts/live-render-check.mjs"
+    "render:live": "node scripts/live-render-check.mjs",
+    "build:readonly": "node scripts/build-edition.js --edition readonly",
+    "build:admin": "node scripts/build-edition.js --edition admin"
   },
   "dependencies": {},
   "devDependencies": {}

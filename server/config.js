@@ -251,6 +251,44 @@ const DEFAULTS = {
     // enabled write would be reachable by anyone who can open a socket.
     allowWritesWithoutAuth: false,
   },
+  // THE ADMINISTRATIVE SUITE (docs/PLAN-ADMIN-SUITE.md), off, and off in a way that
+  // costs nothing to leave off: when `enabled` is false the suite's modules are never
+  // imported, so none of that code is in this process at all -- not loaded and refusing,
+  // ABSENT. `server/admin-gate.js` decides; `server/main.js` does the import or does not.
+  //
+  // Every other default here is the restrictive one, and each has its own refusal naming
+  // itself, because this is the block that decides whether a web request can spend money.
+  admin: {
+    enabled: false,
+    // HTTPS is required: a wallet passphrase and an elevation password cross this
+    // connection. Set true only behind a TLS terminator you trust (see server.trustProxy).
+    allowInsecure: false,
+    // With accounts off there is no role to check and no user to elevate, so enabling the
+    // suite there needs its own separate word -- the same shape as
+    // actions.allowWritesWithoutAuth, for the same reason.
+    allowWithoutAuth: false,
+    // A wallet UI reachable from the internet is a different proposition from one on a
+    // desk. Binding publicly with the suite on needs saying out loud.
+    allowPublicBind: false,
+    // Per-wallet opt-in: a wallet not named here is not loadable, listable or spendable,
+    // whatever the node would allow.
+    wallets: [],
+    // Password re-entry buys this long before the next state change asks again.
+    elevationMs: 300_000,
+    spend: {
+      // NO DEFAULT CAP, and no spend without one: the first send is refused until a
+      // number is set here, so the size of the largest possible mistake is a decision
+      // somebody made rather than one nobody noticed (operator, 2026-09-18).
+      capSat: null,
+      capSat24h: null,
+      // A first spend on chain=main asks for a differently-worded confirmation than one
+      // on testnet or signet, so muscle memory from a test network does not carry over.
+      mainnetPhrase: true,
+    },
+    // Advisory, not an allowlist: any destination works, but one that is not named here
+    // needs a typed confirmation, with the address shown from the BUILT transaction.
+    addressBook: [],
+  },
   log: {
     level: 'info',
     tailBytes: 2 * 1024 * 1024,
@@ -420,6 +458,14 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     'BLOCKYARD_TLS_KEY': ['server.tls.key', String],
     'BLOCKYARD_ACTIONS': ['actions.allow', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
     'BLOCKYARD_ENABLE_ACTIONS': ['actions.enabled', Boolean],
+    // The suite's own switches. BLOCKYARD_ADMIN=1 is the whole feature; the three
+    // BLOCKYARD_ADMIN_ALLOW_* are the deliberate weakenings, each named after what it
+    // gives up rather than after what it enables.
+    'BLOCKYARD_ADMIN': ['admin.enabled', Boolean],
+    'BLOCKYARD_ADMIN_ALLOW_INSECURE': ['admin.allowInsecure', Boolean],
+    'BLOCKYARD_ADMIN_ALLOW_WITHOUT_AUTH': ['admin.allowWithoutAuth', Boolean],
+    'BLOCKYARD_ADMIN_ALLOW_PUBLIC_BIND': ['admin.allowPublicBind', Boolean],
+    'BLOCKYARD_ADMIN_WALLETS': ['admin.wallets', (v) => v.split(',').map((s) => s.trim()).filter(Boolean)],
     'BLOCKYARD_LOG_LEVEL': ['log.level', String],
     'BLOCKYARD_RETENTION_HOURS': ['store.retentionHours', Number],
   };

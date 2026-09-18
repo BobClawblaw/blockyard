@@ -9,6 +9,7 @@ import { UserStore, randomPassword } from './auth/users.js';
 import { SessionStore, RateLimiter, LoginGuard } from './auth/sessions.js';
 import { StreamHub } from './http/sse.js';
 import { createAppServer } from './http/server.js';
+import { adminGate, adminGateLine } from './admin-gate.js';
 import { computeBuildId } from './http/static.js';
 import { NodeMonitor } from './collect/monitor.js';
 import { localAddresses, bindProblemMessage, planBinds } from './netinfo.js';
@@ -360,6 +361,31 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
       msg: `not binding ${missing}: this machine has no such address right now. If it is a tunnel (tailscale0), start this unit after tailscaled.service, or drop it from server.hosts. Continuing on: ${plan.bindable.join(', ')}`,
     });
   }
+  // ------------------------------------------- the administrative suite, if it may load
+  // LOADED, NOT MERELY ENABLED (docs/PLAN-ADMIN-SUITE.md §2, operator 2026-09-18: "if it's
+  // disabled at blockyard start, the wallet modules never ever get loaded into blockyard").
+  // The gate is decided here, in core, and the import happens only if it opened -- so on a
+  // default install nothing under server/admin/ is evaluated, and no bug in that directory
+  // can be reached, because it is not in this process.
+  //
+  // Placed after TLS and the auth config are settled (both are gates) and before
+  // createAppServer, which compiles the route table once and takes app.adminRoutes with it.
+  {
+    const gate = adminGate(cfg, { tls: app.tls, trustProxy: cfg.server?.trustProxy });
+    app.adminGate = gate;
+    app.adminEnabled = gate.ok;
+    if (gate.ok) {
+      const { adminRoutes } = await import('./admin/index.js');
+      app.adminRoutes = adminRoutes(app);
+      app.log({ level: 'warn', msg: adminGateLine(gate, cfg) });
+    } else if (!gate.off) {
+      // Asked for and refused: say why, every reason, once.
+      app.log({ level: 'warn', msg: adminGateLine(gate, cfg) });
+    } else {
+      app.log({ level: 'debug', msg: adminGateLine(gate, cfg) });
+    }
+  }
+
   for (const host of plan.bindable) {
     const srv = createAppServer(app);
     app.servers.push(srv);
