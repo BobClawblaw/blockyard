@@ -278,3 +278,17 @@ test('the mining page shows the block being built and names the child-pays-for-p
   assert.equal(/getblocktemplate/.test(pkgs), false,
     'and no longer names a call this software does not make -- the panel used to tell the operator that getrawmempool carries no depends, which is where the graph now comes from');
 });
+test('a node in initial sync still draws its block charts, from the blocks it applied', () => {
+  // Operator, 2026-09-18, the Core oracle at 99.7% with blocks three weeks old: "Why is this
+  // missing data?" The four block charts read the last 24 h of history by block time, which a
+  // syncing node does not have; the latest blocks it applied (blocks.recent) carry every figure.
+  const { el } = installDom();
+  const texts = new Map();
+  const state = { page: 'chain', node: 'core-nvme', byNode: new Map(), events: [], snap: null, series: { blocks: {}, node: {} }, cfg: { sources: [] } };
+  const h = { api: async () => ({}), toast: () => {}, state, fmt: F, charts, setText: (id, v) => texts.set(id, v), canvas: (id) => el(id), renderFeed: () => {}, render: () => {}, renderSyncHero: () => {}, peersDetail: async () => [] };
+  const t0 = Date.now() - 20 * 86400_000;
+  const recent = Array.from({ length: 5 }, (_, i) => ({ height: 964_693 - i, t: t0 - i * 600_000, time: (t0 - i * 600_000) / 1000, gapSec: 600, size: 1.5e6, totalfee: 1e6, txs: 6000, sizeBasis: 'total_size' }));
+  panels.renderChain({ id: 'core-nvme', sync: {}, tip: { height: 964_693, headers: 967_590 }, blocks: { recent }, series: {} }, state, h);
+  for (const id of ['chGapChart', 'chSizeChart', 'chFeeChart', 'chTxChart']) assert.ok(el(id).__hasData, `${id} drew`);
+  assert.match(String(texts.get('chSizeSrc')), /latest 5 blocks applied/, 'and says what it is drawing');
+});

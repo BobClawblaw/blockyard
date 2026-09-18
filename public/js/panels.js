@@ -33,21 +33,39 @@ export function renderChain(s, state, h) {
     ? `<span title="Headers-first: this reaches 100% only when the last block lands">${fmt.num(s.tip.height)} of ${fmt.num(s.tip.headers)} announced headers applied</span>`
     : 'no header count reported yet');
 
-  const gap = (b.gap ?? []).filter((p) => Number.isFinite(p.v));
-  paint(h.canvas('chGapChart'), {
-    when: gap.length > 1,
-    draw: (c) => lineChart(c, [
-      { label: 'seconds between blocks', color: COL.info, points: gap, area: true },
-    ], { fmtY: (v) => `${Math.round(v)}s`, fmtTip: (v) => `${(v / 60).toFixed(1)} min`, marker: { v: 600, label: '10 min target', color: COL.ok } }),
-    placeholder: 'need two blocks to measure an interval',
-  });
+  // A NODE IN INITIAL SYNC HAS NO LAST 24 HOURS OF BLOCKS (operator, 2026-09-18, the Core
+  // oracle at 99.7%: "Why is this missing data?"). These four charts are the block history over
+  // the last day by each block's own time, and a node applying blocks from three weeks ago has
+  // none there -- the store drops a row older than its window. The monitor still holds the
+  // latest blocks it applied, with every figure these charts draw (blocks.recent, 40 of them),
+  // which is what the notes under the charts were already reading. So when the history has
+  // nothing to draw, the charts draw those, at their own block times, and say so in the legend.
   const stats = s.blocks?.recent ?? [];
+  const blockSeries = (ser, field) => {
+    const hist = (ser ?? []).filter((p) => Number.isFinite(p.v));
+    if (hist.length > 1) return { points: hist, recent: false };
+    const pts = stats.filter((x) => Number.isFinite(x[field]) && Number.isFinite(x.t))
+      .map((x) => ({ t: x.t, v: x[field] })).sort((a, b) => a.t - b.t);
+    return { points: pts, recent: true };
+  };
+  // the card's own label says which it is showing: a chart legend is drawn for two series or more
+  const blockChart = (id, srcId, base, ser, field, color, fmtY, what, extra = {}) => {
+    const { points, recent } = blockSeries(ser, field);
+    h.setText(srcId, recent && points.length > 1 ? `latest ${fmt.num(points.length)} blocks applied · at block time` : base);
+    paint(h.canvas(id), {
+      when: points.length > 1,
+      draw: (c) => lineChart(c, [{ label: what, color, points, area: true }], { fmtY, ...extra }),
+      placeholder: extra.placeholder ?? 'waiting for samples',
+    });
+  };
+  blockChart('chGapChart', 'chGapSrc', 'inter-arrival, last 24h', b.gap, 'gapSec', COL.info, (v) => `${Math.round(v)}s`, 'seconds between blocks',
+    { fmtTip: (v) => `${(v / 60).toFixed(1)} min`, marker: { v: 600, label: '10 min target', color: COL.ok }, placeholder: 'need two blocks to measure an interval' });
   const gaps = stats.map((x) => x.gapSec).filter((x) => x != null && x >= 0 && x < 7200);
   h.setText('chGapNote', gaps.length
     ? `${gaps.length} intervals measured · median ${fmt.ageSec(median(gaps))} · ${gaps.filter((g) => g > 1200).length} over 20 min`
     : '');
 
-  drawFromSeries(h, 'chSizeChart', b.size, COL.purple, (v) => fmt.bytes(v, 0), { fmtTip: (v) => fmt.bytes(v, 0) });
+  blockChart('chSizeChart', 'chSizeSrc', 'bytes, sum of transaction sizes', b.size, 'size', COL.purple, (v) => fmt.bytes(v, 0), 'block size', { fmtTip: (v) => fmt.bytes(v, 0) });
   // What the number *is*, stated where the number is drawn. The figure is
   // getblockstats' total_size -- the sum of transaction sizes -- not the serialized
   // block, and the difference is exactly the kind of thing a reader cannot recover
@@ -62,8 +80,8 @@ export function renderChain(s, state, h) {
         ? ` · this block: median tx ${fmt.bytes(sizeRow.medianTxSize, 0)}, witness ${fmt.bytes(sizeRow.swtotalSize, 0)} of ${fmt.bytes(sizeRow.size, 0)}`
         : '')
     : (sizeRow?.sizeMissing ?? 'no block stats collected yet — the monitor has not seen a new height since it started'));
-  drawFromSeries(h, 'chFeeChart', b.fee, COL.ok, (v) => fmt.short(v), { fmtTip: (v) => `${fmt.sats(v)} sat` });
-  drawFromSeries(h, 'chTxChart', b.txs, COL.cyan, (v) => fmt.short(v));
+  blockChart('chFeeChart', 'chFeeSrc', 'sats', b.fee, 'totalfee', COL.ok, (v) => fmt.short(v), 'fees', { fmtTip: (v) => `${fmt.sats(v)} sat` });
+  blockChart('chTxChart', 'chTxSrc', 'count', b.txs, 'txs', COL.cyan, (v) => fmt.short(v), 'transactions');
 
   const txr = n.txRate ?? [];
   paint(h.canvas('chTxRateChart'), {

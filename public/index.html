@@ -244,24 +244,24 @@
              state and UTXO/difficulty cards three across with two-column lists. -->
 
         <div class="card w4">
-          <h3>Block interval <span class="sp"></span><span class="src">inter-arrival, last 24h</span></h3>
+          <h3>Block interval <span class="sp"></span><span class="src" id="chGapSrc">inter-arrival, last 24h</span></h3>
           <canvas class="chart" id="chGapChart"></canvas>
           <div class="note tiny faint" id="chGapNote"></div>
         </div>
 
         <div class="card w4">
-          <h3>Block size <span class="sp"></span><span class="src">bytes, sum of transaction sizes</span></h3>
+          <h3>Block size <span class="sp"></span><span class="src" id="chSizeSrc">bytes, sum of transaction sizes</span></h3>
           <canvas class="chart" id="chSizeChart"></canvas>
           <div class="note tiny faint" id="chSizeNote"></div>
         </div>
 
         <div class="card w4">
-          <h3>Fees per block <span class="sp"></span><span class="src">satsoshis</span></h3>
+          <h3>Fees per block <span class="sp"></span><span class="src" id="chFeeSrc">sats</span></h3>
           <canvas class="chart" id="chFeeChart"></canvas>
         </div>
 
         <div class="card w4">
-          <h3>Transactions per block <span class="sp"></span><span class="src">count</span></h3>
+          <h3>Transactions per block <span class="sp"></span><span class="src" id="chTxSrc">count</span></h3>
           <canvas class="chart" id="chTxChart"></canvas>
         </div>
 
