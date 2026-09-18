@@ -203,6 +203,34 @@ Each lands on its own branch, with tests, and each is useful on its own.
 - **M8 — the fourth security audit**, run over the whole suite the way 2026-09-16's was run over
   the monitor, plus the user guide, and a re-run of the M0 proofs.
 
+## 8a. What was built overnight, 2026-09-18
+
+M0–M3 are merged to main; M4, M6 and M7 are on `admin-m4-send` and wait for a read.
+
+| | state | where |
+|---|---|---|
+| M0 gates + two editions | **merged** | `server/edition.js`, `server/admin-gate.js`, `scripts/build-edition.js` |
+| M1 elevation + `walletAccess` | **merged** | `server/admin/elevation.js` |
+| M2 wallet, read-only | **merged** | `server/admin/wallet.js`, `server/rpc/admin-allowlist.js` |
+| M3 receive | **merged** | `server/admin/receive.js` |
+| M4 send | **branch** | `server/admin/send.js` + a regtest end-to-end test |
+| M5 transaction tools | not started | — |
+| M6 daemon control | **branch** | `server/admin/daemon.js` |
+| M7 config editors | **branch** | `server/admin/config-edit.js` |
+| M8 security audit | not started, deliberately | to be read awake |
+
+Two corrections to this plan, made because the code disagreed with it:
+
+1. **§2.6 said elevation is required for every state change**, which the first
+   implementation read as "consume it when the request arrives". That meant a mistyped
+   confirmation cost the operator their password and taught them to re-type it without
+   reading — the precise habit the mechanism exists to prevent. Elevation is now consumed
+   at the **point of no return**, by the handler, immediately before the irreversible call.
+2. **The "weighty keys" list in §7 originally included `dbcache` and `maxconnections`.**
+   Neither can lock anyone out or open anything up. An acknowledgement asked for a
+   performance knob is an acknowledgement people learn to click through, which spends the
+   attention the mechanism is there to buy.
+
 ## 9. Non-goals
 
 No seed generation, no key display, no `dumpprivkey`, no `sethdseed`, ever. No wallet backup
