@@ -1435,3 +1435,46 @@ rate-limited)`, socket resets and nodestate clears, `Potential stale tip detecte
 `CreateNewBlock(): block weight: N txs: N fees: N sigops N`. The byte-count lines are `[net]`
 category and exist only because this node runs `debug=net`; a default install has the rest but not
 those, so per-peer bytes must be reported as present-or-absent rather than as zero.
+
+## 38. The auxiliary index family, read at last (2026-09-18)
+
+§37 measured the gap; this is the first piece of it closed. Four tags -- `[txindex]`,
+`[txospender]`, `[addr_hist]`/`[addrhist]` and the `[trail]` line that reports all three -- carry
+the node's own index building, and every one of their lines was `raw`.
+
+| log | lines | parsed before | parsed after |
+|---|---|---|---|
+| experimental build, run 26 (mid-IBD) | 40,878 | 21,577 (52.8%) | **24,200 (59.2%)** |
+| experimental build, production (synced) | 10,789 | 7,686 (71.2%) | **7,695 (71.3%)** |
+
+The two logs move by different amounts because the family is a *building* subsystem: 2,622 lines in
+the IBD run, nine in the synced node's, where the indexes are finished and say so once. Within the
+family itself, both are now at 100%: 0 of 2,622 and 0 of 9 lines still `raw`.
+
+Three things the lines turned out to be, none of which were guessable from the tag:
+
+1. **Two writers, two spellings, one subsystem.** The daemon writes `[addr_hist]` with a timestamp;
+   the child process it forks to build a run writes `[addrhist]` -- no underscore -- with **no
+   timestamp at all**, because `bmc_build_addr_hist` is a separate program whose stdout is
+   redirected into the same file. 40% of the family's lines are the child's. They were being
+   stamped with the time they were read, which is the same defect §37 names for Core, found here in
+   a log the parser was supposed to understand.
+2. **`base to=-1` is a value, not a typo.** It is what an index with no run yet reports. A `\d+` in
+   the rule read it as height 1.
+3. **The nouns are per builder and they multiply**: `records`, `spends`, `funds`, `spendrefs`,
+   `keys`, `events`, `transactions`, `sparse`. Rather than a regex per noun, the count list is
+   scanned pair by pair (`parseCountList`), so a builder that reports a new one is read rather than
+   dropped. This is the same tactic as `dlcProgressFields`, and it is why 52 frozen shapes need 15
+   rules.
+
+**Throughput**, measured the same way as §37 (one thread, every rule tried per line, best of three
+after two warm passes over the same 40,883 lines): 208,178 lines/s before, **167,663 after** -- 19%
+for 15 more rules on every line. The node writes a few hundred lines a second at its noisiest, so
+this remains three orders of magnitude clear of the constraint.
+
+**What is still unread**, whole file, after this change: `[idx]` at 10,041 lines (24.6% of the log,
+in **3 shapes**, of which `fold N..N: read=… folded_to=… slots=…` is 10,008 -- still the biggest
+single win available anywhere in the parser), `[utxo_live]` at 2,509 (mostly `merge of N run(s)
+deferred`), `[boot]` at 616, `[dl]` at 445, `[txrelay] orphan drops:` at 398, `[dial] memory:` at
+380, `[cmpct]` at 324. Also noted: `[coinstats-hist]` cannot be tagged at all, because `TAG_RE` is
+`[a-z0-9_]+` and that tag has a hyphen in it.

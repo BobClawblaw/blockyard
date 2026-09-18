@@ -1337,6 +1337,19 @@ export class NodeMonitor extends EventEmitter {
     return rec;
   }
 
+  // Per-index record, created on demand, keyed by the normalised index name
+  // (`txindex`, `txospender`, `addr_hist`). Several log lines from two different
+  // writers describe the same index, so they share one accessor -- the same shape as
+  // peerRecord above, for the same reason.
+  indexRecord(name, ts) {
+    const ls = this.state.logState;
+    ls.indexes = ls.indexes ?? {};
+    const rec = ls.indexes[name] ?? { index: name, runs: null, runsTo: null, covered: null, state: null };
+    rec.at = ts;
+    ls.indexes[name] = rec;
+    return rec;
+  }
+
   absorb(ev, now) {
     const ls = this.state.logState;
     switch (ev.kind) {
@@ -1599,6 +1612,125 @@ export class NodeMonitor extends EventEmitter {
           dlcStored: ev.stored, dlcStoredOf: ev.storedOf, dlcApplied: ev.applied, dlcAppliedLag: ev.appliedLag,
           dlcInFlight: ev.inFlight, dlcNodeEtaMs: ev.nodeEtaMs,
         });
+        return [];
+      }
+      // ---------------------------------------------------- the auxiliary indexes
+      // THREE INDEXES THE NODE BUILDS BESIDE THE CHAIN (2026-09-18): txindex,
+      // txospender and addr_hist, each assembled as fixed-height "runs" that are
+      // later merged, with a live "tail" carrying the index past its last run.
+      //
+      // They are kept as one record per index rather than as separate log fields
+      // because every question worth asking is per index ("how far has txospender
+      // got", "is anything merging right now"), and because the [trail] line the
+      // node prints reports all three together -- a shape that only makes sense
+      // read as a map.
+      //
+      // FEED POLICY: a run built, a merge finished and a finished index's totals go
+      // in; the run inventory, the pass progress and the tail bookkeeping do not.
+      // 759 `run …dat: N records` lines in one run's log would be the feed.
+      case 'index_trail': {
+        const at = ev.ts;
+        for (const [name, st] of Object.entries(ev.indexes)) {
+          const rec = this.indexRecord(name, at);
+          rec.state = st.state;
+          if (st.state === 'waiting') { rec.runsTo = st.reach; rec.needMore = st.needMore; rec.building = null; rec.merging = null; }
+          if (st.state === 'building') { rec.building = { from: st.from, to: st.to, pid: st.pid }; rec.merging = null; }
+          if (st.state === 'merging') { rec.merging = { runs: st.runs, pid: st.pid }; rec.building = null; }
+        }
+        return [];
+      }
+      case 'index_run_start': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.state = 'building';
+        rec.building = { from: ev.from, to: ev.to, pid: ev.pid, tool: ev.tool };
+        return [];
+      }
+      case 'index_run_built': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.runs = ev.runs;
+        rec.runsTo = Math.max(rec.runsTo ?? -1, ev.to);
+        rec.lastRun = { from: ev.from, to: ev.to, secs: ev.secs, pid: ev.pid, at: ev.ts };
+        rec.building = null;
+        rec.state = 'waiting';
+        return [ev];
+      }
+      case 'index_merge_start': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.state = 'merging';
+        rec.merging = { runs: ev.runs, pid: ev.pid, tool: ev.tool };
+        return [];
+      }
+      case 'index_merged': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.merges = ev.merges;
+        rec.lastMerge = { secs: ev.secs, pid: ev.pid, at: ev.ts };
+        rec.merging = null;
+        rec.state = 'waiting';
+        return [ev];
+      }
+      case 'index_run_listed': {
+        // The inventory, re-listed whenever it changes: counted, not stored one by
+        // one, because a full mainnet index is fifty of these lines per listing.
+        const rec = this.indexRecord(ev.index, ev.ts);
+        if (ev.to > (rec.listedTo ?? -1)) { rec.listedTo = ev.to; rec.listedFile = ev.file; }
+        rec.rowsNoun = ev.noun;
+        return [];
+      }
+      case 'index_tail_rotated': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.tailRotated = { folded: ev.folded, to: ev.to, kept: ev.kept, at: ev.ts };
+        return [];
+      }
+      case 'index_tail_active': {
+        // `covered` is the height the index can actually answer to, which is the
+        // one number here a person reading the page cares about.
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.covered = ev.covered;
+        rec.baseTo = ev.baseTo;
+        rec.backfilled = ev.backfilled;
+        return [];
+      }
+      case 'index_scan_start': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.scanning = { from: ev.from, to: ev.to, tip: ev.tip, note: ev.note, at: ev.ts };
+        return [];
+      }
+      case 'index_pass': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.pass = { pass: ev.pass, unit: ev.unit, done: ev.done, of: ev.of, counts: ev.counts, at: ev.ts };
+        return [];
+      }
+      case 'index_pass_done': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.pass = { pass: ev.pass, done: true, counts: ev.counts, secs: ev.secs, at: ev.ts };
+        return [];
+      }
+      case 'index_done':
+      case 'index_merge_done': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.lastBuild = { kind: ev.kind === 'index_done' ? 'run' : 'merge', counts: ev.counts, bytes: ev.bytes, secs: ev.secs, height: ev.height ?? null, at: ev.ts };
+        rec.scanning = null;
+        rec.pass = null;
+        return [ev];
+      }
+      case 'index_merge_rows': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.merging = { ...(rec.merging ?? {}), runs: ev.runs, rows: ev.rows, from: ev.from, to: ev.to, file: ev.file };
+        return [];
+      }
+      case 'index_summary': {
+        // A finished index reporting its totals. The only line of the family that a
+        // synced node prints at all, so it is what the page shows outside a build.
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.totals = { counts: ev.counts, bytes: ev.bytes, at: ev.ts };
+        if (ev.height != null) rec.covered = ev.height;
+        if (ev.to != null) rec.covered = Math.max(rec.covered ?? -1, ev.to);
+        return [ev];
+      }
+      case 'index_no_runs': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        rec.runs = 0;
+        rec.note = ev.note;
         return [];
       }
       case 'catchup_progress':
