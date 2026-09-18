@@ -62,6 +62,18 @@ function spentIn24h(now = Date.now()) {
 export function __resetSpent() { spent.length = 0; }
 
 /**
+ * Count sats against the rolling cap from somewhere other than the send path.
+ *
+ * The paste-and-broadcast box and the fee bumper both move money, and a rolling cap that
+ * only counted the Send screen would be a cap with two doors beside it
+ * (server/admin/txtools.js).
+ */
+export function recordSpend(sat) {
+  const n = Number(sat) || 0;
+  if (n > 0) spent.push({ at: Date.now(), sat: n });
+}
+
+/**
  * An amount in satoshis, from something a browser sent.
  *
  * Refuses anything that is not a whole number of satoshis, including the float that
@@ -146,10 +158,21 @@ export function checkCaps(app, { sendingSat, feeSat }, now = Date.now()) {
  * Nothing is signed here and nothing can leave: `walletcreatefundedpsbt` neither unlocks
  * the wallet nor touches a key. The wallet does not even have to be unlocked yet.
  */
-export async function buildSpend(app, ctx, { node, wallet, address, amountSat, feeRate = null, subtractFee = false }) {
+export async function buildSpend(app, ctx, { node, wallet, address, amountSat, feeRate = null, subtractFee = false, inputs = null }) {
   sweep();
   const to = checkAddress(address);
   const sat = checkAmountSat(amountSat);
+
+  // COIN CONTROL (M5). Naming the inputs is the caller saying "spend these and nothing
+  // else"; the node still decides the change and the fee. Shape-checked here because
+  // these go straight into an RPC argument, and a malformed one is a confusing node error
+  // rather than a sentence about what was wrong.
+  const chosen = (inputs ?? []).map((i) => {
+    if (!/^[0-9a-fA-F]{64}$/.test(String(i?.txid ?? ''))) deny('an input needs a transaction id', 'input-invalid');
+    const vout = Number(i?.vout);
+    if (!Number.isInteger(vout) || vout < 0) deny('an input needs an output index', 'input-invalid');
+    return { txid: String(i.txid), vout };
+  });
 
   const options = {
     // Core's own replaceability default is what a fee-bump screen depends on later.
@@ -159,7 +182,9 @@ export async function buildSpend(app, ctx, { node, wallet, address, amountSat, f
   };
   const built = await walletCall(app, {
     node, wallet, capability: 'wallet.spend', method: 'walletcreatefundedpsbt',
-    args: [[], [{ [to]: satToBtcString(sat) }], 0, options],
+    // With inputs named, add `add_inputs: false` so the node cannot quietly reach for
+    // another coin to cover the shortfall -- "spend these" has to mean these.
+    args: [chosen, [{ [to]: satToBtcString(sat) }], 0, chosen.length ? { ...options, add_inputs: false } : options],
   });
   if (!built?.psbt) deny('the node did not return a transaction to sign', 'build-failed', 502);
 
@@ -198,6 +223,7 @@ export async function buildSpend(app, ctx, { node, wallet, address, amountSat, f
     changeSat: change.reduce((n, o) => n + o.amountSat, 0),
     changeAddresses: change.map((o) => o.address),
     inputs: (decoded?.tx?.vin ?? []).length,
+    coinControl: chosen.length ? chosen : null,
     vsize: decoded?.tx?.vsize ?? null,
     feeRateSatPerVb: decoded?.tx?.vsize ? Math.round((feeSat / decoded.tx.vsize) * 100) / 100 : null,
     replaceable: true,

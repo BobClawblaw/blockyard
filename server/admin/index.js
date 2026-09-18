@@ -19,6 +19,7 @@ import { newAddress, labelAddress } from './receive.js';
 import { buildSpend, confirmSpend, pendingFor } from './send.js';
 import { daemonActions, daemonStop } from './daemon.js';
 import { readNodeConf, writeNodeConf, readOwnConfig, writeOwnConfig, LOCKED_BLOCKS } from './config-edit.js';
+import { decodeAny, broadcastRaw, previewBump, confirmBump } from './txtools.js';
 
 /** The suite's own refusal: an HttpError the server turns into a JSON envelope. */
 function refuseWith(err) {
@@ -118,7 +119,7 @@ export function adminRoutes(app) {
           },
           // What this build can actually do, read by the UI rather than guessed from a
           // version number. Each milestone adds its own name here as it lands.
-          capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend', 'node.control', 'config.edit'],
+          capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend', 'node.control', 'config.edit', 'tx.tools'],
           lockedConfigBlocks: LOCKED_BLOCKS,
           rpc: capabilitySummary(),
           wallets: namedWallets(app),
@@ -258,6 +259,8 @@ export function adminRoutes(app) {
           amountSat: ctx.body?.amountSat,
           feeRate: ctx.body?.feeRate ?? null,
           subtractFee: ctx.body?.subtractFee === true,
+          // Coin control (M5): the coins the operator picked, or none for the node's choice.
+          inputs: ctx.body?.inputs ?? null,
         });
         await app.audit({
           type: 'admin-spend-built', username: ctx.user?.username ?? null,
@@ -337,6 +340,35 @@ export function adminRoutes(app) {
         try { return await writeOwnConfig(app, ctx, { patch: ctx.body?.patch }); }
         catch (err) { refuseWith(err); }
       }, { what: 'editing this monitor\'s configuration' }),
+    },
+    // -------------------------------------------------------- transaction tools (M5)
+    // Decoding changes nothing and reaches no key, so it needs the grant and no
+    // elevation: it is the tool for finding out what you are holding.
+    {
+      method: 'POST', path: '/api/admin/tx/decode', auth: 'admin', csrf: true, body: true,
+      handler: walletWrite(async (ctx, app, { wallet, node }) => ({
+        ok: true, ...(await decodeAny(app, { node, wallet, raw: ctx.body?.raw })),
+      })),
+    },
+    // Broadcast IS elevated, and consumes: see server/admin/txtools.js for the case where
+    // a pasted transaction turns out to be a send of this wallet's own coins.
+    {
+      method: 'POST', path: '/api/admin/tx/broadcast', auth: 'admin', csrf: true, body: true,
+      handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => broadcastRaw(app, ctx, {
+        node, wallet, raw: ctx.body?.raw, acceptSpendingOurs: ctx.body?.acceptSpendingOurs === true,
+      })), { consume: true, what: 'broadcasting a transaction' }),
+    },
+    {
+      method: 'POST', path: '/api/admin/tx/bump', auth: 'admin', csrf: true, body: true,
+      handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => previewBump(app, ctx, {
+        node, wallet, txid: ctx.body?.txid, feeRate: ctx.body?.feeRate ?? null,
+      })), { what: 'pricing a fee bump' }),
+    },
+    {
+      method: 'POST', path: '/api/admin/tx/bump/confirm', auth: 'admin', csrf: true, body: true,
+      handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => confirmBump(app, ctx, {
+        node, wallet, txid: ctx.body?.txid, feeRate: ctx.body?.feeRate ?? null, passphrase: ctx.body?.passphrase,
+      })), { consume: true, what: 'sending a fee bump' }),
     },
   ];
 }
