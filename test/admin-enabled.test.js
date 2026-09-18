@@ -24,8 +24,9 @@ test('the gate opens, the module loads, and the route exists', async () => {
     assert.equal(res.body.enabled, true);
     assert.equal(res.body.gates.walletsNamed, 1);
     assert.equal(res.body.gates.spendCapSat, 50_000);
-    // M0 ships no capability, and says so rather than letting a version number imply it.
-    assert.deepEqual(res.body.capabilities, []);
+    // The UI reads the capability list rather than guessing from a version number which
+    // milestones this build carries. M0 shipped none; M1 added elevation.
+    assert.deepEqual(res.body.capabilities, ['elevation']);
   });
 });
 
