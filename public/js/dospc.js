@@ -1105,15 +1105,51 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     if (ah === 0x02 || ah === 0x12) { R[EAX] &= ~0xff; return true; }
     return true;
   }
-  const mouseState = { dx: 0, dy: 0, buttons: 0, present: true };
+  // THE POINTER HAS A POSITION (operator, 2026-09-18: "keys still don't work in the menu. I can't
+  // even start the game"). Function 3 used to answer 0,0 whatever happened, and function 4 was
+  // ignored. Wolfenstein 3D's menus read the mouse that way: centre it with function 4 (x 320,
+  // y 100), read it back with function 3, and take anything more than 60 from the centre as a
+  // direction held -- then wait for that direction to be let go before taking the next input. At
+  // 0,0 it was "up, held" forever, so the menu waited forever and no key, Enter included, got
+  // through. Now the driver keeps a position the way a real one does: centred in its range on a
+  // reset, set by function 4, bounded by 7 and 8, and moved by the page's mouse motion -- a
+  // mickey a pixel across, two a pixel down, the driver defaults.
+  const mouseState = {
+    dx: 0, dy: 0, buttons: 0, present: true,
+    x: 320, y: 100, minX: 0, maxX: 639, minY: 0, maxY: 199, fx: 0, fy: 0,
+    /** Motion in mickeys: the counters function 0Bh reads, and the pointer function 3 reads. */
+    move(dx, dy) {
+      this.dx += dx; this.dy += dy;
+      this.fx += dx; this.fy += dy / 2;
+      const ix = Math.trunc(this.fx), iy = Math.trunc(this.fy);
+      this.fx -= ix; this.fy -= iy;
+      this.x = Math.max(this.minX, Math.min(this.maxX, this.x + ix));
+      this.y = Math.max(this.minY, Math.min(this.maxY, this.y + iy));
+    },
+  };
+  const s16 = (v) => (v << 16) >> 16;
   function mouse(c) {
     const ax = u16(R[EAX]);
+    const m = mouseState;
     switch (ax) {
-      case 0x0001: case 0x0002: case 0x0004: case 0x0007: case 0x0008: case 0x000f: case 0x001a: case 0x001d: return true;
+      case 0x0001: case 0x0002: case 0x000f: case 0x001a: case 0x001d: return true;
       case 0x0000: case 0x0021:
-        if (!mouseState.present) { setAX(0); return true; }
+        if (!m.present) { setAX(0); return true; }
+        // a reset: the default range, the pointer in the middle of it
+        m.minX = 0; m.maxX = 639; m.minY = 0; m.maxY = 199; m.x = 320; m.y = 100; m.fx = 0; m.fy = 0;
         setAX(0xffff); R[EBX] = (R[EBX] & ~0xffff) | 3; return true;
-      case 0x0003: R[EBX] = (R[EBX] & ~0xffff) | mouseState.buttons; R[ECX] &= ~0xffff; R[EDX] &= ~0xffff; return true;
+      case 0x0003: R[EBX] = (R[EBX] & ~0xffff) | m.buttons; R[ECX] = (R[ECX] & ~0xffff) | m.x; R[EDX] = (R[EDX] & ~0xffff) | m.y; return true;
+      case 0x0004:
+        m.x = Math.max(m.minX, Math.min(m.maxX, s16(u16(R[ECX]))));
+        m.y = Math.max(m.minY, Math.min(m.maxY, s16(u16(R[EDX]))));
+        m.fx = 0; m.fy = 0;
+        return true;
+      case 0x0007: case 0x0008: {
+        const a = s16(u16(R[ECX])), b = s16(u16(R[EDX]));
+        const lo = Math.min(a, b), hi = Math.max(a, b);
+        if (ax === 7) { m.minX = lo; m.maxX = hi; m.x = Math.max(lo, Math.min(hi, m.x)); } else { m.minY = lo; m.maxY = hi; m.y = Math.max(lo, Math.min(hi, m.y)); }
+        return true;
+      }
       case 0x000b: {
         const dx = Math.max(-32768, Math.min(32767, Math.round(mouseState.dx)));
         const dy = Math.max(-32768, Math.min(32767, Math.round(mouseState.dy)));

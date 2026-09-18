@@ -17,6 +17,9 @@ export const renderWolf3d = createDosGame({
   idleText: 'The shareware episode, Escape from Wolfenstein, an Apogee game: the real WOLF3D.EXE v1.4 running on a PC this monitor emulates. Click the screen to use the mouse.',
   loadingText: 'loading the shareware episode…',
   saveName: /^SAVEGAM\d\.WL1$/i,
-  keysText: () => '↑ ↓ walk · ← → turn · Alt strafe · Ctrl or left click fire · Space open · Shift run · 1–4 weapons · Esc menu · F8 quick save · F9 quick load · rebind them under Control in the game’s own menu',
+  // both, always (operator, 2026-09-18: "I want to support both arrow keys and wasd. not one or the
+  // other", and "make A and D strafe left and right"): the worker points the game's move keys and
+  // strafe button at whichever is held (dosio.js wolfMoveKeys)
+  keysText: () => 'W S or ↑ ↓ walk · A D strafe · ← → or the mouse turn · Ctrl or left click fire · Space open · Shift run · Alt + ← → strafe · 1–4 weapons · arrows and Enter in the menus · Esc menu · F8 quick save · F9 quick load',
   switches: [],
 });

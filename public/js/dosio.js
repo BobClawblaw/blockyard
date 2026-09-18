@@ -149,6 +149,81 @@ export function withControls(bytes, controls = DEFAULT_CONTROLS) {
   return out;
 }
 
+// ------------------------------------------------------------------ Wolfenstein 3D's move keys
+// ARROWS AND WASD, BOTH, ALWAYS (operator, 2026-09-18: "is there no wasd controls in wolf3d?!", then
+// "I want to support both arrow keys and wasd. not one or the other", then "For WASD mode, assume
+// the player is playing with a mouse. make A and D strafe left and right instead").
+//
+// The game moves on ONE key a direction, kept in `dirscan` -- north, east, south, west, as 16-bit
+// scancodes -- read from CONFIG.WL1 at byte 478 on start and written back on quit, with the eight
+// button keys straight after (`buttonscan`: fire, STRAFE, run, open, weapons 1-4). So each
+// direction is pointed at whichever of its keys is held: W or the up arrow walks, S or down backs
+// up, the left and right arrows turn. The game has no strafe keys -- strafing is its strafe button
+// (Alt) held with a turn key -- so while A or D is held, the strafe button is pointed at that same
+// key too, and the one key reads as "strafe" and "left" (or "right"). Let go, and the strafe button
+// is the game's own again. While A or D is down the mouse's sideways motion strafes as well: that
+// is the original game's rule for the strafe button, not ours.
+//
+// Why not have the page send an arrow for W? Because the game also reads letters as letters: on
+// the high-score name A and D would move the text cursor, in the menus S would jump to "Sound".
+// dirscan and buttonscan are read only while playing, so rewriting them leaves typing and the menus
+// exactly as they were -- and the menus keep the arrows and Enter, from the keyboard defaults.
+const W = 0x11, A = 0x1e, S = 0x1f, D = 0x20, UP = 0x48, LEFT = 0x4b, RIGHT = 0x4d, DOWN = 0x50;
+export const WOLF_ARROWS = Object.freeze([UP, RIGHT, DOWN, LEFT]);   // dirscan: north, east, south, west
+const WOLF_DIRSCAN_AT = 478;
+const WOLF_STRAFE_AT = WOLF_DIRSCAN_AT + 8 + 2;                        // buttonscan[bt_strafe]
+
+/** CONFIG.WL1 (bytes) with the move keys set to the arrows, the game's own defaults; nothing else changes. */
+export function withWolfArrows(bytes) {
+  if (!bytes || bytes.length < WOLF_DIRSCAN_AT + 8) return bytes;
+  const out = bytes.slice();
+  WOLF_ARROWS.forEach((k, i) => { out[WOLF_DIRSCAN_AT + 2 * i] = k; out[WOLF_DIRSCAN_AT + 2 * i + 1] = 0; });
+  return out;
+}
+
+/**
+ * Keys held, from scancodes as the page sends them (an 0xE0 prefix before the extended ones; a
+ * make adds, a break removes). Returns what the game should move on now: `dirs`, its four move
+ * keys, and `strafe`, the key its strafe button should be (null: the game's own).
+ */
+export function wolfMoveKeys(held, codes = []) {
+  for (const c of codes) {
+    if (c === 0xe0 || c === 0xe1) continue;
+    if (c & 0x80) held.delete(c & 0x7f); else held.add(c);
+  }
+  const pick = (letter, arrow) => (held.has(letter) && !held.has(arrow) ? letter : arrow);
+  const strafe = held.has(A) && !held.has(LEFT) ? A : held.has(D) && !held.has(RIGHT) ? D : null;
+  return {
+    dirs: [pick(W, UP), pick(D, RIGHT), pick(S, DOWN), pick(A, LEFT)],
+    strafe,
+  };
+}
+
+/**
+ * Point a running Wolfenstein 3D's dirscan and strafe button at `move` (wolfMoveKeys). The live
+ * arrays are found by what the game read from the config it booted with -- its four move keys and
+ * eight button keys, 24 bytes, one match in conventional memory -- and `cache.at` keeps the
+ * address. Before the game has read its config there is nothing to find: returns false, and the
+ * next call looks again.
+ */
+export function setWolfMoveKeys(mem, move, bootConfig, cache = {}) {
+  if (!(bootConfig?.length >= WOLF_DIRSCAN_AT + 24)) return false;
+  if (cache.at == null) {
+    const pat = bootConfig.subarray(WOLF_DIRSCAN_AT, WOLF_DIRSCAN_AT + 24);
+    for (let i = 0; i < 0xa0000 - 24 && cache.at == null; i++) {
+      let j = 0;
+      while (j < 24 && mem[i + j] === pat[j]) j++;
+      if (j === 24) cache.at = i;
+    }
+    if (cache.at == null) return false;
+  }
+  const put = (at, k) => { mem[at] = k & 0xff; mem[at + 1] = k >> 8; };
+  move.dirs.forEach((k, i) => put(cache.at + 2 * i, k));
+  const own = bootConfig[WOLF_STRAFE_AT] | (bootConfig[WOLF_STRAFE_AT + 1] << 8);
+  put(cache.at + (WOLF_STRAFE_AT - WOLF_DIRSCAN_AT), move.strafe ?? own);
+  return true;
+}
+
 // ------------------------------------------------------------------ text mode
 /** Code page 437 as Unicode, so text mode's box drawing and ENDOOM's blocks draw as they did. */
 export const CP437 = '\u0000☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼ !"#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~⌂'

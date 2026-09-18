@@ -13,7 +13,7 @@
 //               (and controls {scheme}: rebind the running game's keys)
 import { createPC } from './dospc.js';
 import { createSoundCard } from './soundcard.js';
-import { withControls, rebindKeys, quakeAutoexec, GAMES } from './dosio.js';
+import { withControls, rebindKeys, withWolfArrows, wolfMoveKeys, setWolfMoveKeys, quakeAutoexec, GAMES } from './dosio.js';
 
 const SLICE_MS = 10;
 const CHUNK = 50000;                       // instructions between looks for a finished picture
@@ -25,6 +25,10 @@ let lastFrameSeq = -1, lastPalSeq = -1, lastText = null;
 let pixels = new Uint8Array(64000);        // bounced back by the page after each frame, to reuse
 let lastWrites = -1, seenWrites = -1;
 const keyEntries = {};                     // where DOOM's key settings live, once found
+const wolfKeys = {};                       // where Wolfenstein 3D's live move keys are, once found
+const wolfHeld = new Set();                // the keys held, which pick W or the arrow, and whether A or D strafes
+let wolfBootConfig = null;                 // the CONFIG.WL1 it started with: how those keys are found
+let wolfLast = '';                         // the move keys last written, so an unchanged set is not rewritten
 const yieldChannel = new MessageChannel();
 yieldChannel.port1.onmessage = () => { scheduled = false; loop(); };
 
@@ -95,6 +99,7 @@ async function boot({ game: key = 'doom', rate, controls }) {
   const firstRun = !saved[game.config];
   for (const [name, bytes] of Object.entries(saved)) files[name] = bytes;
   if (key === 'doom' && files[game.config]) files[game.config] = withControls(files[game.config], controls);
+  if (key === 'wolf3d' && files[game.config]) files[game.config] = wolfBootConfig = withWolfArrows(files[game.config]);
   if (key === 'quake') files['ID1/AUTOEXEC.CFG'] = quakeAutoexec({ firstRun });
   pc = createPC({
     files,
@@ -174,12 +179,21 @@ self.onmessage = async (e) => {
     switch (m.type) {
       case 'boot': await boot(m); setRunning(true); break;
       case 'run': setRunning(m.on); break;
-      case 'key': if (pc) for (const c of m.codes) pc.key(c); break;
+      case 'key':
+        if (!pc) break;
+        for (const c of m.codes) pc.key(c);
+        if (game?.key === 'wolf3d') {
+          // W or the arrow, whichever is held (dosio.js wolfMoveKeys); written only when it changes,
+          // and looked for again on the next key if the game has not read its config yet
+          const move = wolfMoveKeys(wolfHeld, m.codes), keys = `${move.dirs}/${move.strafe}`;
+          if (keys !== wolfLast && setWolfMoveKeys(pc.mem, move, wolfBootConfig, wolfKeys)) wolfLast = keys;
+        }
+        break;
       case 'mouse':
-        if (pc) { pc.mouse.dx += m.dx; pc.mouse.dy += m.dy; pc.mouse.buttons = m.buttons; }
+        if (pc) { pc.mouse.move(m.dx, m.dy); pc.mouse.buttons = m.buttons; }
         break;
       case 'controls':
-        if (pc) {
+        if (pc && game?.key !== 'wolf3d') {
           // the running game's keys now, and the config it would read if it started again
           rebindKeys(pc.mem, m.scheme, keyEntries);
           const cfg = pc.dir.get('DEFAULT.CFG');

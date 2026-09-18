@@ -945,13 +945,16 @@ them. The terms of all three games are listed in `NOTICE`.
 ### Playing
 
 **Click the screen to capture the mouse**: moving it forward and back walks, left and right turns,
-the left button fires. **Esc** gives the mouse back. The keys are the game's own:
+the left button fires. **Esc** gives the mouse back. **W A S D and the arrows both work, all the
+time**: W A S D the way mouse players expect (A and D strafe; turn with the mouse), the arrows the
+game's own way. The menus take the arrows and **Enter**:
 
 | Keys | |
 |---|---|
-| **↑** **↓** | walk |
-| **←** **→** | turn |
-| **Alt** + **←** **→** | strafe |
+| **W** **S** or **↑** **↓** | walk |
+| **A** **D** | strafe left and right |
+| **←** **→** or the mouse | turn |
+| **Alt** + **←** **→** | strafe, the game's own way |
 | **Ctrl** or left click | fire |
 | **Space** | open doors, push walls |
 | **Shift** (held) | run |
@@ -959,7 +962,10 @@ the left button fires. **Esc** gives the mouse back. The keys are the game's own
 | **Esc** | the menu |
 | **F8** / **F9** | quick save / quick load |
 
-Rebind them under **Change View** and **Control** in the game's own menu; it keeps what you choose.
+Rebind the buttons under **Control** in the game's own menu; it keeps what you choose. The move keys
+are BlockYard's: the game takes one key a direction, so the page points each direction at whichever
+of its two keys you are holding, and while **A** or **D** is held that key is also the game's strafe
+button (so the mouse strafes too while you hold one, as it does holding Alt in the original).
 
 ### Pausing, saving, quitting
 

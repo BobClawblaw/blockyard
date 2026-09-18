@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createPC, loadLE, parseCoff, hasLE, MEM_SIZE } from '../public/js/dospc.js';
 import { createSoundCard, Opl3, oplRateTimes } from '../public/js/soundcard.js';
-import { rebindKeys, withControls } from '../public/js/dosio.js';
+import { rebindKeys, withControls, withWolfArrows, wolfMoveKeys, setWolfMoveKeys } from '../public/js/dosio.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DOOM = path.join(ROOT, 'games', 'doom_dos');
@@ -322,6 +322,98 @@ test('the keyboard: a scancode raises IRQ1 and waits on port 60h for the handler
   pc.key(0x9e);
   pc.run(50);
   assert.equal(mem[0x600], 0x9e, 'and came up');
+});
+
+test('the mouse driver keeps a pointer: centred on a reset, set by function 4, moved by motion', () => {
+  // Operator, 2026-09-18: "keys still don't work in the menu. I can't even start the game".
+  // Function 3 answered 0,0 whatever happened and function 4 was ignored; Wolfenstein 3D's menu
+  // centres the pointer with 4, reads it back with 3, and took 0,0 as "up, held" -- forever.
+  const pc = barePC();
+  const { cpu } = pc;
+  const int33 = (ax, cx = 0, dx = 0) => {
+    cpu.R[0] = ax; cpu.R[1] = cx; cpu.R[2] = dx; cpu.R[3] = 0;
+    pc.mem.set([0xcd, 0x33, 0xf4], 0x2000); cpu.invalidate(0x2000, 16);
+    cpu.eip = 0x2000; cpu.run(2);
+    return { ax: cpu.R[0] & 0xffff, bx: cpu.R[3] & 0xffff, cx: cpu.R[1] & 0xffff, dx: cpu.R[2] & 0xffff };
+  };
+  assert.equal(int33(0).ax, 0xffff, 'a mouse is installed');
+  assert.deepEqual([int33(3).cx, int33(3).dx], [320, 100], 'and a reset puts the pointer in the middle');
+  int33(4, 320, 100);
+  pc.mouse.move(10, -40);                                // mickeys: a pixel across, two a pixel down
+  assert.deepEqual([int33(3).cx, int33(3).dx], [330, 80], 'motion moves it');
+  int33(4, 320, 100);
+  assert.deepEqual([int33(3).cx, int33(3).dx], [320, 100], 'function 4 puts it back');
+  int33(8, 50, 60);
+  assert.equal(int33(3).dx, 60, 'function 8 bounds it');
+  pc.mouse.move(0, 10_000);
+  assert.equal(int33(3).dx, 60, 'and it stays inside the bounds');
+  int33(0x0b);                                           // read out what has gathered so far
+  pc.mouse.move(8, 0);
+  assert.equal(int33(0x0b).cx, 8, 'the motion counters still see the same mickeys');
+});
+
+test('Wolfenstein 3D\'s move keys: W or the up arrow, whichever is held, and A or D is also the strafe button', () => {
+  // Operator, 2026-09-18: "I want to support both arrow keys and wasd. not one or the other", and
+  // "For WASD mode, assume the player is playing with a mouse. make A and D strafe left and right"
+  const held = new Set();
+  const at = (codes) => wolfMoveKeys(held, codes);
+  assert.deepEqual(at([]), { dirs: [0x48, 0x4d, 0x50, 0x4b], strafe: null }, 'nothing held: the arrows, the game\'s own strafe button');
+  assert.deepEqual(at([0x11]), { dirs: [0x11, 0x4d, 0x50, 0x4b], strafe: null }, 'W held: W walks');
+  assert.deepEqual(at([0x1e]), { dirs: [0x11, 0x4d, 0x50, 0x1e], strafe: 0x1e }, 'A held too: A is left and the strafe button');
+  assert.deepEqual(at([0x9e, 0x91]), { dirs: [0x48, 0x4d, 0x50, 0x4b], strafe: null }, 'let go: back to the arrows');
+  assert.deepEqual(at([0xe0, 0x4b, 0x1e]), { dirs: [0x48, 0x4d, 0x50, 0x4b], strafe: null }, 'the left arrow held turns, whatever A says');
+  at([0xe0, 0xcb, 0x9e]);
+  // written where the game keeps them: the 24 bytes it read from the config, found once
+  const cfg = withWolfArrows(new Uint8Array(522));
+  cfg[488] = 0x38;                                       // buttonscan[bt_strafe]: Alt
+  const mem = new Uint8Array(0xa0000);
+  mem.set(cfg.subarray(478, 502), 0x3aab0);
+  const cache = {};
+  assert.ok(setWolfMoveKeys(mem, at([0x20]), cfg, cache));
+  assert.equal(cache.at, 0x3aab0);
+  assert.deepEqual([mem[0x3aab2], mem[0x3aaba]], [0x20, 0x20], 'D: right, and the strafe button');
+  assert.ok(setWolfMoveKeys(mem, at([0xa0]), cfg, cache));
+  assert.deepEqual([mem[0x3aab2], mem[0x3aaba]], [0x4d, 0x38], 'let go: the right arrow, and Alt again');
+});
+
+test('WOLF3D.EXE: the menu takes the arrows; in the game W and the up arrow walk, A strafes, the left arrow turns', needWolf, () => {
+  const files = wolfFiles();
+  const boot = withWolfArrows(files['CONFIG.WL1']);
+  let pc;
+  const now = () => (pc ? pc.cpu.cycles : 0) / 20e6 * 1000;
+  pc = createPC({ files: { ...files, 'CONFIG.WL1': boot }, now, programName: 'WOLF3D.EXE' });
+  pc.boot(new Uint8Array(fs.readFileSync(path.join(WOLF, 'WOLF3D.EXE'))));
+  const run = (n) => { let d = 0; while (d < n && !pc.exited) d += pc.run(5e6) || (pc.cpu.cycles += 5e5, 5e5); };
+  // keys go in the way the worker sends them: into the machine, and through wolfMoveKeys
+  const held = new Set(), cache = {};
+  const send = (codes) => { for (const c of codes) pc.key(c); setWolfMoveKeys(pc.mem, wolfMoveKeys(held, codes), boot, cache); };
+  const press = (codes, hold = 12e6) => { send(codes); run(hold); send(codes.map((c) => (c === 0xe0 ? c : c | 0x80))); run(20e6); };
+  const frame = () => pc.renderIndexed(new Uint8Array(64000));
+  const diff = (a, b) => { let n = 0; for (let i = 0; i < 64000; i++) if (a[i] !== b[i]) n++; return n; };
+  const moved = (codes, hold = 30e6) => { const a = frame(); press(codes, hold); return diff(a, frame()); };
+  run(100e6);
+  for (let i = 0; i < 3; i++) { press([0x1c]); run(40e6); }   // sign-on, title, menu
+  // THE MENU TAKES KEYS THE FIRST TIME IT OPENS (operator, 2026-09-18: "keys still don't work in
+  // the menu. I can't even start the game"): the mouse driver answered 0,0, which the menu read as
+  // "up, held" and waited on forever. Down, as a browser sends it, has to move the cursor.
+  const menu = frame();
+  assert.ok(moved([0xe0, 0x50]) > 200, 'the menu cursor moves on the arrows');
+  run(40e6); press([0xe0, 0x48], 30e6); run(40e6);             // and back up to New Game
+  assert.ok(diff(menu, frame()) < 200, 'back on New Game');
+  for (let i = 0; i < 3; i++) { press([0x1c]); run(60e6); }   // New Game, episode 1, difficulty
+  run(150e6);
+  // standing still changes ~160 pixels a frame (the level animates); a step changes thousands
+  const up = moved([0xe0, 0x48], 8e6), back = moved([0x1f], 8e6), w = moved([0x11], 8e6);
+  assert.ok(up > 2000, 'the up arrow walks');
+  assert.ok(back > 2000, 'S backs up');
+  assert.ok(w > 2000, 'and W walks');
+  const a = frame();
+  send([0x1e]); run(20e6);
+  assert.equal(pc.mem[cache.at + 10], 0x1e, 'while A is held it is the strafe button');
+  send([0x9e]); run(20e6);
+  assert.ok(diff(a, frame()) > 2000, 'and the player moved');
+  assert.equal(pc.mem[cache.at + 10], boot[488], 'let go, the strafe button is the game\'s own again');
+  assert.ok(moved([0xe0, 0x4b]) > 2000, 'the left arrow turns');
 });
 
 // ------------------------------------------------------------------ the Sound Blaster
