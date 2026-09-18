@@ -300,6 +300,10 @@ surfaced live as `log.health.ratio` on the Node panel.
 
 ## 14. Methods the node documents as refusing
 
+> **Re-measured 2026-09-18 (§41).** `getblockfilter` and `getmempoolcluster` answer on bmc now,
+> and `enumeratesigners` needs `-signer` exactly as Core does; the current list is in §41 and in
+> `NODE_REFUSES`.
+
 `getmempoolcluster`, `loadtxoutset`, `getblockfilter`/`scanblocks`/
 `getdescriptoractivity` (outside the undo window), `getblockfrompeer`,
 `preciousblock`, `pruneblockchain`, `submitheader`, `exportasmap`,
@@ -1585,3 +1589,46 @@ What changed because of it: the lane reads `rpc.maxInFlight` (`server/rpc/client
 only stops one slow call (a mempool read, a block drill-down) holding every other tier behind it.
 A node that does service one connection at a time sets `"rpc": { "maxInFlight": 1 }` on its own
 entry. The Node & RPC page shows in flight now, the ceiling, and the peak since start.
+
+## 41. RPC parity with Core, measured: every method, most fields, a short list left (2026-09-18)
+
+The README said bmc "serves most of Core's RPC", from bmc's own repository description. Asked
+"why are we not 100% parallel with Core RPC calls?", measured against the Core node on this box
+(`/Satoshi:31.99.0/`, a development build), read-only.
+
+**Method names: all of them.** Every one of the 155 methods in Core's `help` is in bmc's `help`
+(168). bmc's extra 13 are its address index (`getaddressbalance`, `getaddresstxids`), its own
+diagnostics (`bmcgetcapabilities`, `bmcgetdownloadinfo`, `bmcgetmempooljournal`), and methods Core
+hides from `help` but has (`invalidateblock`, `reconsiderblock`, `estimaterawfee`,
+`getorphantxs`, `getrawaddrman`, `addpeeraddress`).
+
+**Response fields**, the same call on both, keys compared recursively:
+
+| call | Core's fields | bmc lacks |
+|---|---|---|
+| `getblockchaininfo`, `getmempoolinfo`, `getmininginfo`, `getindexinfo`, `getblock`, `getblockheader`, `getblockstats`, `getchaintxstats`, `getdeploymentinfo`, `getnettotals`, `estimatesmartfee`, `uptime`, `getchaintips`, `getmempoolentry` | all | **nothing** |
+| `getnetworkinfo` | 26 | `tx_send_rate`, `inv_buckets` -- **not in Core v31.1**: fields of this development build, which bmc's own parity doc warns against diffing |
+| `getrawtransaction <txid> 2` | 11 | `vsize_adjusted` -- also this build's |
+| `getpeerinfo` | 64 | `addrlocal` never (0 of 11 peers; Core 10 of 10); `last_block` / `last_transaction` omitted for a peer that has sent none (Core reports 0). The per-message byte maps differ peer to peer on both, by what each peer happened to send |
+| `getmemoryinfo` | -- | refused in its default `"stats"` mode (those figures describe Core's secure allocator, which bmc does not have); `"mallocinfo"` answers |
+
+**Refusals, measured where a call cannot change state**, otherwise from bmc's catalogue:
+
+| method | bmc | Core |
+|---|---|---|
+| `getblockfilter` (tip, and height 800,000) | **answers** | answers |
+| `getmempoolcluster` | **answers** | answers |
+| `enumeratesigners` | "restart bitcoind with -signer" | the same |
+| `pruneblockchain 0` (both unpruned) | refused: fork choice belongs to the forked download worker | "not in prune mode" |
+| `getblockfrompeer` (a peer id that does not exist) | refused: peer connections belong to the worker | "Block already downloaded" |
+| `submitheader` (the tip's own header) | `null` | `null` |
+| `getopenrpcinfo` | refused: no OpenRPC description published | answers |
+| `loadtxoutset`, `exportasmap`, `preciousblock`, `rpc.discover`, `submitheader` for an unknown header | refused by design (bmc's README and `docs/RPC_LIVE_NODE.md`) | -- |
+
+Counted: 14 of the 18 calls match exactly; `getnetworkinfo` and `getrawtransaction` match
+Core's release (their differences are the development build's fields), 16; `getpeerinfo` and
+`getmemoryinfo "stats"` are the two that do not. So "most" undersold it, and the gap is not method coverage: it is a few deliberate refusals and
+three `getpeerinfo` fields. `getblockfilter` and `getmempoolcluster` had been in `NODE_REFUSES`
+since §14 and answer now -- a console error from them would have been excused as expected --
+so the list was re-cut to this table, and `enumeratesigners` / `walletdisplayaddress` left it
+because Core gives the same answer.

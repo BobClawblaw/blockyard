@@ -25,9 +25,15 @@ bugs.**
 validating Bitcoin node for Linux x86-64, written in NASM assembly with a C orchestration layer —
 and, like BlockYard, every line of it is AI-authored. It verifies the chain from genesis, keeps a
 UTXO set proven byte-identical to Bitcoin Core's (MuHash-exact), follows mainnet live, runs a
-Core-policy mempool and relay, and serves most of Core's JSON-RPC surface, including
-`getblocktemplate`, `submitblock` and `scantxoutset`, plus `txindex`, `coinstatsindex`,
-`blockfilterindex` and an address index of its own.
+Core-policy mempool and relay, and serves Bitcoin Core's JSON-RPC surface — every method in
+Core's `help` answers to its name, and of 18 calls compared field by field against a Core node,
+14 return exactly Core's fields (`getblock`, `getblockstats` and `getmempoolentry` among them) and
+two more differ only by fields of Core's unreleased development build
+([MEASUREMENTS 41](docs/MEASUREMENTS.md)) — including `getblocktemplate`, `submitblock` and
+`scantxoutset`, plus `txindex`, `coinstatsindex`, `blockfilterindex` and an address index of its
+own. What is left is a short, stated list: a few methods it refuses by design (no OpenRPC
+description, no asmap, no assumeutxo, and what its separate download process owns) and a
+handful of `getpeerinfo` fields.
 
 > **An academic, experimental development build — not ready for primetime.** bmc has had internal
 > and external security review but no independent human audit of its consensus and cryptographic
@@ -117,7 +123,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1190 unit tests, all built in
+npm test            # optional: 1191 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -206,7 +212,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1190 unit tests (node:test, no dependencies)
+npm test             # 1191 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -227,7 +233,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1190 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1191 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

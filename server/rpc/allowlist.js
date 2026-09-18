@@ -86,13 +86,22 @@ export function classifyMethod(method) {
   return { allowed: false, kind: 'unknown', reason: 'not recognised as a read-only method; add it to server/rpc/allowlist.js if this is wrong' };
 }
 
-// Methods the node itself documents as refusing (or as needing the worker
-// channel). Surfaced so the UI can label a refusal as expected rather than as a
-// monitor bug. Lifted from docs/RPC_LIVE_NODE.md's refusal catalogue.
+// Methods Bitcoin Machine Code refuses (by design, or because the forked download worker owns
+// what they would change). Surfaced so the UI can label a refusal as expected rather than as a
+// monitor bug. RE-MEASURED 2026-09-18 against bmc run 26 and Core, not copied from the node's
+// catalogue, which had fallen behind it (docs/MEASUREMENTS.md section 41):
+//   * left the list: `getblockfilter` and `getmempoolcluster` answer on bmc as on Core;
+//     `enumeratesigners` and `walletdisplayaddress` need `-signer` on bmc exactly as on Core,
+//     so an error from them is Core's behaviour, not a bmc refusal;
+//   * joined it: `getmemoryinfo`, whose default "stats" mode bmc refuses (it has no secure
+//     allocator for those figures to describe); "mallocinfo" answers;
+//   * stayed: no OpenRPC description (`getopenrpcinfo`, `rpc.discover`), no asmap (`exportasmap`),
+//     no assumeutxo (`loadtxoutset`), and what the worker owns -- `pruneblockchain`,
+//     `getblockfrompeer` (both refused live today), `preciousblock`, and `submitheader` for a header
+//     the node does not already have (a known one answers null, as on Core).
 export const NODE_REFUSES = new Set([
-  'loadtxoutset', 'getopenrpcinfo', 'rpc.discover', 'exportasmap', 'enumeratesigners',
-  'walletdisplayaddress', 'getmempoolcluster', 'getblockfrompeer', 'preciousblock',
-  'pruneblockchain', 'submitheader', 'getblockfilter',
+  'loadtxoutset', 'getopenrpcinfo', 'rpc.discover', 'exportasmap', 'getmemoryinfo',
+  'getblockfrompeer', 'preciousblock', 'pruneblockchain', 'submitheader',
 ]);
 
 export function allowlistSummary() {

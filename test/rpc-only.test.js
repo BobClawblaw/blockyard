@@ -358,3 +358,15 @@ test('a synced node\'s idle downloader does not hide the traffic getnettotals co
   assert.equal(s.net.inSource, 'log');
   await m.stop();
 });
+
+test('the node-refuses list is what bmc refuses today, not what its catalogue said in August', async () => {
+  // Re-measured 2026-09-18 against bmc run 26 and Core (docs/MEASUREMENTS.md section 41). A method
+  // on this list gets "an error here is expected behaviour" in the console, so a method bmc now
+  // answers must not be on it: that note would excuse a real failure.
+  const { NODE_REFUSES } = await import('../server/rpc/allowlist.js');
+  for (const m of ['getblockfilter', 'getmempoolcluster']) assert.ok(!NODE_REFUSES.has(m), `${m} answers on bmc now`);
+  for (const m of ['enumeratesigners', 'walletdisplayaddress']) assert.ok(!NODE_REFUSES.has(m), `${m} needs -signer on bmc exactly as on Core`);
+  for (const m of ['getopenrpcinfo', 'rpc.discover', 'exportasmap', 'loadtxoutset', 'getmemoryinfo', 'pruneblockchain', 'getblockfrompeer', 'preciousblock', 'submitheader']) {
+    assert.ok(NODE_REFUSES.has(m), `${m} is still refused`);
+  }
+});
