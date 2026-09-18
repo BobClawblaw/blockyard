@@ -567,8 +567,10 @@ async function peersDetail(force = false) {
   if (state.page !== 'peers') return;
   if (!force && Date.now() - peersFetchedAt < 15_000) return state.peerRows;
   peersFetchedAt = Date.now();
+  const id = state.node;
   try {
-    const d = await api(`/api/peers?node=${encodeURIComponent(state.node ?? '')}`);
+    const d = await api(`/api/peers?node=${encodeURIComponent(id ?? '')}`);
+    if (id !== state.node) return null;       // answered for the node we just left
     state.peerRows = d.rpcPeers ?? [];
     return state.peerRows;
   } catch { return null; }
@@ -612,13 +614,15 @@ async function mempoolDetail(force = false) {
   if (!force && Date.now() - mempoolFetchedAt < MEMPOOL_DETAIL_MS) return state.mempoolDist;
   mempoolFetchedAt = Date.now();
   state.poolFetchedAt = mempoolFetchedAt;   // the panels count down from here
+  const id = state.node;
   try {
     if (state.viewerMode === '2') {
-      api(`/api/mempool/dense?node=${encodeURIComponent(state.node ?? '')}`)
-        .then((x) => { if (x?.v) { state.denseBlock = { ...x, fetchedAt: Date.now() }; render(); } })
+      api(`/api/mempool/dense?node=${encodeURIComponent(id ?? '')}`)
+        .then((x) => { if (x?.v && id === state.node) { state.denseBlock = { ...x, fetchedAt: Date.now() }; render(); } })
         .catch(() => { /* the mode 1 picture stays up */ });
     }
-    const d = await api(`/api/mempool?node=${encodeURIComponent(state.node ?? '')}`);
+    const d = await api(`/api/mempool?node=${encodeURIComponent(id ?? '')}`);
+    if (id !== state.node) return state.mempoolDist;   // answered for the node we just left
     if (d?.dist) {
       state.mempoolDist = { ...d.dist, count: d.info?.count ?? d.dist.count, fetchedAt: Date.now(), stale: false };
       render();
@@ -646,8 +650,10 @@ async function nextBlockDetail(force = false) {
   const freshMs = state.page === 'overview' ? 60_000 : 20_000;
   if (!force && Date.now() - templateFetchedAt < freshMs) return state.snap?.attribution?.nextBlock;
   templateFetchedAt = Date.now();
+  const id = state.node;
   try {
-    const d = await api(`/api/nextblock?node=${encodeURIComponent(state.node ?? '')}`);
+    const d = await api(`/api/nextblock?node=${encodeURIComponent(id ?? '')}`);
+    if (id !== state.node) return state.snap?.attribution?.nextBlock ?? null;   // for the node we just left
     if (state.snap?.attribution && d && !d.unavailable) { state.snap.attribution.nextBlock = d; render(); }
     return d;
   } catch { return state.snap?.attribution?.nextBlock ?? null; }
@@ -662,8 +668,10 @@ async function refreshMempoolDetail(force = false) {
   // panel promises that moment, so the fetch goes as soon as it is due
   if (!force && mpDetailTimer && Date.now() - mpDetailTimer < 9000 && Date.now() < mempoolFetchedAt + MEMPOOL_DETAIL_MS) return;
   mpDetailTimer = Date.now();
+  const id = state.node;
   try {
-    const d = await api(`/api/mempool?node=${encodeURIComponent(state.node ?? '')}`);
+    const d = await api(`/api/mempool?node=${encodeURIComponent(id ?? '')}`);
+    if (id !== state.node) return;             // answered for the node we just left
     state.mempoolDetail = d;
     // the page's own fetch also feeds its Block space viewer, so the Mempool
     // page does not poll /api/mempool twice -- but only once a minute, the
@@ -797,10 +805,22 @@ async function switchNode(id) {
   state.snap = rec.snap ?? null;
   state.series = rec.series ?? null;
   state.events = [];
+  // THE PAGE'S OWN DETAIL BELONGS TO THE NODE IT WAS FETCHED FOR. Peers, the pool
+  // distribution and the dense block are not in the per-node cache; kept across a switch,
+  // the new node's pages showed the old node's peers and pool until each one's own timer
+  // (15-30 s) came round. They are dropped here and fetched for the new node below.
+  state.peerRows = null; state.mempoolDist = null; state.denseBlock = null; state.mempoolDetail = null;
   state.es?.close();
   connect();
   render();
-  if (!rec.snap) await backgroundRefresh();
+  // A STAT REFRESH, IMMEDIATELY (operator, 2026-09-18: "when we select another node from the
+  // dropdown, we should force a stat refresh immediately after"). It used to happen only for
+  // a node this tab had never shown (`if (!rec.snap)`), so switching BACK showed the cached
+  // snapshot from whenever it was last seen until the stream or the 20 s pull caught up. The
+  // cached one is still drawn first -- never a blank page -- and the fresh one replaces it.
+  // The page's own detail is forced too; each loader returns at once if its page is not open.
+  peersDetail(true); mempoolDetail(true); nextBlockDetail(true); refreshMempoolDetail(true);
+  await backgroundRefresh();
 }
 
 /**
@@ -812,22 +832,29 @@ async function switchNode(id) {
  * merges it into the cache. The foreground renders whatever is known right now
  * and flags it as stale if it is old; it never waits and never clears itself.
  */
-let pulling = false;
+// ONE PULL PER NODE, NOT ONE PER TAB. A single `pulling` flag let a pull still in flight for
+// the node just left swallow the new node's refresh (it returned at once), and then that
+// old pull landed and was filed under whichever node was selected by then -- the new node
+// briefly wore the old one's figures. Each pull now belongs to the node it asked about: it
+// always updates that node's cache, and reaches the screen only if that node is still shown.
+const pulling = new Set();
 async function backgroundRefresh() {
-  if (!state.node || pulling) return;
-  pulling = true;
+  const id = state.node;
+  if (!id || pulling.has(id)) return;
+  pulling.add(id);
   try {
-    const sn = await api(`/api/state?node=${encodeURIComponent(state.node)}`);
-    // A successful pull is liveness too, by any definition -- the watchdog below asks
-    // "has anything arrived lately", and an HTTP refresh is exactly that.
-    state.lastFrameAt = Date.now();
-    state.streamFails = 0;
-    const rec = nodeRec(state.node);
+    const sn = await api(`/api/state?node=${encodeURIComponent(id)}`);
+    const rec = nodeRec(id);
     rec.snap = sn;
     rec.snapAt = Date.now();
     // Merge rather than replace so a frame missing one series cannot erase a chart.
     rec.series = { ...(rec.series ?? {}), ...(sn.series ?? {}) };
     rec.seriesAt = Date.now();
+    if (id !== state.node) return;          // kept for when it is shown again; not drawn now
+    // A successful pull is liveness too, by any definition -- the watchdog below asks
+    // "has anything arrived lately", and an HTTP refresh is exactly that.
+    state.lastFrameAt = Date.now();
+    state.streamFails = 0;
     state.snap = sn;
     state.series = rec.series;
     render();
@@ -837,12 +864,12 @@ async function backgroundRefresh() {
     // header looked merely slow. Re-read the node list and land on a real one.
     // Seen for real when the benchmark node was removed from the config while a tab
     // was open on it: the tab kept asking for a node that no longer existed.
-    if (err.status === 404) await recoverMissingNode();
+    if (err.status === 404 && id === state.node) await recoverMissingNode();
     // Otherwise silence is correct: the next tick retries, and the charts still show
     // what they showed before, marked stale. A toast every 20s on a flaky link would
     // be worse than the gap.
   } finally {
-    pulling = false;
+    pulling.delete(id);
   }
 }
 

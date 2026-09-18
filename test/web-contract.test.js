@@ -155,12 +155,23 @@ test('every state fetch names the selected node', () => {
   // Now there is one fetch path and it names the node.
   const fetches = [...app.matchAll(/api\(`\/api\/state([^`]*)`\)/g)];
   assert.ok(fetches.length >= 1, 'expected at least one /api/state fetch');
+  // The pull names the node it captured when it started (`id`), so an answer that lands after
+  // a switch is filed under the node it is about rather than whichever is selected by then.
   for (const m of fetches) {
-    assert.match(m[1], /\?node=\$\{encodeURIComponent\(state\.node\)\}/,
+    assert.match(m[1], /\?node=\$\{encodeURIComponent\((state\.node|id)\)\}/,
       'every /api/state fetch must carry ?node=');
   }
+  const pull = app.slice(app.indexOf('async function backgroundRefresh'), app.indexOf('async function recoverMissingNode'));
+  assert.match(pull, /const id = state\.node;/, 'the pull captures the node it asks about');
+  assert.match(pull, /if \(id !== state\.node\) return;/, 'and does not draw it once another node is shown');
   assert.match(app, /await backgroundRefresh\(\);/, 'boot loads through the same path');
-  assert.match(app, /if \(!rec\.snap\) await backgroundRefresh\(\);/, 'a node with no cache is pulled on switch');
+  // Operator, 2026-09-18: "when we select another node from the dropdown, we should force a stat
+  // refresh immediately after". It used to be `if (!rec.snap) await backgroundRefresh()`: only a
+  // node never shown before was pulled, so switching back showed a cached snapshot.
+  const sw = app.slice(app.indexOf('async function switchNode'), app.indexOf('async function backgroundRefresh'));
+  assert.doesNotMatch(sw, /^\s*if \(!rec\.snap\)/m, 'every switch pulls, cached or not');   // code, not the comment quoting it
+  assert.match(sw, /await backgroundRefresh\(\);/, 'a switch pulls the new node at once');
+  assert.match(sw, /peersDetail\(true\); mempoolDetail\(true\); nextBlockDetail\(true\); refreshMempoolDetail\(true\);/, 'and forces the page\'s own detail');
 });
 
 test('per-method RPC refusals are surfaced rather than collapsed to null', () => {
