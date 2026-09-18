@@ -46,7 +46,7 @@ export async function freePort() {
  * two fake daemons -- which is also how production is configured, so the test path is
  * the real path.
  */
-export async function withApp({ nodes = 1, config = {}, adminPassword = null, tlsFiles = null, log = null, auth = true } = {}, fn) {
+export async function withApp({ nodes = 1, config = {}, adminPassword = null, tlsFiles = null, log = null, auth = true, wallets = null } = {}, fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-app-'));
   const { boot } = await import('../../server/main.js');
   const fakes = [];
@@ -56,6 +56,10 @@ export async function withApp({ nodes = 1, config = {}, adminPassword = null, tl
     const fport = await freePort();
     const fake = await startFakeNode({
       port: fport,
+      // Wallets this fake node has loaded, for the administrative suite's tests. None by
+      // default, which is what every other test wants and what a node without a wallet
+      // actually answers.
+      ...(wallets && i === 0 ? { wallets } : {}),
       logFile: path.join(dir, `fake-${i}.log`),
       ibd: i === 0 && nodes > 1 ? false : true,
       catchupBlocksPerSec: 9,

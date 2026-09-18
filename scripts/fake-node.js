@@ -16,6 +16,70 @@ import os from 'node:os';
 
 const SYNTH_TIP = 900000;
 
+// THE WALLET METHODS THIS FAKE ANSWERS (2026-09-18, for the administrative suite's tests).
+//
+// Shapes copied from Bitcoin Core 29/30's own replies, including the fields the suite
+// reads and the awkward ones it has to cope with: BTC as a decimal STRING-ish number,
+// `bip125-replaceable` as a string rather than a boolean, negative amounts for sends.
+// A fake that answers in tidier shapes than the real node tests the fake.
+const WALLET_METHODS_FAKE = {
+  getwalletinfo: (w, _p, name) => ({
+    walletname: name,
+    walletversion: 169900,
+    format: 'sqlite',
+    balance: w.balance ?? 0,
+    unconfirmed_balance: 0,
+    immature_balance: 0,
+    txcount: (w.transactions ?? []).length,
+    keypoolsize: 1000,
+    paytxfee: 0,
+    private_keys_enabled: w.privateKeys !== false,
+    avoid_reuse: false,
+    scanning: false,
+    descriptors: true,
+    external_signer: false,
+    // present only on an encrypted wallet, which is how the suite tells them apart
+    ...(w.encrypted ? { unlocked_until: w.unlockedUntil ?? 0 } : {}),
+    lastprocessedblock: { hash: '00'.repeat(32), height: w.height ?? 1 },
+  }),
+  getbalances: (w) => ({
+    mine: {
+      trusted: w.balance ?? 0,
+      untrusted_pending: w.pending ?? 0,
+      immature: w.immature ?? 0,
+    },
+  }),
+  listunspent: (w, p) => {
+    const minconf = Number(p[0] ?? 0);
+    return (w.utxos ?? []).filter((u) => (u.confirmations ?? 0) >= minconf);
+  },
+  listtransactions: (w, p) => {
+    const count = Number(p[1] ?? 10);
+    const skip = Number(p[2] ?? 0);
+    return (w.transactions ?? []).slice(skip, skip + count);
+  },
+  listlabels: (w) => Object.keys(w.labels ?? {}),
+  getaddressesbylabel: (w, p) => {
+    const found = (w.labels ?? {})[p[0]];
+    if (!found) return {};
+    return Object.fromEntries(found.map((a) => [a, { purpose: 'receive' }]));
+  },
+  listdescriptors: (w, p, name) => {
+    // The real node returns PRIVATE descriptors when passed true. This fake returns them
+    // too -- so that if the suite ever passes the argument, the test sees an xprv in the
+    // response and fails, rather than passing because the fake was polite.
+    const priv = p[0] === true;
+    return {
+      wallet_name: name,
+      descriptors: (w.descriptors ?? []).map((d) => ({
+        desc: priv ? d.desc.replace('xpub', 'xprv') : d.desc,
+        timestamp: 1700000000, active: true, internal: false, range: [0, 999], next: 0,
+      })),
+    };
+  },
+  getaddressinfo: (w, p) => ({ address: p[0], ismine: true, solvable: true, labels: [] }),
+};
+
 export class FakeNode {
   constructor(opts = {}) {
     this.port = opts.port ?? 18331;
@@ -38,6 +102,11 @@ export class FakeNode {
     this.logTimer = null;
     this.requests = 0;
     this.batchRequests = 0;
+    // Every wallet path a call arrived on, in order, including nulls for calls with none.
+    this.walletPaths = [];
+    // Wallets this fake node has "loaded". A test names them; the default is none, which
+    // is the honest default -- a node with no wallet loaded answers -18 to wallet calls.
+    this.wallets = opts.wallets ?? {};
   }
 
   start() {
@@ -78,13 +147,32 @@ export class FakeNode {
       const isBatch = Array.isArray(body);
       if (isBatch) this.batchRequests += 1;
       const items = isBatch ? body : [body];
-      const replies = items.map((it) => this.reply(it));
+      // WHICH WALLET THE CALL ARRIVED ON (2026-09-18). Core addresses a wallet by URL
+      // path; a call with no path lands on the default wallet. The administrative suite
+      // must never do that by accident, so this records the path and hands it to the
+      // method -- which lets a test assert that a read of wallet "a" actually went to
+      // wallet "a" rather than checking that the answer looked plausible.
+      const walletName = /^\/wallet\/(.+)$/.exec(req.url ?? '')?.[1];
+      this.walletPaths.push(walletName ? decodeURIComponent(walletName) : null);
+      const replies = items.map((it) => this.reply(it, { wallet: walletName ? decodeURIComponent(walletName) : null }));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(isBatch ? replies : replies[0]));
     });
   }
 
-  reply(it) {
+  reply(it, { wallet = null } = {}) {
+    // The wallet methods the administrative suite reads (docs/PLAN-ADMIN-SUITE.md M2).
+    // Deliberately minimal and deliberately WALLET-AWARE: each answer carries the name it
+    // was asked on, so a test can prove the addressing rather than assume it.
+    if (WALLET_METHODS_FAKE[it.method]) {
+      if (!wallet) {
+        return { result: null, error: { code: -19, message: 'Wallet file not specified (must request wallet RPC through /wallet/<filename> uri-path)' }, id: it.id };
+      }
+      if (!this.wallets[wallet]) {
+        return { result: null, error: { code: -18, message: `Requested wallet does not exist or is not loaded` }, id: it.id };
+      }
+      return { result: WALLET_METHODS_FAKE[it.method](this.wallets[wallet], it.params ?? [], wallet), error: null, id: it.id };
+    }
     if (it.method === 'estimatesmartfee') {
       // The targets all arrive as separate batch elements; answer per element.
       const t = it.params?.[0] ?? 6;
