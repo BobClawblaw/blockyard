@@ -3344,8 +3344,18 @@ export function starClusters(pw, ph, at = GALAXY_AT_DEFAULT, seed = 29) {
 /** Where the disc sits and how big it is. One source, so the renderer and the tests agree. */
 export function galaxyGeometry(pw, ph, at = GALAXY_AT_DEFAULT) {
   const [fx, fy, reach, oversample] = GALAXY_PLACEMENTS[at] ?? GALAXY_PLACEMENTS[GALAXY_AT_DEFAULT];
-  const maxR = (Math.min(pw, ph / GALAXY_FLATTEN) / 2) * reach;
-  return { cx: pw * fx, cy: ph * fy, maxR, inner: maxR * 0.08, oversample };
+  const fit = (Math.min(pw, ph / GALAXY_FLATTEN) / 2) * reach;
+  // TO THE FAR CORNER, WHATEVER THE SHAPE (operator, 2026-09-18: "Can we extend galaxy rendering
+  // for the entire background in the markets 3d view? It gets cut of on the right side"). `fit`
+  // is sized off the SHORT side, so on a panel much wider than it is tall -- the Markets board,
+  // ~3.5:1 -- the disc ended two thirds of the way across and left the right side bare. The disc
+  // now reaches at least the panel's farthest corner (measured in the unflattened disc, where the
+  // stars live), and the star count grows by the area it gained, so the density slider still means
+  // the same thing on a wide panel as on a squarer one.
+  const far = Math.hypot(Math.max(fx, 1 - fx) * pw, (Math.max(fy, 1 - fy) * ph) / GALAXY_FLATTEN);
+  const maxR = Math.max(fit, far);
+  const grow = maxR / fit;
+  return { cx: pw * fx, cy: ph * fy, maxR, inner: maxR * 0.08, oversample: oversample * grow * grow };
 }
 export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false) {
   let s = seed >>> 0;

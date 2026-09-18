@@ -445,6 +445,23 @@ test('the density setting means the same thing wherever the galaxy sits', async 
   assert.ok(hi - lo < lo * 0.3, `and fills it comparably: ${JSON.stringify(counts)}`);
 });
 
+test('a wide panel is covered to its far edge, not only as far as its height allows', async () => {
+  // Operator, 2026-09-18: "Can we extend galaxy rendering for the entire background in the markets
+  // 3d view? It gets cut of on the right side". The disc was sized off the panel's short side, so
+  // on the ~3.5:1 Markets board the arms died two thirds of the way across.
+  const { starField, galaxyGeometry, GALAXY_PLACEMENTS, GALAXY_FLATTEN } = await import('../public/js/details3d.js');
+  const [W, H] = [2000, 560];
+  for (const at of Object.keys(GALAXY_PLACEMENTS)) {
+    const { cx, cy } = galaxyGeometry(W, H, at);
+    const tenths = new Array(10).fill(0);
+    for (const s of starField(W, H, 1, 7, 1, at)) {
+      const x = cx + s.gr * Math.cos(s.ga), y = cy + s.gr * GALAXY_FLATTEN * Math.sin(s.ga);
+      if (x >= 0 && x < W && y >= 0 && y < H) tenths[Math.floor((x / W) * 10)]++;
+    }
+    assert.ok(Math.min(...tenths) > 40, `${at}: stars in every tenth of the width (${tenths.join(' ')})`);
+  }
+});
+
 test('the arms are arms: the stars bunch along the spiral instead of spreading evenly', async () => {
   // The structural claim behind the effect. On a logarithmic arm the angle tracks log(radius), so
   // undoing that twist should collapse most stars onto a couple of headings; a uniform scatter
