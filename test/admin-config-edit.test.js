@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { withApp } from './helpers/http.js';
 import { __resetElevations } from '../server/admin/elevation.js';
-import { parseConf, renderConf, applyChanges, confSettings, diffText, WEIGHTY_KEYS, LOCKED_BLOCKS } from '../server/admin/config-edit.js';
+import { parseConf, renderConf, applyChanges, confSettings, diffText, WEIGHTY_KEYS, REFUSED_KEYS, LOCKED_BLOCKS } from '../server/admin/config-edit.js';
 
 const SAMPLE = [
   '# a node someone actually configured',
@@ -60,7 +60,10 @@ test('settings carry their section, so [main] rpcport is not the global one', ()
   const rpcport = rows.find((r) => r.key === 'rpcport');
   assert.equal(rpcport.section, 'main');
   assert.equal(rows.find((r) => r.key === 'server').section, null);
-  assert.equal(rpcport.weighty, true, 'rpcport can move the door');
+  // rpcport was weighty-and-acknowledged until 2026-09-19; it is refused outright now
+  // (operator decision (1): no RPC binding from the web), so the row says it is not editable.
+  assert.equal(rpcport.editable, false, 'rpcport moves the door, and is edited by hand');
+  assert.equal(rows.find((r) => r.key === 'txindex').weighty, true, 'txindex can cost a resync');
   assert.equal(rows.find((r) => r.key === 'dbcache').weighty, false, 'a cache size is a performance knob, not a lockout risk');
 });
 
@@ -87,10 +90,11 @@ test('a new setting lands inside its section, not at the end of the file', () =>
 });
 
 test('a section that does not exist yet is created for the setting', () => {
-  const { entries } = applyChanges(parseConf(SAMPLE), [{ key: 'rpcport', value: '18332', section: 'test' }]);
+  // Was rpcport until 2026-09-19, which the editor now refuses; dbcache exercises the same path.
+  const { entries } = applyChanges(parseConf(SAMPLE), [{ key: 'dbcache', value: '512', section: 'test' }]);
   const out = renderConf(entries);
-  assert.match(out, /\[test\]\nrpcport=18332/);
-  assert.match(out, /\[main\]\nrpcport=8332/, 'the mainnet one is untouched');
+  assert.match(out, /\[test\]\ndbcache=512/);
+  assert.match(out, /\[main\]\nrpcport=8332\ndbcache=4096/, 'the mainnet one is untouched');
 });
 
 test('removing a setting removes the line, and removing a missing one is not an error', () => {
@@ -100,7 +104,8 @@ test('removing a setting removes the line, and removing a missing one is not an 
 
 test('a value with a line break in it is refused, not written', () => {
   // Otherwise one setting becomes two, and the second is whatever the browser sent.
-  assert.throws(() => applyChanges(parseConf(SAMPLE), [{ key: 'rpcauth', value: 'a\nrpcallowip=0.0.0.0/0' }]), /line break/);
+  // (The key was rpcauth until 2026-09-19; that is refused outright now, before its value is looked at.)
+  assert.throws(() => applyChanges(parseConf(SAMPLE), [{ key: 'uacomment', value: 'a\nrpcallowip=0.0.0.0/0' }]), /line break/);
   assert.throws(() => applyChanges(parseConf(SAMPLE), [{ key: 'bad key', value: '1' }]), /not a setting name/);
 });
 
@@ -131,20 +136,22 @@ test('a write takes a backup first, and says what changed', async () => {
   });
 });
 
-test('a setting that can lock you out needs naming, one by one', async () => {
+test('a setting that can cut the node off needs naming, one by one', async () => {
+  // Was rpcallowip until 2026-09-19. That one is refused outright now, acknowledged or not
+  // (test/admin-config-edit-hardening.test.js); bind is the P2P door and still acknowledged.
   await ready(async ({ client, csrf, file }) => {
     const refused = await client.post('/api/admin/config/node', {
-      changes: [{ key: 'rpcallowip', value: '0.0.0.0/0' }, { key: 'maxconnections', value: '10' }],
+      changes: [{ key: 'bind', value: '0.0.0.0' }, { key: 'maxconnections', value: '10' }],
     }, { csrf });
     assert.equal(refused.status, 400);
     assert.equal(refused.body.error.code, 'acknowledge-required');
-    assert.match(refused.body.error.message, /rpcallowip/);
+    assert.match(refused.body.error.message, /bind/);
     assert.ok(!refused.body.error.message.includes('maxconnections'), 'only the weighty ones need naming');
-    assert.ok(!fs.readFileSync(file, 'utf8').includes('rpcallowip'), 'nothing was written');
+    assert.ok(!fs.readFileSync(file, 'utf8').includes('bind='), 'nothing was written');
 
     const ok = await client.post('/api/admin/config/node', {
-      changes: [{ key: 'rpcallowip', value: '0.0.0.0/0' }],
-      acknowledge: ['rpcallowip'],
+      changes: [{ key: 'bind', value: '0.0.0.0' }],
+      acknowledge: ['bind'],
     }, { csrf });
     assert.equal(ok.status, 200);
   });
@@ -152,14 +159,15 @@ test('a setting that can lock you out needs naming, one by one', async () => {
 
 test('the audit records which keys changed and never their values', async () => {
   await ready(async ({ client, csrf }) => {
+    // rpcpassword until 2026-09-19, which cannot be written from the web any more; the
+    // property is the same for any key -- the audit carries names, not values.
     await client.post('/api/admin/config/node', {
-      changes: [{ key: 'rpcpassword', value: 'hunter2-the-real-one' }],
-      acknowledge: ['rpcpassword'],
+      changes: [{ key: 'uacomment', value: 'hunter2-the-real-one' }],
     }, { csrf });
     const audit = await client.get('/api/audit?limit=50');
     const text = JSON.stringify(audit.body);
     assert.match(text, /admin-node-conf-write/);
-    assert.match(text, /rpcpassword/, 'the key is recorded');
+    assert.match(text, /uacomment/, 'the key is recorded');
     assert.ok(!text.includes('hunter2-the-real-one'), 'the VALUE must never reach the audit trail');
   });
 });
@@ -200,20 +208,24 @@ test('the locked block is still SHOWN, so the operator can see what is in force'
     assert.equal(res.body.locked.admin.enabled, true);
     assert.match(res.body.lockedNote, /widen its own gates/);
     assert.deepEqual(LOCKED_BLOCKS, ['admin']);
-    // and the editable half never carries a password back to a browser
-    // The password field specifically -- the username is not a secret and stays readable,
-    // which is why this looks at the field rather than grepping the whole document.
-    for (const node of res.body.editable.nodes ?? []) {
-      assert.equal(node.rpcPassword, '********', 'the node RPC password must never come back to a browser');
-    }
+    // and the editable half never carries a password back to a browser. Until 2026-09-19 it
+    // held every node with the password masked; nodes are not editable from the web now
+    // (operator decision (4)), so they are not in it at all -- and neither is the mask.
+    assert.equal(res.body.editable.nodes, undefined);
+    assert.ok(!JSON.stringify(res.body).includes('********'));
   });
 });
 
 test('every weighty key is one the operator would want to be asked about', () => {
   // Not an exhaustive list of dangerous settings — a judgement about which ones can end
   // with a node nobody can reach, a node everybody can reach, or a resync.
-  for (const k of ['rpcauth', 'rpcallowip', 'rpcbind', 'bind', 'prune', 'txindex', 'wallet', 'datadir']) {
+  for (const k of ['bind', 'listen', 'onlynet', 'proxy', 'prune', 'txindex', 'wallet']) {
     assert.ok(WEIGHTY_KEYS.has(k), `${k} should require acknowledgement`);
+  }
+  // rpcauth, rpcallowip, rpcbind and datadir were here until 2026-09-19. They are refused
+  // outright now (operator decision (1)), and a key that is refused is not also acknowledgeable.
+  for (const k of ['rpcauth', 'rpcallowip', 'rpcbind', 'datadir']) {
+    assert.ok(REFUSED_KEYS.has(k) && !WEIGHTY_KEYS.has(k), `${k} is refused, not acknowledged`);
   }
   for (const k of ['maxuploadtarget', 'dbcache', 'maxconnections', 'par']) {
     assert.ok(!WEIGHTY_KEYS.has(k), `${k} is a performance knob; asking about it teaches people to click through`);

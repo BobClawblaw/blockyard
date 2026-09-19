@@ -321,7 +321,12 @@ export function adminRoutes(app) {
     // ---------------------------------------------------------------- the configs
     // Two files, two dangers: bitcoin.conf can lock the operator out of their node, and
     // BlockYard's own config holds the block that restrains this suite -- which is why
-    // that block is not writable from here at all (server/admin/config-edit.js).
+    // that block is not writable from here at all (server/admin/config-edit.js). Since
+    // 2026-09-19 both editors are refusal-first: RPC credentials, binding and file paths
+    // in bitcoin.conf, and everything but display and polling in BlockYard's own file,
+    // are refused by name. Reading the node conf is not elevated: every credential value
+    // is masked before it leaves the server, and what remains is what the admin role
+    // already sees on the Node tab.
     {
       method: 'GET', path: '/api/admin/config/node', auth: 'admin',
       handler: async (ctx, app) => {
@@ -342,7 +347,9 @@ export function adminRoutes(app) {
     },
     {
       method: 'GET', path: '/api/admin/config/self', auth: 'admin',
-      handler: async (ctx, app) => ({ ok: true, ...readOwnConfig(app) }),
+      handler: async (ctx, app) => {
+        try { return { ok: true, ...readOwnConfig(app) }; } catch (err) { refuseWith(err); }
+      },
     },
     {
       method: 'POST', path: '/api/admin/config/self', auth: 'admin', csrf: true, body: true,
