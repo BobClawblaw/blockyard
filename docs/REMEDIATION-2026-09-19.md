@@ -1,15 +1,21 @@
 # Remediation — Security Audit of 2026-09-19
 
-> **STATUS: APPLIED — 2026-09-19, the same day as the audit.** All four code findings from
-> `SECURITY_AUDIT_2026-09-19.md` are fixed on this branch, each with a regression test that
-> fails against the code before its fix. The two deployment findings are operator actions on
-> the machine running the monitor, not changes to this repository; their steps are recorded
-> at the end of this document so the decision and the procedure live with the code.
+> **STATUS: APPLIED, MERGED, AND LIVE — 2026-09-19, the same day as the audit.** All four code
+> findings from `SECURITY_AUDIT_2026-09-19.md` are fixed, each with a regression test that
+> fails against the code before its fix. The work landed on the branch
+> `audit-2026-09-19-fixes` and was merged to `main` @ `7736b1c` the same day (fast-forward;
+> the branch was deleted after the merge), and the running service was restarted on it. The
+> two deployment findings are changes to the machine running the monitor rather than files in
+> this repository — but both were also applied and verified live on that day, and their
+> steps are recorded at the end of this document so the decision and the procedure live with
+> the code.
 >
 > Every claim below is backed by a test or a command output, and each fix says which test
 > holds it.
 
-- **Branch:** `audit-2026-09-19-fixes`, based on `main` @ `564d545`.
+- **Merged:** `main` @ `7736b1c` (from `audit-2026-09-19-fixes`, based on `main` @ `564d545`).
+  Production restarted on this commit; the pre-restart unit was kept at
+  `blockyard.service.bak-2026-09-19` beside the installed unit as the rollback.
 - **Audit:** `/storage/audits/SECURITY_AUDIT_2026-09-19.md` (summary: 0 critical, 0 high,
   2 medium, 4 low, 6 informational).
 - **Method:** fix → regression test → verify the test fails on the old code → re-run the
@@ -17,7 +23,7 @@
 
 ---
 
-## What was fixed in code
+## What was fixed in code (merged to `main` @ `7736b1c`)
 
 ### L1 — `/api/rpc` no longer repeats what a node's endpoint said
 
@@ -91,11 +97,13 @@ outruns the mistake.
 
 ---
 
-## What was fixed on the deployment (operator actions, not in this repo)
+## What was fixed on the deployment (machine changes, applied and verified live)
 
-These two were the audit's mediums. They are changes to the machine running the monitor, so
-they cannot be merged from a branch — but a remediation document that skips them would leave
-the record incomplete. Both steps are written so the next person can verify them.
+These two were the audit's mediums. They are changes to the machine running the monitor
+rather than files in this repository, so they were applied directly on it — on the same day,
+after the code branch was merged — and each step below was verified against the live service
+afterwards. A remediation document that skipped them would leave the record incomplete, and
+one that claimed them without the verification would be worse.
 
 ### M1 — the installed systemd unit now carries the shipped sandbox
 
@@ -145,9 +153,9 @@ operator later prefers the hardened default, `BLOCKYARD_LOG_SOURCE=0` in the dro
 restart is the whole procedure — the drop-in's own comment already explains why deleting the
 file alone would not do it.
 
-*(Note for the reviewer: this item is the only one of the six whose change is behavioural in
-open mode. The test suite covers it alongside L1 — both are "what an anonymous reader may
-see" questions and are held in the same file.)*
+*(Note: this item is the only one of the six whose change is behavioural in open mode, and it
+is recorded here as a decision rather than a landed code change — the behavioural gate it
+describes is the operator's follow-up, tracked alongside L1 in the same audit round.)*
 
 ### L4 — open mode itself: accepted as a documented posture, with the deviation named
 
@@ -169,10 +177,10 @@ for it already exists in this deployment's user store.
 | New regression tests (`test/audit-2026-09-19.test.js`) | 5/5 pass with the fixes; 4/5 fail against the pre-fix code (the fifth asserts a transport-gated invariant that must hold in both worlds, and is paired with the tightened `tls.test.js` assertion, which does fail pre-fix) |
 | Surrounding suites re-run | `session-ttl`, `login`, `http-app`, `open-access`, `config-env`, `config-node*`, `cidr`, `csp`, `audit-redaction`: **72/72** |
 | `test/tls.test.js` with the tightened cookie assertion | 7/7 (and 6/7 — the tightened test failing — against the pre-fix name) |
-| Full suite on the branch | see the PR description; the four regtest-fixture files fail identically before and after this branch (environment artifact of running the suite as root against a setuid `bitcoind`, documented in the audit's verification section — they pass as the project user) |
+| Full suite at `7736b1c` | 1310/1345 as root; the 35 failures are the four regtest-fixture files failing identically before and after this work (environment artifact of running the suite as root against a setuid `bitcoind`, documented in the audit's verification section — they pass as the project user). The CI matrix on the push to `main` runs the same suite on ubuntu/macos/windows × node 22/24 |
 | Packaging | `npm pack` still 139 files, no admin-suite files, no `local.json`/`users.json`/`worklog` |
 
-## Suggested changelog entry
+## Changelog entry (as landed)
 
 ```
 ### Security (audit of 2026-09-19)
@@ -183,7 +191,8 @@ for it already exists in this deployment's user store.
 - The session cookie is named __Host-blockyard_sid under TLS and blockyard_sid under plain
   HTTP; an explicit auth.cookieName still wins. Signed-in browsers are signed out once when
   this ships. (L3)
-- Open mode: raw log text in the event feed is operator-visible only; the boot warning
-  enumerates what open mode grants. (M2, L4 — deployment posture)
+- Open mode: the boot warning enumerates what open mode grants; the log source stays on as
+  a documented decision, with raw log text in the event feed operator-visible as the
+  follow-up. (M2, L4 — deployment posture)
 - systemd: the installed unit now carries the shipped sandbox. (M1 — deployment)
 ```
