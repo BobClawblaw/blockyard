@@ -165,19 +165,65 @@ the RPC route: a bug in this web application reaches the node's RPC, not the mac
 
 ## 7. The two config editors
 
-**`bitcoin.conf`** — parsed into key/value with section awareness, validated against a table of
-known keys, written through a timestamped backup (`bitcoin.conf.bak-<stamp>`, the convention
-`scripts/setup.js` already uses), with a diff preview and an explicit "this needs a restart to
-apply" banner naming the keys that changed. Keys that can lock the operator out or widen exposure
-— `rpcauth`, `rpcpassword`, `rpcallowip`, `bind`, `rpcbind`, `prune`, `txindex`, `wallet` — are
-flagged in the diff and need their own confirmation.
+Both editors are **refusal-first** since the review of 2026-09-19. The first cut refused only
+the `admin` block and acknowledged everything else, and "everything else" turned out to include
+a way to point the node editor at `~/.bashrc`, a section name written raw into the file (one
+field could add any line), `rpcallowip` behind a checkbox, and `server.trustProxy` and
+`auth.enabled` in BlockYard's own file -- the settings that switch off the HTTPS and accounts
+gates of §2. Operator decisions, 2026-09-19:
 
-**BlockYard's own config** — `local.json` and the display settings, with one carve-out that
-matters:
+> (1) The web config editor may NOT touch RPC credentials or binding, and may not redirect
+> which file it writes.
+>
+> (4) BlockYard's own config editor edits only an ALLOWLIST of display and polling settings;
+> everything else is locked like the admin block.
+
+**`bitcoin.conf`** -- always `<datadir>/bitcoin.conf`; a node `confFile` that names another
+file is a refusal to read or write, not a choice. The file must be a regular file (a symbolic
+link is refused, and opened with `O_NOFOLLOW` so one swapped in is an error). Parsed with
+section awareness, written back through a backup (`bitcoin.conf.bak-<stamp>-<random>`, 0600,
+from the same bytes the diff was computed on), atomically, **with the original's mode, owner and
+group** -- and refused, before anything is touched, when the monitor cannot give the new file
+the old one's owner (not root, and not the owner). Only changed lines are re-rendered; the rest
+stay byte for byte, CRLF included.
+
+- **Refused outright** (`key-refused`), in every spelling -- global, section-qualified
+  (`main.rpcallowip`) and negated (`norpcallowip`): `rpcauth`, `rpcuser`, `rpcpassword`,
+  `rpcbind`, `rpcallowip`, `rpcport`, `rpccookiefile`, `rpccookieperms`, `rpcwhitelist`,
+  `rpcwhitelistdefault`, `server`, `rest`, `includeconf`, `conf`, `datadir`, `walletdir`,
+  `blocksdir`, `whitebind`, `whitelist`, `chain`, `testnet`, `testnet4`, `regtest`, `signet`,
+  `signetchallenge`, `signetseednode`, `zmqpub*`. They are the path around every wallet gate in
+  this suite, or they move or lock out the node, and they are edited by hand on the machine.
+  Added to the operator's list for a worse reason: the `*notify` keys and `signer` (each runs
+  a command as the node's user) and `debuglogfile`, `pid`, `settings`, `ipcbind` (paths the
+  node writes to).
+- **Acknowledged by exact name** (`acknowledge` must be a list; a string was a substring
+  test): `bind`, `listen`, `onlynet`, `proxy`, `onion`, `tor`, `listenonion`, `torcontrol`,
+  `externalip`, `discover`, `prune`, `txindex`, `blockfilterindex`, `coinstatsindex`,
+  `assumevalid`, `reindex`, `reindex-chainstate`, `wallet`, `disablewallet`. Resource knobs
+  (`dbcache`, `maxconnections`, `maxuploadtarget`) are not, so the acknowledgement keeps its
+  meaning.
+- A section is one of `main`, `test`, `testnet4`, `signet`, `regtest`. A new global key goes
+  above the first section header (appended to the end it would be inside the last section).
+  A key that appears more than once in its scope is refused ("edit by hand").
+- `rpcauth`, `rpcuser`, `rpcpassword` and `torpassword` values are masked in the text, the
+  settings list and every diff. Reading is admin-role, not elevated: after masking, nothing in
+  it is a credential.
+
+**BlockYard's own config** -- the loaded config file's own JSON (never the in-force config,
+whose defaults and env values would be frozen into the file), patched leaf by leaf, only
+where the leaf is on the allowlist (`SELF_EDITABLE` in `server/admin/config-edit.js`, with a
+type and a range each): `poll.*`, `markets.*`, `store.retentionHours`/`ringCapacity`/
+`maxEventLog`/`blockMapCap`/`snapshotEveryMs`, `log.staleMs`/`healthMs`. Anything else is
+refused naming the key (`setting-locked`), and the whole patch with it.
+`__proto__`/`constructor`/`prototype` are refused at any depth, and `server/config.js` skips
+them when it merges a file.
 
 > **The `admin` block itself is not editable from the web.** The suite cannot widen its own gates,
 > grant `walletAccess`, raise `spendCap` or turn off `requireHttps`. Those change on disk, by
-> someone with shell access, and the editor shows them read-only with a note saying so.
+> someone with shell access, and the editor shows them read-only with a note saying so. Since
+> 2026-09-19 the same holds for `auth`, `server`, `actions`, `nodes`, `rpc` and every path or
+> credential: they are the gates the admin block stands on.
 
 A suite that can edit the settings that restrain it is not restrained. (This is the same reasoning
 that stops an agent granting itself permissions, and it is worth stating in the file rather than
@@ -209,7 +255,8 @@ Each lands on its own branch, with tests, and each is useful on its own.
 
 ## 8a. What was built overnight, 2026-09-18
 
-M0–M3 are merged to main; M4, M6 and M7 are on `admin-m4-send` and wait for a read.
+M0–M3 are merged to main; M4–M7 and the suite's screens are on `admin-m4-send`. They were read
+on 2026-09-19 (§8b) and every finding was fixed on the branch.
 
 | | state | where |
 |---|---|---|
@@ -234,6 +281,47 @@ Two corrections to this plan, made because the code disagreed with it:
    Neither can lock anyone out or open anything up. An acknowledgement asked for a
    performance knob is an acknowledgement people learn to click through, which spends the
    attention the mechanism is there to buy.
+
+## 8b. The read, 2026-09-19
+
+Four parallel reviews (send; transaction tools; daemon and config editors; the screens and new
+routes), each finding reproduced against a throwaway regtest node or confirmed in the code before
+it counted, then fixed on three branches merged into `admin-m4-send`, each fix with a test that
+failed first. What they found, in the order of what it could cost:
+
+- **The config editor could reach the machine.** A section name was written into
+  `bitcoin.conf` unvalidated (a newline in it wrote any line), the file written was whatever
+  `confFile` said and the self-editor could set that, the "weighty key" acknowledgement missed
+  `main.`-qualified spellings, and the node's RPC credentials went to the browser. Fixed: only
+  `<datadir>/bitcoin.conf`, opened `O_NOFOLLOW`, mode and owner kept or the write refused;
+  sections are the five networks; credentials are redacted.
+- **The caps could be raced and dodged.** The 24h cap was checked, then five RPC awaits, then
+  recorded: two confirms at once both passed (305,640 sat out under a 250,000 cap). The paste box
+  decided "ours" from `listunspent`, which leaves out coins already spent in the mempool or
+  locked (10 BTC and 49.999 BTC went out uncapped), and asked only the request's wallet. Fixed:
+  check-and-reserve in one synchronous step; ownership from each input's parent transaction
+  across every named wallet; the Send phrase on pasted spends; one elevation, one action.
+- **A second build could replace a send already reported sent**, and a broadcast that timed out
+  was neither counted nor recorded. Fixed: a build locks its coins (released on cancel, expiry
+  or a failure before broadcast); the txid is recorded before broadcasting and an ambiguous
+  outcome says "may have been broadcast".
+- **The QR codes could not be scanned**: the Reed-Solomon remainder read the generator backwards,
+  and versions 7–10 lacked their version blocks. The tests had passed because their reader
+  shared the blind spots. Now checked against ISO/IEC 18004's worked example, and 176 of 176
+  symbols decode in OpenCV (0 before).
+- Smaller: amounts under 100 sat threw (JavaScript prints them in exponent form); the fee-bump
+  dialog could sign a rate other than the one it priced; the wallet on screen could differ from
+  the one a send was built from; the wallet relock could be dropped by a busy lane.
+
+**Decisions taken with the fixes (operator, 2026-09-19).** (1) The web config editor does not
+touch RPC credentials, binding, or anything that says which file is written: `rpcauth`,
+`rpcuser`, `rpcpassword`, `rpcbind`, `rpcallowip`, `server`, `includeconf`, the chain switches,
+`zmqpub*`, the `*notify` commands and the rest are refused in every spelling, to be edited by
+hand. (2) The wallet passphrase is required for every send, paste-box spend and fee bump on an
+encrypted wallet, and one signing operation runs at a time per wallet. (3) `admin.wallets`
+entries name their node, `{ "node", "wallet" }`; a bare name only works with one node
+configured. (4) BlockYard's own config editor changes only an allowlist of polling, markets,
+storage-tuning and log-timing settings; everything else is locked like the `admin` block.
 
 ## 11. Releases, while this is being built
 

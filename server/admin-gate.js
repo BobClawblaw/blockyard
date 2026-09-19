@@ -71,7 +71,9 @@ export function adminGateLine(gate, cfg) {
   if (gate.edition === EDITIONS.READONLY) return 'administrative suite: NOT IN THIS BUILD (read-only edition) -- its code is not on this disk';
   if (gate.off) return 'administrative suite: OFF (the default) -- its modules are not loaded into this process';
   if (!gate.ok) return `administrative suite: REFUSED to load -- ${gate.reasons.join('; ')}`;
-  const wallets = cfg.admin?.wallets ?? [];
+  // Entries are `{ node, wallet }` since 2026-09-19 (a bare name still reads on one node);
+  // joined raw, an object prints as "[object Object]" in the banner.
+  const wallets = (cfg.admin?.wallets ?? []).map((w) => (typeof w === 'string' ? w : `${w?.wallet} on ${w?.node}`));
   return 'administrative suite: ON -- '
     + (wallets.length ? `wallets ${wallets.join(', ')}` : 'no wallet named (admin.wallets is empty, so no wallet is reachable)')
     + `, elevation ${Math.round((cfg.admin?.elevationMs ?? 0) / 1000)}s`

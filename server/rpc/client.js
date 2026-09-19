@@ -105,8 +105,14 @@ export class Lane {
   // FIFO lane, and a measured 69-second getchaintxstats batch left the cheap
   // getblockchaininfo poll starved behind it -- so the sync bar received about
   // one height sample per two minutes on exactly the node that most needed it.
-  submit(job, { weight = 1, key = null, maxWaitMs = null, priority = 5, label = null } = {}) {
-    if (this.breakerOpen) {
+  //
+  // `ignoreBreaker` sends the call through an open breaker. It exists for exactly one caller
+  // -- the administrative suite's `walletlock` after a spend (server/admin/wallet.js,
+  // relockWallet) -- because the breaker protects a busy node from questions, and "lock the
+  // wallet I just unlocked" is not a question that may wait out a cooldown. Anything else
+  // passing it is a mistake.
+  submit(job, { weight = 1, key = null, maxWaitMs = null, priority = 5, label = null, ignoreBreaker = false } = {}) {
+    if (this.breakerOpen && !ignoreBreaker) {
       const e = new RpcError(
         `RPC circuit breaker open; retry in ${Math.ceil((this.openUntil - Date.now()) / 1000)}s${this.openedBy ? ` (opened by ${this.openedBy.label}, ${this.openedBy.kind} after ${this.openedBy.ms}ms)` : ''}`,
         { kind: 'breaker' },
@@ -135,6 +141,7 @@ export class Lane {
       entry.resolve = (v) => { if (!entry.settled) { entry.settled = true; resolve(v); } };
       entry.reject = (e) => { if (!entry.settled) { entry.settled = true; reject(e); } };
       entry.priority = priority;
+      entry.ignoreBreaker = ignoreBreaker;
       this.pending.set(mapKey, entry);
       setImmediate(() => this._drain());
     });
@@ -160,7 +167,7 @@ export class Lane {
     // what protects a single-threaded server. The measured shape (2026-09-08) was a
     // fast-tier poll sitting in the lane behind three slow-tier failures and running
     // anyway after the breaker opened.
-    if (now < this.openUntil) {
+    if (now < this.openUntil && !first.ignoreBreaker) {
       first.reject(new RpcError(
         `RPC circuit breaker open; retry in ${Math.ceil((this.openUntil - now) / 1000)}s${this.openedBy ? ` (opened by ${this.openedBy.label}, ${this.openedBy.kind})` : ''} — this call was already queued when it opened`,
         { kind: 'breaker' },
@@ -374,7 +381,7 @@ export class RpcClient {
   // `key` makes this poll-coalescable: pass the same key for a recurring tier so
   // a fresh request supersedes one still waiting. Never pass a key for a
   // user-initiated call -- those must each be answered.
-  async batch(calls, { timeoutMs, heavy = false, key = null, maxWaitMs = null, priority = 5, walletPath = '' } = {}) {
+  async batch(calls, { timeoutMs, heavy = false, key = null, maxWaitMs = null, priority = 5, walletPath = '', ignoreBreaker = false } = {}) {
     if (!calls.length) return [];
     const idOf = (i) => `c${i}`;
     const payload = calls.map((c, i) => ({ jsonrpc: '1.0', id: idOf(i), method: c.method, params: c.params ?? [] }));
@@ -435,7 +442,7 @@ export class RpcClient {
       return out;
     };
 
-    return this.lane.submit(job, { key, maxWaitMs, priority, label: calls.map((c) => c.method).join('+').slice(0, 120) });
+    return this.lane.submit(job, { key, maxWaitMs, priority, ignoreBreaker, label: calls.map((c) => c.method).join('+').slice(0, 120) });
   }
 
   async call(method, params = [], opts = {}) {

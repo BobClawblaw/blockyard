@@ -33,7 +33,8 @@ test('a default monitor never loads the suite, and says so with its absence', as
 test('the suite\'s client code is not served either', async () => {
   await withApp({ nodes: 1 }, async ({ client }) => {
     await client.login('admin', client.adminPassword);
-    for (const p of ['/js/admin/wallet.js', '/admin', '/admin/wallet']) {
+    // /css/admin.css joined the list on 2026-09-19: it was served with the gate shut.
+    for (const p of ['/js/admin/wallet.js', '/js/admin/suite.js', '/css/admin.css', '/admin', '/admin/wallet']) {
       const res = await client.get(p);
       assert.equal(res.status, 404, `${p} must 404 while the suite is off`);
     }

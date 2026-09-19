@@ -1,0 +1,228 @@
+/* THE ADMINISTRATIVE SUITE'S STYLES (docs/PLAN-ADMIN-SUITE.md).
+ *
+ * A file rather than an injected <style>, because `style-src 'self'` has no
+ * 'unsafe-inline' and is not going to get one -- server/http/static.js explains why, and
+ * test/csp.test.js fails if a `style=` comes back into the shipped HTML or JS. So the
+ * suite's classes live here, are linked by suite.js when the suite loads, and are excluded
+ * from the read-only build alongside the rest of it (scripts/build-edition.js ADMIN_PATHS).
+ *
+ * The tokens are the app's own (--bg-2, --line, --accent…), so this looks like the rest of
+ * the monitor rather than like a bolted-on admin panel.
+ */
+
+/* SOMETHING YOU CAN OPEN SAYS SO BEFORE YOU CLICK IT.
+ *
+ * The first cut styled `.clickable:hover > td`, which covers a table row and nothing else --
+ * so the addresses under each label were clickable with no hover, no cursor change and no
+ * hint they did anything (operator, 2026-09-18: "Bad UX. We need to highlight the wallet
+ * labels when we mouseover them"). Hover and focus are handled together here, because a
+ * thing reachable only by mouse is the same bug wearing a different hat.
+ *
+ * No layout shift on hover: a list that moves under the pointer is a list people misclick,
+ * and this one has addresses in it. */
+.clickable { cursor: pointer; transition: background-color .08s ease, color .08s ease; }
+.clickable:hover > td { background: var(--bg-3); }
+
+/* An address, a label row, anything that is not a table row. */
+code.clickable,
+.clickable:not(tr) {
+  border-radius: 4px;
+  outline: 1px solid transparent;
+  outline-offset: 1px;
+}
+code.clickable:hover,
+.clickable:not(tr):hover {
+  background: var(--bg-3);
+  color: var(--fg);
+  outline-color: var(--accent-dim);
+}
+/* Keyboard users get the same signal, and a visible ring rather than the browser default,
+   which is invisible against this background. */
+code.clickable:focus-visible,
+.clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+tr.clickable:hover > td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+
+/* The labels list: each label is a heading with its addresses under it, and the whole
+   group reads as one thing rather than as loose text. */
+.labelgroup { border-left: 2px solid var(--line); padding-left: 10px; margin: 10px 0; }
+.labelgroup:hover { border-left-color: var(--accent-dim); }
+.labelgroup > .row { margin-bottom: 4px; }
+
+/* Amounts. A send is negative and reads as negative. */
+.pos { color: #3fb950; }
+.neg { color: #f85149; }
+.sub { color: var(--fg-faint); font-size: 12px; }
+.warn { color: var(--warn); }
+.big { font: 600 28px/1.1 var(--sans, system-ui); letter-spacing: -0.02em; margin: 2px 0 4px; }
+
+/* An address, a txid, an outpoint: monospace, breakable, never overflowing its cell. */
+.addr {
+  font: 400 12px/1.45 var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--fg-dim);
+  word-break: break-all;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* The dialogs: elevation, transaction detail, fee bump. Fixed overlay, centred, and
+   scrollable on a phone -- the detail view is taller than a small screen. */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.66);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow: auto;
+  z-index: 60;
+}
+.modalbox {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  width: min(520px, 100%);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+.modalbox.wide { width: min(860px, 100%); }
+.modalbox h3 { margin: 0 0 8px; }
+.modalbox h4 { margin: 14px 0 6px; color: var(--fg-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.modalbox input, .modalbox textarea, .modalbox select { width: 100%; margin: 6px 0; }
+.modalbox .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+
+/* Definition lists carry the figures in the detail and confirm views. */
+.modalbox dl, .card dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 8px 0;
+}
+.modalbox dt, .card dt { color: var(--fg-faint); font-size: 12px; }
+.modalbox dd, .card dd { margin: 0; }
+
+/* The raw transaction, for copying out. */
+.rawtx {
+  width: 100%;
+  font: 400 11px/1.4 var(--mono, ui-monospace, monospace);
+  background: var(--bg-1);
+  color: var(--fg-dim);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  resize: vertical;
+}
+
+/* The confirm screen is the one place in this application where a person is about to
+   spend money, so it does not look like the rest of the form it grew out of. */
+.confirm {
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  background: var(--bg-1);
+}
+.confirm h4 { margin: 0 0 8px; color: var(--accent); }
+
+/* Destructive buttons say so before they are read. */
+button.danger { border-color: #f85149; color: #ffd7d3; background: #40181a; }
+button.danger:hover { background: #55201f; }
+
+/* Wallet tables can be long; the head stays put while the rows scroll. */
+[data-page="wallet"] table.t { width: 100%; border-collapse: collapse; }
+[data-page="wallet"] table.t th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-2);
+  text-align: left;
+  font: 600 11px/1.6 var(--sans, system-ui);
+  color: var(--fg-faint);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  border-bottom: 1px solid var(--line);
+  padding: 4px 8px;
+}
+[data-page="wallet"] table.t td { padding: 4px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+[data-page="wallet"] .card { margin-bottom: 14px; }
+
+/* Core's four screens, as a row of tabs above the panels (corelayout.js SCREENS). */
+.screens { display: flex; gap: 4px; margin-left: auto; }
+button.screen { background: transparent; border: 1px solid transparent; color: var(--fg-dim); padding: 4px 12px; border-radius: 6px 6px 0 0; }
+button.screen:hover { color: var(--fg); }
+button.screen.on { color: var(--accent); border-color: var(--line); border-bottom-color: var(--bg-2); background: var(--bg-2); }
+
+/* overviewpage.ui's Balances box: labels left, figures right, total emphasised. */
+dl.balances { grid-template-columns: max-content 1fr; row-gap: 6px; }
+dl.balances dt { color: var(--fg-dim); font-size: 13px; }
+dl.balances dd { font: 500 14px/1.3 var(--mono, ui-monospace, monospace); text-align: right; }
+dl.balances dd.big { font-size: 22px; color: var(--fg); border-top: 1px solid var(--line); padding-top: 6px; }
+dl.balances dt:has(+ dd.big) { border-top: 1px solid var(--line); padding-top: 6px; }
+
+/* transactiontablemodel.cpp's first column is the status glyph, narrow and unlabelled. */
+table.tx td.statuscol, table.tx th.statuscol { width: 22px; text-align: center; }
+table.tx td.amount { text-align: right; font: 500 13px/1.3 var(--mono, ui-monospace, monospace); white-space: nowrap; }
+table.tx td.ok, table.tx td.statuscol.ok { color: #3fb950; }
+table.tx td.statuscol.sub { color: var(--fg-faint); }
+table.tx td.statuscol.warn { color: var(--warn); }
+
+/* A button that reads as a link: "Bump fee", "all 37 transactions". */
+button.linky { background: none; border: 0; color: var(--accent); padding: 0; font-size: 12px; cursor: pointer; }
+button.linky:hover { text-decoration: underline; }
+
+/* Core colours the fee red in its confirmation. */
+.confirm dd.fee { color: #f85149; }
+
+/* A freshly derived address is the one thing on that screen worth reading at a distance. */
+.big-addr {
+  display: block;
+  font-size: 15px;
+  color: var(--fg);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  user-select: all;
+}
+
+/* The QR for a fresh receiving address. White plate under it on purpose: a dark-theme page
+   inverts the code otherwise, and a fair number of scanners will not read an inverted one. */
+canvas.qr {
+  display: block;
+  margin: 10px 0;
+  background: #fff;
+  border-radius: 6px;
+  padding: 0;
+  image-rendering: pixelated;
+}
+
+/* Core puts "Choose…" immediately beside Pay To; the field and the button read as one
+   control rather than as a field with something after it. */
+.payto { display: flex; gap: 6px; align-items: center; }
+.payto input { flex: 1; }
+
+/* The picker: label over address, comfortable to hit, obviously a list of choices. */
+.payees { max-height: 46vh; overflow: auto; margin: 8px 0; }
+.payee {
+  display: block;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+.payee b { display: block; font-weight: 500; }
+.payees h4:first-child { margin-top: 0; }
+
+/* "Spending from: <wallet> on <node>" on the confirm screen, taken from the server's build
+   (2026-09-19): the one line that says which wallet is about to sign, so it is not small. */
+.confirm .spending { font-weight: 600; color: var(--fg); margin: 4px 0 10px; }
+
+/* A priced fee-bump rate is locked until "Change the rate"; it should look locked. */
+.modalbox input:disabled { opacity: .6; cursor: not-allowed; }
+
+/* The transaction detail's output roles (corelayout.js outputRole). */
+[data-page="wallet"] td.neg, .modalbox td.neg { color: #f85149; }
+.modalbox td.pos { color: #3fb950; }

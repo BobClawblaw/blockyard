@@ -82,6 +82,12 @@ const DEFAULTS = {
       rpcUrl: 'http://127.0.0.1:8332',
       datadir: '/home/bitcoin/.bitcoin',
       chainHint: 'main',
+      // WHO RESTARTS THIS NODE, if anyone (docs/PLAN-ADMIN-SUITE.md §6). BlockYard never
+      // starts a node and cannot see a unit file; this is the operator telling it what to
+      // expect, so that the administrative suite can refuse to call something a restart
+      // when nothing is configured to restart it. "systemd:bitcoind", "docker:bitcoin",
+      // "supervisor:bitcoind", or "none" (the default).
+      supervisor: 'none',
       cookieFile: null, // derived from datadir+chainHint when null
       rpcUser: null,
       rpcPassword: null,
@@ -353,7 +359,15 @@ function deepMerge(base, extra) {
   if (Array.isArray(base) || Array.isArray(extra)) return extra;
   if (!isPlainObject(base) || !isPlainObject(extra)) return extra;
   const out = { ...base };
-  for (const k of Object.keys(extra)) out[k] = deepMerge(base[k], extra[k]);
+  for (const k of Object.keys(extra)) {
+    // JSON.parse makes "__proto__" an ordinary own key, and `out[k] =` then calls the
+    // prototype SETTER: a config file saying {"__proto__": {...}} gave the loaded config a
+    // prototype of its choosing, so every setting the file did not name read through to
+    // that object (found in the admin config-editor review, 2026-09-19). No setting is
+    // called any of these, so they are skipped rather than reported.
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    out[k] = deepMerge(base[k], extra[k]);
+  }
   return out;
 }
 
@@ -652,6 +666,19 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   }
   if (!(Number.isInteger(cfg.store.auditMaxBytes) && cfg.store.auditMaxBytes >= 64 * 1024)) {
     problems.push('store.auditMaxBytes must be >= 65536; below that the audit rotates on every write');
+  }
+  // admin.wallets: `{ node, wallet }` pairs, or a bare name (read as the only node's when
+  // there is one; refused at use when there are several -- server/admin/wallet.js). A pair
+  // naming a node that is not configured is refused HERE, because it can never be right
+  // and would otherwise surface as a wallet that silently never appears.
+  const nodeIdSet = new Set((cfg.nodes ?? []).map((n) => n.id));
+  for (const w of cfg.admin?.wallets ?? []) {
+    if (typeof w === 'string') { if (!w.length) problems.push('admin.wallets has an empty wallet name'); continue; }
+    if (!w || typeof w !== 'object' || typeof w.wallet !== 'string' || !w.wallet.length || typeof w.node !== 'string' || !w.node.length) {
+      problems.push(`admin.wallets entry ${JSON.stringify(w)} must be { "node": "<node id>", "wallet": "<name>" }`);
+    } else if (!nodeIdSet.has(w.node)) {
+      problems.push(`admin.wallets entry for "${w.wallet}" names node "${w.node}", which is not configured (nodes: ${[...nodeIdSet].join(', ')})`);
+    }
   }
   for (const n of cfg.nodes) {
     if (!n.rpcUrl || !/^https?:\/\//.test(n.rpcUrl)) problems.push(`node ${n.id}: rpcUrl must be http(s)://host:port`);

@@ -34,6 +34,7 @@
     "!server/rpc/admin-allowlist.js",
     "public/",
     "!public/js/admin/",
+    "!public/css/admin.css",
     "scripts/",
     "config/pool-map.json",
     "systemd/",
