@@ -215,3 +215,14 @@ canvas.qr {
 }
 .payee b { display: block; font-weight: 500; }
 .payees h4:first-child { margin-top: 0; }
+
+/* "Spending from: <wallet> on <node>" on the confirm screen, taken from the server's build
+   (2026-09-19): the one line that says which wallet is about to sign, so it is not small. */
+.confirm .spending { font-weight: 600; color: var(--fg); margin: 4px 0 10px; }
+
+/* A priced fee-bump rate is locked until "Change the rate"; it should look locked. */
+.modalbox input:disabled { opacity: .6; cursor: not-allowed; }
+
+/* The transaction detail's output roles (corelayout.js outputRole). */
+[data-page="wallet"] td.neg, .modalbox td.neg { color: #f85149; }
+.modalbox td.pos { color: #3fb950; }
