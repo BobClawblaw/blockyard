@@ -267,7 +267,10 @@ silently ate another test's result line — rule 22.
    an idle node. `log.health.ratio` (share of lines a rule claimed) is published, a
    frozen-sample test holds it at >=0.85, and `log-missing` / `log-silent` /
    `log-unparsed` fire as flags -- `log-silent` quoting the chain delta it observed
-   during the silence, so it diagnoses instead of accusing. Rule 15.
+   during the silence, so it diagnoses instead of accusing. Rule 15. Since 2026-09-19 every
+   current bmc log parses at 100.00% (MEASUREMENTS §42), one rule per line shape and never a
+   whole tag, so a `raw` line from bmc is a new line the node started writing: read it, and add
+   its rule and a real fixture line (`test/logparse-100.test.js` holds every rule to one).
 
 10. **A test that mutates `process.env` races every other test in its file.** Node
    runs a file's top-level tests **concurrently** (verified: a sibling sees an env var
@@ -414,7 +417,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1292 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1304 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -699,7 +702,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1292 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1304 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

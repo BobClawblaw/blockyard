@@ -863,6 +863,7 @@ Not a node defect but the standing debt, with numbers, so the next session start
 Core's `debug.log` parses at **0%** and every event is stamped with the time it was read rather
 than the time in the line. bmc's own log, whose grammar these rules were written for, parsed at
 52.6% on a fresh tail on 2026-09-17 (against ~96% on the frozen fixtures). Since 2026-09-18 it
-parses at **93.3%** (MEASUREMENTS §38-39, run 26's 42,804 lines). Core's `debug.log` is still
-at 0%. The drift
+parsed at **93.3%** (MEASUREMENTS §38-39, run 26's 42,804 lines), and since 2026-09-19 at
+**100.00%** on every current log -- run 27, run 26 and the production log -- with 49 lines of
+old builds left in the rotated archives (§42). Core's `debug.log` is still at 0%. The drift
 is invisible because `log-unparsed` only fires below 5% coverage. See docs/MEASUREMENTS.md.
