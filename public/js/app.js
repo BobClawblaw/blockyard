@@ -277,10 +277,31 @@ function expanded(s, sync, caveats) {
     // ROWS ONLY WHERE THE FIGURE EXISTS (2026-09-14): these three are read from an experimental
     // node's log; Bitcoin Core prints none of them, and a row saying "not printed by this build"
     // was three lines of nothing on every Core install
-    ...(ibd.nodeProgress == null ? [] : [['node\'s own progress ([dlc] ==)',
-      `${ibd.nodeProgress.pct == null ? '–' : `${ibd.nodeProgress.pct}% stored`} · ${ibd.nodeProgress.stored ?? '–'}/${ibd.nodeProgress.total ?? '?'} blocks${ibd.nodeProgress.etaText ? ` · their own eta ${ibd.nodeProgress.etaText}` : ''}${ibd.nodeProgress.rateText ? ` · ${ibd.nodeProgress.rateText}` : ''}`]]),
-    ...(ibd.nodeCatchup == null ? [] : [['applying thread ([utxo_live])',
-      `${ibd.nodeCatchup.pct == null ? '–' : `${ibd.nodeCatchup.pct}%`} caught up${ibd.nodeCatchup.blocksPerSec != null ? ` at ${ibd.nodeCatchup.blocksPerSec} blk/s` : ''}${ibd.nodeCatchup.eta ? ` · their own eta ${ibd.nodeCatchup.eta}` : ''}`]]),
+    // THE FIELD NAMES THE MONITOR STORES (operator, 2026-09-19: "why are the stats at the bottom
+    // blank?"). These two rows read `pct`, `total`, `etaText`, `blocksPerSec` and `eta` since the
+    // first commit, and the monitor has always stored `storedPct`, `storedOf`, `nodeEtaMs`,
+    // `blkPerSec` and `nodeEtaMs` (monitor.js, `dlc_progress` / `catchup`). Only `stored`
+    // matched, so the rows read "– · 611521/? blocks" and "63.1% caught up" while the node's log
+    // carried the target, the rates and both of the node's own ETAs.
+    ...(ibd.nodeProgress == null ? [] : [['node\'s own progress ([dlc] ==)', (() => {
+      const p = ibd.nodeProgress;
+      const window = p.inFlight == null ? null
+        : `${F.num(p.inFlight)} in flight${p.windowSize != null ? ` of ${F.num(p.windowSize)}` : ''}${p.oldestGapSec === 0 ? ', no gap' : p.oldestGapSec != null ? `, oldest gap ${F.ageSec(p.oldestGapSec)}` : ''}`;
+      return [
+        `${p.storedPct == null ? '–' : `${p.storedPct}%`} stored · ${p.stored == null ? '–' : F.num(p.stored)}/${p.storedOf == null ? '?' : F.num(p.storedOf)} blocks`,
+        p.nodeEtaMs != null ? `their own eta ${F.eta(p.nodeEtaMs / 1000)}` : null,
+        window,
+        p.applied != null ? `applied ${F.num(p.applied)}${p.appliedLag != null ? ` (${F.num(p.appliedLag)} behind the stored tip)` : ''}` : null,
+      ].filter(Boolean).join(' · ');
+    })()]]),
+    ...(ibd.nodeCatchup == null ? [] : [['applying thread ([utxo_live])', (() => {
+      const c = ibd.nodeCatchup;
+      return [
+        `${c.pct == null ? '–' : `${c.pct}%`} caught up${c.height != null && c.of != null ? ` · ${F.num(c.height)}/${F.num(c.of)}` : ''}`,
+        c.blkPerSec != null ? `${c.blkPerSec} blk/s${c.avgBlkPerSec != null ? ` (avg ${c.avgBlkPerSec})` : ''}` : null,
+        c.nodeEtaMs != null ? `their own eta ${F.eta(c.nodeEtaMs / 1000)}` : null,
+      ].filter(Boolean).join(' · ');
+    })()]]),
     ...(ibd.applyRate == null ? [] : [['apply rate ([dl] updating utxo)',
       `${ibd.applyRate.perSec ?? '–'} tx/s over ${ibd.applyRate.windowSec ?? '?'}s`]]),
     // Deliberately separate rows: three different threads reporting three

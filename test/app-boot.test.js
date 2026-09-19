@@ -234,3 +234,29 @@ test('the feed grid cannot be blown out by long content, or clipped by narrow tr
   const txt = css.match(/\.feed \.row \.txt \{[^}]*\}/)?.[0] ?? '';
   assert.match(txt, /overflow-wrap:\s*(anywhere|break-word)/, 'text must be able to break inside its track');
 });
+
+test('the sync detail rows read the node\'s own progress under the names the monitor stores', () => {
+  // Operator, 2026-09-19, run 27 mid-IBD: "why are the stats at the bottom blank?" The rows read
+  // pct / total / etaText and blocksPerSec / eta; the monitor has always stored storedPct /
+  // storedOf / nodeEtaMs and blkPerSec / nodeEtaMs. Only `stored` matched: "– · 611521/? blocks".
+  installDom();
+  const box = globalThis.document.getElementById('syncBoxUnderTest');
+  const was = app.state.heroForced;
+  app.state.heroForced = true;
+  try {
+    app.renderSyncHero(box, {
+      label: 'bmc run 27', chain: 'main',
+      sync: { state: 'ibd', pct: 63.19, strip: [] },
+      log: { ibd: {
+        nodeProgress: { stored: 612641, storedOf: 967593, storedPct: 63.32, nodeEtaMs: ((8 * 60 + 1) * 60 + 30) * 1000, inFlight: 0, windowSize: 4096, oldestGapSec: 0, applied: 612473, appliedLag: 167 },
+        nodeCatchup: { height: 612288, of: 967592, pct: 63.3, blkPerSec: 24.0, avgBlkPerSec: 24.0, nodeEtaMs: ((4 * 60 + 6) * 60 + 55) * 1000 },
+      } },
+    });
+    const html = box.innerHTML;
+    assert.match(html, /63\.32% stored · 612,641\/967,593 blocks/, 'the target is shown, not "?"');
+    assert.match(html, /their own eta 00:08:01:30/, "the download's own ETA");
+    assert.match(html, /0 in flight of 4,096, no gap/);
+    assert.match(html, /applied 612,473 \(167 behind the stored tip\)/);
+    assert.match(html, /63\.3% caught up · 612,288\/967,592 · 24 blk\/s \(avg 24\) · their own eta 00:04:06:55/, "the applying thread's rate and ETA");
+  } finally { app.state.heroForced = was; }
+});
