@@ -1735,3 +1735,15 @@ one or more per rule added or widened, plus the three old rules no fixture had; 
 home directory, the node's public and LAN addresses and its onion and i2p names). One test now
 holds every rule to having at least one real line frozen somewhere -- 276 of 277 do; the
 exception, `txRelayBare`, has never appeared in any log on this box.
+
+**Addendum, the same afternoon.** bmc merged the fixes for the two things reported upstream above --
+the NUL byte after `INFO node start` and the `bind` misread (bitcoinmachinecode PR #287, "three
+hand-counted lengths were off by one; one wrote a NUL into debug.log") -- and the nodes restarted on
+that build. Their shutdown and restart wrote six shapes no log had carried before: the server's
+datadir-lock handover (`no process lists the datadir lock ...`, `download worker pid N exited with
+status N (Ns)`, `datadir lock held by no other process ...`), `[coinstats] fold worker pid N stopped
+(...)`, `[coinstats] repair: builder ... not executable` and `[ctl] network DISABLED: dropped all N
+outbound leg(s)`. The census named each within minutes, which is the reason there is no catch-all.
+Six rules later every current log reads 100.00% again: run 27 18,548 lines, run 26 73,175,
+production 9,746. The network being disabled and a repair that cannot start go to the feed; the rest
+is state.

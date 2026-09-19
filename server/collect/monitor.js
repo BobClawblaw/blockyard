@@ -2040,6 +2040,10 @@ export class NodeMonitor extends EventEmitter {
       case 'node_fatal':
       case 'boot_aborted':
         return [ev];
+      case 'network_active':
+        // The node dropped every peer on purpose (setnetworkactive false): state, and news.
+        ls.networkActive = { active: ev.active, droppedLegs: ev.droppedLegs ?? null, at: ev.ts };
+        return [ev];
       case 'boot_repair': {
         const b = this.bootRecord(ev.ts);
         b.repairs ??= [];

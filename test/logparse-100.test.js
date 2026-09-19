@@ -188,6 +188,8 @@ test('the monitor: state by default, the feed only for news', async () => {
     'window_stall', 'chunk_failed', 'ban_amnesty', 'chunk_retry', 'headers_minwork', 'headers_rejected', 'dl_catchup_done', 'dl_committer_restart',
     'tx_broadcast', 'tip_stale', 'utxo_caught_up', 'utxo_failure', 'coinstats_repair', 'coinstats_state', 'coinstats_hist', 'mempool_lock_recovered',
     'archive_integrity', 'config_rejected', 'node_fatal', 'boot_aborted', 'reorg', 'index_disabled', 'index_rolled_back',
+    // the node dropped every peer on purpose (setnetworkactive false; the 2026-09-19 build logs it)
+    'network_active',
   ]);
   const kinds = new Set(fed.map((r) => r.kind));
   assert.deepEqual([...kinds].filter((k) => !NEWS.has(k)), [], 'these kinds reached the feed without being news');

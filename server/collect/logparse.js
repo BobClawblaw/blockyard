@@ -1836,6 +1836,33 @@ const RULES = [
     re: /\[serve\]\s*inbound (\S+) handshake failed \[(v\d)\] \(pid (\d+)\)/,
     apply(m) { const a = addrParts(m[1]); return { kind: 'peer_reject', addr: a.addr, host: a.host, transport: m[2], reason: `${m[2]} handshake failed`, severity: 'warn' }; },
   },
+  // THE SHUTDOWN HANDOVER (bmc, 2026-09-19, the build that fixed the NUL byte and the bind
+  // misread): the server waits for the download worker to let go of the datadir lock before it
+  // exits, and says so in three lines. A clean stop, so state rather than feed.
+  // [serve] no process lists the datadir lock, but 1 still hold(s) it on the way out: 1374477 (download worker) -- waiting for the exit to complete (0.0s)
+  // [serve] download worker pid 1374477 exited with status 0 (0.1s)
+  // [serve] datadir lock held by no other process (waited 0.1s) -- exiting releases it
+  {
+    name: 'serveLockWaiting',
+    re: /\[serve\]\s*no process lists the datadir lock, but (\d+) still hold\(s\) it on the way out: (.+?) -- waiting for the exit to complete \((\d+(?:\.\d+)?)s\)$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'serve', facts: { lockHoldersOnExit: +m[1], lockHolders: m[2], lockWaitSec: +m[3] } }),
+  },
+  {
+    name: 'serveWorkerExited',
+    re: /\[serve\]\s*download worker pid (\d+) exited with status (-?\d+) \((\d+(?:\.\d+)?)s\)$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'serve', facts: { workerPid: +m[1], workerExitStatus: +m[2], workerExitSec: +m[3] } }),
+  },
+  {
+    name: 'serveLockReleased',
+    re: /\[serve\]\s*datadir lock held by no other process \(waited (\d+(?:\.\d+)?)s\) -- exiting releases it$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'serve', facts: { lockReleasedAfterSec: +m[1] } }),
+  },
+  // [ctl] network DISABLED: dropped all 11 outbound leg(s)   (setnetworkactive false; news: the node has no peers)
+  {
+    name: 'ctlNetworkDisabled',
+    re: /\[ctl\]\s*network DISABLED: dropped all (\d+) outbound leg\(s\)$/,
+    apply: (m) => ({ kind: 'network_active', active: false, droppedLegs: +m[1], severity: 'warn' }),
+  },
   // [serve] FATAL: download worker pid 2298970 exited with status 1 -- exiting so systemd restarts the unit
   {
     name: 'serveWorkerDied',
@@ -2276,6 +2303,12 @@ const RULES = [
     re: /\[coinstats\]\s*fold worker exiting: folded (\d+) element\(s\), watermark height (-?\d+)/,
     apply: (m) => ({ kind: 'coinstats_state', state: 'worker exiting', folded: +m[1], height: +m[2] }),
   },
+  // [coinstats] fold worker pid 1378753 stopped (coinstats.dat through height 967712)   (a clean stop, 2026-09-19 build)
+  {
+    name: 'coinstatsWorkerStopped',
+    re: /\[coinstats\]\s*fold worker pid (\d+) stopped \((\S+) through height (-?\d+)\)$/,
+    apply: (m) => ({ kind: 'coinstats_state', state: 'worker stopped', pid: +m[1], file: m[2], height: +m[3] }),
+  },
   {
     name: 'coinstatsWorkerGone',
     re: /\[coinstats\]\s*fold worker pid (\d+) is gone \(([^)]*)\) -- the index cannot be maintained/,
@@ -2318,6 +2351,13 @@ const RULES = [
     name: 'coinstatsRepairStart',
     re: /\[coinstats\]\s*repair: history base absent -- building rows (\d+)\.\.(\d+) with (\d+) worker\(s\) \(pid (\d+), attempt (\d+) of (\d+)/,
     apply: (m) => ({ kind: 'coinstats_repair', state: 'building', from: +m[1], to: +m[2], workers: +m[3], pid: +m[4], attempt: +m[5], attempts: +m[6] }),
+  },
+  // [coinstats] repair: builder /…/bmc_build_coinstats_hist not executable -- cannot rebuild the history base
+  // The repair cannot start: news, as a warning, and the builder named by its file only.
+  {
+    name: 'coinstatsRepairNoBuilder',
+    re: /\[coinstats\]\s*repair: builder (\S+) not executable -- cannot rebuild the history base$/,
+    apply: (m) => ({ kind: 'coinstats_repair', state: 'builder not executable', builder: m[1].split('/').pop(), severity: 'warn' }),
   },
   {
     name: 'coinstatsRepairDone',

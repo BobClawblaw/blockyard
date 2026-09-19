@@ -266,3 +266,9 @@ INFO node start (serve mode / download worker)\0
 2026-09-18 19:15:29.196 [mempool] recent-rejects filter: 128 KB shared (inbound announcements of an already-refused tx cost nothing)
 2026-09-16 23:49:34.369 [net] feeler 79.154.41.211:8333 -> dead
 2026-09-17 16:47:07.583 [dial] 141.239.119.165:8333: dialing as block-relay-only (1 of 2)
+2026-09-19 13:55:11.147 [coinstats] repair: builder /mnt/nvme8tb/bench/run27/src/asm/daemon/bmc_build_coinstats_hist not executable -- cannot rebuild the history base
+2026-09-19 13:58:41.580 [ctl] network DISABLED: dropped all 11 outbound leg(s)
+2026-09-19 13:46:07.309 [coinstats] fold worker pid 1378753 stopped (coinstats.dat through height 967712)
+2026-09-19 13:46:07.320 [serve] no process lists the datadir lock, but 1 still hold(s) it on the way out: 1374477 (download worker) -- waiting for the exit to complete (0.0s)
+2026-09-19 13:46:07.408 [serve] datadir lock held by no other process (waited 0.1s) -- exiting releases it
+2026-09-19 13:46:07.408 [serve] download worker pid 1374477 exited with status 0 (0.1s)
