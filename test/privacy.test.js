@@ -119,6 +119,10 @@ test('committed text carries no overlay-network address and no unreviewed host a
     /^scripts\/fake-node\.js$/, /^docs\/MEASUREMENTS\.md$/,
     // Other parser fixtures quoting real peer lines (public bitcoin nodes, not hosts).
     /^test\/rpc-only\.test\.js$/, /^test\/shape-liveness\.test\.js$/, /^test\/node-series\.test\.js$/,
+    // The 100% bmc-log rules' own test (2026-09-19) quotes three public peers from real lines --
+    // one announcing a fork, one serving a compact block, one closing a leg -- reviewed that day.
+    // The node's own address in it is TEST-NET-3 (203.0.113.7) and this box's LAN is 192.0.2.x.
+    /^test\/logparse-100\.test\.js$/,
     // The shareware game packages under games/ (DOOM first), byte for byte as id Software shipped it (2026-09-15): HELPME.TXT
     // and the FAQ list the FTP mirrors of 1993 by address. Public archive hosts, not this network,
     // and the files cannot be edited without breaking "unmodified".

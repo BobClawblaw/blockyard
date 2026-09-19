@@ -45,8 +45,9 @@ handful of `getpeerinfo` fields.
 BlockYard was built side by side with it, and bmc is a first-class citizen here, not a Core
 look-alike that happens to work:
 
-- **Its log is read, not just its RPC.** bmc's log grammar is parsed line by line — 93% of a
-  mainnet IBD run's log ([MEASUREMENTS 39](docs/MEASUREMENTS.md)) — so the sync view shows the
+- **Its log is read, not just its RPC.** Every line bmc writes is read or set aside by name —
+  100% of every current log on the box it is built on, syncing and synced
+  ([MEASUREMENTS 42](docs/MEASUREMENTS.md)) — so the sync view shows the
   download window (in flight, landed, the oldest gap), the index builders (`txindex`,
   `txospender`, the address history), UTXO merges, the orphan pool and 1-parent-1-child relay,
   and which peer announced each block: things no RPC call returns.

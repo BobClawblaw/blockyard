@@ -401,7 +401,7 @@ does not specialise goes through `step()`. What will bite:
 **0.1.3, prepared 2026-09-19 for the operator's review -- not tagged, not published** (`CHANGELOG.md`
 under 0.1.3, with an "Upgrading from 0.1.2" note): Bitcoin Machine Code named as the first-class
 companion node (README section, About card, mempool.space out of the box, RPC parity measured in
-MEASUREMENTS §41), its log read at 96% (boot sequence, index builders), the RPC lane at four in
+MEASUREMENTS §41), every line of its log read or set aside by name (100% of every current log, MEASUREMENTS §42), the RPC lane at four in
 flight, the block charts for a node in initial sync (sampled by height) and for a synced node beside
 one, the Throughput card, the node switch, Wolfenstein 3D's menu and its arrows-and-WASD controls,
 and the shareware packages made whole. The administrative suite reached M7 on `main` and is excluded

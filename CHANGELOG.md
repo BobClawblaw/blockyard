@@ -10,8 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 A release about the node BlockYard was built beside, and the charts that watch it. **Bitcoin
 Machine Code** -- an experimental, Core-compatible node in x86-64 assembly -- is now named as
-BlockYard's first-class companion: the monitor reads 96% of its log where it read 53%, its boot
-sequence and index builders included, and its RPC is measured against Core's (every method in
+BlockYard's first-class companion: the monitor reads every line of its log -- 100% of every
+current log, where it read 53% a release ago, its boot sequence and index builders included -- and its RPC is measured against Core's (every method in
 Core's list, 16 of 18 calls field for field). The **RPC lane** keeps up to four calls in flight per
 node, where it ran one at a time, at the same call rate. A run of **chart fixes** came from
 watching a node in initial sync beside a synced one: the synced node's block charts were wiped by
@@ -33,7 +33,9 @@ the way and is excluded from this release, as it is from every release. 1,292 te
 
 - **Fixed: About showed the node's version as "–".** Since the Mining page's network row arrived (2026-09-15, in 0.1.2), the snapshot carried two `network` keys and kept the Mining one, so the node's own version, protocol and services were lost; About read "version –", and `/api/peers` returned the mining row where its `network` should be the node's `getnetworkinfo`. The node's info is `nodeNetwork` in the snapshot now, and `/api/peers` returns it as documented
 
-- **Added: the node's boot sequence is read.** Bitcoin Machine Code writes twenty-five `[boot]` lines each time it starts -- where it logs, its effective config, each boot step with its time, the DNS seeds and what they returned -- and the monitor flagged every one as unread. Each shape now has its own rule: the finished boot is one line in the event feed, the rest one record per start (`log.boot` in the snapshot). Run 27's log parses at 96.6%
+- **Added: every line Bitcoin Machine Code writes is read, or set aside by name.** The three current logs on this box -- a node in initial sync, a synced one, and production -- went from 99.1%, 94.9% and 93.2% to 100.00% each, and the rotated archives from 90.2% to 99.99% (what is left there is an older build's grammar, listed in `docs/MEASUREMENTS.md` §42). 181 new rules, a rule per line shape and no catch-alls, so a line the node adds later still shows up as unread; six shapes are set aside with the reason recorded, the rest are read with their figures, as state or, for real news (a ban, a failed block, a reorg, a stale tip), in the event feed. Three existing rules had silently stopped matching a changed line and were fixed. Parsing went from about 206,000 to about 505,000 lines a second, because each line now tries only its own tag's rules
+
+- **Added: the node's boot sequence is read.** Bitcoin Machine Code writes twenty-five `[boot]` lines each time it starts -- where it logs, its effective config, each boot step with its time, the DNS seeds and what they returned -- and the monitor flagged every one as unread. Each shape now has its own rule: the finished boot is one line in the event feed, the rest one record per start (`log.boot` in the snapshot)
 
 - **Fixed: a syncing node's block charts showed two clusters with a line across days.** During initial sync the node applies blocks faster than the monitor asks about them, so the newest forty it held were two runs of blocks days of block time apart. For a node in initial sync the four block charts now draw a sample of the whole chain so far against height: three hundred blocks from the first to the tip, fetched once at the lowest priority, plus every block the polls fetch. The card says how many of how many. Every point is a block the node reported (`GET /api/blocks/sampled`)
 

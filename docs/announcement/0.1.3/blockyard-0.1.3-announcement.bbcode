@@ -1,0 +1,85 @@
+[size=14pt][b][ANN] BlockYard 0.1.3 — built beside Bitcoin Machine Code, an RPC lane four calls wide, and charts that tell the truth about a syncing node[/b][/size]
+
+[b]Repository:[/b] [url]https://github.com/BobClawblaw/blockyard[/url]
+[b]Release:[/b] [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.3[/url]
+[b]npm:[/b] [tt]npm install -g blockyard[/tt]
+[b]Licence:[/b] Apache-2.0
+
+[img width=800]IMAGE-URL-FOR:overview.jpg[/img]
+
+Two days after 0.1.2, here is 0.1.3. It is a release about the node BlockYard was built beside, and about the charts that watch a node while it syncs. [b]Bitcoin Machine Code[/b] — an experimental, Core-compatible node written in x86-64 assembly — is now named as BlockYard's first-class companion, and the monitor reads its log line by line. The [b]RPC lane[/b] keeps up to four calls in flight per node instead of one at a time. And a run of [b]chart fixes[/b] came from watching a node in initial sync beside a synced one.
+
+If you are new here: BlockYard is a self-hosted web app you point at [b]your own Bitcoin node[/b]. You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, and a kiosk view. It is plain JavaScript on Node.js with [b]zero dependencies[/b] and [b]zero telemetry[/b], read-only toward your node, and it ships hardened: bound to this machine, sign-in on, HTTPS with a certificate it makes itself.
+
+[size=12pt][b]Built alongside Bitcoin Machine Code[/b][/size]
+
+[url=https://github.com/BobClawblaw/bitcoinmachinecode]Bitcoin Machine Code[/url] ([tt]bmc[/tt]) is a full validating Bitcoin node for Linux x86-64, written in NASM assembly with a C orchestration layer. Like BlockYard, every line of it is AI-authored. It verifies the chain from genesis, keeps a UTXO set proven byte-identical to Bitcoin Core's (MuHash-exact), follows mainnet live, runs a Core-policy mempool and relay, and serves Bitcoin Core's JSON-RPC.
+
+[b]It is an academic, experimental development build, not ready for primetime.[/b] It has had internal and external security review but no independent human audit of its consensus and cryptographic assembly. Run it to study and evaluate, on a machine you can afford to lose, with no funds near it. For a production node, run Bitcoin Core. It is getting more solid every day, and BlockYard is how that is watched and measured.
+
+What BlockYard does for it:
+
+[list]
+[li][b]Its log is read, not just its RPC — every line of it.[/b] On the three current logs on this box — a node syncing, a synced one, and production — BlockYard now reads or deliberately sets aside 100.00% of the lines bmc writes, up from 53% a release ago. There is a rule per line shape and no catch-alls, so a line the node adds later still shows up as unread. It parses more than twice as fast as before, too: each line tries only its own tag's rules. That feeds the download window, the index builders, UTXO merges, the orphan pool and 1-parent-1-child relay, which peer announced each block, and now the node's boot sequence — things no RPC call returns.[/li]
+[li][b]Its RPC is measured against Core's.[/b] Every one of the 155 methods in Core's [tt]help[/tt] answers on bmc. Of 18 calls compared field by field, 14 return exactly Core's fields and two more differ only by fields of Core's unreleased development build. What is left is a short, stated list: a few refusals by design (no OpenRPC description, no asmap, no assumeutxo, and what its separate download process owns) and a handful of [tt]getpeerinfo[/tt] fields.[/li]
+[li][b]Its own indexes are asked first.[/b] The explorer asks the node's address index before anything else; bmc has one, Core does not.[/li]
+[li][b]It runs mempool.space out of the box.[/b] mempool.space needs a Core-compatible RPC and an Esplora REST API. On Core that REST API is a second program with an index of its own. bmc serves both from the node process, and builds every index mempool uses during its initial sync — no Electrum server, no separate indexer, no rebuild afterwards, no patch to mempool. (Set the index options before the first sync.)[/li]
+[li][b]A bmc node joins the node picker once it is 100% synced.[/b] One still in initial sync is a benchmark run, and stays out of the list until it finishes.[/li]
+[/list]
+
+[img width=800]IMAGE-URL-FOR:about.jpg[/img]
+
+[size=12pt][b]The RPC lane, four calls wide[/b][/size]
+
+[tt]rpc.maxInFlight[/tt] had been advisory since it was written: the lane ran one call at a time, because the first node BlockYard watched could serve only one connection. Neither node here works that way any more. Eight [tt]getblockstats[/tt] at once ran at 4.9 times the throughput of one at a time on bmc, and 4.5 times on Bitcoin Core 31.1, whose default is four RPC threads. So the lane now keeps up to four calls in flight per node.
+
+It does not ask any node for more calls a second: the starts are still spaced by the same rate ceiling. What changes is that one slow call — a mempool read, a block drill-down — no longer holds every other panel behind it. A node that really does serve one connection at a time gets [tt]"rpc": { "maxInFlight": 1 }[/tt] on its own entry.
+
+[size=12pt][b]Charts, and a node in initial sync[/b][/size]
+
+Watching a node in initial sync beside a synced one showed how many charts only told the truth for a synced node:
+
+[list]
+[li][b]The synced node's block charts were wiped by the syncing one.[/b] Every node shares one block history, stamped with each block's own time. A node in initial sync added blocks from a year ago after the synced node's current ones, and the history — which searched on the assumption that it was in time order — read nothing back and deleted everything at its next cleanup. Late rows are now put in their place, and rows older than the retention window are not stored at all.[/li]
+[li][b]The syncing node's block charts were empty, then two clusters with a line across days.[/b] They plotted the last 24 hours by block time, which a node applying blocks from years ago does not have. For a node in initial sync they now draw a sample of the whole chain against height: three hundred blocks from the first to the tip, fetched once at the lowest priority, plus every block the polls fetch. Every point is a block the node reported.[/li]
+[li][b]The Network page's Throughput card was empty, and its figure was wrong.[/b] It had moved from the Overview keeping its Overview ids, so nothing drew it; and a log figure that is zero on a synced node had been overwriting the rate [tt]getnettotals[/tt] measures. A test now fails whenever a page writes to an element the page does not have. It found two more.[/li]
+[li][b]Switching node showed the old figures.[/b] Every switch now pulls at once, and an answer for the node you just left is dropped.[/li]
+[li][b]The node's own progress rows were blank[/b], because they read field names the monitor never stored. [b]About showed the node's version as "–"[/b], because the snapshot carried two keys called [tt]network[/tt]. Both are fixed.[/li]
+[/list]
+
+[img width=800]IMAGE-URL-FOR:chain.jpg[/img]
+
+[size=12pt][b]Diversions[/b][/size]
+
+[list]
+[li][b]Wolfenstein 3D's menu takes keys again.[/b] The emulated mouse driver answered "where is the pointer" with 0,0, which the game's menu read as "up, held" and waited on forever. The driver now keeps a real pointer — which also lets the mouse move the menu, as it did in 1992.[/li]
+[li][b]Arrows and W A S D both move, and A and D strafe.[/b] The game has one key per direction and no strafe keys, so the page points each direction at whichever key you are holding, and makes A or D the strafe button while it is down. Letters still type where the game asks for a name.[/li]
+[li][b]Every shareware game ships whole, as its official release did.[/b] Quake 1.06 and DOOM 1.9 were already byte-identical to id's own archives. Wolfenstein 3D was missing Apogee's [tt]VENDOR.DOC[/tt], the licence its redistribution depends on, and a file that licence requires; both are added from the release 3D Realms distributed. [tt]NOTICE[/tt] names each game, its owner and its terms, and a test pins every game file to the hash of its official release.[/li]
+[li][b]The galaxy reaches the far side of a wide panel.[/b][/li]
+[/list]
+
+[size=12pt][b]Upgrading from 0.1.2[/b][/size]
+
+[tt]npm install -g blockyard[/tt] (or [tt]git pull[/tt]), then restart.
+
+[list]
+[li][b]The RPC lane keeps up to four calls in flight per node.[/b] If you watch a node that serves one connection at a time, give its entry [tt]"rpc": { "maxInFlight": 1 }[/tt].[/li]
+[li][b]Nothing to migrate.[/b] No setting was renamed and no file moved.[/li]
+[/list]
+
+[size=12pt][b]How it was made[/b][/size]
+
+As before, [b]every line was written by an AI, directed by a human[/b], including the fixes, the tests and this post. The operator decided what mattered, what was wrong and what looked bad, and never typed a line of it. It is still [b]experimental pre-release software[/b]. Expect bugs, and tell us what broke.
+
+[size=12pt][b]Links[/b][/size]
+
+[list]
+[li]Source: [url]https://github.com/BobClawblaw/blockyard[/url][/li]
+[li]Release 0.1.3: [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.3[/url][/li]
+[li]Changelog: [url]https://github.com/BobClawblaw/blockyard/blob/main/CHANGELOG.md[/url][/li]
+[li]Bitcoin Machine Code: [url]https://github.com/BobClawblaw/bitcoinmachinecode[/url][/li]
+[li]Getting started: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md[/url][/li]
+[li]User guide: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/USER-GUIDE.md[/url][/li]
+[/list]
+
+Apache-2.0. Run your own node.
