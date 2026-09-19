@@ -165,19 +165,65 @@ the RPC route: a bug in this web application reaches the node's RPC, not the mac
 
 ## 7. The two config editors
 
-**`bitcoin.conf`** — parsed into key/value with section awareness, validated against a table of
-known keys, written through a timestamped backup (`bitcoin.conf.bak-<stamp>`, the convention
-`scripts/setup.js` already uses), with a diff preview and an explicit "this needs a restart to
-apply" banner naming the keys that changed. Keys that can lock the operator out or widen exposure
-— `rpcauth`, `rpcpassword`, `rpcallowip`, `bind`, `rpcbind`, `prune`, `txindex`, `wallet` — are
-flagged in the diff and need their own confirmation.
+Both editors are **refusal-first** since the review of 2026-09-19. The first cut refused only
+the `admin` block and acknowledged everything else, and "everything else" turned out to include
+a way to point the node editor at `~/.bashrc`, a section name written raw into the file (one
+field could add any line), `rpcallowip` behind a checkbox, and `server.trustProxy` and
+`auth.enabled` in BlockYard's own file -- the settings that switch off the HTTPS and accounts
+gates of §2. Operator decisions, 2026-09-19:
 
-**BlockYard's own config** — `local.json` and the display settings, with one carve-out that
-matters:
+> (1) The web config editor may NOT touch RPC credentials or binding, and may not redirect
+> which file it writes.
+>
+> (4) BlockYard's own config editor edits only an ALLOWLIST of display and polling settings;
+> everything else is locked like the admin block.
+
+**`bitcoin.conf`** -- always `<datadir>/bitcoin.conf`; a node `confFile` that names another
+file is a refusal to read or write, not a choice. The file must be a regular file (a symbolic
+link is refused, and opened with `O_NOFOLLOW` so one swapped in is an error). Parsed with
+section awareness, written back through a backup (`bitcoin.conf.bak-<stamp>-<random>`, 0600,
+from the same bytes the diff was computed on), atomically, **with the original's mode, owner and
+group** -- and refused, before anything is touched, when the monitor cannot give the new file
+the old one's owner (not root, and not the owner). Only changed lines are re-rendered; the rest
+stay byte for byte, CRLF included.
+
+- **Refused outright** (`key-refused`), in every spelling -- global, section-qualified
+  (`main.rpcallowip`) and negated (`norpcallowip`): `rpcauth`, `rpcuser`, `rpcpassword`,
+  `rpcbind`, `rpcallowip`, `rpcport`, `rpccookiefile`, `rpccookieperms`, `rpcwhitelist`,
+  `rpcwhitelistdefault`, `server`, `rest`, `includeconf`, `conf`, `datadir`, `walletdir`,
+  `blocksdir`, `whitebind`, `whitelist`, `chain`, `testnet`, `testnet4`, `regtest`, `signet`,
+  `signetchallenge`, `signetseednode`, `zmqpub*`. They are the path around every wallet gate in
+  this suite, or they move or lock out the node, and they are edited by hand on the machine.
+  Added to the operator's list for a worse reason: the `*notify` keys and `signer` (each runs
+  a command as the node's user) and `debuglogfile`, `pid`, `settings`, `ipcbind` (paths the
+  node writes to).
+- **Acknowledged by exact name** (`acknowledge` must be a list; a string was a substring
+  test): `bind`, `listen`, `onlynet`, `proxy`, `onion`, `tor`, `listenonion`, `torcontrol`,
+  `externalip`, `discover`, `prune`, `txindex`, `blockfilterindex`, `coinstatsindex`,
+  `assumevalid`, `reindex`, `reindex-chainstate`, `wallet`, `disablewallet`. Resource knobs
+  (`dbcache`, `maxconnections`, `maxuploadtarget`) are not, so the acknowledgement keeps its
+  meaning.
+- A section is one of `main`, `test`, `testnet4`, `signet`, `regtest`. A new global key goes
+  above the first section header (appended to the end it would be inside the last section).
+  A key that appears more than once in its scope is refused ("edit by hand").
+- `rpcauth`, `rpcuser`, `rpcpassword` and `torpassword` values are masked in the text, the
+  settings list and every diff. Reading is admin-role, not elevated: after masking, nothing in
+  it is a credential.
+
+**BlockYard's own config** -- the loaded config file's own JSON (never the in-force config,
+whose defaults and env values would be frozen into the file), patched leaf by leaf, only
+where the leaf is on the allowlist (`SELF_EDITABLE` in `server/admin/config-edit.js`, with a
+type and a range each): `poll.*`, `markets.*`, `store.retentionHours`/`ringCapacity`/
+`maxEventLog`/`blockMapCap`/`snapshotEveryMs`, `log.staleMs`/`healthMs`. Anything else is
+refused naming the key (`setting-locked`), and the whole patch with it.
+`__proto__`/`constructor`/`prototype` are refused at any depth, and `server/config.js` skips
+them when it merges a file.
 
 > **The `admin` block itself is not editable from the web.** The suite cannot widen its own gates,
 > grant `walletAccess`, raise `spendCap` or turn off `requireHttps`. Those change on disk, by
-> someone with shell access, and the editor shows them read-only with a note saying so.
+> someone with shell access, and the editor shows them read-only with a note saying so. Since
+> 2026-09-19 the same holds for `auth`, `server`, `actions`, `nodes`, `rpc` and every path or
+> credential: they are the gates the admin block stands on.
 
 A suite that can edit the settings that restrain it is not restrained. (This is the same reasoning
 that stops an agent granting itself permissions, and it is worth stating in the file rather than

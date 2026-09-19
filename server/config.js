@@ -359,7 +359,15 @@ function deepMerge(base, extra) {
   if (Array.isArray(base) || Array.isArray(extra)) return extra;
   if (!isPlainObject(base) || !isPlainObject(extra)) return extra;
   const out = { ...base };
-  for (const k of Object.keys(extra)) out[k] = deepMerge(base[k], extra[k]);
+  for (const k of Object.keys(extra)) {
+    // JSON.parse makes "__proto__" an ordinary own key, and `out[k] =` then calls the
+    // prototype SETTER: a config file saying {"__proto__": {...}} gave the loaded config a
+    // prototype of its choosing, so every setting the file did not name read through to
+    // that object (found in the admin config-editor review, 2026-09-19). No setting is
+    // called any of these, so they are skipped rather than reported.
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    out[k] = deepMerge(base[k], extra[k]);
+  }
   return out;
 }
 
