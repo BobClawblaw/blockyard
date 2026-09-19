@@ -374,7 +374,9 @@ Only the sync bar's data: small enough to poll hard from a status widget.
 
 ### `GET /api/nodes`
 
-Every configured node with its sync state.
+Every configured node with its sync state -- except a Bitcoin Machine Code node (known by its
+`/BitcoinMachineCode:` user agent) that is not yet synced, which is left out of `nodes` and
+`attention` until it is. `/api/state?node=<id>` still answers for it.
 
 ```json
 {

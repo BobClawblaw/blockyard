@@ -569,8 +569,15 @@ export const routes = [
     // node three directories away is 72% through an IBD is not lying, but it is
     // not useful either -- and it is exactly what happened on this box.
     method: 'GET', path: '/api/nodes', auth: 'any',
+    // A BITCOIN MACHINE CODE NODE IS LISTED ONLY WHEN IT IS 100% SYNCED (operator, 2026-09-19:
+    // "only show 100% synced BMC nodes in the drop-down"). A bmc node still in initial sync is
+    // a benchmark run, and the picker, the "also syncing" buttons and the attention list all
+    // come from here, so it is left out of all three until its sync state says `synced`. It is
+    // known as bmc by its own user agent (getnetworkinfo subversion /BitcoinMachineCode:...).
+    // A page that remembered it falls back to the primary node, because the list no longer
+    // names it. /api/state?node= still answers for it: this hides it, it does not unconfigure it.
     handler: (ctx, app) => ({
-      nodes: [...app.monitors.values()].map((m) => {
+      nodes: [...app.monitors.values()].filter((m) => !bmcStillSyncing(m)).map((m) => {
         let sync = null;
         try { sync = m.snapshot({ seriesRanges: {} }).sync; } catch { /* not yet populated */ }
         return {
@@ -585,7 +592,7 @@ export const routes = [
       primary: app.primary?.id ?? null,
       // Any node needing attention, so a default landing page lands on the work
       // rather than on the node that has none.
-      attention: [...app.monitors.values()].map((m) => {
+      attention: [...app.monitors.values()].filter((m) => !bmcStillSyncing(m)).map((m) => {
         try {
           const sy = m.snapshot({ seriesRanges: {} }).sync;
           // Unknown counts as attention: a node we cannot read is exactly the
@@ -1245,6 +1252,14 @@ function mempoolView(m) {
       usage: app_ring(m, 'mempool', 'usage'),
     },
   };
+}
+
+/** A Bitcoin Machine Code node not yet 100% synced: kept out of the node list (see /api/nodes). */
+export function bmcStillSyncing(m) {
+  if (!/^\/BitcoinMachineCode:/.test(m.state?.networkInfo?.subversion ?? '')) return false;
+  let sync = null;
+  try { sync = m.snapshot({ seriesRanges: {} }).sync; } catch { return true; }
+  return sync?.state !== 'synced';
 }
 
 function app_ring(m, seriesName, field) {

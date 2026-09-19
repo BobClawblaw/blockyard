@@ -66,7 +66,7 @@ are node actions, which are off unless an operator explicitly enables them (see
 |---|---|
 | **BlockYard v… · build** | The version and build this tab is running. |
 | **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The seven games live at the end, under the **Diversions** pop-down: Tetrust, Blockout, Blockanoid, Scorched Yard, Wolfenstein 3D, DOOM and Quake. |
-| **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. |
+| **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. A Bitcoin Machine Code node is listed only once it is 100% synced: one still in initial sync is a benchmark run, and stays out of the list until it finishes. |
 | **stream** | The live link to the server. `connecting` on load, then `live`. `reconnecting` means the link dropped and the browser is retrying. `stale` means the link is up but no fresh data has arrived for more than 90 seconds. |
 | **rpc** | The node's last RPC round-trip time. It turns red when the average climbs above five seconds. |
 | **up** | How long the monitor process has been running. |
