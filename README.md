@@ -252,7 +252,7 @@ Everything here was written by an AI directed by a human, and audited by AI:
 [docs/SECURITY-AUDIT-2026-09-16.md](docs/SECURITY-AUDIT-2026-09-16.md) are the audits, findings
 and remediation included. The test suite runs in CI on Ubuntu, macOS and Windows (Node 22 and 24);
 a real install has been done on macOS (Core 29.1) and Linux, and Windows has only the test suite.
-[docs/DEFECTS.md](docs/DEFECTS.md) lists five open items, honestly stated, with the
+[docs/DEFECTS.md](docs/DEFECTS.md) lists four open items, honestly stated, with the
 measurements behind each. Read it before deploying: several are node-capability limits
 rather than bugs, and knowing which is which matters.
 

@@ -433,7 +433,7 @@ Bitcoin Machine Code (bmc), on the machine that runs it**. bmc, the experimental
 was first written against, is first-class again. What is not supported is reading a node
 elsewhere over RPC alone: the Umbrel-on-the-LAN path was tried on 09-13 and dropped, because
 real-time explorer data over RPC was a failed idea. `docs/DEFECTS.md` opens with that decision;
-entries whose only subject was that are closed with it. Five open items remain.
+entries whose only subject was that are closed with it. Four open items remain.
 
 **The address index** (`server/chain/`): Core has no address index, so the explorer's address
 page reads one built from the node's own blk/rev files -- 21-byte rows, 256 sorted segments with
@@ -712,16 +712,13 @@ The smoke count is the one number here that is still typed by hand (60 before
 2026-09-09; the new checks cover the build stamp, CSP nonce, login throttle,
 drill-down routes, audit budget and breaker telemetry).
 
-Still open as of 2026-09-09: see `docs/DEFECTS.md` — six items then (five today), and each one says why it is still open.
-Four are node-side (mempool add/remove stream needs the `zmqpubsequence` the node
-refuses; per-peer byte and relay counts are not in `getpeerinfo` on the deployed
-build; the restart storm belongs to whoever owns the deploy). One is a deliberate
-non-change (per-tier circuit breakers — the policy is unchanged, but `rpc.breaker`
-in telemetry now answers which method opened it and what it froze). One needs a
-browser engine: layout, CSS cascade and real `EventSource` reconnect behaviour. TLS,
-by contrast, is no longer open: TLS is available (see `docs/SECURITY.md`, "Transport
-security"), and the plaintext default is now a boot-time warning rather
-than a footnote. The licence is Apache-2.0 (`LICENSE`, `NOTICE`).
+Still open as of 2026-09-19: four items in `docs/DEFECTS.md`, each saying why. Three are the
+explorer's (an address page shows no mempool transactions; verbose RPC it re-parses costs 3-5x;
+the transaction cache does not survive a restart) and one needs a browser engine (layout, the
+CSS cascade and real `EventSource` reconnects: narrowed, not closed). The mempool add/remove
+stream was closed 2026-09-19 as a decision: a visualizer draws snapshots, and the poll is the
+design. TLS is on by default (see `docs/SECURITY.md`, "Transport security"). The licence is
+Apache-2.0 (`LICENSE`, `NOTICE`).
 
 ## Conventions
 

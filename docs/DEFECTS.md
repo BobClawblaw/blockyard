@@ -590,7 +590,18 @@ Kept as checked rather than deleted, so nobody re-derives them.
   "just a flake". Both now await a promise the task itself resolves once it is genuinely holding
   the lane. Nothing in `server/rpc/` changed: the lane was never wrong, the test was.
 
-- [ ] Mempool **add/remove stream** is not real: the node refuses
+- [x] **Closed 2026-09-19 as a decision, not a fix: a visualizer does not need a per-transaction
+  stream.** Operator: "Do we really need live mempool polling for a visualizer?" No. The board
+  redraws from a pool snapshot every 30 s and its transition takes ~20 s to settle, so events
+  arriving several a second would be batched back into snapshots before anything was drawn; the
+  verbose read that makes the snapshot costs the node well under 1% of one RPC thread (0.08 s for
+  ~12,500 transactions, measured 2026-09-10); and what only a stream can say -- mined, evicted or
+  replaced -- is a question for an explorer or a fee-bumping wallet, not for a picture of the next
+  block. bmc refuses the `sequence` topic besides, so it would stay on the poll regardless. The
+  poll is the design. `feed:{kind:'poll', streamAvailable:false}` stays, because it is true; a
+  ZMQ `sequence` client is worth writing only for a feature that needs per-transaction events,
+  and there is none. The original entry, kept as written:
+  Mempool **add/remove stream** is not real: the node refuses
   `zmqpubsequence` (documented in its `docs/RPC_LIVE_NODE.md` slice 19 — it can
   publish adds but has no clean "removed" choke point). So "realtime mempool"
   here is a 60 s verbose poll plus log-derived ingest rate, not a per-tx stream.
