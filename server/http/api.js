@@ -449,6 +449,15 @@ export const routes = [
       return { node: m.id, blocks: s.blocks.recent.slice(0, limit), stats: blockStats(s.blocks.recent) };
     },
   },
+  // The blocks the monitor holds, sampled evenly by height -- what the Chain page draws for a node
+  // in initial sync, whose last 24 hours of blocks do not exist (monitor.js blockSamples).
+  {
+    method: 'GET', path: '/api/blocks/sampled', auth: 'any',
+    handler: (ctx, app) => {
+      const m = pickNode(ctx, app);
+      return { node: m.id, ...m.blockSamples(clampInt(ctx.query.points, 2, 600, 300)) };
+    },
+  },
   // ------------------------------------------------- block / tx drill-down
   //
   // "Which transaction?" used to be answerable only by typing an RPC call into the

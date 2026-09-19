@@ -292,3 +292,56 @@ test('a node in initial sync still draws its block charts, from the blocks it ap
   for (const id of ['chGapChart', 'chSizeChart', 'chFeeChart', 'chTxChart']) assert.ok(el(id).__hasData, `${id} drew`);
   assert.match(String(texts.get('chSizeSrc')), /latest 5 blocks applied/, 'and says what it is drawing');
 });
+
+test('a syncing node draws the blocks sampled across its whole sync, by height, with nothing inferred', () => {
+  // Operator, 2026-09-19, run 27 mid-IBD: "Can't we infer the missing data so the graphs are
+  // complete?" The 40 newest blocks were two clusters days of block time apart, drawn with a line
+  // across the gap. The monitor holds thousands of real blocks from the sync; the charts draw an
+  // even sample of those, against height.
+  const m = monitorWith(RICH, []);
+  m.state.blocks.clear();
+  for (let h = 700_000; h < 700_600; h += 3) m.state.blocks.set(h, { height: h, time: 1.6e9 + h, size: h, totalfee: 2 * h, txs: 3, gapSec: null });
+  const got = m.blockSamples(50);
+  assert.equal(got.held, 200);
+  assert.deepEqual([got.from, got.to], [700_000, 700_597]);
+  assert.equal(got.points.length, 50, 'evenly spread, no repeats');
+  assert.equal(got.points[0].height, 700_000);
+  assert.equal(got.points.at(-1).height, 700_597, 'the newest held block is always included');
+  assert.ok(got.points.every((p) => p.size === p.height && p.totalfee === 2 * p.height), 'every value is the stored block\'s own');
+
+  const { el } = installDom();
+  const texts = new Map();
+  const state = { page: 'chain', node: 'bmc', byNode: new Map(), events: [], snap: null, series: { blocks: {}, node: {} }, cfg: { sources: [] }, blockSamples: { node: 'bmc', ...got } };
+  const h = { api: async () => ({}), toast: () => {}, state, fmt: F, charts, setText: (id, v) => texts.set(id, v), canvas: (id) => el(id), renderFeed: () => {}, render: () => {}, renderSyncHero: () => {}, peersDetail: async () => [] };
+  panels.renderChain({ id: 'bmc', ibd: true, sync: {}, tip: { height: 700_597, headers: 967_000 }, blocks: { recent: [] }, series: {} }, state, h);
+  assert.ok(el('chSizeChart').__hasData, 'the size chart drew the samples');
+  assert.match(String(texts.get('chSizeSrc')), /50 of 200 blocks sampled · heights 700,000–700,597/);
+  // samples for another node are not drawn under this one
+  state.blockSamples = { node: 'other', ...got };
+  panels.renderChain({ id: 'bmc', ibd: true, sync: {}, tip: { height: 700_597, headers: 967_000 }, blocks: { recent: [] }, series: {} }, state, h);
+  assert.doesNotMatch(String(texts.get('chSizeSrc')), /sampled/, 'another node\'s samples are ignored');
+});
+
+test('a syncing node samples the whole chain once, behind everything else, and keeps it', async () => {
+  // After a restart the live block map is empty, and it evicts oldest-first, so a sync's chart
+  // would start at the restart. Once, heights spread from 1 to the tip are asked for.
+  const m = monitorWith(RICH, []);
+  m.state.blocks.clear();
+  m.lastTip = 777_400;
+  const asked = [];
+  m.rpc.batch = async (calls, opts) => {
+    asked.push({ n: calls.length, opts });
+    return calls.map((c) => ({ ok: true, result: { height: c.params[0], time: 1.2e9 + c.params[0], total_size: 1000 + c.params[0], totalfee: 7, txs: 2 } }));
+  };
+  await m.sampleChainHistory(25);
+  assert.equal(m.chainSamples.size, 25);
+  const hs = [...m.chainSamples.keys()].sort((a, b) => a - b);
+  assert.deepEqual([hs[0], hs.at(-1)], [1, 777_400], 'from the first block to the tip');
+  assert.ok(asked.every((a) => a.n <= 12 && a.opts.priority === 9 && a.opts.maxWaitMs >= 60_000), 'batched, last in line, not dropped as stale');
+  const got = m.blockSamples(300);
+  assert.equal(got.held, 25);
+  assert.equal(got.points.find((p) => p.height === 1).size, 1001, 'the node\'s own figure for that block');
+  asked.length = 0;
+  await m.sampleChainHistory(25);
+  assert.equal(asked.length, 0, 'and a height it holds is not asked again');
+});

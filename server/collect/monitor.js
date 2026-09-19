@@ -167,6 +167,8 @@ export class NodeMonitor extends EventEmitter {
     this.unseenLines = 0;
     this.storeCfg = store || {};
     this.blockMapCap = this.storeCfg.blockMapCap ?? 12000;
+    this.chainSamples = new Map();   // height -> block, the chain-wide sample of a node in initial sync
+    this.chainSampling = false;
     this.blockMapEvicted = 0;
 
     this.state = {
@@ -423,6 +425,11 @@ export class NodeMonitor extends EventEmitter {
       }
       this.state.chainInfo = bc;
     }
+    // a node in initial sync: fetch its chain-wide sample once (sampleChainHistory)
+    // (and again every 10 minutes while fewer than 250 arrived: a batch caught behind a node's stalled
+    // RPC times out, and one failed attempt must not leave the chart with two batches for good)
+    if (bc?.initialblockdownload === true && !this.chainSampling && this.chainSamples.size < 250
+      && Date.now() - (this.chainSampleTriedAt ?? 0) > 600_000) this.sampleChainHistory().catch(() => {});
 
     if (mi) {
       this.state.mempool = { ...this.state.mempool, ...mi };
@@ -1075,6 +1082,70 @@ export class NodeMonitor extends EventEmitter {
       if (parsed && typeof parsed === 'object') this.mining.aliases = parsed;
     } catch (err) {
       if (err?.code !== 'ENOENT') this.mining.lastError = `aliases: ${err?.message}`;
+    }
+  }
+
+  /**
+   * THE BLOCKS THIS MONITOR HOLDS, EVENLY SAMPLED BY HEIGHT (operator, 2026-09-19, run 27 mid-IBD:
+   * "Can't we infer the missing data so the graphs are complete?"). Nothing is inferred. During
+   * initial sync the node applies blocks faster than the lane may ask about them (onNewTip keeps
+   * the newest 24 a poll), so the block map is a real sample of the chain so far -- 11,136 blocks
+   * over 130,000 heights on run 27 -- and the 40 newest the snapshot carries are two clusters with
+   * days of block time between them. This hands back up to `points` of what is held, spread evenly
+   * over the held range, so a chart can show the sync's whole history rather than a line drawn
+   * across a gap. gapSec is only ever set between consecutive heights (fetchBlockStats), so an
+   * interval here is still a measured one.
+   */
+  blockSamples(points = 300) {
+    // the live block map and the chain-wide sample (sampleChainHistory), which eviction never touches
+    const heights = [...new Set([...this.state.blocks.keys(), ...this.chainSamples.keys()])].sort((a, b) => a - b);
+    const n = heights.length;
+    const want = Math.max(2, Math.min(points, n));
+    const picked = [];
+    for (let i = 0; i < want && n; i++) {
+      const h = heights[Math.round((i * (n - 1)) / Math.max(1, want - 1))];
+      if (picked.length && picked[picked.length - 1] === h) continue;
+      picked.push(h);
+    }
+    const rows = picked.map((h) => {
+      const r = this.state.blocks.get(h) ?? this.chainSamples.get(h);
+      return { height: h, time: r.time ?? null, size: r.size ?? null, totalfee: r.totalfee ?? null, txs: r.txs ?? null, gapSec: r.gapSec ?? null };
+    });
+    return { held: n, from: heights[0] ?? null, to: heights[n - 1] ?? null, points: rows };
+  }
+
+  /**
+   * THE WHOLE CHAIN, SAMPLED ONCE, for a node in initial sync. The live block map holds what the
+   * polls fetched since this process started -- empty after a restart -- and evicts its oldest
+   * heights first, so on its own a sync's chart would begin at the restart and lose its start
+   * within the hour. So, once, `points` heights spread evenly from 1 to the tip are fetched with
+   * getblockstats, in batches of 12, behind every other call (priority 9, a two-minute wait
+   * budget so the queue cannot drop them as stale), and kept in `chainSamples`, which nothing
+   * evicts. ~300 calls, about 75 s at the lane's rate ceiling; the live samples extend it from
+   * there. Every value is the node's own answer for that block.
+   */
+  async sampleChainHistory(points = 300) {
+    const tip = this.lastTip;
+    if (this.chainSampling || !(tip > 1)) return;
+    this.chainSampling = true;
+    this.chainSampleTriedAt = Date.now();
+    try {
+      const heights = [];
+      for (let i = 0; i < points; i++) {
+        const h = Math.round(1 + (i * (tip - 1)) / (points - 1));
+        if (heights[heights.length - 1] !== h && !this.chainSamples.has(h)) heights.push(h);
+      }
+      for (const chunk of chunkBy(heights, 12)) {
+        if (this.stopped) return;
+        const calls = chunk.map((h) => ({ method: 'getblockstats', params: [h, ['height', 'time', 'total_size', 'totalfee', 'txs']] }));
+        const results = await this.rpc.batch(calls, { priority: 9, maxWaitMs: 120_000 });
+        results.forEach((r, i) => {
+          const b = r.ok ? r.result : null;
+          if (b && b.height === chunk[i]) this.chainSamples.set(b.height, { height: b.height, time: b.time ?? null, size: b.total_size ?? null, totalfee: b.totalfee ?? null, txs: b.txs ?? null, gapSec: null });
+        });
+      }
+    } finally {
+      this.chainSampling = false;
     }
   }
 

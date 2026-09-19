@@ -562,6 +562,26 @@ Recent blocks with per-block statistics from `getblockstats`.
 
 `p` holds the feerate percentiles (10/25/50/75/90) in sat/vB. `gapSec` is the time since the previous block. Gaps of 7200 s or more are left out of `stats`.
 
+### `GET /api/blocks/sampled`
+
+The blocks the monitor holds, sampled evenly by height. The Chain page draws these for a node in
+initial block download. That node has no last 24 hours of blocks, and it applies blocks faster than
+the monitor asks about them (at most the newest 24 per poll), so the blocks the monitor holds are a
+real but gappy sample of the sync so far. Every point is a block the node reported; nothing is
+interpolated. `gapSec` is set only when the previous height was also fetched.
+
+| Query | Type | Default | Meaning |
+|---|---|---|---|
+| `node` | string | primary | Node id. |
+| `points` | int | `300` | 2–600. At most this many, spread evenly from the oldest held height to the newest (both included). |
+
+```json
+{
+  "node": "bmc-run27", "held": 11136, "from": 647125, "to": 777400,
+  "points": [ { "height": 647125, "time": 1597000000, "size": 1234567, "totalfee": 23456789, "txs": 2345, "gapSec": null } ]
+}
+```
+
 ### `GET /api/block`
 
 One block: header, statistics and the first 50 txids.

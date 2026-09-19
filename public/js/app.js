@@ -530,7 +530,7 @@ export function render() {
   switch (state.page) {
     case 'overview': renderOverview(s); break;
     case 'space': renderBlockSpace(s, state, helpers); break;
-    case 'chain': renderChain(s, state, helpers); break;
+    case 'chain': blockSamplesDetail(); renderChain(s, state, helpers); break;
     case 'mining': renderMining(s, state, helpers); break;
     case 'mempool': renderMempool(s, state, helpers); break;
     case 'peers': {
@@ -579,6 +579,25 @@ async function peersDetail(force = false) {
 }
 
 let peersFetching = false;
+
+// A SYNCING NODE'S BLOCK CHARTS draw the blocks the monitor has sampled across the sync so far
+// (/api/blocks/sampled, monitor.js blockSamples), not the 40 newest: during initial sync those are
+// clusters with days of block time between them. Fetched only on the Chain page, only for a node
+// in initial sync, every 30 s; the answer names its node and is dropped on a switch.
+let samplesFetchedAt = 0, samplesFetching = false;
+async function blockSamplesDetail(force = false) {
+  if (state.page !== 'chain' || state.snap?.ibd !== true) return state.blockSamples;
+  if (samplesFetching || (!force && Date.now() - samplesFetchedAt < 30_000)) return state.blockSamples;
+  samplesFetching = true; samplesFetchedAt = Date.now();
+  const id = state.node;
+  try {
+    const d = await api(`/api/blocks/sampled?node=${encodeURIComponent(id ?? '')}&points=300`);
+    if (id !== state.node) return state.blockSamples;
+    state.blockSamples = d;
+    render();
+    return d;
+  } catch { return state.blockSamples; } finally { samplesFetching = false; }
+}
 
 // The block being built right now. Fetched only while the Mining page is on screen, and
 // only once every 20 s -- which is now OUR cost, not the node's: since 2026-09-13 the server
@@ -811,7 +830,7 @@ async function switchNode(id) {
   // distribution and the dense block are not in the per-node cache; kept across a switch,
   // the new node's pages showed the old node's peers and pool until each one's own timer
   // (15-30 s) came round. They are dropped here and fetched for the new node below.
-  state.peerRows = null; state.mempoolDist = null; state.denseBlock = null; state.mempoolDetail = null;
+  state.peerRows = null; state.mempoolDist = null; state.denseBlock = null; state.mempoolDetail = null; state.blockSamples = null;
   state.es?.close();
   connect();
   render();
@@ -822,6 +841,7 @@ async function switchNode(id) {
   // cached one is still drawn first -- never a blank page -- and the fresh one replaces it.
   // The page's own detail is forced too; each loader returns at once if its page is not open.
   peersDetail(true); mempoolDetail(true); nextBlockDetail(true); refreshMempoolDetail(true);
+  samplesFetchedAt = 0;   // the Chain page's sampled blocks: due at once for the new node
   await backgroundRefresh();
 }
 

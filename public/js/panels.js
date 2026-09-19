@@ -41,20 +41,32 @@ export function renderChain(s, state, h) {
   // which is what the notes under the charts were already reading. So when the history has
   // nothing to draw, the charts draw those, at their own block times, and say so in the legend.
   const stats = s.blocks?.recent ?? [];
+  // ...and better than the latest 40, which during a sync are clusters with days of block time
+  // between them (operator, 2026-09-19: "Can't we infer the missing data so the graphs are
+  // complete?"): the blocks the monitor has sampled across the whole sync so far, evenly by
+  // height (/api/blocks/sampled). Nothing is inferred -- every point is a block the node reported
+  // -- and they are drawn against HEIGHT, which is what a sync moves through, with the card
+  // saying how many of how many. The latest 40 remain the fallback until the samples arrive.
+  const samples = state.blockSamples?.node === s.id ? state.blockSamples : null;
   const blockSeries = (ser, field) => {
     const hist = (ser ?? []).filter((p) => Number.isFinite(p.v));
-    if (hist.length > 1) return { points: hist, recent: false };
+    if (hist.length > 1) return { points: hist, mode: 'history' };
+    const sampled = (samples?.points ?? []).filter((x) => Number.isFinite(x[field])).map((x) => ({ t: x.height, v: x[field] }));
+    if (sampled.length > 1) return { points: sampled, mode: 'sampled' };
     const pts = stats.filter((x) => Number.isFinite(x[field]) && Number.isFinite(x.t))
       .map((x) => ({ t: x.t, v: x[field] })).sort((a, b) => a.t - b.t);
-    return { points: pts, recent: true };
+    return { points: pts, mode: 'recent' };
   };
   // the card's own label says which it is showing: a chart legend is drawn for two series or more
   const blockChart = (id, srcId, base, ser, field, color, fmtY, what, extra = {}) => {
-    const { points, recent } = blockSeries(ser, field);
-    h.setText(srcId, recent && points.length > 1 ? `latest ${fmt.num(points.length)} blocks applied · at block time` : base);
+    const { points, mode } = blockSeries(ser, field);
+    h.setText(srcId, points.length < 2 || mode === 'history' ? base
+      : mode === 'sampled' ? `${fmt.num(points.length)} of ${fmt.num(samples.held)} blocks sampled · heights ${fmt.num(samples.from)}–${fmt.num(samples.to)}`
+      : `latest ${fmt.num(points.length)} blocks applied · at block time`);
+    const byHeight = mode === 'sampled' ? { fmtX: (v) => fmt.short(v), fmtTipX: (v) => `block ${fmt.num(Math.round(v))}` } : {};
     paint(h.canvas(id), {
       when: points.length > 1,
-      draw: (c) => lineChart(c, [{ label: what, color, points, area: true }], { fmtY, ...extra }),
+      draw: (c) => lineChart(c, [{ label: what, color, points, area: true }], { fmtY, ...extra, ...byHeight }),
       placeholder: extra.placeholder ?? 'waiting for samples',
     });
   };

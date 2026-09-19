@@ -137,7 +137,7 @@ function logTicks(lo, hi) {
 
 /**
  * Multi-series line/area. series: [{label, color, points:[{t,v}], axis:'right', type:'line'|'area'}]
- * opts: {fmtY, fmtX, fmtTip, min, max, rightMax, zeroBase, marker, staleMs}
+ * opts: {fmtY, fmtX, fmtTip, fmtTipX, min, max, rightMax, zeroBase, marker, staleMs}
  */
 export function lineChart(canvas, series, opts = {}) {
   const pts = (series ?? []).filter((s) => s.points && s.points.length);
@@ -330,7 +330,7 @@ function attachLineTip(canvas, opts) {
     ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, 5); ctx.fill(); ctx.stroke();
     ctx.textAlign = 'left';
     ctx.fillStyle = COL.text;
-    ctx.fillText(clock(t), bx + 6, by + 8);
+    ctx.fillText((opts.fmtTipX ?? clock)(t), bx + 6, by + 8);   // fmtTipX: an x that is not a time (a block height)
     rows.forEach((row, i) => {
       const y = by + 20 + i * 12;
       ctx.fillStyle = row.color;
