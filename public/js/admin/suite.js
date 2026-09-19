@@ -454,6 +454,10 @@ export async function initAdminSuite({ api, toast, state }) {
     // pressed: the picker can change in between, and a send must come from the wallet the
     // screen showed (2026-09-19 review).
     const build = () => withElevation('Building a transaction reads the wallet’s coins.', async () => {
+      // A build holds its coins (server/admin/send.js locks them so a second build cannot
+      // replace a send already made). Building again releases the last one's at once rather
+      // than leaving them held until it expires ten minutes later.
+      await cancelBuild(ui.build);
       const res = await api('/api/admin/wallet/send/build', {
         method: 'POST',
         body: { ...pairBody(pair), address: address.value.trim(), amountSat: amount.value.trim() },
@@ -474,6 +478,13 @@ export async function initAdminSuite({ api, toast, state }) {
       el('button', { class: 'primary', text: 'Review', onclick: build }),
       el('p', { class: 'sub', text: 'Nothing is signed until you confirm the transaction the node builds.' }),
       out);
+  }
+
+  /** Release a pending build's coins. Best effort: an expired or already-used build is simply gone. */
+  async function cancelBuild(b) {
+    if (!b?.id) return;
+    if (ui.build?.id === b.id) ui.build = null;
+    await api('/api/admin/wallet/send/cancel', { method: 'POST', body: { id: b.id } }).catch(() => {});
   }
 
   function confirmScreen(b, out, { pair, encrypted }) {
@@ -546,7 +557,11 @@ export async function initAdminSuite({ api, toast, state }) {
         ? el('p', { class: 'sub', text: 'This destination is in your address book.' })
         : el('p', { class: 'warn', text: 'This destination is NOT in your address book. Check the address above against the one you were given, character by character.' }),
       phrase, required ? pass : null, passHint, err,
-      mismatch ? null : el('button', { class: 'danger', text: `Send ${sats(b.totalSat)}`, onclick: send }));
+      mismatch ? null : el('button', { class: 'danger', text: `Send ${sats(b.totalSat)}`, onclick: send }),
+      el('button', {
+        text: 'Cancel', title: 'Discard this transaction and release the coins it holds',
+        onclick: async () => { await cancelBuild(b); out.replaceChildren(el('p', { class: 'sub', text: 'Cancelled. Nothing was signed, and its coins are free again.' })); },
+      }));
   }
 
   /**

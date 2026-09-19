@@ -597,3 +597,26 @@ test('landing elsewhere leaves the wallet section hidden', async () => {
   assert.ok(!suite.page.classList.contains('on'));
   assert.equal(suite.page.childNodes.length, 0);
 });
+
+test('a build nobody sends gives its coins back: Cancel, or Review again, releases it at once', async () => {
+  // A build locks its coins on the node so a second build cannot replace a send already made
+  // (server/admin/send.js, 2026-09-19). Without a way to let go, backing out of the confirm
+  // screen left them held for the ten minutes a build lives.
+  const { suite, log } = await buildASend();
+  const first = log.find((c) => c.path === '/api/admin/wallet/send/build');
+  assert.ok(first);
+  await click(button(suite.page, 'Cancel'));
+  await settle();
+  const cancels = log.filter((c) => c.path === '/api/admin/wallet/send/cancel');
+  assert.equal(cancels.length, 1, 'Cancel asks the server to release the build');
+  assert.ok(cancels[0].body.id, 'naming the build');
+  assert.match(suite.page.textContent, /its coins are free again/);
+
+  // Review twice: the second build releases the first before it is made
+  await click(button(suite.page, 'Review'));
+  await settle();
+  await click(button(suite.page, 'Review'));
+  await settle();
+  const order = log.map((c) => c.path).filter((p) => /send\/(build|cancel)/.test(p));
+  assert.deepEqual(order.slice(-3), ['/api/admin/wallet/send/build', '/api/admin/wallet/send/cancel', '/api/admin/wallet/send/build'], `order was ${JSON.stringify(order)}`);
+});
