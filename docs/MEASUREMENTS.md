@@ -1632,3 +1632,106 @@ three `getpeerinfo` fields. `getblockfilter` and `getmempoolcluster` had been in
 since §14 and answer now -- a console error from them would have been excused as expected --
 so the list was re-cut to this table, and `enumeratesigners` / `walletdisplayaddress` left it
 because Core gives the same answer.
+
+## 42. All of bmc's log, claimed (2026-09-19)
+
+The operator: "Why don't we read 100% of BMC logs? We should make sure we are 100% on that." §39
+left a long tail and said it was worth doing when a panel needed it; this is it done. Measured
+with the shipped `parseLine`, a line counted as read when it is anything but `kind: 'raw'`.
+
+**The current logs** (the target). "Before" is the parser at the start of the day; the logs are
+live, so "after" is the same files a few hours later, each a little longer:
+
+| log | before | after |
+|---|---|---|
+| run 27, mid-IBD, newest build | 14,761 of 14,894 (99.11%) | **15,286 of 15,286 (100.00%)** |
+| run 26, synced | 63,663 of 67,096 (94.88%) | **67,602 of 67,602 (100.00%)** |
+| production, `bitcoin.main.log` | 4,231 of 4,541 (93.17%) | **4,938 of 4,938 (100.00%)** |
+| production, `bitcoin.main.log.1` | 13,011 of 13,778 (94.43%) | **13,778 of 13,778 (100.00%)** |
+
+That was 4,643 unread lines in 186 shapes (802 by the finer mask of the coverage script, which
+splits a shape on every distinct flag value and uptime).
+
+**The rotated archives** (older builds, 2026-08-31 to 2026-09-18, 399,552 lines in 22 files):
+39,213 unread before (90.19%), **49 after (99.99%)**; 16 of the 22 files are at 100.00%. The
+worst was `bitcoin.main.log.4.gz` at 59.77%, now 100.00%.
+
+**How.** A rule per shape, never a tag: 181 new rules and 8 widened ones (277 rules in all). By
+tag: `[dlc]` 25, `[utxo_live]` 22, `[dl]` 16, `[coinstats]` 11, `[dial]` 10, `[boot]` 9,
+`[mempool]` 8, `[rpc]` 8, `[config]` 7, `[mux]` 6, `[coinstats-hist]` 6, `[reorg]` 6, `[serve]`
+5, `[tor]` 5, untagged 5, `[zmq]` 4, `[net]` 3, `[txindex]`/`[txospender]` 3, `[addrindex]` 3,
+and one or two each for `[tx_accept]`, `[txrelay]`, `[addrself]`, `[hashidx]`, `[archive]`,
+`[bfilter]`, `[wallet]`, `[feeest]`, `[i2p]`, `[privbcast]`, `[catchup]`. 125 of the new rules
+are for lines in the current logs; 56 are for shapes only the archives carry, added where the
+shape was trivial or the line was one an operator must see (a UTXO apply failure, a reorg, a
+FATAL, archive corruption). A new line under a known tag still arrives as `raw` -- a test pins
+that for `[config]`, `[dlc]`, `[mempool]`, `[rpc]` and the untagged lines.
+
+**Read, or set aside.** Of the 186 current shapes, **180 are read** into events with their
+figures and **6 are set aside** by three explicit rules (kind `noted`, each with its reason):
+the four continuation lines of the five-line `[mempool] WARNING` (its first line is read, and
+is a warning in the feed), the `[tor] (outbound onion is unaffected; …)` aside to the line
+before it, and the banner's `=====` rule line. 50 lines of the current logs are set aside, all
+of those.
+
+What the monitor does with the rest follows the §39 policy: state by default, the feed only for
+news. News is a peer BANNED for stalling the download window (not a stall by one already
+banned), a block that failed `cons_verify` (not a lost socket), an amnesty, a committer restart,
+the chain crossing `-minimumchainwork`, the download's catch-up and the applier's `caught up`,
+`tip stale for 30 min` and its recovery, a UTXO apply failure, a coinstats repair starting and
+finishing, a transaction submitted over RPC leaving the node, a setting the node misread, a
+FATAL, a reorg. Everything else is state: 578 leg closures, 168 leg syncs, 179 pool tip claims,
+155 zmq overruns (a flag, not 155 rows), and the thirty-odd lines each start writes. Once-per-start facts are one kind,
+`node_fact`, merged per subsystem into `logState.nodeFacts`; the snapshot carries a `log.node`
+block (build, worker start, UTXO engine, zmq, rejections by reason, leg closures) and leaves the
+node's own addresses -- public IP, onion and i2p names -- in state only.
+
+**Three existing rules had drifted**, found the way §39 found `orphan drops`, by enumerating what
+was unread: `[tx_accept] last 30s:` gained `invalid (last: "p2wpkh signature invalid")` (85
+lines), `[block] stored` lost its `tx=` and gained `(pushed compact block + blocktxn from …)`
+(238), and `[dl] outbound N =` became `[dl] filled outbound N = … [background dial]` (121). Five
+more were widened for a new optional part: `addr gossip`, `pass4 … txouts=N`, `logging to … and
+to the console`, and, for the archives, `[dial] memory:` without its block half and `(leg stays
+down; not dialled again for N min)`. All read both spellings; each old event is unchanged.
+
+**Two things the node could fix**, reported rather than worked round in silence: the download
+worker's `INFO node start (serve mode / download worker)` line ends in a NUL byte (all 32
+copies), which is what makes grep call these logs binary; and `[config] bind=192.0.2.x is not a
+usable number -- reading it as 0` on the production node today, a misread of a real setting.
+
+**Timestamps.** 1,279 lines of the current logs carry no timestamp of the node's format: the index
+builders' and the coinstats worker's children, the worker's start line, the start banner, and a
+few `[mempool]` continuation lines. Every one is read with `tsFallback: true`, as §38 set up. The
+banner prints its own time in UTC; that is carried as a figure (`loggedAtUtc`), not used as the
+event time, because it is not the node's timestamp format and the rest of its start is.
+
+**Speed.** Every line used to be tried against every rule, twice. Now a rule is keyed by the tag
+its pattern opens with, and a line tries its own tag's rules, then the five anchored untagged
+ones, then -- only if nothing claimed it -- the rules of any other tag that appears later in
+the line (one line in 615,000 needed that: two log lines written without a newline between
+them). Run 26's 67,124 lines, best of three after two warm passes, same box and Node v22.23.2:
+**~206,000 lines/s before, ~505,000 after** (469-536k across runs), with nearly three times the
+rules. A Core log, where every line is unread and so pays the most: 159,000 before, 1,386,000
+after.
+
+**Nothing changed for a line the old parser read.** Every line of the four current logs, the 22
+archives, every fixture, and 114,322 lines of the Core oracle's log went through both parsers:
+571,747 events identical, 44,132 newly read, 0 different, 0 lost.
+
+**Left unread, in the archives only** (49 lines, 41 shapes, none in any current log): the
+`[archive] *** CORRUPTION DETECTED ***` report of 2026-09-01 (its head line is read; the 13
+lines after it and the `dup-repair` line are one-off prose), the step-by-step lines of the reorg
+of 2026-09-11 (12: `disconnecting`, `reconnecting`, `hash index rebuilt`, `mempool reconciled`,
+the `[bfilter]` and `[dl]` lines that follow it; its `detected`, `complete` and `unapply …
+ALREADY ABSENT` lines are read), `[axt]` (4), `[serve]` (4: three bloom-filter disconnects and
+one onion inbound), `[coinstats]` (3), `[ctl]` (2),
+`[addr]` (2), `[cmpct] bmc.cmpctrecv=0` (2), and one each of `[addrbook]`, `[reindex]`,
+`[addrindex]`, `[utxo_live] undo: migrated`, `[dial] i2p unavailable` and `[dl] archive was
+repaired`. Each is from a build no longer running; a rule for them would be a guess at a grammar
+the node has moved on from.
+
+Tests: `test/logparse-100.test.js`, fixture `test/fixtures/log-samples-100.txt` (268 real lines,
+one or more per rule added or widened, plus the three old rules no fixture had; scrubbed of the
+home directory, the node's public and LAN addresses and its onion and i2p names). One test now
+holds every rule to having at least one real line frozen somewhere -- 276 of 277 do; the
+exception, `txRelayBare`, has never appeared in any log on this box.
