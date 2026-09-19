@@ -34,12 +34,21 @@ export const CAPABILITIES = Object.freeze({
     'gettransaction', 'listlabels', 'getaddressesbylabel', 'getaddressinfo',
     'listreceivedbyaddress', 'listreceivedbylabel', 'listsinceblock', 'listdescriptors',
     'estimatesmartfee', 'getnetworkinfo', 'getblockchaininfo',
+    // Added 2026-09-19 for the money-safety review, each a read: which coins a pending
+    // build holds, whether a build's coins are still unspent at confirm, and whether a
+    // broadcast whose answer was lost actually reached the mempool.
+    'listlockunspent', 'gettxout', 'getmempoolentry',
   ],
   'wallet.receive': ['getnewaddress', 'setlabel'],
   'wallet.spend': [
     'walletcreatefundedpsbt', 'walletprocesspsbt', 'finalizepsbt', 'decodepsbt',
     'analyzepsbt', 'testmempoolaccept', 'sendrawtransaction', 'walletpassphrase',
     'walletlock', 'bumpfee', 'psbtbumpfee', 'getrawtransaction', 'decoderawtransaction',
+    // A pending build locks the coins it chose, so a second build cannot choose them and
+    // then replace the first after it was reported sent (review, 2026-09-19). A write --
+    // to the wallet's in-memory lock set, never persisted (the call never passes
+    // `persistent`) -- so it sits with the spend methods.
+    'lockunspent',
   ],
   'node.control': ['stop', 'uptime', 'getblockcount'],
 });
@@ -56,6 +65,14 @@ const ARG_RULES = {
     : 'listdescriptors takes no argument here: the boolean form returns PRIVATE descriptors (xprvs), which this suite never asks for'),
   // The passphrase and a timeout, and the timeout must be short: an unlock that outlives
   // the action it was for is an unlocked wallet nobody is watching.
+  // Lock or unlock named outpoints, in memory only. The third argument, `persistent`,
+  // writes the lock into the wallet file, where it would outlive the build that took it
+  // and hold a coin nobody remembers holding.
+  lockunspent: (args) => {
+    if (args.length !== 2) return 'lockunspent takes the unlock flag and a list of outpoints, and nothing else (never `persistent`)';
+    if (typeof args[0] !== 'boolean' || !Array.isArray(args[1]) || !args[1].length) return 'lockunspent takes a boolean and a non-empty list of outpoints';
+    return null;
+  },
   walletpassphrase: (args) => {
     if (args.length !== 2) return 'walletpassphrase takes the passphrase and a timeout';
     const secs = Number(args[1]);

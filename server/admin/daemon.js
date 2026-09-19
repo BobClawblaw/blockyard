@@ -12,6 +12,7 @@
 // happened. A button labelled Restart that performs a shutdown would be the worst thing in
 // this suite.
 import { walletCall } from './wallet.js';
+import { requireElevation } from './elevation.js';
 
 function deny(message, code = 'admin-refused', status = 400) {
   const err = new Error(message);
@@ -101,7 +102,12 @@ export async function daemonStop(app, ctx, { node, restart = false, confirm = nu
   const before = await heightOf(app, node);
   // The point of no return. Everything above this line can be got wrong and retried
   // without a new password; nothing below it can be undone at all.
-  ctx.consumeElevation?.();
+  //
+  // The route's consumeElevation re-checks as it consumes, so a second stop riding the same
+  // elevation throws here (review, 2026-09-19); outside a route, the same check directly --
+  // never a silent skip, which is what `?.()` was.
+  if (typeof ctx.consumeElevation === 'function') ctx.consumeElevation();
+  else requireElevation(ctx, { consume: true, what: 'stopping the node' });
   await walletCall(app, { node, wallet: null, capability: 'node.control', method: 'stop', args: [] });
   await app.audit({
     type: restart ? 'admin-node-restart' : 'admin-node-stop',

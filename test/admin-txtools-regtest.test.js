@@ -143,8 +143,12 @@ describe('a pasted transaction that spends our own coins is treated as a send', 
       assert.match(refused.body.error.message, /That is a send, not a broadcast/);
       assert.deepEqual(JSON.parse(rt.cli('getrawmempool')), [], 'nothing went out');
 
-      // Confirmed deliberately, it goes -- and it counted.
-      const sent = await client.post('/api/admin/tx/broadcast', { wallet: 'hot', raw: final.hex, acceptSpendingOurs: true }, { csrf });
+      // Confirmed deliberately, with the wallet's passphrase, it goes -- and it counted. The
+      // passphrase was not asked for here until 2026-09-19; the operator's decision that
+      // day is that broadcasting this wallet's coins asks for it the way a send does, so
+      // this test asserted the unsafe shape and was changed. (The payment is to our own
+      // address, so no typed phrase: nothing leaves but the fee.)
+      const sent = await client.post('/api/admin/tx/broadcast', { wallet: 'hot', raw: final.hex, acceptSpendingOurs: true, passphrase: PASSPHRASE }, { csrf });
       assert.equal(sent.status, 200, JSON.stringify(sent.body));
       assert.equal(sent.body.spendsOurs, true);
       assert.ok(sent.body.oursSat > 0);
@@ -197,7 +201,8 @@ describe('paying yourself out of a large coin costs the fee, not the coin', asyn
       const final = JSON.parse(rt.cli('finalizepsbt', processed.psbt));
       rt.cli('-rpcwallet=hot', 'walletlock');
 
-      const res = await client.post('/api/admin/tx/broadcast', { wallet: 'hot', raw: final.hex, acceptSpendingOurs: true }, { csrf });
+      // The passphrase: required since 2026-09-19 for any broadcast of this wallet's coins.
+      const res = await client.post('/api/admin/tx/broadcast', { wallet: 'hot', raw: final.hex, acceptSpendingOurs: true, passphrase: PASSPHRASE }, { csrf });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.ok(res.body.netSat < 10_000, `only the fee left the wallet: ${res.body.netSat} sat`);
       assert.ok(res.body.changeSat > 4_900_000_000, 'the coin came back');

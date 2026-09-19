@@ -346,11 +346,11 @@ only produce the startup line `administrative suite: NOT IN THIS BUILD`.
 | `admin.allowInsecure` | `false` | Allow the suite over plain HTTP. Without it the suite needs TLS or `server.trustProxy`. |
 | `admin.allowWithoutAuth` | `false` | Allow the suite while accounts are off. |
 | `admin.allowPublicBind` | `false` | Allow the suite while bound to an address other than this machine. |
-| `admin.wallets` | `[]` | Wallets the suite may load, list or spend from. A wallet not named here is refused. |
+| `admin.wallets` | `[]` | Wallets the suite may load, list or spend from, each as `{ "node": "<node id>", "wallet": "<name>" }`. A wallet is identified by the pair: the same name on another node is a different wallet and is refused. A bare name (`"hot"`) is accepted only when exactly one node is configured; with several, the suite refuses it at use and asks for the node to be named. An entry naming a node that is not configured stops the server at startup. |
 | `admin.elevationMs` | `300000` (5 min) | How long a password re-entry lasts before the next state change asks again. |
 | `admin.spend.capSat` | `null` | Per-spend cap in satoshis. There is no default: no spend is allowed until it is set. |
 | `admin.spend.capSat24h` | `null` | Cap on spends over 24 hours, in satoshis. |
-| `admin.spend.mainnetPhrase` | `true` | A first spend on mainnet asks for a differently worded confirmation. |
+| `admin.spend.mainnetPhrase` | `true` | On mainnet, a destination outside the address book needs the phrase `SEND REAL BITCOIN` rather than `send on main`, so a habit from a test network does not carry over. `false` uses `send on main`. The chain is asked of the node at each build or broadcast. |
 | `admin.addressBook` | `[]` | Known destinations. Others need a typed confirmation. |
 
 ### log
@@ -437,7 +437,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_ADMIN_ALLOW_INSECURE` | `admin.allowInsecure` | boolean | `false` | Allow the suite over plain HTTP. |
 | `BLOCKYARD_ADMIN_ALLOW_WITHOUT_AUTH` | `admin.allowWithoutAuth` | boolean | `false` | Allow the suite while accounts are off. |
 | `BLOCKYARD_ADMIN_ALLOW_PUBLIC_BIND` | `admin.allowPublicBind` | boolean | `false` | Allow the suite on a non-local listen address. |
-| `BLOCKYARD_ADMIN_WALLETS` | `admin.wallets` | list | *(empty)* | Wallets the suite may use. |
+| `BLOCKYARD_ADMIN_WALLETS` | `admin.wallets` | list | *(empty)* | Wallets the suite may use, as bare names. Only usable with a single node; with several, name each wallet's node in the config file. |
 | `BLOCKYARD_LOG_SOURCE` | `log.enabled` | boolean | `false` | `1` tails node log files; `0` (or unset) runs on RPC alone. |
 | `BLOCKYARD_LOG_LEVEL` | `log.level` | string | `info` | `debug`, `info`, `warn` or `error`. |
 | `BLOCKYARD_MARKETS` | `markets.enabled` | boolean | `true` | `0` removes the Markets feed; the polling checkbox then cannot turn it on. |

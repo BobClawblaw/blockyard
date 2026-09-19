@@ -14,9 +14,9 @@ import { HttpError } from '../http/api.js';
 import { adminGate, adminGateLine } from '../admin-gate.js';
 import { elevate, dropElevation, elevationState, elevationLabel, requireElevation } from './elevation.js';
 import { capabilitySummary } from '../rpc/admin-allowlist.js';
-import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels, walletTransaction } from './wallet.js';
+import { namedWallets, requireNamedWallet, defaultNode, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels, walletTransaction } from './wallet.js';
 import { newAddress, labelAddress } from './receive.js';
-import { buildSpend, confirmSpend, pendingFor, addressBook } from './send.js';
+import { buildSpend, confirmSpend, cancelBuild, pendingFor, addressBook } from './send.js';
 import { daemonActions, daemonStop } from './daemon.js';
 import { readNodeConf, writeNodeConf, readOwnConfig, writeOwnConfig, LOCKED_BLOCKS } from './config-edit.js';
 import { decodeAny, broadcastRaw, previewBump, confirmBump } from './txtools.js';
@@ -32,13 +32,17 @@ function refuseWith(err) {
  * Order matters and is the order of the plan's gate chain: hold the grant, then name a
  * wallet the operator opted in. A caller that skipped either would be one `await` away
  * from reading someone's balances without the grant.
+ *
+ * The request names the NODE as well as the wallet, and the pair is what is checked
+ * (operator, 2026-09-19): a wallet name means nothing without the node it is on. With one
+ * node configured the node may be left out; with several it may not, and nothing here
+ * defaults to "the first one" -- neither the first node nor the first wallet.
  */
 function walletRead(handler) {
   return async (ctx, app) => {
     try {
       requireWalletAccess(app, ctx.user);
-      const wallet = requireNamedWallet(app, ctx.query?.wallet ?? namedWallets(app)[0]);
-      const node = ctx.query?.node ?? [...app.monitors.keys()][0];
+      const { node, wallet } = requireNamedWallet(app, ctx.query?.node ?? defaultNode(app), ctx.query?.wallet);
       return await handler(ctx, app, { wallet, node });
     } catch (err) { refuseWith(err); }
   };
@@ -55,8 +59,7 @@ function walletWrite(handler) {
   return async (ctx, app) => {
     try {
       requireWalletAccess(app, ctx.user);
-      const wallet = requireNamedWallet(app, ctx.body?.wallet ?? namedWallets(app)[0]);
-      const node = ctx.body?.node ?? [...app.monitors.keys()][0];
+      const { node, wallet } = requireNamedWallet(app, ctx.body?.node ?? defaultNode(app), ctx.body?.wallet);
       return await handler(ctx, app, { wallet, node });
     } catch (err) { refuseWith(err); }
   };
@@ -77,7 +80,13 @@ function elevated(handler, { consume = false, what = 'this action' } = {}) {
     // to try. Worse, it trains exactly the reflex this whole mechanism depends on them not
     // having. The handler calls ctx.consumeElevation() itself, immediately before the
     // irreversible step.
-    if (consume) ctx.consumeElevation = () => dropElevation(ctx.session?.tokenHash ?? null);
+    //
+    // AND RE-CHECKED AS IT IS CONSUMED (review, 2026-09-19). This was a bare drop, called
+    // after the handler's awaits -- so two requests that both passed the check above on
+    // arrival both proceeded, the second "consuming" an elevation that was already gone.
+    // One password, one action has to hold for requests that are in flight together, not
+    // only for ones that arrive one after another: the second caller throws here.
+    if (consume) ctx.consumeElevation = () => requireElevation(ctx, { consume: true, what });
     return handler(ctx, app);
   };
 }
@@ -114,7 +123,9 @@ export function adminRoutes(app) {
             elevationMs: app.cfg.admin?.elevationMs ?? 0,
             spendCapSat: app.cfg.admin?.spend?.capSat ?? null,
             spendCapSat24h: app.cfg.admin?.spend?.capSat24h ?? null,
-            mainnetPhrase: Boolean(app.cfg.admin?.spend?.mainnetPhrase),
+            // Read the way the send path reads it (server/admin/send.js, phraseFor): only an
+            // explicit false turns the mainnet sentence off.
+            mainnetPhrase: app.cfg.admin?.spend?.mainnetPhrase !== false,
             addressBook: (app.cfg.admin?.addressBook ?? []).length,
           },
           // What this build can actually do, read by the UI rather than guessed from a
@@ -122,7 +133,10 @@ export function adminRoutes(app) {
           capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend', 'node.control', 'config.edit', 'tx.tools'],
           lockedConfigBlocks: LOCKED_BLOCKS,
           rpc: capabilitySummary(),
-          wallets: namedWallets(app),
+          // `{ node, wallet }` pairs (operator, 2026-09-19). `node` is null for a bare name
+          // in a config with several nodes -- a wallet the routes will refuse until the
+          // entry names its node, shown so the screen can say which entry to fix.
+          wallets: namedWallets(app).map(({ node, wallet }) => ({ node, wallet })),
           // This session's elevation, never the grant itself.
           elevation: elevationState(ctx.session?.tokenHash ?? null),
           you: {
@@ -276,23 +290,47 @@ export function adminRoutes(app) {
       }), { what: 'building a transaction' }),
     },
     // CONFIRM consumes the elevation: one password, one spend.
+    //
+    // The build carries its own (node, wallet), checked again in confirmSpend; `node` and
+    // `wallet` in the body are optional here and, when sent, must be the build's pair.
     {
       method: 'POST', path: '/api/admin/wallet/send/confirm', auth: 'admin', csrf: true, body: true,
-      handler: walletWrite(async (ctx, app) => {
+      handler: async (ctx, app) => {
         try {
+          requireWalletAccess(app, ctx.user);
           return await confirmSpend(app, ctx, {
             id: ctx.body?.id, phrase: ctx.body?.phrase, passphrase: ctx.body?.passphrase,
+            node: ctx.body?.node ?? null, wallet: ctx.body?.wallet ?? null,
           });
         } catch (err) { refuseWith(err); }
-      }),
+      },
+    },
+    // CANCEL gives a build's coins back (a build locks them). Not elevated: it can only
+    // un-spend, and asking for a password to change your mind is a tax on caution.
+    {
+      method: 'POST', path: '/api/admin/wallet/send/cancel', auth: 'admin', csrf: true, body: true,
+      handler: async (ctx, app) => {
+        try {
+          requireWalletAccess(app, ctx.user);
+          return await cancelBuild(app, ctx, { id: ctx.body?.id });
+        } catch (err) { refuseWith(err); }
+      },
     },
     {
+      // The grant, like every other wallet read (review, 2026-09-19): the book is a list of
+      // where this wallet's money goes, which is wallet information.
       method: 'GET', path: '/api/admin/addressbook', auth: 'admin',
-      handler: async (ctx, app) => ({ ok: true, ...addressBook(app) }),
+      handler: async (ctx, app) => {
+        try { requireWalletAccess(app, ctx.user); } catch (err) { refuseWith(err); }
+        return { ok: true, ...addressBook(app) };
+      },
     },
     {
       method: 'GET', path: '/api/admin/wallet/send/pending', auth: 'admin',
-      handler: async (ctx) => ({ ok: true, builds: pendingFor(ctx) }),
+      handler: async (ctx, app) => {
+        try { requireWalletAccess(app, ctx.user); } catch (err) { refuseWith(err); }
+        return { ok: true, builds: pendingFor(ctx) };
+      },
     },
     // ------------------------------------------------------------------ the daemon
     // No wallet grant here: stopping a node is an administrator's business, not a
@@ -373,6 +411,8 @@ export function adminRoutes(app) {
       method: 'POST', path: '/api/admin/tx/broadcast', auth: 'admin', csrf: true, body: true,
       handler: elevated(walletWrite(async (ctx, app, { wallet, node }) => broadcastRaw(app, ctx, {
         node, wallet, raw: ctx.body?.raw, acceptSpendingOurs: ctx.body?.acceptSpendingOurs === true,
+        phrase: ctx.body?.phrase ?? null, passphrase: ctx.body?.passphrase ?? null,
+        passphrases: ctx.body?.passphrases ?? null,
       })), { consume: true, what: 'broadcasting a transaction' }),
     },
     {
