@@ -241,7 +241,15 @@ const DEFAULTS = {
     loginMaxAttempts: 8,
     loginWindowMs: 300000,
     lockoutMs: 600000,
-    cookieName: 'blockyard_sid',
+    // THE __Host- PREFIX (audit 2026-09-19, L3): binds the cookie to path /, forbids a
+    // Domain attribute and demands the Secure flag -- three properties this code already
+    // guarantees (serializeCookie always emits Path=/ and never a Domain; TLS at boot
+    // forces secureCookie). The prefix is what stops a subdomain or a sibling path from
+    // overwriting the session cookie. It is applied HERE, at load, not in the default,
+    // because a __Host- cookie without Secure is dropped by the browser outright: on a
+    // plain-HTTP run (BLOCKYARD_TLS=0) sessions would silently never stick. The test
+    // beside this (test/audit-2026-09-19.test.js) holds both branches.
+    cookieName: null,                  // resolved in validate(): prefixed under TLS, plain without it
     secureCookie: false, // forced true at boot when TLS is on
     // OPEN MODE'S NODE CONNECTION IS SET FROM THIS MACHINE ONLY (audit 2026-09-16, M1/M2). With
     // accounts off, the node-connection save and test are answered only for a loopback caller: the
@@ -647,6 +655,16 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   for (const c of cfg.server.allowCidrs ?? []) {
     const parsed = parseCidr(c);
     if (!parsed.ok) problems.push(`server.allowCidrs entry "${c}" is unusable: ${parsed.reason}`);
+  }
+  // THE COOKIE NAME FOLLOWS THE TRANSPORT (audit 2026-09-19, L3). A __Host- cookie needs
+  // Secure; under plain HTTP the browser would drop it and every sign-in would look
+  // broken, so the prefix is applied only where TLS is actually on. An explicit
+  // auth.cookieName in a config file always wins -- an operator who set a name chose it,
+  // and the prefix is hardening, not a rule to fight them over.
+  if (!cfg.auth.cookieName) {
+    cfg.auth.cookieName = (cfg.server.tls?.enabled !== false || cfg.auth.secureCookie === true)
+      ? '__Host-blockyard_sid'
+      : 'blockyard_sid';
   }
   validateTls(cfg, now);
   // "Open to everyone" plus "node writes enabled" is the one combination where the

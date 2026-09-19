@@ -161,6 +161,19 @@ export class LoginGuard {
   }
 
   _entry(key) {
+    // KEEP THE MAP BOUNDED (audit 2026-09-19, L2). A username spray across random names
+    // grows `attempts` by three keys per try and nothing removed them: the RateLimiter
+    // sweeps at 5,000 buckets, this map never did. Entries whose window has emptied and
+    // whose lockout has expired carry no state a correct decision needs -- a failed try
+    // outside the window neither locks nor counts -- so they are dropped here, before
+    // the map is read rather than on a timer nobody wants to maintain.
+    if (this.attempts.size > 5000) {
+      const now = Date.now();
+      const stale = now - this.windowMs;
+      for (const [k, e] of this.attempts) {
+        if (e.lockedUntil <= now && !(e.hits.length && e.hits[e.hits.length - 1] > stale)) this.attempts.delete(k);
+      }
+    }
     let e = this.attempts.get(key);
     if (!e) { e = { hits: [], lockedUntil: 0 }; this.attempts.set(key, e); }
     const cutoff = Date.now() - this.windowMs;

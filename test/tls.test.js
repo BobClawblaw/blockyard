@@ -168,8 +168,12 @@ test('with TLS on: HTTPS serves, HTTP does not, the cookie is Secure and HSTS is
       const login = await client.login('admin');
       assert.equal(login.status, 200);
       const setCookies = (await client.raw('/api/login', { method: 'POST', body: { username: 'admin', password: client.adminPassword } })).headers.getSetCookie();
-      assert.ok(setCookies.some((c) => /blockyard_sid=/.test(c) && /\bSecure\b/.test(c)),
-        `a Secure cookie over TLS: ${setCookies.join(' | ')}`);
+      // THE __Host- PREFIX (audit 2026-09-19, L3): under TLS the session cookie is named
+      // __Host-blockyard_sid -- bound to path /, no Domain, Secure required. The match is
+      // on the full prefixed name, not a substring: a substring would also accept the
+      // unprefixed form and the point of the prefix is that it is there.
+      assert.ok(setCookies.some((c) => /(^|;\s*)__Host-blockyard_sid=/.test(c.split(';')[0].trim()) && /\bSecure\b/.test(c)),
+        `a __Host- Secure cookie over TLS: ${setCookies.join(' | ')}`);
 
       assert.match((await client.get('/api/build')).body.scheme, /^https$/);
       // Plain HTTP against the TLS listener must fail, not answer.

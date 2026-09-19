@@ -664,8 +664,23 @@ export const routes = [
           note: NODE_REFUSES.has(method) ? 'the node documents this method as refused or worker-owned; an error here is expected behaviour, not a monitor fault' : null,
         };
       } catch (err) {
+        // WHAT A NODE SAID IS NOT ALWAYS OURS TO REPEAT (audit 2026-09-19, L1). RpcError carries up
+        // to 200 characters of a transport reply's body, and `?node=` can name any configured
+        // monitor -- so echoing err.message here was the same read-back primitive the 09-16 M2 fix
+        // removed from /api/config/node/test, one console POST to a mispointed node entry away.
+        // The full detail is kept where the operator reads: the audit trail, which open mode does
+        // not serve. What the HTTP reply carries is the class of failure, verbatim from the same
+        // GENERIC table the node-connection probe uses -- and only for the kinds that quote the
+        // endpoint; rpc/auth errors are the NODE's own JSON-RPC refusal, not transport noise.
+        const GENERIC = {
+          timeout: 'the node did not answer in time',
+          transport: 'the node could not be reached, or answered with an HTTP error',
+          parse: 'the node answered, but not with JSON-RPC',
+          breaker: 'the node is backing off after consecutive failures',
+        };
+        const message = GENERIC[err.kind] ?? err.message;
         await app.audit({ type: 'rpc', ok: false, username: ctx.user.username, node: m.id, method, error: err.message, ip: ctx.ip });
-        return { ok: false, node: m.id, method, ms: Date.now() - t0, error: { message: err.message, code: err.code ?? null, kind: err.kind ?? 'rpc' } };
+        return { ok: false, node: m.id, method, ms: Date.now() - t0, error: { message, code: err.code ?? null, kind: err.kind ?? 'rpc' } };
       }
     },
   },
