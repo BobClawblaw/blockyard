@@ -103,14 +103,33 @@ export async function withApp({ nodes = 1, config = {}, adminPassword = null, tl
   try {
     // `configFile` is passed explicitly, so config/local.json on this box can never
     // enter the run (rule 18) -- no env sentinel needed.
-    app = await boot({ configFile: cfgFile, log });
-    const origin = `${app.tls ? 'https' : 'http'}://127.0.0.1:${port}`;
+    //
+    // RETRIED ON A PORT COLLISION (2026-09-18). freePort() asks the OS for a free port and
+    // then CLOSES the socket before handing the number over, so between that close and the
+    // app's bind the port is anybody's -- and node runs test FILES in parallel processes,
+    // each doing the same thing. It shows up as one file failing to boot with EADDRINUSE,
+    // at random, in a suite that is otherwise green; it cost two "is the suite actually
+    // passing?" investigations before it was chased down. A fresh port and another go is
+    // the fix that does not require holding a socket open across a boot.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        app = await boot({ configFile: cfgFile, log });
+        break;
+      } catch (err) {
+        const taken = /EADDRINUSE|already listening/i.test(err?.message ?? '');
+        if (!taken || attempt >= 4) throw err;
+        const next = await freePort();
+        base.server.port = next;
+        fs.writeFileSync(cfgFile, JSON.stringify(merge(base, config)));
+      }
+    }
+    const origin = `${app.tls ? 'https' : 'http'}://127.0.0.1:${app.cfg.server.port}`;
     const client = makeClient(origin, app);
     // The admin credential the boot actually created. Reading it back rather than
     // injecting one through the environment is what keeps this helper free of
     // process-global state.
     client.adminPassword = adminPassword ?? app.bootstrap?.password ?? null;
-    return await fn({ app, base: origin, client, dir, fakes, port });
+    return await fn({ app, base: origin, client, dir, fakes, port: app.cfg.server.port });
   } finally {
     if (app) await app.shutdown({ saveHistory: false }).catch(() => {});
     for (const f of fakes) await f.stop().catch(() => {});

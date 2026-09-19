@@ -77,7 +77,18 @@ export async function elevate(app, { sessionId, username, password }, now = Date
   const v = await app.users.verify(username, String(password ?? ''));
   if (!v.ok) {
     attempts.set(sessionId, { n: a.n + 1, first: a.first });
-    await app.audit({ type: 'admin-elevate-failed', username, attempt: a.n + 1, reason: v.reason ?? 'bad password' });
+    // The LENGTH of what was submitted, never the value. Added 2026-09-18 while chasing a
+    // failure that could not be reproduced outside the browser: it distinguishes the three
+    // things that actually go wrong -- the wrong secret entirely (a wallet passphrase is a
+    // different length from an account password), a paste that picked up whitespace, and
+    // an empty field from a form that submitted before it was filled. A password's length
+    // is not a password, and the alternative is guessing.
+    await app.audit({
+      type: 'admin-elevate-failed', username, attempt: a.n + 1,
+      reason: v.reason ?? 'bad password',
+      chars: String(password ?? '').length,
+      trimmedChars: String(password ?? '').trim().length,
+    });
     return { ok: false, error: v.reason === 'account disabled' ? 'this account is disabled' : 'that password is not right' };
   }
 

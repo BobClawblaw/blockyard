@@ -14,9 +14,9 @@ import { HttpError } from '../http/api.js';
 import { adminGate, adminGateLine } from '../admin-gate.js';
 import { elevate, dropElevation, elevationState, elevationLabel, requireElevation } from './elevation.js';
 import { capabilitySummary } from '../rpc/admin-allowlist.js';
-import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels } from './wallet.js';
+import { namedWallets, requireNamedWallet, requireWalletAccess, walletOverview, walletUtxos, walletHistory, walletDescriptors, walletLabels, walletTransaction } from './wallet.js';
 import { newAddress, labelAddress } from './receive.js';
-import { buildSpend, confirmSpend, pendingFor } from './send.js';
+import { buildSpend, confirmSpend, pendingFor, addressBook } from './send.js';
 import { daemonActions, daemonStop } from './daemon.js';
 import { readNodeConf, writeNodeConf, readOwnConfig, writeOwnConfig, LOCKED_BLOCKS } from './config-edit.js';
 import { decodeAny, broadcastRaw, previewBump, confirmBump } from './txtools.js';
@@ -213,6 +213,12 @@ export function adminRoutes(app) {
       })),
     },
     {
+      method: 'GET', path: '/api/admin/wallet/tx', auth: 'admin',
+      handler: walletRead(async (ctx, app, { wallet, node }) => ({
+        ok: true, ...(await walletTransaction(app, { node, wallet, txid: ctx.query?.txid })),
+      })),
+    },
+    {
       method: 'GET', path: '/api/admin/wallet/descriptors', auth: 'admin',
       // PUBLIC descriptors. `listdescriptors true` returns xprvs and is refused by the
       // allowlist's argument rule, so there is no path from this route to a private key.
@@ -279,6 +285,10 @@ export function adminRoutes(app) {
           });
         } catch (err) { refuseWith(err); }
       }),
+    },
+    {
+      method: 'GET', path: '/api/admin/addressbook', auth: 'admin',
+      handler: async (ctx, app) => ({ ok: true, ...addressBook(app) }),
     },
     {
       method: 'GET', path: '/api/admin/wallet/send/pending', auth: 'admin',

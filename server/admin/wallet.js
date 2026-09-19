@@ -192,3 +192,67 @@ export async function walletLabels(app, { node, wallet }) {
   }
   return out;
 }
+
+/**
+ * One transaction, in full: what the wallet knows plus what the raw transaction says.
+ *
+ * `gettransaction` with verbose gives the decoded body in the same call, so the inputs and
+ * outputs come back without a second round trip. Each output is checked against the wallet
+ * so the detail view can say which of them are YOURS -- the difference between "this paid
+ * out 1 BTC" and "this paid out 1 BTC and 48 came back as change" is the whole meaning of
+ * the row, and a list of outputs without it invites the wrong reading.
+ */
+export async function walletTransaction(app, { node, wallet, txid }) {
+  if (!/^[0-9a-fA-F]{64}$/.test(String(txid ?? ''))) {
+    const err = new Error('that is not a transaction id');
+    err.status = 400; err.code = 'txid-invalid';
+    throw err;
+  }
+  const tx = await walletCall(app, {
+    node, wallet, capability: 'wallet.read', method: 'gettransaction', args: [txid, true, true],
+  });
+  const decoded = tx?.decoded ?? null;
+
+  const outputs = [];
+  for (const v of decoded?.vout ?? []) {
+    const address = v.scriptPubKey?.address ?? null;
+    let mine = false;
+    if (address) {
+      const info = await walletCall(app, { node, wallet, capability: 'wallet.read', method: 'getaddressinfo', args: [address] })
+        .catch(() => null);
+      mine = Boolean(info?.ismine);
+    }
+    outputs.push({ n: v.n, address, type: v.scriptPubKey?.type ?? null, amountSat: toSats(v.value), mine });
+  }
+
+  return {
+    txid,
+    wallet,
+    amountSat: toSats(tx?.amount ?? 0),
+    feeSat: tx?.fee == null ? null : toSats(tx.fee),
+    confirmations: tx?.confirmations ?? 0,
+    blockHash: tx?.blockhash ?? null,
+    blockHeight: tx?.blockheight ?? null,
+    blockTime: tx?.blocktime ? tx.blocktime * 1000 : null,
+    time: (tx?.time ?? 0) * 1000,
+    receivedTime: (tx?.timereceived ?? 0) * 1000,
+    replaceable: tx?.['bip125-replaceable'] ?? 'unknown',
+    // Per-address rows as the WALLET sees them: this is where a send and its change both
+    // show up, each with its own category.
+    details: (tx?.details ?? []).map((d) => ({
+      address: d.address ?? null, category: d.category, amountSat: toSats(d.amount),
+      label: d.label ?? null, vout: d.vout, feeSat: d.fee == null ? null : toSats(d.fee),
+      abandoned: Boolean(d.abandoned),
+    })),
+    inputs: (decoded?.vin ?? []).map((v) => ({ txid: v.txid ?? null, vout: v.vout ?? null, sequence: v.sequence ?? null, coinbase: Boolean(v.coinbase) })),
+    outputs,
+    vsize: decoded?.vsize ?? null,
+    weight: decoded?.weight ?? null,
+    version: decoded?.version ?? null,
+    locktime: decoded?.locktime ?? null,
+    feeRateSatPerVb: tx?.fee != null && decoded?.vsize ? Math.round((Math.abs(toSats(tx.fee)) / decoded.vsize) * 100) / 100 : null,
+    // The raw transaction, for pasting somewhere else. It is public data -- it is on the
+    // chain or in a mempool -- so there is nothing here to withhold.
+    hex: tx?.hex ?? null,
+  };
+}

@@ -39,6 +39,8 @@ export const ADMIN_PATHS = [
   // imported only from server/admin/, so excluding it costs a read-only build nothing.
   'server/rpc/admin-allowlist.js',
   'public/js/admin',
+  // the suite's stylesheet, which lives under public/css/ beside the monitor's own
+  'public/css/admin.css',
 ];
 
 // admin-gate.js is deliberately NOT in that list -- see below. It is core: a read-only

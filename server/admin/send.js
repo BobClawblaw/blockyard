@@ -119,6 +119,31 @@ export function inAddressBook(app, address) {
 }
 
 /**
+ * The address book, as a list a screen can show.
+ *
+ * Entries may be a bare string or `{ address, label }`; both spellings are accepted
+ * because an operator editing JSON by hand will write whichever is shorter, and refusing
+ * one of them would be a rule with no purpose behind it.
+ *
+ * READ-ONLY FROM THE WEB, and the payload says so rather than leaving a screen to discover
+ * it at the first save. It lives in the `admin` block, which this suite cannot write
+ * (server/admin/config-edit.js): an interface that could add its own destination could skip
+ * the typed confirmation that not being in this list requires.
+ */
+export function addressBook(app) {
+  const raw = app.cfg.admin?.addressBook ?? [];
+  return {
+    entries: raw.map((e) => (typeof e === 'string'
+      ? { address: e, label: null }
+      : { address: e?.address ?? null, label: e?.label ?? null })).filter((e) => e.address),
+    editable: false,
+    note: 'The address book is part of the admin block, which the web interface cannot write. '
+      + 'Add entries in config/local.json and restart. A destination that is NOT in this list still works '
+      + 'it just asks you to type a confirmation phrase first.',
+  };
+}
+
+/**
  * The phrase the operator must type for a destination outside the address book.
  *
  * Different on mainnet, deliberately (operator's choice at scoping): muscle memory from a
