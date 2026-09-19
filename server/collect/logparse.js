@@ -882,6 +882,7 @@ const RULES = [
   // hyphenated tag is one TAG_RE cannot claim, so it is still sitting in the text.
   {
     name: 'coinstatsHistPass',
+    keys: ['coinstats_hist', 'coinstats-hist'],
     re: /\[coinstats[-_]hist\]\s*pass(\d+)(?:\s+w(\d+))? (\d+)\/(\d+) \((\d+(?:\.\d+)?)s\)/,
     apply: (m) => ({ kind: 'coinstats_hist_pass', pass: +m[1], worker: m[2] == null ? null : +m[2], done: +m[3], of: +m[4], secs: +m[5] }),
   },
@@ -1129,6 +1130,50 @@ const RULES = [
   },
 ];
 
+// DISPATCH BY TAG (2026-09-19). Until today every line was tried against every rule, twice
+// (once without its tag, once with), which was cheap at 60 rules and would not have been at
+// 250: reading all of bmc's log took the rule count past four times what §37 measured. Each
+// rule now names the tag it belongs to -- read from the literal `\[tag` its pattern starts
+// with, or given as `keys` where the pattern spells the tag some other way -- and a line
+// tries only the rules for the tag it opens with, then the few that are not keyed on a tag.
+// The key is taken from the text itself rather than TAG_RE, so `[dlc w5]` and
+// `[coinstats-hist]`, which TAG_RE does not claim, still find their rules.
+//
+// A line that none of those claims then tries every rule, in order, exactly as before. That
+// keeps the old behaviour for anything odd (a rule matching mid-line, a line whose tag is
+// not first) and costs only the lines that end up unread, which on bmc's log is now none.
+const KEY_RE = /^\s*\[([a-z0-9_-]+)/;
+function ruleKeys(rule) {
+  if (rule.keys) return rule.keys;
+  const src = rule.re.source;
+  const lit = src.match(/^\\\[([a-z0-9_]+)(?:\\\]|:| )/);
+  if (lit) return [lit[1]];
+  const alt = src.match(/^\\\[\(([a-z0-9_|]+)\)\\\]/);
+  if (alt) return alt[1].split('|');
+  return null;
+}
+const RULES_BY_KEY = new Map();
+const RULES_ANY = [];
+for (const rule of RULES) {
+  const keys = ruleKeys(rule);
+  if (!keys) { RULES_ANY.push(rule); continue; }
+  for (const k of keys) {
+    if (!RULES_BY_KEY.has(k)) RULES_BY_KEY.set(k, []);
+    RULES_BY_KEY.get(k).push(rule);
+  }
+}
+function tryRules(list, text) {
+  for (const rule of list) {
+    const m = text.match(rule.re);
+    if (m) {
+      const out = rule.apply(m);
+      if (out) return [rule, out];
+    }
+  }
+  return null;
+}
+export const RULE_KEYS_FOR_TEST = { byKey: RULES_BY_KEY, any: RULES_ANY };
+
 // Which measurements must keep arriving, and how long a silence counts as a format
 // change rather than a quiet phase.
 //
@@ -1228,27 +1273,28 @@ export function parseLine(line) {
     tsFallback = true;
   }
 
+  const body = rest;
   let tag = null;
   const tagm = rest.match(TAG_RE);
   if (tagm) { tag = tagm[0].replace(/[\[\]\s]/g, ''); rest = rest.slice(tagm[0].length); }
   const tagBase = tag ? tag.split(':')[0] : null;
 
-  for (const rule of RULES) {
-    const m = rest.match(rule.re) ?? trimmed.match(rule.re);
-    if (m) {
-      const out = rule.apply(m);
-      if (out) {
-        out.ts = ts;
-        if (tsFallback) out.tsFallback = true;
-        out.tag = tag;
-        out.tagBase = tagBase;
-        out.text = rest.trim();
-        out.rule = rule.name;
-        out.severity = out.severity ?? classify(tagBase, rest);
-        if (cut) out.truncated = cut;
-        return out;
-      }
-    }
+  // The line's own rules first, then the untagged ones, then -- only for a line neither
+  // claims -- every rule, which is what the parser did for every line before dispatch.
+  const key = body.match(KEY_RE)?.[1];
+  const own = key ? RULES_BY_KEY.get(key) : undefined;
+  const hit = (own && tryRules(own, body)) ?? tryRules(RULES_ANY, body) ?? tryRules(RULES, body);
+  if (hit) {
+    const [rule, out] = hit;
+    out.ts = ts;
+    if (tsFallback) out.tsFallback = true;
+    out.tag = tag;
+    out.tagBase = tagBase;
+    out.text = rest.trim();
+    out.rule = rule.name;
+    out.severity = out.severity ?? classify(tagBase, rest);
+    if (cut) out.truncated = cut;
+    return out;
   }
 
   return {
