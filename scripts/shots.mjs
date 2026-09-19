@@ -131,6 +131,9 @@ for (const [name, p, settle, height = null] of [
   ['explorer-home', 'explorer', 6000],
   // the network row, the labelled pie and the year chart (2026-09-16); content-sized like the rest
   ['mining', 'mining', 12000],
+  // Chain & Sync (0.1.3): the sync strip and the block charts; worth shooting on a node in initial
+  // sync, where the charts sample the whole chain by height (BLOCKYARD_NODE picks it)
+  ['chain', 'chain', 15000],
 ]) {
   if (!doing(name)) continue;
   try { await nav(p); done.push(await shoot(name, { settle, height })); } catch (e) { fail(name, e); }

@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-09-19
+
+A release about the node BlockYard was built beside, and the charts that watch it. **Bitcoin
+Machine Code** -- an experimental, Core-compatible node in x86-64 assembly -- is now named as
+BlockYard's first-class companion: the monitor reads 96% of its log where it read 53%, its boot
+sequence and index builders included, and its RPC is measured against Core's (every method in
+Core's list, 16 of 18 calls field for field). The **RPC lane** keeps up to four calls in flight per
+node, where it ran one at a time, at the same call rate. A run of **chart fixes** came from
+watching a node in initial sync beside a synced one: the synced node's block charts were wiped by
+the syncing one, the syncing node's were empty and are now a sample of the whole chain, the Network
+page's Throughput card is drawn again from the right rate, and picking a node refreshes it at once.
+Under Diversions, **Wolfenstein 3D**'s menu takes keys again and moves on both arrows and W A S D,
+and every **shareware** game ships whole with its own terms. The administrative suite grew to M7 on
+the way and is excluded from this release, as it is from every release. 1,292 tests, from 1,070.
+
+### Upgrading from 0.1.2
+
+- **The RPC lane now keeps up to four calls in flight per node** (`rpc.maxInFlight`, default 4,
+  matching Bitcoin Core's four RPC threads). It does not ask any node for more calls a second.
+  A node that serves one connection at a time should get `"rpc": { "maxInFlight": 1 }` on its own
+  entry.
+- **Nothing to migrate.** No setting was renamed, no file moved.
+
+- **Changed: a Bitcoin Machine Code node appears in the node picker only once it is 100% synced.** One still in initial sync is a benchmark run: it is left out of the drop-down, the "also syncing" buttons and the list of nodes needing attention until it finishes. It is hidden, not unconfigured
+
+- **Fixed: About showed the node's version as "–".** Since the Mining page's network row arrived (2026-09-15, in 0.1.2), the snapshot carried two `network` keys and kept the Mining one, so the node's own version, protocol and services were lost; About read "version –", and `/api/peers` returned the mining row where its `network` should be the node's `getnetworkinfo`. The node's info is `nodeNetwork` in the snapshot now, and `/api/peers` returns it as documented
+
+- **Added: the node's boot sequence is read.** Bitcoin Machine Code writes twenty-five `[boot]` lines each time it starts -- where it logs, its effective config, each boot step with its time, the DNS seeds and what they returned -- and the monitor flagged every one as unread. Each shape now has its own rule: the finished boot is one line in the event feed, the rest one record per start (`log.boot` in the snapshot). Run 27's log parses at 96.6%
+
+- **Fixed: a syncing node's block charts showed two clusters with a line across days.** During initial sync the node applies blocks faster than the monitor asks about them, so the newest forty it held were two runs of blocks days of block time apart. For a node in initial sync the four block charts now draw a sample of the whole chain so far against height: three hundred blocks from the first to the tip, fetched once at the lowest priority, plus every block the polls fetch. The card says how many of how many. Every point is a block the node reported (`GET /api/blocks/sampled`)
+
+- **Fixed: the sync detail rows for the node's own progress were mostly blank.** "Node's own progress" and "applying thread" had read field names the monitor never stored, since the first commit. They now show stored of target, the node's own ETA, the download window, how far the applying thread is behind, and its rate
+
+- **Closed as a decision: no live mempool stream.** A ZMQ `sequence` client was on the defects list as buildable. A visualizer draws snapshots -- the board redraws every 30 seconds -- and the verbose mempool read costs the node under 1% of one RPC thread, so the poll is the design. `/api/mempool` still says `kind: 'poll'`
+
 - **Changed: the RPC lane runs up to four calls at once per node.** `rpc.maxInFlight` had been advisory since it was written -- the lane gated on a single flag and never read it -- because the first node BlockYard watched served one connection at a time. Neither node here does now: eight `getblockstats` at once ran 4.9 times the throughput of one at a time on Bitcoin Machine Code and 4.5 times on Bitcoin Core 31.1, whose default is four RPC threads (`docs/MEASUREMENTS.md` §40). Starts are still spaced by the rate ceiling, so no node is asked for more calls a second; one slow call just stops holding every other panel behind it. A node that does serve one connection at a time sets `"rpc": { "maxInFlight": 1 }` on its own entry. The Node & RPC page shows calls in flight, the ceiling and the peak
 
 - **Fixed: a node in initial sync wiped every other node's block charts.** Block size, fees, transactions per block and the block interval sat empty on a fully synced node. The block history is shared by every node and stamped with each block's own time; a node still syncing added blocks from a year ago after the synced node's current ones, and the history -- which searched on the assumption it was in time order -- read nothing back and deleted everything at its next 30-second prune. A late row is now put in its place, a history loaded from disk is sorted, and a row older than the retention window is not stored at all
@@ -28,7 +63,7 @@ All notable changes to this project are documented here. The format follows
 
 - **Docs: Bitcoin Machine Code, BlockYard's companion node.** The README and the About page say what it is -- an experimental, Core-compatible node in x86-64 assembly, not ready for production -- what BlockYard does for it, how it runs mempool.space with no separate indexer, and how close its RPC is to Core's, measured: every method, and 16 of 18 calls field for field against Core's release
 
-- **In development, in no release: the administrative suite.** Milestones M0 to M3 (`docs/PLAN-ADMIN-SUITE.md`): the suite is absent by default, a gate of five conditions and an elevation step, a read-only wallet view, and receiving. It exists in git only. The npm package, the container image and the edition builder all exclude it, and a test holds all four exclusions; every release stays read-only toward your node
+- **In development, in no release: the administrative suite.** Milestones M0 to M7 (`docs/PLAN-ADMIN-SUITE.md`): the suite is absent by default, a gate of five conditions and an elevation step, a read-only wallet view, receiving, sending, transaction tools, stopping the node, and editors for `bitcoin.conf` and BlockYard's own settings. M4 to M7 were read by four parallel reviews before they were merged, and every finding was fixed with a test (§8b). It exists in git only. The npm package, the container image and the edition builder all exclude it, and a test holds all four exclusions; this release is read-only toward your node, as every release is
 
 - **Added: the monitor reads 93% of the node's log, up from 53%.** With bmc's log grammar settled, the shapes that carried the remainder are read: the chain view's fold (its figures, plus the anomaly marker and the quiet-pass count run 27 adds), deferred UTXO merges, the dial book's memory, who announced each block first and how, compact-block hit rates and bandwidth mode, the peer-book sample by family, and the coinstats history pass. The chatty ones are state, not feed — a quarter of one run's log was fold lines, and the feed is not the place for them. `docs/MEASUREMENTS.md` §39 has the numbers, including the throughput, which did not move
 

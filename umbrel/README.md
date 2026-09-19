@@ -39,7 +39,7 @@ The box this was written on has Docker but no buildx and no socket permission, s
 multi-arch build happens in GitHub Actions:
 
 ```
-gh workflow run publish-umbrel-image.yml -f version=0.1.2
+gh workflow run publish-umbrel-image.yml -f version=0.1.3
 ```
 
 It pushes `ghcr.io/<owner>/blockyard:<version>` for `linux/amd64` and `linux/arm64` and

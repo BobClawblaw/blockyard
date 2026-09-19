@@ -396,7 +396,17 @@ does not specialise goes through `step()`. What will bite:
   registers and flags every 10,000, memory identical at the end -- and the native fuzzer re-run through
   `run(1)` (118k instructions, 0 mismatches). `cpu.step()` in the API is the interpreter alone.
 
-## Current state (2026-09-17)
+## Current state (2026-09-19)
+
+**0.1.3, prepared 2026-09-19 for the operator's review -- not tagged, not published** (`CHANGELOG.md`
+under 0.1.3, with an "Upgrading from 0.1.2" note): Bitcoin Machine Code named as the first-class
+companion node (README section, About card, mempool.space out of the box, RPC parity measured in
+MEASUREMENTS §41), its log read at 96% (boot sequence, index builders), the RPC lane at four in
+flight, the block charts for a node in initial sync (sampled by height) and for a synced node beside
+one, the Throughput card, the node switch, Wolfenstein 3D's menu and its arrows-and-WASD controls,
+and the shareware packages made whole. The administrative suite reached M7 on `main` and is excluded
+from the release. The announcement is `docs/announcement/0.1.3/`. Tag, tarball from the tag, GitHub
+release and npm wait for the operator's "release".
 
 **0.1.2, released 2026-09-17** (`CHANGELOG.md` under 0.1.2, with an "Upgrading from 0.1.0" list):
 the third AI security audit with every finding fixed, the resumable and reference-checked address
@@ -414,7 +424,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1292 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1294 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -699,7 +709,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1292 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1294 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

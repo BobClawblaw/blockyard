@@ -124,7 +124,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1292 unit tests, all built in
+npm test            # optional: 1294 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -215,7 +215,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1292 unit tests (node:test, no dependencies)
+npm test             # 1294 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -225,8 +225,9 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.1.2** (2026-09-17) — a hardening release after 0.1.0: the third security audit with
-every finding fixed, a resumable address index build, and Scorched Yard. Pre-release software: the
+Version **0.1.3** (2026-09-19) — Bitcoin Machine Code as BlockYard's first-class companion node,
+an RPC lane that keeps four calls in flight, and a run of chart fixes for nodes in initial sync.
+Pre-release software: the
 word is meant literally. Releases are published on [npm](https://www.npmjs.com/package/blockyard)
 as `blockyard`, as [GitHub releases](https://github.com/BobClawblaw/blockyard/releases),
 and announced on
@@ -236,7 +237,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1292 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1294 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node
