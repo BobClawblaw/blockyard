@@ -77,17 +77,19 @@ export async function elevate(app, { sessionId, username, password }, now = Date
   const v = await app.users.verify(username, String(password ?? ''));
   if (!v.ok) {
     attempts.set(sessionId, { n: a.n + 1, first: a.first });
-    // The LENGTH of what was submitted, never the value. Added 2026-09-18 while chasing a
-    // failure that could not be reproduced outside the browser: it distinguishes the three
-    // things that actually go wrong -- the wrong secret entirely (a wallet passphrase is a
-    // different length from an account password), a paste that picked up whitespace, and
-    // an empty field from a form that submitted before it was filled. A password's length
-    // is not a password, and the alternative is guessing.
+    // Two booleans about what was submitted, never its value and no longer its length.
+    // The first version (2026-09-18) recorded `chars` and `trimmedChars` to tell a wrong
+    // secret from a stray paste; the review of 2026-09-19 pointed out that a password's
+    // length, written to a file other people read, is a fact about the password: it tells
+    // whoever reads the trail how long the thing to guess is. What the lengths were for is kept: an empty field from a form that submitted early,
+    // and a paste that picked up whitespace, are the two failures worth telling apart
+    // from a plain wrong password.
+    const submitted = String(password ?? '');
     await app.audit({
       type: 'admin-elevate-failed', username, attempt: a.n + 1,
       reason: v.reason ?? 'bad password',
-      chars: String(password ?? '').length,
-      trimmedChars: String(password ?? '').trim().length,
+      empty: submitted.length === 0,
+      hadSurroundingWhitespace: submitted.length > 0 && submitted.trim().length !== submitted.length,
     });
     return { ok: false, error: v.reason === 'account disabled' ? 'this account is disabled' : 'that password is not right' };
   }
