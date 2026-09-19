@@ -255,7 +255,8 @@ Each lands on its own branch, with tests, and each is useful on its own.
 
 ## 8a. What was built overnight, 2026-09-18
 
-M0–M3 are merged to main; M4, M6 and M7 are on `admin-m4-send` and wait for a read.
+M0–M3 are merged to main; M4–M7 and the suite's screens are on `admin-m4-send`. They were read
+on 2026-09-19 (§8b) and every finding was fixed on the branch.
 
 | | state | where |
 |---|---|---|
@@ -280,6 +281,47 @@ Two corrections to this plan, made because the code disagreed with it:
    Neither can lock anyone out or open anything up. An acknowledgement asked for a
    performance knob is an acknowledgement people learn to click through, which spends the
    attention the mechanism is there to buy.
+
+## 8b. The read, 2026-09-19
+
+Four parallel reviews (send; transaction tools; daemon and config editors; the screens and new
+routes), each finding reproduced against a throwaway regtest node or confirmed in the code before
+it counted, then fixed on three branches merged into `admin-m4-send`, each fix with a test that
+failed first. What they found, in the order of what it could cost:
+
+- **The config editor could reach the machine.** A section name was written into
+  `bitcoin.conf` unvalidated (a newline in it wrote any line), the file written was whatever
+  `confFile` said and the self-editor could set that, the "weighty key" acknowledgement missed
+  `main.`-qualified spellings, and the node's RPC credentials went to the browser. Fixed: only
+  `<datadir>/bitcoin.conf`, opened `O_NOFOLLOW`, mode and owner kept or the write refused;
+  sections are the five networks; credentials are redacted.
+- **The caps could be raced and dodged.** The 24h cap was checked, then five RPC awaits, then
+  recorded: two confirms at once both passed (305,640 sat out under a 250,000 cap). The paste box
+  decided "ours" from `listunspent`, which leaves out coins already spent in the mempool or
+  locked (10 BTC and 49.999 BTC went out uncapped), and asked only the request's wallet. Fixed:
+  check-and-reserve in one synchronous step; ownership from each input's parent transaction
+  across every named wallet; the Send phrase on pasted spends; one elevation, one action.
+- **A second build could replace a send already reported sent**, and a broadcast that timed out
+  was neither counted nor recorded. Fixed: a build locks its coins (released on cancel, expiry
+  or a failure before broadcast); the txid is recorded before broadcasting and an ambiguous
+  outcome says "may have been broadcast".
+- **The QR codes could not be scanned**: the Reed-Solomon remainder read the generator backwards,
+  and versions 7–10 lacked their version blocks. The tests had passed because their reader
+  shared the blind spots. Now checked against ISO/IEC 18004's worked example, and 176 of 176
+  symbols decode in OpenCV (0 before).
+- Smaller: amounts under 100 sat threw (JavaScript prints them in exponent form); the fee-bump
+  dialog could sign a rate other than the one it priced; the wallet on screen could differ from
+  the one a send was built from; the wallet relock could be dropped by a busy lane.
+
+**Decisions taken with the fixes (operator, 2026-09-19).** (1) The web config editor does not
+touch RPC credentials, binding, or anything that says which file is written: `rpcauth`,
+`rpcuser`, `rpcpassword`, `rpcbind`, `rpcallowip`, `server`, `includeconf`, the chain switches,
+`zmqpub*`, the `*notify` commands and the rest are refused in every spelling, to be edited by
+hand. (2) The wallet passphrase is required for every send, paste-box spend and fee bump on an
+encrypted wallet, and one signing operation runs at a time per wallet. (3) `admin.wallets`
+entries name their node, `{ "node", "wallet" }`; a bare name only works with one node
+configured. (4) BlockYard's own config editor changes only an allowlist of polling, markets,
+storage-tuning and log-timing settings; everything else is locked like the `admin` block.
 
 ## 11. Releases, while this is being built
 
