@@ -101,7 +101,7 @@ export function renderAbout(s, state, h) {
   }
 
   if (node) {
-    const n = s?.network ?? null;
+    const n = s?.nodeNetwork ?? null;   // the node's getnetworkinfo; `network` is the Mining page's
     const html = row('node', esc(s?.label ?? '–'))
       + row('version', esc(n?.subversion ?? '–'))
       + row('protocol', n?.protocol ?? '–')

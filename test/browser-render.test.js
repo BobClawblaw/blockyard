@@ -345,3 +345,20 @@ test('a syncing node samples the whole chain once, behind everything else, and k
   await m.sampleChainHistory(25);
   assert.equal(asked.length, 0, 'and a height it holds is not asked again');
 });
+
+test('the snapshot keeps the node\'s own network info beside the Mining page\'s network row', async () => {
+  // Both were `network:` in one object literal from 2026-09-15 (the Mining network row), and
+  // JavaScript keeps the last: every snapshot lost the node's version, protocol and services,
+  // and About read "version –". Found in the 0.1.3 screenshots, 2026-09-19.
+  const m = monitorWith(RICH, []);
+  m.state.networkInfo = { ...RICH.getnetworkinfo, protocolversion: 70016, localservicesnames: ['NETWORK', 'WITNESS'] };
+  const s = m.snapshot({});
+  assert.equal(s.nodeNetwork?.subversion, '/BitcoinMachineCode:0.0.1/', 'the node\'s own getnetworkinfo is in the snapshot');
+  assert.equal(s.nodeNetwork?.protocol, 70016);
+  assert.ok(s.network && 'difficulty' in s.network, 'and the Mining page\'s network row is still `network`');
+
+  const { el } = installDom();
+  const about = await import('../public/js/about.js');
+  about.renderAbout(s, {}, { api: async () => ({}), toast: () => {}, fmt: F, render: () => {} });
+  assert.match(String(el('abNode').innerHTML), /BitcoinMachineCode:0\.0\.1/, 'About shows the node\'s version');
+});

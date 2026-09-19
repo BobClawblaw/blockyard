@@ -2268,7 +2268,12 @@ export class NodeMonitor extends EventEmitter {
       pruned: boolOrNull(s.chainInfo?.pruned),
       chainwork: s.chainInfo?.chainwork ?? null,
       uptimeSec: s.uptimeSec ?? null,
-      network: s.networkInfo ? {
+      // THE NODE'S OWN getnetworkinfo, under its own key (2026-09-19). It was `network` until the
+      // Mining page's network row (11a4b57, 2026-09-15) added a second `network:` further down
+      // this same object literal -- JavaScript keeps the last, so since that day every snapshot
+      // lost the node's version, protocol and services, and About read "version –". Found in the
+      // 0.1.3 screenshots.
+      nodeNetwork: s.networkInfo ? {
         version: s.networkInfo.version,
         subversion: s.networkInfo.subversion,
         protocol: s.networkInfo.protocolversion,

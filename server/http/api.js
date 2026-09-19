@@ -1274,7 +1274,9 @@ function peersView(m) {
     rpcPeers: m.state.peers.list,
     activity: s.peers.activity,
     recentEvents: s.peers.recentEvents,
-    network: s.network,
+    // the node's getnetworkinfo, as docs/API.md describes it -- the snapshot keeps it under
+    // `nodeNetwork` since 2026-09-19, because its `network` is the Mining page's network row
+    network: s.nodeNetwork,
   };
 }
 
