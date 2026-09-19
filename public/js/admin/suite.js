@@ -15,7 +15,7 @@
 // and here it is a security control rather than a preference. Every byte of this is
 // readable in the browser's view-source, and CSP forbids anything that is not.
 
-import { SCREENS, BALANCES, TX_COLUMNS, txType, txStatus, txGlyph, confirmationLines } from './corelayout.js';
+import { SCREENS, BALANCES, TX_COLUMNS, txType, txStatus, txGlyph, confirmationLines, outputRole } from './corelayout.js';
 import { encodeQr, paymentUri, drawQr } from './qr.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -32,6 +32,57 @@ const el = (tag, attrs = {}, ...kids) => {
   for (const kid of kids.flat()) if (kid != null) node.append(kid);
   return node;
 };
+
+/**
+ * A wallet is a (node, wallet) PAIR, not a name. Since 2026-09-19 /api/admin/status lists
+ * `{ node, wallet }` objects and every wallet request names both: the same wallet name can
+ * exist on two nodes, and a request that named only the wallet left the server to guess.
+ * A bare string (the shape before that) is still read, as a wallet on no named node.
+ */
+const toPair = (w) => (typeof w === 'string' ? { node: null, wallet: w } : { node: w?.node ?? null, wallet: w?.wallet ?? '' });
+const pairLabel = (p) => (p.node ? `${p.node} \u00b7 ${p.wallet}` : p.wallet);
+const pairKey = (p) => `${p.node ?? ''}\u0000${p.wallet}`;
+/** The query string that names a pair, for GET routes. */
+const pairQs = (p) => (p.node != null ? `node=${encodeURIComponent(p.node)}&` : '') + `wallet=${encodeURIComponent(p.wallet)}`;
+/** The body fields that name a pair, for POST routes. */
+const pairBody = (p) => ({ node: p.node, wallet: p.wallet });
+
+/**
+ * A field for the WALLET passphrase -- the second secret, never the account password.
+ *
+ * autocomplete="off" is ignored on a password field by every current browser, so the old
+ * fields let a browser offer to save the wallet passphrase as this site's login and later
+ * fill it into the elevation prompt, which asks for the account password (2026-09-19
+ * review). "one-time-code" is a token browsers do not save as a login or fill from one;
+ * the distinct name keeps it out of the site's saved credentials, and the two vendor
+ * attributes ask the common password managers to leave it alone as well.
+ *
+ * REQUIRED when the wallet is encrypted (decision, 2026-09-19): a send, a broadcast of our
+ * coins and a fee bump are each signed with the passphrase typed for them, never because
+ * the wallet happened to be unlocked already by something else. `encrypted` null means
+ * "not known", which is treated as encrypted: the server has the last word either way.
+ */
+let passphraseSeq = 0;
+function walletPassphrase(encrypted) {
+  const required = encrypted !== false;
+  const input = el('input', {
+    type: 'password',
+    name: 'wallet-passphrase',
+    id: `wallet-passphrase-${++passphraseSeq}`,
+    autocomplete: 'one-time-code',
+    'data-1p-ignore': '',
+    'data-lpignore': 'true',
+    required: required ? 'required' : null,
+    placeholder: 'WALLET passphrase (the one that encrypts the wallet)',
+  });
+  const hint = el('div', {
+    class: 'sub',
+    text: required
+      ? 'Required: this wallet is encrypted, and a transaction is signed only with the passphrase typed here -- never because the wallet was already unlocked.'
+      : 'This wallet is not encrypted, so there is no passphrase to type.',
+  });
+  return { input, hint, required };
+}
 
 const sats = (n) => (n == null ? '—' : `${Number(n).toLocaleString()} sat`);
 const btc = (n) => (n == null ? '—' : `${(n / 1e8).toFixed(8)} BTC`);
@@ -64,16 +115,23 @@ export async function initAdminSuite({ api, toast, state }) {
     screen: 'overview',
     status,
     elevation: status.elevation ?? { elevated: false, leftMs: 0 },
-    wallet: status.wallets?.[0] ?? null,
+    wallets: (status.wallets ?? []).map(toPair).filter((p) => p.wallet),
+    wallet: null,
     build: null,
+    // The Receive screen's history, per (node, wallet): wallet A's addresses must not be
+    // offered under wallet B, where "Send to this" would pay A from B.
+    received: new Map(),
   };
+  ui.wallet = ui.wallets[0] ?? null;
 
   // ------------------------------------------------------------- elevation prompt
   // The password is read from an input, sent, and the input is cleared. It is never put
   // in a variable that outlives the call, never in state, never in the URL.
   async function elevate(why) {
     return new Promise((resolve) => {
-      const input = el('input', { type: 'password', autocomplete: 'current-password', placeholder: 'your account password' });
+      // current-password and the account's own field name: this is the one secret here a
+      // browser may fill, and the wallet passphrase fields are named so it never fills them.
+      const input = el('input', { type: 'password', name: 'password', id: 'elevate-password', autocomplete: 'current-password', placeholder: 'your account password' });
       const err = el('div', { class: 'warn' });
       const close = () => { input.value = ''; dialog.remove(); };
       const submit = async () => {
@@ -126,24 +184,35 @@ export async function initAdminSuite({ api, toast, state }) {
 
   // ------------------------------------------------------------------- the panels
   function walletPicker() {
-    const sel = el('select', { onchange: (e) => { ui.wallet = e.target.value; render(); } });
-    for (const w of ui.status.wallets ?? []) {
-      const opt = el('option', { value: w, text: w });
-      if (w === ui.wallet) opt.selected = true;
+    // The option's value is its index: a pair does not fit in a value attribute, and two
+    // pairs can share a wallet name.
+    const sel = el('select', { onchange: (e) => { ui.wallet = ui.wallets[Number(e.target.value)] ?? null; render(); } });
+    ui.wallets.forEach((p, i) => {
+      const opt = el('option', { value: String(i), text: pairLabel(p) });
+      if (ui.wallet && pairKey(p) === pairKey(ui.wallet)) { opt.selected = true; opt.setAttribute('selected', 'selected'); }
       sel.append(opt);
-    }
+    });
     return sel;
   }
 
+  /**
+   * Whether the pair's wallet is encrypted, from its overview: the build summary does not
+   * say (yet), and the passphrase field has to know whether to be required. null when the
+   * wallet could not be asked, which the field treats as encrypted.
+   */
+  async function encryptedOf(pair) {
+    try { return Boolean((await api(`/api/admin/wallet?${pairQs(pair)}`)).encrypted); } catch { return null; }
+  }
+
   // Core's overviewpage.ui: a Balances box of four labelled rows, then Recent transactions.
-  async function overviewPanel() {
+  async function overviewPanel(pair) {
     const box = el('div', { class: 'card' }, el('h3', { text: 'Balances' }));
-    if (!ui.wallet) {
+    if (!pair) {
       box.append(el('p', { text: 'No wallet is named in admin.wallets, so none is reachable from here.' }));
       return box;
     }
     try {
-      const w = await api(`/api/admin/wallet?wallet=${encodeURIComponent(ui.wallet)}`);
+      const w = await api(`/api/admin/wallet?${pairQs(pair)}`);
       const dl = el('dl', { class: 'balances' });
       for (const b of BALANCES) {
         dl.append(
@@ -219,7 +288,8 @@ export async function initAdminSuite({ api, toast, state }) {
   // feature. It now comes with a copy button and a "Send to this address" that fills the
   // Send screen's destination and takes you there -- which on a test network is the whole
   // loop, and on a real one is how you pay yourself between wallets.
-  async function receivePanel() {
+  async function receivePanel(pair) {
+    if (!pair) return el('div', { class: 'card' }, el('h3', { text: 'Receive' }), el('p', { text: 'No wallet is named in admin.wallets.' }));
     const label = el('input', { type: 'text', placeholder: 'Label (what is this address for?)' });
     const out = el('div');
 
@@ -252,9 +322,10 @@ export async function initAdminSuite({ api, toast, state }) {
       );
     };
 
+    const received = ui.received.get(pairKey(pair)) ?? [];
     const make = () => withElevation('Deriving an address writes to the wallet.', async () => {
-      const res = await api('/api/admin/wallet/address', { method: 'POST', body: { wallet: ui.wallet, label: label.value } });
-      ui.received = [{ address: res.address, label: res.label }, ...(ui.received ?? [])].slice(0, 10);
+      const res = await api('/api/admin/wallet/address', { method: 'POST', body: { ...pairBody(pair), label: label.value } });
+      ui.received.set(pairKey(pair), [{ address: res.address, label: res.label }, ...(ui.received.get(pairKey(pair)) ?? [])].slice(0, 10));
       label.value = '';
       show(res);
       toast('address derived');
@@ -268,11 +339,11 @@ export async function initAdminSuite({ api, toast, state }) {
 
     // Core's "Requested payments history", as much of it as this suite has: the addresses
     // derived in this session, newest first, each reusable without deriving another.
-    if (ui.received?.length) {
+    if (received.length) {
       const table = el('table', { class: 't' },
         el('thead', {}, el('tr', {}, el('th', { text: 'Label' }), el('th', { text: 'Address' }), el('th', { text: '' }))));
       const body = el('tbody');
-      for (const r of ui.received) {
+      for (const r of received) {
         const row = el('tr', { class: 'clickable', tabindex: '0', title: 'show the QR and the address' },
           el('td', { text: r.label ?? '' }),
           el('td', {}, el('code', { class: 'addr', text: r.address })),
@@ -308,7 +379,7 @@ export async function initAdminSuite({ api, toast, state }) {
    * The distinction is on the screen rather than implied, because "I have paid this before"
    * and "I have vouched for this" are different claims and only one of them skips a guard.
    */
-  async function choosePayee(onPick) {
+  async function choosePayee(pair, onPick) {
     const list = el('div', { class: 'payees' }, el('div', { class: 'sub', text: 'loading…' }));
     const search = el('input', { type: 'text', placeholder: 'Enter address or label to search', autocomplete: 'off' });
     const dialog = el('div', { class: 'modal' },
@@ -321,7 +392,7 @@ export async function initAdminSuite({ api, toast, state }) {
 
     const [book, history] = await Promise.all([
       api('/api/admin/addressbook').catch(() => ({ entries: [] })),
-      api(`/api/admin/wallet/history?wallet=${encodeURIComponent(ui.wallet)}&count=200`).catch(() => ({ transactions: [] })),
+      api(`/api/admin/wallet/history?${pairQs(pair)}&count=200`).catch(() => ({ transactions: [] })),
     ]);
     // Distinct destinations, most recent first, and never one of our own receive addresses.
     const seen = new Set((book.entries ?? []).map((e) => e.address));
@@ -367,52 +438,72 @@ export async function initAdminSuite({ api, toast, state }) {
   // ------------------------------------------------------------------------ send
   // Two screens, because the second one shows what the NODE built rather than what was
   // typed. See server/admin/send.js.
-  async function sendPanel() {
+  async function sendPanel(pair) {
+    if (!pair) return el('div', { class: 'card' }, el('h3', { text: 'Send' }), el('p', { text: 'No wallet is named in admin.wallets.' }));
     const address = el('input', { type: 'text', placeholder: 'Pay To (destination address)', autocomplete: 'off' });
     // Filled by "Send to this address" on the Receive screen, or by an address book row.
     // Consumed once: leaving it set would quietly re-fill the field after a send.
     if (ui.prefillTo) { address.value = ui.prefillTo; ui.prefillTo = null; }
     const amount = el('input', { type: 'text', inputmode: 'numeric', placeholder: 'amount in satoshis' });
     const out = el('div');
+    // Whether the passphrase is required. Asked while the panel is drawn, not at Review,
+    // so the answer is there when the confirm screen needs it.
+    const encrypted = await encryptedOf(pair);
 
+    // THE PAIR THIS PANEL WAS DRAWN FOR, not whatever ui.wallet says when Review is
+    // pressed: the picker can change in between, and a send must come from the wallet the
+    // screen showed (2026-09-19 review).
     const build = () => withElevation('Building a transaction reads the wallet’s coins.', async () => {
       const res = await api('/api/admin/wallet/send/build', {
         method: 'POST',
-        body: { wallet: ui.wallet, address: address.value.trim(), amountSat: amount.value.trim() },
+        body: { ...pairBody(pair), address: address.value.trim(), amountSat: amount.value.trim() },
       });
       ui.build = res.build;
-      out.replaceChildren(confirmScreen(res.build, out));
+      out.replaceChildren(confirmScreen(res.build, out, { pair, encrypted: res.build.encrypted ?? encrypted }));
     }).catch((e) => out.replaceChildren(el('p', { class: 'warn', text: e.message })));
 
     return el('div', { class: 'card' },
       el('h3', { text: 'Send' }),
+      el('div', { class: 'sub', text: `from ${pair.wallet}${pair.node ? ` on ${pair.node}` : ''}` }),
       el('div', { class: 'payto' },
         address,
         // Core's sendcoinsentry.ui puts this immediately beside the field, which is where
         // a person looks when they are about to paste something they got in an email.
-        el('button', { text: 'Choose…', title: 'Choose previously used address', onclick: () => choosePayee((a) => { address.value = a; address.focus(); }) })),
+        el('button', { text: 'Choose…', title: 'Choose previously used address', onclick: () => choosePayee(pair, (a) => { address.value = a; address.focus(); }) })),
       amount,
       el('button', { class: 'primary', text: 'Review', onclick: build }),
       el('p', { class: 'sub', text: 'Nothing is signed until you confirm the transaction the node builds.' }),
       out);
   }
 
-  function confirmScreen(b, out) {
+  function confirmScreen(b, out, { pair, encrypted }) {
     const phrase = b.phrase ? el('input', { type: 'text', placeholder: `type: ${b.phrase}`, autocomplete: 'off' }) : null;
-    const pass = el('input', { type: 'password', placeholder: 'WALLET passphrase (the one that encrypts the wallet)', autocomplete: 'off' });
+    const { input: pass, hint: passHint, required } = walletPassphrase(encrypted);
     const err = el('div', { class: 'warn' });
+    // The server's build names the wallet it will sign with. If that is not the pair this
+    // screen was drawn for, something between the two has gone wrong, and the one safe
+    // answer is not to offer the Send button.
+    const mismatch = pair && (b.wallet !== pair.wallet || (pair.node != null && b.node !== pair.node));
 
     const send = async () => {
+      if (required && !pass.value) {
+        err.textContent = 'Type the wallet passphrase: this wallet is encrypted, and a send is signed only with the passphrase typed for it.';
+        return;
+      }
       try {
-        const res = await api('/api/admin/wallet/send/confirm', {
+        // Inside withElevation: the elevation is consumed by a spend and lasts minutes, so
+        // it can lapse between Review and Send. Then the password prompt appears and the
+        // same request is retried -- the passphrase field is read again, not cleared.
+        const res = await withElevation('Sending signs and broadcasts a transaction.', () => api('/api/admin/wallet/send/confirm', {
           method: 'POST',
-          body: { wallet: b.wallet, id: b.id, phrase: phrase?.value ?? null, passphrase: pass.value },
-        });
+          body: { node: b.node, wallet: b.wallet, id: b.id, phrase: phrase?.value ?? null, passphrase: pass.value },
+        }));
         pass.value = '';
+        if (!res) { err.textContent = 'Not sent: the password prompt was cancelled.'; return; }
         out.replaceChildren(
           el('h4', { text: 'Sent' }),
           el('code', { class: 'addr', text: res.txid }),
-          el('div', { class: 'sub', text: `${sats(res.sendingSat)} to ${res.to}, fee ${sats(res.feeSat)}` }),
+          el('div', { class: 'sub', text: `${sats(res.sendingSat)} to ${res.to}, fee ${sats(res.feeSat)}, from ${b.wallet} on ${b.node}` }),
         );
         toast('transaction broadcast');
       } catch (e) {
@@ -425,7 +516,6 @@ export async function initAdminSuite({ api, toast, state }) {
         }
       }
     };
-
     // EVERY FIGURE COMES FROM THE BUILT TRANSACTION, laid out as Core lays out its own
     // confirmation (sendcoinsdialog.cpp, via corelayout.js): review line, recipient,
     // amount, the fee with its size in kvB, the note about raising it later, total last.
@@ -444,6 +534,9 @@ export async function initAdminSuite({ api, toast, state }) {
     return el('div', { class: 'confirm' },
       el('h4', { text: 'Confirm send coins' }),
       el('p', { text: lead.text }),
+      // From the server's build, not from the picker: this is the wallet that will sign.
+      el('p', { class: 'spending', text: `Spending from: ${b.wallet} on ${b.node}` }),
+      mismatch ? el('p', { class: 'warn', text: `This was built from ${b.wallet} on ${b.node}, not the wallet this screen was opened for (${pairLabel(pair)}). Build it again.` }) : null,
       el('div', { class: 'sub', text: 'Pay To' }),
       el('div', {}, el('code', { class: 'addr', text: b.to })),
       dl,
@@ -452,8 +545,8 @@ export async function initAdminSuite({ api, toast, state }) {
       b.addressBook
         ? el('p', { class: 'sub', text: 'This destination is in your address book.' })
         : el('p', { class: 'warn', text: 'This destination is NOT in your address book. Check the address above against the one you were given, character by character.' }),
-      phrase, pass, err,
-      el('button', { class: 'danger', text: `Send ${sats(b.totalSat)}`, onclick: send }));
+      phrase, required ? pass : null, passHint, err,
+      mismatch ? null : el('button', { class: 'danger', text: `Send ${sats(b.totalSat)}`, onclick: send }));
   }
 
   /**
@@ -463,7 +556,7 @@ export async function initAdminSuite({ api, toast, state }) {
    * single click is what a row in a web page usually wants, and binding both costs nothing
    * -- the second event on a dialog that is already open is a no-op.
    */
-  async function txDetail(txid) {
+  async function txDetail(pair, txid) {
     const body = el('div', { text: 'loading…' });
     const dialog = el('div', { class: 'modal' },
       el('div', { class: 'modalbox wide' },
@@ -474,7 +567,7 @@ export async function initAdminSuite({ api, toast, state }) {
     document.body.append(dialog);
 
     try {
-      const t = await api(`/api/admin/wallet/tx?wallet=${encodeURIComponent(ui.wallet)}&txid=${encodeURIComponent(txid)}`);
+      const t = await api(`/api/admin/wallet/tx?${pairQs(pair)}&txid=${encodeURIComponent(txid)}`);
       const rows = el('dl', {},
         el('dt', { text: 'amount' }), el('dd', { class: t.amountSat < 0 ? 'neg' : 'pos', text: `${sats(t.amountSat)} (${btc(t.amountSat)})` }),
         el('dt', { text: 'fee' }), el('dd', { text: t.feeSat == null ? '—' : `${sats(t.feeSat)}${t.feeRateSatPerVb ? ` · ${t.feeRateSatPerVb} sat/vB` : ''}` }),
@@ -491,13 +584,16 @@ export async function initAdminSuite({ api, toast, state }) {
         el('thead', {}, el('tr', {}, el('th', { text: '#' }), el('th', { text: 'address' }), el('th', { text: 'amount' }), el('th', { text: '' }))));
       const outBody = el('tbody');
       for (const o of t.outputs ?? []) {
+        const role = outputRole(t, o);
         outBody.append(el('tr', {},
           el('td', { text: String(o.n) }),
           el('td', {}, el('code', { class: 'addr', text: o.address ?? o.type ?? '—' })),
           el('td', { text: sats(o.amountSat) }),
-          // The whole point of the view: which outputs came back to you. Without this a
-          // 1 BTC payment out of a 50 BTC coin reads as a 50 BTC transaction.
-          el('td', { class: o.mine ? 'pos' : 'sub', text: o.mine ? 'yours (change)' : 'not yours' })));
+          // The whole point of the view: which outputs came back to you, and as what.
+          // Without this a 1 BTC payment out of a 50 BTC coin reads as a 50 BTC
+          // transaction; with every output of ours called "change" (until 2026-09-19), a
+          // payment RECEIVED read as change too. corelayout.js outputRole says how.
+          el('td', { class: role.tone, text: role.text })));
       }
       outs.append(outBody);
 
@@ -535,13 +631,13 @@ export async function initAdminSuite({ api, toast, state }) {
   const fmtTime = (ms) => (ms ? new Date(ms).toLocaleString() : '—');
   const shortId = (id) => (id ? `${id.slice(0, 8)}…${id.slice(-6)}` : '—');
 
-  async function historyPanel({ recent = false } = {}) {
+  async function historyPanel(pair, { recent = false } = {}) {
     // transactiontablemodel.cpp: a status column with no title, then Date, Type, Label,
     // Amount -- Core's order, and Core's own status wording (corelayout.js).
     const box = el('div', { class: 'card' }, el('h3', { text: recent ? 'Recent transactions' : 'Transactions' }));
-    if (!ui.wallet) return box;
+    if (!pair) return box;
     try {
-      const res = await api(`/api/admin/wallet/history?wallet=${encodeURIComponent(ui.wallet)}`);
+      const res = await api(`/api/admin/wallet/history?${pairQs(pair)}`);
       const all = res.transactions ?? [];
       const rows = recent ? all.slice(0, 5) : all;
       if (!rows.length) {
@@ -554,7 +650,7 @@ export async function initAdminSuite({ api, toast, state }) {
       for (const t of rows) {
         const st = txStatus(t);
         const bump = t.confirmations === 0 && t.bip125Replaceable === 'yes' && t.category === 'send'
-          ? el('button', { class: 'linky', text: 'Bump fee', onclick: () => bumpDialog(t) })
+          ? el('button', { class: 'linky', text: 'Bump fee', onclick: () => bumpDialog(pair, t) })
           : null;
         const row = el('tr', { class: 'clickable', tabindex: '0', title: st.text },
           el('td', { class: `statuscol ${st.tone}`, text: txGlyph(t) }),
@@ -563,7 +659,7 @@ export async function initAdminSuite({ api, toast, state }) {
           el('td', { text: t.label ?? '' }),
           el('td', { class: t.amountSat < 0 ? 'amount neg' : 'amount pos' }, el('div', { text: btc(t.amountSat) }), bump),
         );
-        const open = (e) => { if (!e.target?.closest?.('button')) txDetail(t.txid); };
+        const open = (e) => { if (!e.target?.closest?.('button')) txDetail(pair, t.txid); };
         row.addEventListener('click', open);
         row.addEventListener('dblclick', open);
         row.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(e); });
@@ -580,44 +676,76 @@ export async function initAdminSuite({ api, toast, state }) {
     return box;
   }
 
-  /** Raise the fee on an unconfirmed send: price it first, then one password, one send. */
-  function bumpDialog(tx) {
+  /**
+   * Raise the fee on an unconfirmed send: price it first, then one password, one send.
+   *
+   * WHAT IS SENT IS WHAT WAS PRICED (2026-09-19 review). "Replace it" used to read the rate
+   * box at click time, and the box stayed editable after pricing -- so the operator could
+   * look at a price for 5 sat/vB and replace at 50. The priced rate is now captured, the box
+   * is locked while a price stands, and any edit ("Change the rate") throws the price away.
+   */
+  function bumpDialog(pair, tx) {
     const rate = el('input', { type: 'text', inputmode: 'numeric', placeholder: 'new fee rate, sat/vB' });
-    const pass = el('input', { type: 'password', placeholder: 'wallet passphrase', autocomplete: 'off' });
     const out = el('div');
+    let priced = null;
+    const encrypted = encryptedOf(pair);   // a promise; awaited once there is a price
+
+    const unprice = () => {
+      priced = null;
+      rate.disabled = false;
+      out.replaceChildren();
+    };
+    rate.addEventListener('input', () => { if (priced != null) unprice(); });
+
+    const price = async () => {
+      const asked = rate.value.trim();
+      try {
+        const res = await withElevation('Pricing a replacement reads the wallet.', () => api('/api/admin/tx/bump', {
+          method: 'POST', body: { ...pairBody(pair), txid: tx.txid, feeRate: asked },
+        }));
+        if (!res) return;
+        priced = asked;
+        rate.disabled = true;
+        const { input: pass, hint, required } = walletPassphrase(await encrypted);
+        const replace = async () => {
+          if (required && !pass.value) {
+            out.append(el('p', { class: 'warn', text: 'Type the wallet passphrase: this wallet is encrypted, and a replacement is signed only with the passphrase typed for it.' }));
+            return;
+          }
+          try {
+            const done = await withElevation('Replacing a transaction signs and broadcasts it.', () => api('/api/admin/tx/bump/confirm', {
+              method: 'POST',
+              body: { ...pairBody(pair), txid: tx.txid, feeRate: priced, passphrase: pass.value },
+            }));
+            pass.value = '';
+            if (!done) return;
+            dialog.remove();
+            toast(`replaced: ${done.txid.slice(0, 12)}…`);
+            render();
+          } catch (err) { pass.value = ''; out.append(el('p', { class: 'warn', text: err.message })); }
+        };
+        out.replaceChildren(
+          el('dl', {},
+            el('dt', { text: 'rate' }), el('dd', { text: `${priced} sat/vB` }),
+            el('dt', { text: 'fee now' }), el('dd', { text: sats(res.oldFeeSat) }),
+            el('dt', { text: 'fee after' }), el('dd', { text: sats(res.newFeeSat) }),
+            el('dt', { text: 'extra' }), el('dd', { text: sats(res.deltaSat) })),
+          el('p', { class: 'sub', text: res.note }),
+          required ? pass : null, hint,
+          el('div', { class: 'row' },
+            el('button', { class: 'danger', text: `Replace it at ${priced} sat/vB`, onclick: replace }),
+            el('button', { text: 'Change the rate', onclick: () => { unprice(); rate.focus(); } })));
+      } catch (err) { out.replaceChildren(el('p', { class: 'warn', text: err.message })); }
+    };
+
     const dialog = el('div', { class: 'modal' },
       el('div', { class: 'modalbox' },
         el('h3', { text: 'Raise the fee' }),
         el('div', { class: 'sub' }, el('code', { class: 'addr', text: tx.txid })),
+        el('div', { class: 'sub', text: `in ${pair.wallet}${pair.node ? ` on ${pair.node}` : ''}` }),
         rate,
         el('div', { class: 'row' },
-          el('button', { text: 'Price it', onclick: async () => {
-            try {
-              const res = await withElevation('Pricing a replacement reads the wallet.', () => api('/api/admin/tx/bump', {
-                method: 'POST', body: { wallet: ui.wallet, txid: tx.txid, feeRate: rate.value.trim() },
-              }));
-              if (!res) return;
-              out.replaceChildren(
-                el('dl', {},
-                  el('dt', { text: 'fee now' }), el('dd', { text: sats(res.oldFeeSat) }),
-                  el('dt', { text: 'fee after' }), el('dd', { text: sats(res.newFeeSat) }),
-                  el('dt', { text: 'extra' }), el('dd', { text: sats(res.deltaSat) })),
-                el('p', { class: 'sub', text: res.note }),
-                pass,
-                el('button', { class: 'danger', text: 'Replace it', onclick: async () => {
-                  try {
-                    const done = await api('/api/admin/tx/bump/confirm', {
-                      method: 'POST',
-                      body: { wallet: ui.wallet, txid: tx.txid, feeRate: rate.value.trim(), passphrase: pass.value },
-                    });
-                    pass.value = '';
-                    dialog.remove();
-                    toast(`replaced: ${done.txid.slice(0, 12)}…`);
-                    render();
-                  } catch (err) { pass.value = ''; out.append(el('p', { class: 'warn', text: err.message })); }
-                } }));
-            } catch (err) { out.replaceChildren(el('p', { class: 'warn', text: err.message })); }
-          } }),
+          el('button', { text: 'Price it', onclick: price }),
           el('button', { text: 'Close', onclick: () => dialog.remove() })),
         out));
     document.body.append(dialog);
@@ -625,11 +753,11 @@ export async function initAdminSuite({ api, toast, state }) {
   }
 
   // --------------------------------------------------------------------- coins
-  async function utxoPanel() {
+  async function utxoPanel(pair) {
     const box = el('div', { class: 'card' }, el('h3', { text: 'Coins' }));
-    if (!ui.wallet) return box;
+    if (!pair) return box;
     try {
-      const res = await api(`/api/admin/wallet/utxos?wallet=${encodeURIComponent(ui.wallet)}`);
+      const res = await api(`/api/admin/wallet/utxos?${pairQs(pair)}`);
       const rows = res.utxos ?? [];
       box.append(el('div', { class: 'sub', text: `${rows.length} output(s), ${sats(rows.reduce((n, u) => n + u.amountSat, 0))} in total` }));
       const table = el('table', { class: 't' },
@@ -656,11 +784,11 @@ export async function initAdminSuite({ api, toast, state }) {
     return box;
   }
 
-  async function labelPanel() {
+  async function labelPanel(pair) {
     const box = el('div', { class: 'card' }, el('h3', { text: 'Labels' }));
-    if (!ui.wallet) return box;
+    if (!pair) return box;
     try {
-      const res = await api(`/api/admin/wallet/labels?wallet=${encodeURIComponent(ui.wallet)}`);
+      const res = await api(`/api/admin/wallet/labels?${pairQs(pair)}`);
       const rows = res.labels ?? [];
       if (!rows.length) return box.append(el('p', { class: 'sub', text: 'no labels yet' })), box;
       for (const l of rows) {
@@ -747,20 +875,43 @@ export async function initAdminSuite({ api, toast, state }) {
     return bar;
   }
 
+  /**
+   * RENDERS ARE ORDERED BY GENERATION (2026-09-19 review). Each render awaits several
+   * requests, and two can overlap -- a picker change while the last one is still loading.
+   * Unordered, whichever finished LAST was drawn: the older one, showing wallet A under a
+   * picker that said B. Each render now takes a number and draws only if no newer render
+   * has started since, and every panel is handed the pair it was started for rather than
+   * reading ui.wallet after its awaits.
+   */
+  let generation = 0;
   async function render() {
     if (state?.page !== 'wallet') return;
+    const mine = ++generation;
+    const pair = ui.wallet;
     const head = el('div', { class: 'row' }, el('label', { text: 'wallet' }), walletPicker(), screenTabs());
     // Core keeps each screen to its own job: the Overview carries no send form, and the
     // Send screen carries no transaction list. Following that is most of what makes this
     // feel like Core rather than like a page with Core's words on it.
     const panels = [];
-    if (ui.screen === 'overview') panels.push(await overviewPanel(), await historyPanel({ recent: true }));
-    else if (ui.screen === 'send') panels.push(await sendPanel(), await utxoPanel(), await addressBookPanel());
-    else if (ui.screen === 'receive') panels.push(await receivePanel(), await labelPanel());
-    else panels.push(await historyPanel());
+    if (ui.screen === 'overview') panels.push(await overviewPanel(pair), await historyPanel(pair, { recent: true }));
+    else if (ui.screen === 'send') panels.push(await sendPanel(pair), await utxoPanel(pair), await addressBookPanel());
+    else if (ui.screen === 'receive') panels.push(await receivePanel(pair), await labelPanel(pair));
+    else panels.push(await historyPanel(pair));
+    if (mine !== generation) return;   // a newer render started while this one waited
     page.replaceChildren(head, ...panels);
   }
 
   btn.addEventListener('click', () => setTimeout(render, 0));
+
+  // OPENING #wallet DIRECTLY (2026-09-19 review). app.js's setPage runs at boot, usually
+  // before this module's import() resolves: it found no wallet section to show and no
+  // suite to render, and the page stayed blank until the tab was clicked. So if the page
+  // is already 'wallet' by the time the suite exists, show the section and draw it. Not
+  // awaited: the caller should not wait on a wallet's worth of requests to finish booting.
+  if (state?.page === 'wallet') {
+    page.classList?.add('on');
+    btn.classList?.add('on');
+    render().catch((e) => toast(`the wallet screen could not be drawn: ${e.message}`));
+  }
   return { render, page, btn };
 }

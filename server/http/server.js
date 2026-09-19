@@ -164,8 +164,10 @@ export function createAppServer(app) {
       // is not running the suite hands out none of its UI -- there is nothing on the other
       // end of it, and an admin screen that renders and then fails every call is a worse
       // answer than a 404. (The server-side modules are not merely unserved, they are
-      // unloaded; see server/admin-gate.js.)
-      if (!app.adminEnabled && (path.startsWith('/js/admin/') || path === '/admin' || path.startsWith('/admin/'))) {
+      // unloaded; see server/admin-gate.js.) The suite's stylesheet is part of its UI and
+      // is gated the same way: until 2026-09-19 /css/admin.css was served with the gate
+      // shut, the one piece of the suite a disabled monitor still handed out.
+      if (!app.adminEnabled && (path.startsWith('/js/admin/') || path === '/css/admin.css' || path === '/admin' || path.startsWith('/admin/'))) {
         return serveStaticError(req, res, statics, path, 404, H());
       }
       const out = await statics.serve(req, res, path);

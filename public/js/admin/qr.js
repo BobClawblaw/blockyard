@@ -9,11 +9,26 @@
 // covers every address and BIP21 URI this suite will ever draw (a bech32m mainnet address
 // in a URI is about 75 characters; version 10 holds 213 bytes at level M).
 //
-// VERIFIED AGAINST AN INDEPENDENT IMPLEMENTATION rather than by eye: test/qr.test.js
-// generates the same payloads with segno (a Python QR library, installed only for the
-// test) and compares the two matrices module for module. A QR code that is subtly wrong
-// scans as a different address, which is the single worst failure this file could have,
-// and "it looked like a QR code" is not evidence.
+// HOW IT IS CHECKED, AND HOW IT ONCE WAS NOT. A QR code that is subtly wrong scans as a
+// different address or as nothing, and "it looked like a QR code" is not evidence. The
+// first version of this header (2026-09-18) said the test compared this encoder against
+// segno "module for module". It did not: it compared the function patterns only, and read
+// the payload back through a reader that skipped the error-correction codewords and the
+// version-information areas. Both were wrong here -- the Reed-Solomon remainder used the
+// generator backwards and one term off, and versions 7-10 wrote no version information,
+// snaking data through the two blocks instead -- and every test passed. Found in review on
+// 2026-09-19: not one symbol this file drew decoded in OpenCV, from version 2 to 10.
+//
+// Since then test/qr.test.js checks the ISO/IEC 18004 worked example's EC codewords
+// exactly, checks every block's syndromes and both version blocks on every read-back, and
+// compares the WHOLE matrix against segno when segno can be had. Measured 2026-09-19 with
+// OpenCV 5.0 (a scratch check, not a repo test: the suite does not depend on Python): 22
+// P2WPKH and P2TR BIP21 payloads spanning versions 2-10, each drawn at all eight masks --
+// every symbol at the mask this file chooses decoded to the exact input in both of
+// OpenCV's detectors, and all 176 in QRCodeDetectorAruco. The classic QRCodeDetector
+// missed two unchosen masks on a perfect pixel grid and read both once rotated 7 degrees;
+// it misses segno's own symbol at one of the same two, so that is the detector's
+// localisation, not the content. Before the fix, none of the 176 decoded.
 //
 // The pieces, in the order the standard applies them: encode the data, add error
 // correction over GF(256), interleave the blocks, place the modules on the grid, try the
@@ -50,7 +65,17 @@ function rsGenerator(degree) {
   return poly;
 }
 
-/** The error-correction codewords for one block. */
+/**
+ * The error-correction codewords for one block: the data, times x^degree, modulo the
+ * generator.
+ *
+ * `rsGenerator` returns the coefficients LOWEST degree first -- index `degree` holds the
+ * monic leading 1 -- while `rem` below is kept HIGHEST degree first, so the term that
+ * lines up with rem[i] is gen[degree - 1 - i]. Until 2026-09-19 this read gen[i + 1],
+ * which is the right term only for a generator stored the other way round; every EC
+ * codeword came out wrong ('01234567' at 1-M gave 7b a6 46 ... where the standard prints
+ * a5 24 d4 ...) and no scanner could read the result.
+ */
 function rsRemainder(data, degree) {
   const gen = rsGenerator(degree);
   const rem = new Array(degree).fill(0);
@@ -58,7 +83,7 @@ function rsRemainder(data, degree) {
     const factor = byte ^ rem[0];
     rem.shift();
     rem.push(0);
-    for (let i = 0; i < degree; i++) rem[i] ^= mul(gen[i + 1], factor);
+    for (let i = 0; i < degree; i++) rem[i] ^= mul(gen[degree - 1 - i], factor);
   }
   return rem;
 }
@@ -233,6 +258,34 @@ function reserveFormat(grid) {
   place(grid, 8, grid.size - 8, true);   // the always-dark module
 }
 
+/**
+ * Version information, versions 7 and up: the version number in six bits and a BCH(18,6)
+ * remainder over the generator 0x1F25, unmasked. A scanner reads the version from here on
+ * these sizes rather than trusting the module count.
+ */
+function versionBits(version) {
+  let rem = version;
+  for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >> 11) * 0x1f25);
+  return (version << 12) | rem;
+}
+
+/**
+ * Write both 6x3 version blocks: above the bottom-left finder and, transposed, left of the
+ * top-right one. Written before the data is placed, so the data path goes around them.
+ * Missing until 2026-09-19, when data was snaked straight through both blocks.
+ */
+function drawVersion(grid, version) {
+  if (version < 7) return;
+  const bits = versionBits(version);
+  for (let i = 0; i < 18; i++) {
+    const dark = ((bits >> i) & 1) === 1;
+    const a = grid.size - 11 + (i % 3);
+    const b = Math.floor(i / 3);
+    place(grid, a, b, dark);
+    place(grid, b, a, dark);
+  }
+}
+
 /** Snake the codewords up and down the grid, skipping everything already placed. */
 function placeData(grid, codewords) {
   let bitIndex = 0;
@@ -341,6 +394,7 @@ export function encodeQr(text, { forceMask = null } = {}) {
   alignment(base, version);
   timing(base);
   reserveFormat(base);
+  drawVersion(base, version);
   placeData(base, codewords);
 
   // Try every mask, keep the one the standard's penalty rules like best. `forceMask` is
@@ -359,6 +413,12 @@ export function encodeQr(text, { forceMask = null } = {}) {
   if (forceMask != null) best = candidates[forceMask];
   return { size, version, mask: best.mask, modules: best.cells, candidates };
 }
+
+/**
+ * The pieces the tests check against the standard directly (ISO/IEC 18004's worked example
+ * and Annex D's version table). Not for the suite's own use.
+ */
+export const qrInternals = Object.freeze({ rsRemainder, versionBits });
 
 /** The BIP21 URI Core puts in the code, rather than the bare address. */
 export function paymentUri(address, { label = '', amountSat = null } = {}) {

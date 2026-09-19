@@ -76,6 +76,13 @@ function makeDom() {
       querySelector(sel) { return walk(node).find((n) => matches(n, sel)) ?? null; },
       querySelectorAll(sel) { return walk(node).filter((n) => matches(n, sel)); },
       closest(sel) { let n = node; while (n) { if (matches(n, sel)) return n; n = n.parent; } return null; },
+      // classList over className, so the suite's page/nav toggles can be observed.
+      classList: {
+        add(c) { if (!node.classList.contains(c)) node.className = `${node.className} ${c}`.trim(); },
+        remove(c) { node.className = String(node.className).split(/\s+/).filter((x) => x && x !== c).join(' '); },
+        toggle(c, on = !node.classList.contains(c)) { if (on) node.classList.add(c); else node.classList.remove(c); return on; },
+        contains(c) { return String(node.className).split(/\s+/).includes(c); },
+      },
       focus() {}, select() {}, scrollIntoView() {},
       click() { for (const fn of node.listeners.click ?? []) fn({ target: node }); },
       get childNodes() { return node.children; },
@@ -102,20 +109,40 @@ function makeDom() {
 }
 
 
-/** A wallet's worth of plausible answers, shaped exactly as the real routes return them. */
-function fakeApi(calls) {
-  return async (path) => {
+// Two wallets on two nodes, in the { node, wallet } shape /api/admin/status returns since
+// 2026-09-19. The second deliberately shares nothing with the first, so a request that
+// carries the wrong half of a pair is visible in the log.
+const WALLETS = [{ node: 'regtest', wallet: 'hot' }, { node: 'cold-node', wallet: 'bmc-run27' }];
+
+const qs = (path) => Object.fromEntries(new URLSearchParams(path.split('?')[1] ?? ''));
+
+/** An error shaped the way public/js/app.js's api() throws one. */
+const apiError = (message, code) => Object.assign(new Error(message), { payload: { error: { message, code } } });
+
+/**
+ * A wallet's worth of plausible answers, shaped exactly as the real routes return them.
+ * `calls` gets each path; `log` gets { path, method, body }. `over[path-prefix]` replaces
+ * the default answer, and may be a function of (path, opts) -- which is how the tests below
+ * delay one answer or refuse one once.
+ */
+function fakeApi(calls, log = [], over = {}) {
+  return async (path, opts = {}) => {
     calls.push(path);
+    log.push({ path, method: opts.method ?? 'GET', body: opts.body ?? null });
+    for (const [prefix, answer] of Object.entries(over)) {
+      if (path.startsWith(prefix)) return typeof answer === 'function' ? answer(path, opts) : answer;
+    }
     if (path.startsWith('/api/admin/status')) {
       return {
         enabled: true,
-        wallets: ['hot'],
+        wallets: WALLETS,
         elevation: { elevated: true, leftMs: 300_000 },
         capabilities: ['elevation', 'wallet.read', 'wallet.receive', 'wallet.spend'],
         you: { username: 'admin', role: 'admin', walletAccess: true },
-        gates: { https: true, accounts: true, walletsNamed: 1, spendCapSat: 5_000_000 },
+        gates: { https: true, accounts: true, walletsNamed: 2, spendCapSat: 5_000_000 },
       };
     }
+    if (path.startsWith('/api/admin/elevate')) return { ok: true, leftMs: 300_000 };
     if (path.startsWith('/api/admin/wallet/history')) {
       return {
         ok: true,
@@ -133,9 +160,29 @@ function fakeApi(calls) {
     if (path.startsWith('/api/admin/addressbook')) {
       return { ok: true, entries: [{ address: 'bcrt1qbookentry', label: 'cold storage' }], editable: false, note: 'read only' };
     }
-    if (path.startsWith('/api/admin/wallet')) {
+    if (path.startsWith('/api/admin/wallet/address')) {
+      return { ok: true, address: `bcrt1q${opts.body?.wallet}derived`, label: opts.body?.label ?? '' };
+    }
+    if (path.startsWith('/api/admin/wallet/send/build')) {
+      const b = opts.body ?? {};
       return {
-        ok: true, wallet: 'hot', node: 'regtest', canSpend: true, encrypted: true, scanning: null,
+        ok: true,
+        build: {
+          id: 'build-1', wallet: b.wallet, node: b.node, chain: 'regtest', to: b.address,
+          sendingSat: 100_000, feeSat: 282, totalSat: 100_282, changeSat: 49_899_718, changeAddresses: ['bcrt1qchange'],
+          inputs: 1, vsize: 141, feeRateSatPerVb: 2, replaceable: true, addressBook: false, phrase: 'send on regtest', expiresAt: Date.now() + 60_000,
+        },
+      };
+    }
+    if (path.startsWith('/api/admin/wallet/send/confirm')) {
+      return { ok: true, txid: 'e'.repeat(64), sendingSat: 100_000, feeSat: 282, to: 'bcrt1qdest' };
+    }
+    if (path.startsWith('/api/admin/tx/bump/confirm')) return { ok: true, txid: 'f'.repeat(64) };
+    if (path.startsWith('/api/admin/tx/bump')) return { ok: true, oldFeeSat: 282, newFeeSat: 705, deltaSat: 423, note: 'priced' };
+    if (path.startsWith('/api/admin/wallet')) {
+      const q = qs(path);
+      return {
+        ok: true, wallet: q.wallet, node: q.node, canSpend: true, encrypted: true, scanning: null,
         balances: { trustedSat: 5_000_000_000, untrustedPendingSat: 0, immatureSat: 500_000_000_000, totalSat: 505_000_000_000 },
       };
     }
@@ -143,7 +190,7 @@ function fakeApi(calls) {
   };
 }
 
-async function mount() {
+async function mount({ over = {}, page = 'wallet' } = {}) {
   const { document, mk } = makeDom();
   // The suite injects its own nav button and page section, so the page it lands on only
   // has to provide a nav and a section to sit beside.
@@ -156,13 +203,28 @@ async function mount() {
   main.append(existing);
   document.body.append(nav, main);
   const calls = [];
+  const log = [];
+  const toasts = [];
   const mod = await import('../public/js/admin/suite.js');
+  const state = { page };
   const suite = await mod.initAdminSuite({
-    api: fakeApi(calls),
-    toast: () => {},
-    state: { page: 'wallet' },
+    api: fakeApi(calls, log, over),
+    toast: (t) => toasts.push(t),
+    state,
   });
-  return { suite, calls };
+  if (suite) suite.state = state;
+  return { suite, calls, log, toasts, document };
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const settle = async (n = 5) => { for (let i = 0; i < n; i++) await tick(); };
+const button = (root, text) => root.querySelectorAll('button').find((b) => b.textContent === text || b.textContent.startsWith(text));
+const click = async (node) => { for (const fn of node.listeners.click ?? []) await fn({ target: node }); };
+const lastModal = () => document.body.querySelectorAll('div.modal').pop();
+async function toScreen(suite, name) {
+  const tab = suite.page.querySelectorAll('button.screen').find((b) => b.textContent === name);
+  tab.click();
+  await suite.render();
 }
 
 test('the module evaluates and mounts', async () => {
@@ -290,4 +352,248 @@ test('a row opens its detail view, and the Bump button does not', async () => {
   const button = row.querySelector('button');
   assert.ok(button, 'the unconfirmed replaceable send should offer a fee bump');
   assert.ok(typeof row.onclick === 'function' || row.listeners?.click, 'the row is not clickable');
+});
+
+// ---------------------------------------------------------- the review of 2026-09-19
+// Each test below is a finding from that review, written to fail against the code as it
+// was, before the fix.
+
+test('the picker names node and wallet, and every wallet request carries both', async () => {
+  // /api/admin/status lists { node, wallet } pairs since 2026-09-19: one wallet name can
+  // exist on two nodes, and a request naming only the wallet let the server guess which.
+  const { suite, log } = await mount();
+  await suite.render();
+  const select = suite.page.querySelector('select');
+  const labels = select.querySelectorAll('option').map((o) => o.textContent);
+  assert.deepEqual(labels, ['regtest · hot', 'cold-node · bmc-run27']);
+
+  const second = select.querySelectorAll('option')[1];
+  select.listeners.change[0]({ target: { value: second.attrs.value } });
+  await settle();
+  log.length = 0;
+  for (const screen of ['Overview', 'Send', 'Receive', 'Transactions']) await toScreen(suite, screen);
+  const walletCalls = log.filter((c) => c.path.startsWith('/api/admin/wallet'));
+  assert.ok(walletCalls.length >= 5, 'the screens should have asked about the wallet');
+  for (const c of walletCalls) {
+    assert.deepEqual({ node: qs(c.path).node, wallet: qs(c.path).wallet }, { node: 'cold-node', wallet: 'bmc-run27' },
+      `${c.path} does not name the selected pair`);
+  }
+});
+
+test('an older render that finishes late does not overwrite a newer one', async () => {
+  // Wallet A's overview answers slowly; the operator switches to B meanwhile. Unordered,
+  // A's result landed last and the page showed A under a picker that said B -- and a send
+  // built from that page went from whichever wallet the code happened to read.
+  let gate = null;                                    // open until the test closes it
+  let releaseA;
+  const { suite } = await mount({
+    page: 'overview',
+    over: {
+      '/api/admin/wallet?': async (path) => {
+        const q = qs(path);
+        if (q.wallet === 'hot' && gate) await gate;
+        return {
+          ok: true, wallet: q.wallet, node: q.node, canSpend: true, encrypted: true, scanning: null,
+          balances: { trustedSat: 1, untrustedPendingSat: 0, immatureSat: 0, totalSat: 1 },
+        };
+      },
+    },
+  });
+  suite.state.page = 'wallet';
+  await suite.render();                               // A, drawn: the picker is on the page
+  gate = new Promise((r) => { releaseA = r; });
+  const first = suite.render();                       // A again, stuck on the slow answer
+  await tick();
+  suite.page.querySelector('select').listeners.change[0]({ target: { value: '1' } });   // -> B
+  await settle();
+  releaseA();
+  await first;
+  await settle();
+  const sub = suite.page.querySelectorAll('div.sub').map((n) => n.textContent);
+  assert.ok(sub.includes('bmc-run27 on cold-node'), `the page should show B, shows ${JSON.stringify(sub)}`);
+  assert.ok(!sub.includes('hot on regtest'), 'A\'s late answer must be dropped, not drawn');
+});
+
+async function buildASend(opts = {}) {
+  const m = await mount(opts);
+  await m.suite.render();
+  await toScreen(m.suite, 'Send');
+  const pay = m.suite.page.querySelectorAll('input').find((i) => (i.attrs.placeholder ?? '').startsWith('Pay To'));
+  const amount = m.suite.page.querySelectorAll('input').find((i) => (i.attrs.placeholder ?? '').startsWith('amount'));
+  pay.value = 'bcrt1qdest';
+  amount.value = '100000';
+  await click(button(m.suite.page, 'Review'));
+  await settle();
+  return m;
+}
+
+test('the confirm screen names the wallet it spends from, as the server built it', async () => {
+  const { suite, log } = await buildASend();
+  const build = log.find((c) => c.path === '/api/admin/wallet/send/build');
+  assert.deepEqual({ node: build.body.node, wallet: build.body.wallet }, { node: 'regtest', wallet: 'hot' });
+  const confirm = suite.page.querySelector('div.confirm');
+  assert.ok(confirm, 'no confirm screen');
+  assert.ok(confirm.textContent.includes('Spending from: hot on regtest'), confirm.textContent);
+});
+
+test('the wallet passphrase is required on an encrypted wallet, and is not a login password', async () => {
+  const { suite, log } = await buildASend();
+  const confirm = suite.page.querySelector('div.confirm');
+  const pass = confirm.querySelectorAll('input').find((i) => i.attrs.type === 'password');
+  assert.ok(pass, 'no passphrase field');
+  assert.equal(pass.attrs.required, 'required', 'required on an encrypted wallet (decision of 2026-09-19)');
+  // autocomplete="off" is ignored on password fields; a browser would offer to save the
+  // wallet passphrase as this site's login, then fill it into the elevation prompt.
+  assert.equal(pass.attrs.autocomplete, 'one-time-code');
+  assert.equal(pass.attrs.name, 'wallet-passphrase');
+  assert.match(confirm.textContent, /[Rr]equired/, 'the hint says it is required, and why');
+
+  // Empty: refused here, before anything reaches the server.
+  confirm.querySelectorAll('input').find((i) => i.attrs.type === 'text').value = 'send on regtest';
+  await click(button(confirm, 'Send'));
+  await settle();
+  assert.ok(!log.some((c) => c.path === '/api/admin/wallet/send/confirm'), 'an empty passphrase must not be sent');
+});
+
+test('a lapsed elevation at Send asks for the password and then sends', async () => {
+  // Elevation is consumed by a spend and lasts minutes, so it can run out between Review
+  // and Send. That used to surface as an error and a cleared passphrase field.
+  let refused = false;
+  const { suite, log, document: doc } = await buildASend({
+    over: {
+      '/api/admin/wallet/send/confirm': (path, opts) => {
+        if (!refused) { refused = true; throw apiError('elevation required', 'elevation-required'); }
+        return { ok: true, txid: 'e'.repeat(64), sendingSat: 100_000, feeSat: 282, to: opts.body.address ?? 'bcrt1qdest' };
+      },
+    },
+  });
+  const confirm = suite.page.querySelector('div.confirm');
+  confirm.querySelectorAll('input').find((i) => i.attrs.type === 'text').value = 'send on regtest';
+  confirm.querySelectorAll('input').find((i) => i.attrs.type === 'password').value = 'wallet secret';
+  const sending = click(button(confirm, 'Send'));
+  await settle();
+  const prompt = doc.body.querySelectorAll('div.modal').pop();
+  assert.ok(prompt && prompt.textContent.includes('Confirm it is you'), 'the password prompt should open');
+  const pw = prompt.querySelector('input');
+  assert.equal(pw.attrs.autocomplete, 'current-password', 'the elevation prompt keeps current-password');
+  pw.value = 'account password';
+  await click(button(prompt, 'Confirm'));
+  await sending;
+  await settle();
+  const confirms = log.filter((c) => c.path === '/api/admin/wallet/send/confirm');
+  assert.equal(confirms.length, 2, 'retried once after elevating');
+  assert.equal(confirms[1].body.passphrase, 'wallet secret', 'the passphrase survives the prompt');
+  assert.deepEqual({ node: confirms[1].body.node, wallet: confirms[1].body.wallet }, { node: 'regtest', wallet: 'hot' });
+  assert.ok(suite.page.textContent.includes('Sent'), 'and it sent');
+});
+
+test('the requested-payments history belongs to the wallet it was made in', async () => {
+  const { suite } = await mount();
+  await suite.render();
+  await toScreen(suite, 'Receive');
+  await click(button(suite.page, 'Create new receiving address'));
+  await settle();
+  await suite.render();
+  assert.ok(suite.page.textContent.includes('Requested payments history'), 'A shows its own history');
+  suite.page.querySelector('select').listeners.change[0]({ target: { value: '1' } });
+  await settle();
+  await suite.render();
+  assert.ok(!suite.page.textContent.includes('bcrt1qhotderived'), 'wallet A\'s address must not show under wallet B');
+  assert.ok(!suite.page.textContent.includes('Requested payments history'), 'B has made no requests');
+  // And back on A, it is still there.
+  suite.page.querySelector('select').listeners.change[0]({ target: { value: '0' } });
+  await settle();
+  await suite.render();
+  assert.ok(suite.page.textContent.includes('bcrt1qhotderived'), 'A keeps its own history');
+});
+
+test('a fee bump replaces at the rate it priced, not whatever is in the box', async () => {
+  const { suite, log, document: doc } = await mount();
+  await suite.render();
+  await click(button(suite.page, 'Bump fee'));
+  const dialog = doc.body.querySelectorAll('div.modal').pop();
+  const rate = dialog.querySelector('input');
+  rate.value = '5';
+  await click(button(dialog, 'Price it'));
+  await settle();
+  assert.equal(rate.disabled, true, 'the rate is fixed once priced');
+  const pass = dialog.querySelectorAll('input').find((i) => i.attrs.type === 'password');
+  assert.equal(pass.attrs.required, 'required');
+  assert.equal(pass.attrs.autocomplete, 'one-time-code');
+  pass.value = 'wallet secret';
+  rate.value = '50';                                  // what a stale or scripted edit would do
+  await click(button(dialog, 'Replace it'));
+  await settle();
+  const confirm = log.find((c) => c.path === '/api/admin/tx/bump/confirm');
+  assert.ok(confirm, 'nothing was sent');
+  assert.equal(confirm.body.feeRate, '5', 'the priced rate, not the edited one');
+  assert.deepEqual({ node: confirm.body.node, wallet: confirm.body.wallet }, { node: 'regtest', wallet: 'hot' });
+});
+
+test('editing the rate after pricing throws the price away', async () => {
+  const { suite, document: doc } = await mount();
+  await suite.render();
+  await click(button(suite.page, 'Bump fee'));
+  const dialog = doc.body.querySelectorAll('div.modal').pop();
+  const rate = dialog.querySelector('input');
+  rate.value = '5';
+  await click(button(dialog, 'Price it'));
+  await settle();
+  assert.ok(button(dialog, 'Replace it'), 'priced');
+  await click(button(dialog, 'Change the rate'));
+  assert.equal(rate.disabled, false);
+  assert.equal(button(dialog, 'Replace it'), undefined, 'no Replace button for a rate that is no longer priced');
+  rate.value = '6';
+  for (const fn of rate.listeners.input ?? []) fn({ target: rate });
+  assert.equal(button(dialog, 'Replace it'), undefined);
+});
+
+test('a transaction\'s outputs are labelled by what they are to this wallet', async () => {
+  const detail = (details, outputs) => ({
+    ok: true, txid: '9'.repeat(64), wallet: 'hot', amountSat: 0, feeSat: null, confirmations: 1,
+    time: 1789718000000, replaceable: 'no', details, inputs: [], outputs, vsize: 141, weight: 564, hex: '00',
+  });
+  const cases = [
+    // A receive: the output that is ours is the payment, not change.
+    [detail([{ address: 'bcrt1qme', category: 'receive', amountSat: 250_000, vout: 1 }],
+      [{ n: 0, address: 'bcrt1qtheirchange', amountSat: 10, mine: false }, { n: 1, address: 'bcrt1qme', amountSat: 250_000, mine: true }]),
+    ['not yours', 'yours (received)']],
+    // A send: theirs is the payment out, ours (absent from details) is the change.
+    [detail([{ address: 'bcrt1qthem', category: 'send', amountSat: -100_000, vout: 0 }],
+      [{ n: 0, address: 'bcrt1qthem', amountSat: 100_000, mine: false }, { n: 1, address: 'bcrt1qchange', amountSat: 5, mine: true }]),
+    ['paid out', 'yours (change)']],
+    // A send to yourself: the destination is ours and is not change.
+    [detail([{ address: 'bcrt1qself', category: 'send', amountSat: -100_000, vout: 0 }, { address: 'bcrt1qself', category: 'receive', amountSat: 100_000, vout: 0 }],
+      [{ n: 0, address: 'bcrt1qself', amountSat: 100_000, mine: true }, { n: 1, address: 'bcrt1qchange', amountSat: 5, mine: true }]),
+    ['yours (sent to yourself)', 'yours (change)']],
+  ];
+  for (const [answer, want] of cases) {
+    const { suite, document: doc } = await mount({ over: { '/api/admin/wallet/tx': answer } });
+    await suite.render();
+    const row = suite.page.querySelector('table.tx tbody tr');
+    row.listeners.click[0]({ target: row });
+    await settle();
+    const dialog = doc.body.querySelectorAll('div.modal').pop();
+    const table = dialog.querySelectorAll('table.t')[0];
+    const got = table.querySelectorAll('tbody tr').map((r) => r.children[3].textContent);
+    assert.deepEqual(got, want);
+  }
+});
+
+test('opening #wallet directly renders the suite once it has loaded', async () => {
+  // app.js's setPage('wallet') runs at boot, before the suite's import() resolves -- so the
+  // section did not exist to be shown, and adminSuite was not there to render. The page
+  // stayed blank until the tab was clicked.
+  const { suite } = await mount({ page: 'wallet' });
+  await settle();
+  assert.ok(suite.page.classList.contains('on'), 'the wallet section is shown');
+  assert.ok(suite.btn.classList.contains('on'), 'and its nav button marked');
+  assert.ok(suite.page.querySelectorAll('div.card').length >= 1, 'and it rendered without a click');
+});
+
+test('landing elsewhere leaves the wallet section hidden', async () => {
+  const { suite } = await mount({ page: 'overview' });
+  await settle();
+  assert.ok(!suite.page.classList.contains('on'));
+  assert.equal(suite.page.childNodes.length, 0);
 });

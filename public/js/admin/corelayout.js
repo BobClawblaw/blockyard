@@ -118,3 +118,27 @@ export function confirmationLines(build, { fmt }) {
   lines.push({ kind: 'total', label: 'Total Amount', value: fmt(build.totalSat) });
   return lines;
 }
+
+/**
+ * What one output of a transaction is to this wallet, for the detail view.
+ *
+ * Until 2026-09-19 every output of ours read "yours (change)", which is right only for a
+ * send -- on a receive the output that is ours is the PAYMENT, and on a send to yourself it
+ * is the destination. Core tells them apart the same way this does: `gettransaction`'s
+ * `details` lists an output of ours that was received (category "receive", or a mined
+ * category) and omits change entirely (CachedTxIsChange), so an output that is ours and
+ * absent from `details` is change. `tx.details` is what server/admin/wallet.js's
+ * walletTransaction returns, one row per (output, category).
+ */
+export function outputRole(tx, output) {
+  const cats = new Set((tx?.details ?? []).filter((d) => d.vout === output.n).map((d) => d.category));
+  const received = cats.has('receive') || cats.has('generate') || cats.has('immature') || cats.has('orphan');
+  if (output.mine) {
+    if (cats.has('send') && received) return { text: 'yours (sent to yourself)', tone: 'pos' };
+    if (cats.has('generate') || cats.has('immature')) return { text: 'yours (mined)', tone: 'pos' };
+    if (received) return { text: 'yours (received)', tone: 'pos' };
+    return { text: 'yours (change)', tone: 'pos' };
+  }
+  if (cats.has('send')) return { text: 'paid out', tone: 'neg' };
+  return { text: 'not yours', tone: 'sub' };
+}
