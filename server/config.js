@@ -659,6 +659,19 @@ function validate(cfg, ifaces = null, now = Date.now()) {
   if (!(Number.isInteger(cfg.store.auditMaxBytes) && cfg.store.auditMaxBytes >= 64 * 1024)) {
     problems.push('store.auditMaxBytes must be >= 65536; below that the audit rotates on every write');
   }
+  // admin.wallets: `{ node, wallet }` pairs, or a bare name (read as the only node's when
+  // there is one; refused at use when there are several -- server/admin/wallet.js). A pair
+  // naming a node that is not configured is refused HERE, because it can never be right
+  // and would otherwise surface as a wallet that silently never appears.
+  const nodeIdSet = new Set((cfg.nodes ?? []).map((n) => n.id));
+  for (const w of cfg.admin?.wallets ?? []) {
+    if (typeof w === 'string') { if (!w.length) problems.push('admin.wallets has an empty wallet name'); continue; }
+    if (!w || typeof w !== 'object' || typeof w.wallet !== 'string' || !w.wallet.length || typeof w.node !== 'string' || !w.node.length) {
+      problems.push(`admin.wallets entry ${JSON.stringify(w)} must be { "node": "<node id>", "wallet": "<name>" }`);
+    } else if (!nodeIdSet.has(w.node)) {
+      problems.push(`admin.wallets entry for "${w.wallet}" names node "${w.node}", which is not configured (nodes: ${[...nodeIdSet].join(', ')})`);
+    }
+  }
   for (const n of cfg.nodes) {
     if (!n.rpcUrl || !/^https?:\/\//.test(n.rpcUrl)) problems.push(`node ${n.id}: rpcUrl must be http(s)://host:port`);
     // AUTHENTICATION CAN COME FROM EITHER PLACE. Cookie auth needs a datadir (or an explicit
