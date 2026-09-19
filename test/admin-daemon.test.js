@@ -140,8 +140,11 @@ describe('stopping a node actually stops it, and says it will stay stopped', asy
       assert.match(res.body.message, /STAYS stopped/);
       assert.equal(typeof res.body.heightBefore, 'number');
 
-      // The process really is gone, which is the thing a fake could not have shown.
-      await new Promise((r) => setTimeout(r, 500));
+      // The process really is gone, which is the thing a fake could not have shown. Waited for,
+      // not slept for: RPC goes quiet before bitcoind has flushed and exited, and under the full
+      // suite's load that took longer than the fixed 500 ms this used to sleep (2026-09-19: failed
+      // once in two full runs, passed 8/8 alone). The claim is that it exits, not how fast.
+      if (rt.running()) await new Promise((r) => { rt.child.once('exit', r); setTimeout(r, 30_000); });
       assert.equal(rt.running(), false, 'the bitcoind process exited');
 
       // and the successful one DID consume it
