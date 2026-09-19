@@ -1,0 +1,268 @@
+2026-09-18 19:15:29.222 [feeest] estimator started fresh (no fee_estimates.dat) (115 MB shared)
+2026-09-16 21:49:08.057 [feeest] estimator seeded from fee_estimates.dat (115 MB shared)
+2026-09-18 19:15:29.222 [mempool] maxmempool=300MB -> 1048576 slots, 286MB tx storage (shared, locked)
+2026-09-18 19:15:29.299 [hashidx] indexed 1 stored heights
+INFO node start (serve mode / download worker)\0
+2026-09-18 19:15:29.304 [serve] download worker pid 1394727
+2026-09-18 19:15:29.304 [rpc] gettxout answers via the download worker (IPC)
+2026-09-18 19:15:29.304 [rpc] no rpcuser/rpcpassword -- using cookie authentication
+2026-09-18 19:15:29.304 [dl] worker: reloading chain archive...
+2026-09-18 19:15:29.304 [dl] worker: loading live UTXO state...
+2026-09-18 19:15:29.304 [dl] worker: chain archive reloaded: tip=0 (0.00s)
+2026-09-18 19:15:29.304 [archive] integrity OK: 1 entries, 1 unique, 0 duplicates
+2026-09-18 19:15:29.304 [utxo_live] assumevalid: block not on the header chain yet -- every script is evaluated; re-checked every 1,000 blocks
+2026-09-18 19:15:29.304 [utxo_live] sizing: BULK -- far behind, batch-sized memtable (applied=-1 tip=0 gap=1) slots=2^25 blob=6144MB compact_at=48
+2026-09-16 21:49:48.297 [utxo_live] sizing: BULK -- far behind, batch-sized memtable (applied=321800 tip=321800 gap=0) slots=2^25 blob=6144MB compact_at=48
+2026-09-16 23:55:56.063 [utxo_live] sizing: steady-state (applied=434960 tip=434960 gap=0) slots=2^16 blob=64MB compact_at=12
+2026-09-18 19:15:29.305 [rpc] block archive opened (chain RPCs live)
+2026-09-18 19:15:29.305 [wallet] seed, mnemonic and passphrase locked into RAM (mlock) and excluded from core dumps
+2026-09-18 19:15:29.305 [rpc] cookie authentication enabled (.cookie, mode 0600)
+2026-09-18 19:15:29.317 [rpc] JSON-RPC server on 127.0.0.1:8461 (live-node + chain, user=)
+2026-09-18 19:15:29.317 [mempool] no mempool.dat to reload (persistmempool=1)
+2026-09-18 19:15:29.317 [tor] no onion service: cannot connect to tor control port 127.0.0.1:9051
+2026-09-18 19:15:29.317 [tor] (outbound onion is unaffected; only INBOUND needs the control port)
+2026-09-18 19:15:29.317 [net] listening on IPv6 [::]:8462 (cjdns peers arrive here)
+2026-09-18 19:15:29.318 [mux] address book empty -- falling back to the seed list
+2026-09-18 19:15:29.318 serving on port 8462 (0 outbound peer(s))...
+2026-09-18 19:15:29.690 [utxo_live] init dir=/mnt/nvme8tb/bench/run27/data/main slots=2^25 fresh applied_height=-1 manifest_n=0 live=0
+2026-09-16 21:10:55.685 [utxo_live] init dir=/home/USER/bmc-run26/main slots=2^25 fresh applied_height=-1 manifest_n=0 live=0
+2026-09-18 19:15:29.690 [coinstats] seeding from a full walk at height -1 (~-1M coins; one-time)
+2026-09-09 15:57:35.482 [coinstats] seeding from a full walk at height 966181 (~165M coins; one-time)
+2026-09-18 19:15:29.734 [coinstats] seeded: 0 coins, txouts=0 at height -1
+2026-09-09 16:00:50.328 [coinstats] seeded: 165301194 coins, txouts=165301194 at height 966181
+2026-09-18 19:15:29.745 [coinstats] fold worker pid 1394840 started at height -1: the connect thread pushes coin records, the worker folds
+2026-09-16 21:50:23.507 [coinstats] fold worker pid 2021039 started at height 321800: the connect thread pushes coin records, the worker folds
+2026-09-18 19:15:29.745 [dl] worker: live UTXO state loaded (0.44s)
+2026-09-18 19:15:29.745 [dl] worker: chainwork in step with the archive (1 record(s) backfilled, 0.00s)
+2026-09-18 19:15:29.745 [reorg] mempool reconciliation armed (shared pool, policy capacity 1048576)
+2026-09-18 19:15:29.896 [dl] dial: 8 of 64 candidate(s) answered within the budget
+2026-09-18 19:15:30.159 [addrself] external address confirmed by 2 peers: 203.0.113.7:8462
+2026-09-18 19:16:18.346 [dlc] the pool announces height 967591 (85 of 117 peers claimed one; the median claim counts)
+2026-09-18 19:16:18.502 [dlc] headers from 216.230.225.43:8333 are below -minimumchainwork so far -- holding 2000, storing none until the chain proves its work
+2026-09-18 19:16:22.608 [dlc] headers from 216.230.225.43:8333: still below -minimumchainwork after 50 held page(s) (100000 headers, 7.7 MB) in 4s -- 1.8MB/s
+2026-09-18 19:16:57.414 [dlc] chain from 216.230.225.43:8333 crossed -minimumchainwork -- storing 469 held page(s)
+2026-09-18 19:17:00.583 [dlc] span [1,967592] (967592 heights)
+2026-09-18 19:17:00.583 [dlc] Core's shape: 8 of 117 live peer(s) download at once (cap 8, span 967592), window 4096 blocks above the connected tip, stall timeout 2 s
+2026-09-10 02:39:29.292 [dlc] Core's shape: 64 of 217 live peer(s) download at once (cap 64), window 15360 blocks above the connected tip, stall timeout 2 s
+2026-09-18 19:17:00.636 [dl:2] 3.146.133.93:8333 connection closed theirs (revents 0x2019) after 90s; unread: (nothing)
+2026-09-17 00:25:57.785 [dl:1] 192.80.135.43:8333 connection closed ours/ping-timeout after 1258s -- no pong in 20 min
+2026-09-17 18:58:32.252 [dl:7] 82.116.38.140:8333 connection closed theirs (EOF on the first read) after 0s; unread: (nothing)
+2026-09-17 19:12:36.525 [dl:0] 142.126.143.14:8333 connection closed ours/shutdown after 254s -- the worker is stopping
+2026-09-17 21:22:59.297 [dl:0] 216.138.33.235:8333 connection closed ours/sync-failed-3x after 86s -- 3 failing sync passes, last where=3 in 24.1s
+2026-09-18 02:10:17.692 [dl:2] 104.238.220.72:8333 connection closed ours/sync-budget after 62s -- the pass exceeded 60s (where=7)
+2026-09-10 06:26:45.577 [dl:5] 98.36.176.14:8333 connection closed ours/pass-session after 62s -- the pass could not export its v2 session
+2026-09-10 07:07:23.862 [dl:1] 34.89.207.91:8333 connection closed ours/probe-budget after 84s -- the reorg probe exceeded its budget
+2026-09-18 19:17:02.684 [utxo_live] assumevalid: block found at height 938343 on the header chain -- script evaluation skipped through it, resumed above
+2026-09-08 06:29:55.031 [utxo_live] assumevalid: block found at height 938343 -- script evaluation skipped through it, resumed above
+2026-09-18 19:17:02.802 [bfilter] index open at 0 records (tip 967592) -- closing the gap from the archive + undo, in slices
+2026-09-17 19:00:35.716 [bfilter] index open at 967453 records (tip 967453)
+2026-09-10 03:44:27.678 [bfilter] ADOPTED at 966182 records (tip 966299) -- closing the gap from undo data
+2026-09-18 19:17:11.522 [txindex] trail: builder /mnt/nvme8tb/bench/run27/src/asm/daemon/bmc_build_tx_index not executable -- the index cannot be built
+2026-09-18 19:17:51.616 [utxo_live] h=91842: duplicate coinbase outpoint overwritten (Core: AddCoins overwrite=fCoinbase); coinstats: remove old + add new
+2026-09-18 19:21:31.443 [dlc] w6 172.220.244.249:8333 is stalling the window: chunk [188041,188080] is the oldest missing and the window (4096 above 188041) is full -- dropped after 2 s (next timeout 4 s; peer BANNED for the run)
+2026-09-18 19:21:31.443 [dlc w6] 172.220.244.249:8333 stalling the window (held its oldest missing chunk while it was full) (last measured 113.5KB/s, completed 0 chunk(s)/0 block(s) on this peer); dropping for a fresh peer
+2026-09-18 19:22:23.137 [dlc w2] 13.53.202.93:8333 dead weight (last measured 495.2B/s, completed 0 chunk(s)/0 block(s) on this peer); dropping for a fresh peer
+2026-09-18 19:22:42.267 [dlc w7] 20.14.178.84:8333: chunk [195281,195320] attempt 3 failed after 794 ms: socket read failed or closed (code -4)
+2026-09-16 21:26:10.593 [dlc w5] 188.134.8.36:8333: chunk [236081,236120] attempt 3 failed after 3928 ms: a block failed cons_verify (code -5)
+2026-09-18 19:28:23.823 [utxo_live] BIP30: ancestor at height 227931 is BIP34Hash -- skipping the duplicate-outpoint check above that height
+2026-09-18 23:45:06.235 [utxo_live] run files total 46.7 GB > budget 46.3 GB (35% of RAM) -- compacting 27 of 27 runs below the count threshold
+2026-09-19 11:17:24.520 [dlc w4] no reachable peer -- amnesty, un-banned 38 peer(s)
+2026-09-16 21:10:55.170 [mempool] departure journal: 2000000 records (289 MB) in mempool_journal.dat
+2026-09-16 21:10:55.298 [rpc] Esplora facade on 127.0.0.1:3006 (bmc.esploraport; no auth: keep it on loopback or behind a proxy)
+2026-09-16 21:10:55.685 [addrindex] LIVE: covered=0 (backfilled 1) -- extension index, not a Core feature
+2026-09-16 23:41:48.996 [addrindex] LIVE: covered=431427 (backfilled 0; the archive is ahead, the rest lands as the engine applies it) -- extension index, not a Core feature
+2026-09-16 21:12:36.641 [addrindex] journal rotated: 97 records folded into history runs (to 19999), 3 kept
+2026-09-16 21:48:35.660 [mempool] saved 1 transaction(s) to mempool.dat
+2026-09-16 21:48:35.660 [serve] forwarded SIGTERM to download worker pid 1655716
+2026-09-16 21:48:37.260 [dlc] shutdown requested -- stopping 8 worker(s)
+2026-09-16 21:48:39.449 [dlc] connected 321801 block(s) during the download; connected tip 321800 (the rotation drains the rest)
+2026-09-16 21:48:39.449 [dlc] catch-up done: 322400 new blocks written
+2026-09-16 21:48:39.449 [dl] shutting down (signal 15): tip=967325 peers=5 txouts=13485256 uptime=00:00:37:42
+2026-09-16 21:48:39.989 [feeest] shutdown: 0 unconfirmed tx flushed, fee_estimates.dat written (best height 321800)
+[coinstats] fold worker exiting: folded 240158840 element(s), watermark height 321800
+2026-09-16 21:48:42.041 [coinstats] fold worker pid 1655732 is gone (already reaped) -- the index cannot be maintained
+2026-09-16 23:54:41.074 [coinstats] fold worker pid 3065396 is gone (exited) -- the index cannot be maintained
+2026-09-16 21:49:08.057 [tx_accept] WAL is 2531390197 bytes -- sizing the validation snapshot at 2^24 slots, 2430 MB blob (the writer was bulk-sized when it last wrote)
+2026-09-16 21:49:46.893 [boot] index.dat carried 645525 empty record(s) past the tip (height 321800) -- trimmed
+2026-09-16 21:49:47.819 [boot] headers.dat runs 645525 linked record(s) ahead of the archive tip (headers-first): kept
+2026-09-16 21:49:48.197 [mux] using 64 peer(s) from the address book (seeds are bootstrap-only)
+2026-09-16 21:49:48.297 [utxo_live] WAL tail is 2414MB -- bulk-sizing the memtable despite gap=0 (see incident #32)
+2026-09-16 21:50:23.439 [coinstats] adopted persisted state at height 321800
+2026-09-16 21:50:24.589 [dl] sendrawtransaction accepted, queued for announcement to 3/3 legs
+2026-09-19 01:12:37.514 [dl] sendrawtransaction accepted, queued for announcement to 9/10 legs (repeats muted; +N shows in the tx_accept summary)
+2026-09-02 06:41:55.266 [dl] sendrawtransaction accepted, relayed to 4/4 legs
+2026-09-02 07:10:23.725 [dl] sendrawtransaction accepted, relayed to 6/8 legs (repeats muted; +N shows in the tx_accept summary)
+2026-09-16 21:50:24.589 [mempool] loaded mempool.dat: 1 of 1 in the pool (1 admitted, 0 already there); 0 refused: 0 missing-inputs, 0 conflicting, 0 policy, 0 no-ack, 0 other (0 re-offered, 0 then accepted); 1 arrival time(s) restored
+2026-09-16 21:51:39.869 [dlc] stage: discarded 18 file(s) an earlier run left; their chunks are fetched again
+2026-09-16 21:54:23.555 [dlc] headers: already current per 216.230.225.42:8333 (total 967328)
+2026-09-16 22:01:31.369 [boot] archive check found 1 problem(s) in 0.03s -- see [check] lines above
+2026-09-16 23:10:21.665 [txrelay] addr gossip: +1 address(es) to the book
+2026-09-16 23:38:11.938 [utxo_live] shutdown requested -- stopping catch-up cleanly after height 431427 (307 block(s) applied this call, checkpoint persisted)
+2026-09-16 23:49:34.277 [dl] 673 blocks on disk ahead of the UTXO set -- applying before syncing legs
+2026-09-16 23:49:34.369 [addrself] advertised 203.0.113.7:8464 to 6 clearnet peer(s)
+2026-09-16 23:49:56.810 [utxo_live] catchup timing: 673 block(s) 433048..433720 in 22.4s -- read 0% idx 3% verify 1% get 13% put 19% ckpt 1% flush 61% csi 2% other 0% (33.34 ms/blk over 673)
+2026-09-16 23:49:56.810 [utxo_live] caught up at height 433720 -- downshifting to steady-state flush thresholds (fill=49152 op=131072)
+2026-09-16 23:49:57.672 [utxo_live] caught up: flushed the WAL tail (295135888 bytes, manifest_n 13 -> 14) so the next reload has nothing to replay
+2026-09-16 23:50:02.291 [dial] tip stale for 30 min (no block seen): wanting 9 outbound
+2026-09-16 23:54:40.681 [mempool] WARNING: a process died holding the mempool lock; the lock has
+[mempool]          been recovered and the node keeps running, but the pool
+[mempool]          may hold a partially-applied entry. It is rebuilt from
+[mempool]          the chain on the next reorg reconcile; restart if you
+[mempool]          want it rebuilt now.
+2026-09-16 23:54:40.890 [utxo_live] shutdown: killed background compaction pid 3103403 (its partial run is an orphan)
+2026-09-16 23:58:27.056 [utxo_live] init: pre-catchup compact manifest_n=36 -> 1 (result=1)
+2026-09-01 13:38:14.723 [utxo_live] recover: compact manifest_n=13 -> 1 (result=1)
+2026-09-16 23:58:27.144 [utxo_live] init: swept 1 orphan file(s) the manifest does not name
+2026-09-17 15:39:51.259 [utxo_live] assumevalid: above height 938343 -- script evaluation resumed
+2026-09-17 16:44:51.695 [dlc w3] done: blocks=23120
+2026-09-17 16:45:15.937 [dlc] committer exited unexpectedly (status 0) -- restarting it
+2026-09-17 16:45:16.000 [dlc] committer: 5311 chunk(s) appended in height order; committed tip 967384
+2026-09-17 16:47:04.142 [coinstats] repair: history base absent -- building rows 0..967384 with 8 worker(s) (pid 2729906, attempt 1 of 3; /home/USER/bmc-run26/bmc_build_coinstats_hist)
+[coinstats-hist] dir=/home/USER/bmc-run26/main tip=967384 to=967384 workers=8 chain=main
+[coinstats-hist] dir=/storage/bitcoinmachinecode/data/main tip=966124 to=966124 workers=8 chain=main
+2026-09-17 16:47:04.347 [dl] UTXO backlog 0 -- resuming normal leg rotation
+2026-09-17 16:47:08.452 [dl] filled outbound 7 = 141.239.119.165:8333 (fd 51) proto=70016 services=0xc49 ua="/Satoshi:31.1.0/" height=967440 addrv2=1 [background dial]
+2026-09-17 18:57:52.670 [dl] filled outbound 6 = 123.243.159.11:8333 (fd 31) proto=70016 services=0xc09 ua="/Satoshi:28.1.0(FutureBit-Apollo-Node)/" height=967452 addrv2=1 [background dial]
+2026-09-17 19:01:31.139 [dl] filled outbound 7 = 84.211.191.0:8333 (fd 23) proto=70016 services=0x4000c0d ua="/Satoshi:28.1.0/Knots:20250305/" height=967453 addrv2=1 [background dial]
+2026-09-17 16:47:46.718 [dial] tip fresh again: wanting 8 outbound
+2026-09-17 16:47:50.200 [mux:3] stored tip height=967440 from 86.127.254.44:8333 (announced on connect)
+2026-09-17 16:47:50.200 [mux:3] 86.127.254.44:8333     sync ok=1 new=56 tip=967440 (45.64s)
+2026-09-17 17:14:51.797 [mux:6] 187.125.157.191:8333   sync ok=1 new=1 tip=967442 (2.35s)
+2026-09-17 16:57:22.769 [txrelay] 1p1c accepted: parent 9eb944e6aab6d5cf.. + child e532129369baf941.. (package 350 sat / 318 vB)
+2026-09-17 17:02:57.188 [block] stored height=967441 hash=000000000000000000018830868dac1af50d132bdf71d9707b9fe7271998bfc8 bytes=1565590 (pushed compact block + blocktxn from 86.127.254.44:8333)
+2026-09-18 04:32:36.982 [block] stored height=967503 hash=0000000000000000000157b2c37ade166897ca6f712a74a8e7487bd2c818e604 bytes=552 (pushed compact block from 91.65.138.76:8333)
+[coinstats-hist] pass1 done (3012s)
+[coinstats-hist] pass2 w4: 437267723 spends matched, 0 unmatched
+[coinstats-hist] pass3: 5 worker(s) (largest range needs ~11439 MB each; MemAvailable 87468 MB)
+[coinstats-hist] pass4 0/967384 txouts=0 (0s)
+[coinstats-hist] DONE: rows 0..967384, txouts=165248406 amount=20085348.00433346 prevout_spent=924714841436813381 coinbase=2038608840561710 scripts=5116221750 subsidy=2008557812500000 (2s)
+2026-09-17 18:25:41.886 [coinstats] repair: history base rebuilt, rows 0..967384 verified (pid 2729906, 5917s)
+2026-09-17 18:57:38.167 [tx_accept] reject (policy): txn-already-in-mempool
+2026-09-17 19:13:14.885 [tx_accept] reject (policy): insufficient fee
+2026-09-17 20:17:29.809 [tx_accept] reject (policy): min relay fee not met
+2026-09-18 21:21:02.108 [tx_accept] reject (policy): too-long-mempool-chain (repeats muted; the 30s summary counts them)
+2026-09-18 21:22:06.085 [tx_accept] reject (policy): txn-already-in-mempool (repeats muted; the 30s summary counts them)
+2026-09-17 18:58:34.630 [coinstats] history base complete to 967384
+2026-09-17 18:59:02.418 [mux:7] no dial helper free for 65.181.13.28:58333 -- the leg stays down until the next retry
+2026-09-17 19:12:36.525 [dial] anchors.dat: 1 block-relay-only peer(s) saved
+2026-09-17 19:13:07.522 [dial] anchors.dat: 1 block-relay-only peer(s) from the last run dialled first
+2026-09-17 20:09:40.513 [dlc] archive already complete through 967462
+2026-09-17 22:38:03.829 [tx_accept] last 30s: +84 accepted (mempool 14737) | rejected: 0 missing-inputs, 1 invalid (last: "p2wpkh signature invalid"), 99 policy | 0 already confirmed
+2026-09-18 02:11:44.894 [dl] waited for 1 pass helper(s) before the parallel download; 0 still running
+2026-09-18 03:59:54.066 [dlc] headers from 98.116.106.214:8333 attach at height 959297 and end at 961296, below the 967496 we hold -- the peer is behind us; trying another
+2026-09-19 11:58:14.675 [dial] 104.195.232.36:8333: background dial landed but the leg was not installed
+2026-09-19 05:38:53.673 [zmq] notification ring overrun: 24 transaction(s) not published (total 70892) (repeats muted; the total is cumulative)
+2026-09-19 11:52:31.540 [zmq] notification ring overrun: 298 transaction(s) not published (total 298)
+======================================================================
+===== bmcbitcoind  LOG START: 2026-09-19 11:50:10 UTC
+=====   pid 1362025  v0.0.1  built Sep 19 2026 09:08:09  mode=serve
+2026-09-19 11:50:10.400 [config] loaded /storage/bitcoinmachinecode/data/bitcoin.conf: 17 setting(s) applied
+2026-09-08 06:28:01.145 [config] loaded /storage/bitcoinmachinecode/data/../config/bitcoin.conf: 10 setting(s) applied (some rejected -- see above)
+2026-09-19 11:50:10.400 [config] peers: min_bps=32768 ticks=3 min_usable=8 pool=2048
+2026-09-19 11:50:10.400 [config] addr : max_per_response=256 max_per_netgroup=16
+2026-09-19 11:50:10.400 [config] utxo : dbcache=1024MB -> bulk_slots=2^22 bulk_blob=1024MB bulk_gap=50000 compact_at=12
+2026-09-19 11:50:10.400 [config] pool : maxmempool=300MB mempoolexpiry=336h maxuploadtarget=0MB
+2026-09-19 11:50:10.400 [config] mpol : minrelay=100 inc=100 sat/vB, anc=25/101kvB desc=25/101kvB fullrbf=1
+2026-09-19 11:50:10.400 [config] res  : par=0 (auto) maxreceivebuffer=5000*1000B
+2026-09-19 11:50:10.400 [config] net  : port=8332 bind=192.0.2.242 listen=1 blocksonly=0 timeout=5000ms peertimeout=60s
+2026-09-19 11:50:10.400 [config] src  : dnsseed=1 seednode=0 addnode=0 connect=0
+2026-09-19 11:50:10.400 [config] chain: prune=off checkblocks=n checklevel=3 stopatheight=none
+2026-09-19 11:50:10.400 [config] mine : blockmaxweight=4000000 reserved=8000 blockmintxfee=1 sat/kvB version=0x20000000 printpriority=0
+2026-09-19 11:50:10.400 [config] wallet: addresstype=bech32 changetype=(auto) txconfirmtarget=6 walletrbf=1 broadcast=1 mintxfee=1000 fallbackfee=0 discardfee=10000 consolidate=10000 sat/kvB aps=0/0 zeroconfchange=1 wallets=0
+2026-09-19 11:50:10.400 [config] rpc  : threads=4 workqueue=64 timeout=30s whitelists=0(default=auto) cookieperms=owner
+2026-09-19 11:50:10.400 [config] log  : timestamps=1 micros=0 threadnames=0 sourcelocations=0 shrink=1
+2026-09-19 11:50:10.400 [config] peers: maxtipage=86400s inboundrelay=100% whitelistrelay=1 forcerelay=0 peerblockfilters=0 uacomment=0
+2026-09-19 11:50:10.401 [config] pow  : nBits schedule enforcement ON (no_retarget=0 min_diff=0 bip94=0 powlimit=1d00ffff)
+2026-09-19 11:50:10.401 [config] work : minimumchainwork=0000000000000000000000000000000000000001128750f82f4c366153a3a030 (chain default)
+2026-09-19 11:50:10.400 [config] chain:   checking last 6 block(s)
+2026-09-19 11:50:10.401 [net] BIP324 v2 transport enabled (services=0x809); 0 of 0 known peers advertise v2
+2026-09-19 11:50:10.401 [boot] logging to /storage/bitcoinmachinecode/data/main//dev/null (debuglogfile) and to the console (printtoconsole=1)
+2026-09-19 11:50:57.948 [boot] boot catch-up runs BEFORE the UTXO engine starts: its blocks are connected by the worker afterwards (bmc.bootcatchup=0 leaves the download to the worker, which connects while it downloads)
+2026-09-19 11:51:50.361 [zmq] publishing hashblock on tcp://127.0.0.1:28332
+2026-09-19 11:51:50.361 [zmq] publishing hashtx on tcp://127.0.0.1:28333
+2026-09-19 11:51:50.361 [zmq] publishing sequence on tcp://127.0.0.1:28334
+2026-09-19 11:51:50.570 [wallet] encrypted store present -- locked (walletpassphrase to unlock)
+2026-09-19 11:51:50.570 [rpc] encrypted wallet adopted (locked -- use walletpassphrase)
+2026-09-08 06:29:54.318 [rpc] encrypted wallet adopted and unlocked from the configured passphrase source
+2026-09-19 11:52:40.401 [zmq] subscriber connected on tcp://127.0.0.1:28332 (1 total)
+2026-09-18 21:16:19.014 [config] bind=192.0.2.242 is not a usable number -- reading it as 0
+2026-09-19 01:05:13.556 [config] zmqpubhashblock=tcp://127.0.0.1:28332 is not a usable number -- reading it as 0
+2026-09-08 06:28:01.144 [config] dbcache=16384   # 2026-09-01 15:40: was 32768 -- with 32 GB the worker held 18 GB of anon flush scratch + 3 GB runs per flush and the run files stopped fitting in the page cache (apply thread in D at 2-5 blocks/s); 16 GB halves both is not a usable number -- reading it as 0
+2026-09-18 21:16:19.015 [boot] FATAL: cannot obtain a lock on data directory /storage/bitcoinmachinecode/data/main. bmcbitcoind is probably already running.
+2026-09-18 21:27:36.842 [dial] 45.137.226.182:8333 advertised v2 but the handshake failed -- retrying as v1
+2026-09-19 01:07:42.008 [zmq] subscriber could not take a rawtx message; dropping it
+2026-09-19 01:07:43.586 [zmq] subscriber could not take a rawblock message; dropping it
+2026-09-09 21:58:31.159 [mux:12] next peer 162.237.151.65:8333 unreachable: connect: No route to host (leg stays down; not dialled again for 0 min)
+2026-09-09 21:59:10.901 [mux:12] next peer 37.151.32.195:8333 unreachable: connect timed out (10s) (leg stays down; not dialled again for 0 min)
+2026-09-09 21:59:39.533 [mux:12] next peer 192.46.232.229:8333 unreachable: peer lacks NODE_WITNESS (leg stays down; not dialled again for 0 min)
+2026-09-09 23:21:08.204 [mempool] loaded mempool.dat: 13361 accepted, 95 rejected of 13456 (82 waited for a parent, 0 of them then accepted)
+2026-09-10 00:29:13.004 [hashidx] +6 height(s) now servable (through 966287)
+2026-09-10 04:52:13.768 [catchup] store now tips at height 966303
+2026-09-10 07:07:23.862 [reorg] probe of 34.89.207.91:8333 exceeded 60s budget; re-dialing
+2026-09-10 07:09:09.880 [dl:4] ? exceeded 60s budget; re-dialing
+2026-09-08 23:04:58.370 [dl:1] 82.168.170.188:8333 exceeded 60s budget; re-dialing
+[coinstats-hist] discarded 0 stale scratch file(s) and 252 old-layout csh_*.tmp (no pass1 marker: a dead run's leftovers)
+2026-09-09 00:01:30.580 [serve] inbound 192.0.2.242:60132 connected [v2] (pid 2000468) proto=70017 services=0xc09 ua="/Satoshi:31.99.0/" height=966124
+2026-09-09 15:38:05.439 [serve] inbound 192.0.2.242:35194 connected [v1] (pid 4075453) proto=70016 services=0x9 ua="" height=0
+2026-09-09 15:38:26.420 [serve] inbound 192.0.2.242:54568 handshake failed [v1] (pid 4081387) 
+2026-09-09 15:57:58.694 [coinstats] seed walk: 20M of ~165M coins (12%, 0.9M/s)
+2026-09-09 18:41:29.642 [dial] memory: 8 address(es) remembered, 0 candidate(s) skipped under backoff
+2026-09-08 05:06:26.550 [utxo_live] compaction of 9 run(s) [3..12) of 12 started in background pid 2988100 (mid-catchup at height 966018; newest runs, tombstones kept) -- apply continues
+2026-09-01 19:12:48.682 [utxo_live] compaction of 3 run(s) [0..3) of 3 started in background pid 3028274 (post-catchup at height 965066; full merge) -- apply continues
+2026-09-08 05:39:14.448 [utxo_live] background compaction done in 1967.9s: manifest_n 12 -> 4 (9 merged into run 205, 0 flushed meanwhile), 9 input run(s) unlinked (started at height 966018; apply never waited)
+2026-09-08 06:28:01.145 [config] dbcache=0 out of range [4,262144] -- ignoring
+2026-09-08 06:28:01.145 [config] txindex=1 has no effect -- the txid index is built OFFLINE (daemon/build_tx_index <datadir>) and is used automatically when txindex.dat is present; this daemon does not build or update it
+2026-09-08 06:28:41.403 [dial] cjdns reachable (fc00::/8 over IPv6)
+2026-09-08 06:29:54.370 [tor] listenonion=0 -- no onion service
+2026-09-08 06:29:55.024 [txospender] no base txospender.dat -- index disabled (build one with daemon/build_txospender_index)
+2026-09-08 06:37:26.706 [txospender] no base txospender.dat -- index disabled (build one with daemon/bmc_build_txospender_index)
+2026-09-08 06:30:15.182 [dl] coinstatsindex=0 -- not maintaining the coin statistics index
+2026-09-08 06:30:52.379 [net] bind failed: Address already in use
+2026-09-08 06:30:52.379 [boot] lsock failed: Address already in use
+2026-09-08 09:30:43.757 [boot] shutdown requested during the catch-up -- exiting before the worker starts
+2026-09-08 09:32:35.674 [rpc] Esplora facade NOT started: bind 127.0.0.1:3002: Address already in use
+2026-09-08 17:16:46.581 [addrindex] backfill stopped at height 966097 (undo pruned?)
+2026-09-08 17:16:46.581 [addrindex] boot backfill failed -- disabled
+2026-09-08 17:17:25.149 [coinstats] persisted height 965913 != applied 966096 -- re-seed needed
+2026-09-01 12:33:48.689 [coinstats] index INVALIDATED (pre-BIP34 duplicate-coinbase overwrite) -- will re-seed
+2026-09-07 09:58:23.307 [boot] headers.dat ran 143 record(s) past the archive tip -- trimmed to 965871
+2026-09-07 10:00:54.842 [utxo_live] catchup progress: height=965871/965913 (100.0%) 5.3 blk/s (avg 5.3) eta 00:00:00:07
+2026-08-31 21:43:32.733 [utxo_live] catchup progress: height=964942/964942 (100.0%)
+2026-09-07 06:13:09.868 [dlc w2] reconnect budget [965951,965990]
+2026-09-07 06:13:09.870 [dlc w2] chunk [965951,965990] ABANDONED
+2026-09-06 07:19:45.812 [mux:7] broadcast tip height=965724 to 91.206.17.195:8333
+2026-09-06 08:33:18.324 [dlc] headers from 23.16.135.74:8333 fork from our chain at height 961632 -- discarding
+2026-09-06 18:52:49.187 [dial] 31.209.143.169:8333 exceeded 20s dial budget; dropping
+2026-09-05 09:37:11.214 [reorg] candidate REJECTED: fork at height 961631 is 3961 blocks deep (max 100 -- deeper than the retained undo data). Human review required.
+2026-09-05 09:37:11.214 [reorg] probe of 14.203.153.221:8333 rejected a candidate chain (no action taken)
+2026-09-05 20:45:25.710 [bfilter] index at 964360, tip 965666 -- waiting for the backfill to close in
+2026-09-03 07:25:52.089 [dlc] recorded 1 known-good peer(s) for next boot
+2026-09-02 06:41:15.992 [dial] onion via SOCKS5 127.0.0.1:9050
+2026-09-02 06:41:27.993 [dial] i2p session up via SAM 127.0.0.1:7656, our address examplexampleexampleexampleexampleexampleexampl.b32.i2p
+2026-09-02 06:41:37.793 [i2p] accepting inbound streams on examplexampleexampleexampleexampleexampleexampl.b32.i2p (SAM STREAM ACCEPT)
+2026-09-02 06:41:37.794 [tor] onion service exampleonionexampleonionexampleonionexampleonionexamp.onion:8333 -> 127.0.0.1:8334 (key onion_v3_private_key)
+2026-09-02 06:41:37.794 [tor] announcing exampleonionexampleonionexampleonionexampleonionexamp.onion:8333 to onion peers
+2026-09-02 06:41:37.883 [privbcast] enabled: sendrawtransaction goes out over tor i2p short-lived connections, 3 per transaction, and stays out of the mempool until heard back
+2026-09-02 22:33:38.053 [privbcast] enabled: sendrawtransaction goes out over short-lived connections, 3 per transaction, and stays out of the mempool until heard back
+2026-09-02 06:45:02.245 [dial] m6y3rwmifml7bpvwr73bm7vunr6qyy6imeazzhoc2s7uleovqetq.b32.i2p:0 connected via i2p transport
+2026-09-02 06:45:32.980 [dial] 6hjjzgv3c24xwbds7pw4agp3ei5vutfum2izjppreyitop4lklrjxkid.onion:8333 connected via onion transport
+2026-09-02 22:36:58.615 [config] FATAL: private broadcast of own transactions requested (privatebroadcast=1), but none of Tor or I2P networks is reachable -- set onion=/proxy= or i2psam=, or drop the option
+2026-09-02 22:36:58.619 [serve] FATAL: download worker pid 2298970 exited with status 1 -- exiting so systemd restarts the unit
+2026-08-31 21:43:45.868 [txrelay:3] 79.112.132.88:8333: +14 tx accepted (mempool 4992)
+2026-09-01 11:50:56.703 [boot] headers.dat diverged from the archive at position 965018 -- trimmed (re-derived from the blocks at boot)
+2026-09-01 11:57:37.516 [dlc] headers from 79.116.38.44:8333 do not connect to our tip -- discarding 3 header(s)
+2026-09-01 12:29:25.061 [archive] *** CORRUPTION DETECTED ***
+2026-09-01 13:37:31.946 [utxo_live] REJECT h=428471 tx=3: input references a missing/already-spent UTXO
+2026-09-01 13:37:31.946 [utxo_live] FATAL: apply_block failed at height 428471 -- stopping catch-up
+2026-09-01 13:37:31.946 [dl] utxo_live_catchup FAILED at height 428470 -- attempting in-place recovery
+2026-09-01 13:43:24.686 [dl] utxo STILL failing after recovery (streak=1) -- DEGRADED (no UTXO tracking), retrying in 5s
+2026-09-01 14:23:45.195 [dl] utxo recovery SUCCEEDED (1 compaction round(s)) -- tracking continues at height 539017
+2026-09-11 11:50:23.258 [reorg] detected competing chain at height 966499, work=0x00000001468e1de9c9ceb61709b87494 vs ours=0x00000001468da9fee2d7af9cdf8492f6 (our tip=966500, candidate adds 2 blocks)
+2026-09-11 11:50:24.416 [utxo_live] unapply h=966500: 2494 of 10178 created outputs were ALREADY ABSENT and were not deleted -- if this is not a partial apply, the lookup is lying and the set may hold phantom coins
+2026-09-11 11:50:24.826 [txindex] tail watermark rolled back 966500 -> 966499 (store truncated)
+2026-09-11 11:50:24.826 [txospender] tail watermark rolled back 966500 -> 966499 (store truncated)
+2026-09-11 11:50:24.829 [addrindex] rolled back 966500 -> 966499 (store truncated)
+2026-09-11 11:50:33.292 [reorg] complete: new tip height=966501 hash=0000000000000000.. (9.11s, -1 +2 blocks)
+2026-09-18 19:15:29.196 [mempool] recent-rejects filter: 128 KB shared (inbound announcements of an already-refused tx cost nothing)
+2026-09-16 23:49:34.369 [net] feeler 79.154.41.211:8333 -> dead
+2026-09-17 16:47:07.583 [dial] 141.239.119.165:8333: dialing as block-relay-only (1 of 2)

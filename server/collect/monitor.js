@@ -2014,6 +2014,281 @@ export class NodeMonitor extends EventEmitter {
       case 'headers_from':
         ls.lastHeadersFrom = { at: ev.ts, host: ev.host, headers: ev.headers, total: ev.total };
         return [];
+      // ------------------------------------------ everything else bmc writes (2026-09-19)
+      // logparse.js, "EVERYTHING ELSE BMC WRITES". FEED POLICY, as for the sections above:
+      // a line reaches the feed only when it is news -- a failure, a stall, a peer banned,
+      // a phase finishing, a start that did not happen. Everything else is state, and
+      // every kind is named here, because the default below sends an unnamed kind to the
+      // feed: `leg_closed` alone is 100+ rows a day.
+      //
+      // Flags raised from these lines are age-gated like `node-restarting`: the tail replays
+      // hours of history at start, and a stall from this morning must not be raised as a
+      // stall now.
+      case 'noted':
+        // Set aside by rule: a continuation or a separator, with nothing in it to keep.
+        return [];
+      case 'node_fact': {
+        // How the node came up, one subsystem at a time; a later start overwrites it.
+        const facts = (ls.nodeFacts ??= {});
+        facts[ev.subsystem] = { ...(facts[ev.subsystem] ?? {}), ...ev.facts, at: ev.ts };
+        return [];
+      }
+      case 'node_build':
+        // The banner: which build is running, the only place the log says so.
+        ls.nodeBuild = { ...(ls.nodeBuild ?? {}), ...Object.fromEntries(Object.entries(ev).filter(([k]) => ['program', 'loggedAtUtc', 'pid', 'version', 'built', 'mode'].includes(k))), at: ev.ts };
+        return [];
+      case 'node_fatal':
+      case 'boot_aborted':
+        return [ev];
+      case 'boot_repair': {
+        const b = this.bootRecord(ev.ts);
+        b.repairs ??= [];
+        if (b.repairs.length < 16) b.repairs.push({ file: ev.file, action: ev.action, records: ev.records, height: ev.height });
+        return [];
+      }
+      case 'config_loaded':
+        ls.nodeConfig = { at: ev.ts, file: ev.file, applied: ev.applied, someRejected: ev.someRejected, sections: {} };
+        return [];
+      case 'config_section': {
+        const c = (ls.nodeConfig ??= { at: ev.ts, sections: {} });
+        c.sections[ev.section] = { ...(c.sections[ev.section] ?? {}), ...ev.settings };
+        return [];
+      }
+      case 'config_rejected':
+        // A setting the node did not take as written (on this box today: `bind=` read as a
+        // number). Once per start, and exactly what an operator would want to be told.
+        return [ev];
+      // Peers and legs.
+      case 'tip_on_connect': {
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.tipOnConnect = ev.height;
+        return [];
+      }
+      case 'tip_broadcast': {
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.tipsBroadcast = (rec.tipsBroadcast ?? 0) + 1;
+        return [];
+      }
+      case 'leg_sync': {
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.lastSync = { ok: ev.ok, added: ev.added, tip: ev.tip, secs: ev.secs, at: ev.ts };
+        return [];
+      }
+      case 'leg_closed': {
+        // Who hung up and why: the peer list, and a count per reason. Not the feed.
+        this.peerEvents.unshift({ ...ev });
+        if (this.peerEvents.length > 400) this.peerEvents.length = 400;
+        const why = `${ev.by}/${ev.reason ?? '?'}`.replace(/revents \S+/, 'revents');
+        const c = (ls.legClosures ??= { total: 0, byReason: {} });
+        c.total += 1;
+        if (c.byReason[why] != null || Object.keys(c.byReason).length < 32) c.byReason[why] = (c.byReason[why] ?? 0) + 1;
+        c.lastAt = ev.ts;
+        return [];
+      }
+      case 'leg_no_helper':
+      case 'leg_budget':
+      case 'dial_unused':
+      case 'dial_v2_fallback':
+      case 'dial_transport': {
+        // Counted, not listed: each is one leg or dial that did not become a connection.
+        const c = (ls.dialCounters ??= {});
+        c[ev.kind] = (c[ev.kind] ?? 0) + 1;
+        return [];
+      }
+      case 'tx_relay_leg': {
+        const cur = this.perPeerRelay.get(ev.host) ?? { accepted: 0, blocks: 0, first: ev.ts };
+        cur.accepted += ev.accepted;
+        cur.lastSeen = ev.ts;
+        cur.leg = ev.leg;
+        cur.addr = ev.addr;
+        this.perPeerRelay.set(ev.host, cur);
+        return [];
+      }
+      case 'self_address':
+        // The node's own public address: kept in state, deliberately not in the snapshot.
+        ls.selfAddress = { ...(ls.selfAddress ?? {}), addr: ev.addr, ...(ev.confirmedBy != null ? { confirmedBy: ev.confirmedBy } : {}), ...(ev.advertisedTo != null ? { advertisedTo: ev.advertisedTo } : {}), at: ev.ts };
+        return [];
+      case 'anchors':
+        ls.anchors = { at: ev.ts, peers: ev.peers, state: ev.state };
+        return [];
+      case 'tip_stale':
+        // THE NODE SAYING IT HAS SEEN NO BLOCK FOR HALF AN HOUR. News both ways.
+        ls.tipStale = { at: ev.ts, stale: ev.stale, minutes: ev.minutes, wantOutbound: ev.wantOutbound };
+        if (ev.stale && now - ev.ts < 600_000) this.flagQuality('tip-stale', `the node has seen no new block for ${ev.minutes} min and is reaching for ${ev.wantOutbound} outbound peers (its own words: "tip stale")`, 'warn');
+        else if (!ev.stale) this.clearQuality('tip-stale');
+        return [ev];
+      // The download.
+      case 'pool_tip_claim':
+        ls.poolTipClaim = { at: ev.ts, height: ev.height, claimed: ev.claimed, of: ev.of };
+        return [];
+      case 'headers_current':
+        ls.lastHeadersFrom = { at: ev.ts, host: ev.host, headers: 0, total: ev.total, current: true };
+        return [];
+      case 'headers_minwork':
+        ls.headersMinwork = { at: ev.ts, state: ev.state, host: ev.host, pages: ev.pages ?? null, headers: ev.headers ?? null, rate: ev.rate ?? null };
+        return ev.state === 'crossed' ? [ev] : [];
+      case 'headers_behind':
+        ls.lastHeadersBehind = { at: ev.ts, host: ev.host, to: ev.to, ours: ev.ours };
+        return [];
+      case 'headers_rejected':
+        return ev.why === 'fork' ? [ev] : [];
+      case 'archive_complete':
+        ls.archiveComplete = { at: ev.ts, height: ev.height };
+        return [];
+      case 'window_stall': {
+        // A PEER BANNED for stalling the window is news; a stall by one already banned is not.
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        if (ev.newlyBanned) rec.banned = true;
+        ls.windowStalls = (ls.windowStalls ?? 0) + 1;
+        return ev.newlyBanned ? [ev] : [];
+      }
+      case 'worker_drop': {
+        const rec = this.peerRecord(ev.host, ev.addr, ev.ts);
+        rec.dropped = { reason: ev.reason, rate: ev.rate, chunks: ev.chunks, blocks: ev.blocks, at: ev.ts };
+        return [];
+      }
+      case 'chunk_failed': {
+        const c = (ls.chunkFailures ??= { total: 0, verifyFailed: 0 });
+        c.total += 1;
+        if (ev.verifyFailed) c.verifyFailed += 1;
+        c.last = { reason: ev.reason, host: ev.host, from: ev.from, to: ev.to, at: ev.ts };
+        // A block that failed consensus verification is news; a dropped socket is not.
+        return ev.verifyFailed ? [ev] : [];
+      }
+      case 'chunk_retry':
+        return ev.abandoned ? [ev] : [];
+      case 'ban_amnesty':
+      case 'dl_catchup_done':
+      case 'dl_committer_restart':
+        return [ev];
+      case 'worker_done':
+      case 'dl_stopping':
+      case 'dl_stage_discarded':
+      case 'dl_known_good':
+      case 'pass_helpers':
+        return [];
+      case 'dl_plan':
+        ls.dlPlan = { ...(ls.dlPlan ?? {}), ...Object.fromEntries(Object.entries(ev).filter(([k]) => ['from', 'to', 'heights', 'parallel', 'live', 'cap', 'span', 'window', 'stallTimeoutSec'].includes(k))), at: ev.ts };
+        return [];
+      case 'dl_connected_during':
+        ls.dlConnectedDuring = { at: ev.ts, blocks: ev.blocks, tip: ev.tip };
+        return [];
+      case 'dl_committer':
+        ls.dlCommitter = { at: ev.ts, chunks: ev.chunks, tip: ev.tip };
+        return [];
+      case 'dial_probe':
+        ls.dialProbe = { at: ev.ts, answered: ev.answered, candidates: ev.candidates };
+        return [];
+      case 'worker_step_begin':
+      case 'worker_step': {
+        // The download worker's own start, beside the boot record rather than inside it.
+        const w = (ev.kind === 'worker_step_begin' && ev.step === 'reloading chain archive') || !ls.workerStart
+          ? (ls.workerStart = { startedAt: ev.ts, steps: [], inProgress: null }) : ls.workerStart;
+        if (ev.kind === 'worker_step_begin') w.inProgress = ev.step;
+        else {
+          if (w.steps.length < 8) w.steps.push({ step: ev.step, sec: ev.sec, tip: ev.tip, records: ev.records });
+          w.inProgress = null;
+        }
+        return [];
+      }
+      case 'worker_shutdown':
+        // The serve process's own shutdown line is the feed row (`node_shutdown`).
+        ls.workerShutdown = { at: ev.ts, signal: ev.signal, tip: ev.tip, peers: ev.peers, txouts: ev.txouts, uptimeMs: ev.uptime };
+        return [];
+      case 'tx_broadcast':
+        // A transaction submitted to this node leaving it: somebody's payment.
+        return [ev];
+      case 'utxo_backlog':
+        ls.utxoBacklog = { at: ev.ts, behind: ev.behind, state: ev.state };
+        return [];
+      // The UTXO engine.
+      case 'utxo_failure':
+        if (ev.state === 'recovered') this.clearQuality('utxo-failing');
+        else if (now - ev.ts < 600_000) this.flagQuality('utxo-failing', `the node's UTXO applier reported "${ev.state}"${ev.height != null ? ` at height ${ev.height}` : ''}${ev.reason ? `: ${ev.reason}` : ''}`, 'warn');
+        return [ev];
+      case 'utxo_caught_up':
+        // The applier reaching the tip: the end of a catch-up, which is news.
+        ls.utxoCaughtUp = { at: ev.ts, height: ev.height };
+        return [ev];
+      case 'utxo_init':
+        ls.utxoInit = { at: ev.ts, mode: ev.mode, appliedHeight: ev.appliedHeight, live: ev.live, manifestN: ev.manifestN, slots: ev.slots };
+        return [];
+      case 'utxo_sizing':
+        ls.utxoSizing = { ...(ls.utxoSizing ?? {}), ...Object.fromEntries(Object.entries(ev).filter(([k]) => ['mode', 'applied', 'tip', 'gap', 'slots', 'blobMB', 'compactAt', 'walTailMB'].includes(k))), at: ev.ts };
+        return [];
+      case 'utxo_maintenance':
+        ls.utxoMaintenance = { at: ev.ts, action: ev.action };
+        return [];
+      case 'catchup_timing':
+        ls.catchupTiming = { at: ev.ts, blocks: ev.blocks, from: ev.from, to: ev.to, secs: ev.secs, phases: ev.phases, msPerBlk: ev.msPerBlk };
+        return [];
+      case 'assumevalid':
+        ls.assumevalid = { at: ev.ts, state: ev.state, height: ev.height };
+        return [];
+      case 'bip30':
+        return [];
+      case 'coinstats_state':
+        ls.coinstats = { at: ev.ts, state: ev.state, height: ev.height ?? ls.coinstats?.height ?? null };
+        return ev.state === 'invalidated' ? [ev] : [];
+      case 'coinstats_repair':
+        return [ev];
+      case 'coinstats_hist':
+        ls.coinstatsHist = { ...(ls.coinstatsHist ?? {}), at: ev.ts, state: ev.state, ...(ev.pass != null ? { pass: ev.pass } : {}) };
+        return ev.state === 'done' ? [ev] : [];
+      // The mempool, relay and zmq.
+      case 'package_accepted': {
+        const p = (ls.packages ??= { count: 0 });
+        p.count += 1;
+        p.last = { feeSat: ev.feeSat, vsize: ev.vsize, satPerVb: ev.satPerVb, at: ev.ts };
+        return [];
+      }
+      case 'tx_reject': {
+        const r = (ls.txRejects ??= {});
+        const key = `${ev.class}: ${ev.reason}`;
+        if (r[key] != null || Object.keys(r).length < 32) r[key] = (r[key] ?? 0) + 1;
+        return [];
+      }
+      case 'mempool_persist':
+        ls.mempoolPersist = { at: ev.ts, state: ev.state, txs: ev.txs, refused: ev.refused ?? null, refusedBy: ev.refusedBy ?? null };
+        return [];
+      case 'mempool_lock_recovered':
+        if (now - ev.ts < 600_000) this.flagQuality('mempool-lock-recovered', 'a process died holding the mempool lock; the node recovered it and keeps running, but the pool may hold a partially-applied entry until the next reorg reconcile or a restart (the node\'s own words)', 'warn');
+        return [ev];
+      case 'zmq_overrun': {
+        // SUBSCRIBERS MISSING NOTIFICATIONS: whatever reads this node's zmq did not see these.
+        const z = (ls.zmq ??= {});
+        z.overrunTotal = ev.total ?? (z.overrunTotal ?? 0) + ev.dropped;
+        z.lastOverrunAt = ev.ts;
+        if (now - ev.ts < 600_000) this.flagQuality('zmq-overrun', `the node could not publish ${z.overrunTotal} transaction notification(s) over zmq (its ring overran); a zmq subscriber has missed them`, 'warn');
+        return [];
+      }
+      case 'zmq_subscriber':
+        (ls.zmq ??= {}).subscribers = ev.total;
+        return [];
+      case 'fee_estimator':
+        ls.feeEstimator = { at: ev.ts, state: ev.state, bestHeight: ev.bestHeight ?? null };
+        return [];
+      // Chain state and the indexes beside it.
+      case 'hash_index':
+        ls.hashIndex = { at: ev.ts, heights: ev.heights ?? ls.hashIndex?.heights ?? null, through: ev.through ?? null };
+        return [];
+      case 'archive_integrity':
+        ls.archiveIntegrity = { at: ev.ts, entries: ev.entries, unique: ev.unique, duplicates: ev.duplicates, corrupt: ev.corrupt ?? false };
+        return ev.corrupt || ev.duplicates > 0 ? [ev] : [];
+      case 'bfilter_state':
+        ls.bfilter = { at: ev.ts, records: ev.records, tip: ev.tip, backfilling: ev.backfilling };
+        return [];
+      case 'index_rolled_back':
+      case 'index_disabled': {
+        const rec = this.indexRecord(ev.index, ev.ts);
+        if (ev.kind === 'index_disabled') { rec.state = 'disabled'; rec.note = ev.why; }
+        else rec.rolledBack = { from: ev.from, to: ev.to, at: ev.ts };
+        return [ev];
+      }
+      case 'reorg':
+        return [ev];
+      case 'reorg_probe':
+        return [];
       default:
         return [ev];
     }
@@ -2443,6 +2718,27 @@ export class NodeMonitor extends EventEmitter {
         connBudget: s.logState.connBudget ?? null,
         // the node's last start, from its [boot] lines: steps and times, config, seeds, the total
         boot: s.logState.boot ?? null,
+        // What the rest of bmc's log says about the node itself (2026-09-19): which build, the
+        // download worker's own start, the UTXO engine, zmq, rejections by reason. Addresses
+        // stay out -- the node's public address, onion and i2p names, RPC endpoints are kept
+        // in logState (nodeFacts, selfAddress) but not sent to viewers.
+        node: {
+          build: s.logState.nodeBuild ?? null,
+          workerStart: s.logState.workerStart ?? null,
+          utxoInit: s.logState.utxoInit ?? null,
+          utxoSizing: s.logState.utxoSizing ?? null,
+          assumevalid: s.logState.assumevalid ?? null,
+          catchupTiming: s.logState.catchupTiming ?? null,
+          tipStale: s.logState.tipStale ?? null,
+          zmq: s.logState.zmq ?? null,
+          txRejects: s.logState.txRejects ?? null,
+          packages: s.logState.packages ?? null,
+          mempoolPersist: s.logState.mempoolPersist ?? null,
+          coinstats: s.logState.coinstats ?? null,
+          legClosures: s.logState.legClosures ?? null,
+          dialCounters: s.logState.dialCounters ?? null,
+          archiveIntegrity: s.logState.archiveIntegrity ?? null,
+        },
         backfilled: this.logBackfilled,
         // What the log-health timer concluded, not what we hope. `ratio` is the
         // share of lines a parser actually claimed over the last window, and
