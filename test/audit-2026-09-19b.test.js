@@ -95,3 +95,17 @@ test('M2-follow-up: the gate is wired through the real server, not just the hand
     assert.equal(app.cfg.auth.openEventsFromNetwork, false);
   });
 });
+
+// --------------------------------------------------------------------------- N2: the unit
+
+test('N2: the shipped unit pins PATH instead of trusting systemd\'s default', () => {
+  // ExecStart goes through /usr/bin/env node. The unit is sandboxed (the 09-16 M8 fix holds),
+  // so a compromised process cannot swap the interpreter; what the pin protects against is
+  // the ordinary case -- an install whose default PATH resolves node to something else. The
+  // line was present but commented out; a commented directive is the pre-fix state.
+  const unit = fs.readFileSync(path.join(ROOT, 'systemd', 'blockyard.service'), 'utf8');
+  const lines = unit.split('\n');
+  assert.ok(lines.some((l) => l.startsWith('Environment=PATH=')), 'Environment=PATH= must be an active directive');
+  assert.ok(!lines.some((l) => l.trim().startsWith('#Environment=PATH=')), 'the commented-out form is the pre-fix state');
+  assert.match(unit, /^Environment=PATH=\/usr\/local\/sbin:\/usr\/local\/bin:\/usr\/sbin:\/usr\/bin:\/bin$/m, 'the pinned path keeps /usr/local/bin first, where the measured too-old and root-only interpreters live -- the pin documents the order, it does not guess a new one');
+});

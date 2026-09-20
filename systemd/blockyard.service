@@ -37,7 +37,12 @@ WorkingDirectory=/storage/blockyard
 # nothing. Pin PATH for child processes and give ExecStart an absolute path; generate
 # the path once with `node -v` on the target and paste it in, since this file is
 # committed and a per-machine interpreter belongs in a drop-in, not here.
-#Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+#
+# The pin (audit 2026-09-19, N2): active since the round-2 remediation. It does not
+# change what /usr/bin/env finds on this box -- it makes "what the service runs" stop
+# depending on systemd's default PATH, which is the only thing an unusual image could
+# move out from under it.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
 #ExecStart=/absolute/path/to/node server/main.js
 ExecStart=/usr/bin/env node server/main.js
 # always, not on-failure. The outage this box actually had -- service gone, nothing on
