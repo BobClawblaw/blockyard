@@ -424,7 +424,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1311 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1322 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -468,6 +468,15 @@ node was told to write elsewhere, `server=1`, `txindex=1` -- so the questions it
 ones the file cannot answer; it offers to leave the index build to the server's first start, the
 default; and `--workers N` is written into the config as `addressIndexWorkers`, defaulting to at
 most 4, not the 16 a dedicated build takes.)
+
+**Two more AI security audits ran on 2026-09-19, back to back.** The first (GLM, report kept beside
+the tree) found three code items, fixed in `7736b1c` with tests that failed first
+(`docs/REMEDIATION-2026-09-19.md` records it; its log-source finding settled as a decision with a
+named follow-up). The second (report `docs/SECURITY-AUDIT-2026-09-19b.md`) re-verified all of the
+09-13/14/16 findings plus `7736b1c`, and found the follow-up's gate missing from the code, plus three
+more items: all four fixed 2026-09-20 on `audit-2026-09-19-round2` (`docs/REMEDIATION-2026-09-19b.md`,
+tests in `test/audit-2026-09-19b.test.js` and the files it names). Still open by design: M8, the
+security audit of the administrative suite — the release exclusion holds in the meantime.
 
 **A third AI security audit, `docs/SECURITY-AUDIT-2026-09-16.md`: every finding remediated the same day (`test/audit-2026-09-16*.test.js` hold the fixes):** 1 high (a stalled event-stream reader is never dropped, so memory grows without bound), 8 medium (open mode writable by scripts, probe SSRF, the index build deleting its output directory, wallet key reads in the RPC allowlist, no body deadline, audit-trail flushing, private docs in the npm package, an unsandboxed systemd unit), 17 low. **Two earlier AI security audits**, both remediated the same day: `docs/SECURITY-AUDIT.md` (09-13, one
 HIGH: the node-probe credential leak) and `docs/SECURITY-AUDIT-2026-09-14.md` (1 medium: an
@@ -709,7 +718,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1311 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1322 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
