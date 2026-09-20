@@ -19,6 +19,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { withApp } from './helpers/http.js';
 import { __resetElevations } from '../server/admin/elevation.js';
 import { __resetPending, __resetSpent, satToBtcString, checkAmountSat } from '../server/admin/send.js';
+import { regtestUnavailable } from './helpers/regtest.js';
 
 const PASSPHRASE = 'correct-horse-battery';
 const CANDIDATES = [
@@ -32,55 +33,64 @@ const CLI = BITCOIND ? path.join(path.dirname(BITCOIND), 'bitcoin-cli') : null;
 
 /** A regtest node with an encrypted, funded wallet. Returns how to reach it and how to stop it. */
 async function regtest() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-regtest-'));
-  // Port 0 is not an option for bitcoind, so take one the OS says is free and race
-  // nothing else on this machine for it.
-  const net = await import('node:net');
-  const port = await new Promise((resolve) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
-  });
-  const conf = path.join(dir, 'bitcoin.conf');
-  fs.writeFileSync(conf, [
-    'regtest=1', 'server=1', 'rpcuser=rt', 'rpcpassword=rtpass',
-    // Regtest has no fee estimation, and a wallet that cannot estimate a fee cannot fund
-    // a transaction at all.
-    'fallbackfee=0.0002',
-    // `listen=0` and `bind=` together are refused by Core ("Cannot set -bind or -whitebind
-    // together with -listen=0"), and a node that will not start is a test that fails with
-    // a connection error rather than a reason -- which is exactly how this line was found.
-    '[regtest]', `rpcport=${port}`, 'listen=0', 'rpcbind=127.0.0.1', 'rpcallowip=127.0.0.1',
-  ].join('\n'));
+  let dir;
+  let child;
+  try {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-regtest-'));
+    // Port 0 is not an option for bitcoind, so take one the OS says is free and race
+    // nothing else on this machine for it.
+    const net = await import('node:net');
+    const port = await new Promise((resolve) => {
+      const s = net.createServer();
+      s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
+    });
+    const conf = path.join(dir, 'bitcoin.conf');
+    fs.writeFileSync(conf, [
+      'regtest=1', 'server=1', 'rpcuser=rt', 'rpcpassword=rtpass',
+      // Regtest has no fee estimation, and a wallet that cannot estimate a fee cannot fund
+      // a transaction at all.
+      'fallbackfee=0.0002',
+      // `listen=0` and `bind=` together are refused by Core ("Cannot set -bind or -whitebind
+      // together with -listen=0"), and a node that will not start is a test that fails with
+      // a connection error rather than a reason -- which is exactly how this line was found.
+      '[regtest]', `rpcport=${port}`, 'listen=0', 'rpcbind=127.0.0.1', 'rpcallowip=127.0.0.1',
+    ].join('\n'));
 
-  const cli = (...args) => execFileSync(CLI, [`-datadir=${dir}`, `-conf=${conf}`, ...args], { encoding: 'utf8' }).trim();
-  // stderr is kept, not ignored: a node that refuses to start says why on it, and
-  // throwing that text is the difference between a fixable test and a mystery.
-  const child = spawn(BITCOIND, [`-datadir=${dir}`, `-conf=${conf}`], { stdio: ['ignore', 'ignore', 'pipe'] });
-  let stderr = '';
-  child.stderr.on('data', (c) => { stderr += c.toString(); });
+    const cli = (...args) => execFileSync(CLI, [`-datadir=${dir}`, `-conf=${conf}`, ...args], { encoding: 'utf8' }).trim();
+    // stderr is kept, not ignored: a node that refuses to start says why on it, and
+    // throwing that text is the difference between a fixable test and a mystery.
+    child = spawn(BITCOIND, [`-datadir=${dir}`, `-conf=${conf}`], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (c) => { stderr += c.toString(); });
 
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    try { cli('getblockchaininfo'); break; } catch (err) {
-      if (child.exitCode != null || Date.now() > deadline) {
-        throw new Error(`regtest node did not come up${stderr ? `: ${stderr.trim().split('\n')[0]}` : `: ${err.message}`}`);
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      try { cli('getblockchaininfo'); break; } catch (err) {
+        if (child.exitCode != null || Date.now() > deadline) {
+          throw new Error(`regtest node did not come up${stderr ? `: ${stderr.trim().split('\n')[0]}` : `: ${err.message}`}`);
+        }
+        await new Promise((r) => setTimeout(r, 200));
       }
-      await new Promise((r) => setTimeout(r, 200));
     }
-  }
-  cli('-named', 'createwallet', 'wallet_name=hot', `passphrase=${PASSPHRASE}`);
-  const addr = cli('-rpcwallet=hot', 'getnewaddress');
-  cli('generatetoaddress', '101', addr);   // 100 for maturity, 1 to spend
+    cli('-named', 'createwallet', 'wallet_name=hot', `passphrase=${PASSPHRASE}`);
+    const addr = cli('-rpcwallet=hot', 'getnewaddress');
+    cli('generatetoaddress', '101', addr);   // 100 for maturity, 1 to spend
 
-  return {
-    dir, port, cli, addr,
-    url: `http://127.0.0.1:${port}`,
-    async stop() {
-      try { cli('stop'); } catch { /* already gone */ }
-      await new Promise((r) => { child.on('exit', r); setTimeout(r, 5000); });
-      fs.rmSync(dir, { recursive: true, force: true });
-    },
-  };
+    return {
+      dir, port, cli, addr,
+      url: `http://127.0.0.1:${port}`,
+      async stop() {
+        try { cli('stop'); } catch { /* already gone */ }
+        await new Promise((r) => { child.on('exit', r); setTimeout(r, 5000); });
+        fs.rmSync(dir, { recursive: true, force: true });
+      },
+    };
+  } catch (err) {
+    // N3 (audit 2026-09-19): a failed start leaves no litter and no running node behind.
+    if (child && child.exitCode == null) child.kill('SIGKILL');
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
 }
 
 /** Boot BlockYard pointed at the regtest node, signed in, granted and elevated. */
@@ -112,13 +122,15 @@ async function withSuite(rt, config, fn) {
   });
 }
 
-const describe = BITCOIND ? test : test.skip;
+// N3 (audit 2026-09-19): a host that cannot run regtest skips the suite with the reason
+// instead of failing every test here.
+const RT_UNAVAILABLE = regtestUnavailable();
+const describe = RT_UNAVAILABLE ? test.skip : test;
 
 // Top level and unconditional: a `test()` inside an `if` reads as a nested subtest to the
 // scanner behind doc-counts, which counts the suite by reading the source.
-test('there is a bitcoind to drive the send tests', { skip: BITCOIND ? false : `no bitcoind found (looked in ${CANDIDATES.join(', ')}; set BITCOIND=/path/to/bitcoind)` }, () => {
-  assert.equal(fs.existsSync(BITCOIND), true);
-  assert.equal(fs.existsSync(CLI), true, 'bitcoin-cli lives beside bitcoind');
+test('regtest can run on this host, or the suite is skipped with the reason', { skip: RT_UNAVAILABLE ?? false }, () => {
+  assert.equal(RT_UNAVAILABLE, null, RT_UNAVAILABLE);
 });
 
 describe('a send, end to end, against a real node', async (t) => {
