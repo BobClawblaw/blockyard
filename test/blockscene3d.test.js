@@ -419,6 +419,41 @@ test('an idle effect draws glowing outlines as thick rgba strokes, and never tou
   assert.ok(!ops.some((o2) => o2.txid === 'f' && (o2.face === 'outline' || o2.face === 'glow')), 'the airborne one is left alone');
 });
 
+test('the scan crosses in ONE pass and x-rays the tiles its beam lights', () => {
+  // (operator, 2026-09-20: "the UFO does two passes. It only needs to do one pass. And use the
+  // x-ray effect on the blocks it lights up". The old front panned out and back on the block
+  // board -- `1 - Math.abs((u*2 % 2) - 1)` -- so the saucer crossed twice and its 16.8 s ran
+  // twice as long as every other front's.)
+  const fx = (u) => ({ kind: 'scan', u, amp: 1, gridW: 40, gridH: 40, dx: 1, dy: 0, beamR: 5 });
+  // monotone: later u is always further along -- the front never comes back
+  let prev = fxFront(fx(0));
+  assert.ok(prev < 0, 'it starts past the entering edge');
+  for (let u = 0.05; u <= 1.0001; u += 0.05) {
+    const p = fxFront(fx(Math.min(1, u)));
+    assert.ok(p > prev, `u=${u.toFixed(2)}: the front only moves forward (${prev.toFixed(1)} -> ${p.toFixed(1)})`);
+    prev = p;
+  }
+  assert.ok(prev > 40, 'and ends past the far edge');
+  // the swath: a tile under the beam is lit AND x-rayed, in proportion; off the beam, neither
+  const at = (x, u) => fxAt({ txid: 'q', x: x - 1, y: 10, s: 2 }, fx(u));
+  const on = at(fxFront(fx(0.5)), 0.5), behind = at(fxFront(fx(0.5)) - 3, 0.5), far = at(fxFront(fx(0.5)) + 12, 0.5);
+  const xr = (v) => v.xray ?? 0;
+  assert.ok(on.glow > 0.9 && xr(on) > 0.9, 'a tile under the beam glows and goes x-ray');
+  assert.ok(xr(on) > xr(behind) && xr(behind) > xr(far), 'the glassness follows the beam');
+  assert.ok(!far.xray && !far.glow, 'a tile the beam has not reached is untouched');
+  // and the treatment is the real one: buildScene dims the body to glass and draws the raster
+  const p = fxFront(fx(0.5)) - 1;
+  const ops = buildScene([{ txid: 'r', x: p, y: 5, s: 2, z: 0, color: feeColor(5) }], { unit: 10, fx: fx(0.5) }).ops;
+  const raster = ops.find((o2) => o2.face === 'outline' && o2.lw === 0.8);
+  assert.ok(raster && /rgba\(160,230,255/.test(raster.stroke), 'the x-ray raster is on the scanned tile');
+  // GLASS: the same tile without the scan draws a fully opaque top; under the beam its body's
+  // alpha drops (buildScene's `a = alpha * (1 - 0.72 * xray)`)
+  const topFill = ops.find((o2) => o2.txid === 'r' && o2.face === 'top').fill;
+  const plainFill = buildScene([{ txid: 'r', x: p, y: 5, s: 2, z: 0, color: feeColor(5) }], { unit: 10 }).ops.find((o2) => o2.txid === 'r' && o2.face === 'top').fill;
+  const alpha = (f) => { const m = f.match(/,\s*([\d.]+)\)$/); return m ? parseFloat(m[1]) : 1; };
+  assert.ok(alpha(topFill) < alpha(plainFill) - 0.3, `the body goes glass under the beam (${alpha(topFill)} < ${alpha(plainFill)})`);
+});
+
 test('no two slabs ever intersect, at any moment of the whole transition', () => {
   const a = layout(5);
   const b = layout(9);

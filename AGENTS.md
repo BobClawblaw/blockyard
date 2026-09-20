@@ -424,7 +424,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1322 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1326 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -507,10 +507,45 @@ units (`boundedRadius`), never set in units alone, a capture on the Kiosk page i
 shipping one, and `test/kiosk.test.js` plays every effect at the Kiosk's panel size and holds
 the caps and the soft fills' opacity.
 
-**Effects.** Thirty-four, with a no-repeat window (12) per board; two lists (`effects` for Block
+**Effects.** Thirty-five, with a no-repeat window (12) per board; two lists (`effects` for Block
 space, `marketEffects` for Markets), nothing rare -- the pulse and the bulge are ordinary picks
 on the Markets list since 2026-09-14. The bulge is a ball that fits the line: exactly
 the tube at both ends, an arced skin, the core magnified through it, gravity along the pipe.
+The newest is the pulsar wind (2026-09-20, the price board's own -- it played on both for a day,
+then "remove it from the block space view", and it is twice the size it was on Markets): a
+pulsar's passage through a companion's
+stellar wind, after NASA's XRISM / BP Crucis film. Two cuts of it were rejected before the
+operator's own words named what was missing -- "the winds don't look enough like a particle
+simulation" -- so the gas is one: 3200 particles advected every frame through a flow field (the
+stream, a swirl, an infall that takes over at the flare's peak, a bow shock), the spiral arms a
+density modulation of their brightness rather than drawn arms, stroked in ten brightness buckets
+so the whole cloud costs about a dozen strokes. **Anything with state must live on `st.fx`, the
+run's record: `fxNow` builds a fresh object every frame**, and the first cut of the particles kept
+them there and silently re-seeded 3200 of them sixty times a second (it draws as an even haze --
+the giveaway is that nothing ever moves). **A PARTICLE IS A POINT.** Three cuts drew it as a
+motion-blur streak -- velocity times seven, then two chasing points, then a curve through six
+distance-sampled breadcrumbs -- and the operator rejected every one in the same words ("too much
+like lines", "line segments when accreting", "Still looks too much like lines and not a particle
+field"), because a streak IS a line however faithfully it follows the path. Dots, and enough of
+them (15000, afforded by a sine table for the flow field and one batched stroke per brightness
+bucket, a dot being a zero-length segment with a round cap). Structure then has to come from
+DENSITY, and the banding that makes the gas fibrous has to be **carried by the particle** (fixed
+at spawn, shared along a lane) rather than painted as a pattern in space -- a spatial pattern
+stays put while the flow slides through it, which puts a hard ring round the star and blotches in
+the wind. The turbulence is a CURL field (the
+perpendicular gradient of a two-octave stream function), because sines added to the drift deflect
+a particle without turning it and its path stays locally straight -- but keep it to about a third
+of the drift, or the eddies stop bending the wind and become the wind, piling the gas into rolls
+and leaving the pulsar in a void. The gas is spawned bunched on the stream's axis, too: spread
+evenly, the gas nearest the star is the gas that gets eaten, so the middle empties and the wind
+ends up as two bands with the pulsar flying down the corridor between them. The beam is a ray on a rotating star:
+it swings, foreshortens and flashes, and the star's beat is the same number. The price line leans
+toward it as it passes (`pulsarBend`, the black hole's `lensPoints` with the opposite sign -- a
+lens pushes the background out, a passing mass pulls the line in). **A warp that travels along the
+line has to go into the curve's cache key**: `priceLine` caches its Path2D on the ends plus the
+middle point, which a bend crossing the line can leave untouched -- and then the warp freezes in
+place while the star flies on. It is cheaper per
+frame than the supernova (a headless timing at Kiosk panel size: 2.4 ms against 23 ms).
 
 **The first fresh install (a Mac, 2026-09-14) found the release's worst bug**, and it was not
 where the symptoms pointed: `gettxoutsetinfo` walked the whole UTXO set every minute on a node
@@ -718,7 +753,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1322 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1326 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

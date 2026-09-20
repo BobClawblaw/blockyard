@@ -948,13 +948,12 @@ export function fxFront(fx) {
   // and puts it on `fx.margin`; four is the fallback for a caller with no panel (tests).
   const m = fx.margin ?? 4;
   const lo = Math.min(...qs) - m, hi = Math.max(...qs) + m;
-  // A SEARCHLIGHT PANS (operator, 2026-09-15: "the scanner needs to be more like a search light,
-  // slowly panning back and forth"). A single linear pass is a scanner; sweeping out and back is a
-  // light being AIMED, which is what reads as something looking for things. `pan` is set for the
-  // top-down board only -- on the price chart the camera is low and one pass along the hours is
-  // the right motion.
-  const t = fx.pan ? 1 - Math.abs(((fx.u * 2) % 2) - 1) : fx.u;
-  return lo + t * (hi - lo);
+  // A SEARCHLIGHT PANS -- IT DID (operator, 2026-09-15: "the scanner needs to be more like a search
+  // light, slowly panning back and forth", which `1 - Math.abs(...)` gave the top-down board until
+  // 2026-09-20: "the UFO does two passes. It only needs to do one pass"). One pass again, like
+  // every other front: enters past one edge, leaves past the other. The price chart always kept
+  // its single pass along the hours.
+  return lo + fx.u * (hi - lo);
 }
 
 // a deterministic 0..1 from an integer: where a firework bursts, which cube flares. Hashed, not
@@ -1005,8 +1004,31 @@ export function fxAt(t, fx) {
       // (fx.beamR, set with the cone) so light and geometry cannot disagree, and it hits harder:
       // a near-white glow, a bright outline and real lift, so a struck cube stands up out of the
       // board rather than merely brightening.
+      // X-RAY TREATMENT (operator, 2026-09-20: "use the x-ray effect on the blocks it lights up"):
+      // the tiles under the beam go glass-and-raster the way the xray effect's own front leaves
+      // them -- buildScene's `xray` branch dims the body to glass and draws the wireframe edges
+      // and raster -- while the beam's own glow, outline and lift stay. The glassness follows the
+      // same weight as the light: a tile is seen through exactly as hard as it is lit.
+      //
+      // THE BEAM'S AIM (operator, 2026-09-20: "I want the ufo scanner panning back and forth
+      // perpendicular to it's line of travel, to the extend of each side of the board and back",
+      // "The saucer stays in it's movement position ... the saucer always flies through the
+      // vertical or horizontal center of the grid"). The craft holds the board's centreline; the
+      // beam it throws swings ALONG the front line -- perpendicular to travel -- to each side of
+      // the board and back, one swing per pass, sine-eased. The swing is computed once per frame
+      // in details3d's fxNow (fx.scanPan) and the landing point rides on fx.panAt, so the tiles
+      // lit here and the cone drawn there cannot disagree. Without an aim record (fxAt called
+      // bare, as the unit tests do) the beam lights the swath across the front, as before.
+      if (fx.panAt) {
+        const d = Math.hypot(cx - fx.panAt.x, cy - fx.panAt.y);
+        const w = g((d - (fx.beamR ?? 5.5)) / (fx.beamR ?? 5.5));
+        // past the beam the tile is untouched -- FX_NONE, like the xray front leaves nothing behind
+        if (w < 0.02) return FX_NONE;
+        return { glow: Math.min(1, 1.6 * A * w), outline: Math.min(1, 1.2 * A * w), lift: 1.4 * A * w, color: [225, 248, 255], xray: A * w };
+      }
       const w = g((along() - fxFront(fx)) / (fx.beamR ?? 5.5));
-      return { glow: Math.min(1, 1.6 * A * w), outline: Math.min(1, 1.2 * A * w), lift: 1.4 * A * w, color: [225, 248, 255] };
+      if (w < 0.02) return FX_NONE;
+      return { glow: Math.min(1, 1.6 * A * w), outline: Math.min(1, 1.2 * A * w), lift: 1.4 * A * w, color: [225, 248, 255], xray: A * w };
     }
     case 'xray': {
       // X-RAY (2026-09-15, operator: "Add xray as additional choosable effect"): a front sweeps the
@@ -1198,6 +1220,7 @@ export function fxAt(t, fx) {
     case 'pulse':        // the price line's surge lights the candles under its head (details3d fxNow)
     case 'firework':     // each shell lights its surroundings in its colour (details3d fxNow)
     case 'blackhole':    // the hole's head shrinks the candles it reaches toward nothing (scale) and lights the rest orange
+    case 'pulsar':       // the pulsar and the disturbed wind light the tiles they pass (details3d fxNow)
     case 'lightcycle':
     case 'packets':
     case 'centipede':

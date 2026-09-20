@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
-import { FX_KINDS, SPACE_FX, MARKET_FX, MARKET_MS, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard } from '../public/js/details3d.js';
+import { FX_KINDS, SPACE_FX, MARKET_FX, MARKET_MS, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard, pulsarHeights, pulsarZ, pulsarSpin } from '../public/js/details3d.js';
 import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions, fxCadence } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
@@ -24,10 +24,10 @@ test('there are at least twenty-five effects, and every one has a switch of its 
   assert.deepEqual(switches('marketEffects'), MARKET_FX, 'the price board switches are exactly MARKET_FX, in order');
   assert.deepEqual(panelRows('marketEffects'), MARKET_FX, 'and its tab lists exactly those');
   assert.deepEqual([...new Set([...SPACE_FX, ...MARKET_FX])].sort(), [...FX_KINDS].sort(), 'between them, every effect has a switch');
-  assert.ok(MARKET_FX.every((k) => SPACE_FX.includes(k) || ['pulse', 'bulge', 'breathe', 'saber', 'blackhole'].includes(k)), 'the price board offers nothing the block board lacks but the five of its own');
+  assert.ok(MARKET_FX.every((k) => SPACE_FX.includes(k) || ['pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'pulsar'].includes(k)), 'the price board offers nothing the block board lacks but the six of its own');
   assert.ok(SPACE_FX.length >= 25, 'twenty-five or more on the block board');
-  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14) plus the four of 2026-09-15, in FX_KINDS order');
-  assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge', 'breathe', 'saber', 'blackhole'], 'the block board lacks only the five that are the price board\'s own (the black hole hovered over it for a day, 2026-09-15, and was taken off again)');
+  assert.deepEqual(MARKET_FX, ['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'pulsar', 'stormball'], 'the price board ships the twelve the operator chose (2026-09-14) plus the four of 2026-09-15 and the pulsar wind of 2026-09-20, in FX_KINDS order');
+  assert.deepEqual(FX_KINDS.filter((k) => !SPACE_FX.includes(k)), ['pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'pulsar'], 'the block board lacks only the six that are the price board\'s own (the black hole hovered over it for a day, 2026-09-15, and was taken off again; the pulsar wind for one day too, 2026-09-20: "remove it from the block space view")');
   for (const group of ['effects', 'marketEffects']) {
     assert.equal(DEFAULTS[group].noRepeat, 12, `${group}: the no-repeat window defaults to 12`);
     // all on, they were asked for -- but the fireworks, kept for occasions (2026-09-15), ship off
@@ -439,4 +439,88 @@ test('the searchlight and the tractor beam never follow each other: they fly the
       prev = k;
     }
   }
+});
+
+test('THE PULSAR STAYS ON SCREEN, and does not always fly down the price line', () => {
+  // Two operator notes on the same day, both about where the passage goes (2026-09-20):
+  // "Don't always have it moving so close to the line", then "Don't have the pulsar off-screen
+  // ... Always make sure it's travelling inside the viewport". The first is a matter of taste in
+  // the lane mix; the second is a hard bound, and the reason this is a pure function at all --
+  // it was checked by looking at screenshots twice, and a tall price range broke it anyway.
+  const lanes = { through: 0, above: 0, below: 0 };
+  const CASES = [
+    // [lo, hi, zTop] -- the Markets board's own shape (zBase 6, zMax 28) with a quiet range and
+    // with prices filling the axis, the harness's chart, a flat one, and two extremes. The
+    // second is the one that broke it: measured against the price range, the high lane sat well
+    // above the top of the panel.
+    [10, 20, 34], [7, 32, 34], [5, 17, 40], [10, 12, 40], [2, 34, 40], [1, 38, 40], [8, 9, 12],
+  ];
+  for (const [lo, hi, zTop] of CASES) {
+    const ceil = Math.max(1.8, zTop * 0.82);
+    for (let i = 0; i < 400; i++) {
+      const h6 = fxHash(i * 3 + 1), h7 = fxHash(i * 3 + 2), h8 = fxHash(i * 3 + 3);
+      const h = pulsarHeights(lo, hi, zTop, h6, h7, h8);
+      const { za, zb, lane } = h;
+      if (lo === 10 && hi === 20) lanes[lane]++;         // the mix, judged on a chart with room
+      // the wander goes nowhere the ends could not: same bounds, at every moment of the crossing
+      for (let t = 0; t <= 1.0001; t += 0.05) {
+        const z = pulsarZ(h, t, fxHash(i * 7 + 4), fxHash(i * 7 + 5), fxHash(i * 7 + 6), fxHash(i * 7 + 7));
+        assert.ok(z >= 0.8 - 1e-9 && z <= ceil + 1e-9, `lo=${lo} hi=${hi} zTop=${zTop} t=${t.toFixed(2)}: wandered to ${z}`);
+      }
+      // and it arrives and leaves exactly where the heights say
+      assert.ok(Math.abs(pulsarZ(h, 0) - za) < 1e-9, 'the wander is nothing at the near edge');
+      assert.ok(Math.abs(pulsarZ(h, 1) - zb) < 1e-9, 'and nothing at the far one');
+      for (const z of [za, zb]) {
+        assert.ok(z >= 0.8 - 1e-9, `lo=${lo} hi=${hi} zTop=${zTop}: ${z} is under the deck`);
+        assert.ok(z <= ceil + 1e-9, `lo=${lo} hi=${hi} zTop=${zTop}: ${z} is above the panel (ceiling ${ceil})`);
+      }
+      // the whole passage is a straight run between the two, so both ends inside the bound means
+      // every moment of it is inside the bound
+      assert.ok(Math.min(za, zb) >= 0.8 - 1e-9 && Math.max(za, zb) <= ceil + 1e-9, 'the run between the ends stays in the same bound');
+    }
+  }
+  const total = lanes.through + lanes.above + lanes.below;
+  assert.ok(lanes.through / total > 0.2 && lanes.through / total < 0.5, `about a third pass through the line's band (${lanes.through}/${total})`);
+  assert.ok(lanes.above / total > 0.3, `most pass clear above it (${lanes.above}/${total})`);
+  assert.ok(lanes.below > 0, 'and some skim below');
+  // and where there IS no room -- prices filling their axis -- the passage still keeps clear of
+  // the line more often than not, by going under it rather than collapsing on to the ceiling
+  let clear = 0;
+  for (let i = 0; i < 400; i++) {
+    const h8 = fxHash(i * 3 + 3);
+    if (pulsarHeights(7, 32, 34, fxHash(i * 3 + 1), fxHash(i * 3 + 2), h8).lane !== 'through') clear++;
+  }
+  assert.ok(clear > 100, `a full chart still gets passages clear of the line (${clear}/400)`);
+  // IT DOES NOT FLY A RULED LINE (operator, 2026-09-20: "It always seems to move in a straight
+  // line"). Two things it used to do: arrive and leave at the same height, and go from one to the
+  // other without deviating. Measured on a chart with room, most passages now have a real skew
+  // between their ends, and most bow away from the straight run between them by a visible amount.
+  let skewed = 0, bowed = 0, runs = 0;
+  for (let i = 0; i < 300; i++) {
+    const h = pulsarHeights(10, 20, 34, fxHash(i * 7 + 1), fxHash(i * 7 + 2), fxHash(i * 7 + 3));
+    const span = Math.max(1, h.ceil - h.floor);
+    runs++;
+    if (Math.abs(h.zb - h.za) > span * 0.05) skewed++;
+    let worst = 0;
+    for (let t = 0.05; t < 1; t += 0.05) {
+      const straight = h.za + (h.zb - h.za) * t;
+      worst = Math.max(worst, Math.abs(pulsarZ(h, t, fxHash(i * 7 + 4), fxHash(i * 7 + 5), fxHash(i * 7 + 6), fxHash(i * 7 + 7)) - straight));
+    }
+    if (worst > span * 0.02) bowed++;
+  }
+  assert.ok(skewed / runs > 0.8, `most passages end at a different height from where they began (${skewed}/${runs})`);
+  assert.ok(bowed / runs > 0.8, `and most wander off the straight run between the two (${bowed}/${runs})`);
+  // ONE DIRECTION, ALL THE WAY THROUGH (operator, 2026-09-20: "It should always spin in one
+  // constant direction and never change direction"). The sign came off the disks' weights first
+  // and off a halfway flip second, and both read as the wind changing its mind. It is a function
+  // of the seed and of nothing else now -- so it cannot vary within a run, whatever the acts do.
+  assert.equal(pulsarSpin.length, 1, 'the spin takes the seed alone: nothing that moves during a run can reach it');
+  let cw = 0;
+  for (let i = 0; i < 200; i++) {
+    const s = pulsarSpin(i * 977);
+    assert.ok(s === 1 || s === -1, `a direction, not a number: ${s}`);
+    assert.equal(s, pulsarSpin(i * 977), 'and the same one every time that seed replays');
+    if (s > 0) cw++;
+  }
+  assert.ok(cw > 60 && cw < 140, `both directions actually happen (${cw}/200 clockwise)`);
 });

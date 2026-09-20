@@ -209,6 +209,8 @@ export const DEFAULTS = Object.freeze({
     // unless user selects it"): off on both boards until someone ticks it
     shockwave: true, nova: true, firework: false, flare: true, wave: true, quake: true,
     rain: true, sparkle: true, checker: true, radar: true, vortex: true, powerup: true, combo: true, aurora: true, plasma: true,
+    // (no pulsar here: the wind passage is the price board's own -- operator, 2026-09-20, "remove
+    // it from the block space view" -- so it sits with the five in marketEffects below)
     // the agents: something happening on the board, rather than a pattern over it
     centipede: true, tractor: true, missile: true, boulderdash: true, stormball: true,
     // NO REPEATS (operator, 2026-09-14: "add a config field that defaults to 12. Make sure to pick a
@@ -238,7 +240,7 @@ export const DEFAULTS = Object.freeze({
     saber: true,          // the line ignites as a light saber
     blackhole: true,      // the chart collapses into a black hole
     firework: false,      // kept for occasions, off until ticked (see the block board's list)
-    flare: true, wave: true, stormball: true,
+    flare: true, wave: true, pulsar: true, stormball: true,
     noRepeat: 12,
     // no firstAfter here: the candle board does not land (operator, 2026-09-14: "there is no
     // 'landing' for the markets display"); after a refresh its first effect keeps the cadence below
@@ -351,7 +353,7 @@ const FX_ROW = Object.freeze({
   tide: Object.freeze({ label: 'Tide', hint: 'A swell that lifts the blocks it passes under' }),
   cascade: Object.freeze({ label: 'Cascade', hint: 'The blocks light in feerate order, richest first' }),
   twinkle: Object.freeze({ label: 'Twinkle', hint: 'Scattered blocks flash white, each on its own beat' }),
-  scan: Object.freeze({ label: 'Scan line', hint: 'A curtain of light standing on the board, floor to top, sweeping across: a white core, soft cyan faces, raster rippling down it, a bar it hangs from, a glowing foot with a phosphor tail, motes in the beam' }),
+  scan: Object.freeze({ label: 'Scan line', hint: 'A UFO crosses the board in one pass while its beam pans back and forth perpendicular to its flight, to each side of the board and back, blocks under it x-rayed: a white core, soft cyan faces, raster rippling down it, a glowing pool with sparks, motes in the beam' }),
   xray: Object.freeze({ label: 'X-ray', hint: 'A front sweeps the board and everything behind it goes x-ray -- bodies to glass, edges and a raster lit -- then develops back to solid' }),
   lightcycle: Object.freeze({ label: 'Light cycles', hint: 'Two riders from opposite edges, leaving light walls, until one crashes' }),
   ball: Object.freeze({ label: 'Lightning ball', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
@@ -364,6 +366,7 @@ const FX_ROW = Object.freeze({
   nova: Object.freeze({ label: 'Nova', hint: 'An implosion to the middle, then a brighter blast back out' }),
   firework: Object.freeze({ label: 'Fireworks', hint: 'A display of up to ten shells, each at its own moment and place, with its smoke. Off by default -- kept for special occasions; tick it to put it in the rotation' }),
   flare: Object.freeze({ label: 'Supernova', hint: 'One block goes supernova: a star swells and blows out in a white-out, a debris cloud of gas expands and cools white to blue to violet, a shockwave throws what it crosses, and a pulsar is left beating at the centre' }),
+  pulsar: Object.freeze({ label: 'Pulsar wind', hint: 'A pulsar makes one passage through its companion\u2019s stellar wind, as XRISM watched BP Crucis: a messy accretion disk spins up around it, breaks up mid-stream as plasma falls straight on (the flare\u2019s peak), then rebuilds before the pulsar slips out of the stream. The gas turns the same way throughout \u2014 whichever way this passage happens to turn' }),
   wave: Object.freeze({ label: 'Wave', hint: 'Several crests rolling across the board, the blocks riding them' }),
   quake: Object.freeze({ label: 'Quake', hint: 'The board shakes, hardest at the start, and settles' }),
   rain: Object.freeze({ label: 'Code rain', hint: 'A drop falls down every column with a white head and a green tail' }),
@@ -390,6 +393,7 @@ const MARKET_HINT = Object.freeze({
   stormball: 'An electric blue sphere in a nebula flies through the chart, striking candles and charging the price line where it passes; a struck candle often throws a green arc on to another, and that one sometimes on to a third',
   cascade: 'The candles light in order, tallest first',
   flare: 'One candle goes supernova: it swells white-hot, blows out in a flash and a lens flare, a shockwave rings out across the chart, plasma is flung on every side, and a ring nebula expands and cools for the rest of the run',
+  pulsar: 'A pulsar rides one passage through the companion\u2019s stellar wind: a messy accretion disk spins up round it, breaks up mid-stream as plasma falls straight on (the flare\u2019s peak), then rebuilds before the pulsar exits the stream. It turns one way for the whole passage, and the price line leans toward it if it comes near',
 });
 // THE WINDOW'S TOP IS THE LIST'S LENGTH (operator, 2026-09-14: "for the markets page, all we have
 // is 12 effects, so max the slider out at max effects"): a window wider than the list is the same
@@ -656,7 +660,7 @@ const PANEL_GROUPS = Object.freeze([
     note: 'What the candle board on Markets and Kiosk may play while it rests, chosen the same way as on Block space but from the sixteen that translate to a chart: fronts along the hours, bursts from the candle row, the candles lit where they stand, and the price line\u2019s own pulse, bulge and ball lightning. The Board effects switch on the Markets & Price tab is the master.',
     bulk: true,
     rows: fxRows([
-      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball',
+      'ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'pulsar', 'stormball',
     ], MARKET_HINT, { landing: false, top: 300 }),
   }),
   Object.freeze({

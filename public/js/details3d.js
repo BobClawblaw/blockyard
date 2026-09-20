@@ -146,7 +146,7 @@ function sizeCanvas(canvas, maxDpr = Infinity) {
 // and one toggle in settings.js (the `effects` and `marketEffects` groups), and the lists are checked against each other
 // by a test, so an effect cannot ship without a switch or a switch without an effect.
 const FX_MS = {
-  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 16800,   // 8400 -> 16800: top-down it pans OUT AND BACK, so two traversals at the same unhurried speed   // scan 4200 -> 6000 -> 8400: the sweep now starts and ends off-panel, so the span grew and the duration follows it (below)
+  ripple: 5200, outline: 4400, tide: 5200, cascade: 5600, twinkle: 3800, scan: 8400,   // 8400 -> 16800 when the top-down scan panned OUT AND BACK; one pass again (2026-09-20), so 16800 -> 8400 -- the duration follows the span
   xray: 6500,                                  // the board goes x-ray behind a sweeping front, and develops back
   lightcycle: 6500, ball: 5600, pulse: 9000,   // pulse 7000 -> 9000 (2026-09-14: "make it a bit slower")
   bulge: 16000,                                // a sphere rolling through the price line; half speed (was 8000)
@@ -155,6 +155,7 @@ const FX_MS = {
   blackhole: 26000,                            // the chart collapses into a black hole and is let go again
   shockwave: 4200, nova: 5200, firework: 5600, flare: 16000, wave: 6000, quake: 3200,   // flare 3600 -> 8000 -> 16000 (2026-09-15: it is a supernova now, and the cloud disperses slowly)
   rain: 6400, sparkle: 4600, checker: 4400, radar: 6000, vortex: 6400, powerup: 5000, combo: 4800, aurora: 7200, plasma: 6400,
+  pulsar: 26000,                               // a passage through a stellar wind, in four acts (XRISM / BP Crucis, NASA SVS 15099) -- long, like the black hole, because the story needs the time
   // THE AGENTS (agents.js): effects that are a thing MOVING rather than a pattern over the board.
   // Longer than the fields, because something that travels needs time to be watched -- a field
   // reads at a glance, an agent has to arrive, do something, and leave.
@@ -220,6 +221,37 @@ const PULSE_TRAVEL = 0.66;
 const PULSE_TAIL = 0.45;
 // a cheap deterministic 0..1 from an integer, for the pulse's particle motes
 const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+// THE BEAM'S AIM (operator, 2026-09-20: "I want the ufo scanner panning back and forth
+// perpendicular to it's line of travel, to the extend of each side of the board and back", then,
+// of the craft: "The saucer stays in it's movement position ... the saucer always flies through
+// the vertical or horizontal center of the grid"). The front keeps its single straight pass down
+// the board's centreline; the beam it throws swings along the front's OWN axis -- perpendicular
+// to travel -- from one side of the board to the other and back, one full swing per pass,
+// sine-eased so it rests a moment at each edge. The seed only chooses which side is visited
+// first. The signed offset in grid units rides on the effect record: fxAt lights the tiles under
+// the panned pool and drawScanCurtain aims cone, pool and sparks with it, so light and geometry
+// cannot disagree. The price board's curtain stays centred (fxNow never sets scanPan there).
+export function scanPanOf(u, dx, dy, gridW, gridH, seed = 0) {
+  const ax = -dy, ay = dx;                                         // along the front line
+  const span = gridW / 2 * Math.abs(ax) + gridH / 2 * Math.abs(ay); // centreline to the board's side
+  const side = hash01(seed + 91) < 0.5 ? 1 : -1;
+  return side * Math.sin(u * Math.PI * 2) * span;
+}
+// A SINE TABLE, for the one place in this file that needs tens of thousands of them a frame: the
+// pulsar's wind advects fifteen thousand particles through a two-octave curl field, which is eight
+// trig calls each. Linear interpolation between 2048 samples is visually exact for a flow field
+// (the error is under a thousandth) and several times quicker. Nothing else should need this --
+// everywhere else in here, Math.sin is called a few dozen times a frame and is perfectly fine.
+const SIN_N = 2048, SIN_TAB = new Float64Array(SIN_N + 1);
+for (let i = 0; i <= SIN_N; i++) SIN_TAB[i] = Math.sin((i / SIN_N) * Math.PI * 2);
+const TAU = Math.PI * 2;
+function fastSin(t) {
+  let u = (t / TAU) % 1;
+  if (u < 0) u += 1;
+  const f = u * SIN_N, i = f | 0, k = f - i;
+  return SIN_TAB[i] + (SIN_TAB[i + 1] - SIN_TAB[i]) * k;
+}
+const fastCos = (t) => fastSin(t + Math.PI / 2);
 // A board with a price line is not a grid to sweep across. The straight-front effects (outline,
 // scan, tide), the light cycles and the lightning ball all travel the FLOOR, which on the candle
 // board is empty space -- which is what "through space on an invisible grid" describes. Where a
@@ -242,12 +274,104 @@ const hash01 = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x -
 // where they stand (cascade, twinkle, the flare), or is the price line's own (pulse, bulge, ball
 // lightning). The rest -- riders and walkers, the field patterns, anything that falls down the
 // depth or turns in place, anything that moves a tile -- stays on the block board.
-const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball']);
+const ON_CANDLES = new Set(['ripple', 'outline', 'tide', 'cascade', 'twinkle', 'scan', 'xray', 'pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'firework', 'flare', 'wave', 'stormball', 'pulsar']);
+/**
+ * THE PULSAR'S PASSAGE, AS A HEIGHT AT EACH END (a pure function, so the two things that have
+ * gone wrong with it are testable rather than eyeballed -- test/effects.test.js holds both).
+ *
+ * `h6`/`h7` are the two ends, `h8` picks the lane. Three lanes, because a passage that always
+ * ran inside the price line's own range bent the line every single time and made the bend the
+ * rule rather than the occasion (operator, 2026-09-20: "Don't always have it moving so close to
+ * the line"): a third go through the band, most pass clear above it, the rest skim below.
+ *
+ * AND EVERY ONE IS CLAMPED INTO THE BOARD'S OWN HEIGHT (operator, the same day: "Don't have the
+ * pulsar off-screen ... Always make sure it's travelling inside the viewport"). The lanes are
+ * measured in multiples of the LINE's range, which says nothing about where the panel ends -- on
+ * a chart with a tall price range the high lane went clean off the top. `zTop` (the top of the
+ * price axis, what the board fits to the panel) is the ceiling, less a margin for the star's own
+ * halo; the floor keeps it above the deck. The lane is as far from the line as there is room for
+ * and no further.
+ */
+export function pulsarHeights(lo, hi, zTop, h6, h7, h8) {
+  const R = Math.max(1, hi - lo);
+  const top = Number.isFinite(zTop) ? zTop : hi + R;
+  const floor = 0.8, ceil = Math.max(floor + 1, top * 0.82);
+  const clamp = (v) => Math.max(floor, Math.min(ceil, v));
+  const loC = clamp(lo), hiC = clamp(hi);
+  // EACH LANE IS MEASURED IN THE ROOM IT ACTUALLY HAS, not in multiples of the line's range.
+  // Measured against the range and then clamped, every high passage on a chart whose prices fill
+  // its axis landed on the ceiling and flew dead flat at the same height; spread through the
+  // headroom instead, they vary as much as the panel allows, which on a full chart is a little
+  // and on a quiet one is a lot.
+  // A LANE NEEDS ROOM TO BE A LANE. On the Markets board the price band fills most of its axis
+  // (zBase 6, zMax 28), so above the line there is often nothing left once the ceiling takes its
+  // margin -- and a lane with no room collapses on to the ceiling and flies dead flat. When the
+  // room is not there the passage takes the other side, and only falls back to crossing the line
+  // when neither side has any.
+  const enough = Math.max(1.5, R * 0.15);
+  const roomAbove = ceil - hiC, roomBelow = loC - floor;
+  let lane = h8 < 0.34 ? 'through' : h8 < 0.8 ? 'above' : 'below';
+  if (lane === 'above' && roomAbove < enough) lane = roomBelow >= enough ? 'below' : 'through';
+  if (lane === 'below' && roomBelow < enough) lane = roomAbove >= enough ? 'above' : 'through';
+  const span = lane === 'through' ? [loC + (hiC - loC) * 0.15, hiC]
+    : lane === 'above' ? [hiC + (ceil - hiC) * 0.15, ceil]
+      : [floor, loC - (loC - floor) * 0.15];
+  const at = (h) => clamp(span[0] + (span[1] - span[0]) * h);
+  let za = at(h6), zb = at(h7);
+  // A SKEW WORTH SEEING: two draws from the same band land close together as often as not, and a
+  // passage that arrives and leaves at the same height is a horizontal rule across the panel. The
+  // far end is pushed out to at least a third of the lane's span, on whichever side it already
+  // favoured (2026-09-20, with the wander below: "a bit of vertical skew between the start and
+  // end point").
+  const wide = Math.abs(span[1] - span[0]);
+  if (wide > 0.2 && Math.abs(zb - za) < wide * 0.33) {
+    const away = zb >= za ? 1 : -1;
+    zb = clamp(za + away * wide * 0.33);
+    if (Math.abs(zb - za) < wide * 0.2) zb = clamp(za - away * wide * 0.33);   // the other way, at a wall
+  }
+  return { za, zb, lane, floor, ceil };
+}
+/**
+ * WHERE THE PASSAGE IS AT `travel` (0 at the near edge, 1 at the far one). Inspired by the way
+ * the lightning ball crosses -- it wanders rather than ruling a line (operator, 2026-09-20:
+ * "Have it moving more like the lightning ball ... It always seems to move in a straight line").
+ * Not the ball's own path: that one walks the grid and turns at cells, which on a chart would
+ * read as a staircase. This is the straight run between the two ends with two slow swells laid
+ * over it, enveloped to nothing at both ends so the arrival and the exit still happen where the
+ * heights say, and clamped to the same bounds, so wandering can never carry it off the panel.
+ */
+/**
+ * WHICH WAY THIS PASSAGE TURNS: +1 or -1, from the seed and from nothing else.
+ *
+ * It takes the seed ALONE on purpose (operator, 2026-09-20: "It should always spin in one
+ * constant direction and never change direction"). Twice now the sign has been derived from
+ * something that moves during the run -- first from whichever disk weighed more, then from a
+ * deliberate flip at the halfway mark -- and both read as the wind changing its mind. A function
+ * of the seed cannot drift, and the missing `u` parameter is the guard: making it change through
+ * a run would mean changing this signature, which is a decision rather than an accident.
+ */
+export function pulsarSpin(seed) { return hash01(seed + 116) < 0.5 ? 1 : -1; }
+export function pulsarZ(h, travel, h10 = 0.5, h11 = 0.5, h12 = 0.5, h13 = 0.5) {
+  const base = h.za + (h.zb - h.za) * travel;
+  // the room on the roomier side: a lane that hugs the ceiling has none above it, and sizing the
+  // swell by the tighter side would leave those passages flying the ruled line the wander exists
+  // to break. The result is clamped either way, so such a passage simply bows the one way it can.
+  const room = Math.max(h.ceil - Math.max(h.za, h.zb), Math.min(h.za, h.zb) - h.floor);
+  const amp = Math.max(0, Math.min(room * 0.75, (h.ceil - h.floor) * 0.16));
+  if (amp <= 0.01) return base;
+  const env = Math.sin(Math.PI * Math.max(0, Math.min(1, travel)));          // nothing at either end
+  const w = Math.sin(travel * Math.PI * (1.4 + h10 * 1.2) + h11 * 6.283) * 0.72
+    + Math.sin(travel * Math.PI * (2.9 + h12 * 2.2) + h13 * 6.283) * 0.28;
+  return Math.max(h.floor, Math.min(h.ceil, base + amp * env * w));
+}
 // effects that are drawn on the price line and nowhere else: never offered to a board of blocks
 // the black hole is back on the price board only (operator, 2026-09-15, after a day of it hovering
 // over the block board: "still snapping into place. Just remove the black hole effect from block
 // space if you can't fix it")
-const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber', 'blackhole']);
+// the pulsar wind joined them on 2026-09-20 ("remove it from the block space view"): on a board
+// of cubes the passage was a small bright knot crossing a big grid, and the gas it stirs has
+// nothing to do with what the cubes are; on the chart it has the whole sky to cross
+const LINE_ONLY = new Set(['pulse', 'bulge', 'breathe', 'saber', 'blackhole', 'pulsar']);
 // EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have a separate effects
 // list ... the Block Space effects specific to that panel, and settings specific to market panel"):
 // settings.js keeps one group of switches per list (`effects` for the block board, `marketEffects`
@@ -313,6 +437,7 @@ function fxNow(st, t) {
   // (shockwave, nova, radar, vortex) need an origin, and they were once ripple's alone.
   const out = { kind: f.kind, u, ms: f.ms, gridW: st.gridW, gridH: st.gridH, dx: f.dx, dy: f.dy, rank: f.rank, seed: f.seed,
     x: f.x, y: f.y, amp: Math.min(1, u * 6) * Math.pow(1 - u, 0.8) };
+  if (f.kind === 'scan' && !onPriceBoard(st)) out.scanPan = scanPanOf(u, f.dx, f.dy, st.gridW, st.gridH, f.seed);
   if (f.kind === 'ripple') {
     const reach = Math.hypot(Math.max(f.x, st.gridW - f.x), Math.max(f.y, st.gridH - f.y));
     Object.assign(out, { x: f.x, y: f.y, r: reach * (1 - Math.pow(1 - u, 2)), w: 2.2 + 2.4 * u });
@@ -395,6 +520,88 @@ function fxNow(st, t) {
     // scale themselves, so every cube glides home and grows back over the whole last fifth
     const R = boundedRadius(2.3, 0.047, st.gridW) * reach;
     out.heads = grow > 0.02 ? [{ x: hx, y: hy, z: hz, color: [255, 160, 60], alpha: grow, r: R * growIn, rPeak: R, scale: 0, pull: 1, release: growOut, lean: line ? 1 : 0, shrink: !line }] : [];
+  }
+  // THE PULSAR IN THE WIND (2026-09-20, modelled on NASA SVS 15099 -- XRISM's view of BP Crucis /
+  // GX 301-2): the pulsar makes one passage through the companion's plasma stream. Four acts, as
+  // the mission observed them: entering the stream a messy accretion disk forms and plasma
+  // spirals INWARD; deeper in, the flow lacks angular momentum, the disk BREAKS UP and plasma
+  // falls straight on -- the X-ray flare's peak; near the far side the disk REBUILDS; then the
+  // pulsar exits and the board is quiet again. The X-ray brightness follows the same curve,
+  // peaking in the direct-accretion act. The rebuilt disk turns the SAME way as the first one
+  // (operator, 2026-09-20): the mission's own reversal was in here for a day and it reads as a
+  // glitch rather than as physics, so the acts are told by the swirl's strength and the infall.
+  // Everything is hashed off the seed, so a replay is the same passage. The lighting rides on
+  // `heads` (the pulsar itself, and the wind where it is disturbed) -- the same machinery the
+  // fireworks and the black hole light with; there is no pull: the operator took the black
+  // hole's shearing off the block board once, and the wind lights, it does not drag.
+  if (f.kind === 'pulsar') {
+    const line = st.axes?.line;
+    const H = (k) => hash01(f.seed + 100 + k);
+    // the crossing: a fifth of the way in from each edge, easing at both ends, so the arrival
+    // and the exit are watched, not cut (the black hole's travel, the same shape)
+    const travel = u < 0.1 ? 0 : u > 0.9 ? 1 : (() => { const t = (u - 0.1) / 0.8; return t * t * (3 - 2 * t); })();
+    const dir = (f.dx || 0) !== 0 ? Math.sign(f.dx) : H(9) < 0.5 ? 1 : -1;
+    const px = st.gridW * (0.14 + 0.72 * travel) * (dir > 0 ? 1 : 0) + st.gridW * (0.86 - 0.72 * travel) * (dir > 0 ? 0 : 1);
+    // the wind: a diagonal swath of gas across the board, its own height at each edge; the
+    // pulsar's path runs through it, wobbling a little, entering one side and leaving the other
+    const sa = st.gridH * (0.12 + 0.66 * H(1)), sb = st.gridH * (0.12 + 0.66 * H(2));
+    const sw = Math.max(1.6, st.gridH * 0.16);                    // the stream's half-width
+    // it drifts across the board's depth as it goes, too -- a small one, since the depth is eight
+    // units against the hours' width, but enough that the crossing is not a ruled line in y either
+    const wob = (Math.sin(travel * Math.PI * (1.6 + H(14)) + H(3) * 6.283) * 0.7
+      + Math.sin(travel * Math.PI * 3.3 + H(15) * 6.283) * 0.3) * sw * 0.42;
+    const py = sa + (sb - sa) * (px / st.gridW) + wob;
+    // THROUGH SPACE, NOT ALONG THE LINE (operator, 2026-09-20: "I don't want it riding the line.
+    // I want it moving randomly across the screen like the black hole does"), NOT ALWAYS CLOSE TO
+    // IT (the lanes in pulsarHeights), and NOT IN A RULED LINE ("Have it moving more like the
+    // lightning ball, in a random horizontal direction, with a bit of vertical skew between the
+    // start and end point. It always seems to move in a straight line") -- the wander in pulsarZ.
+    // The horizontal direction is the board's own random one (fxDirection gives the price board
+    // either way along the hours); the skew and the wander are the seed's.
+    let pz;
+    {
+      let lo = 4, hi = 18;
+      if (line && line.length > 1) { lo = Infinity; hi = -Infinity; for (const p of line) { lo = Math.min(lo, p.z); hi = Math.max(hi, p.z); } }
+      const hgt = pulsarHeights(lo, hi, st.axes?.zTop, H(6), H(7), H(8));
+      pz = pulsarZ(hgt, travel, H(10), H(11), H(12), H(13));
+    }
+    // inside the stream: soft edges either side of the passage (0.13..0.87 of the run)
+    const edge = (a, b, v) => Math.max(0, Math.min(1, (v - a) / (b - a)));
+    const inStream = edge(0.08, 0.16, u) * (1 - edge(0.84, 0.92, u));
+    // the acts, as WEIGHTS on the swirl and the infall -- never as a change of direction: disk1
+    // builds after entry, breaks at the middle, disk2 rebuilds, all gone on exit
+    const disk1 = inStream * (1 - edge(0.4, 0.5, u));             // the disk spins up, then goes
+    const direct = inStream * edge(0.42, 0.52, u) * (1 - edge(0.56, 0.66, u));   // no disk: straight in
+    const disk2 = inStream * edge(0.56, 0.68, u);                 // and the rebuild, the same way round
+    // X-ray brightness: low on approach, flaring through the breakdown, easing off on exit --
+    // the shape of GX 301-2's light curve every four days
+    const bright = 0.3 + 0.35 * inStream + 0.9 * direct * (0.7 + 0.3 * Math.sin(u * 60)) + 0.25 * disk1 + 0.3 * disk2;
+    // A PLACE TO KEEP THE GAS: fxNow builds a FRESH object every frame, so anything with state --
+    // and the wind is a particle simulation now -- cannot live on it (the first cut of the
+    // particles did, and re-seeded 1500 of them 60 times a second, which draws as a faint even
+    // haze and nothing else). `f` is the run's own record: it lives as long as the effect does.
+    // ONE SENSE OF ROTATION FOR THE WHOLE PASSAGE (operator, 2026-09-20: "It should always spin
+    // in one constant direction and never change direction"). The seed picks clockwise or
+    // counter-clockwise when the effect starts and that is the end of it -- nothing else votes,
+    // and in particular the acts do not: the original reading took its sign from which disk
+    // weighed more, which reversed the gas at the break-up, and a later cut flipped it at the
+    // halfway mark on purpose. Both were wrong. The disk still breaks up and rebuilds -- that is
+    // the accretion story, and it is told by the swirl's STRENGTH and the infall, not by turning
+    // the wind around.
+    const spin = pulsarSpin(f.seed);
+    out.pulsar = { px, py, pz, sa, sb, sw, travel, inStream, disk1, disk2, direct, bright, dir, spin, store: f };
+    // the lighting: the pulsar itself, and a wake of wind behind it and gusts ahead -- five
+    // points, offset along the path, the stream disturbed where the pulsar has been
+    const heads = [];
+    // A LIGHT, NOT A FLOODLIGHT (2026-09-20): at full alpha the tiles under the star went solid
+    // white on the block board and the picture was a white brick instead of a star in the gas
+    if (bright > 0.05) heads.push({ x: px, y: py, color: [225, 242, 255], alpha: Math.min(0.72, bright * 0.72), r: 2.4 });
+    for (const off of [-5, -2.5, 0, 2.5, 5]) {
+      const sx = px + off * dir, sy = sa + (sb - sa) * (sx / st.gridW);
+      const w = 0.34 * inStream * Math.exp(-(off * off) / 22);
+      if (w > 0.03) heads.push({ x: sx, y: sy, color: [140, 195, 255], alpha: w, r: 3.4 });
+    }
+    out.heads = heads;
   }
   // THE PULSE LIGHTS WHAT IT PASSES (operator, 2026-09-15: "interfering with the affected areas"):
   // its head is a light on the board, so the candles under it glow warm as it goes by (fxAt's
@@ -1249,6 +1456,9 @@ function drawScanCurtain(ctx, view, lw) {
   const fp = fxFront(fx);
   const fcx = fx.gridW / 2 + (fp - (fx.gridW / 2) * fx.dx - (fx.gridH / 2) * fx.dy) * fx.dx;
   const fcy = fx.gridH / 2 + (fp - (fx.gridW / 2) * fx.dx - (fx.gridH / 2) * fx.dy) * fx.dy;
+  // (fcx/fcy is the BOARD CENTRE projected onto the front line, so the craft always flies the
+  // grid's vertical or horizontal centre -- operator, 2026-09-20: "the saucer always flies
+  // through the vertical or horizontal center of the grid")
   const ends = curtainEnds(fx, 0);
   const [A, B] = ends ?? [{ x: fcx, y: fcy, z: 0 }, { x: fcx, y: fcy, z: 0 }];
 
@@ -1267,9 +1477,21 @@ function drawScanCurtain(ctx, view, lw) {
   // volumetric part: nothing is faked with a gradient across a flat face, the light is thick where
   // the geometry is thick. Three nested shells give the falloff depth, a bright pool marks where
   // it lands, and motes drift inside the volume rather than on a sheet.
-  const mx = fcx, my = fcy;                                 // the front's own centre, on or off the board
-  const half = Math.hypot(B.x - A.x, B.y - A.y) / 2;      // reach along the front line
+  // THE BEAM'S AIM (operator, 2026-09-20: "I want the ufo scanner panning back and forth
+  // perpendicular to it's line of travel, to the extend of each side of the board and back", and
+  // "The saucer stays in it's movement position"). The craft holds the front's own line; the beam
+  // it throws swings ALONG the front -- perpendicular to travel -- from one side of the board to
+  // the other and back, the sweep computed once in fxNow (fx.scanPan) so the tiles fxAt lights and
+  // the cone drawn here cannot disagree. The price chart's curtain stays centred (no scanPan).
+  const pan = fx.scanPan ?? 0;
   const ax = -fx.dy, ay = fx.dx;                          // unit vector ALONG the front
+  const px = fcx + ax * pan, py = fcy + ay * pan;         // where the beam is aimed this frame
+  const mx = px, my = py;
+  const SPREAD = scanBeamGeom(view).spread;
+  // A SPOTLIGHT, NOT A CURTAIN, on the block board: the pool is the beam's footprint, so the base
+  // ellipse is sized to the beam itself (fxAt lights that same disc); the price chart keeps its
+  // full-width curtain.
+  const half = price ? Math.hypot(B.x - A.x, B.y - A.y) / 2 : SPREAD * 1.25;
   const sx = fx.dx, sy = fx.dy;                           // unit vector along the SWEEP
   // PROPORTIONS ARE THE WHOLE EFFECT (operator, 2026-09-15: the first cut "is fucked"). It put the
   // apex at top*1.5 -- z = 51 on the price board -- over a base barely 5 units across, which draws
@@ -1289,7 +1511,6 @@ function drawScanCurtain(ctx, view, lw) {
   // line AND a hard ceiling under the chart's top, so it rides above the price wherever the price
   // happens to be and never reaches the edge.
   const apex = { x: mx, y: my, z: scanBeamGeom(view).z };
-  const SPREAD = scanBeamGeom(view).spread;
   const RING = 44;
   // a point on the base ellipse: `f` scales the shell, `th` runs around it
   const ring = (th, f) => ({
@@ -1387,7 +1608,12 @@ function drawScanCurtain(ctx, view, lw) {
     const age = (now - k * STEP) / LIFE;
     if (age < 0 || age >= 1) continue;
     const t = hash01(fx.seed + k * 5 + 1);
-    const q = { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: 0 };
+    // on the block board the beam is a panning spotlight, so the sparks scatter inside its
+    // FOOTPRINT (the disc fxAt lights), not along the front line the craft flies
+    const q = (!price && fx.panAt)
+      ? (() => { const rr = Math.sqrt(hash01(fx.seed + k * 5 + 3)) * SPREAD * 1.2, th2 = hash01(fx.seed + k * 5 + 4) * Math.PI * 2;
+          return { x: mx + Math.cos(th2) * rr, y: my + Math.sin(th2) * rr, z: 0 }; })()
+      : { x: A.x + (B.x - A.x) * t, y: A.y + (B.y - A.y) * t, z: 0 };
     const p = P(q), rise = U * 2.2 * age * (1 - age) * 4, drift = (hash01(fx.seed + k * 5 + 2) - 0.5) * U * 1.2 * age;
     disc(p.x + drift, p.y - rise, U * 0.07 * (1 - age), `rgba(255,255,255,${(0.9 * (1 - age) * amp).toFixed(3)})`);
   }
@@ -1425,6 +1651,41 @@ function lensPoints(pts, view) {
     const dx = p.x - h.c.x, dy = p.y - h.c.y, r = Math.hypot(dx, dy) || 1e-6;
     const r2 = Math.sqrt(r * r + rE * rE);
     return { x: h.c.x + (dx / r) * r2, y: h.c.y + (dy / r) * r2 };
+  });
+}
+// THE LINE LEANS TOWARD THE PULSAR (operator, 2026-09-20: "Can we have the yellow price line
+// bending towards the pulsar if it gets near?"). The black hole's lens pushes the line OUT, away
+// from the shadow, because that is what a lens does to a background image; a pulsar is a mass
+// passing close by, so this pulls the line IN, toward it -- the same machinery, the opposite
+// sign, and it only says anything while the star is actually near the line.
+//
+// The pull is zero at the star itself, peaks about one star-radius out and dies away beyond --
+// so the line bows toward it in a smooth hump rather than kinking at the nearest point -- and
+// each point moves at most most of the way to the star, so no part of the line can be dragged
+// through it and out the other side.
+// THE PASSAGE'S ONE SCALE, in one place: the gas field, the disk, the star's halo, the beam's
+// thickness and the bend it puts in the price line are all multiples of this, and the bend lives
+// in a different function from the drawing -- so when the operator asks for it bigger (3.2 units
+// on 2026-09-20, then 6.4 "at least 2x larger", then 8.5, another third) exactly one number
+// moves. Still a share of the board's width, never units alone: the Kiosk's panel is narrower.
+const pulsarR = (U, gridW) => U * boundedRadius(8.5, 0.186, gridW);
+function pulsarBend(pts, view) {
+  const fx = view.fx, p = fx?.pulsar;
+  if (!p) return pts;
+  const u = fx.u;
+  const vis = Math.max(0, Math.min(1, (u - 0.015) / 0.075)) * (1 - Math.max(0, Math.min(1, (u - 0.9) / 0.09)));
+  if (vis <= 0.01) return pts;
+  const U = view.unit ?? 8;
+  const R = pulsarR(U, fx.gridW);
+  const c = project(p.px, p.py, p.pz, view);
+  // it leans hardest while the star is at its brightest -- the flare's peak drags the most line
+  const k = R * 1.15 * vis * Math.min(1.15, 0.55 + 0.6 * Math.min(1, p.bright));
+  return pts.map((q) => {
+    const dx = c.x - q.x, dy = c.y - q.y, r = Math.hypot(dx, dy);
+    if (r < 1e-6) return q;
+    const t = r / R;
+    const d = Math.min(r * 0.85, k * t / (1 + t * t * t));
+    return { x: q.x + (dx / r) * d, y: q.y + (dy / r) * d };
   });
 }
 function drawBlackHole(ctx, view, lw) {
@@ -1570,6 +1831,317 @@ function drawBlackHole(ctx, view, lw) {
   }
   ctx.lineWidth = lw;
 }
+
+// THE PULSAR IN THE WIND, AS THE REFERENCE FILM SHOWS IT (operator, 2026-09-20, of the first
+// cut: "the effect is terrible. It needs to look like this" -- NASA's XRISM / BP Crucis concept
+// film). What that film actually shows, layer by layer, and what the first cut drew instead:
+//
+//   the wind    GAS IN MOTION round the star, in thousands of pieces. Two cuts got this wrong
+//               before it was a simulation: the first scattered gasCloud spheres and read as grey
+//               fog, the second drew sine-shaped polylines and read as wire ribbons (operator:
+//               "the winds don't look enough like a particle simulation"). It is particles
+//               advected through a flow field now -- see the block below for the field and why
+//               each term is the strength it is.
+//   the disk    SPIRAL ARMS wound round the star, turning. Not drawn, and not painted on either:
+//               each particle carries its own brightness from the lane it entered on, so the
+//               bright sheets are made OF the gas and the star's swirl winds them into arms. At
+//               the flare's peak the swirl gives way to a radial pull and the arms become infall
+//               streaks dropping straight on to the star, which is the break-up XRISM saw -- the
+//               gas never turns round, it only stops being able to hold its orbit.
+//   the beam    ONE THIN PALE-CYAN RAY threading the star and running off both edges, SWINGING
+//               (operator: "The pulsar beam is not swinging back and forth"). A ray on a rotating
+//               star: it sweeps, foreshortens as it turns toward us, and flashes as it comes
+//               over. The star's beat is that same number, so the two cannot drift apart.
+//   the star    a tiny crisp white point in a tight blue-white bloom.
+//
+// The palette is the film's: indigo gas lit lavender and blue-white where the pulsar reaches it,
+// the beam and the core white-cyan. Sizes are bounded by the board's width (boundedRadius),
+// because every one of these plays on the Kiosk's small panels too. Soft round fills go through
+// softStops (the house rule: no banded gradients); the gas and the beam are plain strokes, which
+// do not band. The four acts and the light curve stay in fxNow, which also lights the tiles.
+// A frame costs about 2 ms on the Kiosk's candle panel, against the supernova's 23.
+function drawPulsar(ctx, view, lw) {
+  const fx = view.fx;
+  if (!fx || fx.kind !== 'pulsar' || !fx.pulsar) return;
+  const p = fx.pulsar, U = view.unit ?? 8, now = view.now ?? 0, u = fx.u;
+  const c = project(p.px, p.py, p.pz, view);
+  const H = (k) => hash01(fx.seed + 100 + k);
+  // the star and its beam are there for the whole crossing -- they fly in, pass through the
+  // stream and leave; the wind and the disk only exist while the pulsar is inside the stream
+  const vis = edge01(u, 0.015, 0.09) * (1 - edge01(u, 0.9, 0.99));
+  const wind = p.inStream * vis;
+  if (vis <= 0.01) return;
+  // the star's scale, and with it the whole passage (pulsarR): 3.2 units at first, then "at
+  // least 2x larger in size on the markets view", then a third again on top (2026-09-20)
+  const R0 = pulsarR(U, fx.gridW);
+  // THE GAS DOUBLED, THE STAR DID NOT: a pulsar is a point, and a bloom drawn at twice the scale
+  // is a white ball with a ray through it. The star's own halo and the beam's thickness keep
+  // close to the size they had, so the passage grew without the thing at the middle of it
+  // turning into a blob. (Its LENGTH is unchanged -- the beam always crossed the board.)
+  const Rs = R0 * 0.62;
+  // THE FLOW, TAKEN FROM THE BOARD, NOT ASSUMED: the stream runs from one edge's height to the
+  // other's, so its direction on screen is the projection of two points along it. Everything in
+  // the wind lies on this axis; the beam does not (in the film the ray and the wind plainly do
+  // not share an orientation).
+  const streamY = (gx) => p.sa + (p.sb - p.sa) * (gx / (fx.gridW || 1));
+  const a0 = project(p.px - 3, streamY(p.px - 3), p.pz, view);
+  const a1 = project(p.px + 3, streamY(p.px + 3), p.pz, view);
+  let ax = a1.x - a0.x, ay = a1.y - a0.y;
+  const alen = Math.hypot(ax, ay) || 1; ax /= alen; ay /= alen;
+  const qx = -ay, qy = ax;                                          // across the stream
+  // A THREAD IS A CURVE, NOT A ZIG-ZAG: the first pass of this rewrite drew the strands as plain
+  // polylines and they came out as EKG traces -- every sample point a visible corner. The samples
+  // are control points instead, the line running through their midpoints as quadratics, which is
+  // the cheap standard way to get a smooth curve out of a sampled path and costs nothing here.
+  const stroke = (pts, w, col, a) => {
+    if (!(a > 0.004) || pts.length < 2) return;
+    ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${a.toFixed(3)})`;
+    ctx.lineWidth = Math.max(0.35, w); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    if (pts.length === 2 || typeof ctx.quadraticCurveTo !== 'function') {
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    } else {
+      for (let i = 1; i < pts.length - 1; i++) ctx.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
+      ctx.quadraticCurveTo(pts[pts.length - 2].x, pts[pts.length - 2].y, pts[pts.length - 1].x, pts[pts.length - 1].y);
+    }
+    ctx.stroke();
+  };
+  // THE WIND IS A PARTICLE SIMULATION, NOT A DRAWING OF ONE (operator, 2026-09-20: "the winds
+  // don't look enough like a particle simulation"). The pass before this drew the threads as
+  // sine-shaped polylines -- a picture of a flow, which reads as ribbons however finely it is
+  // stroked, because nothing in it is actually moving through a field. So the gas is particles
+  // now: a few thousand of them, held on the effect (`fx._wind`, the way the plume layer is
+  // held), each ADVECTED every frame through the flow field the pulsar makes in the wind:
+  //
+  //   the stream     a steady drift along the board's stream axis -- the companion's wind
+  //   the vortex     a tangential term round the star, falling off with distance, turning the
+  //                  way the act turns: one way as the disk spins up, the other after it rebuilds
+  //   the infall     a radial pull, gentle while there is a disk and overwhelming at the flare's
+  //                  peak, which is exactly the break-up XRISM saw: the gas stops orbiting and
+  //                  drops straight in
+  //   the shock      a short outward push very close in, so the flow parts round the star
+  //                  instead of every particle piling on to the point
+  //
+  // The spiral arms are not drawn either: each particle carries the brightness of the lane it
+  // entered on, so the bright sheets are made OF the gas and the swirl winds them into arms. A
+  // particle dies when it reaches the star (accreted) or leaves the field, and is respawned
+  // upstream, so the count is steady. The swirl's SIGN is fixed for the whole passage (fxNow's
+  // `spin`): the acts change how hard it turns and how hard it falls in, never which way.
+  //
+  // COST: the particles are stroked in BRIGHTNESS BUCKETS -- one path per bucket, a few thousand
+  // little motion-blur segments in a dozen strokes -- because a stroke per particle is what would
+  // actually cost something. The state is kept in the star's own frame (offsets from it), so the
+  // pulsar flies through the gas rather than towing it along.
+  {
+    const curl = p.spin || 1;                                       // one direction, flipped at the middle
+    const Rf = R0 * 7;                                              // how far the gas is simulated
+    // THE COUNT IS THE PICTURE. Drawn as streaks, a few thousand of these filled the frame and
+    // what you saw was the shape of each streak; drawn as dots, what you see is where the dots
+    // are DENSE -- and density needs numbers. Fifteen thousand, which is affordable because the
+    // field they move through is evaluated off a sine table (`fastSin`) rather than Math.sin,
+    // and because they are stroked as one path per brightness bucket.
+    const N = 20000;                                                // 15000 + a third (2026-09-20)
+    const keep = p.store || fx;                                     // the run's record: it outlives the frame
+    let W = keep._wind;
+    if (!W || W.R0 !== R0) W = keep._wind = { t: now, R0, n: 0, ps: [] };
+    const hw = () => { W.n = (W.n + 1) >>> 0; return hash01(fx.seed + 1300 + W.n * 7.7); };
+    // upstream, anywhere across the field: where the gas comes in from
+    const spawn = (q, seeded) => {
+      const along = seeded ? (hw() * 2 - 1) * Rf : -Rf * (0.95 + 0.25 * hw());
+      // ON STREAMLINES, NOT SCATTERED: everything spawned on a lane follows the same path, so the
+      // dots string out nose to tail along it and the eye reads a filament rather than noise --
+      // which is what the film's wind is made of.
+      // THE PULSAR PLOUGHS THROUGH THE WIND; IT DOES NOT FLY DOWN A CORRIDOR OF IT (operator,
+      // 2026-09-20: "the winds are too far away from the pulsar at times ... not having them
+      // running across the top and bottom"). Spread evenly across the field, the gas nearest the
+      // star is the gas that gets eaten, so the middle empties and what is left are two bands
+      // along the top and bottom with the pulsar flying between them. The lanes are bunched
+      // toward the middle instead -- three draws averaged, which piles them on the star's own
+      // path -- so the densest gas is exactly the gas it is flying into.
+      const bunch = (hw() + hw() + hw()) / 1.5 - 1;                   // -1..1, heaped at 0
+      const lane = Math.round(bunch * 40) / 40;                       // still on shared streamlines
+      const across = lane * Rf * 0.6 + (hw() - 0.5) * Rf * 0.02;
+      q.x = ax * along + qx * across; q.y = ay * along + qy * across;
+      q.m = 0.55 + 0.9 * hw();                                      // its own pace through the field
+      q.b = 0.35 + 0.65 * hw();                                     // and its own brightness
+      // THE BANDING IS CARRIED, NOT PAINTED ON. Lighting the gas by a pattern in SPACE draws that
+      // pattern -- the flow slides through it and the bands stay put, which is how a ring ends up
+      // round the star and blotches end up in the wind. This is a property of the particle
+      // itself, fixed when it enters: neighbours on a lane share it, so the bright sheets are
+      // made of gas, and when the star winds that gas up the sheets wind up with it. Dye in a
+      // fluid, not a stencil over it.
+      q.f = 0.12 + 0.88 * (0.5 + 0.5 * Math.sin(lane * 47 + hw() * 0.5)) ** 2;
+      q.life = 0;
+      return q;
+    };
+    if (!W.ps.length) for (let i = 0; i < N; i++) W.ps.push(spawn({}, true));
+    // THE CLOCK IS CLAMPED: a test steps this loop in 700 ms jumps and a backgrounded tab in
+    // whole seconds; an unclamped dt would teleport every particle through the star in one step
+    const dt = Math.max(0, Math.min(48, now - W.t)); W.t = now;
+    const drift = U * 0.0045;                                       // the stream, px/ms
+    // FAST GAS IS THIN GAS: a steady flow's density goes as one over its speed, so the first
+    // swirl -- eighteen times the drift speed close in -- scoured a clean hole round the star and
+    // left the disk as a ring of void. The swirl is a few times the drift now, and it comes with
+    // a steady inward pull, so the gas spirals IN and piles up where the film is brightest.
+    // and the pull has to keep up with the swirl, or the gas simply ORBITS: at a tenth of the
+    // tangential speed it circled the star at a fixed radius and drew a hard bright annulus, a
+    // marble rather than an accretion. It spirals in and is eaten now, which is also why there is
+    // always room for the wind behind it.
+    // and the swirl never goes all the way out, or the gas stops turning at the break-up and the
+    // eddies decide which way it goes instead -- which is what made the rotation look as though
+    // it changed its mind. It drops to a little over half through the break-up rather than to
+    // nothing, with the infall laid over the top of it.
+    const swirlK = U * 0.022 * (0.55 + 0.95 * Math.max(p.disk1, p.disk2)) * p.inStream;
+    const pullK = U * 0.012 * (1 + 2.5 * p.direct);
+    // THE SHOCK IS A NUDGE, NOT A WALL: at the strength the first cut used (and falling off as
+    // slowly as the swirl) it swept a clean round bubble out of the gas and the star sat in a
+    // hole. It falls off as the cube of the reach now, so it only parts the flow that is nearly
+    // on top of the star.
+    const shockK = U * 0.007;
+    // THE EDDIES ARE A CURL FIELD NOW, NOT TWO SINES ADDED TO THE DRIFT. Sines pushed the gas
+    // about but left its PATH locally straight -- a particle crossing one is deflected, not
+    // turned -- so the wisps stayed dashes (operator: "too much like lines instead of curving
+    // paths"). A curl field is the perpendicular gradient of a stream function: its flow lines
+    // are closed loops, every one of them curved, and a particle in it is always turning. Two
+    // octaves, both slowly drifting, so the wind is a field of soft rolling eddies the pulsar
+    // flies through.
+    // and it is a SECOND-ORDER term, about a third of the drift: at the strength the first curl
+    // cut used, the eddies stopped bending the wind and started BEING the wind -- the gas piled
+    // into the rolls and left the pulsar sitting in a clean void, which is the opposite of what it
+    // is for. The wind still blows through; it just does not blow straight.
+    const eddyK = U * 0.0026, L1 = R0 * 1.15, L2 = R0 * 3.1;
+    const eA = now * 0.00021 + H(11) * 6.3, eB = now * -0.00014 + H(12) * 6.3;
+    // the buckets: ten bands of brightness, each stroked once
+    const BK = 10, paths = [];
+    for (let i = 0; i < BK; i++) paths.push([]);
+    for (const q of W.ps) {
+      const r = Math.hypot(q.x, q.y) || 0.001;
+      const g = R0 * R0 / (r * r + R0 * R0 * 1.6);                  // the star's reach, softened at the core
+      const ux = q.x / r, uy = q.y / r;
+      const g3 = g * g * g;
+      // the curl of the two-octave stream function psi = sin(x/L + a)cos(y/L + b): the velocity
+      // is (dpsi/dy, -dpsi/dx), which cannot diverge -- it can only roll
+      const s1x = fastSin(q.x / L1 + eA), c1x = fastCos(q.x / L1 + eA);
+      const s1y = fastSin(q.y / L1 + eB), c1y = fastCos(q.y / L1 + eB);
+      const s2x = fastSin(q.x / L2 - eB), c2x = fastCos(q.x / L2 - eB);
+      const s2y = fastSin(q.y / L2 + eA), c2y = fastCos(q.y / L2 + eA);
+      const ex = -(s1x * s1y) / L1 - 0.7 * (s2x * s2y) / L2;
+      const ey = (c1x * c1y) / L1 + 0.7 * (c2x * c2y) / L2;
+      const eddy = eddyK * R0;                                       // the field's own scale
+      const vx = ax * drift + eddy * ex + (-uy) * curl * swirlK * g - ux * pullK * g + ux * shockK * g3;
+      const vy = ay * drift + eddy * ey + (ux) * curl * swirlK * g - uy * pullK * g + uy * shockK * g3;
+      q.px = q.x; q.py = q.y;
+      q.x += vx * q.m * dt; q.y += vy * q.m * dt;
+      q.life += dt;
+      // ACCRETED, OR ROUND AGAIN: gas that reaches the star is gone (respawned upstream, which is
+      // the only place new gas comes from); gas that simply leaves the field WRAPS to the far
+      // side, because a stellar wind is not a puff -- it keeps blowing, and respawning the
+      // stragglers one by one instead left the upstream half of the board visibly empty.
+      let r2 = Math.hypot(q.x, q.y);
+      if (r2 < R0 * 0.16 || q.life > 90000) { spawn(q, false); continue; }
+      let along = q.x * ax + q.y * ay, across = q.x * qx + q.y * qy;
+      if (Math.abs(along) > Rf || Math.abs(across) > Rf * 0.75) {
+        if (Math.abs(along) > Rf) along -= Math.sign(along) * 2 * Rf;
+        if (Math.abs(across) > Rf * 0.75) across -= Math.sign(across) * 1.5 * Rf;
+        q.x = ax * along + qx * across; q.y = ay * along + qy * across;
+        r2 = Math.hypot(q.x, q.y);
+      }
+      if (wind <= 0.02) continue;                                   // simulated on, drawn only in the stream
+      const near = 1 / (1 + (r2 / (R0 * 2.4)) ** 2);
+      // THE BOX MUST NOT SHOW: the gas wraps in a rectangle around the flow, and a rectangle's
+      // corners were plainly visible as straight edges in the wind. Every particle fades toward
+      // the box's walls, so the seam it wraps across is already dark when it crosses.
+      const la = Math.abs(q.x * ax + q.y * ay) / Rf, lc = Math.abs(q.x * qx + q.y * qy) / (Rf * 0.75);
+      const edge = Math.max(0, (1 - la * la) * (1 - lc * lc * lc));
+      // THE FILAMENTS ARE DENSITY, NOT SHAPE: a field of evenly lit dots is sand, whatever it is
+      // doing. The carried banding (q.f) is what makes it fibrous -- structure drawn by WHICH
+      // dots are lit, with not a line anywhere in it.
+      const b = Math.max(0, Math.min(0.999, q.b * q.f * edge * (0.2 + 0.8 * near) * wind * 1.9));
+      if (b < 0.03) continue;
+      const path = paths[Math.min(BK - 1, Math.floor(b * BK))];
+      // A PARTICLE IS A POINT. Every cut before this one drew it as a streak -- velocity times
+      // seven, then two chasing points, then a curve through six breadcrumbs -- and every one of
+      // them read as what it was (operator, three times over: "too much like lines", "line
+      // segments when accreting", "Still looks too much like lines and not a particle field").
+      // A motion-blur streak IS a line, however well it follows the path. So there are no trails
+      // at all now: each particle is a dot, and there are enough of them that the STRUCTURE --
+      // the filaments, the spiral, the infall -- is drawn by where the dots are dense, not by
+      // what shape each one is. That is what a particle field looks like.
+      path.push(c.x + q.x, c.y + q.y);
+    }
+    for (let i = 0; i < BK; i++) {
+      const path = paths[i];
+      if (!path.length) continue;
+      const b = (i + 0.5) / BK;
+      // cool indigo out in the wind, blue-white where the pulsar lights it. Two passes: a broad
+      // dim halo that gives the gas volume, and the grain of the dust over it.
+      // it never reaches white: gas lit by a pulsar is blue-violet, and a field of white specks
+      // reads as a starfield sitting on top of the board rather than as something in front of it
+      const col = [Math.round(58 + 150 * b), Math.round(64 + 152 * b), Math.round(142 + 106 * b)];
+      // A DOT IS A ZERO-LENGTH SEGMENT WITH A ROUND CAP, and thousands of them go into ONE path
+      // and one stroke. Drawing each as its own arc or fillRect is thousands of canvas calls a
+      // frame; this is two, and the cap makes every one of them a circle of exactly lineWidth.
+      ctx.lineCap = 'round';
+      for (const [wide, al] of [[R0 * (0.04 + 0.09 * b), 0.025 + 0.09 * b], [Math.max(0.8, R0 * (0.009 + 0.018 * b)), 0.18 + 0.72 * b]]) {
+        ctx.strokeStyle = `rgba(${col[0]},${col[1]},${col[2]},${al.toFixed(3)})`;
+        ctx.lineWidth = wide;
+        ctx.beginPath();
+        for (let k = 0; k < path.length; k += 2) { ctx.moveTo(path[k], path[k + 1]); ctx.lineTo(path[k] + 0.01, path[k + 1]); }
+        ctx.stroke();
+      }
+    }
+  }
+  // THE BEAM SWINGS (operator, 2026-09-20: "The pulsar beam is not swinging back and forth"). A
+  // pulsar's beam is a searchlight on a rotating star, and the first cut pinned it at one fixed
+  // diagonal, which is the one thing about a pulsar everybody already knows is wrong.
+  //
+  // It is a ray turning in THREE dimensions here, not an angle wobbling in two: the axis sweeps
+  // round a cone, so on screen the ray swings across the board, FORESHORTENS as it turns toward
+  // us (a long ray becomes a short stub), and FLASHES as it comes over -- the lighthouse. The
+  // star's own beat is the same number, so the point flares exactly when the beam points at us
+  // instead of ticking to a clock of its own.
+  const spin = now * 0.0016 + H(5) * 6.3;
+  const cone = 0.62;                                                // how far off the spin axis the beam sits
+  const b3x = Math.cos(spin), b3y = cone, b3z = Math.sin(spin);     // in the spin axis's own frame
+  const tiltA = (0.22 + 0.56 * H(4)) * Math.PI * (H(9) < 0.5 ? 1 : -1);   // where that axis lies on the board
+  const cta = Math.cos(tiltA), sta = Math.sin(tiltA);
+  const bnx = b3x * cta - b3y * sta, bny = b3x * sta + b3y * cta;
+  const bscreen = Math.hypot(bnx, bny) || 1e-6;
+  const bx = bnx / bscreen, by = bny / bscreen;
+  const facing = Math.abs(b3z);                                     // 1 when it points at us (or away)
+  const flash = 0.3 + 0.7 * Math.pow(facing, 4);
+  {
+    const L = U * boundedRadius(30, 1.05, fx.gridW) * (0.25 + 0.75 * bscreen);   // foreshortened
+    const lit = Math.min(1.2, p.bright) * (0.45 + 0.75 * flash) * vis;
+    const SEG = 9;
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < SEG; i++) {
+        const d0 = (i / SEG) * L, d1 = ((i + 1) / SEG) * L;
+        const fade = Math.pow(1 - i / SEG, 1.3);
+        const pts = [{ x: c.x + bx * d0 * side, y: c.y + by * d0 * side }, { x: c.x + bx * d1 * side, y: c.y + by * d1 * side }];
+        stroke(pts, Rs * 0.62 * (0.3 + 0.7 * fade), [76, 126, 196], 0.09 * lit * fade);
+        stroke(pts, Rs * 0.2 * (0.35 + 0.65 * fade), [150, 200, 246], 0.22 * lit * fade);
+        stroke(pts, Math.max(0.8, Rs * 0.055), [236, 248, 255], 0.8 * lit * fade);
+      }
+    }
+  }
+  // THE PULSAR: a tiny crisp white point in a tight blue-white bloom, its brightness the light
+  // curve with the lighthouse beat riding on it
+  const beat = flash;                                                 // the beam coming over, not a clock of its own
+  const glow = Math.min(1, p.bright) * (0.5 + 0.5 * beat) * vis;
+  if (glow > 0.02) {
+    softStops(ctx, c.x, c.y, Rs * (2 + 0.5 * beat), [[0, `rgba(150,190,240,${(0.12 * glow).toFixed(3)})`], [1, 'rgba(96,140,210,0)']]);
+    softStops(ctx, c.x, c.y, Rs * (1.5 + 0.35 * beat), [[0, `rgba(206,232,255,${(0.6 * glow).toFixed(3)})`], [0.28, `rgba(150,190,240,${(0.26 * glow).toFixed(3)})`], [1, 'rgba(110,150,215,0)']]);
+    // THE POINT IS NEVER DIMMER THAN ITS OWN RAY: on the approach the light curve is at its floor,
+    // and with the core scaled by it too the frame was a hairline of beam with no star at the end
+    // of it. The core holds a crisp white whenever the pulsar is on screen at all.
+    const core = vis * Math.min(1, 0.55 + 0.45 * glow);
+    softStops(ctx, c.x, c.y, Rs * (0.34 + 0.16 * beat), [[0, `rgba(255,255,255,${core.toFixed(3)})`], [0.5, `rgba(226,242,255,${(0.7 * core).toFixed(3)})`], [1, 'rgba(190,220,255,0)']]);
+  }
+  ctx.lineWidth = lw;
+}
+// an edge fade (0 at a, 1 at b), used by the pulsar's passage
+function edge01(v, a, b) { return Math.max(0, Math.min(1, (v - a) / (b - a))); }
 
 // A STAR'S GLINT (for the supernova's progenitor; 2026-09-15, operator: "The flashing dot as a
 // supernova looks bad. The star is blue-shifted before it blows up. Can we have a better glint
@@ -2632,6 +3204,17 @@ function priceLine(ctx, view, axes) {
   // radius rE growing with the hole -- so the chart warps into an arc round the shadow, and
   // the stretch inside the horizon is drawn under the shadow, which covers it
   if (view.fx?.kind === 'blackhole' && view.fx.blackhole) pts = lensPoints(pts, view);
+  // and it leans toward the pulsar as that passes (pulsarBend)
+  let warp = '';
+  if (view.fx?.kind === 'pulsar' && view.fx.pulsar) {
+    pts = pulsarBend(pts, view);
+    // THE CACHED CURVE MUST KNOW THE LINE MOVED. The key below is the ends and the middle, which
+    // is enough while the shape only changes with the series or the camera -- but a bend that
+    // travels along the line can leave all three untouched and freeze the warp in place. The
+    // star's own position goes in the key, so the path is retraced exactly as often as it bends.
+    const b = view.fx.pulsar;
+    warp = `|p${b.px.toFixed(2)},${b.py.toFixed(2)},${(b.bright ?? 0).toFixed(2)},${view.fx.u.toFixed(3)}`;
+  }
   const lw = ctx.lineWidth;
   const join = ctx.lineJoin, cap = ctx.lineCap;
   ctx.lineJoin = 'round';
@@ -2644,7 +3227,7 @@ function priceLine(ctx, view, axes) {
   const P2 = typeof Path2D === 'function';
   let path = null;
   if (P2) {
-    const key = `${pts.length}|${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}|${pts[pts.length - 1].x.toFixed(2)},${pts[pts.length - 1].y.toFixed(2)}|${pts[(pts.length / 2) | 0].y.toFixed(2)}`;
+    const key = `${pts.length}|${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}|${pts[pts.length - 1].x.toFixed(2)},${pts[pts.length - 1].y.toFixed(2)}|${pts[(pts.length / 2) | 0].y.toFixed(2)}${warp}`;
     if (CURVE.key === key && CURVE.path) path = CURVE.path;
     else {
       try { path = new Path2D(); traceCurve(path, pts); CURVE.key = key; CURVE.path = path; }
@@ -3779,7 +4362,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // name and calls it with a hand-built view -- and the registry simply points at them.
   const agentDraw = view.fx?.kind ? AGENTS[view.fx.kind]?.draw : null;
   if (agentDraw) agentDraw(ctx, view, ctx.lineWidth, { drawCycles, drawBall, project });
-  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); drawBlackHole(ctx, view, ctx.lineWidth); drawScanCurtain(ctx, view, ctx.lineWidth); }
+  else { drawCycles(ctx, view, ctx.lineWidth); drawBall(ctx, view, ctx.lineWidth); drawFireworks(ctx, view, ctx.lineWidth); drawSupernova(ctx, view, ctx.lineWidth); drawBlackHole(ctx, view, ctx.lineWidth); drawPulsar(ctx, view, ctx.lineWidth); drawScanCurtain(ctx, view, ctx.lineWidth); }
   // A CALLER'S OWN LAYER, over the board and in the board's own projection (operator, 2026-09-16:
   // "We have fucking firework and nebula effects and you're doing shitty block and sprite
   // explosions?"). The effects above are the renderer's, chosen by cadence and seed; a game needs
@@ -4260,13 +4843,21 @@ export function render3d(canvas, cells, options = {}) {
     if (view.fx && view.viewRect) {
       const r = view.viewRect;
       view.fx.margin = Math.max(0 - r.x0, r.x1 - st.gridW, 0 - r.y0, r.y1 - st.gridH, 4) + 3;
-      // the scan's beam: its half-width, so fxAt lights exactly the swath the cone covers, and
-      // whether it PANS -- a searchlight sweeping out and back, which is the top-down board's
-      // motion; the price chart keeps its single pass along the hours
+      // the scan's beam: its half-width, so fxAt lights exactly the swath the cone covers
+      // (its old `pan` out-and-back motion is gone -- one pass, 2026-09-20), and -- on the block
+      // board -- the beam's AIM: the pan rides along from fxNow (fx.scanPan), but the landing
+      // point is built HERE, after the margin above is known, so it sits on the same front line
+      // the saucer flies (fxNow cannot know the margin yet). fxAt lights the tiles under it;
+      // drawScanCurtain draws the cone onto it. One record, two consumers, no drift.
       if (view.fx.kind === 'scan') {
         const g = scanBeamGeom(view);
         view.fx.beamR = g.spread;
-        view.fx.pan = !g.price;
+        if (!g.price && view.fx.scanPan != null) {
+          const fp2 = fxFront(view.fx);
+          const ax2 = -view.fx.dy, ay2 = view.fx.dx;
+          view.fx.panAt = { x: view.fx.gridW / 2 + (fp2 - (view.fx.gridW / 2) * view.fx.dx - (view.fx.gridH / 2) * view.fx.dy) * view.fx.dx + ax2 * view.fx.scanPan,
+            y: view.fx.gridH / 2 + (fp2 - (view.fx.gridW / 2) * view.fx.dx - (view.fx.gridH / 2) * view.fx.dy) * view.fx.dy + ay2 * view.fx.scanPan };
+        }
       }
     }
     const frame = frameAt(st.plan, t, view);

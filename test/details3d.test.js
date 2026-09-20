@@ -15,8 +15,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { render3d, block3d, mempool3d, hitTest, DEFAULTS, triggerIdle } from '../public/js/details3d.js';
-import { planTransition, project } from '../public/js/blockscene3d.js';
+import { render3d, block3d, mempool3d, hitTest, DEFAULTS, triggerIdle, scanPanOf } from '../public/js/details3d.js';
+import { planTransition, project, fxFront, fxAt } from '../public/js/blockscene3d.js';
 
 function harness() {
   let rafPending = null;
@@ -224,6 +224,42 @@ test('an unchanged refresh does NOT restart the transition', () => {
   assert.equal(same.replanned, false, 'identical data must not replan');
   assert.equal(same.settled, false, 'the transition is still in flight');
   assert.equal(h.pending(), true, 'and its animation loop was left alone');
+});
+
+test('the scan beam pans along the front while the saucer holds the centreline', () => {
+  // (operator, 2026-09-20: "I want the ufo scanner panning back and forth perpendicular to it's
+  // line of travel, to the extend of each side of the board and back", then "The saucer stays in
+  // it's movement position ... the saucer always flies through the vertical or horizontal center
+  // of the grid".) scanPanOf swings edge to edge, sine-eased, over one pass; the swing is
+  // deterministic given the seed; and the width travelled is the board's own half-extent along
+  // the front axis -- each side of the board and back.
+  const W = 40, H = 30;
+  const pan = (u) => scanPanOf(u, 1, 0, W, H, 7);
+  assert.equal(pan(0), 0, 'it starts aimed down the centreline');
+  assert.ok(Math.abs(pan(0.25) - H / 2) < 1e-9, `a quarter in it holds one edge (${pan(0.25)})`);
+  assert.ok(Math.abs(pan(0.5)) < 1e-9, 'and is back on the line mid-pass');
+  assert.ok(Math.abs(pan(0.75) + H / 2) < 1e-9, `a quarter later the other edge (${pan(0.75)})`);
+  assert.ok(Math.abs(pan(1)) < 1e-9, 'and home as the pass ends');
+  // deterministic: the same seed replays the same sweep; the seed only picks which edge first
+  assert.equal(pan(0.3), scanPanOf(0.3, 1, 0, W, H, 7), 'the sweep replays identically');
+  // a board crossed along the other axis spans by that axis's half-extent instead
+  assert.ok(Math.abs(scanPanOf(0.25, 0, 1, W, H, 7) - W / 2) < 1e-9, 'travel down the board pans across its width');
+});
+
+test('the scan lights the tiles under the PANNED beam, not the front line', () => {
+  // the aim record: fxAt lights a disc around fx.panAt; with it, a tile beside the front line but
+  // under the beam lights, and a tile ON the front line but away from the aim does not
+  const W = 40, H = 30, u = 0.25, pan = scanPanOf(u, 1, 0, W, H, 7);
+  const fp = fxFront({ kind: 'scan', u, amp: 1, gridW: W, gridH: H, dx: 1, dy: 0 });
+  const panAt = { x: W / 2 + (fp - W / 2) * 1, y: H / 2 + pan };      // front centre slid along (0,1)
+  const fx = { kind: 'scan', u, amp: 1, gridW: W, gridH: H, dx: 1, dy: 0, beamR: 5, panAt };
+  const under = fxAt({ txid: 'a', x: Math.floor(panAt.x), y: Math.floor(panAt.y), s: 2 }, fx);
+  assert.ok(under.glow > 0.8 && (under.xray ?? 0) > 0.4, 'the tile under the aimed beam glows and goes x-ray');
+  const off = fxAt({ txid: 'b', x: Math.floor(panAt.x), y: 2, s: 2 }, fx);   // on the saucer's line, away from the aim
+  assert.ok(!off.glow && !off.xray, 'a tile on the front line but off the aim is dark');
+  // and WITHOUT an aim record (bare fxAt, as fxAt's own tests call it) the swath lights as before
+  const bare = fxAt({ txid: 'c', x: fp - 1, y: H / 2, s: 2 }, { kind: 'scan', u, amp: 1, gridW: W, gridH: H, dx: 1, dy: 0, beamR: 5 });
+  assert.ok(bare.glow > 0.8, 'no aim record: the swath lights');
 });
 
 test('A REFRESH WAITS FOR THE RUNNING EFFECT TO FINISH ITS SEQUENCE', () => {
