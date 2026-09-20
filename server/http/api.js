@@ -529,11 +529,25 @@ export const routes = [
       // source and are not shown as panels any more; ?source=all opts back in for a
       // person debugging the parser itself.
       const src = ctx.query.source ? String(ctx.query.source).split(',') : ['monitor'];
+      // THE LOG FEED IN OPEN MODE (audit 2026-09-19, M2 follow-up; the 09-16 loopback gate
+      // did not cover this endpoint). With accounts off, ?source=all would hand the node's
+      // log -- including the raw, unparsed lines -- to anyone who can reach the port. The
+      // log source stays on (the operator's decision, 2026-09-17), but its event-feed rows
+      // are operator-visible only: ?source=all is refused with the switch that changes it
+      // named, and kind "raw" rows are dropped from every open-mode answer. The gate keys
+      // off auth.enabled, not the caller's address -- behind server.trustProxy every
+      // request looks local, so an address check would be a fiction. auth.openEventsFromNetwork
+      // restores the old reach; with accounts on there is no gate.
+      const logClosed = !app.cfg.auth.enabled && app.cfg.auth.openEventsFromNetwork !== true;
+      if (logClosed && src.includes('all')) {
+        throw new HttpError(403, 'with accounts off, ?source=all is refused: it includes the node log feed, which open deployments keep for the operator -- turn accounts on, or set auth.openEventsFromNetwork to serve it', { code: 'log_feed_closed' });
+      }
       const sev = ctx.query.severity ? String(ctx.query.severity).split(',') : null;
       const kinds = ctx.query.kind ? String(ctx.query.kind).split(',') : null;
       const q = ctx.query.q ? String(ctx.query.q).toLowerCase() : null;
       let rows = app.history.eventsSinceSeq(since, limit * 4);
       if (!src.includes('all')) rows = rows.filter((r) => src.includes(r.source ?? 'monitor'));
+      if (logClosed) rows = rows.filter((r) => r.kind !== 'raw');
       if (sev) rows = rows.filter((r) => sev.includes(r.severity));
       if (kinds) rows = rows.filter((r) => kinds.includes(r.kind));
       if (q) rows = rows.filter((r) => `${r.text ?? ''} ${r.tag ?? ''} ${r.kind ?? ''}`.toLowerCase().includes(q));
