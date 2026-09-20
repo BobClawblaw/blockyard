@@ -74,7 +74,15 @@ export function adminGateLine(gate, cfg) {
   // Entries are `{ node, wallet }` since 2026-09-19 (a bare name still reads on one node);
   // joined raw, an object prints as "[object Object]" in the banner.
   const wallets = (cfg.admin?.wallets ?? []).map((w) => (typeof w === 'string' ? w : `${w?.wallet} on ${w?.node}`));
+  // N1 (audit 2026-09-19 round 2): when this switch is what lets the suite load with
+  // accounts off, say so by name -- and say what is true, which is less than the switch's
+  // name suggests. The switch satisfies the gate, so the suite LOADS; it does not make the
+  // routes reachable, because every /api/admin/* route asks for role admin, and in open mode
+  // the only identity is the frozen viewer (measured against the pre-fix server: accounts
+  // off + admin.allowWithoutAuth: true, /api/admin/status answered 403).
+  const viaSwitch = cfg.admin?.allowWithoutAuth === true && !cfg.auth?.enabled;
   return 'administrative suite: ON -- '
+    + (viaSwitch ? 'accounts off, loaded via admin.allowWithoutAuth; its routes still refuse -- with no accounts there is no admin role to grant, so the suite is in this process but not reachable over HTTP (BLOCKYARD_AUTH=1 for reachability) -- ' : '')
     + (wallets.length ? `wallets ${wallets.join(', ')}` : 'no wallet named (admin.wallets is empty, so no wallet is reachable)')
     + `, elevation ${Math.round((cfg.admin?.elevationMs ?? 0) / 1000)}s`
     + `, spend cap ${cfg.admin?.spend?.capSat == null ? 'NOT SET (sends are refused until admin.spend.capSat is)' : `${cfg.admin.spend.capSat} sat`}`;
