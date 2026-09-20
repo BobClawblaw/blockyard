@@ -257,6 +257,15 @@ const DEFAULTS = {
     // the saved connection -- and with it the datadir cookie, after the next restart -- at itself, or
     // make this server fetch its internal URLs. `true` restores the old reach, knowingly.
     openNodeConfigFromNetwork: false,
+    // THE NODE LOG FEED STAYS OFF THE ANONYMOUS READ SURFACE (audit 2026-09-19, M2 follow-up,
+    // round 2). With accounts off, /api/events?source=all would hand the node's log -- including
+    // the raw, unparsed lines -- to anyone who can reach the port, where RPC-only mode ships
+    // structured figures only. The log source stays ON (the operator's decision, 2026-09-17:
+    // it surfaces findings the RPC lane cannot see), but its event-feed rows are
+    // operator-visible only: ?source=all is refused with this switch named, and kind "raw" rows
+    // are dropped from every open-mode answer. `true` restores the old reach, knowingly; the
+    // gate is open-mode only, so accounts-on deployments are unaffected by it.
+    openEventsFromNetwork: false,
   },
   actions: {
     // Anything that can change node or machine state is off unless explicitly
@@ -472,6 +481,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     'BLOCKYARD_AUTH': ['auth.enabled', Boolean],
     'BLOCKYARD_ALLOW_WRITES_WITHOUT_AUTH': ['actions.allowWritesWithoutAuth', Boolean],
     'BLOCKYARD_OPEN_NODE_CONFIG_FROM_NETWORK': ['auth.openNodeConfigFromNetwork', Boolean],
+    'BLOCKYARD_OPEN_EVENTS_FROM_NETWORK': ['auth.openEventsFromNetwork', Boolean],
     // Run on RPC alone: 0 turns the log tail off for every node. Measured why is
     // in server/collect/monitor.js and MEASUREMENTS 3/4 -- bandwidth and per-peer
     // bytes work on builds that publish them and do not on the deployed one.

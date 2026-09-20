@@ -270,6 +270,7 @@ sessions, CSRF protection and a per-user audit trail.
 | `auth.loginWindowMs` | `300000` (5 min) | Intended: window in which failed attempts are counted. See [Known quirks](#known-quirks); the effective value is 5 minutes. |
 | `auth.lockoutMs` | `600000` (10 min) | How long a username stays locked after too many failures. |
 | `auth.openNodeConfigFromNetwork` | `false` | With accounts off, the node connection form (test and save) answers only a caller on this machine's loopback address, and never behind `server.trustProxy`. A browser check cannot stop a script, and a script that can save the connection decides where the node's cookie is sent after the next restart. `true` lets any client that reaches the port use the form. With accounts on, the form needs an admin either way. |
+| `auth.openEventsFromNetwork` | `false` | With accounts off, `/api/events?source=all` is refused and rows of kind `raw` (unparsed node-log lines) are dropped from every event answer, so the log feed stays out of the anonymous read surface. `true` restores the old reach. With accounts on the gate does not exist. |
 | `auth.cookieName` | `"blockyard_sid"` | Name of the session cookie. |
 | `auth.secureCookie` | `false` | Mark the session cookie `Secure`. Forced to `true` when `server.tls` is on. Set it yourself only when a TLS-terminating reverse proxy sits in front, because browsers never send a `Secure` cookie over plain HTTP. |
 
@@ -428,6 +429,7 @@ Environment variables override `config/local.json`.
 | `BLOCKYARD_RETENTION_HOURS` | `store.retentionHours` | number | `72` | Chart history retention. |
 | `BLOCKYARD_AUTH` | `auth.enabled` | boolean | `true` | Accounts; `0` is open mode. |
 | `BLOCKYARD_OPEN_NODE_CONFIG_FROM_NETWORK` | `auth.openNodeConfigFromNetwork` | boolean | `false` | In open mode, let any client use the node connection form, not only this machine. |
+| `BLOCKYARD_OPEN_EVENTS_FROM_NETWORK` | `auth.openEventsFromNetwork` | boolean | `false` | In open mode, serve `/api/events?source=all` (the node log feed, raw rows included) to every reader. Off by default: the log source stays on for the panels it backs, but its event-feed rows are operator-visible only. |
 | `BLOCKYARD_SECURE_COOKIE` | `auth.secureCookie` | boolean | `false` | `Secure` session cookie. Use it behind a TLS terminator; it is automatic with built-in TLS. |
 | `BLOCKYARD_ADMIN_PASSWORD` | *(none)* | string | *(generated)* | Password for the `admin` account created on first boot when accounts are on and no users exist. It is ignored once any user exists. It is a secret, so do not leave it in a unit file after first boot. |
 | `BLOCKYARD_ENABLE_ACTIONS` | `actions.enabled` | boolean | `false` | Master switch for node writes. |

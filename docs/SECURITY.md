@@ -48,6 +48,7 @@ Open access is still available as a posture you choose: with `auth.enabled: fals
 | the read-only RPC console (behind the allowlist) | password changes and sessions |
 | the live Server-Sent Events stream | **every node write**, even if actions are enabled |
 | Display settings (they are normalised before use) | the node connection form, except from this machine's loopback address (`auth.openNodeConfigFromNetwork` widens it) |
+| the event feed, without the log source's rows | the node log feed: `/api/events?source=all` is refused and `raw`-kind rows are dropped (`auth.openEventsFromNetwork` restores it) |
 
 The `viewer` ceiling cannot be raised by configuration or by any credential while accounts
 are off. The start-up log states which addresses are readable and how to close them, so

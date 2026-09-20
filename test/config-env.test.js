@@ -117,3 +117,14 @@ test('BLOCKYARD_DATA and the node sentinels still arrive as the types config exp
     assert.equal(cfg.server.trustProxy, true);
     assert.equal(typeof cfg.server.trustProxy, 'boolean');
   }));
+
+test('BLOCKYARD_OPEN_EVENTS_FROM_NETWORK is the open-mode log-feed switch (audit 2026-09-19b, M2 follow-up)', () => {
+  // Default closed: with accounts off, /api/events?source=all is refused and raw-kind rows
+  // are dropped (the test beside this in test/audit-2026-09-19b.test.js holds the behaviour).
+  assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.openEventsFromNetwork, false);
+  return withEnv({ BLOCKYARD_OPEN_EVENTS_FROM_NETWORK: '1' }, () => {
+    assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.openEventsFromNetwork, true);
+  }).then(() => withEnv({ BLOCKYARD_OPEN_EVENTS_FROM_NETWORK: '0' }, () => {
+    assert.equal(loadConfig({ configFile: '/nonexistent.json', ifaces }).auth.openEventsFromNetwork, false);
+  }));
+});
