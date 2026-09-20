@@ -28,46 +28,95 @@ export const BITCOIND = CANDIDATES.find((p) => { try { return fs.existsSync(p); 
 const CLI = BITCOIND ? path.join(path.dirname(BITCOIND), 'bitcoin-cli') : null;
 
 /**
+ * N3 (audit 2026-09-19): can regtest run on this host at all, and if not, why?
+ *
+ * Two things stop it. The binary may be missing (CI runners, laptops), which every
+ * regtest file already detected on its own. The other was found on the audit host of
+ * 2026-09-19, where the binary was present but the OS temp directory could not hold a
+ * datadir -- "Permission denied" creating `regtest/wallets` -- so every regtest test
+ * failed AND each failure left an empty datadir behind; one `npm test` run left about
+ * 18,000 of them. The probe creates the exact shape bitcoind itself creates (a datadir
+ * with `regtest/wallets` inside), takes that as the host's word, and removes its scratch
+ * directory after. A host that answers no gets its regtest suites SKIPPED with this
+ * reason instead of N failed tests that read like app defects.
+ *
+ * The answer is cached: the probe is cheap, but a test file asks once at load, not per
+ * test.
+ */
+let probeAnswer;
+export function regtestUnavailable() {
+  if (probeAnswer === undefined) probeAnswer = probe();
+  return probeAnswer;
+}
+function probe() {
+  if (!BITCOIND) return `no bitcoind found (looked in ${CANDIDATES.join(', ')}; set BITCOIND=/path/to/bitcoind)`;
+  let dir;
+  try {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-rtprobe-'));
+    fs.mkdirSync(path.join(dir, 'regtest', 'wallets'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'probe'), 'regtest');
+    return null;
+  } catch (err) {
+    return `cannot create a regtest datadir under ${os.tmpdir()}: ${err.message}`;
+  } finally {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
  * A regtest node with an encrypted wallet `hot` holding `mature` spendable coinbases.
  *
  * `mature` defaults to 10: 100 blocks for maturity plus ten to spend, so two sends in
  * flight at once each have a coin of their own.
  */
 export async function regtest({ mature = 10 } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-money-'));
-  const net = await import('node:net');
-  const port = await new Promise((resolve) => {
-    const s = net.createServer();
-    s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
-  });
-  const conf = path.join(dir, 'bitcoin.conf');
-  fs.writeFileSync(conf, ['regtest=1', 'server=1', 'rpcuser=rt', 'rpcpassword=rtpass', 'fallbackfee=0.0002',
-    '[regtest]', `rpcport=${port}`, 'listen=0', 'rpcbind=127.0.0.1', 'rpcallowip=127.0.0.1'].join('\n'));
-  const cli = (...args) => execFileSync(CLI, [`-datadir=${dir}`, `-conf=${conf}`, ...args], { encoding: 'utf8' }).trim();
-  const json = (...args) => JSON.parse(cli(...args));
-  const child = spawn(BITCOIND, [`-datadir=${dir}`, `-conf=${conf}`], { stdio: ['ignore', 'ignore', 'pipe'] });
-  let stderr = '';
-  child.stderr.on('data', (c) => { stderr += c.toString(); });
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    try { cli('getblockchaininfo'); break; } catch (err) {
-      if (child.exitCode != null || Date.now() > deadline) throw new Error(`regtest node did not come up: ${stderr.trim().split('\n')[0] || err.message}`);
-      await new Promise((r) => setTimeout(r, 200));
+  const unavailable = regtestUnavailable();
+  if (unavailable) throw new Error(`regtest unavailable on this host: ${unavailable} (the regtest suites skip on such a host; this check is defence in depth)`);
+  let dir;
+  let child;
+  try {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-money-'));
+    const net = await import('node:net');
+    const port = await new Promise((resolve) => {
+      const s = net.createServer();
+      s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); });
+    });
+    const conf = path.join(dir, 'bitcoin.conf');
+    fs.writeFileSync(conf, ['regtest=1', 'server=1', 'rpcuser=rt', 'rpcpassword=rtpass', 'fallbackfee=0.0002',
+      '[regtest]', `rpcport=${port}`, 'listen=0', 'rpcbind=127.0.0.1', 'rpcallowip=127.0.0.1'].join('\n'));
+    const cli = (...args) => execFileSync(CLI, [`-datadir=${dir}`, `-conf=${conf}`, ...args], { encoding: 'utf8' }).trim();
+    const json = (...args) => JSON.parse(cli(...args));
+    child = spawn(BITCOIND, [`-datadir=${dir}`, `-conf=${conf}`], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (c) => { stderr += c.toString(); });
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      try { cli('getblockchaininfo'); break; } catch (err) {
+        if (child.exitCode != null || Date.now() > deadline) throw new Error(`regtest node did not come up: ${stderr.trim().split('\n')[0] || err.message}`);
+        await new Promise((r) => setTimeout(r, 200));
+      }
     }
+    cli('-named', 'createwallet', 'wallet_name=hot', `passphrase=${PASSPHRASE}`);
+    const addr = cli('-rpcwallet=hot', 'getnewaddress');
+    cli('generatetoaddress', String(100 + mature), addr);
+    return {
+      dir, port, cli, json, addr, url: `http://127.0.0.1:${port}`,
+      mempool: () => json('getrawmempool'),
+      unlockedUntil: (w = 'hot') => json(`-rpcwallet=${w}`, 'getwalletinfo').unlocked_until,
+      async stop() {
+        try { cli('stop'); } catch { /* already gone */ }
+        await new Promise((r) => { child.on('exit', r); setTimeout(r, 5000); });
+        fs.rmSync(dir, { recursive: true, force: true });
+      },
+    };
+  } catch (err) {
+    // N3 (audit 2026-09-19): a failed start leaves no litter and no running node behind.
+    // The directory used to survive every failure; the child used to keep running when
+    // the wait loop gave up.
+    if (child && child.exitCode == null) child.kill('SIGKILL');
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    throw err;
   }
-  cli('-named', 'createwallet', 'wallet_name=hot', `passphrase=${PASSPHRASE}`);
-  const addr = cli('-rpcwallet=hot', 'getnewaddress');
-  cli('generatetoaddress', String(100 + mature), addr);
-  return {
-    dir, port, cli, json, addr, url: `http://127.0.0.1:${port}`,
-    mempool: () => json('getrawmempool'),
-    unlockedUntil: (w = 'hot') => json(`-rpcwallet=${w}`, 'getwalletinfo').unlocked_until,
-    async stop() {
-      try { cli('stop'); } catch { /* already gone */ }
-      await new Promise((r) => { child.on('exit', r); setTimeout(r, 5000); });
-      fs.rmSync(dir, { recursive: true, force: true });
-    },
-  };
 }
 
 /**

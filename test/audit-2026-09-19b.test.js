@@ -10,6 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { routes, HttpError } from '../server/http/api.js';
@@ -108,4 +109,19 @@ test('N2: the shipped unit pins PATH instead of trusting systemd\'s default', ()
   assert.ok(lines.some((l) => l.startsWith('Environment=PATH=')), 'Environment=PATH= must be an active directive');
   assert.ok(!lines.some((l) => l.trim().startsWith('#Environment=PATH=')), 'the commented-out form is the pre-fix state');
   assert.match(unit, /^Environment=PATH=\/usr\/local\/sbin:\/usr\/local\/bin:\/usr\/sbin:\/usr\/bin:\/bin$/m, 'the pinned path keeps /usr/local/bin first, where the measured too-old and root-only interpreters live -- the pin documents the order, it does not guess a new one');
+});
+
+// --------------------------------------------------------------------------- N3: the regtest helper
+
+test('N3: the regtest probe answers null or a reason, and leaves no scratch dir behind', async () => {
+  // Host-independent: on a runner without bitcoind the answer is a reason, on a host like
+  // this one it is null. Both must be a clean answer -- and the probe must clean up after
+  // itself either way, because the litter it used to leave was the finding.
+  const { regtestUnavailable } = await import('./helpers/regtest.js');
+  const answer = regtestUnavailable();
+  assert.ok(answer === null || (typeof answer === 'string' && answer.length > 10),
+    `the probe answers null or a one-line reason, got: ${JSON.stringify(answer)}`);
+  assert.equal(regtestUnavailable(), answer, 'the answer is cached, not re-probed per call');
+  const leftovers = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('blockyard-rtprobe-'));
+  assert.deepEqual(leftovers, [], 'the probe removes its scratch datadir');
 });

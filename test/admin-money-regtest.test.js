@@ -9,13 +9,16 @@
 // wallet does and does not list -- so each is run against Core itself.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { BITCOIND, CANDIDATES, PASSPHRASE, regtest, withSuite, fundWallet, signedTx, coins } from './helpers/regtest.js';
+import { PASSPHRASE, regtest, regtestUnavailable, withSuite, fundWallet, signedTx, coins } from './helpers/regtest.js';
 
-const describe = BITCOIND ? test : test.skip;
+// N3 (audit 2026-09-19): the host decides whether regtest can run, and if it cannot the
+// suite skips with the reason instead of every test here failing, each leaving a fresh
+// empty datadir in the OS temp directory.
+const RT_UNAVAILABLE = regtestUnavailable();
+const describe = RT_UNAVAILABLE ? test.skip : test;
 
-test('there is a bitcoind to drive the money-safety tests', { skip: BITCOIND ? false : `no bitcoind found (looked in ${CANDIDATES.join(', ')})` }, () => {
-  assert.equal(fs.existsSync(BITCOIND), true);
+test('regtest can run on this host, or the suite is skipped with the reason', { skip: RT_UNAVAILABLE ?? false }, () => {
+  assert.equal(RT_UNAVAILABLE, null, RT_UNAVAILABLE);
 });
 
 const build = (client, csrf, body) => client.post('/api/admin/wallet/send/build', { wallet: 'hot', node: 'rt', ...body }, { csrf });
