@@ -12,7 +12,7 @@
 // module into the process, the first test below fails.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { withApp } from './helpers/http.js';
+import { withApp, logSink } from './helpers/http.js';
 import { adminGate, adminGateLine, boundPublicly } from '../server/admin-gate.js';
 
 test('a default monitor never loads the suite, and says so with its absence', async () => {
@@ -110,6 +110,60 @@ test('the banner names what is open, including the cap that is not set', () => {
   assert.match(capped, /spend cap 50000 sat/);
   const noWallet = adminGateLine({ ok: true, off: false, reasons: [] }, { admin: { ...cfg.admin, wallets: [] } });
   assert.match(noWallet, /no wallet named/);
+});
+
+// N1 (audit 2026-09-19 round 2): admin.allowWithoutAuth is a gate condition, not a role.
+// It lets the suite LOAD with accounts off; it does not make its routes reachable, because
+// in open mode the only identity is the frozen viewer, and the viewer ceiling applies to
+// admin routes whether or not the switch is set (measured against the pre-fix server: with
+// accounts off and the switch on, /api/admin/status answered 403). The disclosure must say
+// exactly that -- the switch by name, and what the switch does and does not do.
+
+test('N1: with accounts off, the ON line names admin.allowWithoutAuth, and says the routes still refuse', () => {
+  const cfg = { auth: { enabled: false }, admin: { enabled: true, allowWithoutAuth: true, wallets: ['hot'], elevationMs: 300_000, spend: { capSat: null } } };
+  const line = adminGateLine({ ok: true, off: false, reasons: [] }, cfg);
+  assert.match(line, /admin\.allowWithoutAuth/);
+  assert.match(line, /still refuse/);
+  assert.match(line, /no admin role to grant/);
+  // With accounts on the gate passes without the switch, so the line does not claim a
+  // role the switch does not play; and the existing ON wording is untouched otherwise.
+  const on = adminGateLine({ ok: true, off: false, reasons: [] }, { auth: { enabled: true }, admin: { ...cfg.admin } });
+  assert.doesNotMatch(on, /allowWithoutAuth/);
+  assert.match(on, /ON -- wallets hot/);
+});
+
+test('N1: the disclosure is what the server does -- boot with the switch on, accounts off', async () => {
+  const log = logSink();
+  await withApp({
+    auth: false, log,
+    config: {
+      log: { level: 'warn' },
+      admin: { enabled: true, allowInsecure: true, allowWithoutAuth: true, wallets: [], elevationMs: 60_000, spend: { capSat: 1000 } },
+    },
+  }, async ({ app, client }) => {
+    assert.equal(app.adminEnabled, true, 'the switch loads the suite');
+    const boot = log.entries.filter((e) => String(e.msg).includes('administrative suite')).map((e) => e.msg).join('\n');
+    assert.ok(boot.length, 'the boot banner reports the suite');
+    assert.match(boot, /admin\.allowWithoutAuth/);
+    assert.match(boot, /still refuse/);
+    // ...and the routes the disclosure says refuse do refuse: no accounts means no admin
+    // role to grant, so the suite is in this process but not reachable over HTTP.
+    const st = await client.get('/api/admin/status');
+    assert.equal(st.status, 403);
+    assert.equal(st.body.accounts, false);
+  });
+});
+
+test('N1: the status report carries the switch by name, in both states', async () => {
+  for (const withSwitch of [true, false]) {
+    await withApp({ nodes: 1, config: { admin: { enabled: true, allowInsecure: true, ...(withSwitch ? { allowWithoutAuth: true } : {}), wallets: [], elevationMs: 60_000, spend: { capSat: 1000 } } } }, async ({ client }) => {
+      await client.login('admin', client.adminPassword);
+      const st = await client.get('/api/admin/status');
+      assert.equal(st.status, 200);
+      assert.equal(st.body.gates.accounts, true);
+      assert.equal(st.body.gates.allowWithoutAuth, withSwitch, 'the switch is named in the status payload, in both states');
+    });
+  }
 });
 
 test('the RPC console still refuses every wallet method (audit M4 is untouched by all this)', async () => {

@@ -119,6 +119,12 @@ export function adminRoutes(app) {
           gates: {
             https: Boolean(app.tls) || Boolean(app.cfg.server?.trustProxy) || Boolean(app.cfg.admin?.allowInsecure),
             accounts: Boolean(app.cfg.auth?.enabled),
+            // NAMED rather than inferred (audit 2026-09-19 round 2, N1): this is the switch
+            // that lets the suite load with accounts off; the operator reading this report
+            // should see its state next to `accounts` rather than work it out from the
+            // boot banner. It does not open the routes -- in open mode the viewer ceiling
+            // still answers 403 for them; it only satisfies the gate.
+            allowWithoutAuth: app.cfg.admin?.allowWithoutAuth === true,
             walletsNamed: (app.cfg.admin?.wallets ?? []).length,
             elevationMs: app.cfg.admin?.elevationMs ?? 0,
             spendCapSat: app.cfg.admin?.spend?.capSat ?? null,
