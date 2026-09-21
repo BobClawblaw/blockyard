@@ -195,6 +195,7 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
                      arrivals are born there, departures end there.
   (page #space)      the viewer at window size + being-built and tip panels
                      (renderBlockSpace in mining.js)
+  js/gl2d.js         the WebGL renderer: the viewer's Canvas 2D subset on WebGL2 (appearance.renderer)
   js/goggles.js      the 2D treemap maps (squarify) that the 3D viewer sits beside
   js/x86.js, dospc.js, soundcard.js, dosworker.js, dosaudio.js, dosio.js, dosgame.js, wolf3d.js, doom.js, quake.js
                      the DOS Diversions: an i386 interpreter, the PC (real-mode DOS for Wolf3D,
@@ -281,6 +282,98 @@ silently ate another test's result line — rule 22.
    User admin, the audit trail and password changes 403 on the role; node writes are
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
+
+## Current state (2026-09-21): two renderers, Software and WebGL
+
+**Every 3D board, sky and effect draws on either renderer** (operator: "a second rendering option to
+blockyard for WebGL rendering, and port all existing effects over to the new system. Supporting
+either WebGL or Software rendering"). Not thirty-five effects rewritten as shaders: everything
+already drew through ONE seam, the context `render3d` hands `paintFrame`, so that seam exists twice.
+`public/js/gl2d.js` is the Canvas 2D subset the viewer uses, on WebGL2; `surfaceFor` in
+`details3d.js` picks per frame. Setting: `appearance.renderer` (`'software'` shipped, `'webgl'`);
+`options.renderer` overrides it per canvas. What will bite:
+
+- **An effect is still written once, against the 2D API, under the same rules** (no clip, no
+  globalAlpha, no composite modes). If it needs a call gl2d.js does not have, add it THERE, with a
+  test, rather than branching the effect. The one branch that exists is `softStops`: on GL it is
+  one radial-gradient fill instead of two hundred nested discs (same cumulative alpha by
+  construction). `ctx.gl2d` is the flag.
+- **A native Path2D cannot be read back.** The two caches that used one (drawGround's layers, the
+  price line's CURVE) ask `ctx.createPath()` when it exists; a Path2D handed to the GL context is
+  refused, not drawn wrong.
+- **Overlap is the whole difficulty.** A 2D fill or stroke paints each pixel once however its
+  pieces overlap; triangles do not. Convex outlines, opaque paint, specks (<= 6 px: stars, the
+  pulsar's dots), hairlines (<= 1.5 px) and single thin outlines (the seam round a cube, as a
+  non-overlapping mitre strip) batch directly; everything else goes through the stencil. Getting
+  this wrong is SLOW, not ugly: the first cut stencilled every cube seam, 2,372 draws a frame;
+  it is 20-400 now. `node scripts/gl-compare.mjs --trace` names the call sites that stencil.
+- **A one-point subpath draws nothing** (closePath leaves one behind every outline; the 2D context
+  drops it too). Counting it as a round-capped dot was the 2,372.
+- **The GL canvas goes DIRECTLY UNDER the board canvas, same stacking layer, document order**
+  (`layerUnder`), glued to its box every frame, copying its CSS transform. Never raise the board
+  canvas with a z-index: Tetrust's sky canvas would sit over the well and the play button and take
+  every click. The Formation's overlay uses the same helper now. The board canvas stays, clear,
+  and keeps the pointer; its CSS background is let go and restored.
+- **Whoever reads pixels back keeps Software**: Scorched Yard's land (`fluidFloor`) and sky
+  (scorchedwind.js) pass `renderer: 'software'`. A new getImageData on a board canvas needs the same.
+- **A cached bitmap drawn with drawImage carries a `__v` stamp** (gasLayer, the Living sky's dome),
+  bumped when it is repainted; unstamped sources are uploaded on every draw.
+- **Fallback is silent and final per canvas**: no WebGL2, a compile failure, a lost context.
+- **WebGL has a finish Software cannot have** (operator: "The WebGL should look much better than the
+  software renderer"): with `appearance.glow` > 0 the frame is drawn into a multisampled target,
+  what is EMISSIVE is blurred at three sizes and added back (bloom), and the result is dithered.
+  **Emissive is marked, not guessed**: `ctx.emissive` (paintFrame turns it off round the cubes and
+  the day sky) feeds a second render target. The first cut bloomed by brightness and turned every
+  yellow cube into a lamp -- a cube's colour is the feerate, DATA, and must come out as drawn.
+  Glow 0 is the Software picture and is what the parity check runs at.
+- **Speed is in three places, all measured on the profile** (`gl-compare.mjs --profile --gl-only`):
+  gradients are rows of a 64-texel ramp ATLAS keyed by a numeric hash, so they batch (a supernova
+  was 400 draws with 32-stop uniform uploads each); whole circles, ellipses and round dots are ONE
+  QUAD with the rim computed per pixel (`discQuad`), not a fan of up to 280 triangles; and the
+  supernova's half-size plume layer is skipped on GL (a 2D canvas rasterised and uploaded every
+  frame is the opposite of an economy there). `rgba(r,g,b,a)` is parsed by character code.
+  Measured 2026-09-21 on an RTX 5090, 720x450, ms a frame Software -> WebGL: supernova 21 -> 14,
+  fireworks 14 -> 7, pulsar 30 -> 26, black hole 23 -> 14 once its strips were triangulated.
+- **The resting board is kept on the graphics card** (`ctx.retained(id, same, fn)` in gl2d.js; paintFrame
+  wraps the ground, grid, wall and cubes). `sameBoard` compares this frame's ops with the last
+  frame's VALUE FOR VALUE -- a hover glow, a tint, a lift all arrive as different ops -- so "the
+  same" is measured, never assumed; only effects the GRID draws a part of (ripple, outline, tide,
+  the ball) force it live, so a supernova plays over a kept board. Anything not replayable from
+  vertices (a texture, a two-circle gradient) marks the segment bad and it draws live for ever.
+  Resting Block space on the 5090: 7.3 -> 3.8 ms (software 12.8). What is left is the star field.
+  If you add a board input that is NOT in the ops (a new grid option read from `view`), add it to
+  sameBoard or the board will not repaint.
+- **The star field and the pulsar's gas LIVE on the card.** `ctx.starField`: a star's constants go up
+  once (keyed on the `bk` bucket record, which is rebuilt exactly when the stars or colours are),
+  the turn, twinkle and shade are the vertex shader's, one instanced draw. Twinkle frequencies are
+  snapped to whole turns in `STAR_BEAT` so the clock can wrap (a float32 stutters on a big clock).
+  `ctx.particles`: state in two buffers, stepped with TRANSFORM FEEDBACK, drawn as instanced discs;
+  the effect supplies `simulate` and `look` as GLSL. **`PULSAR_GLSL` is drawPulsar's particle block
+  term for term: change one, change both.** Its dice are the card's (an INTEGER hash -- `fract(sin)`
+  on a float32 clumped 27,000 particles on to a few lanes), so GL shows the same wind, not the same
+  dots. Either returns false where it cannot run and the ordinary path draws instead. Measured on
+  the 5090: resting Block space 11.0 -> 2.9 ms (about 1k vertices a frame left), pulsar 26 -> 8.
+- **Per-puff overhead, not physics, was the supernova's cost**, so it was NOT ported to GLSL (its nine
+  clouds each carry a JS colour function; a second copy of each would have to be kept in step).
+  Instead: a whole-turn arc's outline is lazy (`WholeTurn`: a disc is one quad and nothing read the
+  hundred points), `gasBlobs` keeps a cloud's seed-only layout, stops go to the GL gradient as
+  `[r,g,b,a]` arrays instead of strings to parse back, and `bakeRamp` steps span by span.
+- **A recorded path keeps its stroke triangles per pen** (`path.strokes`, dropped when it is flattened
+  again), and the resting price line is a retained segment keyed on `CURVE.key` (`WIRE_SIG`).
+  Resting Markets on the 5090: 10.4 -> 2.9 ms, 37k -> 2k vertices a frame.
+- **A concave fill is triangulated, not stencilled**, when it is one outline that does not cross
+  itself (`earClip`: a ribbon test first -- the black hole's forty ring strips close on themselves
+  with a zero-width seam no ear clipper accepts -- then ears, and either way the triangles' area
+  must equal the outline's or it is refused and the stencil does it). Black hole: 105 draws and 41
+  stencil passes a frame -> 30 and 4.
+- **`ctx.gl2d === true`, never truthy**: the suite's catch-all Proxy stubs answer every property
+  with a function.
+- **Verify in a browser, both renderers, the same frame**: `node scripts/gl-compare.mjs` (headless
+  chromium, SwiftShader or `--gpu vulkan` for the real card -- it prints the renderer it got -- virtual clock, seeded Math.random; 52 scenes, the live switch, restore
+  and lost-context fallback; PNG pairs with `--out`). Measured 2026-09-21: mean difference 0.6-1.8
+  of 255. Its fake `cancelAnimationFrame` must really cancel, or a replaced loop keeps painting and
+  reads as a renderer bug. A look change arriving mid-transition is parked until the board lands.
+  `test/gl2d.test.js` holds the geometry and the context against a recording WebGL stub.
 
 ## Current state (2026-09-15): DOOM
 
@@ -424,7 +517,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1335 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1370 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -753,7 +846,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1335 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1370 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

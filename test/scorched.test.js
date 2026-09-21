@@ -1308,7 +1308,7 @@ test('scorched yard: a blast does not stall the frame', async () => {
   const t1 = performance.now(); buildScene([...tiles].sort(landOrder), { ...o, order: 'given' }); const known = performance.now() - t1;
   assert.ok(known < general / 2, `the known order builds in well under half the time (${known.toFixed(1)} ms against ${general.toFixed(1)})`);
   const src = readFileSync(new URL('../public/js/scorchedyard.js', import.meta.url), 'utf8');
-  assert.match(src, /\.sort\(landOrder\), \{ \.\.\.opts\(FIELD\), order: 'given' \}\)/, 'the game draws its land that way');
+  assert.match(src, /\.sort\(landOrder\), \{ \.\.\.opts\(FIELD\), order: 'given'[,} ]/, 'the game draws its land that way');   // (and on the software renderer: its pixels are read back)
   // 2. the air is warmed up and its floor read from the canvas only for NEW land; a crater moves the
   //    floor from the rules' own column heights
   const wind = src.slice(src.indexOf('function drawWind('), src.indexOf('\n}\n', src.indexOf('function drawWind(')));

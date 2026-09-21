@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A second renderer: WebGL.** Settings, Appearance, *3D renderer*: **Software** (the 2D canvas,
+  as before, and still the default) or **WebGL**. Every 3D board, sky and effect draws on either:
+  the viewer's drawing calls are implemented a second time on WebGL2 (`public/js/gl2d.js`), so an
+  effect is written once and runs on both. The switch is live, and a browser without WebGL2, a
+  shader that will not compile or a lost graphics context goes back to Software by itself, so a
+  board is never blank. Checked in a real browser, the same frame on both renderers, for every
+  sky and every effect on both boards (`node scripts/gl-compare.mjs`): mean difference under 2 in
+  255 per channel. Scorched Yard's land and sky stay on Software: the game reads their pixels.
+  WebGL also has a finish of its own, *WebGL glow*: neon lines, stars, sparks and white-hot cores
+  throw real light (bloom), and wide faint glows lose their bands. The blocks never glow: their
+  colour is the feerate.
+- **The Formation**, a fifth sky: a galaxy assembling itself on a loop, after the TNG50 film, on
+  the graphics card where there is one.
+
+
 ## [0.1.3] — 2026-09-19
 
 A release about the node BlockYard was built beside, and the charts that watch it. **Bitcoin

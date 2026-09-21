@@ -20,9 +20,118 @@ import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
 import { AGENTS, isAgent, rng, lensFlare, saucerAbove } from './agents.js';
 import { drawLivingSky } from './livingsky.js';
+import { drawGalaxyForm } from './galform.js';
+import { formGlAttach, formGlSupported } from './formgl.js';
 import { drawGalaxyFlight } from './galflight.js';
+import { createGl2d, gl2dSupported } from './gl2d.js';
+import { loadSettings } from './settings.js';
 
 const STATE = new WeakMap();
+// The Formation's WebGL layer, one per 2D context: the GL canvas rides over the board's own
+// canvas and is created lazily on the first frame this sky draws (formgl.js). Cleared when
+// the sky changes -- see switchSky in the options block below.
+const FORM_GL = new WeakMap();
+// A CANVAS LAID DIRECTLY UNDER ANOTHER, for a GL layer (a 2D and a GL context cannot share an
+// element). "Directly" is the point: it goes in the SAME stacking layer as `el`, immediately
+// before it in the document, so document order alone puts it beneath -- and nothing else on the
+// page changes places. Raising `el` with a z-index instead was tried for the Formation and is
+// wrong in general: Tetrust's sky canvas, lifted over its siblings, would sit (transparent, but
+// taking every click) on top of the well, the title and the play button. It is glued to el's own
+// BOX (glueUnder, every frame), never inset:0 of the parent: a parent can be a whole page section
+// (operator, 2026-09-21, of the first cut: "It's drawing on top of the price chart"), and it
+// copies el's CSS transform, which Scorched Yard's canvases carry.
+function layerUnder(el) {
+  const c = document.createElement('canvas');
+  const cs = getComputedStyle(el);
+  if (cs.position === 'static') el.style.position = 'relative';   // positioned, so document order decides
+  c.style.position = 'absolute';
+  c.style.pointerEvents = 'none';
+  c.style.zIndex = cs.zIndex;
+  if (cs.transform && cs.transform !== 'none') { c.style.transform = cs.transform; c.style.transformOrigin = cs.transformOrigin; }
+  (el.parentElement || el).insertBefore(c, el);
+  return c;
+}
+function glueUnder(c, el) {
+  c.style.left = `${el.offsetLeft}px`; c.style.top = `${el.offsetTop}px`;
+  c.style.width = `${el.offsetWidth}px`; c.style.height = `${el.offsetHeight}px`;
+}
+function dropFormGl(ctx) {
+  const st = FORM_GL.get(ctx);
+  if (!st) return;
+  if (ctx.canvas?.style) { ctx.canvas.style.background = st.bg; ctx.canvas.style.position = st.pos; }
+  st.canvas.remove();
+  st.ctl?.dispose();
+  FORM_GL.delete(ctx);
+}
+
+// THE TWO RENDERERS (2026-09-21; operator: "a second rendering option to blockyard for WebGL
+// rendering, and port all existing effects over to the new system. Supporting either WebGL or
+// Software rendering"). Everything in this file draws through the context paintFrame is handed,
+// so the choice is made in exactly one place -- surfaceFor, below -- and what it returns is either
+// the board canvas's own 2D context (Software, as it always was) or gl2d.js's look-alike on a
+// WebGL2 canvas laid UNDER the board canvas (a 2D and a GL context cannot share an element). The
+// board canvas stays where it is, transparent, and keeps the pointer: hover and clicks never
+// learn which renderer drew the frame.
+//
+// The choice is appearance.renderer in settings.js, read through loadSettings (memoised on the
+// stored string) every frame so the switch is live; `options.renderer` overrides it for a canvas
+// whose PIXELS are read back by its owner (Scorched Yard's land and sky), which only the 2D
+// canvas can answer. No WebGL2, a failed compile or a lost context is Software, silently and for
+// good on that canvas: a board must never be blank because a GPU was blocklisted.
+export const RENDERERS = Object.freeze(['software', 'webgl']);
+const GL_LAYER = new WeakMap();           // the board canvas -> its GL layer
+export function rendererOf(opts) {
+  let want = opts?.renderer;
+  if (want !== 'software' && want !== 'webgl') { try { want = loadSettings().appearance.renderer; } catch { want = 'software'; } }
+  return want === 'webgl' ? 'webgl' : 'software';
+}
+function dropGlLayer(canvas) {
+  const L = GL_LAYER.get(canvas);
+  if (!L || !L.ctx) return;
+  dropFormGl(L.ctx);
+  L.ctx.dispose();
+  L.ctx = null;
+  L.canvas.remove();
+  canvas.style.background = L.bg; canvas.style.position = L.pos;
+}
+/** The context this frame draws on: the GL look-alike when WebGL is chosen and works, else `ctx2d`. */
+function surfaceFor(canvas, ctx2d, geom, opts) {
+  let L = GL_LAYER.get(canvas);
+  const wantGl = rendererOf(opts) === 'webgl' && !L?.gone && typeof document !== 'undefined' && !!canvas.style && !!canvas.parentElement && gl2dSupported();
+  if (!wantGl) {
+    if (L?.ctx) dropGlLayer(canvas);
+    return ctx2d;
+  }
+  if (!L || !L.ctx) {
+    L = { canvas: null, ctx: null, gone: false, bg: canvas.style.background, pos: canvas.style.position };
+    GL_LAYER.set(canvas, L);
+    // the layer goes directly under the board canvas (layerUnder), and the board canvas lets go
+    // of its CSS background (app.css paints one): a canvas's clear pixels show ITS background,
+    // not what is behind the element
+    L.canvas = layerUnder(canvas);
+    L.ctx = createGl2d(L.canvas, { onLost: () => { L.gone = true; } });
+    if (!L.ctx) { L.gone = true; L.canvas.remove(); canvas.style.position = L.pos; return ctx2d; }
+    dropFormGl(ctx2d);                       // the Formation's overlay re-attaches under the GL canvas
+    canvas.style.background = 'transparent';
+    // what Software last painted must not sit over the GL frame
+    ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  if (L.gone) { dropGlLayer(canvas); return ctx2d; }
+  const gc = L.canvas;
+  if (gc.width !== geom.pw) gc.width = geom.pw;
+  if (gc.height !== geom.ph) gc.height = geom.ph;
+  glueUnder(gc, canvas);
+  // the finish only this renderer has (gl2d.js POST_FS): bloom and dither, by appearance.glow
+  let glow = opts.glow;
+  if (!(glow >= 0)) { try { glow = loadSettings().appearance.glow; } catch { glow = 0; } }
+  L.ctx.bloom = glow;
+  return L.ctx;
+}
+/** Which renderer drew this canvas's last frame ('webgl' | 'software'), for the panel and the tests. */
+export function rendererIn(canvas) { return GL_LAYER.get(canvas)?.ctx ? 'webgl' : 'software'; }
+/** The GL renderer's running counts on this canvas (draw calls, vertices, stencil passes, frames), or null. */
+export function rendererStats(canvas) { const c = GL_LAYER.get(canvas)?.ctx; return c ? { ...c.stats } : null; }
 
 // The tail cell stands for thousands of small transactions the backend does
 // not send individually. As ONE tile it is a disaster: measured in the
@@ -169,6 +278,8 @@ const FX_MS = {
   // stormball replaced portal (2026-09-14); slow on purpose -- it drifts across the whole view
   boulderdash: 6400, stormball: 11000,};
 export const FX_KINDS = Object.keys(FX_MS);
+/** How long an effect runs on the block board, in ms (the price board's own lengths are MARKET_MS). */
+export const fxMs = (kind) => FX_MS[kind] ?? 0;
 // the price board's own lengths, where they differ: ball lightning crosses it at a third of the
 // block board's speed -- 11 s there; a third slower (16.5 s, operator 2026-09-15: "cut the speed
 // by 33% now that it's slower"), then 40% slower again (27.5 s: "Slow it down movement by 40%")
@@ -1173,6 +1284,17 @@ export function softStops(ctx, x, y, r, stops, N = 0) {
   // only coarser. The layer count therefore comes from the RADIUS, not from a constant: about one
   // ring per 1.2px, floored so a small sprite is not wasteful and capped so a huge nebula cannot
   // cost thousands of fills.
+  // ON THE GL RENDERER THIS IS ONE FILL. The nested discs below exist because a software
+  // rasteriser bands a gradient; a fragment shader evaluates it per pixel, and the cumulative
+  // opacity the discs are built to reach at each radius IS the stop's alpha -- so the same stops
+  // on a radial gradient are the same picture, without two hundred fans to tessellate.
+  if (ctx.gl2d === true && stops.every((st) => /^rgba?\(/.test(String(st[1])))) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, Math.max(0.5, Math.abs(r)));
+    for (const [o, c] of stops) g.addColorStop(Math.max(0, Math.min(1, o)), c);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, Math.max(0.5, Math.abs(r)), 0, Math.PI * 2); ctx.fill();
+    return;
+  }
   if (!N) N = Math.max(16, Math.min(220, Math.round(Math.abs(r) / 1.2)));
   const at = (t) => {
     let a = stops[0], b = stops[stops.length - 1];
@@ -1861,6 +1983,64 @@ function drawBlackHole(ctx, view, lw) {
 // softStops (the house rule: no banded gradients); the gas and the beam are plain strokes, which
 // do not band. The four acts and the light curve stay in fxNow, which also lights the tiles.
 // A frame costs about 2 ms on the Kiosk's candle panel, against the supernova's 23.
+// THE PULSAR'S WIND AS GLSL, for the GL renderer's particles (gl2d.js). It is drawPulsar's particle
+// block term for term -- the stream, the vortex, the infall, the shock, the two-octave curl field,
+// accretion and the wrap, the lanes and the carried banding -- so a change to one is a change to
+// both. State: s0 = (x, y, pace m, life ms), s1 = (brightness b, banding f, respawn count, -).
+let W_DONE = false;
+const PULSAR_GLSL = `
+uniform float uR0, uCurl, uSeed, uWind;
+uniform vec4 uAxis, uK;              // axis: along (x,y), across (x,y).  K: drift, swirl, pull, shock
+uniform vec3 uEddy;                  // strength, phase a, phase b
+uniform vec2 uCentre;
+float rnd(float id, float n, float k) { return hash3(id, n + uSeed * 4099.0, k); }
+void spawn(inout vec4 s0, inout vec4 s1, float id, bool seeded) {
+  float n = s1.z + 1.0, Rf = uR0 * 7.0;
+  float along = seeded ? (rnd(id, n, 1.0) * 2.0 - 1.0) * Rf : -Rf * (0.95 + 0.25 * rnd(id, n, 1.0));
+  float bunch = (rnd(id, n, 2.0) + rnd(id, n, 3.0) + rnd(id, n, 4.0)) / 1.5 - 1.0;
+  float lane = floor(bunch * 40.0 + 0.5) / 40.0;
+  float across = lane * Rf * 0.6 + (rnd(id, n, 5.0) - 0.5) * Rf * 0.02;
+  s0.xy = uAxis.xy * along + uAxis.zw * across;
+  s0.z = 0.55 + 0.9 * rnd(id, n, 6.0);
+  s0.w = 0.0;
+  float band = 0.5 + 0.5 * sin(lane * 47.0 + rnd(id, n, 8.0) * 0.5);
+  s1 = vec4(0.35 + 0.65 * rnd(id, n, 7.0), 0.12 + 0.88 * band * band, n, 0.0);
+}
+void simulate(inout vec4 s0, inout vec4 s1, float id, float dt, bool init) {
+  if (init) { spawn(s0, s1, id, true); return; }
+  float R0 = uR0, Rf = R0 * 7.0, L1 = R0 * 1.15, L2 = R0 * 3.1;
+  vec2 q = s0.xy;
+  float r = max(length(q), 0.001);
+  float g = R0 * R0 / (r * r + R0 * R0 * 1.6), g3 = g * g * g;
+  vec2 u = q / r;
+  float ex = -(sin(q.x / L1 + uEddy.y) * sin(q.y / L1 + uEddy.z)) / L1 - 0.7 * (sin(q.x / L2 - uEddy.z) * sin(q.y / L2 + uEddy.y)) / L2;
+  float ey = (cos(q.x / L1 + uEddy.y) * cos(q.y / L1 + uEddy.z)) / L1 + 0.7 * (cos(q.x / L2 - uEddy.z) * cos(q.y / L2 + uEddy.y)) / L2;
+  float eddy = uEddy.x * R0;
+  vec2 v = uAxis.xy * uK.x + eddy * vec2(ex, ey) + vec2(-u.y, u.x) * uCurl * uK.y * g - u * uK.z * g + u * uK.w * g3;
+  q += v * s0.z * dt;
+  s0.w += dt;
+  if (length(q) < R0 * 0.16 || s0.w > 90000.0) { spawn(s0, s1, id, false); return; }
+  float along = dot(q, uAxis.xy), across = dot(q, uAxis.zw);
+  if (abs(along) > Rf) along -= sign(along) * 2.0 * Rf;
+  if (abs(across) > Rf * 0.75) across -= sign(across) * 1.5 * Rf;
+  s0.xy = uAxis.xy * along + uAxis.zw * across;
+}
+vec4 look(vec4 s0, vec4 s1, int pass, out vec2 centre, out float radius) {
+  float R0 = uR0, Rf = R0 * 7.0;
+  vec2 q = s0.xy;
+  float near = 1.0 / (1.0 + pow(length(q) / (R0 * 2.4), 2.0));
+  float la = abs(dot(q, uAxis.xy)) / Rf, lc = abs(dot(q, uAxis.zw)) / (Rf * 0.75);
+  float edge = max(0.0, (1.0 - la * la) * (1.0 - lc * lc * lc));
+  float b = clamp(s1.x * s1.y * edge * (0.2 + 0.8 * near) * uWind * 1.9, 0.0, 0.999);
+  centre = uCentre + q;
+  if (b < 0.03) { radius = 0.0; return vec4(0.0); }
+  vec3 col = vec3(58.0 + 150.0 * b, 64.0 + 152.0 * b, 142.0 + 106.0 * b) / 255.0;
+  // two passes, as the strokes are: the broad dim halo that gives the gas volume, then its grain
+  if (pass == 0) { radius = R0 * (0.04 + 0.09 * b) * 0.5; return vec4(col, 0.025 + 0.09 * b); }
+  radius = max(0.8, R0 * (0.009 + 0.018 * b)) * 0.5;
+  return vec4(col, 0.18 + 0.72 * b);
+}`;
+
 function drawPulsar(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'pulsar' || !fx.pulsar) return;
@@ -1943,6 +2123,24 @@ function drawPulsar(ctx, view, lw) {
     // and because they are stroked as one path per brightness bucket.
     const N = 27000;                                                // 20000 + 35% (2026-09-20, operator)
     const keep = p.store || fx;                                     // the run's record: it outlives the frame
+    // ON THE GL RENDERER THE GAS LIVES ON THE CARD (gl2d.js particles; PULSAR_GLSL below is this
+    // block's physics, term for term): nothing per particle happens here, and nothing is uploaded.
+    // Same field, same lanes, same carried banding; its dice are the card's own, so it is the same
+    // wind and not the same dots. The numbers the field needs each frame are all it is sent.
+    if (ctx.gl2d === true) {
+      const G = (keep._windGl ??= { t: now });
+      const dtG = Math.max(0, Math.min(48, now - G.t)); G.t = now;
+      const Ug = U;
+      if (ctx.particles({
+        key: keep, count: N, glsl: PULSAR_GLSL, passes: 2, dt: dtG, draw: wind > 0.02,
+        uniforms: {
+          uR0: R0, uAxis: [ax, ay, qx, qy], uCentre: [c.x, c.y], uCurl: curl, uSeed: (fx.seed % 1000) + 1,
+          uK: [Ug * 0.0045, Ug * 0.022 * (0.55 + 0.95 * Math.max(p.disk1, p.disk2)) * p.inStream, Ug * 0.012 * (1 + 2.5 * p.direct), Ug * 0.007],
+          uEddy: [Ug * 0.0026, now * 0.00021 + H(11) * 6.3, now * -0.00014 + H(12) * 6.3], uWind: wind,
+        },
+      })) W_DONE = true;
+    }
+    if (W_DONE) { W_DONE = false; } else {
     let W = keep._wind;
     if (!W || W.R0 !== R0) W = keep._wind = { t: now, R0, n: 0, ps: [] };
     const hw = () => { W.n = (W.n + 1) >>> 0; return hash01(fx.seed + 1300 + W.n * 7.7); };
@@ -2091,6 +2289,7 @@ function drawPulsar(ctx, view, lw) {
         ctx.stroke();
       }
     }
+    }
   }
   // THE BEAM SWINGS (operator, 2026-09-20: "The pulsar beam is not swinging back and forth"). A
   // pulsar's beam is a searchlight on a rotating star, and the first cut pinned it at one fixed
@@ -2179,7 +2378,11 @@ function starGlint(ctx, x, y, size, col, f, now, lw) {
 // it, and the sphere's silhouette is LUMPY -- every blob's radius carries a low-order wobble by
 // its direction, so the cloud has lobes and bays rather than an outline. `colorAt(front, f, H)`,
 // if given, decides each blob's colour from its depth, the run and its own hashes.
-function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25], colorAt = null, blobScale = 1, stretchMax = 2.4) {
+const GAS_BLOBS = new Map();
+function gasBlobs(seed, n, stretchMax) {
+  const key = `${seed}|${n}|${stretchMax}`;
+  const had = GAS_BLOBS.get(key);
+  if (had) return had;
   const blobs = [];
   const clumps = Math.max(4, Math.round(n / 14));
   const cdir = [];
@@ -2195,6 +2398,15 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
     blobs.push({ x: rho * Math.sin(ph) * Math.cos(th), y: rho * Math.sin(ph) * Math.sin(th), z: rho * Math.cos(ph), s: 0.16 + 0.2 * H(4), w: H(5) * Math.PI * 2, stretch: 1 + (stretchMax - 1) * (0.3 + 0.7 * H(9)), H, k });
   }
   blobs.sort((a, b) => a.z - b.z);                                       // back to front
+  if (GAS_BLOBS.size >= 64) GAS_BLOBS.delete(GAS_BLOBS.keys().next().value);
+  GAS_BLOBS.set(key, blobs);
+  return blobs;
+}
+function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 150, dark = [90, 20, 25], colorAt = null, blobScale = 1, stretchMax = 2.4) {
+  // THE CLOUD'S SHAPE IS ITS SEED'S: where each puff sits, how big, how stretched, in what order --
+  // none of it moves with the clock, and it was being hashed out and sorted again every frame for
+  // every cloud on screen (8% of a supernova's frame). Made once a seed, kept a while.
+  const blobs = gasBlobs(seed, n, stretchMax);
   const canTransform = typeof ctx.save === 'function' && typeof ctx.rotate === 'function' && typeof ctx.scale === 'function';
   for (const b of blobs) {
     const wob = 0.035 * Math.sin(now * 0.0013 + b.w) + 0.02 * Math.sin(now * 0.0029 + b.k);
@@ -2210,15 +2422,16 @@ function gasCloud(ctx, cx, cy, shell, f, now, seed, bright, rc, grad, disc, n = 
     }
     const a = bright * (0.32 + 0.3 * front) * (1 - 0.25 * f);
     if (a < 0.004) continue;
-    const fill = (rr) => grad(0, 0, rr, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
+    // (on the GL renderer a stop's colour goes over as numbers -- gl2d.js addColorStop -- instead of
+    // being printed as a string for it to read back, three times a puff)
+    const C = ctx.gl2d === true ? (c3, al) => [c3[0], c3[1], c3[2], Math.max(0, Math.min(1, al))] : (c3, al) => `rgba(${c3.join(',')},${al.toFixed(3)})`;
     if (canTransform) {
       const ang = Math.atan2(y - cy, x - cx);                            // stretched along its own radial line
       ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(b.stretch, 1 / Math.sqrt(b.stretch));
-      ctx.fillStyle = grad(0, 0, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
+      ctx.fillStyle = grad(0, 0, r, [[0, C(core, a)], [0.45, C(col, a * 0.7)], [1, C(col, 0)]]);
       ctx.beginPath(); ctx.arc(0, 0, Math.max(0.5, r), 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     } else softStops(ctx, x, y, r, [[0, `rgba(${core.join(',')},${a.toFixed(3)})`], [0.45, `rgba(${col.join(',')},${(a * 0.7).toFixed(3)})`], [1, `rgba(${col.join(',')},0)`]]);
-    void fill;
   }
   // the limb: a soft brightening at the sphere's edge
   const R = shell * 1.02;
@@ -2253,6 +2466,11 @@ function discFor(c) { return (x, y, r, fill) => { c.fillStyle = fill; c.beginPat
 // a half-size offscreen layer matching the board's canvas and transform, cleared for this frame;
 // null where there is no real canvas to make one from
 function plumeLayer(ctx, fx) {
+  // the half-size layer is a SOFTWARE economy (a quarter of the pixels to fill). On the GL renderer it
+  // is the opposite: a 2D canvas rasterised on the processor and uploaded as a texture every frame,
+  // which was the supernova's stall there (operator, 2026-09-21: "major performance issues on the GL
+  // path"). Null draws the plumes straight onto the board, which the graphics card does not notice.
+  if (ctx.gl2d === true) return null;
   const cv = ctx.canvas;
   if (!cv || !cv.width || typeof ctx.getTransform !== 'function' || typeof ctx.drawImage !== 'function' || typeof document === 'undefined') return null;
   const w = Math.ceil(cv.width / 2), h = Math.ceil(cv.height / 2);
@@ -2546,7 +2764,11 @@ function drawGround(ctx, layers, lw) {
     if (!l.polys.length && !l.lines.length) continue;
     if (l.fill) ctx.fillStyle = l.fill;
     else { ctx.strokeStyle = l.stroke; ctx.lineWidth = lw * (l.lw ?? 1); }
-    if (P2) {
+    if (ctx.gl2d === true) {
+      // the GL renderer's own recorded path (gl2d.js): a native Path2D cannot be read back
+      if (!l.glPath) { l.glPath = ctx.createPath(); trace(l.glPath, l); }
+      if (l.fill) ctx.fill(l.glPath); else ctx.stroke(l.glPath);
+    } else if (P2) {
       if (!l.path) { l.path = new Path2D(); trace(l.path, l); }
       if (l.fill) ctx.fill(l.path); else ctx.stroke(l.path);
     } else {
@@ -3197,6 +3419,7 @@ function drawSaberLine(ctx, pts, lw, fx, view, GLOW, CORE) {
     }
   }
 }
+const WIRE_SIG = new WeakMap();           // the GL context -> the wire it last drew (priceLine's retained segment)
 function priceLine(ctx, view, axes) {
   let pts = (axes.line ?? []).map((q) => project(q.x, axes.y ?? 0, q.z, view));
   if (pts.length < 2) return;
@@ -3225,13 +3448,13 @@ function priceLine(ctx, view, axes) {
   // changes, not when a frame ticks. drawGround caches its Path2D the same way (l.path); doing it
   // per frame here would allocate and re-trace thirty Beziers sixty times a second underneath an
   // effect that is already the expensive thing on screen.
-  const P2 = typeof Path2D === 'function';
+  const P2 = ctx.gl2d === true || typeof Path2D === 'function';
   let path = null;
   if (P2) {
-    const key = `${pts.length}|${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}|${pts[pts.length - 1].x.toFixed(2)},${pts[pts.length - 1].y.toFixed(2)}|${pts[(pts.length / 2) | 0].y.toFixed(2)}${warp}`;
+    const key = `${ctx.gl2d === true ? 'gl' : '2d'}|${pts.length}|${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}|${pts[pts.length - 1].x.toFixed(2)},${pts[pts.length - 1].y.toFixed(2)}|${pts[(pts.length / 2) | 0].y.toFixed(2)}${warp}`;
     if (CURVE.key === key && CURVE.path) path = CURVE.path;
     else {
-      try { path = new Path2D(); traceCurve(path, pts); CURVE.key = key; CURVE.path = path; }
+      try { path = ctx.gl2d === true ? ctx.createPath() : new Path2D(); traceCurve(path, pts); CURVE.key = key; CURVE.path = path; }
       catch { path = null; CURVE.key = null; CURVE.path = null; }
     }
   }
@@ -3281,7 +3504,16 @@ function priceLine(ctx, view, axes) {
     return;
   }
   if (!fx) {
-    for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
+    // THE PLAIN WIRE, KEPT ON THE CARD (gl2d.js retained): six strokes of one curve in fixed
+    // colours are the same triangles every frame until the curve, the pen or the panel changes --
+    // and the curve's cache key above says exactly when it has. Same as last frame: nothing is
+    // built and nothing is uploaded. (The lens and the pulsar's bend go in that key already.)
+    const wire = () => { for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`); };
+    if (ctx.gl2d === true && path) {
+      const sig = `${CURVE.key}|${lw}`, was = WIRE_SIG.get(ctx);
+      WIRE_SIG.set(ctx, sig);
+      ctx.retained('wire', was === sig, wire);
+    } else wire();
     if (view.fx?.kind === 'stormball' && view.fx.stormball) electrifyLine(ctx, pts, view, lw);
     done();
     return;
@@ -3686,6 +3918,18 @@ function priceLine(ctx, view, axes) {
   done();
 }
 
+/** Is this tag colour (#rrggbb or rgb()) light enough that dark figures read better on it than white? Pure. */
+export function tagIsLight(colour) {
+  const c = String(colour ?? '');
+  let v = null;
+  const h = c.match(/^#([0-9a-f]{6})/i);
+  if (h) v = [0, 2, 4].map((i) => parseInt(h[1].slice(i, i + 2), 16));
+  else { const m = c.match(/rgba?\(([^)]+)\)/); if (m) v = m[1].split(',').slice(0, 3).map(Number); }
+  if (!v || v.some((x) => !Number.isFinite(x))) return false;
+  const lin = v.map((x) => { const u = x / 255; return u <= 0.03928 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4; });
+  const L = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  return (L + 0.05) / 0.0533 > 1.05 / (L + 0.05);        // near-black's contrast against white's
+}
 function axisLabels(ctx, view, axes, n, k, dpr) {
   const px = (v) => (v * dpr) / k;
   const y = axes.y ?? 0;
@@ -3697,7 +3941,10 @@ function axisLabels(ctx, view, axes, n, k, dpr) {
     const w = ctx.measureText(t.label).width;
     ctx.fillStyle = t.strong ? (t.color ?? 'rgba(40,60,50,1)') : 'rgba(2,12,8,0.78)';
     ctx.fillRect(p.x - px(4), p.y - px(8), w + px(8), px(16));
-    ctx.fillStyle = t.strong ? 'rgba(255,255,255,1)' : 'rgba(185,255,220,1)';
+    // the figures take whichever ink reads on the tag: white on the rising price's green measures
+    // 2.2:1 (WCAG asks 4.5 for text), near-black on it 9:1. The tag's colour is the caller's, so
+    // the choice is made from its luminance rather than assumed
+    ctx.fillStyle = t.strong ? (tagIsLight(t.color) ? 'rgba(4,16,10,1)' : 'rgba(255,255,255,1)') : 'rgba(185,255,220,1)';
     ctx.fillText(t.label, p.x, p.y);
   }
   ctx.textAlign = 'center';
@@ -4085,6 +4332,7 @@ function gasLayer(f, pw, ph, bright, opts) {
     }
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
+  bmp.__v = (bmp.__v | 0) + 1;          // the GL renderer uploads a stamped bitmap once per stamp (gl2d.js textureOf)
   f.gas = { key, bmp, q, D };
   return f.gas;
 }
@@ -4125,6 +4373,23 @@ function drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, opts) {
   const stars = f.stars, n = stars.length;
   const bk = starBuckets(f, colours);
   const { px, py, bucket, count, order, styles, ci, B } = bk;
+  // ON THE GL RENDERER THE FIELD LIVES ON THE CARD (gl2d.js starField): the stars' constants are
+  // sent once and the turning, the twinkle and the shade are the vertex shader's -- no loop here,
+  // no buckets, one draw. Only the giants' glints below still need a place, and there are a few
+  // hundred of them, so theirs is worked out alone. `bk` is the key: it is rebuilt exactly when the
+  // stars or their colours are.
+  if (ctx.gl2d === true && ctx.starField({ key: bk, stars, galaxy: !!galaxy, cx: f.cx, cy: f.cy, flatten: GALAXY_FLATTEN, colourOf: (s) => (colours || !s.c0 ? s.c : s.c0) }, spin, now, bright)) {
+    if (!glints) return;
+    const bigs = (bk.bigs ??= stars.reduce((l, s, i) => { if (s.big) l.push(i); return l; }, []));
+    const cs = Math.cos(spin), sn = Math.sin(spin);
+    for (const i of bigs) {
+      const s = stars[i];
+      if (galaxy) { const ca = Math.cos(s.ga), sa = Math.sin(s.ga); px[i] = f.cx + s.gr * (ca * cs - sa * sn); py[i] = f.cy + s.gr * GALAXY_FLATTEN * (sa * cs + ca * sn); bucket[i] = (px[i] < -4 || px[i] > pw + 4 || py[i] < -4 || py[i] > ph + 4) ? -1 : 0; }
+      else { px[i] = s.x; py[i] = s.y; bucket[i] = 0; }
+    }
+    drawGlints(ctx, stars, bigs, bk, now, bright, colours, dpr);
+    return;
+  }
   count.fill(0);
   const cs = Math.cos(spin), sn = Math.sin(spin);
   for (let i = 0; i < n; i++) {
@@ -4157,8 +4422,13 @@ function drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, opts) {
     ctx.fill();
   }
   if (!glints) return;
-  // the giants' halo and cross, one by one: a few hundred at most
-  for (let i = 0; i < n; i++) {
+  drawGlints(ctx, stars, null, bk, now, bright, colours, dpr);
+}
+// the giants' halo and cross, one by one: a few hundred at most (`only`: their indices, when known)
+function drawGlints(ctx, stars, only, bk, now, bright, colours, dpr) {
+  const { px, py, bucket } = bk, n = only ? only.length : stars.length;
+  for (let k = 0; k < n; k++) {
+    const i = only ? only[k] : k;
     const s = stars[i];
     if (!s.big || bucket[i] < 0) continue;
     const a = Math.min(1, starAlpha(s, now) * bright);
@@ -4282,21 +4552,92 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
 // shadowBlur: viewer-canvas-rules.test.js). The nucleus is stars instead: the bulge population is
 // dense and at full brightness, which looks like a core because it is one.
 
+// Is the board this frame the board of the last frame on this context? Everything the ground, the
+// grid and the cubes are drawn from: the ops themselves (a hover glow, an effect's tint or lift all
+// arrive as different fills or points), the options object (one per render3d call), the panel, the
+// grid, and no effect that the grid itself draws a part of. Pure but for its memory.
+const LAST_BOARD = new WeakMap();
+function sameBoard(ctx, ops, opts, view, geom, gridN, gridH, blockRows) {
+  const was = LAST_BOARD.get(ctx);
+  const now = { ops, opts, pw: geom.pw, ph: geom.ph, gridN, gridH, blockRows, rise: view.risePerUnit,
+    // only what the GRID draws of an effect counts here (drawGrid: the ripple's ring, the outline's and
+    // the tide's front, the ball's glow); what an effect does to the cubes arrives in the ops, and
+    // what it draws over the board is drawn after it -- so a supernova plays over a kept board
+    fx: !!view.fx && (view.fx.kind === 'ripple' || view.fx.kind === 'outline' || view.fx.kind === 'tide' || !!view.fx.ball) };
+  LAST_BOARD.set(ctx, now);
+  if (!was || now.fx || was.fx || was.opts !== opts || was.pw !== now.pw || was.ph !== now.ph || was.gridN !== gridN || was.gridH !== gridH
+    || was.blockRows !== blockRows || was.rise !== now.rise || was.ops.length !== ops.length) return false;
+  for (let i = 0; i < ops.length; i++) {
+    const a = was.ops[i], b = ops[i];
+    if (a === b) continue;
+    if (a.fill !== b.fill || a.stroke !== b.stroke || a.lw !== b.lw || a.always !== b.always || a.face !== b.face || a.points.length !== b.points.length) return false;
+    for (let k = 0; k < a.points.length; k++) if (a.points[k].x !== b.points[k].x || a.points[k].y !== b.points[k].y) return false;
+  }
+  return true;
+}
+
 function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
   const { pw, ph, dpr } = geom;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  // cleared first, so a TRANSPARENT background (Tetrust's well, laid over its own sky canvas) shows
-  // what is behind the canvas rather than the last frame
+  // THE GL SKY DREW THIS FRAME -> THE BOARD CANVAS STAYS TRANSPARENT. The GL layer lives
+  // UNDER this canvas (form: the overlay is glued to the board's box below); the board's
+  // usual opaque background fill would hide it entirely. The GL clear supplies the black,
+  // the gas draws on it, and everything after this point (tiles, grid, labels) paints over
+  // the transparent canvas onto the GL sky beneath. Any other sky: the 2D canvas paints
+  //   its own background as always.
   ctx.clearRect(0, 0, pw, ph);
-  ctx.fillStyle = opts.background;
-  ctx.fillRect(0, 0, pw, ph);
+  if (!(opts.skyType === 'form' && !opts.formNoGl && formGlSupported())) {
+    ctx.fillStyle = opts.background;
+    ctx.fillRect(0, 0, pw, ph);
+  }
   // THE SKY: the star field, the living sky (livingsky.js: a real day from the clock, with the
-  // star field coming out at night through the same drawStars), or the galaxy flight
-  // (galflight.js: the camera flying through a wrapping chain of galaxies, after NASA SVS 14950)
+  // star field coming out at night through the same drawStars), the galaxy flight
+  // (galflight.js: the camera flying through a wrapping chain of galaxies, after NASA SVS 14950),
+  // or the Formation (galform.js: a galaxy assembling on a loop, after the TNG50 film --
+  // white-on-black gas density, filaments to disc to twin fountains). The Formation runs on
+  // WEBGL where the browser offers it (formgl.js: 40k additive-blended GPU particles, the
+  // film's coloured plasma look), and falls back to the 2D speck renderer where it does not:
+  // headless browsers, VMs, blocklisted GPUs. The GL canvas sits OVER the 2D one (a 2D and a
+  // GL context cannot share an element) and only exists while this sky is chosen.
+  ctx.emissive = !earthSky(opts);           // the stars throw light; a day sky, bright all over, must not
   if (starsOn(opts)) {
     if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
     else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
-    else drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+    else if (opts.skyType === 'form') {
+      let drew = false;
+      if (!opts.formNoGl && formGlSupported()) {
+        let st = FORM_GL.get(ctx);
+        if (!st) {
+          // the GL canvas goes directly under this one, glued to its box (layerUnder, above)
+          const el = ctx.canvas;
+          // THE CANVAS'S OWN CSS BACKGROUND BLOCKS THE GL LAYER (the price-chart board
+          // carries `background: #020906` in app.css): a canvas's transparent pixels show
+          // its CSS background, not what sits behind the element. While the GL sky runs,
+          // the CSS background must be transparent -- saved here, restored on dispose.
+          st = { canvas: null, ctl: null, gone: false, bg: el.style.background, pos: el.style.position };
+          st.canvas = layerUnder(el);
+          el.style.background = 'transparent';
+          FORM_GL.set(ctx, st);
+        }
+        glueUnder(st.canvas, ctx.canvas);     // layouts shift it around
+        if (!st.ctl && !st.gone) {
+          st.ctl = formGlAttach(st.canvas, { onLost: () => { st.gone = true; } });
+          if (!st.ctl) st.gone = true;
+        }
+        if (st.ctl) drew = st.ctl.draw(pw, ph, dpr || 1, view.now ?? 0, opts);
+      }
+      // the fallback paints the 2D layer alone when there is no GL
+      if (!drew) drawGalaxyForm(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+    }
+    else {
+      // ANY OTHER SKY: the Formation's GL apparatus, if this board ever ran it, must stand
+      // down -- the CSS background restored, the GL canvas removed -- or it would keep
+      // drawing behind (and, with its own clear, blank out) every other sky.
+      dropFormGl(ctx);
+      if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
+      else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
+      else drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+    }
   }
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
@@ -4332,33 +4673,52 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
 
   // The ground first, then the shadows lying on it, then the glowing layer
   // (drawGrid returns it) -- light, so no shadow dims it -- then the cubes.
-  let glow = opts.grid ? drawGrid(ctx, view, opts, gridN, blockRows, gridH) : null;
-  let wall = opts.axes ? () => drawAxes(ctx, view, opts.axes, gridN) : null;
-  for (const op of frame.ops) {
-    if (glow && op.face !== 'shadow') { glow(); glow = null; }
-    if (wall && op.face !== 'shadow') { wall(); wall = null; }
-    const p = op.points;
-    ctx.beginPath();
-    ctx.moveTo(p[0].x, p[0].y);
-    for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
-    ctx.closePath();
-    ctx.fillStyle = op.fill;
-    ctx.fill();
-    // The seam's colour comes from the op, already scaled by the tile's
-    // alpha, so an outline fades exactly as its tile does. A fixed colour
-    // here is what left black frames hanging where departing blocks had been.
-    // `always`: an op whose stroke IS the point (the neon edge) draws whether or not the dark
-    // seam (Stone edges) is on -- it replaces the seam rather than accompanying it
-    if (op.stroke && (opts.edges || op.always)) {
-      ctx.strokeStyle = op.stroke;
-      if (op.lw) { const lw0 = ctx.lineWidth; ctx.lineWidth = lw0 * op.lw; ctx.stroke(); ctx.lineWidth = lw0; }
-      else ctx.stroke();
+  // THE BOARD ITSELF -- the ground, the grid, the wall and every cube -- is the same drawing frame
+  // after frame while nothing moves, and on the GL renderer it is then kept on the graphics card
+  // instead of being built again (gl2d.js retained): sameBoard compares this frame's ops with the
+  // last frame's, value for value, so "the same" is measured, never assumed.
+  const board = () => {
+    ctx.emissive = true;
+    let glow = opts.grid ? drawGrid(ctx, view, opts, gridN, blockRows, gridH) : null;
+    let wall = opts.axes ? () => drawAxes(ctx, view, opts.axes, gridN) : null;
+    // (ctx.emissive is the GL renderer's: what throws light in its bloom. The cubes do NOT -- their
+    // colour is the feerate -- so it is off round them and on for the neon, the line and the effects.
+    // On the 2D context it is a property nobody reads.)
+    for (const op of frame.ops) {
+      if (glow && op.face !== 'shadow') { ctx.emissive = true; glow(); glow = null; }
+      if (wall && op.face !== 'shadow') { ctx.emissive = true; wall(); wall = null; }
+      ctx.emissive = op.always === true;       // a neon tube's edge is a lamp; a stone is not
+      const p = op.points;
+      ctx.beginPath();
+      ctx.moveTo(p[0].x, p[0].y);
+      for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
+      ctx.closePath();
+      ctx.fillStyle = op.fill;
+      ctx.fill();
+      // The seam's colour comes from the op, already scaled by the tile's
+      // alpha, so an outline fades exactly as its tile does. A fixed colour
+      // here is what left black frames hanging where departing blocks had been.
+      // `always`: an op whose stroke IS the point (the neon edge) draws whether or not the dark
+      // seam (Stone edges) is on -- it replaces the seam rather than accompanying it
+      if (op.stroke && (opts.edges || op.always)) {
+        ctx.strokeStyle = op.stroke;
+        if (op.lw) { const lw0 = ctx.lineWidth; ctx.lineWidth = lw0 * op.lw; ctx.stroke(); ctx.lineWidth = lw0; }
+        else ctx.stroke();
+      }
     }
-  }
-  if (glow) glow();   // a board with no cubes on it
-  if (wall) wall();
+    ctx.emissive = true;
+    if (glow) glow();   // a board with no cubes on it
+    if (wall) wall();
+  };
+  if (ctx.gl2d === true) ctx.retained('board', sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), board);
+  else board();
+  ctx.emissive = true;                       // (a replayed board never ran the line that leaves it on)
   if (opts.axes?.line) priceLine(ctx, view, opts.axes);
-  if (opts.axes) axisLabels(ctx, view, opts.axes, gridN, fit.scaleX, dpr || 1);
+  // THE LABELS ARE READ, NOT LIT (operator, 2026-09-21, of the current price on the WebGL board with
+  // the glow on: "blue is background is hard to read for current price"). The tag's box is a flat
+  // bright fill, and drawn as a lamp its own bloom poured back over it: the green of a rising
+  // price washed out to a pale blue under white figures. A label throws no light.
+  if (opts.axes) { ctx.emissive = false; axisLabels(ctx, view, opts.axes, gridN, fit.scaleX, dpr || 1); ctx.emissive = true; }
   // THE AGENT'S OWN GEOMETRY, dispatched from the registry (agents.js). The light cycles' walls
   // and the lightning ball were two hard-coded calls here; with fifty agents this is the seam.
   // drawCycles and drawBall stay in this module -- lightcycle-crash.test.js imports drawCycles by
@@ -4720,7 +5080,8 @@ export function render3d(canvas, cells, options = {}) {
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
-    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon,
+    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.formSpeed,
+    rendererOf(opts),                     // a parked board repaints when the renderer is switched
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
@@ -4864,7 +5225,9 @@ export function render3d(canvas, cells, options = {}) {
       }
     }
     const frame = frameAt(st.plan, t, view);
-    paintFrame(ctx, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
+    const surface = surfaceFor(canvas, ctx, geom, opts);
+    paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
+    surface.flush?.();                       // the GL renderer batches; the 2D context has no such call
     st.lastFit = frame.__fit ?? st.lastFit;
     st.lastOps = frame.ops;
     st.settled = frame.settled;

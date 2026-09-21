@@ -694,6 +694,9 @@ function drawSky() {
     // the horizon is where the land is, not the bottom of the panel: the hills fill the lower
     // third, so the sun and the moon set behind them rather than under them
     skyHorizon: 0.58,
+    // this canvas's PIXELS are read back (scorchedwind.js samples the sky for the wind plane's
+    // tint), and only a 2D canvas answers getImageData: Software here whatever the setting says
+    renderer: 'software',
     // the clouds of the Living sky drift with this round's wind, and turn with it
     skyWind: G.game ? Math.sign(G.game.wind || 1) * (0.4 + Math.abs(G.game.wind) / 4) : 1,
     // and each round draws its own hour of the Living sky (the original's sky changed each round)
@@ -757,7 +760,7 @@ function draw(now = performance.now()) {
       // 1,800 identical resting cubes, twice a blast. A resting grid has one correct order, found by
       // diffing every pixel against the general sort: back rows first, and within a row the columns
       // from the outside in, the right one first where two tie at the centre. Pixel-identical, 7 ms.
-      board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }).sort(landOrder), { ...opts(FIELD), order: 'given' });
+      board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }).sort(landOrder), { ...opts(FIELD), order: 'given', renderer: 'software' });   // fluidFloor reads this canvas's pixels back: the 2D canvas, whatever the setting
       G.landKey = key;
     }
     drawWind(now);

@@ -111,6 +111,11 @@ default-deny allowlist, and a tabbed **Display settings** panel (the gear) that 
 board without a reload and picks the layout's colours — light or dark, the shipped look, Mono,
 Nous, GitHub, Catppuccin, or nine colours of your own.
 
+The 3D boards, their skies and every effect draw on either of **two renderers**, picked in the
+same panel: **Software** (the 2D canvas, on the processor; the default, and it works everywhere)
+or **WebGL** (the same picture on the graphics card). A browser without WebGL2 stays on Software
+by itself. Both are hand-written here, like everything else: no library.
+
 ## Quick start
 
 You need **Node.js 22.2 or newer** and a running **Bitcoin Core 25.0 or later** (or a
@@ -125,7 +130,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1335 unit tests, all built in
+npm test            # optional: 1370 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -216,7 +221,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1335 unit tests (node:test, no dependencies)
+npm test             # 1370 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -238,7 +243,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1335 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1370 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

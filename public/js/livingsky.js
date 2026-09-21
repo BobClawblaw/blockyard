@@ -172,7 +172,7 @@ function domeLayer(ctx, pw, ph, key, paint) {
     c = { canvas, ctx: c2, key: null, w: pw, h: ph };
     CACHE.set(cv, c);
   }
-  if (c.key !== key) { c.ctx.setTransform(1, 0, 0, 1, 0, 0); c.ctx.clearRect(0, 0, pw, ph); paint(c.ctx); c.key = key; }
+  if (c.key !== key) { c.ctx.setTransform(1, 0, 0, 1, 0, 0); c.ctx.clearRect(0, 0, pw, ph); paint(c.ctx); c.key = key; c.canvas.__v = (c.canvas.__v | 0) + 1; }   // the stamp: the GL renderer re-uploads the dome only when it was repainted
   ctx.drawImage(c.canvas, 0, 0);
   return true;
 }
