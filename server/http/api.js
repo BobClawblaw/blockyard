@@ -492,8 +492,9 @@ export const routes = [
     handler: async (ctx, app) => {
       if (!app.markets) return { ok: true, enabled: false, note: MARKETS_OFF };
       if (!(await marketsPollingOn(app))) return pollingOff(app);
-      app.markets.touch();
-      return app.markets.view();
+      // ?tf=1m|5m|15m: the finer bars a short chart draws (anything else: the hourly series alone)
+      app.markets.touch(ctx.query.tf);
+      return app.markets.view(ctx.query.tf);
     },
   },
   // THE SPOT PRICE, for dollar figures on pages that are not Markets (the Mining tab's reward

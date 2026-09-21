@@ -324,13 +324,15 @@ Beyond the raw figures, it carries the reasoning the UI needs to be honest:
 
 The browser's CSP only allows connections to its own origin
 (`connect-src 'self'`), so exchange data is fetched by the server. The feed reads
-the public, unauthenticated REST endpoints of five exchanges: Coinbase, Kraken,
-Bitstamp, Bitfinex and OKX.
+the public, unauthenticated REST endpoints of six exchanges: Coinbase, Kraken,
+Bitstamp, Bitfinex, Gemini and OKX.
 
 - **Starts on demand.** `GET /api/markets` and `/api/markets/depth` call
   `touch()`. The first touch starts three timers:
   - tickers every `markets.tickerMs` (15 s)
   - hourly candles every `markets.candleMs` (5 min, the latest 168)
+  - finer candles (1, 5 or 15 minutes; the latest 120) only for a grain that a request has asked for with
+    `?tf=` in the last `markets.idleAfterMs`, each on its own cadence (20 s, 60 s, 2 min): the short charts
   - order books every `markets.bookMs` (30 s)
 - **Stops when idle.** Polling parks after `markets.idleAfterMs` (10 min) without
   a request. A monitor nobody is watching makes no exchange traffic.

@@ -50,12 +50,14 @@ function stubFeed(fail = new Set()) {
     if (e.id === 'kraken') replies.set(e.candleUrl, { error: [], result: { XXBTZUSD: cs.map((k) => [k.t / 1000, k.o, k.c + 5, k.o - 5, k.c, 0, 3, 1]), last: 1 } });
     if (e.id === 'bitstamp') replies.set(e.candleUrl, { data: { ohlc: cs.map((k) => ({ timestamp: String(k.t / 1000), open: k.o, high: k.c + 5, low: k.o - 5, close: k.c, volume: 4 })) } });
     if (e.id === 'bitfinex') replies.set(e.candleUrl, cs.map((k) => [k.t, k.o, k.c, k.c + 5, k.o - 5, 5]).reverse());
+    if (e.id === 'gemini') replies.set(e.candleUrl, cs.map((k) => [k.t, k.o, k.c + 5, k.o - 5, k.c, 7]).reverse());
     if (e.id === 'okx') replies.set(e.candleUrl, { code: '0', data: cs.map((k) => [String(k.t), k.o, k.c + 5, k.o - 5, k.c, 6]).reverse() });
   }
   replies.set(ex('coinbase').tickerUrl, { price: '77300', bid: '77299', ask: '77301', volume: '100' });
   replies.set(ex('kraken').tickerUrl, { error: [], result: { X: { a: ['77310'], b: ['77308'], c: ['77309'], v: ['1', '200'] } } });
   replies.set(ex('bitstamp').tickerUrl, { last: '77320', bid: '77319', ask: '77321', volume: '300' });
   replies.set(ex('bitfinex').tickerUrl, [77330, 1, 77331, 1, 0, 0, 77330, 400, 0, 0]);
+  replies.set(ex('gemini').tickerUrl, { bid: '77314.00', ask: '77316.00', last: '77315.00', volume: { BTC: '450.5', USD: '1', timestamp: 1 } });
   replies.set(ex('okx').tickerUrl, { code: '0', data: [{ last: '78300', bidPx: '78299', askPx: '78301', vol24h: '500' }] });
   const calls = [];
   const fetchImpl = async (url, init) => {
@@ -72,7 +74,8 @@ test('the feed: every exchange polled, figures derived, one failure reported wit
   const { feed, calls } = stubFeed(new Set(['bitfinex']));
   await feed.pollTickers();
   await feed.pollCandles();
-  assert.equal(calls.length, 10);
+  assert.equal(calls.length, 2 * EXCHANGES.length, 'a ticker and a candle request an exchange');
+  assert.equal(EXCHANGES.length, 6, 'Gemini since 2026-09-22 ("Don\'t forget to add gemini exchange")');
   assert.match(calls[0].init.headers['user-agent'], /BlockYard/);
   assert.ok(calls[0].init.signal, 'every request has a timeout');
   const v = feed.view();
@@ -85,9 +88,18 @@ test('the feed: every exchange polled, figures derived, one failure reported wit
   assert.equal(bf.error, 'HTTP 451');
   assert.equal(bf.last, null);
   assert.equal(bf.stale, true);
-  assert.equal(v.summary.reporting, 3, 'three USD books: the failing one and the USDT one are out');
-  assert.equal(v.summary.median, 77309);
+  assert.equal(v.summary.reporting, 4, 'four USD books: the failing one and the USDT one are out');
+  assert.equal(v.summary.median, (77309 + 77315) / 2, 'of 77300, 77309, 77315, 77320');
   assert.equal(v.summary.spread, 20);
+  // Gemini's own layouts: pubticker's volume is an object, its candles are [ms, o, h, l, c, v] newest first
+  const gm = v.exchanges.find((e) => e.id === 'gemini');
+  assert.deepEqual([gm.last, gm.bid, gm.ask, gm.vol24, gm.quote], [77315, 77314, 77316, 450.5, 'USD']);
+  assert.equal(gm.candles.length, 30);
+  assert.ok(gm.candles[0].t < gm.candles.at(-1).t && gm.candles.at(-1).h === gm.candles.at(-1).c + 5 && gm.candles.at(-1).v === 7, 'oldest first, high and volume in their places');
+  assert.throws(() => ex('gemini').parseCandles({ result: 'error', message: 'Supplied value is not valid' }), /Supplied value is not valid/, 'an error reply is an error, not an empty chart');
+  assert.match(ex('gemini').fineUrl(900, 120), /\/v2\/candles\/btcusd\/15m$/);
+  const gb = BOOKS.gemini.parse({ bids: [{ price: '77314.00', amount: '0.5', timestamp: '1' }], asks: [{ price: '77316.00', amount: '0.25', timestamp: '1' }] });
+  assert.deepEqual(gb, { bids: [[77314, 0.5]], asks: [[77316, 0.25]] });
 });
 
 test('the feed runs only while someone is looking', () => {
@@ -465,8 +477,8 @@ test('the kiosk price panel keeps the price and drops the 24 h book detail', asy
   await feed.pollCandles();
   const html = priceInfoHtml(feed.view(), fmt);
   // KEPT: the price itself, its day, and where the figure came from
-  assert.match(html, /<b class="kp-price">\$77,309\.00<\/b>/, 'the median of the fresh USD books');
-  assert.match(html, /median of 3 USD books/, 'and the provenance line');
+  assert.match(html, /<b class="kp-price">\$77,312\.00<\/b>/, 'the median of the fresh USD books (77300, 77309, 77315, 77320 -- four, with Gemini)');
+  assert.match(html, /median of 4 USD books/, 'and the provenance line');
   assert.doesNotMatch(html, /style="/);
   assert.match(priceInfoHtml(null, fmt), /asking the exchanges/);
   // DROPPED (operator, 2026-09-12: "swap out 24 hour order book spread and details, keep the
@@ -511,4 +523,82 @@ test('the 3D board keeps its price fit across refreshes while the data stays ins
   assert.ok(out.hi > 230, 'data that leaves the range re-fits');
   const shrunk = chart3d(mk(140, 160), { fit: { lo: first.lo, hi: first.hi } });
   assert.ok(shrunk.hi - shrunk.lo < (first.hi - first.lo) * 0.5, 'and data that shrinks well inside it re-fits too, so the chart does not stay zoomed out');
+});
+
+// ---- FINER BARS (operator, 2026-09-22: "bitcoinity.org/markets has 10m 1h 3h and 12h charts. Why don't we? ... Why
+// don't we fetch finer bars like bitcoinity does?")
+import { GRAINS, grainOf as serverGrain } from '../server/collect/markets.js';
+import { RANGES, barsOf, grainOf } from '../public/js/markets.js';
+
+test('the short ranges are finer bars: 1 h of 1 m, 3 h of 5 m, 12 h of 15 m -- about sixty each', () => {
+  assert.deepEqual(RANGES.map(([n]) => n), [1, 3, 12, 24, 48, 168]);
+  assert.deepEqual([1, 3, 12, 24, 168].map(grainOf), ['1m', '5m', '15m', null, null]);
+  assert.deepEqual(barsOf(1), { n: 60, sec: 60, grain: '1m' });
+  assert.deepEqual(barsOf(3), { n: 36, sec: 300, grain: '5m' });
+  assert.deepEqual(barsOf(12), { n: 48, sec: 900, grain: '15m' });
+  assert.deepEqual(barsOf(48), { n: 48, sec: 3600, grain: null });
+  for (const [n] of RANGES) assert.ok(barsOf(n).n <= 168 && (barsOf(n).grain ? barsOf(n).n <= MAX_3D_HOURS : true), 'a short chart fits the 3D board whole');
+  // every grain the page can ask for is one the server knows, and every exchange can serve it
+  for (const [n] of RANGES) if (grainOf(n)) assert.ok(GRAINS[grainOf(n)], grainOf(n));
+  for (const ex of EXCHANGES) for (const g of Object.values(GRAINS)) assert.match(ex.fineUrl(g.sec, g.keep), /^https:\/\//, `${ex.id} ${g.sec}`);
+  assert.equal(serverGrain('1m'), '1m'); assert.equal(serverGrain('2m'), null); assert.equal(serverGrain('__proto__'), null); assert.equal(serverGrain(undefined), null);
+  // each exchange's own spelling of five minutes
+  const url = (id) => EXCHANGES.find((e) => e.id === id).fineUrl(300, 120);
+  assert.match(url('coinbase'), /granularity=300$/); assert.match(url('kraken'), /interval=5$/); assert.match(url('bitstamp'), /step=300&limit=120$/);
+  assert.match(url('bitfinex'), /trade:5m:tBTCUSD\/hist\?limit=120$/); assert.match(url('okx'), /bar=5m&limit=120$/);
+});
+
+test('a finer grain is fetched ONLY while somebody asks for it, no oftener than its cadence, and says when it fails', async () => {
+  let T = 1_790_000_000_000;
+  const calls = [];
+  const bar = (t) => [t / 1000, 100, 110, 90, 105, 2];                   // (Kraken's layout: time s, o, h, l, c, vwap, volume)
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.includes('bitstamp')) return { ok: false, status: 503, json: async () => ({}) };
+    if (url.includes('interval=1')) return { ok: true, status: 200, json: async () => ({ error: [], result: { X: Array.from({ length: 200 }, (_, i) => { const r = bar(T - (199 - i) * 60_000); return [r[0], r[1], r[2], r[3], r[4], 0, r[5], 1]; }) } }) };
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+  const two = EXCHANGES.filter((e) => e.id === 'kraken' || e.id === 'bitstamp');
+  const feed = new MarketFeed({ idleAfterMs: 600_000 }, { fetchImpl, now: () => T, exchanges: two });
+  await feed.pollFine();
+  assert.equal(calls.length, 0, 'nobody asked: nothing is fetched');
+  assert.equal(feed.view().exchanges[0].bars, undefined, 'and a plain view carries no bars');
+  feed.fineWanted.set('1m', T);
+  await feed.pollFine();
+  assert.equal(calls.length, 2, 'one request an exchange, for the grain asked for and no other');
+  const v = feed.view('1m');
+  assert.equal(v.grain, '1m');
+  const k = v.exchanges.find((e) => e.id === 'kraken').bars, b = v.exchanges.find((e) => e.id === 'bitstamp').bars;
+  assert.equal(k.candles.length, GRAINS['1m'].keep, 'kept to what a chart can use');
+  assert.equal(k.candles.at(-1).t - k.candles.at(-2).t, 60_000);
+  assert.deepEqual([b.candles.length, b.error], [0, 'HTTP 503'], 'a failure is reported on that exchange, never hidden');
+  assert.ok(v.exchanges.every((e) => Array.isArray(e.candles)), 'the hourly series is still there: the 24 h figures are made from it');
+  T += 5_000; await feed.pollFine();
+  assert.equal(calls.length, 2, 'not again inside its cadence');
+  T += 20_000; await feed.pollFine();
+  assert.equal(calls.length, 4, 'and again once it is due');
+  T += 700_000; await feed.pollFine();
+  assert.equal(calls.length, 4, 'ten minutes after the last ask it is dropped');
+  assert.equal(feed.fineWanted.size, 0);
+  assert.equal(feed.view('bogus').grain, null, 'an unknown grain is the hourly view');
+});
+
+test('the chart series for a short range is made of the bars the reply carries, the live BAR at the ticker', () => {
+  const now = Date.UTC(2026, 8, 22, 18, 30, 20);
+  const bars = (sec) => Array.from({ length: 120 }, (_, i) => ({ t: Math.floor(now / (sec * 1000)) * sec * 1000 - (119 - i) * sec * 1000, o: 100, h: 110, l: 90, c: 105, v: 1 }));
+  const mk = (id, last, grain, sec) => ({ id, name: id, pair: 'BTC/USD', last, candles: bars(3600).slice(-48), bars: { grain, sec, candles: bars(sec) } });
+  const ser = chartSeries({ exchanges: [mk('a', 120, '1m', 60), mk('b', 80, '1m', 60)] }, 'a', 1, now);
+  assert.deepEqual([ser.candles.length, ser.sec, ser.grain], [60, 60, '1m']);
+  assert.equal(ser.candles.at(-1).t - ser.candles.at(-2).t, 60_000);
+  assert.equal(ser.candles.at(-1).c, 120, 'the live minute follows the ticker');
+  assert.equal(ser.overlays[0].candles.length, 60, 'overlays cover the same minutes');
+  // the reply still carries another grain (the range was just changed): nothing to draw yet, rather than the wrong bars
+  assert.equal(chartSeries({ exchanges: [mk('a', 120, '1m', 60)] }, 'a', 3, now), null);
+  // the 3D board takes them, labelled in minutes
+  const c3 = chart3d(ser, { zMax: 20 });
+  assert.equal(c3.hours, 60);
+  assert.ok(c3.axes.x.length >= 4 && c3.axes.x.every((q) => /^\d\d:\d0$/.test(q.label)), c3.axes.x.map((q) => q.label).join(' '));
+  // and the flat chart's ticks are round minutes
+  const ticks = timeTicks(ser.candles[0].t, ser.candles.at(-1).t, 900);
+  assert.ok(ticks.length >= 4 && ticks.every((q) => q.t % 300_000 === 0 && /^\d\d:\d\d$/.test(q.label)), ticks.map((q) => q.label).join(' '));
 });

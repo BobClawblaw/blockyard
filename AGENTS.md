@@ -525,6 +525,18 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   slides by its height only. Two fills a face (the room, a near-edge fall-off), on BOTH renderers. Now costs what the
   plain board does on GL (rest 3.9, live 8.1). NOT verified: Software in a real browser -- the harness's 2D canvas is
   CPU-rasterised and gradient faces read 70 ms there against 56 for the old quads.
+- **MARKETS HAS SHORT CHARTS** (2026-09-22; operator: "bitcoinity.org/markets has 10m 1h 3h and 12h charts. Why don't
+  we? ... Why don't we fetch finer bars like bitcoinity does?" -- there was no reason; hourly-only was the first day's
+  simplification). A range names its GRAIN: 1 h = 60 x 1 m, 3 h = 36 x 5 m, 12 h = 48 x 15 m (`RANGES`, `grainOf`,
+  `barsOf` in public/js/markets.js; `GRAINS`, `fineUrl`, `pollFine` in server/collect/markets.js). The page asks
+  `/api/markets?tf=<grain>`, the reply carries `bars` per exchange, and ONLY A GRAIN SOMEBODY ASKED FOR IN THE LAST TEN
+  MINUTES IS POLLED (20 s / 60 s / 2 min). The hourly series is always kept: the table's 24 h figures are made from it.
+  All five exchanges serve all three grains (probed live 2026-09-22: 120 bars each). `chartSeries` returns null while
+  the reply still carries another grain, and the note under the table says the chart is still the last range.
+  NOT DONE YET: the 10 m chart (needs bars built from each exchange's trades feed), Gemini (its candles and book
+  answer from here; CEX.IO's candle endpoint returns `[]` and its market is 0.35 BTC a day), a currency picker
+  (Coinbase, Kraken, Bitstamp and Gemini all list BTC/EUR). New exchanges are NEW OUTBOUND HOSTS: docs and the
+  Settings text name every host contacted.
 - **ON MARKETS, WHAT CROSSES THE BOARD STARTS AND ENDS BEYOND THE PANEL** (operator, 2026-09-22: "Never make an
   effect just blink in out of existence for the market board"). The Markets canvas is far wider than its chart (the
   chart is about the middle half), so "past the board's edge" is in plain view. Anything that travels measures the
@@ -705,7 +717,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1394 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1397 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1034,7 +1046,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1394 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1397 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

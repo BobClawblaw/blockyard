@@ -2,7 +2,7 @@
 // bitcoinity.org entirely"; asked where prices should come from: "Add exchange prices").
 //
 // THE ONE OUTBOUND CONNECTION THAT IS NOT THE NODE. Everything else in this monitor reads the
-// node's RPC; this module fetches the public, unauthenticated REST endpoints of five exchanges
+// node's RPC; this module fetches the public, unauthenticated REST endpoints of six exchanges
 // over HTTPS. It runs here, server-side, because the page's CSP lets the browser talk to this
 // origin only (connect-src 'self'). What leaves the machine: this host's address and a
 // User-Agent, sent to the hosts named below -- nothing about the node.
@@ -48,6 +48,7 @@ export const EXCHANGES = [
     tickerUrl: 'https://api.exchange.coinbase.com/products/BTC-USD/ticker',
     parseTicker: (j) => ({ last: num(j?.price), bid: num(j?.bid), ask: num(j?.ask), vol24: num(j?.volume) }),
     candleUrl: 'https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=3600',
+    fineUrl: (sec) => `https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=${sec}`,
     // [time s, low, high, open, close, volume], newest first
     parseCandles: (j) => tidy((Array.isArray(j) ? j : []).map((r) => candle(r[0] * 1000, r[3], r[2], r[1], r[4], r[5]))),
   },
@@ -56,6 +57,7 @@ export const EXCHANGES = [
     tickerUrl: 'https://api.kraken.com/0/public/Ticker?pair=XBTUSD',
     parseTicker: (j) => { const r = krakenResult(j); return { last: num(r?.c?.[0]), bid: num(r?.b?.[0]), ask: num(r?.a?.[0]), vol24: num(r?.v?.[1]) }; },
     candleUrl: 'https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=60',
+    fineUrl: (sec) => `https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=${sec / 60}`,
     // [time s, open, high, low, close, vwap, volume, count], oldest first
     parseCandles: (j) => tidy((krakenResult(j) ?? []).map((r) => candle(r[0] * 1000, r[1], r[2], r[3], r[4], r[6]))),
   },
@@ -64,6 +66,7 @@ export const EXCHANGES = [
     tickerUrl: 'https://www.bitstamp.net/api/v2/ticker/btcusd/',
     parseTicker: (j) => ({ last: num(j?.last), bid: num(j?.bid), ask: num(j?.ask), vol24: num(j?.volume) }),
     candleUrl: 'https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=3600&limit=168',
+    fineUrl: (sec, n) => `https://www.bitstamp.net/api/v2/ohlc/btcusd/?step=${sec}&limit=${n}`,
     parseCandles: (j) => tidy((j?.data?.ohlc ?? []).map((r) => candle(Number(r.timestamp) * 1000, r.open, r.high, r.low, r.close, r.volume))),
   },
   {
@@ -72,18 +75,47 @@ export const EXCHANGES = [
     // [BID, BID_SIZE, ASK, ASK_SIZE, DAILY_CHANGE, DAILY_CHANGE_RELATIVE, LAST_PRICE, VOLUME, HIGH, LOW]
     parseTicker: (j) => { const a = bitfinexRows(j); return { last: num(a[6]), bid: num(a[0]), ask: num(a[2]), vol24: num(a[7]) }; },
     candleUrl: 'https://api-pub.bitfinex.com/v2/candles/trade:1h:tBTCUSD/hist?limit=168',
+    fineUrl: (sec, n) => `https://api-pub.bitfinex.com/v2/candles/trade:${sec / 60}m:tBTCUSD/hist?limit=${n}`,
     // [MTS, OPEN, CLOSE, HIGH, LOW, VOLUME], newest first
     parseCandles: (j) => tidy(bitfinexRows(j).map((r) => candle(r[0], r[1], r[3], r[4], r[2], r[5]))),
+  },
+  // GEMINI (operator, 2026-09-22: "why don't we include prices from Gemini or cex.io", then "Don't forget to add gemini
+  // exchange"). Probed from this host the same day: v1 pubticker carries bid, ask, last and the 24 h BTC volume in
+  // one reply; v2 candles are [ms, o, h, l, c, v], newest first, at 1m/5m/15m/1hr (and lag -- the newest hourly bar
+  // was 1.7 h old -- so the live bar is the ticker's or nobody's); the whole book is about 300 KB.
+  // CEX.IO was probed too and left out: its candle endpoint answers [] and its market was 0.35 BTC in 24 hours.
+  {
+    id: 'gemini', name: 'Gemini', pair: 'BTC/USD', quote: 'USD',
+    tickerUrl: 'https://api.gemini.com/v1/pubticker/btcusd',
+    parseTicker: (j) => ({ last: num(j?.last), bid: num(j?.bid), ask: num(j?.ask), vol24: num(j?.volume?.BTC) }),
+    candleUrl: 'https://api.gemini.com/v2/candles/btcusd/1hr',
+    fineUrl: (sec) => `https://api.gemini.com/v2/candles/btcusd/${sec / 60}m`,
+    parseCandles: (j) => { if (!Array.isArray(j)) throw new Error(String(j?.message ?? j?.reason ?? 'not a candle list')); return tidy(j.map((r) => candle(r[0], r[1], r[2], r[3], r[4], r[5]))); },
   },
   {
     id: 'okx', name: 'OKX', pair: 'BTC-USDT', quote: 'USDT',
     tickerUrl: 'https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT',
     parseTicker: (j) => { const d = okxData(j)[0]; return { last: num(d?.last), bid: num(d?.bidPx), ask: num(d?.askPx), vol24: num(d?.vol24h) }; },
     candleUrl: 'https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=1H&limit=168',
+    fineUrl: (sec, n) => `https://www.okx.com/api/v5/market/candles?instId=BTC-USDT&bar=${sec / 60}m&limit=${n}`,
     // [ts ms, o, h, l, c, vol, volCcy, volCcyQuote, confirm], newest first
     parseCandles: (j) => tidy(okxData(j).map((r) => candle(r[0], r[1], r[2], r[3], r[4], r[5]))),
   },
 ];
+
+// FINER BARS (operator, 2026-09-22: "bitcoinity.org/markets has 10m 1h 3h and 12h charts. Why don't we? ... Why don't
+// we fetch finer bars like bitcoinity does?"). There was no reason: hourly candles were the first day's
+// simplification. Every exchange here serves 1-, 5- and 15-minute candles from the same endpoint as its hourly ones
+// (probed from this host 2026-09-22; each entry's `fineUrl`). A short chart is about sixty bars of the grain that
+// fits it -- 1 h of 1 m, 3 h of 5 m, 12 h of 15 m -- and ONLY THE GRAIN SOMEBODY IS LOOKING AT IS POLLED, on the same
+// on-demand rule as everything else in this file: asking for it is what keeps it coming, and it stops ten minutes
+// after the last ask. The hourly series is always kept: the 24 h figures in the table are made from it.
+export const GRAINS = Object.freeze({
+  '1m': Object.freeze({ sec: 60, keep: 120, everyMs: 20_000 }),
+  '5m': Object.freeze({ sec: 300, keep: 120, everyMs: 60_000 }),
+  '15m': Object.freeze({ sec: 900, keep: 120, everyMs: 120_000 }),
+});
+export const grainOf = (v) => (Object.hasOwn(GRAINS, String(v)) ? String(v) : null);
 
 // ORDER BOOKS (operator, 2026-09-11, with a picture of bitcoinity's depth chart: "we are totally
 // missing this view in the market info"). Each exchange's public book, as deep as it gives it
@@ -100,6 +132,8 @@ export const BOOKS = {
     url: 'https://api-pub.bitfinex.com/v2/book/tBTCUSD/P2?len=100',
     parse: (j) => { const r = bitfinexRows(j); return { bids: pairs(r.filter((x) => x[2] > 0).map((x) => [x[0], x[2]])), asks: pairs(r.filter((x) => x[2] < 0).map((x) => [x[0], -x[2]])) }; },
   },
+  // [{ price, amount, timestamp }]; limit 0 is the whole book
+  gemini: { url: 'https://api.gemini.com/v1/book/btcusd?limit_bids=0&limit_asks=0', parse: (j) => ({ bids: pairs((j?.bids ?? []).map((r) => [r.price, r.amount])), asks: pairs((j?.asks ?? []).map((r) => [r.price, r.amount])) }) },
   okx: { url: 'https://www.okx.com/api/v5/market/books-full?instId=BTC-USDT&sz=5000', parse: (j) => { const d = okxData(j)[0]; return { bids: pairs(d?.bids), asks: pairs(d?.asks) }; } },
 };
 
@@ -186,7 +220,9 @@ export class MarketFeed {
     this.fetch = fetchImpl;
     this.now = now;
     this.exchanges = exchanges;
-    this.rows = new Map(exchanges.map((ex) => [ex.id, { ticker: null, candles: [], candlesAt: null, tickerError: null, candleError: null }]));
+    this.rows = new Map(exchanges.map((ex) => [ex.id, { ticker: null, candles: [], candlesAt: null, tickerError: null, candleError: null, fine: {} }]));
+    this.fineWanted = new Map();    // grain -> when it was last asked for
+    this.fineAt = new Map();        // grain -> when it was last polled
     this.timers = null;
     this.lastTouch = 0;
     this.depthHist = [];          // an hour of depth snapshots, for the change bars
@@ -197,17 +233,25 @@ export class MarketFeed {
 
   // Someone is looking: poll now if we were parked, and keep polling until nobody has asked
   // for idleAfterMs.
-  touch() {
+  touch(grain = null) {
     this.lastTouch = this.now();
+    const g = grainOf(grain);
+    if (g) {
+      const fresh = !this.fineWanted.has(g) || this.now() - this.fineWanted.get(g) > this.cfg.idleAfterMs;
+      this.fineWanted.set(g, this.now());
+      if (fresh && this.timers) this.pollFine().catch(() => {});      // a timeframe just chosen: do not make it wait for the next tick
+    }
     if (this.timers) return;
     this.log({ level: 'info', msg: `markets: polling ${this.exchanges.length} exchanges while the Markets tab is open` });
     const run = (fn) => { fn().catch(() => {}); };
     run(() => this.pollTickers());
     run(() => this.pollCandles());
     run(() => this.pollBooks());
+    run(() => this.pollFine());
     const t1 = setInterval(() => {
       if (this.idle()) { this.stop(); this.log({ level: 'info', msg: 'markets: nobody watching; exchange polling parked' }); return; }
       run(() => this.pollTickers());
+      run(() => this.pollFine());             // (it fetches only a grain that is wanted AND due: most ticks it does nothing)
     }, this.cfg.tickerMs);
     const t2 = setInterval(() => run(() => this.pollCandles()), this.cfg.candleMs);
     const t3 = setInterval(() => run(() => this.pollBooks()), this.cfg.bookMs);
@@ -254,6 +298,33 @@ export class MarketFeed {
       } catch (err) {
         row.candleError = { message: String(err?.message ?? err), at: this.now() };
       }
+    }));
+  }
+
+  // The finer grains: each one only while it has been asked for within idleAfterMs, and no oftener than its own
+  // cadence (a one-minute bar is worth re-reading every 20 s, a fifteen-minute one every two minutes).
+  async pollFine() {
+    const now = this.now();
+    const due = [];
+    for (const [g, asked] of this.fineWanted) {
+      if (now - asked > this.cfg.idleAfterMs) { this.fineWanted.delete(g); continue; }
+      if (now - (this.fineAt.get(g) ?? -Infinity) >= GRAINS[g].everyMs - 1000) due.push(g);
+    }
+    await Promise.all(due.map(async (g) => {
+      this.fineAt.set(g, now);
+      const { sec, keep } = GRAINS[g];
+      await Promise.all(this.exchanges.map(async (ex) => {
+        const row = this.rows.get(ex.id);
+        const slot = (row.fine[g] ??= { candles: [], at: null, error: null });
+        if (typeof ex.fineUrl !== 'function') { slot.error = { message: 'this exchange has no finer candles here', at: this.now() }; return; }
+        try {
+          const c = ex.parseCandles(await this.get(ex.fineUrl(sec, keep))).slice(-keep);
+          if (!c.length) throw new Error('no candles in the reply');
+          slot.candles = c; slot.at = this.now(); slot.error = null;
+        } catch (err) {
+          slot.error = { message: String(err?.message ?? err), at: this.now() };
+        }
+      }));
     }));
   }
 
@@ -360,8 +431,9 @@ export class MarketFeed {
     return this.spotBusy;
   }
 
-  view() {
+  view(grain = null) {
     const now = this.now();
+    const g = grainOf(grain);
     const day = now - 24 * 3600e3;
     const exchanges = this.exchanges.map((ex) => {
       const r = this.rows.get(ex.id);
@@ -384,11 +456,13 @@ export class MarketFeed {
         stale: !t || now - t.at > 3 * this.cfg.tickerMs,
         error: r.tickerError?.message ?? r.candleError?.message ?? null,
         candles: r.candles, candlesAt: r.candlesAt,
+        // the finer bars, when a short chart asked for them (stale ones keep their age; an error is reported, never hidden)
+        ...(g ? { bars: { grain: g, sec: GRAINS[g].sec, candles: r.fine[g]?.candles ?? [], at: r.fine[g]?.at ?? null, error: r.fine[g]?.error?.message ?? null } } : {}),
       };
     });
     const usd = exchanges.filter((e) => e.quote === 'USD' && e.last != null && !e.stale).map((e) => e.last).sort((a, b) => a - b);
     return {
-      ok: true, enabled: true, at: now, running: this.running, interval: '1h', tickerMs: this.cfg.tickerMs,
+      ok: true, enabled: true, at: now, running: this.running, interval: '1h', grain: g, grains: Object.keys(GRAINS), tickerMs: this.cfg.tickerMs,
       warming: exchanges.every((e) => e.last == null),
       summary: {
         median: median(usd),

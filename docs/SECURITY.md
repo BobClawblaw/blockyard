@@ -180,7 +180,7 @@ Everything in the monitor talks only to your node, **except**:
 
 | when | to | what is sent |
 |---|---|---|
-| only with **Enable market polling** ticked in Display settings (**off by default**), while someone has the **Markets**, **Kiosk** or **Overview** tab open — Overview's price line reads the same feed unless you switch it off — and for 10 minutes after the last request | `api.exchange.coinbase.com`, `api.kraken.com`, `www.bitstamp.net`, `api-pub.bitfinex.com`, `www.okx.com` (HTTPS) | public ticker, hourly candle and order-book requests with a `User-Agent` naming the software — nothing about your node |
+| only with **Enable market polling** ticked in Display settings (**off by default**), while someone has the **Markets**, **Kiosk** or **Overview** tab open — Overview's price line reads the same feed unless you switch it off — and for 10 minutes after the last request | `api.exchange.coinbase.com`, `api.kraken.com`, `www.bitstamp.net`, `api-pub.bitfinex.com`, `api.gemini.com`, `www.okx.com` (HTTPS) | public ticker, candle and order-book requests with a `User-Agent` naming the software — nothing about your node |
 | with polling on, when someone opens an **explorer** page or the **Mining** tab and no fresh market price is at hand | two of the exchanges above, at most once a minute | a public ticker request |
 
 **Out of the box none of this happens**: polling is off until someone ticks **Display settings → Markets & Price → Enable market polling**, and until then the

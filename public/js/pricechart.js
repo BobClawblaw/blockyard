@@ -6,7 +6,7 @@
 import { niceTicks } from './charts.js';
 import { INK } from './theme.js';   // the axis, grid and tooltip colours of the chosen theme
 
-export const EX_COLORS = { coinbase: '#4c8dff', kraken: '#a78bfa', bitstamp: '#2ecc8f', bitfinex: '#4dd0e1', okx: '#f0b429' };
+export const EX_COLORS = { coinbase: '#4c8dff', kraken: '#a78bfa', bitstamp: '#2ecc8f', bitfinex: '#4dd0e1', gemini: '#f472b6', okx: '#f0b429' };
 const UP = '#26c281', DOWN = '#ef5350';
 const UP_V = 'rgba(38,194,129,0.42)', DOWN_V = 'rgba(239,83,80,0.42)';
 const PAD = { top: 28, right: 78, bottom: 22, left: 10 };
@@ -43,14 +43,15 @@ export function layoutChart(candles, overlays, w, h) {
   return { n, plotW, plotH, priceH, volH, lo, hi, slot, t0, t1, step, X, XT, Y, V, VY0, VH, index, w, h };
 }
 
-// Whole UTC hours, as far apart as the width can label (~80 px); midnight carries the date.
+// Round UTC times, as far apart as the width can label (~80 px); midnight carries the date.
 export function timeTicks(t0, t1, plotW) {
   const span = Math.max(H1, t1 - t0);
-  const step = [1, 2, 3, 6, 12, 24, 48, 96].map((x) => x * H1).find((s) => plotW / (span / s) >= 80) ?? 96 * H1;
+  // (minutes too, since 2026-09-22: a 1 h chart of one-minute bars has no whole hour to label but its ends)
+  const step = [5 / 60, 10 / 60, 15 / 60, 0.5, 1, 2, 3, 6, 12, 24, 48, 96].map((x) => x * H1).find((s) => plotW / (span / s) >= 80) ?? 96 * H1;
   const out = [];
   for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) {
-    const d = new Date(t);
-    out.push({ t, label: d.getUTCHours() === 0 ? `${MON[d.getUTCMonth()]} ${d.getUTCDate()}` : `${String(d.getUTCHours()).padStart(2, '0')}:00` });
+    const d = new Date(t), hh = String(d.getUTCHours()).padStart(2, '0'), mm = String(d.getUTCMinutes()).padStart(2, '0');
+    out.push({ t, label: d.getUTCHours() === 0 && d.getUTCMinutes() === 0 ? `${MON[d.getUTCMonth()]} ${d.getUTCDate()}` : `${hh}:${mm}` });
   }
   return out;
 }

@@ -437,7 +437,7 @@ Core supports.
 
 ## Markets
 
-The BTC/USD price from five exchanges' public APIs. **Polling is off by default**: out of
+The BTC/USD price from six exchanges' public APIs. **Polling is off by default**: out of
 the box the monitor makes no outbound connection but to your node, and Markets and Kiosk say
 so. Tick **Display settings → Markets & Price → Enable market polling** — one switch for
 every screen of this monitor, no restart needed. With it on, the server fetches market data
@@ -450,7 +450,9 @@ Markets or Kiosk, the monitor makes no exchange requests at all.
 
 ### The price chart
 
-The price panel draws the selected exchange's **hourly candles** in one of two views,
+The price panel draws the selected exchange's candles — **hourly** for the 24 h, 48 h and 7 d
+ranges, and **1-, 5- and 15-minute bars** for the 1 h, 3 h and 12 h ranges (about sixty bars each,
+fetched only while a chart that short is open) — in one of two views,
 chosen with the **2D / 3D** buttons in the toolbar and remembered (**Display settings →
 Markets & Price → Price view**). **2D**, the default, is the flat candlestick chart
 described below. **3D** draws the same hours on the same 3D engine as Block space, from a
@@ -473,7 +475,7 @@ range.
 
 ### Controls and summary
 
-- **Exchange buttons**: Coinbase, Kraken, Bitstamp, Bitfinex, OKX. Only exchanges
+- **Exchange buttons**: Coinbase, Kraken, Bitstamp, Bitfinex, Gemini, OKX. Only exchanges
   with candle data are listed. The selected exchange provides the candles, and the
   others appear on the flat chart as lines.
 - **Range**: **24 h**, **48 h** or **7 d**.
@@ -1471,7 +1473,7 @@ way the page opens where you left it.
 
 | setting | what it does |
 |---|---|
-| **Enable market polling** | **Off by default.** Lets the server ask five exchanges for prices, candles and order books — the only thing the monitor ever says to anyone but your node. Until it is on, Markets and Kiosk say so and the explorer shows no dollar figures. Shared by every screen; takes effect at once, and unticking parks the feed at once. (`BLOCKYARD_MARKETS=0` on the server removes the feed so that this box cannot turn it on.) |
+| **Enable market polling** | **Off by default.** Lets the server ask six exchanges for prices, candles and order books — the only thing the monitor ever says to anyone but your node. Until it is on, Markets and Kiosk say so and the explorer shows no dollar figures. Shared by every screen; takes effect at once, and unticking parks the feed at once. (`BLOCKYARD_MARKETS=0` on the server removes the feed so that this box cannot turn it on.) |
 | **Price line on Overview** | The USD median, spread, 24 h volume and how many books reported, at the top of Overview. It needs market polling (above); with that on, this monitor then contacts five exchanges whenever Overview is open, not only on Markets and Kiosk. Switch it off and the landing page talks to nothing but your node. |
 | **Price view** | Which price panel Markets draws: the *flat chart* (default) or the *3D candle board*. One at a time; the 2D / 3D buttons on the page set the same thing. |
 

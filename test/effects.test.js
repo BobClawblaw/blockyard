@@ -183,6 +183,8 @@ test('with every effect switched off the board never schedules one, and it still
   }
 });
 
+import { RANGES as MARKET_RANGES } from '../public/js/markets.js';
+
 test('markets remembers its toolbar: the exchange and the range are settings with controls', () => {
   // (operator, 2026-09-12: "We need to remember the user settings for the Markets page")
   assert.equal(DEFAULTS.markets.exchange, 'coinbase');
@@ -190,7 +192,9 @@ test('markets remembers its toolbar: the exchange and the range are settings wit
   const rows = PANEL.find((g) => g.group === 'markets')?.rows ?? [];
   const ex = rows.find((r) => r.key === 'exchange'), range = rows.find((r) => r.key === 'range');
   assert.ok(ex?.options.some(([v]) => v === 'kraken') && ex.options.length >= 2, 'the exchanges are offered');
-  assert.deepEqual(range?.options.map(([v]) => v), ['24', '48', '168'], 'and the ranges the toolbar offers');
+  // (1, 3 and 12 since 2026-09-22: the short charts, made of finer bars -- markets.js RANGES, held equal below)
+  assert.deepEqual(range?.options.map(([v]) => v), ['1', '3', '12', '24', '48', '168'], 'and the ranges the toolbar offers');
+  assert.deepEqual(range.options.map(([v]) => Number(v)), MARKET_RANGES.map(([n]) => n), 'the same list as the toolbar\'s own');
   const src = readFileSync(new URL('../public/js/markets.js', import.meta.url), 'utf8');
   assert.match(src, /setSetting\(loadSettings\(\), 'markets\.exchange'/, 'a click on an exchange is persisted');
   assert.match(src, /setSetting\(loadSettings\(\), 'markets\.range'/, 'and a click on a range');

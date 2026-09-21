@@ -366,8 +366,9 @@ only produce the startup line `administrative suite: NOT IN THIS BUILD`.
 
 ### markets
 
-The Markets tab fetches public BTC/USD prices, hourly candles and order books from
-five exchanges over HTTPS: Coinbase, Kraken, Bitstamp, Bitfinex and OKX (OKX quotes
+The Markets tab fetches public BTC/USD prices, candles (hourly, and 1-, 5- and 15-minute bars while a
+short chart is open) and order books from
+six exchanges over HTTPS: Coinbase, Kraken, Bitstamp, Bitfinex, Gemini and OKX (OKX quotes
 BTC/USDT). The fetches run on the server, not in the browser. This is BlockYard's
 only outbound connection other than the node, and **polling is off by default**: a fresh
 install makes no request to anyone but the node until someone ticks **Display settings → Markets & Price → Enable market polling** in the browser (a Display

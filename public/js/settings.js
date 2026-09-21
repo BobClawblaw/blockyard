@@ -651,7 +651,7 @@ const PANEL_GROUPS = Object.freeze([
     rows: Object.freeze([
       Object.freeze({
         key: 'polling', label: 'Enable market polling', kind: 'toggle',
-        hint: 'Let the server ask five exchanges (Coinbase, Kraken, Bitstamp, Bitfinex, OKX) for prices, candles and order books. '
+        hint: 'Let the server ask six exchanges (Coinbase, Kraken, Bitstamp, Bitfinex, Gemini, OKX) for prices, candles and order books. '
           + 'Off out of the box: this is the only thing the monitor ever says to anyone but your node, and until it is on, '
           + 'Markets and Kiosk say so and the explorer shows no dollar figures. On, the server asks only while someone is looking, '
           + 'and stops ten minutes after the last look. Shared by every screen of this monitor',
@@ -669,11 +669,11 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'effects', label: 'Board effects', kind: 'toggle', hint: 'The idle effects while the board rests (which of them is the Market effects tab) and the flight when the candles refresh. Off draws the board and leaves it alone' }),
       Object.freeze({
         key: 'exchange', label: 'Exchange', kind: 'choice', hint: 'Whose candles the chart and the 3D board draw. The others stay as overlay lines',
-        options: Object.freeze([['coinbase', 'Coinbase'], ['kraken', 'Kraken'], ['bitstamp', 'Bitstamp'], ['bitfinex', 'Bitfinex'], ['okx', 'OKX']]),
+        options: Object.freeze([['coinbase', 'Coinbase'], ['kraken', 'Kraken'], ['bitstamp', 'Bitstamp'], ['bitfinex', 'Bitfinex'], ['gemini', 'Gemini'], ['okx', 'OKX']]),
       }),
       Object.freeze({
         key: 'range', label: 'Range', kind: 'choice', hint: 'How many hours the chart covers when the page opens',
-        options: Object.freeze([['24', '24 hours'], ['48', '48 hours'], ['168', '7 days']]),
+        options: Object.freeze([['1', '1 hour'], ['3', '3 hours'], ['12', '12 hours'], ['24', '24 hours'], ['48', '48 hours'], ['168', '7 days']]),
       }),
       Object.freeze({
         key: 'priceView', label: 'Price view', kind: 'choice', hint: 'Which one the Markets page draws. Only one at a time — they show the same hours, and two tall panels of it filled the screen',

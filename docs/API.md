@@ -1050,7 +1050,7 @@ To poll incrementally, keep `maxSeq` and pass it back as `since`. The filters ar
 
 ## 12. Markets
 
-Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex and OKX. **This is the only outbound connection BlockYard makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
+Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfinex, Gemini and OKX. **This is the only outbound connection BlockYard makes that is not to the node.** It runs server-side, because the page's CSP allows `connect-src 'self'` only.
 
 - **Off by default.** Polling runs only while the Display setting **Markets & Price → Enable market polling** is on (`markets.polling` in the shared settings file, read per request). With it off, both endpoints answer `{ "ok": true, "enabled": false, "polling": false, "note": "market polling is off ..." }`, the call parks the feed, and the monitor makes no outbound connection but to the node.
 - `BLOCKYARD_MARKETS=0` (or `markets.enabled=false`) removes the feed altogether; both endpoints then answer `{ "ok": true, "enabled": false, "note": "market data is off on this server ..." }` whatever the setting.
@@ -1058,6 +1058,12 @@ Exchange prices from the public REST APIs of Coinbase, Kraken, Bitstamp, Bitfine
 - An exchange that fails keeps its last data and reports `error`. It is never dropped or zero-filled.
 
 ### `GET /api/markets`
+
+Optional `?tf=1m|5m|15m`: also fetch and return that grain's candles (the latest 120) as `bars` on every
+exchange -- `{ grain, sec, candles, at, error }` -- which is what the 1 h, 3 h and 12 h charts draw. Asking is what
+keeps a grain being fetched; it is dropped ten minutes after the last ask. The first reply after a grain is first
+asked for may carry empty `bars` (they are fetched after the ask). Any other value is the hourly view alone. The
+reply's `grain` says which was honoured, and `grains` lists what may be asked for.
 
 ```json
 {

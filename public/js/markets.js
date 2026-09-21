@@ -24,7 +24,19 @@ import { INK } from './theme.js';
 import { renderDepth } from './depthchart.js';
 
 export const REFRESH_MS = 15_000;
-export const RANGES = [[24, '24 h'], [48, '48 h'], [168, '7 d']];
+export const RANGES = [[1, '1 h'], [3, '3 h'], [12, '12 h'], [24, '24 h'], [48, '48 h'], [168, '7 d']];
+// THE SHORT CHARTS ARE FINER BARS, NOT FEWER HOURS (operator, 2026-09-22: "bitcoinity.org/markets has 10m 1h 3h and 12h
+// charts. Why don't we?"). An hour of hourly candles is one candle. So a range names its GRAIN -- 1 h of 1-minute
+// bars, 3 h of 5-minute, 12 h of 15-minute: about sixty bars each, which is what both views draw well -- and the
+// page asks the server for that grain (/api/markets?tf=), which is also what keeps the server fetching it.
+// 24 h and up stay hourly.
+export const grainOf = (range) => (range <= 1 ? '1m' : range <= 3 ? '5m' : range <= 12 ? '15m' : null);
+const GRAIN_SEC = { '1m': 60, '5m': 300, '15m': 900 };
+/** How many bars a range is, and how long each is: { n, sec, grain }. Pure. */
+export function barsOf(range) {
+  const grain = grainOf(range), sec = grain ? GRAIN_SEC[grain] : 3600;
+  return { n: Math.max(1, Math.round((range * 3600) / sec)), sec, grain };
+}
 // 72, AND THE 168 EXPERIMENT IS WHY (2026-09-12). The original note here read "168 towers on the
 // board is a comb, not a chart". The operator chose to overrule it -- the 7 d button said seven
 // days and the board drew three, undisclosed -- so the cap went to 168 and the result was worse
@@ -159,12 +171,22 @@ export function chart3d(ser, { hours = MAX_3D_HOURS, zMax = C3.zMax, fit = null 
   const last = cs.at(-1);
   const z = niceTicks(lo, hi, 6).filter((v) => v >= lo && v <= hi).map((v) => ({ z: r2(Z(v)), label: money(v, 0) }));
   z.push({ z: r2(Z(last.c)), label: money(last.c), color: last.c >= last.o ? UP : DOWN, strong: true });
-  const every = cs.length > 48 ? 12 : 6;
   const x = [];
-  cs.forEach((k, i) => {
-    const d = new Date(k.t);
-    if (d.getUTCHours() % every === 0) x.push({ x: i * C3.slot + C3.slot / 2, label: d.getUTCHours() === 0 ? `${MON[d.getUTCMonth()]} ${d.getUTCDate()}` : `${String(d.getUTCHours()).padStart(2, '0')}:00` });
-  });
+  const sec = ser.sec ?? 3600;
+  if (sec >= 3600) {
+    const every = cs.length > 48 ? 12 : 6;
+    cs.forEach((k, i) => {
+      const d = new Date(k.t);
+      if (d.getUTCHours() % every === 0) x.push({ x: i * C3.slot + C3.slot / 2, label: d.getUTCHours() === 0 ? `${MON[d.getUTCMonth()]} ${d.getUTCDate()}` : `${String(d.getUTCHours()).padStart(2, '0')}:00` });
+    });
+  } else {
+    // minutes: a label every ten bars or so, on a round minute (1 m bars: every 10 min; 5 m: every 30; 15 m: every 2 h)
+    const stepMin = sec === 60 ? 10 : sec === 300 ? 30 : 120;
+    cs.forEach((k, i) => {
+      const d = new Date(k.t), m = d.getUTCHours() * 60 + d.getUTCMinutes();
+      if (m % stepMin === 0) x.push({ x: i * C3.slot + C3.slot / 2, label: `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` });
+    });
+  }
   // the neon line: each hour's close, at the centre of its candle
   const line = cs.map((k, i) => ({ x: i * C3.slot + C3.slot / 2, z: r2(Z(k.c)) }));
   return { tiles, gridW: cs.length * C3.slot, gridH: C3.depth, lo, hi, zMax, hours: cs.length, axes: { y: C3.row + C3.body / 2, zTop: C3.zBase + zMax, z, x, line } };
@@ -208,7 +230,7 @@ export function tableHtml(d, fmt, now = Date.now()) {
 
 export function toolbarHtml(d) {
   prefs();
-  const exs = (d?.exchanges ?? []).filter((e) => e.candles?.length);
+  const exs = (d?.exchanges ?? []).filter((e) => e.candles?.length || e.bars?.candles?.length);
   const b = (attr, v, label, on) => `<button type="button" class="mkbtn${on ? ' on' : ''}" ${attr}="${v}">${label}</button>`;
   return `<div class="mkgrp">${exs.map((e) => b('data-mkex', e.id, `<i class="mkdot" data-ex="${e.id}"></i>${e.name}`, e.id === M.ex)).join('')}</div>
     <div class="mkgrp">${RANGES.map(([n, l]) => b('data-mkrange', n, l, n === M.range)).join('')}</div>
@@ -217,19 +239,23 @@ export function toolbarHtml(d) {
 
 // The selected exchange's candles (the live hour closing at its ticker), the rest as lines.
 export function chartSeries(d, ex, range, now = Date.now()) {
-  const withC = (d?.exchanges ?? []).filter((e) => e.candles?.length);
+  // (a short range draws the finer bars the reply carries for it -- e.bars, when its grain is the range's; until they
+  // arrive there is nothing to draw, and the page says so rather than drawing one hourly candle)
+  const { n, sec, grain } = barsOf(range);
+  const of = (e) => (grain ? (e.bars?.grain === grain ? e.bars.candles : []) : e.candles) ?? [];
+  const withC = (d?.exchanges ?? []).filter((e) => of(e).length);
   const base = withC.find((e) => e.id === ex) ?? withC[0];
   if (!base) return null;
-  const candles = base.candles.slice(-range).map((k) => ({ ...k }));
+  const candles = of(base).slice(-n).map((k) => ({ ...k }));
   const live = candles.at(-1);
-  if (live && base.last != null && now - live.t < 3600e3) {
+  if (live && base.last != null && now - live.t < sec * 1000) {
     live.c = base.last;
     live.h = Math.max(live.h ?? base.last, base.last);
     live.l = Math.min(live.l ?? base.last, base.last);
   }
   const t0 = candles[0]?.t ?? 0;
-  const overlays = withC.filter((e) => e !== base).map((e) => ({ name: e.name, color: EX_COLORS[e.id] ?? '#8aa0b4', candles: e.candles.filter((k) => k.t >= t0) }));
-  return { base, candles, overlays };
+  const overlays = withC.filter((e) => e !== base).map((e) => ({ name: e.name, color: EX_COLORS[e.id] ?? '#8aa0b4', candles: of(e).filter((k) => k.t >= t0) }));
+  return { base, candles, overlays, sec, grain };
 }
 
 function drawChart() {
@@ -281,7 +307,7 @@ function bindChart() {
     const btn = e.target.closest('button');
     if (!btn) return;
     if (btn.dataset.mkex) setSetting(loadSettings(), 'markets.exchange', (M.ex = btn.dataset.mkex));
-    if (btn.dataset.mkrange) setSetting(loadSettings(), 'markets.range', String((M.range = Number(btn.dataset.mkrange))));
+    if (btn.dataset.mkrange) { setSetting(loadSettings(), 'markets.range', String((M.range = Number(btn.dataset.mkrange)))); M.at = 0; M.refetch?.(); }   // (another grain: ask for it now, not at the next refresh)
     if (btn.dataset.mkview) setSetting(loadSettings(), 'markets.priceView', (M.view = btn.dataset.mkview));
     const html = toolbarHtml(M.data);
     bar.innerHTML = html; bar.__html = html;
@@ -292,11 +318,14 @@ function bindChart() {
 }
 
 function fetchMarkets(h, now) {
-  const wait = M.data?.warming || !M.data ? 3000 : REFRESH_MS;
+  const tf = grainOf(prefs().range);
+  // (a short range just chosen: its bars are fetched by the server AFTER the first ask, so ask again soon)
+  const barsDue = !!tf && !(M.data?.exchanges ?? []).some((e) => e.bars?.grain === tf && e.bars.candles?.length);
+  const wait = M.data?.warming || !M.data ? 3000 : barsDue ? 1500 : REFRESH_MS;
   if (M.busy || now - M.at < wait) return;
   M.busy = true;
   M.at = now;
-  h.api('/api/markets')
+  h.api(tf ? `/api/markets?tf=${tf}` : '/api/markets')
     .then((d) => { M.data = d; M.error = null; })
     .catch((err) => { M.error = err.message; })
     .finally(() => { M.busy = false; h.render(); });
@@ -358,6 +387,7 @@ export function renderMarketsBoard(id, h) {
 
 export function renderMarkets(s, state, h) {
   const now = Date.now();
+  M.refetch = () => fetchMarkets(h, Date.now());
   fetchMarkets(h, now);
   const put = (id, html) => { const el = document.getElementById(id); if (el && el.__html !== html) { el.innerHTML = html; el.__html = html; } };
   const d = M.data;
@@ -391,5 +421,13 @@ export function renderMarkets(s, state, h) {
   const capNote = capped
     ? ` The 3D board draws the most recent ${MAX_3D_HOURS} hours of the ${M.range} you picked — the price band is solved from the panel's shape, and a wider board stops describing the prices. The flat chart draws the whole range.`
     : '';
-  put('mkNote', `Public REST APIs of ${d.exchanges.map((e) => h.fmt.esc(e.name)).join(', ')}, fetched by this server every ${Math.round((d.tickerMs ?? REFRESH_MS) / 1000)} s while this tab is open and never otherwise. OKX quotes USDT, so it is left out of the USD median and spread.${capNote}${d.warming ? ' Warming up…' : ''}`);
+  // THE SHORT RANGES SAY WHAT THEY ARE MADE OF, and say so while their bars are still on the way (the last picture
+  // stays up meanwhile -- a chart never erases itself -- so it must not pass for the range just chosen)
+  const bo = barsOf(M.range);
+  const have = bo.grain && d.exchanges.some((e) => e.bars?.grain === bo.grain && e.bars.candles?.length);
+  const failed = bo.grain ? d.exchanges.filter((e) => e.bars?.grain === bo.grain && e.bars.error).map((e) => `${h.fmt.esc(e.name)}: ${h.fmt.esc(e.bars.error)}`) : [];
+  const grainNote = !bo.grain ? '' : have
+    ? ` The ${M.range} h chart is ${bo.n} bars of ${bo.sec / 60} minute${bo.sec > 60 ? 's' : ''}, fetched only while a chart this short is open.${failed.length ? ` No finer bars from ${failed.join('; ')}.` : ''}`
+    : ` <b>Asking the exchanges for ${bo.sec / 60}-minute bars… the chart above is still the last range.</b>${failed.length ? ` ${failed.join('; ')}.` : ''}`;
+  put('mkNote', `${grainNote ? `${grainNote.trim()} ` : ''}Public REST APIs of ${d.exchanges.map((e) => h.fmt.esc(e.name)).join(', ')}, fetched by this server every ${Math.round((d.tickerMs ?? REFRESH_MS) / 1000)} s while this tab is open and never otherwise. OKX quotes USDT, so it is left out of the USD median and spread.${capNote}${d.warming ? ' Warming up…' : ''}`);
 }

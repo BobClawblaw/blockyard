@@ -261,7 +261,7 @@ function draw() {
 
 /**
  * ONE FETCH, HOWEVER MANY VIEWS. The Markets tab and the Kiosk both want the books; this is the
- * shared poll, so opening both does not double the traffic to five exchanges. The server's route
+ * shared poll, so opening both does not double the traffic to six exchanges. The server's route
  * calls markets.touch(), so a Kiosk polling on its own keeps the collector out of its idle park --
  * a wall display needs no special handling.
  */

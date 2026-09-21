@@ -43,6 +43,9 @@ All notable changes to this project are documented here. The format follows
   lightning** throws real bolts on both boards -- channels that hold their shape, fork and re-strike -- crackles with
   held tendrils, carries sparks in orbit, and on Markets flies in from beyond the screen's edge and out past the other.
   The grid-tracing ball is the **Plasma ball** now and throws none.
+- **Markets: 1 h, 3 h and 12 h charts**, made of 1-, 5- and 15-minute candles (about sixty bars each) from the same
+  five exchanges, on both the flat chart and the 3D board, with minute labels on the time axis. The server fetches a
+  finer grain only while a chart that short is open (`/api/markets?tf=`), and stops ten minutes after the last ask.
 - **The block finishes on WebGL**: **Chrome** is new -- a room's strip lights in polished steel, soft bands running
   across the whole board, on both renderers -- and costs what a plain board does (it was twice that); **Satin** is
   rebuilt as brushed metal (a sheen across every face, machined bevels, a brushed grain on WebGL); **Neon** is one

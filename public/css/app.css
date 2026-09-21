@@ -1543,6 +1543,7 @@ table.peertbl td { padding: 2px 7px; }
 .mkdot[data-ex="kraken"] { background: #a78bfa; }
 .mkdot[data-ex="bitstamp"] { background: #2ecc8f; }
 .mkdot[data-ex="bitfinex"] { background: #4dd0e1; }
+.mkdot[data-ex="gemini"] { background: #f472b6; }
 .mkdot[data-ex="okx"] { background: #f0b429; }
 canvas.mkchart { width: 100%; height: min(54vh, 480px); min-height: 300px; display: block; background: var(--bg-0);   /* the theme's well (2026-09-16): the flat chart and the depth chart draw their ink for the theme, so their ground follows too */ border: 1px solid var(--line-soft); border-radius: var(--radius-sm); cursor: crosshair; }
 .mksub { margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .05em; }
