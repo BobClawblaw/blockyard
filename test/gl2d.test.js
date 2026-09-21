@@ -458,6 +458,24 @@ test('particles live on the card: stepped by transform feedback, drawn instanced
   assert.ok(draws(bad).length >= 1, 'and the context still draws');
 });
 
+test('the glow: only what is MARKED throws light, and a crowd of lamps keeps its colours', () => {
+  const src = readFileSync(new URL('../public/js/gl2d.js', import.meta.url), 'utf8');
+  // no brightness rule: a cloud of the Earth sky is near-white and is not a lamp (it blew out)
+  assert.match(src, /oE = vec4\(o\.rgb \* e, o\.a\);/);
+  assert.ok(!/smoothstep\(0\.80, 0\.95, min\(o\.r/.test(src), 'the near-white rule is gone');
+  // bounded on its brightest channel, then screened on: a neon board summed past white when it was added
+  assert.match(src, /glow \/= \(1\.0 \+ 1\.6 \* max\(glow\.r, max\(glow\.g, glow\.b\)\)\);/);
+  assert.match(src, /c\.rgb \+ glow \* \(1\.0 - clamp\(c\.rgb, 0\.0, 1\.0\)\)/);
+  // and the ground's fills are surfaces, its lines lamps (details3d drawGround)
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(d3, /ctx\.emissive = !l\.fill;/);
+  // the flag reaches the vertex: 2 in the disc word when on, 0 when off
+  const gl = stubGl(), ctx = createGl2d(fakeCanvas(), { gl });
+  const flags = () => { const c = gl.calls.filter((x) => x[0] === 'bufferSubData').at(-1); return [c[3][8], c[3][9 * 6 + 8]]; };
+  ctx.fillStyle = '#fff'; ctx.emissive = false; ctx.fillRect(0, 0, 4, 4); ctx.emissive = true; ctx.fillRect(5, 5, 4, 4); ctx.flush();
+  assert.deepEqual(flags(), [0, 2]);
+});
+
 test('a lost context stops drawing and tells its owner once', () => {
   const gl = stubGl(); let listener = null, told = 0;
   const canvas = { ...fakeCanvas(), addEventListener: (n, fn) => { if (n === 'webglcontextlost') listener = fn; } };

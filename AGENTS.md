@@ -326,6 +326,16 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   the day sky) feeds a second render target. The first cut bloomed by brightness and turned every
   yellow cube into a lamp -- a cube's colour is the feerate, DATA, and must come out as drawn.
   Glow 0 is the Software picture and is what the parity check runs at.
+  **The glow is BOUNDED and SCREENED on, and there is no brightness rule.** Added straight, a neon
+  game board (every tube of every piece a lamp) summed past white and the pieces lost their colours;
+  a "near-white is light" rule lit the Earth sky's clouds into blown-out blobs; the ground's FILLS
+  (the floor, its haze) bloomed the whole background -- only its lines are lamps (`drawGround`).
+  All three were found by LOOKING (`gl-compare.mjs --look`), none by the pixel check, which runs at
+  glow 0: a change to the finish is not verified until somebody has looked at a neon board, the
+  Earth sky and the price line with glow on.
+- **Measure at the panel's real size** (`--size 2560x1300`): Software scales with the pixels and
+  WebGL barely moves, so a 720x450 panel flatters Software. 2026-09-21, RTX 5090, ms a frame
+  Software -> WebGL: rest 29.6 -> 3.3, supernova 90.5 -> 10.3, pulsar 68.1 -> 9.7, black hole 37.3 -> 15.3.
 - **Speed is in three places, all measured on the profile** (`gl-compare.mjs --profile --gl-only`):
   gradients are rows of a 64-texel ramp ATLAS keyed by a numeric hash, so they batch (a supernova
   was 400 draws with 32-stop uniform uploads each); whole circles, ellipses and round dots are ONE
@@ -517,7 +527,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1370 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1371 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -846,7 +856,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1370 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1371 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

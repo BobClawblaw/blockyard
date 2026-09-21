@@ -573,9 +573,9 @@ layout(location=0) out vec4 o;
 // turned every yellow cube into a lamp.
 layout(location=1) out vec4 oE;
 void emit(float e) {
-  // near-white is light whoever drew it: a cube flashing white in an effect may glow
-  float white = o.a > 0.0 ? smoothstep(0.80, 0.95, min(o.r, min(o.g, o.b)) / o.a) : 0.0;
-  oE = vec4(o.rgb * max(e, white), o.a);
+  // ONLY WHAT IS MARKED. A rule that near-white is light whoever drew it was here, for a cube
+  // flashing white in an effect -- and it lit every cloud of the Earth sky into a blown-out blob.
+  oE = vec4(o.rgb * e, o.a);
 }
 vec4 ramp(float t) {
   t = clamp(t, 0.0, 1.0);
@@ -685,7 +685,12 @@ void main() {
   vec3 glow = (texture(uB0, vUv).rgb * 0.45 + texture(uB1, vUv).rgb * 0.75 + texture(uB2, vUv).rgb) * uStrength;
   // under one 8-bit step of noise, different every pixel: the eye averages it and the bands go
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
-  vec3 rgb = c.rgb + glow + n / 255.0;
+  // BOUNDED, THEN SCREENED ON. Added straight, a crowd of lamps (a neon game board: every tube of
+  // every piece) summed past white and the pieces lost their colours. The glow is compressed on
+  // its brightest channel (so its hue survives) and laid on as a screen, which can approach white
+  // only where the picture already was.
+  glow /= (1.0 + 1.6 * max(glow.r, max(glow.g, glow.b)));
+  vec3 rgb = c.rgb + glow * (1.0 - clamp(c.rgb, 0.0, 1.0)) + n / 255.0;
   // a clear canvas (a game's well over its sky) takes the glow's light as coverage, so it shows
   float a = clamp(c.a + max(glow.r, max(glow.g, glow.b)), 0.0, 1.0);
   o = vec4(min(rgb, vec3(1.0)) * step(0.0005, a), a);

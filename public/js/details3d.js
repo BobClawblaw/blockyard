@@ -2762,6 +2762,9 @@ function drawGround(ctx, layers, lw) {
   };
   for (const l of layers) {
     if (!l.polys.length && !l.lines.length) continue;
+    // (the GL renderer's bloom: the ground's LINES are neon and throw light; its FILLS -- the floor,
+    // the wide soft haze -- are surfaces, and lit the whole background when they bloomed)
+    ctx.emissive = !l.fill;
     if (l.fill) ctx.fillStyle = l.fill;
     else { ctx.strokeStyle = l.stroke; ctx.lineWidth = lw * (l.lw ?? 1); }
     if (ctx.gl2d === true) {
@@ -2777,6 +2780,7 @@ function drawGround(ctx, layers, lw) {
       if (l.fill) ctx.fill(); else ctx.stroke();
     }
   }
+  ctx.emissive = true;
   ctx.lineWidth = lw;
 }
 
