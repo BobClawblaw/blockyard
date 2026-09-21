@@ -23,41 +23,46 @@ test('neither finish is drawn until asked for', () => {
   assert.equal(DEFAULTS.space.sheen, false);
 });
 
-test('the sheen is a hot highlight and a dark roll-off on every top face, and it works on the plainest cube', () => {
-  // (2026-09-12: two faint bands were "I don't see ... the metallic sheen"; metal is contrast)
-  const s = faces({ sheen: true }, 'sheen');
-  const perTile = (name) => s.filter((op) => op.txid === name);
-  assert.ok(perTile('big').length >= 5 && perTile('small').length >= 5, 'three highlight bands and two dark bands per block, at least');
-  assert.ok(s.every((op) => op.points.length === 4 && op.fill.startsWith('rgba(')), 'plain quads with alpha in the fill');
-  // "I want to be able to apply the sheen onto simple cube mode": with the facets and the crown
-  // gone, the sheen is still there -- it lives on the top face every tile has
-  const flat = faces({ sheen: true, facetPx: Infinity, crownPx: Infinity }, 'sheen');
-  assert.equal(flat.length, s.length, 'flat tiles carry it too');
-  const alpha = (fill) => Number(fill.match(/,([\d.]+)\)$/)[1]);
-  const hot = s.filter((op) => op.fill.startsWith('rgba(255,255,255'));
-  const dark = s.filter((op) => op.fill.startsWith('rgba(0,0,0'));
-  assert.ok(hot.length >= TILES.length && hot.every((op) => alpha(op.fill) >= 0.8), 'a white-hot specular core on the lit edge');
-  // GRADED, NOT STEPPED (2026-09-12: "have the gradient be less coarse"). The bands are nested and
-  // painted widest-first, so the opacity ACCUMULATES toward the edge -- which means the right
-  // things to assert are how much it accumulates to, and that no single band is big enough to be
-  // seen as an edge. The old assertion demanded every dark band be >= 0.25 on its own, which a
-  // graded ramp can never satisfy: it was a pin that only a coarse gradient could pass.
-  const stack = (ops) => 1 - ops.reduce((acc, op) => acc * (1 - alpha(op.fill)), 1);
-  const bigDark = dark.filter((op) => op.txid === 'big');
-  const bigRamp = s.filter((op) => op.txid === 'big' && !op.fill.startsWith('rgba(0,0,0') && !op.fill.startsWith('rgba(255,255,255'));
-  assert.ok(bigDark.length >= 6, `the roll-off is a ramp, not a stripe (${bigDark.length} bands)`);
-  assert.ok(bigRamp.length >= 12, `and so is the highlight (${bigRamp.length} bands)`);
-  assert.ok(stack(bigDark) >= 0.25, `the roll-off still reaches the far edge (${stack(bigDark).toFixed(2)})`);
-  assert.ok(stack(bigRamp) >= 0.35, `and the highlight is worth seeing (${stack(bigRamp).toFixed(2)})`);
-  for (const op of [...bigDark, ...bigRamp]) {
-    assert.ok(alpha(op.fill) <= 0.12, `no single band may read as a step: ${op.fill}`);
-  }
+test('SATIN is brushed metal: a broad sheen across every face, machined bevels, the fee colour kept -- and it works on the plainest cube', () => {
+  // (2026-09-12: two faint bands were "I don't see ... the metallic sheen"; 2026-09-22, of the edge gleam that
+  // followed: "It's still too muted and not metallic enough" -- beside the plain board the difference was a sliver.)
+  const s = faces({ sheen: true, sheenStyle: 'satin' }, 'sheen');
+  assert.deepEqual(faces({ sheen: true }, 'sheen').map((op) => op.points.length), s.map((op) => op.points.length), 'satin is what a bare `sheen` means');
+  assert.ok(s.every((op) => op.ramp && op.ramp.stops.length >= 3 && op.ramp.stops.length <= 32), 'every piece one gradient fill, within what a prepared gradient holds');
+  const lum = (c) => 0.3 * c[0] + 0.55 * c[1] + 0.15 * c[2];
+  const per = (id) => s.filter((op) => op.txid === id);
+  // the sheen lies ACROSS the face, from the board's one room -- so a band runs on from cube to cube
+  const rooms = s.filter((op) => op.ramp.room);
+  assert.equal(rooms.length, TILES.length, 'one on every tile');
+  for (const k of ['x0', 'y0', 'x1', 'y1']) assert.equal(rooms[0].ramp[k], rooms[1].ramp[k], `one gradient line for the board (${k})`);
+  const ls = rooms[0].ramp.stops.map((sp) => lum(sp[1]));
+  assert.ok(Math.max(...ls) - Math.min(...ls) > 90, `metal is contrast (${Math.round(Math.min(...ls))}..${Math.round(Math.max(...ls))})`);
+  assert.ok(Math.max(...ls) < 250 && Math.min(...ls) > 25, 'but satin is never blown out and never black: that is chrome');
+  // the fee colour is the data: a red cube is still plainly red in every tone
+  const red = s.find((op) => op.txid === 'small' && op.ramp.room).ramp.stops.map((sp) => sp[1]);
+  assert.ok(red.every(([r, g, b]) => r > g + 15 && r > b + 15), 'toward steel a little, and no further');
+  // machined bevels where a cube has them: the rim facing the lamp white-hot at its corner, the far rims deep
+  const rims = per('big').filter((op) => !op.ramp.room && op.grain === true && op.ramp.stops.length === 3);   // (a side's sheen is grained too: the room's sixteen stops)
+  assert.equal(rims.length, 4, 'four rim strips on a bevelled cube');
+  assert.equal(rims.filter((op) => lum(op.ramp.stops[0][1]) > 245).length, 2, 'two of them lit along the corner');
+  assert.equal(rims.filter((op) => lum(op.ramp.stops[0][1]) < 90).length, 2, 'and two deep');
+  // "I want to be able to apply the sheen onto simple cube mode": the plainest cube carries the sheen and a gleam
+  const flat = faces({ sheen: true, facetMinUnits: Infinity, crownMinUnits: Infinity }, 'sheen');   // (the scene's own switches; facetPx is render3d's)
+  assert.ok(flat.filter((op) => op.ramp.room).length === TILES.length, 'flat tiles carry it too');
+  assert.ok(flat.some((op) => op.txid === 'big' && lum(op.ramp.stops[0][1]) > 245 && op.ramp.stops.at(-1)[1][3] === 0), 'with a gleam along the lit edge that fades to nothing');
+  // the grain is asked for on the metal, not on the soft fall-off laid over it
+  assert.ok(rooms.every((op) => op.grain === true) && s.some((op) => !op.grain));
 });
 
 test('neon strokes every visible edge in the block\'s own colour, seam or no seam', () => {
   const n = faces({ neon: true }, 'neon');
   assert.ok(n.length >= TILES.length * 2, 'at least a halo and a tube per block');
   assert.ok(n.every((op) => op.stroke && op.fill === 'rgba(0,0,0,0)' && op.always === true), 'strokes only, and marked to draw even with Stone edges off');
+  // the GL renderer draws a halo, tube and core as ONE stroke: the halo names the tube's colour (just under opaque --
+  // an opaque stroke is never drawn soft, and came out as flat bands), the other two say they are parts
+  const halos = n.filter((op) => op.neonTube), parts = n.filter((op) => op.neonPart === true);
+  assert.ok(halos.length > 0 && parts.length === 2 * halos.length && halos.length + parts.length === n.length);
+  assert.ok(halos.every((op) => { const al = Number(op.neonTube.match(/,([\d.]+)\)$/)[1]); return al > 0.5 && al < 0.999; }));
   assert.ok(n.some((op) => op.lw >= 10) && n.some((op) => op.lw >= 3 && op.lw < 6) && n.some((op) => op.lw < 2), 'a wide halo, a tube, a thin bright core');
   // (2026-09-12: a 1.4 x tube over the 0.6-pixel base line was "I don't see neon blocks working")
   const alpha = (col) => Number(col.match(/,([\d.]+)\)$/)[1]);
@@ -142,8 +147,12 @@ test('the switches reach the picture: neon strokes more, the sheen paints white-
   const sheen = paint({ sheen: true });
   const strokes = (ops) => ops.filter((o) => o === 'stroke').length;
   assert.ok(strokes(neon) >= strokes(plain) + 3 * 2 * E2E.length, `neon strokes every tile three more times a face: ${strokes(plain)} -> ${strokes(neon)}`);
-  assert.ok(!plain.some((o) => o.startsWith('set:fillStyle=rgba(255,255,255,0.9')), 'no white-hot band without the sheen');
-  assert.ok(sheen.some((o) => o.startsWith('set:fillStyle=rgba(255,255,255,0.9')), 'the sheen paints its white-hot band');
+  // (the finishes are gradient fills since 2026-09-22; this stub context's gradients take no stops, which the
+  // painter must survive -- it threw 'g.addColorStop is not a function' on the first cut)
+  const grads = (ops) => ops.filter((o) => o === 'createLinearGradient').length;
+  assert.equal(grads(plain), 0, 'no ramp without the sheen');
+  assert.ok(grads(sheen) >= 2 * E2E.length, `the sheen paints its ramps (${grads(sheen)})`);
+  assert.ok(grads(paint({ sheen: true, sheenStyle: 'chrome' })) >= 2 * E2E.length, 'and so does chrome');
 });
 
 test('maxDpr draws a canvas at fewer device pixels than the screen has (Tetrust\'s sky)', () => {
@@ -227,28 +236,59 @@ test('a sphere tile is drawn round: nested discs, no cube faces', () => {
   assert.ok(!cube.some((op) => op.face === 'ball'));
 });
 
-test('CHROME mirrors a horizon that differs from cube to cube and moves with the cube, and keeps the fee colour', () => {
-  // (operator, 2026-09-14: "make the specular metallic effect more prominent. Maybe give it a chrome
-  // or faux reflective effect ... really improve the metallic look")
-  const alpha = (fill) => Number(fill.match(/,([\d.]+)\)$/)[1]);
-  const chrome = (tiles) => buildScene(tiles, { ...O, sheen: true, sheenStyle: 'chrome' }).ops.filter((op) => op.face === 'sheen');
+test('CHROME is a room\'s lights in polished steel: soft bands laid across the whole board, two fills a face, the fee colour kept', () => {
+  // (operator, 2026-09-14: "give it a chrome or faux reflective effect"; 2026-09-22: "The chrome effect is too expensive
+  // and honestly doesn't look very good ... Start the chrome effect from scratch"; and of the second cut, a hard tilted
+  // horizon per cube: "looks terrible with the slanted areas that move", with pictures of soft-banded polished steel.)
+  const chrome = (tiles, extra = {}) => buildScene(tiles, { ...O, sheen: true, sheenStyle: 'chrome', ...extra }).ops.filter((op) => op.face === 'sheen');
   const s = chrome(TILES);
-  assert.ok(s.length > faces({ sheen: true }, 'sheen').length * 0.5, 'a real finish, not a token one');
-  // the horizon: a near-opaque white line across the top face
-  const horizonOf = (ops, id) => ops.find((op) => op.txid === id && op.fill.startsWith('rgba(255,255,255') && alpha(op.fill) > 0.85 && op.points.length === 4);
-  assert.ok(horizonOf(s, 'big') && horizonOf(s, 'small'), 'every cube carries a hard horizon line');
-  // ...placed by where the cube is, so neighbours do not line up into one stripe across the board
-  const yOf = (op) => op.points.reduce((acc, p) => acc + p.y, 0) / 4;
-  const at = (x, y) => horizonOf(chrome([{ txid: 'c', x, y, s: 3, z: 0, color: '#33cc99' }]), 'c');
-  const q = (op, tile) => { const top = buildScene([tile], O).ops.find((o2) => o2.face === 'top').points; const ys = top.map((p) => p.y); return (yOf(op) - Math.min(...ys)) / (Math.max(...ys) - Math.min(...ys)); };
-  const t1 = { txid: 'c', x: 4, y: 6, s: 3, z: 0 }, t2 = { txid: 'c', x: 9, y: 6, s: 3, z: 0 };
-  assert.ok(Math.abs(q(at(4, 6), t1) - q(at(9, 6), t2)) > 0.05, 'the horizon sits at a different depth on a cube five columns along');
-  // ...and it slides as the cube climbs: the reflection travels across a flying cube's face
-  const flying = (z) => horizonOf(chrome([{ txid: 'c', x: 4, y: 6, s: 3, z, color: '#33cc99' }]), 'c');
-  assert.notDeepEqual(flying(0).points, flying(12).points);
-  // the fee colour is the data: the sky reflection is the cube's own hue lifted, not a neutral grey
-  const sky = s.filter((op) => op.txid === 'small' && /^rgba\(2\d\d,\d+,\d+/.test(op.fill) && !op.fill.startsWith('rgba(255,255,255'));
-  assert.ok(sky.some((op) => { const [r, g, b] = op.fill.match(/\d+/g).map(Number); return r > g + 20 && r > b + 20; }), 'a red cube reflects a red-tinted sky');
+  const per = (id) => s.filter((op) => op.txid === id);
+  assert.ok(per('big').filter((op) => !op.lamp).length <= 2 * 4 + 1, `cheap: two ramps a face and the polished edge (${per('big').length} ops; the first chrome was thirty-seven)`);
+  // THE GLINT (operator, 2026-09-22: "the glints look terrible on the chrome board. either remove or drastically improve
+  // them", then "Try the improved glint you recommend"). Not a star stuck on one cube in five by a hash: a soft flare
+  // exactly where one of the room's blown-out strips crosses the cube's far edge -- solved, so it cannot be anywhere else.
+  const board = []; for (let x = 0; x < 20; x += 2) for (let y = 0; y < 20; y += 2) board.push({ txid: `g${x}_${y}`, x, y, s: 2, z: 0, color: '#33cc99' });
+  const full = chrome(board);
+  assert.ok(full.every((op) => op.ramp || op.stroke), 'ramps and edges only: no hard white diamonds');
+  const glows = full.filter((op) => op.lamp && op.ramp.r > 0), streaks = full.filter((op) => op.lamp && !(op.ramp.r > 0));
+  assert.ok(glows.length > 0 && glows.length < board.length && streaks.length === glows.length, `on the cubes a strip crosses, and only those (${glows.length} of ${board.length})`);
+  for (const gl of glows) {
+    const room = full.find((op) => op.txid === gl.txid && op.ramp.room).ramp, dx = room.x1 - room.x0, dy = room.y1 - room.y0;
+    const t = ((gl.ramp.x0 - room.x0) * dx + (gl.ramp.y0 - room.y0) * dy) / (dx * dx + dy * dy);
+    assert.ok(Math.min(Math.abs(t - 0.33), Math.abs(t - 0.82)) < 1e-6, `the flare sits ON a blown-out strip (t = ${t.toFixed(4)})`);
+    assert.equal(gl.ramp.stops.at(-1)[1][3], 0, 'and fades to nothing');
+    assert.ok(gl.ramp.r <= O.unit * 1.3 + 1e-9, 'a small thing, whatever the cube');
+  }
+  assert.ok(streaks.every((op) => op.ramp.stops[0][1][3] === 0 && op.ramp.stops.at(-1)[1][3] === 0), 'the streak along the edge fades out both ways');
+  // it slides along the edge as a cube flies under the light, and comes in from the ends rather than popping
+  const gx = (z) => chrome([{ txid: 'c', x: 6, y: 6, s: 3, z, color: '#33cc99' }]).filter((op) => op.lamp && op.ramp.r > 0).map((op) => op.ramp.x0);
+  const zs = []; for (let z = 0; z <= 40; z += 0.5) zs.push(gx(z));
+  const seen = zs.filter((v) => v.length).map((v) => v[0]);
+  assert.ok(seen.length > 3 && new Set(seen.map((v) => v.toFixed(3))).size === seen.length, 'a different place at every height it is seen at');
+  const lum = (c) => 0.3 * c[0] + 0.55 * c[1] + 0.15 * c[2];
+  const roomOf = (ops, id) => ops.find((op) => op.txid === id && op.ramp?.room);
+  const big = roomOf(s, 'big'), small = roomOf(s, 'small');
+  assert.ok(big && small && big.points.length === 4, 'the whole top face, uncut: nothing slanted across it');
+  // THE BANDS BELONG TO THE ROOM: every resting cube is filled from the SAME line across the board, so a band runs
+  // on from one cube to the next and nothing on a resting board differs by whim or moves
+  for (const k of ['x0', 'y0', 'x1', 'y1']) assert.equal(big.ramp[k], small.ramp[k], `one gradient line for the board (${k})`);
+  assert.ok(Math.abs(big.ramp.x1 - big.ramp.x0) > 40 * O.unit * 0.0 + 1 && Math.abs(big.ramp.y1 - big.ramp.y0) < Math.abs(big.ramp.x1 - big.ramp.x0) * 0.3, 'upright bands, leaning a fixed few degrees');
+  // soft, all of it (the GL renderer's ramps are 64 texels: a hard line in one came out as a smear), and contrasty
+  const offs = big.ramp.stops.map((sp) => sp[0]);
+  for (let i = 1; i < offs.length; i++) assert.ok(offs[i] - offs[i - 1] >= 0.025, 'no feature finer than a texel or two');
+  const ls = big.ramp.stops.map((sp) => lum(sp[1]));
+  assert.ok(Math.max(...ls) > 245 && Math.min(...ls) < 40, 'from a blown-out light to the dark between the lights');
+  let turns = 0; for (let i = 2; i < ls.length; i++) if ((ls[i] - ls[i - 1]) * (ls[i - 1] - ls[i - 2]) < 0) turns++;
+  assert.ok(turns >= 8, `several strip lights, not one gradient (${turns} turns)`);
+  assert.ok(big.ramp.stops.every((sp) => sp[1][3] >= 0.6), 'a reflection, not a wash');
+  // a cube that FLIES passes under the lights: its reflection slides by its height, and only then
+  const flying = (z) => roomOf(chrome([{ txid: 'c', x: 4, y: 6, s: 3, z, color: '#33cc99' }]), 'c').ramp;
+  assert.ok(flying(12).x0 > flying(0).x0 && flying(12).y0 === flying(0).y0, 'sideways, with height');
+  // one memoised ramp a colour, however many cubes
+  assert.equal(flying(0).stops, flying(12).stops);
+  // the fee colour is the data: a red cube's mid-tones and darks are red
+  const red = small.ramp.stops.map((sp) => sp[1]).filter((c) => lum(c) < 200);
+  assert.ok(red.length > 4 && red.every(([r, g, b]) => r >= g && r >= b) && red.some(([r, g, b]) => r > g + 20 && r > b + 20), 'the hue is in the reflection');
   // satin is untouched, and the setting reaches the renderer
   assert.deepEqual(faces({ sheen: true, sheenStyle: 'satin' }, 'sheen'), faces({ sheen: true }, 'sheen'));
   assert.equal(DEFAULTS.space.sheenStyle, 'chrome');
@@ -269,3 +309,4 @@ test('a board can ask for a harder lamp, and 1 is what every board drew before',
   const spread = (list) => Math.max(...list.map(value)) - Math.min(...list.map(value));
   assert.ok(spread(gained) > spread(plain) * 1.4, `a harder lamp tells the faces further apart (${spread(plain)} -> ${spread(gained)})`);
 });
+

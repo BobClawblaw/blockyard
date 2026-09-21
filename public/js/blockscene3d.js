@@ -833,6 +833,31 @@ export function tileFaces(tile, o = {}, cut = false) {
 
 // Blend a hex colour toward white by t, alpha riding inside the rgba() --
 // never through globalAlpha.
+// A FINISH AS GRADIENT FILLS (2026-09-22; operator, of the metallic finish: "It's terribly slow on the OpenGL path").
+// The finishes used to be RAMPS MADE OF NESTED TRANSLUCENT QUADS -- the house idiom when an op's fill could only be a
+// string -- and a chrome cube was thirty-seven of them: measured on an RTX 5090 at 2560x1300, a live board went from
+// 61k vertices and 6.7 ms a frame to 112k and 13.5 with chrome on. An op may now carry a `ramp`
+// ({ x0, y0, x1, y1, stops: [[offset, [r, g, b, a]], ...] }): one linear-gradient fill, on either renderer.
+// THE STOPS NEVER DEPEND ON A CUBE'S OWN NUMBERS -- where a band falls is the gradient LINE's business -- only on
+// colour and weight, so a board has a few dozen distinct ramps however many cubes fly. They are memoised: the same
+// ramp is the same ARRAY, which is how a kept board compares them and how the GL renderer keys its atlas once.
+const RAMPS = new Map();
+/** A ramp's stops, memoised: `make` runs once a key, and the same ramp is ever after the same array. */
+export function rampStops(key, make) {
+  let st = RAMPS.get(key);
+  if (!st) { if (RAMPS.size > 4000) RAMPS.clear(); st = make(); RAMPS.set(key, st); }
+  return st;
+}
+/** 'rgba(r,g,b,a)' as lift() and shade() print it -> [r, g, b, a]. */
+function rgbaOf(str) { const m = str.slice(5, -1).split(','); return [+m[0], +m[1], +m[2], +m[3]]; }
+/** The gradient line of a ramp over the quad whose v=0 edge runs e0 -> e1 and whose v=1 edge passes through `far`:
+ *  square to the v=0 edge, so the ramp's lines of equal colour lie ALONG the quad's edges, as the nested quads' did. */
+function rampLine(e0, e1, far) {
+  const ex = e1.x - e0.x, ey = e1.y - e0.y, L = Math.hypot(ex, ey) || 1, nx = -ey / L, ny = ex / L;
+  const d = (far.x - e0.x) * nx + (far.y - e0.y) * ny;
+  return { x0: e0.x, y0: e0.y, x1: e0.x + nx * d, y1: e0.y + ny * d };
+}
+
 export function lift(hex, t, alpha = 1) {
   const h = String(hex).replace('#', '');
   const ch = (i) => parseInt(h.slice(i, i + 2), 16);
@@ -1620,130 +1645,130 @@ export function buildScene(tiles, o = {}) {
     // has, so they work at every level of detail. What was tried and rejected before is recorded
     // at the head of this section -- diagonal streaks -- and neither of these is a streak.
     if (o.sheen === true && o.sheenStyle === 'chrome') {
-      // CHROME (operator, 2026-09-14: "make the specular metallic effect more prominent. Maybe give
-      // it a chrome or faux reflective effect ... really improve the metallic look"). The satin
-      // sheen below is a highlight along one edge -- a lit surface. Chrome is not lit, it REFLECTS:
-      // what reads as chrome is a hard horizon mirrored in the face -- bright sky above a white line,
-      // near-black ground below it, lightening again toward the near edge -- and a reflection that
-      // SLIDES as the object moves. So the horizon's place on each face comes from where the cube
-      // is on the board and how high it flies: cubes side by side show it at different heights,
-      // and a cube in flight has it travel across its faces. Hue is kept in the sky and the bounce
-      // so the fee colour still reads; the colour is the data, the chrome is the finish.
+      // CHROME, FROM SCRATCH (operator, 2026-09-22: "The chrome effect is too expensive and honestly doesn't look very
+      // good ... Start the chrome effect from scratch"; then, of the second cut -- a hard tilted horizon cut across
+      // every face, placed per cube -- "looks terrible with the slanted areas that move", with three pictures of what
+      // he meant: polished steel. SOFT upright bands of light and dark, nothing hard in them, one band blown out).
+      // The first chrome (2026-09-14) was a translucent wash of thirty-seven faint quads a cube.
+      //
+      // What those pictures are is a smooth sheet reflecting a ROOM: strip lights, and the dark between them. So:
+      //   * THE BANDS BELONG TO THE ROOM, NOT TO THE CUBE. One long ramp lies across the whole board, and every
+      //     face is filled with the part of it that face sits under -- neighbours carry one band across the gap
+      //     between them, as one sheet of steel would, and nothing on a resting board moves or differs by whim;
+      //   * a cube that FLIES passes under the lights: its reflection slides across it, a little, by its height --
+      //     the only motion there is, and it is the motion a real one has;
+      //   * every stop is soft (the GL renderer's ramps are 64 texels; a hard line in one came out as a smear), the
+      //     bands lean by a fixed few degrees like the pictures', and the hue stays in the mid-tones and the darks:
+      //     the colour is the data, the chrome is the finish;
+      //   * a face is TWO fills: the room, and a soft fall-off toward its near edge that gives it form.
       const [BL, BR, TR, TL] = f.top;
+      const gw = o.gridW || 44, unit = o.unit ?? 1;
+      const A = round3(0.92 * a), span = gw * unit * 1.2, lean = 0.14;
+      // the room: light strips of differing width and strength with dark between, one of them blown out. Offsets
+      // are fixed numbers, not dice: the same room every frame, every board.
+      const ROOM = [[0.00, -0.85], [0.05, -0.2], [0.09, 0.8], [0.12, 0.25], [0.17, -0.9], [0.24, -0.55], [0.29, 0.3], [0.33, 1.0], [0.36, 0.45], [0.41, -0.8],
+        [0.47, -1.0], [0.53, -0.3], [0.58, 0.85], [0.61, 0.2], [0.66, -0.85], [0.73, -0.4], [0.78, 0.5], [0.82, 1.0], [0.85, 0.35], [0.90, -0.75], [0.95, -0.95], [1.00, -0.5]];
+      // v: -1 (the dark between the lights) .. 0 (the cube's own colour) .. 1 (a light, blown out)
+      const tone = (v, dim) => (v >= 0 ? rgbaOf(lift(c, (0.1 + 0.9 * v) * dim, A)) : rgbaOf(shade(c, (1 + 0.86 * v) * (0.6 + 0.4 * dim), A)));
+      const room = (dim) => () => ROOM.map(([at, v]) => [at, tone(v, dim)]);
+      const roomLine = (shift) => { const x0 = -0.1 * gw * unit + shift; return { x0, y0: 0, x1: x0 + span, y1: span * lean }; };
+      const form = () => [[0, [0, 0, 0, 0]], [0.55, [0, 0, 0, 0]], [1, [0, 0, 0, round3(0.3 * a)]]];
       const L = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
-      const gw = o.gridW || 44, gh = o.gridH || gw;
-      // the horizon changes from cube to cube (a board of equal slabs is not one flat mirror) and
-      // travels with height, so a flight carries its reflection across its faces
-      const env = ((t.x + t.s / 2) / gw) * 2.3 + ((t.y + t.s / 2) / gh) * 1.1 + (t.z ?? 0) * 0.02;
-      const wave = (ph) => Math.sin(2 * Math.PI * (env + ph));
-      // the far edge of the top on screen is TL-TR, the near edge BL-BR; q runs far (0) to near (1)
-      const strip = (q0, q1) => [L(TL, BL, Math.max(0, q0)), L(TR, BR, Math.max(0, q0)), L(TR, BR, Math.min(1, q1)), L(TL, BL, Math.min(1, q1))];
-      const k = 0.45 + 0.25 * wave(0);
-      // RAMPS ARE NESTED BANDS, as the satin sheen's are: n translucent quads anchored on one line
-      // accumulate into an n-step gradient, where adjacent strips of differing alpha read as stripes.
-      out.push({ txid: t.txid, face: 'sheen', points: f.top, fill: `rgba(160,170,182,${round3(0.14 * a)})` });   // a light steel wash
-      const RAMP = 6;
-      for (let i = 0; i < RAMP; i++) {
-        const u = 1 - i / RAMP;                                        // 1 (widest) toward the horizon
-        // the sky: brightest at the horizon, still carrying the cube's hue
-        out.push({ txid: t.txid, face: 'sheen', points: strip(k - k * Math.pow(u, 1.3), k), fill: lift(c, 0.72, round3(0.1 * a)) });
-        // the ground: darkest just under the horizon, in the cube's own colour darkened, not black
-        out.push({ txid: t.txid, face: 'sheen', points: strip(k, k + (1 - k) * Math.pow(u, 1.6)), fill: shade(c, 0.18, round3(0.125 * a)) });
-        // the bounce: light again toward the near edge
-        out.push({ txid: t.txid, face: 'sheen', points: strip(1 - 0.28 * Math.pow(u, 1.5), 1), fill: lift(c, 0.5, round3(0.065 * a)) });
-      }
-      // the horizon itself: a soft glow over a hard white line
-      out.push({ txid: t.txid, face: 'sheen', points: strip(k - 0.1, k), fill: `rgba(240,248,255,${round3(0.3 * a)})` });
-      out.push({ txid: t.txid, face: 'sheen', points: strip(k - 0.03, k + 0.01), fill: `rgba(255,255,255,${round3(0.92 * a)})` });
-      // the sides mirror their own horizon, offset so it never lines up with the top's
+      const slide = (t.z ?? 0) * unit * 0.22;
+      out.push({ txid: t.txid, face: 'sheen', points: f.top, fill: 'rgba(0,0,0,0)', ramp: { ...roomLine(slide), stops: rampStops(`cr1|${c}|${A}`, room(1)), room: true } });
+      out.push({ txid: t.txid, face: 'sheen', points: f.top, fill: 'rgba(0,0,0,0)', ramp: { ...rampLine(TL, TR, L(TL, BL, 1)), stops: rampStops(`cf|${a}`, form) } });
+      // the sides see the same room from another angle: the bands fall elsewhere on them (a fixed offset), and they
+      // are dimmer, the side turned to the lamp less so (three levels, so the ramps stay few)
       for (const side of f.sides) {
         const lamp = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * lampSide[0] + side.ny * lampSide[1]);
-        const [p0, p1, p2, p3] = side.points;                            // top edge p0-p1, bottom edge p3-p2
-        const band = (v0, v1) => [L(p0, p3, Math.max(0, v0)), L(p1, p2, Math.max(0, v0)), L(p1, p2, Math.min(1, v1)), L(p0, p3, Math.min(1, v1))];
-        const kv = 0.36 + 0.18 * wave(0.37 + (side.key === 'left' || side.key === 'right' ? 0.21 : 0));
-        for (let i = 0; i < 3; i++) {
-          const u = 1 - i / 3;
-          out.push({ txid: t.txid, face: 'sheen', points: band(kv - kv * u, kv), fill: lift(c, 0.65, round3((0.1 + 0.1 * lamp) * a)) });
-          out.push({ txid: t.txid, face: 'sheen', points: band(kv, kv + (1 - kv) * Math.pow(u, 1.4)), fill: shade(c, 0.15, round3(0.18 * a)) });
-        }
-        out.push({ txid: t.txid, face: 'sheen', points: band(0.88, 1), fill: lift(c, 0.4, round3(0.22 * a)) });
-        out.push({ txid: t.txid, face: 'sheen', points: band(kv - 0.05, kv + 0.02), fill: `rgba(255,255,255,${round3((0.5 + 0.4 * lamp) * a)})` });
+        const lv = lamp > 0.66 ? 2 : lamp > 0.25 ? 1 : 0;
+        const [p0, p1, , p3] = side.points;                              // top edge p0-p1, bottom edge p3-p2
+        const off = (side.key === 'left' || side.key === 'right' ? 0.37 : 0.19) * span * 0.2;
+        out.push({ txid: t.txid, face: 'sheen', points: side.points, fill: 'rgba(0,0,0,0)', ramp: { ...roomLine(slide + off), stops: rampStops(`cr${lv}s|${c}|${A}`, room(0.55 + 0.15 * lv)) } });
+        out.push({ txid: t.txid, face: 'sheen', points: side.points, fill: 'rgba(0,0,0,0)', ramp: { ...rampLine(p0, p1, p3), stops: rampStops(`cf|${a}`, form) } });
       }
       // crisp polished edges, drawn whether or not the dark seam is on
       out.push({ txid: t.txid, face: 'sheen', points: f.top, fill: 'rgba(0,0,0,0)', stroke: `rgba(255,255,255,${round3(0.55 * a)})`, lw: 0.9, always: true });
-      // a star glint on some cubes, at the corner facing the lamp; it moves on when the cube does
-      const g = env * 7.3 - Math.floor(env * 7.3);
-      if (g > 0.82) {
-        const corner = viewerLit ? BL : (flip > 0 ? TL : BL);
-        const across = viewerLit ? BR : (flip > 0 ? TR : BR), down = viewerLit ? TL : (flip > 0 ? BL : TL);
-        const cx = corner.x + (across.x - corner.x) * 0.16 + (down.x - corner.x) * 0.16;
-        const cy = corner.y + (across.y - corner.y) * 0.16 + (down.y - corner.y) * 0.16;
-        const r = Math.hypot(across.x - corner.x, across.y - corner.y) * (0.1 + 0.12 * (g - 0.82) / 0.18), w2 = r * 0.12;
-        const glint = (alpha, rr, ww) => {
-          out.push({ txid: t.txid, face: 'sheen', points: [{ x: cx - rr, y: cy }, { x: cx, y: cy - ww }, { x: cx + rr, y: cy }, { x: cx, y: cy + ww }], fill: `rgba(255,255,255,${round3(alpha * a)})` });
-          out.push({ txid: t.txid, face: 'sheen', points: [{ x: cx, y: cy - rr }, { x: cx + ww, y: cy }, { x: cx, y: cy + rr }, { x: cx - ww, y: cy }], fill: `rgba(255,255,255,${round3(alpha * a)})` });
-        };
-        glint(0.35, r * 1.5, w2 * 2.2);
-        glint(0.95, r, w2);
+      // THE GLINT, REDONE (operator, 2026-09-22: "the glints look terrible on the chrome board. either remove or
+      // drastically improve them"; removed, then "Try the improved glint you recommend"). They were four-pointed stars
+      // of two hard white diamonds stuck on the corner of one cube in five by a hash -- a sticker on a mirror. A real
+      // glint is WHERE A LIGHT MEETS AN EDGE: so this one exists only where one of the room's two blown-out strips
+      // crosses the cube's polished far edge. Its place is solved, not rolled -- the ramp's coordinate runs linearly
+      // along the edge, so the crossing is one division -- which means it sits exactly on the bright band, slides
+      // along the edge as a flying cube passes under the light, and fades out toward the edge's ends instead of
+      // popping. Drawn soft: a round glow (a radial ramp) and one streak ALONG the edge, fading to nothing both ways.
+      if (t.s >= 2) {
+        const e0 = flip > 0 ? TL : BL, e1 = flip > 0 ? TR : BR;              // the far edge on screen: the one under the lamp
+        const line = roomLine(slide), dx = line.x1 - line.x0, dy = line.y1 - line.y0, dd = dx * dx + dy * dy;
+        const at = (p) => ((p.x - line.x0) * dx + (p.y - line.y0) * dy) / dd;
+        const t0 = at(e0), t1 = at(e1), El = Math.hypot(e1.x - e0.x, e1.y - e0.y);
+        for (const peak of [0.33, 0.82]) {                                    // ROOM's two strips at full strength
+          const q = Math.abs(t1 - t0) > 1e-9 ? (peak - t0) / (t1 - t0) : -1;
+          if (!(q > 0.06 && q < 0.94)) continue;
+          const win = Math.min(1, (Math.min(q, 1 - q) - 0.06) / 0.16);        // in from the ends, not on at them
+          const g = round3(0.2 + 0.8 * win * win * (3 - 2 * win)), ga = round3(g * a);
+          const C = L(e0, e1, q), ux = (e1.x - e0.x) / El, uy = (e1.y - e0.y) / El;
+          const r = Math.min(El * 0.2, unit * 1.3) * (0.7 + 0.3 * g), len = Math.min(El * 0.46, unit * 3.2) * g, th = Math.max(unit * 0.035, r * 0.07);
+          out.push({ txid: t.txid, face: 'sheen', lamp: true, fill: 'rgba(0,0,0,0)',
+            points: [{ x: C.x - r, y: C.y - r }, { x: C.x + r, y: C.y - r }, { x: C.x + r, y: C.y + r }, { x: C.x - r, y: C.y + r }],
+            ramp: { x0: C.x, y0: C.y, x1: C.x, y1: C.y, r, stops: rampStops(`cgl|${ga}`, () => [[0, [255, 255, 255, round3(0.95 * ga)]], [0.12, [255, 255, 255, round3(0.7 * ga)]], [0.4, [225, 238, 255, round3(0.2 * ga)]], [1, [210, 228, 255, 0]]]) } });
+          out.push({ txid: t.txid, face: 'sheen', lamp: true, fill: 'rgba(0,0,0,0)',
+            points: [{ x: C.x - ux * len, y: C.y - uy * len }, { x: C.x - uy * th, y: C.y + ux * th }, { x: C.x + ux * len, y: C.y + uy * len }, { x: C.x + uy * th, y: C.y - ux * th }],
+            ramp: { x0: C.x - ux * len, y0: C.y - uy * len, x1: C.x + ux * len, y1: C.y + uy * len, stops: rampStops(`cst|${ga}`, () => [[0, [255, 255, 255, 0]], [0.35, [255, 255, 255, round3(0.35 * ga)]], [0.5, [255, 255, 255, round3(0.95 * ga)]], [0.65, [255, 255, 255, round3(0.35 * ga)]], [1, [255, 255, 255, 0]]]) } });
+        }
       }
     } else if (o.sheen === true) {
-      // a specular band hugging the LIT edge of the top: the far edge under the upper-left lamp,
-      // the near edge when the light sits at the viewer. Two nested bands, the inner one hotter:
-      // a metallic gleam along an edge, not a gloss stripe across the face.
+      // SATIN, REBUILT (operator, 2026-09-22: "It's still too muted and not metallic enough"). It was a gleam along
+      // ONE EDGE of the top -- a white sliver on the far side, a little shadow on the near -- over a face that stayed
+      // flat paint: beside the plain board the difference was the sliver. Brushed metal is lit ACROSS its face:
+      //   * A BROAD SHEEN over the whole flat of every face, from one ramp laid across the board as chrome's is (so a
+      //     band runs on from cube to cube and a resting board is still) -- but satin's room is wide and gentle:
+      //     no blown-out strip, no black between the lights. That is the difference between the two finishes;
+      //   * THE COLOUR GOES TOWARD STEEL, a little -- greyer in the darks, paler in the lights -- and no further: the
+      //     colour is the fee rate, and it has to read at a glance;
+      //   * THE BEVELS ARE MACHINED: each rim strip is its own small ramp across its width, white-hot along the corner
+      //     that faces the lamp, deep on the two that do not. They were four flat fills;
+      //   * a fall-off toward the near edge gives the face form, as on chrome;
+      //   * `grain`: on the GL renderer these fills carry a faint brushed grain (gl2d's flag 8; nothing on the 2D
+      //     canvas, which cannot, and nothing under `softGlow: false`, the parity check's).
       const [BL, BR, TR, TL] = f.top;
-      const litFar = !viewerLit;
-      const e0 = litFar ? (flip > 0 ? TL : BL) : (flip > 0 ? BL : TL);
-      const e1 = litFar ? (flip > 0 ? TR : BR) : (flip > 0 ? BR : TR);
-      const o0 = litFar ? (flip > 0 ? BL : TL) : (flip > 0 ? TL : BL);
-      const o1 = litFar ? (flip > 0 ? BR : TR) : (flip > 0 ? TR : BR);
       const L = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
-      const band = (k) => [e0, e1, L(e1, o1, k), L(e0, o0, k)];
-      // A RAMP, NOT STEPS (2026-09-12, operator: "we need more specular on the metallic sheen, and
-      // have the gradient be less coarse"). The first cut was two bands, the second three, and three
-      // wide bands read as three stripes because that is what they are.
-      //
-      // The bands are NESTED and all anchored on the lit edge, so drawing them widest-first lets
-      // each narrower one lay over the last and the alpha ACCUMULATE toward the edge: n translucent
-      // quads are an n-step ramp, and the fineness of the gradient is just n. Each step is kept
-      // under a tenth of full opacity so no single one of them can be seen as an edge. (A real
-      // canvas gradient is not forbidden here -- the rules ban clip, globalAlpha, composite modes
-      // and shadowBlur, not gradients -- but an op's `fill` is a plain rgba STRING that paintFrame
-      // assigns straight to fillStyle, and which the recording-canvas tests read; a CanvasGradient
-      // would need a new op shape and would blind them. Layered fills are the house idiom.)
-      const SHEEN_STEPS = 14;
-      for (let k = 0; k < SHEEN_STEPS; k++) {
-        const t2 = 1 - k / SHEEN_STEPS;                 // 1 (widest) down to one step's width
-        const w = 0.5 * Math.pow(t2, 1.5);              // bunched toward the lit edge
-        const hot = 1 - t2;                             // 0 at the sheen's inner edge, 1 at the lit one
-        out.push({ txid: t.txid, face: 'sheen', points: band(w),
-          fill: lift(c, 0.4 + 0.55 * hot, round3((0.03 + 0.075 * Math.pow(hot, 1.8)) * a)) });
-      }
-      // THE SPECULAR ITSELF: a tight near-white sliver right on the edge, which is the part that
-      // reads as polished metal rather than as a lit surface
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.055), fill: `rgba(255,255,255,${round3(0.9 * a)})` });
-      out.push({ txid: t.txid, face: 'sheen', points: band(0.022), fill: `rgba(255,255,255,${round3(0.96 * a)})` });
-      // and the roll-off into shadow on the far edge, graded the same way
-      const dark = (k) => [o0, o1, L(o1, e1, k), L(o0, e0, k)];
-      const DARK_STEPS = 8;
-      for (let k = 0; k < DARK_STEPS; k++) {
-        const t2 = 1 - k / DARK_STEPS;
-        const w = 0.34 * Math.pow(t2, 1.4);
-        const deep = 1 - t2;
-        out.push({ txid: t.txid, face: 'sheen', points: dark(w), fill: `rgba(0,0,0,${round3((0.035 + 0.06 * deep) * a)})` });
+      const gw = o.gridW || 44, unit = o.unit ?? 1;
+      const A = round3(0.88 * a), span = gw * unit * 1.2, lean = 0.2;
+      const steel = (rgba, k) => [Math.round(rgba[0] + (150 - rgba[0]) * k), Math.round(rgba[1] + (158 - rgba[1]) * k), Math.round(rgba[2] + (170 - rgba[2]) * k), rgba[3]];
+      // v: -1 (turned from the lights) .. 0 (the cube's own colour) .. 1 (the sheen's peak): broad, and never extreme
+      const tone = (v, dim) => (v >= 0 ? steel(rgbaOf(lift(c, (0.06 + 0.66 * v) * dim, A)), 0.1 + 0.12 * v) : steel(rgbaOf(shade(c, (1 + 0.62 * v) * (0.7 + 0.3 * dim), A)), 0.22));
+      const ROOM = [[0.00, -0.6], [0.08, -0.1], [0.15, 0.7], [0.20, 1.0], [0.25, 0.6], [0.34, -0.3], [0.42, -0.8], [0.50, -0.2], [0.57, 0.65], [0.62, 0.95], [0.67, 0.5], [0.76, -0.35], [0.84, -0.75], [0.92, 0.1], [0.97, 0.8], [1.00, 0.9]];
+      const room = (dim) => () => ROOM.map(([at, v]) => [at, tone(v, dim)]);
+      const slide = (t.z ?? 0) * unit * 0.22;
+      const roomLine = (shift) => { const x0 = -0.1 * gw * unit + shift + slide; return { x0, y0: 0, x1: x0 + span, y1: span * lean }; };
+      const form = () => [[0, [0, 0, 0, 0]], [0.5, [0, 0, 0, 0]], [1, [0, 0, 0, round3(0.26 * a)]]];
+      const bevelled = !!f.innerG && !viewerLit && Array.isArray(f.inset) && f.inset.length === 4;
+      const flat = bevelled ? f.inset : f.top;
+      out.push({ txid: t.txid, face: 'sheen', points: flat, fill: 'rgba(0,0,0,0)', grain: true, ramp: { ...roomLine(0), stops: rampStops(`sr1|${c}|${A}`, room(1)), room: true } });
+      out.push({ txid: t.txid, face: 'sheen', points: flat, fill: 'rgba(0,0,0,0)', ramp: { ...rampLine(flip > 0 ? flat[3] : flat[0], flip > 0 ? flat[2] : flat[1], flip > 0 ? flat[0] : flat[3]), stops: rampStops(`sf|${a}`, form) } });
+      if (bevelled) {
+        const [bl, br, tr, tl] = f.inset;
+        // outer edge, inner edge, and whether the lamp is on it (the upper-left lamp: the far rim and the left one)
+        const rims = [[flip > 0 ? [TL, TR, tr, tl] : [BL, BR, br, bl], true], [[BL, TL, tl, bl], true], [[TR, BR, br, tr], false], [flip > 0 ? [BR, BL, bl, br] : [TR, TL, tl, tr], false]];
+        const litRim = () => [[0, [255, 255, 255, round3(0.95 * a)]], [0.22, steel(rgbaOf(lift(c, 0.72, round3(0.95 * a))), 0.15)], [1, steel(rgbaOf(lift(c, 0.22, round3(0.9 * a))), 0.15)]];
+        const darkRim = () => [[0, steel(rgbaOf(shade(c, 0.22, round3(0.92 * a))), 0.2)], [0.6, steel(rgbaOf(shade(c, 0.46, round3(0.9 * a))), 0.2)], [1, steel(rgbaOf(shade(c, 0.7, round3(0.85 * a))), 0.2)]];
+        for (const [q, on] of rims) out.push({ txid: t.txid, face: 'sheen', points: q, fill: 'rgba(0,0,0,0)', grain: true, ramp: { ...rampLine(q[0], q[1], q[2]), stops: rampStops(`${on ? 'sbl' : 'sbd'}|${c}|${a}`, on ? litRim : darkRim) } });
+      } else {
+        // a plain cube has no rim to machine: the gleam along its lit edge, as one ramp
+        const litFar = !viewerLit;
+        const e0 = litFar ? (flip > 0 ? TL : BL) : (flip > 0 ? BL : TL), e1 = litFar ? (flip > 0 ? TR : BR) : (flip > 0 ? BR : TR);
+        const o0 = litFar ? (flip > 0 ? BL : TL) : (flip > 0 ? TL : BL), o1 = litFar ? (flip > 0 ? BR : TR) : (flip > 0 ? TR : BR);
+        const gleam = () => [[0, [255, 255, 255, round3(0.9 * a)]], [0.2, rgbaOf(lift(c, 0.8, round3(0.55 * a)))], [1, rgbaOf(lift(c, 0.5, 0))]];
+        out.push({ txid: t.txid, face: 'sheen', points: [e0, e1, L(e1, o1, 0.3), L(e0, o0, 0.3)], fill: 'rgba(0,0,0,0)', ramp: { ...rampLine(e0, e1, L(e1, o1, 0.3)), stops: rampStops(`sg|${c}|${a}`, gleam) } });
       }
       for (const side of f.sides) {
-        // the side turned to the lamp carries the same ramp up its outer edge
         const d = viewerLit ? Math.max(0, side.ny) : Math.max(0, side.nx * lampSide[0] + side.ny * lampSide[1]);
-        if (d < 0.3) continue;
-        const [p0, p1, p2, p3] = side.points;
-        const SIDE_STEPS = 6;
-        for (let k = 0; k < SIDE_STEPS; k++) {
-          const t2 = 1 - k / SIDE_STEPS;
-          const w = 0.32 * Math.pow(t2, 1.4);
-          const hot = 1 - t2;
-          out.push({ txid: t.txid, face: 'sheen', points: [p0, L(p0, p1, w), L(p3, p2, w), p3],
-            fill: lift(c, 0.55 + 0.4 * hot, round3((0.05 + 0.12 * hot) * d * a)) });
-        }
+        const lv = d > 0.66 ? 2 : d > 0.25 ? 1 : 0;
+        const [p0, p1, , p3] = side.points;
+        const off = (side.key === 'left' || side.key === 'right' ? 0.37 : 0.19) * span * 0.2;
+        out.push({ txid: t.txid, face: 'sheen', points: side.points, fill: 'rgba(0,0,0,0)', grain: true, ramp: { ...roomLine(off), stops: rampStops(`sr${lv}s|${c}|${A}`, room(0.5 + 0.2 * lv)) } });
+        out.push({ txid: t.txid, face: 'sheen', points: side.points, fill: 'rgba(0,0,0,0)', ramp: { ...rampLine(p0, p1, p3), stops: rampStops(`sf|${a}`, form) } });
       }
     }
     if (o.neon === true) {
@@ -1759,9 +1784,11 @@ export function buildScene(tiles, o = {}) {
       const nb = Math.max(0.2, Math.min(2, Number(o.neonBrightness) || 1));
       const halo = lift(nc, 0.25, round3(Math.min(1, 0.3 * nb) * a)), tube = lift(nc, 0.3, round3(Math.min(1, nb) * a)), core = lift(nc, 0.75, round3(Math.min(1, 0.7 * nb) * a));   // the tube keeps the hue; only the thin core goes toward white
       for (const poly of [f.top, ...f.sides.map((sd) => sd.points)]) {
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: round3(11 * (0.6 + 0.4 * nb)), always: true });
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: round3(4 * (0.7 + 0.3 * nb)), always: true });
-        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: core, lw: 1.6, always: true });
+        // (`neonTube` / `neonPart`: the GL renderer draws the three as ONE soft stroke -- the halo's, in the tube's
+        // colour, its cross-section shaped in the shader -- and skips the other two; the 2D canvas draws all three)
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: halo, lw: round3(11 * (0.6 + 0.4 * nb)), always: true, neonTube: lift(nc, 0.3, round3(Math.min(0.99, nb) * a)) });   // (just under opaque: an opaque stroke is never drawn soft)
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: tube, lw: round3(4 * (0.7 + 0.3 * nb)), always: true, neonPart: true });
+        out.push({ txid: t.txid, face: 'neon', points: poly, fill: 'rgba(0,0,0,0)', stroke: core, lw: 1.6, always: true, neonPart: true });
       }
     }
     // the lock: the whole cell flashes white for a moment, then settles

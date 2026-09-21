@@ -43,6 +43,10 @@ All notable changes to this project are documented here. The format follows
   lightning** throws real bolts on both boards -- channels that hold their shape, fork and re-strike -- crackles with
   held tendrils, carries sparks in orbit, and on Markets flies in from beyond the screen's edge and out past the other.
   The grid-tracing ball is the **Plasma ball** now and throws none.
+- **The block finishes on WebGL**: **Chrome** is new -- a room's strip lights in polished steel, soft bands running
+  across the whole board, on both renderers -- and costs what a plain board does (it was twice that); **Satin** is
+  rebuilt as brushed metal (a sheen across every face, machined bevels, a brushed grain on WebGL); **Neon** is one
+  soft stroke an outline with a white core, a coloured tube and a halo (a live neon board 38.7 -> 9.2 ms a frame on an RTX 5090).
 - **Show frame rate** (Settings, Appearance): frames painted in the last second, the processor's
   milliseconds a frame and the renderer, top right of every 3D board.
 

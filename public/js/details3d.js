@@ -4887,7 +4887,9 @@ function sameBoard(ctx, ops, opts, view, geom, gridN, gridH, blockRows) {
   for (let i = 0; i < ops.length; i++) {
     const a = was.ops[i], b = ops[i];
     if (a === b) continue;
-    if (a.fill !== b.fill || a.stroke !== b.stroke || a.lw !== b.lw || a.always !== b.always || a.face !== b.face || a.points.length !== b.points.length) return false;
+    if (a.fill !== b.fill || a.stroke !== b.stroke || a.lw !== b.lw || a.always !== b.always || a.face !== b.face || a.grain !== b.grain || a.lamp !== b.lamp || a.points.length !== b.points.length) return false;
+    // (a ramp's stops are memoised -- the same ramp is the same array -- and its line is four numbers)
+    if (a.ramp || b.ramp) { const p = a.ramp, q = b.ramp; if (!p || !q || p.stops !== q.stops || p.x0 !== q.x0 || p.y0 !== q.y0 || p.x1 !== q.x1 || p.y1 !== q.y1 || p.r !== q.r) return false; }
     for (let k = 0; k < a.points.length; k++) if (a.points[k].x !== b.points[k].x || a.points[k].y !== b.points[k].y) return false;
   }
   return true;
@@ -5009,26 +5011,68 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
     // (ctx.emissive is the GL renderer's: what throws light in its bloom. The cubes do NOT -- their
     // colour is the feerate -- so it is off round them and on for the neon, the line and the effects.
     // On the 2D context it is a property nobody reads.)
+    const quick = ctx.gl2d === true && typeof ctx.fillPoly === 'function';
+    const neonSoft = ctx.gl2d === true && view.softGlow !== false;   // (softGlow: false is the parity check's: the 2D canvas's hard strokes)
     for (const op of frame.ops) {
       if (glow && op.face !== 'shadow') { ctx.emissive = true; glow(); glow = null; }
       if (wall && op.face !== 'shadow') { ctx.emissive = true; wall(); wall = null; }
-      ctx.emissive = op.always === true;       // a neon tube's edge is a lamp; a stone is not
+      if (neonSoft && op.neonPart === true) continue;          // (drawn by its halo's one stroke -- below)
+      ctx.emissive = op.always === true || op.lamp === true;       // a neon tube's edge is a lamp, and so is a glint; a stone is not
       const p = op.points;
-      ctx.beginPath();
-      ctx.moveTo(p[0].x, p[0].y);
-      for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
-      ctx.closePath();
-      ctx.fillStyle = op.fill;
-      ctx.fill();
+      const stroked = !!op.stroke && (opts.edges || op.always);
+      // (a face nobody strokes is one convex polygon: on the GL renderer it goes straight to the batch -- gl2d
+      // fillPoly -- without a path being built for it. It answers false for anything it will not vouch for.)
+      const direct = !stroked && quick;
+      if (!direct) {
+        ctx.beginPath();
+        ctx.moveTo(p[0].x, p[0].y);
+        for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
+        ctx.closePath();
+      }
+      // (a finish's ramp as ONE gradient fill -- blockscene3d rampStops -- on either renderer; on the GL renderer a
+      // gradient is a row of the ramp atlas and batches like a flat fill)
+      if (op.ramp) {
+        const g = op.ramp.r > 0 ? ctx.createRadialGradient(op.ramp.x0, op.ramp.y0, 0, op.ramp.x0, op.ramp.y0, op.ramp.r) : ctx.createLinearGradient(op.ramp.x0, op.ramp.y0, op.ramp.x1, op.ramp.y1);
+        if (typeof g?.useStops === 'function') g.useStops(op.ramp.stops);
+        else if (typeof g?.addColorStop === 'function') {
+          // (the 2D canvas takes strings; they are made once a ramp and left on the memoised array)
+          const st = op.ramp.stops, css = (st.__css ??= st.map((sp) => `rgba(${sp[1][0]},${sp[1][1]},${sp[1][2]},${sp[1][3]})`));
+          for (let i = 0; i < st.length; i++) g.addColorStop(st[i][0], css[i]);
+        }
+        ctx.fillStyle = typeof g?.addColorStop === 'function' || typeof g?.useStops === 'function' ? g : op.fill;   // (a context with no gradients draws nothing for it, rather than throwing)
+      } else ctx.fillStyle = op.fill;
+      if (op.grain === true && neonSoft) ctx.grain = true;        // (the satin finish's brushed grain: the GL renderer's, and not the parity check's)
+      if (!direct) ctx.fill();
+      else if (!ctx.fillPoly(p)) {
+        ctx.beginPath();
+        ctx.moveTo(p[0].x, p[0].y);
+        for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if (op.grain === true && neonSoft) ctx.grain = false;
       // The seam's colour comes from the op, already scaled by the tile's
       // alpha, so an outline fades exactly as its tile does. A fixed colour
       // here is what left black frames hanging where departing blocks had been.
       // `always`: an op whose stroke IS the point (the neon edge) draws whether or not the dark
       // seam (Stone edges) is on -- it replaces the seam rather than accompanying it
-      if (op.stroke && (opts.edges || op.always)) {
+      if (stroked) {
         ctx.strokeStyle = op.stroke;
-        if (op.lw) { const lw0 = ctx.lineWidth; ctx.lineWidth = lw0 * op.lw; ctx.stroke(); ctx.lineWidth = lw0; }
+        // A NEON TUBE IS A SOFT STROKE ON THE GL RENDERER (operator, 2026-09-22: "neon blocks are WAY TOO EXPENSIVE IN
+        // WEBGL"). Its halo, tube and core are wide see-through outlines, and a see-through stroke that overlaps
+        // itself goes through the stencil: measured on an RTX 5090 at 2560x1300, a live neon board was 1,321 stencil
+        // passes and 38.7 ms a frame (the plain board 6.7). A soft stroke is non-overlapping triangles that fade
+        // across themselves in the shader -- it batches like a fill, and a tube that fades is what a tube looks like.
+        // (Widened, because a soft stroke's light is in its middle: the same tube, not a thinner one.)
+        // ...AND ONE STROKE, NOT THREE (the same day: "we really need to fix neon blocks in WebGL. it's very slow").
+        // Soft, the halo, the tube and the core were still three sets of triangles an outline -- 206k vertices a
+        // frame on a live board. The halo's stroke carries all three now: gl2d's `neonStroke` shapes the pen's
+        // cross-section in the shader, in the TUBE's colour (`op.neonTube`), and the other two ops are skipped.
+        const softNeon = neonSoft && op.face === 'neon';
+        if (softNeon) { ctx.softStrokeMin = 1e-6; ctx.softStrokeAny = true; if (op.neonTube) { ctx.strokeStyle = op.neonTube; ctx.neonStroke = true; } }
+        if (op.lw) { const lw0 = ctx.lineWidth; ctx.lineWidth = lw0 * op.lw * (softNeon ? 1.5 : 1); ctx.stroke(); ctx.lineWidth = lw0; }
         else ctx.stroke();
+        if (softNeon) { ctx.softStrokeMin = 0; ctx.softStrokeAny = false; ctx.neonStroke = false; }
       }
     }
     ctx.emissive = true;
@@ -5552,8 +5596,8 @@ export function render3d(canvas, cells, options = {}) {
       }
     }
     const tA = clockMs();
-    const frame = frameAt(st.plan, t, view);
     const surface = surfaceFor(canvas, ctx, geom, opts);
+    const frame = frameAt(st.plan, t, view);
     paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
     // THE FRAME RATE, top right, where it is asked for (appearance.showFps). On a canvas that has a
     // board on it: a game's sky canvas behind its well is the same view, and one figure is enough.

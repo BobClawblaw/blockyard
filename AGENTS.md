@@ -503,6 +503,35 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   sizes and timing hold; the blobs are the fallback. Beside the film the first cuts were GREY: mixed toward white,
   under the old white glow pools (`pool = shaded ? 0 : 1`), a grey shock disc (a thin cyan ring on GL), and the
   operator's white plumes thinning to smoke (they cool to blue on GL). Put ours ABOVE the film's frame to judge.
+- **THE FINISHES ON WEBGL (2026-09-22; operator: "terribly slow on the OpenGL path", "neon blocks are WAY TOO EXPENSIVE
+  IN WEBGL").** Measured on the 5090 at 2560x1300, ms a frame: a live board plain 6.7, old chrome 13.5, neon 38.7
+  (1,321 stencil passes). The cost was never the vertices: it was OPS (a chrome cube was 37 faint quads, each five
+  path calls) and see-through wide strokes (each one a stencil pass). Four things, all in the board painter's seam:
+  an op may carry a **`ramp`** (`{x0,y0,x1,y1,stops}`: one linear-gradient fill, on EITHER renderer; stops are
+  MEMOISED arrays -- `rampStops` -- so `sameBoard` compares them by identity and gl2d's `useStops` skips the sort
+  and keeps the atlas key on the array; a test stub's gradient takes no stops, and the painter must survive that); **`ctx.fillPoly(points)`**
+  sends an unstroked convex face straight to the batch (false = not vouched for, take the path); **neon tubes are
+  ONE soft stroke an outline** on GL -- the halo's, in the tube's colour (`op.neonTube`, kept just under opaque: an
+  opaque stroke is never drawn soft and came out as flat bands), its cross-section (halo, tube, core toward white)
+  shaped in the shader (gl2d flag 16, `ctx.neonStroke`); the tube's and core's ops (`neonPart`) are skipped. Live
+  neon 38.7 -> 9.2 ms. `softGlow: false` -- the parity check -- keeps the three hard strokes, so a plain `--bench`
+  shows the HARD figure; time the real one with `--look --bench`.
+  Keep a ramp's stops independent of per-cube numbers (put those in the gradient LINE) or the 1,024-row atlas churns.
+  **A ramp on GL is 64 texels**: a hard line written as close stops comes out as a smear -- make hard edges geometry.
+- **CHROME is a room's lights in polished steel** (third design; the first was the 37-quad wash, the second a hard
+  tilted horizon cut per cube: "looks terrible with the slanted areas that move", with pictures of soft-banded steel).
+  ONE long soft ramp (`ROOM`, fixed numbers) lies across the whole board and every face is filled from the part it
+  sits under, so bands run on from cube to cube and nothing on a resting board moves; a flying cube's reflection
+  slides by its height only. Two fills a face (the room, a near-edge fall-off), on BOTH renderers. Now costs what the
+  plain board does on GL (rest 3.9, live 8.1). NOT verified: Software in a real browser -- the harness's 2D canvas is
+  CPU-rasterised and gradient faces read 70 ms there against 56 for the old quads.
+- **SATIN is brushed metal** (rebuilt 2026-09-22: "still too muted and not metallic enough" -- it was a gleam along
+  one edge over flat paint). A broad sheen across every face from a board-wide ramp like chrome's but gentle (never
+  blown out, never black: that difference IS the two finishes), the colour pulled a little toward steel, each bevel
+  rim its own ramp (white-hot along the lamp's corner, deep on the far two), a near-edge fall-off, and on the GL
+  renderer a **brushed grain** in the shader (flag 8, `ctx.grain`, asked for per op with `grain: true`; device-pixel
+  streaks, a few percent; off under `softGlow: false`). The vertex flag word is now 1 disc + 2 emissive + 4 soft
+  + 8 grain + 16 neon: decode the big ones FIRST.
 - **The frame rate** (`appearance.showFps`, `options.showFps`): top right of any board that has tiles,
   drawn through the frame's own context so it is the same on both renderers. It counts frames THIS
   canvas painted in the last second (a resting board under a sky reads about 30 by design; a parked
@@ -657,7 +686,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1391 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1392 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -986,7 +1015,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1391 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1392 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

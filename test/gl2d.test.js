@@ -649,7 +649,7 @@ test('the price line\'s halo on WebGL is a GLOW: soft across the pen, round over
   assert.equal(ctx.softStrokeMin, 0);
   // the shader fades it, and reads the three flags apart
   const src = readFileSync(new URL('../public/js/gl2d.js', import.meta.url), 'utf8');
-  assert.match(src, /float e = mod\(vD\.z, 4\.0\) > 1\.5 \? 1\.0 : 0\.0;/);
+  assert.match(src, /float e = mod\(z, 4\.0\) > 1\.5 \? 1\.0 : 0\.0;/);
   assert.match(src, /cover = \(1\.0 - x \* x\) \* \(1\.0 - x \* x\);/);
   // and the chart asks for it for the line alone, and lets go of it after
   const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
@@ -737,4 +737,42 @@ test('the current price is READ: its tag throws no light, and its figures take t
   assert.equal(tagIsLight(undefined), false);
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /ctx\.emissive = false; axisLabels\(/, 'with the glow on, a lit tag bloomed over its own figures');
+});
+
+test('a cube face goes straight to the batch (fillPoly), and a finish\'s ramp is a prepared gradient', () => {
+  // (operator, 2026-09-22, of the metallic finish: "It's terribly slow on the OpenGL path". A board is ten thousand
+  // quads a frame; each through beginPath/moveTo/lineTo/closePath/fill was most of a live board's time.)
+  const gl = stubGl(), ctx = createGl2d(fakeCanvas(), { gl });
+  ctx.setTransform(2, 0, 0, 2, 0, 0);
+  const quad = (x) => [{ x, y: 0 }, { x: x + 1, y: 0 }, { x: x + 1, y: 1 }, { x, y: 1 }];
+  ctx.fillStyle = 'rgba(200,80,60,0.5)';
+  for (let i = 0; i < 100; i++) assert.equal(ctx.fillPoly(quad(i)), true);
+  assert.equal(ctx.fillPoly([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 4 }]), false, 'a concave outline is not vouched for: the caller takes the ordinary path');
+  // a memoised ramp: no sort, and its atlas key is computed once and left on the array
+  const stops = [[0, [10, 20, 30, 0.9]], [0.5, [255, 255, 255, 0.9]], [1, [0, 0, 0, 0.9]]];
+  for (let i = 0; i < 50; i++) { const g = ctx.createLinearGradient(i, 0, i, 1); g.useStops(stops); ctx.fillStyle = g; assert.equal(ctx.fillPoly(quad(i)), true); }
+  assert.equal(typeof stops.__key, 'number', 'keyed once, on the array');
+  ctx.flush();
+  assert.equal(draws(gl).length, 1, 'flat faces and ramped faces in ONE draw');
+  assert.equal(vertsDrawn(gl), 150 * 6);
+  assert.equal(ctx.stats.stencils, 0);
+  // and the painter uses them: unstroked faces direct, neon tubes soft (1,321 stencil passes a frame, measured, as hard strokes)
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(d3, /const direct = !stroked && quick;/);
+  assert.match(d3, /else if \(!ctx\.fillPoly\(p\)\) \{/, 'with the path as the fallback');
+  // ...and ONE stroke an outline, not three ("we really need to fix neon blocks in WebGL. it's very slow"): the halo's
+  // stroke carries the tube and the core, its cross-section shaped in the shader (flag 16), in the tube's colour
+  assert.match(d3, /if \(neonSoft && op\.neonPart === true\) continue;/, 'the tube\'s and the core\'s own ops are skipped');
+  assert.match(d3, /if \(op\.neonTube\) \{ ctx\.strokeStyle = op\.neonTube; ctx\.neonStroke = true; \}/);
+  assert.match(d3, /if \(softNeon\) \{ ctx\.softStrokeMin = 0; ctx\.softStrokeAny = false; ctx\.neonStroke = false; \}/, 'and let go after');
+  const glsrc = readFileSync(new URL('../public/js/gl2d.js', import.meta.url), 'utf8');
+  assert.match(glsrc, /if \(z > 15\.5\) \{ z -= 16\.0; neon = 1\.0; \}\s*\n\s*if \(z > 7\.5\)/, 'the biggest flag is taken off first');
+  assert.match(glsrc, /= 4 \+ emissive \+ neonFlag;/);
+  // the satin finish's brushed grain: a flag on the vertex (8), switched on round the fills that ask for it
+  const src = readFileSync(new URL('../public/js/gl2d.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(z > 7\.5\) \{ z -= 8\.0; grain = 1\.0; \}/, 'decoded before the soft-stroke and disc flags, which it would otherwise be read as');
+  assert.match(src, /o\.rgb = min\(o\.rgb \* k, vec3\(o\.a\)\);/, 'and held inside the pixel\'s own opacity (premultiplied)');
+  assert.match(d3, /if \(op\.grain === true && neonSoft\) ctx\.grain = true;/);
+  assert.match(d3, /if \(op\.grain === true && neonSoft\) ctx\.grain = false;/, 'and off again after');
+  assert.match(d3, /if \(a\.ramp \|\| b\.ramp\) \{/, 'and a kept board compares its ramps');
 });

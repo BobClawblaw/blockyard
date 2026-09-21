@@ -128,6 +128,11 @@ try {
   const scenes = [];
   for (const sky of ['galaxy', 'earth', 'none']) scenes.push({ name: 'space-rest-' + sky, board: 'space', fx: null, extra: { ...st.skyFor({ ...S, space: { ...S.space, sky } }, 'space') } });
   scenes.push({ name: 'markets-rest', board: 'markets', fx: null });
+  // the finishes: a cube under chrome is thirty-odd translucent quads, so this is where a slow board shows
+  for (const style of ['chrome', 'satin']) scenes.push({ name: 'space-rest-' + style, board: 'space', fx: null, extra: { sheen: true, sheenStyle: style } });
+  scenes.push({ name: 'space-rest-neon', board: 'space', fx: null, extra: { neon: true } });
+  scenes.push({ name: 'space-ripple-neon', board: 'space', fx: 'ripple', extra: { neon: true } });
+  scenes.push({ name: 'space-ripple-chrome', board: 'space', fx: 'ripple', extra: { sheen: true, sheenStyle: 'chrome' } });   // (a ripple forces the board live: nothing is kept on the card)
   scenes.push({ name: 'well-clear-neon', board: 'well', fx: null });
   for (const k of d3.SPACE_FX) scenes.push({ name: 'space-' + k, board: 'space', fx: k });
   for (const k of d3.MARKET_FX) scenes.push({ name: 'markets-' + k, board: 'markets', fx: k });

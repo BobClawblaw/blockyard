@@ -598,6 +598,12 @@ class GlGradient {
     if (!c || !(o >= 0 && o <= 1)) return;
     this.stops.push([o, c]); this.settled = null; this.key = null;
   }
+  /** Stops ALREADY SETTLED -- sorted, offsets in 0..1, [r, g, b, a] colours, 32 at most -- and kept by the caller
+   *  from frame to frame (blockscene3d rampStops): no sort, and the atlas key is computed once and left on the array. */
+  useStops(stops) {
+    if (!Array.isArray(stops) || stops.length > 32) { for (const sp of stops || []) this.addColorStop(sp[0], sp[1]); return; }
+    this.stops = stops; this.settled = stops; this.keyOn = stops; this.key = stops.__key ?? null;
+  }
 }
 
 // ------------------------------------------------------------------- the programs
@@ -667,15 +673,29 @@ void main() {
     // to it measured in pixels (fwidth), so a circle is two triangles at any size and its rim is
     // smoother than any polygon's -- under any transform, an ellipse included
     float cover = 1.0;
-    // (the third word is three flags added up: 1 an analytic disc, 2 emissive, 4 a SOFT STROKE)
-    float e = mod(vD.z, 4.0) > 1.5 ? 1.0 : 0.0;
-    if (vD.z > 3.5) {
+    // (the third word is flags added up: 1 an analytic disc, 2 emissive, 4 a SOFT STROKE, 8 BRUSHED GRAIN)
+    float z = vD.z, grain = 0.0, neon = 0.0;
+    if (z > 15.5) { z -= 16.0; neon = 1.0; }
+    if (z > 7.5) { z -= 8.0; grain = 1.0; }
+    float e = mod(z, 4.0) > 1.5 ? 1.0 : 0.0;
+    if (z > 3.5) {
       // A SOFT STROKE: the first word runs -1..1 ACROSS the pen, and the light falls off from the
       // middle of it to nothing at its edge. A glow built from stacked flat strokes falls off in
       // STEPS, and with this renderer's crisp edges the steps are bands (the price line's halo).
       float x = clamp(abs(vD.x), 0.0, 1.0);
       cover = (1.0 - x * x) * (1.0 - x * x);
-    } else if (mod(vD.z, 2.0) > 0.5) {
+      if (neon > 0.5) {
+        // A NEON TUBE IN ONE STROKE (flag 16): the pen is the HALO's width, and across it the shader lays what
+        // were three strokes -- a wide faint halo, the tube in its colour, a core gone toward white. One set of
+        // triangles an outline instead of three (a live neon board was 206k vertices a frame).
+        float tube = 1.0 - smoothstep(0.26, 0.46, x), core = 1.0 - smoothstep(0.05, 0.2, x);
+        float al = vCol.a * max(0.3 * cover, tube);
+        vec3 base = vCol.rgb / max(vCol.a, 1e-4);
+        o = vec4(mix(base, vec3(1.0), 0.72 * core) * al, al);
+        emit(e);
+        return;
+      }
+    } else if (mod(z, 2.0) > 0.5) {
       float d = length(vD.xy), w = max(fwidth(d), 1e-6);
       cover = clamp(0.5 + (1.0 - d) / w, 0.0, 1.0);
       if (cover <= 0.0) discard;
@@ -689,6 +709,16 @@ void main() {
     int i0 = int(floor(t)), i1 = min(i0 + 1, 63);
     vec4 c = mix(texelFetch(uRamp, ivec2(i0, row), 0), texelFetch(uRamp, ivec2(i1, row), 0), t - float(i0));
     o = vec4(c.rgb * c.a, c.a) * (vCol.a * cover);
+    // BRUSHED GRAIN (the satin finish): fine streaks along the brush, each pixel row its own shade and a slower
+    // wander along it -- a few percent of the colour, which is what separates brushed metal from glossy paint.
+    // In DEVICE pixels, so it is the same grain on a big cube and a small one, as a real sheet's is.
+    if (grain > 0.5) {
+      vec2 g = gl_FragCoord.xy;
+      float row = fract(sin(floor(g.y) * 12.9898 + floor(g.x / 23.0) * 78.233) * 43758.5453);
+      float slow = fract(sin(floor(g.y / 3.0) * 39.3468 + floor(g.x / 61.0) * 11.135) * 24634.6345);
+      float k = 1.0 + 0.10 * (row - 0.5) + 0.08 * (slow - 0.5);
+      o.rgb = min(o.rgb * k, vec3(o.a));
+    }
     emit(e);
     return;
   }
@@ -1011,6 +1041,7 @@ export function createGl2d(canvas, hooks = {}) {
   let mode = -1;                                            // what the program's uniforms are set for
   let prepared = false;
 
+  const polyScratch = [];
   const colours = new Map();
   const colourOf = (style) => {
     let c = colours.get(style);
@@ -1161,6 +1192,8 @@ export function createGl2d(canvas, hooks = {}) {
   };
   // the atlas gradient the next vertices carry (G.row < 0: none): device -> gradient coordinate is affine
   let emissive = 2;                                         // 2 or 0: rides in the disc word (see the shader)
+  let neonFlag = 0;                                         // 16 while ctx.neonStroke is on: a soft stroke is drawn with the neon tube's cross-section
+  let grainFlag = 0;                                        // 8 while ctx.grain is on: fills carry the brushed grain (the satin finish)
   let softAny = false;                                      // ...and however strong they are (ctx.softStrokeAny): a bolt's white-hot core is a beam, not a ruled line
   let softMin = 0;                                          // strokes this wide or wider, and faint, are drawn SOFT (0: none) -- ctx.softStrokeMin
   const G = { row: -1, a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 };
@@ -1168,7 +1201,7 @@ export function createGl2d(canvas, hooks = {}) {
     const i = nv * 9; f32[i] = x; f32[i + 1] = y; u32[i + 2] = col;
     if (G.row < 0) f32[i + 5] = -1;
     else { f32[i + 3] = G.a * x + G.c * y + G.e; f32[i + 4] = G.b * x + G.d * y + G.f; f32[i + 5] = G.row; }
-    f32[i + 8] = emissive;
+    f32[i + 8] = emissive + grainFlag;
     nv++;
   };
   // A DISC AS ONE QUAD: centre and the two half-axes in DEVICE space (so any transform, and an
@@ -1228,6 +1261,7 @@ export function createGl2d(canvas, hooks = {}) {
         h2 = Math.imul(h2 ^ w2, 0x85ebca6b) ^ (h2 >>> 13); h2 = Math.imul(h2 ^ w1, 0xc2b2ae35) ^ (h2 >>> 16); h2 = Math.imul(h2 ^ w0, 0x27d4eb2f);
       }
       key = grad.key = (h1 >>> 0) * 2097152 + ((h2 >>> 0) & 0x1fffff);
+      if (grad.keyOn) grad.keyOn.__key = key;            // (prepared stops: the next gradient made from them starts keyed)
     }
     let row = rampRows.get(key);
     if (row !== undefined) return row;
@@ -1551,7 +1585,7 @@ export function createGl2d(canvas, hooks = {}) {
         tri(x0, y0, x1, y1, x2, y2);
         f32[i0 + 6] = l0; f32[i0 + 15] = l1; f32[i0 + 24] = l2;
         f32[i0 + 7] = f32[i0 + 16] = f32[i0 + 25] = 0;
-        f32[i0 + 8] = f32[i0 + 17] = f32[i0 + 26] = 4 + emissive;
+        f32[i0 + 8] = f32[i0 + 17] = f32[i0 + 26] = 4 + emissive + neonFlag;
       };
       for (const s of live) softStrokeGeometry(user(s), s.closed, w * 1.35, softTri, k);
       return true;
@@ -2084,6 +2118,28 @@ void main() {
     bezierCurveTo(ax, ay, bx, by, x, y) { P.bezierCurveTo(ax, ay, bx, by, x, y); },
     createPath() { return new GlPath(); },
     fill, stroke, retained, starField, particles, bake, shade,
+    // ONE CONVEX POLYGON, straight to the batch: [{x, y}, ...] in user space. A board is ten thousand quads a frame
+    // (a cube's faces, bevels, a finish's ramps), and each through beginPath/moveTo/lineTo/closePath/fill is five
+    // calls, two arrays and a sub-path object. The same triangles, the same paint rules as fill(); anything it is
+    // not sure of (a concave outline, a two-circle gradient) goes round by the ordinary path and says so (false).
+    fillPoly(pts) {
+      if (lost) return true;
+      const n = pts.length;
+      if (n < 3) return true;
+      const paint = paintOf(S.fillStyle);
+      if (!paint) return true;
+      const m = P.m, flat = polyScratch;
+      flat.length = 2 * n;
+      for (let i = 0; i < n; i++) { const q = pts[i]; flat[2 * i] = m[0] * q.x + m[2] * q.y + m[4]; flat[2 * i + 1] = m[1] * q.x + m[3] * q.y + m[5]; }
+      if (n > 3 && !isConvex(flat)) return false;
+      prepare(); setSolid();
+      let col;
+      if (paint.grad) { if (!aimGradient(paint)) return false; col = 0xffffffff; } else col = packColour(paint.colour);
+      room((n - 2) * 3);
+      for (let i = 1; i < n - 1; i++) { vert(flat[0], flat[1], col); vert(flat[2 * i], flat[2 * i + 1], col); vert(flat[2 * i + 2], flat[2 * i + 3], col); }
+      if (paint.grad) G.row = -1;
+      return true;
+    },
     fillRect(x, y, w, h) { const keep = P.subs, cur = P.cur; P.subs = []; P.cur = null; P.rect(x, y, w, h); fill(); P.subs = keep; P.cur = cur; },
     clearRect,
     createLinearGradient(x0, y0, x1, y1) { return new GlGradient('linear', [x0, y0, x1, y1]); },
@@ -2099,6 +2155,8 @@ void main() {
     get emissive() { return emissive === 2; }, set emissive(v) { emissive = v ? 2 : 0; },
     /** Strokes at least this wide (user units) and faint (alpha under 0.4) are drawn as SOFT glows; 0 turns it off. GL only. */
     /** With softStrokeMin set: soft strokes however STRONG they are (a lightning bolt's core), not only faint glows. */
+    get neonStroke() { return neonFlag === 16; }, set neonStroke(v) { neonFlag = v === true ? 16 : 0; },
+    get grain() { return grainFlag === 8; }, set grain(v) { grainFlag = v === true ? 8 : 0; },
     get softStrokeAny() { return softAny; }, set softStrokeAny(v) { softAny = v === true; },
     get softStrokeMin() { return softMin; }, set softStrokeMin(v) { const n = Number(v); softMin = Number.isFinite(n) && n > 0 ? n : 0; },
     get bloom() { return bloom; }, set bloom(v) { const n = Number(v); bloom = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; },
