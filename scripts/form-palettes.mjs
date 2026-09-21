@@ -9,7 +9,7 @@
 //   gas L*    how light the densest gas is (0 black, 100 white). The chart's own colours sit at 60-90.
 //   line      the WCAG contrast of the yellow line against the densest gas (4.5 is the floor for text).
 // and ranks them, worst clash first.   node scripts/form-palettes.mjs
-import { FORM_PALETTES, formRamp } from '../public/js/formgl.js';
+import { FORM_PALETTES, FORM_BRIGHTNESS_DEFAULT, formRamp } from '../public/js/formgl.js';
 
 const CHART = { green: [0x1f, 0xc9, 0x8a], red: [0xef, 0x4d, 0x5e], line: [255, 236, 70] };
 const lin = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
@@ -35,7 +35,11 @@ export function scorePalette(name, brightness = 0.8) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const rows = Object.keys(FORM_PALETTES).map((n) => scorePalette(n)).sort((a, b) => a.worst - b.worst);
+  // at the brightness it SHIPS at, unless told otherwise (--brightness 0.8): a brighter sky is no nearer the chart's
+  // colours, but its densest gas is lighter, and the yellow line has less contrast where it crosses that gas
+  const i = process.argv.indexOf('--brightness'), b = i > 0 ? Number(process.argv[i + 1]) : FORM_BRIGHTNESS_DEFAULT;
+  console.log(`at brightness ${b}`);
+  const rows = Object.keys(FORM_PALETTES).map((n) => scorePalette(n, b)).sort((a, b2) => a.worst - b2.worst);
   console.log('palette        nearest to:  green    red   line    gas L*   line contrast');
   for (const r of rows) console.log(`${r.name.padEnd(14)}            ${r.green.toFixed(0).padStart(6)} ${r.red.toFixed(0).padStart(6)} ${r.line.toFixed(0).padStart(6)}   ${r.gasL.toFixed(0).padStart(6)}   ${r.lineContrast.toFixed(1).padStart(6)}${r.worst < 25 ? '   <- close to a chart colour' : ''}`);
 }

@@ -36,10 +36,12 @@ test('the shader is the film\'s picture: a density field through a magma ramp, i
   // ahead of red at the dark end and red ahead of blue at the bright end, and it never goes grey
   // (ONE ramp: the shader's magma() is generated from FORM_RAMP, and the 2D fallback tints through formRamp)
   assert.match(glsl, /uniform vec4 uRamp\[7\];/, 'the ramp is a uniform fed from FORM_PALETTES: one definition, and a palette is a setting, not a recompile');
-  const stops = FORM_RAMP.map(([, c]) => c);
+  // (the FILM'S ramp, magma -- which is no longer the shipped palette, but is still what this test describes)
+  const stops = FORM_PALETTES.magma.map(([, c]) => c);
   assert.deepEqual(formRamp(0), [0, 0, 0]);
-  assert.deepEqual(formRamp(1), FORM_RAMP.at(-1)[1].map((v) => Math.round(v * 255)));
-  assert.deepEqual(formRamp(0.24), [0, 1, 2].map((i) => Math.round(((FORM_RAMP[1][1][i] + FORM_RAMP[2][1][i]) / 2) * 255)), 'halfway between two stops');
+  assert.deepEqual(formRamp(1, 'magma'), FORM_PALETTES.magma.at(-1)[1].map((v) => Math.round(v * 255)));
+  assert.deepEqual(formRamp(0.24, 'magma'), [0, 1, 2].map((i) => Math.round(((FORM_PALETTES.magma[1][1][i] + FORM_PALETTES.magma[2][1][i]) / 2) * 255)), 'halfway between two stops');
+  assert.deepEqual(formRamp(1), FORM_RAMP.at(-1)[1].map((v) => Math.round(v * 255)), 'and with no palette named, the shipped one');
   assert.equal(stops.length, 7);
   assert.deepEqual(stops[0], [0, 0, 0], 'nothing is black');
   assert.ok(stops[1][2] > stops[1][0] * 2 && stops[2][2] > stops[2][0], 'thin gas is violet');
@@ -149,9 +151,9 @@ test('the galaxy sits in the middle or in any corner: the Galaxy sky\'s own five
   // THE SHIPPED PLACE, PACE AND LEVEL ARE THE OPERATOR'S OWN (read from their saved settings, 2026-09-21:
   // "make those the default settings. It was originally too bright and was threatening to overpower the
   // chart"): in a corner, under full brightness, slow. The layer's own fall-backs are the same numbers.
-  assert.deepEqual([DEFAULTS.sky.formAt, DEFAULTS.sky.formBrightness, DEFAULTS.sky.formFlow, DEFAULTS.sky.formSpeed], ['top-left', 0.8, 0.5, 0.4]);
-  assert.deepEqual([FORM_AT_DEFAULT, FORM_BRIGHTNESS_DEFAULT, FORM_FLOW_DEFAULT, FORM_SPEED_DEFAULT], ['top-left', 0.8, 0.5, 0.4], 'one set of numbers, not two');
-  assert.ok(DEFAULTS.sky.formBrightness < 1, 'never the full picture behind a chart');
+  // (brightness was 0.8 while the palette was magma; on 2026-09-22, with Cobalt & gold, the operator set it to 1)
+  assert.deepEqual([DEFAULTS.sky.formAt, DEFAULTS.sky.formBrightness, DEFAULTS.sky.formFlow, DEFAULTS.sky.formSpeed], ['top-left', 1, 0.5, 0.4]);
+  assert.deepEqual([FORM_AT_DEFAULT, FORM_BRIGHTNESS_DEFAULT, FORM_FLOW_DEFAULT, FORM_SPEED_DEFAULT], ['top-left', 1, 0.5, 0.4], 'one set of numbers, not two');
   const row = PANEL.find((g) => g.group === 'sky').rows.find((r) => r.key === 'formAt');
   assert.deepEqual(row.options.map((o) => o[0]), Object.keys(FORM_PLACEMENTS), 'the panel offers exactly the places there are');
   assert.equal(skyFor(normalise({ sky: { formAt: 'top-right' } }), 'space').formAt, 'top-right', 'and it reaches the board');
@@ -217,7 +219,10 @@ test('the palettes: thirteen, the film\'s the default, and none of the twelve ne
   // chart too badly. The chart is the most important visual")
   const { scorePalette } = await import('../scripts/form-palettes.mjs');
   const names = Object.keys(FORM_PALETTES);
-  assert.equal(names.length, 13); assert.equal(FORM_PALETTE_DEFAULT, 'magma'); assert.equal(FORM_RAMP, FORM_PALETTES.magma);
+  // THE SHIPPED ONE IS THE OPERATOR'S (2026-09-22: "make Cyan and Gold the new default" -- cobaltGold in their saved
+  // settings): it is among the farthest from every chart colour, where the film's magma is the nearest
+  assert.equal(names.length, 13); assert.equal(FORM_PALETTE_DEFAULT, 'cobaltGold'); assert.equal(FORM_RAMP, FORM_PALETTES.cobaltGold);
+  assert.ok(scorePalette(FORM_PALETTE_DEFAULT).worst >= 80, 'the default leaves the chart alone');
   for (const n of names) {
     const p = FORM_PALETTES[n];
     assert.equal(p.length, 7, n);
@@ -238,11 +243,12 @@ test('the palettes: thirteen, the film\'s the default, and none of the twelve ne
   const row = PANEL.find((g) => g.group === 'sky').rows.find((r) => r.key === 'formPalette');
   assert.equal(row.kind, 'choice');
   assert.deepEqual(row.options.map((o) => o[0]).sort(), [...names].sort(), 'the picker lists exactly the palettes there are');
-  assert.equal(row.options[0][0], 'magma');
+  assert.equal(row.options[0][0], FORM_PALETTE_DEFAULT, 'the shipped one first');
+  assert.deepEqual(row.options.find((o) => o[0] === 'magma'), ['magma', 'Magma'], 'plain Magma: no "(the film)"');
   assert.deepEqual(FORM_PALETTE_LABELS.map((o) => o[0]), row.options.map((o) => o[0]));
   assert.equal(DEFAULTS.sky.formPalette, FORM_PALETTE_DEFAULT);
   assert.equal(skyFor(normalise({ sky: { formPalette: 'cobaltGold' } }), 'markets').formPalette, 'cobaltGold', 'and it reaches the board');
-  assert.equal(normalise({ sky: { formPalette: 'beige' } }).sky.formPalette, 'magma');
+  assert.equal(normalise({ sky: { formPalette: 'beige' } }).sky.formPalette, 'cobaltGold');
   // the palette reaches the shader as a uniform, and an unknown one is the default
   const sent = [];
   const gl = new Proxy({}, { get: (_t, k) => (typeof k !== 'string' ? undefined : /^[A-Z_0-9]+$/.test(k) ? k
@@ -253,7 +259,7 @@ test('the palettes: thirteen, the film\'s the default, and none of the twelve ne
   ctl.draw(800, 450, 1, 1000, { formPalette: 'abyss' }); ctl.draw(800, 450, 1, 1100, { formPalette: 'no such' }); ctl.draw(800, 450, 1, 1200, {});
   assert.equal(sent[0].length, 28);
   assert.ok(Math.abs(sent[0][4 * 5 + 3] - 214 / 255) < 1e-6, 'abyss: its densest gas is blue');
-  assert.deepEqual(sent[1], sent[2]); assert.ok(Math.abs(sent[1][4 * 5 + 1] - 251 / 255) < 1e-6, 'the default is the film\'s orange');
+  assert.deepEqual(sent[1], sent[2]); assert.ok(Math.abs(sent[1][4 * 5 + 3] - 222 / 255) < 1e-6, 'the default\'s densest gas is cobalt');
   assert.deepEqual(formRamp(0.85, 'abyss'), [84, 158, 214]);
 });
 

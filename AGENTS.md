@@ -416,9 +416,10 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   panel is empty). A satellite ARRIVES: born beyond the frame (`SAT_R0`), its cloud eased up over
   nearly half its life, its knot condensing later; born inside the frame it popped.
   **Its shipped place, level and pace are the OPERATOR'S OWN saved settings** (2026-09-21: "It was
-  originally too bright and was threatening to overpower the chart"): `formAt` top-left,
-  `formBrightness` 0.8, `formFlow` 0.5, `formSpeed` 0.4 -- a sky behind a chart, not a film in front
-  of one. They are one set of numbers (settings.js DEFAULTS.sky == formgl.js FORM_*_DEFAULT, pinned).
+  originally too bright and was threatening to overpower the chart"): `formAt` top-left, `formFlow` 0.5,
+  `formSpeed` 0.4, and since 2026-09-22 `formPalette` cobaltGold at `formBrightness` 1 (it was magma at
+  0.8: the blues do not fight the chart, so the full picture can stand) -- a sky behind a chart, not a
+  film in front of one. They are one set of numbers (settings.js DEFAULTS.sky == formgl.js FORM_*_DEFAULT, pinned).
   **Thirteen palettes** (`FORM_PALETTES`, picker `sky.formPalette`, the shader's ramp a UNIFORM so a palette is
   a setting and not a recompile; the fallback wears it too). The chart is the most important thing on the
   board, so a palette is judged in NUMBERS against the chart's real colours (`node scripts/form-palettes.mjs`:

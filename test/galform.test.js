@@ -137,7 +137,7 @@ test('brought along with the GL layer: perpetual, placed, and in the film\'s col
   const { FORM_PLACEMENTS, formRamp } = await import('../public/js/formgl.js');
   const makeCtx = (fills) => ({ canvas: null, fillStyle: '', beginPath() {}, arc(x, y, r) { fills.push({ style: this.fillStyle, x, y, r }); }, fill() {}, fillRect() {}, ellipse() {} });
   // (the middle, at speed 1, unless a case says otherwise: the shipped place and pace are the operator's own)
-  const at = (now, o = {}) => { const f = []; drawGalaxyForm(makeCtx(f), 800, 500, 1, now, { starBrightness: 1, formAt: 'center', formSpeed: 1, ...o }); return f; };
+  const at = (now, o = {}) => { const f = []; drawGalaxyForm(makeCtx(f), 800, 500, 1, now, { starBrightness: 1, formAt: 'center', formSpeed: 1, formPalette: 'magma', ...o }); return f; };   // (magma: the film's colours are what this test is about)
   // PERPETUAL: long after the assembly it is still there (it used to be fading to black every 140 s, and
   // at exactly 140 s and 280 s drew nothing at all) -- and the disc is still TURNING
   for (const s of [140, 280, 3600, 86400]) assert.ok(at(s * 1000).length > 1500, `drawn at ${s} s`);
@@ -166,11 +166,16 @@ test('brought along with the GL layer: perpetual, placed, and in the film\'s col
   assert.ok(half.length <= full.length && Math.abs(sumA(half) / sumA(full) - 0.5) < 0.03, 'half the light');
   assert.deepEqual(new Set(half.map((f) => f.style.replace(/,[\d.]+\)$/, ''))).size <= new Set(full.map((f) => f.style.replace(/,[\d.]+\)$/, ''))).size, true, 'no new colours');
   // COLOURS: every tint is a colour of the shared ramp, the core is its pale end and the web its violet
-  const ramp = new Set(); for (let i = 0; i <= 64; i++) ramp.add(formRamp(i / 64).join(','));
+  const ramp = new Set(); for (let i = 0; i <= 64; i++) ramp.add(formRamp(i / 64, 'magma').join(','));
   const tints = new Set(at(400_000).map((f) => f.style.replace(/^rgba\(/, '').replace(/,[\d.]+\)$/, '')));
   for (const t of tints) assert.ok(ramp.has(t), `${t} is on the ramp`);
   const [r, g, bl] = [...tints].map((t) => t.split(',').map(Number)).sort((x, y) => (y[0] + y[1] + y[2]) - (x[0] + x[1] + x[2]))[0];
   assert.ok(r > 240 && g > 200 && bl > 120, 'the core reaches the pale end');
   assert.ok([...tints].some((t) => { const [rr, gg, bb] = t.split(',').map(Number); return bb > rr && bb > gg; }), 'and thin gas is violet');
   assert.ok(![...tints].some((t) => { const [rr, gg, bb] = t.split(',').map(Number); return Math.abs(rr - gg) < 12 && Math.abs(gg - bb) < 25 && rr > 150; }), 'nothing is the old grey-white');
+  // and with no palette named it wears the SHIPPED one, as the GL layer does: cobalt gas, not magma's violet-to-orange
+  const shipped = new Set(); for (let i = 0; i <= 64; i++) shipped.add(formRamp(i / 64).join(','));
+  const worn = new Set(at(400_000, { formPalette: undefined }).map((f) => f.style.replace(/^rgba\(/, '').replace(/,[\d.]+\)$/, '')));
+  for (const t of worn) assert.ok(shipped.has(t), `${t} is on the shipped ramp`);
+  assert.ok([...worn].every((t) => { const [rr, , bb] = t.split(',').map(Number); return bb >= rr || rr > 200; }), 'blue gas; only the core is warm');
 });

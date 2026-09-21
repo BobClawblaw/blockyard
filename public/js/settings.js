@@ -183,11 +183,12 @@ export const DEFAULTS = Object.freeze({
     // white-on-black speck renderer here.
     // THE FOUR BELOW ARE THE OPERATOR'S OWN, read out of their saved settings (2026-09-21: "read the
     // settings I have selected for the formation, and make those the default settings. It was originally
-    // too bright and was threatening to overpower the chart"): in a corner, off full brightness, and
-    // slow -- a sky behind a chart, not a film in front of one.
+    // too bright and was threatening to overpower the chart"): in a corner and slow -- a sky behind a chart,
+    // not a film in front of one. (That brightness was 0.8, in magma. On 2026-09-22, living in the blues, they
+    // set it back to 1 and made Cobalt & gold the palette: "Set brightness to 1.0 as I've set the default now".)
     formAt: 'top-left',   // where its galaxy sits: behind the board, or any of the corners (the Galaxy's own five places)
-    formPalette: 'magma', // its colours: formgl.js FORM_PALETTES (the film's own, and twelve chosen to stay off the chart's)
-    formBrightness: 0.8,  // 1 is the picture as it was first made
+    formPalette: 'cobaltGold', // its colours: formgl.js FORM_PALETTES (the film's own, and twelve chosen to stay off the chart's)
+    formBrightness: 1,    // 1 is the picture as it was first made
     formFlow: 0.5,        // the pace of the gas itself: its flow inward, its swirl, its turbulence, the outbursts
     formSpeed: 0.4,       // how fast the galaxy and its satellites live; 0 holds them where they are
   }),
@@ -606,12 +607,12 @@ const PANEL_GROUPS = Object.freeze([
       }),
       Object.freeze({
         key: 'formPalette', label: 'Formation colours', kind: 'choice',
-        hint: 'The gas\u2019s colours. Magma is the film\u2019s own, and its dense gas sits close to the candles\u2019 red and the price line\u2019s yellow. The other twelve were chosen, and measured, to stay well away from the chart\u2019s green, red and yellow: the cool ones (Midnight, Cobalt & gold, Abyss, Ultraviolet) leave the chart clearest, Silver and Glacier are neutral, and the warm ones (Ember, Sepia) are held dark',
+        hint: 'The gas\u2019s colours. Cobalt & gold, as shipped, is all-blue gas with the galaxy itself the one warm thing in it. Twelve of the thirteen were chosen, and measured, to stay well away from the chart\u2019s green, red and yellow: the cool ones (Cobalt & gold, Midnight, Abyss, Ultraviolet) leave the chart clearest, Silver and Glacier are neutral, and the warm ones (Ember, Sepia) are held dark. Magma is the colours of the film this sky is after; its dense gas sits close to the candles\u2019 red',
         options: FORM_PALETTE_OPTIONS,
       }),
       Object.freeze({
         key: 'formBrightness', label: 'Formation brightness', kind: 'range', min: 0.05, max: 1.5, step: 0.05,
-        hint: 'How bright the gas is behind the board. It dims the colours, not the gas, so the violets and oranges stay what they are at any level. 1 is the full picture, which can overpower a chart in front of it; it ships a little under',
+        hint: 'How bright the gas is behind the board. It dims the colours, not the gas, so the violets and oranges stay what they are at any level. 1 is the full picture, and what it ships at. In a warm palette that can overpower a chart in front of it: turn it down',
       }),
       Object.freeze({
         key: 'formFlow', label: 'Formation flow', kind: 'range', min: 0, max: 4, step: 0.1,

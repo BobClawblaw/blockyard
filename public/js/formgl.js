@@ -83,8 +83,9 @@ export const FORM_PLACEMENTS = Object.freeze({
   'bottom-right': [0.78, 0.78, 1.55],
 });
 export const FORM_AT_DEFAULT = 'top-left';               // (the operator's own choice, as are the three defaults below: settings.js)
-/** How bright it ships (sky.formBrightness): 1 is the picture as first made, which threatened to overpower a chart. */
-export const FORM_BRIGHTNESS_DEFAULT = 0.8;
+/** How bright it ships (sky.formBrightness): 1, the full picture. In magma that threatened to overpower the chart and
+ * shipped at 0.8; in the blues it does not (the operator's own setting, 2026-09-22). */
+export const FORM_BRIGHTNESS_DEFAULT = 1;
 /** The gas's pace and the galaxy's, as shipped (sky.formFlow, sky.formSpeed). */
 export const FORM_FLOW_DEFAULT = 0.5;
 export const FORM_SPEED_DEFAULT = 0.4;
@@ -123,15 +124,18 @@ export const FORM_PALETTES = Object.freeze({
   electric: ramp([0, 0, 0], [14, 4, 50], [30, 16, 112], [28, 56, 170], [24, 112, 206], [60, 172, 230], [224, 250, 255]),    // violet through blue to cyan
   midnight: ramp([0, 0, 0], [4, 7, 18], [10, 17, 40], [18, 30, 64], [28, 46, 88], [44, 68, 116], [200, 220, 246]),          // the quiet one: never more than dusk
 });
-export const FORM_PALETTE_DEFAULT = 'magma';
-/** What the Settings picker calls each one, in the order it lists them: the film's first, then coolest to warmest. */
+// THE SHIPPED PALETTE IS THE OPERATOR'S CHOICE (2026-09-22, after living with all thirteen: "make Cyan and
+// Gold the new default" -- their saved setting was cobaltGold): all-blue gas, which is far from every colour
+// on the chart, and the one warm thing in it is the galaxy itself. The film's magma stays in the list.
+export const FORM_PALETTE_DEFAULT = 'cobaltGold';
+/** What the Settings picker calls each one, in the order it lists them: the shipped one first, then coolest to warmest. */
 export const FORM_PALETTE_LABELS = Object.freeze([
-  ['magma', 'Magma (the film)'], ['midnight', 'Midnight'], ['cobaltGold', 'Cobalt & gold'], ['abyss', 'Abyss'], ['ultraviolet', 'Ultraviolet'],
+  ['cobaltGold', 'Cobalt & gold'], ['midnight', 'Midnight'], ['abyss', 'Abyss'], ['ultraviolet', 'Ultraviolet'],
   ['electric', 'Electric'], ['indigoDusk', 'Indigo dusk'], ['glacier', 'Glacier'], ['silver', 'Silver'], ['borealis', 'Borealis'],
-  ['rose', 'Ros\u00e9'], ['sepia', 'Sepia'], ['ember', 'Ember'],
+  ['rose', 'Ros\u00e9'], ['sepia', 'Sepia'], ['ember', 'Ember'], ['magma', 'Magma'],
 ]);
-/** The shipped ramp (the film's), by its old name: [where on the ramp, [r, g, b] 0..1]. */
-export const FORM_RAMP = FORM_PALETTES.magma;
+/** The shipped ramp, by its old name: [where on the ramp, [r, g, b] 0..1]. */
+export const FORM_RAMP = FORM_PALETTES[FORM_PALETTE_DEFAULT];
 /** The ramp at t (0..1) as [r, g, b] 0..255. Pure. */
 export function formRamp(t, palette = FORM_PALETTE_DEFAULT) {
   const FORM_RAMP = FORM_PALETTES[palette] ?? FORM_PALETTES[FORM_PALETTE_DEFAULT];   // (shadows the export: this call's ramp)
@@ -164,7 +168,7 @@ uniform vec3 uPlace;       // where the galaxy sits, as fractions of the panel f
 uniform float uGrow;      // how grown the galaxy is: a slow breath between 0.8 and 1 -- nothing resets, nothing fades
 uniform float uSpin;      // the spiral pattern's angle
 uniform vec2 uSat[${C.SATELLITES}];   // each satellite: how far through its life (0..1), and which life this is
-uniform float uBright;    // sky.formBrightness: 1 is the picture as it was first made; it ships at 0.8
+uniform float uBright;    // sky.formBrightness: 1 is the picture as it was first made, and what it ships at
 uniform vec4 uFlow;       // the two flow layers: phase of each (0..1), and each one's cycle number
 uniform float uChurn;     // the warp's own clock
 uniform float uTurb;      // the jostle's clock (an angle)
