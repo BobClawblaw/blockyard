@@ -106,7 +106,7 @@ try {
   const shot = (board, fx, at, renderer, extra) => {
     seed = 1; VT = 1000; q.length = 0;
     const canvas = stage();
-    boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, showFps: ${process.argv.includes('--fps')}, glSky: ${LOOK}, ...extra });   // (--fps: the frame-rate figure on, to look at it on both renderers)
+    boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, showFps: ${process.argv.includes('--fps')}, glSky: ${LOOK}, softGlow: ${LOOK}, ...extra });   // (--fps: the frame-rate figure on, to look at it on both renderers)
     pump(200, 50);
     if (fx) { d3.triggerIdle(canvas, fx); }
     // the effect's OWN length: a flat six seconds sampled the pulsar 2.7 s into a 26 s run, before

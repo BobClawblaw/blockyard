@@ -3487,6 +3487,15 @@ function priceLine(ctx, view, axes) {
   const join = ctx.lineJoin, cap = ctx.lineCap;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
+  // ON THE GL RENDERER THE LINE'S HALO IS A GLOW, NOT THREE BANDS (operator, 2026-09-22: "The yellow line on
+  // the markets chart looks banded in WebGL. Can we not give it a subtle emissive glow instead of the
+  // banding?"). GLOW below is three flat strokes, 30 / 18 / 10 wide: a fall-off in three steps, which the 2D
+  // canvas's antialiasing smears and this renderer's crisp edges do not. From here to done(), any stroke at
+  // least as wide as the narrowest of them and FAINT (the cores are not) fades across itself in the shader
+  // (gl2d.js softStrokeMin); it is emissive too, so the bloom lights the chart round it. Every effect that
+  // draws the line through this function gets it -- the breath, the saber, the bulge.
+  // (`softGlow: false` keeps the three flat strokes on WebGL too: the parity check compares the same picture)
+  if (ctx.gl2d === true && view.softGlow !== false) ctx.softStrokeMin = lw * 9.5;
   // Built once and CACHED, not rebuilt every frame. All six layers stroke the same shape, and the
   // shape only changes when the projected closes do -- which is when the series or the camera
   // changes, not when a frame ticks. drawGround caches its Path2D the same way (l.path); doing it
@@ -3518,7 +3527,7 @@ function priceLine(ctx, view, axes) {
   const GLOW = [[30, [255, 225, 40], 0.05, 'glow'], [18, [255, 228, 45], 0.10, 'glow'], [10, [255, 232, 55], 0.22, 'glow']];
   const CORE = [[5.5, [255, 236, 70], 0.78, 'core'], [3, [255, 246, 150], 1, 'core'], [1.3, [255, 255, 240], 1, 'core']];
   const fx = view.fx && view.fx.kind === 'pulse' ? view.fx : null;
-  const done = () => { ctx.lineWidth = lw; ctx.lineJoin = join; ctx.lineCap = cap; };
+  const done = () => { ctx.lineWidth = lw; ctx.lineJoin = join; ctx.lineCap = cap; if (ctx.gl2d === true) ctx.softStrokeMin = 0; };
   const HOT = [255, 255, 215];                               // the flash: whiter than the wire
   // THE LINE BREATHES (operator, 2026-09-15: "an effect for the markets page that makes the line
   // breathe in-and-out between those two extents"): three slow swells over the run, each easing
@@ -4921,7 +4930,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   if (ctx.gl2d === true) ctx.retained('board', sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), board);
   else board();
   ctx.emissive = true;                       // (a replayed board never ran the line that leaves it on)
-  if (opts.axes?.line) priceLine(ctx, view, opts.axes);
+  if (opts.axes?.line) { priceLine(ctx, view, opts.axes); if (ctx.gl2d === true) ctx.softStrokeMin = 0; }   // (whichever way priceLine left: the glow rule is the line's alone)
   // THE LABELS ARE READ, NOT LIT (operator, 2026-09-21, of the current price on the WebGL board with
   // the glow on: "blue is background is hard to read for current price"). The tag's box is a flat
   // bright fill, and drawn as a lamp its own bloom poured back over it: the green of a rising
@@ -5405,6 +5414,7 @@ export function render3d(canvas, cells, options = {}) {
       wireWidth: opts.wireWidth,
       // the paint order's memory across frames (blockscene3d obliqueOrder): a tangle keeps the
       // relative order it had last frame, so nothing flickers in and out of one
+      softGlow: opts.softGlow,                  // (priceLine: the line's halo as a soft glow on WebGL)
       orderMemo: (st.orderMemo ??= new Map()),
     };
     // the panel's extent in grid units, from the same constant fit paintFrame

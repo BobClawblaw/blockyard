@@ -332,7 +332,7 @@ export function strokeGeometry(pts, closed, width, cap, join, miterLimit, tri, s
  * a cube's face -- thousands a frame -- can go straight into the batch instead of through the
  * stencil. Under about three device pixels a mitre and a round join are the same pixels. Pure.
  */
-export function stripGeometry(pts, closed, width, cap, tri) {
+export function stripGeometry(pts, closed, width, cap, tri, minCos = 0.5) {
   const hw = width / 2;
   if (!(hw > 0)) return;
   // (typed scratch, grown as needed, and no array per corner: the black hole's disk is a few hundred
@@ -356,7 +356,9 @@ export function stripGeometry(pts, closed, width, cap, tri) {
     let mx = -d0y - d1y, my = d0x + d1x;
     const ml = Math.hypot(mx, my);
     if (ml < 1e-9) { mx = -d0y; my = d0x; } else { mx /= ml; my /= ml; }
-    const cos = Math.max(0.5, Math.abs(mx * -d0y + my * d0x));
+    // (minCos: how far a corner's mitre may reach -- 1 / minCos half-widths. 0.5 is right for a thin seam; a WIDE
+    // soft glow at 0.5 throws a bright spike off the top of every sharp peak of the price line)
+    const cos = Math.max(minCos, Math.abs(mx * -d0y + my * d0x));
     ox[v] = (mx * hw) / cos; oy[v] = (my * hw) / cos;
   }
   // a cap on a thin line is half a pixel of length: the ends simply reach that much further
@@ -375,6 +377,75 @@ export function stripGeometry(pts, closed, width, cap, tri) {
   }
 }
 const STRIP = { x: new Float64Array(64), y: new Float64Array(64), ox: new Float64Array(64), oy: new Float64Array(64) };
+
+/**
+ * A SOFT stroke: triangles whose corners also say how far ACROSS the pen they are (0 on the line, 1 at its
+ * edge), so a shader can fade the light from the middle out. Not stripGeometry with a number bolted on: a
+ * strip has ONE point at each corner, and on a sharp bend -- a peak of the price line -- its outer edge is
+ * a POINT, which under a glow is a little flame standing on every peak. Here the OUTER side of a bend is a
+ * fan (the glow is round there, as a round join is), the INNER side is the one mitre point (so nothing is
+ * laid twice), and an open end is half a fan. tri(x0, y0, l0, x1, y1, l1, x2, y2, l2). Pure.
+ */
+export function softStrokeGeometry(pts, closed, width, tri, scale = 1) {
+  const hw = width / 2;
+  if (!(hw > 0)) return;
+  const X = [], Y = [];
+  for (let i = 0; i < pts.length; i += 2) {
+    const n = X.length;
+    if (n && Math.abs(X[n - 1] - pts[i]) < 1e-9 && Math.abs(Y[n - 1] - pts[i + 1]) < 1e-9) continue;
+    X.push(pts[i]); Y.push(pts[i + 1]);
+  }
+  if (closed && X.length > 1 && Math.abs(X[0] - X[X.length - 1]) < 1e-9 && Math.abs(Y[0] - Y[Y.length - 1]) < 1e-9) { X.pop(); Y.pop(); }
+  const n = X.length;
+  if (n < 2) return;
+  const segs = closed ? n : n - 1;
+  const dx = new Float64Array(segs), dy = new Float64Array(segs);
+  for (let i = 0; i < segs; i++) { const j = (i + 1) % n; const ex = X[j] - X[i], ey = Y[j] - Y[i], l = Math.hypot(ex, ey) || 1; dx[i] = ex / l; dy[i] = ey / l; }
+  // for every vertex: where the LEFT edge arrives and leaves, and the RIGHT edge (left = the normal (-dy, dx))
+  const LaX = new Float64Array(n), LaY = new Float64Array(n), LbX = new Float64Array(n), LbY = new Float64Array(n);
+  const RaX = new Float64Array(n), RaY = new Float64Array(n), RbX = new Float64Array(n), RbY = new Float64Array(n);
+  const fan = (cx, cy, a0, sweep) => {
+    const k = Math.max(1, Math.ceil(Math.abs(sweep) / Math.max(0.12, 2 * Math.acos(Math.max(-1, 1 - 0.35 / Math.max(0.5, hw * scale))))));
+    let px = cx + Math.cos(a0) * hw, py = cy + Math.sin(a0) * hw;
+    for (let q = 1; q <= k; q++) {
+      const a = a0 + (sweep * q) / k, qx = cx + Math.cos(a) * hw, qy = cy + Math.sin(a) * hw;
+      tri(cx, cy, 0, px, py, 1, qx, qy, 1); px = qx; py = qy;
+    }
+  };
+  for (let v = 0; v < n; v++) {
+    const s0 = closed ? (v + segs - 1) % segs : v - 1, s1 = closed ? v % segs : v;
+    const has0 = s0 >= 0, has1 = s1 < segs;
+    const ax = has0 ? dx[s0] : dx[s1], ay = has0 ? dy[s0] : dy[s1], bx = has1 ? dx[s1] : dx[s0], by = has1 ? dy[s1] : dy[s0];
+    const x = X[v], y = Y[v];
+    LaX[v] = x - ay * hw; LaY[v] = y + ax * hw; LbX[v] = x - by * hw; LbY[v] = y + bx * hw;
+    RaX[v] = x + ay * hw; RaY[v] = y - ax * hw; RbX[v] = x + by * hw; RbY[v] = y - bx * hw;
+    if (!has0 || !has1) continue;
+    const cr = ax * by - ay * bx, dt = ax * bx + ay * by;
+    if (Math.abs(cr) < 1e-9 && dt > 0) continue;                                  // straight on
+    const turn = Math.atan2(cr, dt);
+    // the inner side: one point, on the mitre, no further in than the pen is wide
+    const mxr = -(ay + by), myr = ax + bx, ml = Math.hypot(mxr, myr);
+    const mx = ml > 1e-9 ? mxr / ml : -ay, my = ml > 1e-9 ? myr / ml : ax;
+    const reach = hw / Math.max(0.35, Math.abs(mx * -ay + my * ax));
+    if (cr > 0) {            // it turns toward its left-hand normal (-dy, dx): that side is the INSIDE of the bend
+      LaX[v] = LbX[v] = x + mx * reach; LaY[v] = LbY[v] = y + my * reach;
+      fan(x, y, Math.atan2(-ax, ay), turn);                                       // the right: outside, a fan from one normal round to the other
+    } else {
+      RaX[v] = RbX[v] = x - mx * reach; RaY[v] = RbY[v] = y - my * reach;
+      fan(x, y, Math.atan2(ax, -ay), turn);
+    }
+  }
+  for (let i = 0; i < segs; i++) {
+    const j = (i + 1) % n;
+    // each half of the pen on its own side of the line, so the fade is measured FROM the line
+    tri(X[i], Y[i], 0, LbX[i], LbY[i], 1, LaX[j], LaY[j], 1); tri(X[i], Y[i], 0, LaX[j], LaY[j], 1, X[j], Y[j], 0);
+    tri(X[i], Y[i], 0, RbX[i], RbY[i], 1, RaX[j], RaY[j], 1); tri(X[i], Y[i], 0, RaX[j], RaY[j], 1, X[j], Y[j], 0);
+  }
+  if (!closed) {           // the ends: half a fan beyond each, so the glow does not stop on a ruled edge
+    fan(X[0], Y[0], Math.atan2(dx[0], -dy[0]), Math.PI);
+    fan(X[n - 1], Y[n - 1], Math.atan2(-dx[segs - 1], dy[segs - 1]), Math.PI);
+  }
+}
 
 /** At most `max` stops, sorted, offsets clamped: what the shader's uniform arrays can hold. Pure. */
 export function settleStops(stops, max = 32) {
@@ -596,8 +667,15 @@ void main() {
     // to it measured in pixels (fwidth), so a circle is two triangles at any size and its rim is
     // smoother than any polygon's -- under any transform, an ellipse included
     float cover = 1.0;
-    float e = vD.z > 1.5 ? 1.0 : 0.0;
-    if (mod(vD.z, 2.0) > 0.5) {
+    // (the third word is three flags added up: 1 an analytic disc, 2 emissive, 4 a SOFT STROKE)
+    float e = mod(vD.z, 4.0) > 1.5 ? 1.0 : 0.0;
+    if (vD.z > 3.5) {
+      // A SOFT STROKE: the first word runs -1..1 ACROSS the pen, and the light falls off from the
+      // middle of it to nothing at its edge. A glow built from stacked flat strokes falls off in
+      // STEPS, and with this renderer's crisp edges the steps are bands (the price line's halo).
+      float x = clamp(abs(vD.x), 0.0, 1.0);
+      cover = (1.0 - x * x) * (1.0 - x * x);
+    } else if (mod(vD.z, 2.0) > 0.5) {
       float d = length(vD.xy), w = max(fwidth(d), 1e-6);
       cover = clamp(0.5 + (1.0 - d) / w, 0.0, 1.0);
       if (cover <= 0.0) discard;
@@ -1083,6 +1161,7 @@ export function createGl2d(canvas, hooks = {}) {
   };
   // the atlas gradient the next vertices carry (G.row < 0: none): device -> gradient coordinate is affine
   let emissive = 2;                                         // 2 or 0: rides in the disc word (see the shader)
+  let softMin = 0;                                          // strokes this wide or wider, and faint, are drawn SOFT (0: none) -- ctx.softStrokeMin
   const G = { row: -1, a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 };
   const vert = (x, y, col) => {
     const i = nv * 9; f32[i] = x; f32[i + 1] = y; u32[i + 2] = col;
@@ -1512,6 +1591,22 @@ export function createGl2d(canvas, hooks = {}) {
       }
       // one thin outline as a strip; and HAIRLINES however many (a star's glint is two crossing
       // half-pixel lines, a few hundred stars a frame): where two cross, one pixel doubles up
+      // A FAINT WIDE STROKE IS A GLOW, where the caller has said so (ctx.softStrokeMin: the price line's
+      // halo): softStrokeGeometry, a little wider than asked so it carries the same light, fading across
+      // itself in the shader. No stencil: nothing in it is laid twice but the inside of a very tight bend,
+      // and that is at the pen's inner EDGE, where the light is nearly nothing.
+      if (softMin > 0 && S.lineWidth >= softMin && paint.colour[3] * alpha < 0.4) {
+        direct = true; col = packColour(paint.colour, alpha); setSolid();
+        const softTri = (x0, y0, l0, x1, y1, l1, x2, y2, l2) => {
+          const i0 = nv * 9;
+          tri(x0, y0, x1, y1, x2, y2);
+          f32[i0 + 6] = l0; f32[i0 + 15] = l1; f32[i0 + 24] = l2;
+          f32[i0 + 7] = f32[i0 + 16] = f32[i0 + 25] = 0;
+          f32[i0 + 8] = f32[i0 + 17] = f32[i0 + 26] = 4 + emissive;
+        };
+        for (const s of live) softStrokeGeometry(user(s), s.closed, w * 1.35, softTri, k);
+        return;
+      }
       if ((one && w * k <= 3) || w * k <= 1.5) {
         direct = true; col = packColour(paint.colour, alpha); setSolid();
         // THE SEAM ROUND A FACE, thousands a frame whenever the board is moving (the black hole has
@@ -1928,6 +2023,8 @@ void main() {
     /** Does what is drawn from here on throw light (the finish's bloom)? True by default; paintFrame
      * switches it off round the cubes, whose colours are data. */
     get emissive() { return emissive === 2; }, set emissive(v) { emissive = v ? 2 : 0; },
+    /** Strokes at least this wide (user units) and faint (alpha under 0.4) are drawn as SOFT glows; 0 turns it off. GL only. */
+    get softStrokeMin() { return softMin; }, set softStrokeMin(v) { const n = Number(v); softMin = Number.isFinite(n) && n > 0 ? n : 0; },
     get bloom() { return bloom; }, set bloom(v) { const n = Number(v); bloom = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; },
     /** Give the context back: buffers, textures, the listener. The canvas is the caller's. */
     dispose() {

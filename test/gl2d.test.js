@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { STAR_BEAT, beatFrequency, bakeRamp, earClip, parseColour, packColour, arcSegments, arcSweep, isConvex, isSpeck, strokeGeometry, stripGeometry, settleStops, createGl2d, gl2dSupported } from '../public/js/gl2d.js';
+import { STAR_BEAT, beatFrequency, bakeRamp, earClip, softStrokeGeometry, parseColour, packColour, arcSegments, arcSweep, isConvex, isSpeck, strokeGeometry, stripGeometry, settleStops, createGl2d, gl2dSupported } from '../public/js/gl2d.js';
 import { rendererOf, rendererIn, RENDERERS, render3d, softStops, fpsTick, fpsWanted, GALAXY_SPIN, GALAXY_SPIN_MAX } from '../public/js/details3d.js';
 import { skyFor } from '../public/js/settings.js';
 import { DEFAULTS, PANEL, normalise } from '../public/js/settings.js';
@@ -601,6 +601,49 @@ test('the GL renderer\'s own sky: light between the stars, stars as points of li
   assert.match(d3, /if \(!glints \|\| soft\) return;/);
   // far galaxies: gradient fills (one quad each on this renderer), not four flat ellipses
   assert.match(d3, /if \(f\.far && opts\.galaxies !== false && glSky\) \{/);
+});
+
+test('the price line\'s halo on WebGL is a GLOW: soft across the pen, round over a peak, and not three bands', () => {
+  // (operator, 2026-09-22: "The yellow line on the markets chart looks banded in WebGL. Can we not give it a
+  // subtle emissive glow instead of the banding?")
+  // THE GEOMETRY: every corner says how far across the pen it is; the outside of a sharp bend is a FAN, so
+  // above a peak the rim is one half-width from the point all the way round (a strip's single mitre point
+  // stood a little flame on every peak); the inside is one point, so nothing is laid twice
+  const tris = [];
+  softStrokeGeometry([0, 100, 10, 0, 20, 100], false, 40, (...t) => tris.push(t), 1);
+  const corners = tris.flatMap((t) => [[t[0], t[1], t[2]], [t[3], t[4], t[5]], [t[6], t[7], t[8]]]);
+  assert.ok(corners.every((c) => c[2] === 0 || c[2] === 1), 'on the line, or on the rim');
+  assert.ok(corners.filter((c) => c[2] === 0).every((c) => [[0, 100], [10, 0], [20, 100]].some((p) => Math.abs(p[0] - c[0]) < 1e-9 && Math.abs(p[1] - c[1]) < 1e-9)), 'the zeros ARE the line');
+  const over = corners.filter((c) => c[2] === 1 && c[1] < -5);
+  assert.ok(over.length >= 6, 'a fan over the apex, not a point');
+  for (const c of over) assert.ok(Math.abs(Math.hypot(c[0] - 10, c[1]) - 20) < 1e-6, 'round: the rim is 20 from the apex everywhere above it');
+  assert.ok(Math.abs(Math.min(...corners.map((c) => c[1])) + 20) < 1e-6, 'and reaches exactly one half-width above it');
+  // a straight run is two triangles a side and nothing else; an open line has half a fan beyond each end
+  const flat = []; softStrokeGeometry([0, 0, 100, 0, 200, 0], false, 40, (...t) => flat.push(t), 1);
+  const xs = flat.flatMap((t) => [t[0], t[3], t[6]]);
+  assert.ok(Math.min(...xs) < -19.5 && Math.min(...xs) >= -20 - 1e-9 && Math.max(...xs) > 219.5 && Math.max(...xs) <= 220 + 1e-9, 'capped at both ends, a half-width beyond each and no further');
+  // THE CONTEXT: only where the caller asks, only faint strokes at least that wide; the corners carry the flag
+  const gl = stubGl(), ctx = createGl2d(fakeCanvas(), { gl });
+  const word = () => { const c = gl.calls.filter((x) => x[0] === 'bufferSubData').at(-1); return [c[3][6], c[3][8]]; };
+  const line = () => { ctx.beginPath(); ctx.moveTo(0, 50); ctx.lineTo(100, 20); ctx.lineTo(200, 50); ctx.stroke(); ctx.flush(); };
+  ctx.lineWidth = 30; ctx.strokeStyle = 'rgba(255,225,40,0.05)';
+  line();
+  assert.equal(ctx.stats.stencils, 1, 'not asked: a wide faint stroke is a flat one, through the stencil, as before');
+  ctx.softStrokeMin = 10; line();
+  assert.equal(ctx.stats.stencils, 1, 'asked: no stencil');
+  assert.equal(word()[1], 4 + 2, 'soft (4) and emissive (2)');
+  ctx.strokeStyle = 'rgba(255,246,150,1)'; ctx.lineWidth = 12; line();
+  assert.notEqual(word()[1], 6, 'the line\'s CORE is wide enough but not faint: it stays a hard stroke');
+  ctx.softStrokeMin = 0;
+  assert.equal(ctx.softStrokeMin, 0);
+  // the shader fades it, and reads the three flags apart
+  const src = readFileSync(new URL('../public/js/gl2d.js', import.meta.url), 'utf8');
+  assert.match(src, /float e = mod\(vD\.z, 4\.0\) > 1\.5 \? 1\.0 : 0\.0;/);
+  assert.match(src, /cover = \(1\.0 - x \* x\) \* \(1\.0 - x \* x\);/);
+  // and the chart asks for it for the line alone, and lets go of it after
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(d3, /if \(ctx\.gl2d === true && view\.softGlow !== false\) ctx\.softStrokeMin = lw \* 9\.5;/);
+  assert.match(d3, /priceLine\(ctx, view, opts\.axes\); if \(ctx\.gl2d === true\) ctx\.softStrokeMin = 0;/);
 });
 
 test('the Galaxy sky\'s rotation speed: a setting, and a pace -- not a jump', () => {

@@ -453,6 +453,14 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   **A shader that fails to compile falls back SILENTLY**: `patch` is a GLSL reserved word, the bake
   died, and the old ellipses came back looking like "nothing changed". The log now goes to the console
   and to `window.__blockyardGlErrors`, which gl-compare reports as an ERROR.
+- **The price line's halo is a SOFT STROKE on WebGL** (operator: "looks banded in WebGL ... a subtle emissive
+  glow instead"). Its glow is three flat strokes, 30/18/10 wide: a fall-off in three steps, which the 2D
+  canvas's antialiasing smears and GL's crisp edges show as bands. `ctx.softStrokeMin` (set by priceLine, let
+  go after it) makes any stroke that wide AND faint fade across itself in the shader (flag 4 in the disc
+  word, beside 1 disc and 2 emissive), through `softStrokeGeometry`: a FAN on the outside of each bend, one
+  mitre point inside, half-fans at the ends. A plain strip has one point per corner and stood a little
+  flame on every peak of the chart -- found by zooming in, isolated by switching the glow off
+  (`softGlow: false`, which the parity check also passes).
 - **The frame rate** (`appearance.showFps`, `options.showFps`): top right of any board that has tiles,
   drawn through the frame's own context so it is the same on both renderers. It counts frames THIS
   canvas painted in the last second (a resting board under a sky reads about 30 by design; a parked
@@ -607,7 +615,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1382 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1383 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -936,7 +944,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1382 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1383 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
