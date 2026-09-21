@@ -150,6 +150,14 @@ export const DEFAULTS = Object.freeze({
     clusters: true,       // tight knots of stars out in the halo
     colours: true,        // stars coloured by population: warm bulge, blue-white arms
     glints: true,         // the halo and cross glint on the brightest stars
+    // THE FLIGHT (2026-09-20: a sequence of galaxies travelling through the cosmos, repeating
+    // infinitely -- NASA SVS 14950; galflight.js). DISABLED 2026-09-21 (operator: "the flight
+    // effect in blockyard really sucks. We should disable it entirely for now"): the choice is
+    // out of SKIES/SKY_CHOICES and its rows out of the Sky tab. These two keys stay -- skyFor
+    // spreads them and galflight.js still reads them -- so restoring 'flight' to the lists
+    // brings the whole sky back, settings included.
+    flightSpeed: 1,       // the camera's speed; 0 holds the picture still, 4 is four times through
+    flightAt: 'top-right', // where the flight goes: the centre or any corner (shipped: top-right)
   }),
   // `glow` was here and is gone (operator, 2026-09-12: "on markets and price. we should never show
   // the grid glow. that's just terrible"). Never-show makes the switch a control nobody may use,
@@ -431,7 +439,11 @@ export const TAB_ROWS = Object.freeze([
   Object.freeze({ label: 'Effects', groups: Object.freeze(['effects', 'marketEffects']) }),
   Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid', 'scorched']) }),
 ]);
-/** The three answers to "which sky": the Galaxy, the Earth, or none. */
+/** The answers to "which sky", and the none that turns every sky off.
+ * THE FLIGHT IS DISABLED (operator, 2026-09-21: "the flight effect in blockyard really sucks. We
+ * should disable it entirely for now"): the choice is gone from every picker, and a store that
+ * saved 'flight' falls back to the Galaxy (skyOf). galflight.js and its tests stay, so putting
+ * 'flight' back in these lists brings the whole sky back. */
 export const SKIES = Object.freeze(['galaxy', 'earth', 'none']);
 export const SKY_CHOICES = Object.freeze([['galaxy', 'Galaxy'], ['earth', 'Earth'], ['none', 'None']]);
 export const SKY_LABELS = Object.freeze({ galaxy: 'Galaxy', earth: 'Earth', none: 'no sky' });
@@ -524,7 +536,7 @@ const PANEL_GROUPS = Object.freeze([
   Object.freeze({
     group: 'sky',
     title: 'Sky',
-    note: 'Two skies, and which board draws which. The table is the whole map: every board that has a sky behind it, and the sky it is drawing \u2014 change one here or in the board\u2019s own tab, it is the same setting. Below it, what each sky is made of.',
+    note: 'Three skies, and which board draws which. The table is the whole map: every board that has a sky behind it, and the sky it is drawing \u2014 change one here or in the board\u2019s own tab, it is the same setting. Below it, what each sky is made of.',
     rows: Object.freeze([
       Object.freeze({ key: 'map', label: 'Which sky, where', kind: 'skymap', hint: 'Every board with a sky, and the one it draws' }),
       Object.freeze({ key: 'galaxyHead', label: 'The Galaxy', kind: 'heading', hint: 'The star field: stars on slowly turning spiral arms, with the layers of a real galaxy. BlockYard\u2019s own sky' }),
@@ -1114,16 +1126,19 @@ export function skyExtras(n) {
 /**
  * ONE ANSWER PER BOARD (docs/PLAN-SKIES.md): everything the renderer needs to draw the sky this
  * board chose. `sky` is the choice, `stars` whether any sky is drawn at all, `skyType` which one
- * ('galaxy' or 'earth'); then the Earth's settings and the Galaxy's, the deep layers gated off
- * under the Earth. Every board's option builder spreads this and nothing else about the sky.
+ * ('galaxy', 'flight' or 'earth'); then the Earth's settings and the Galaxy's, the deep layers
+ * gated off under anything but the Galaxy. Every board's option builder spreads this and nothing
+ * else about the sky.
  */
 export function skyFor(n, board) {
   const sky = skyOf(n, board);
   return {
     sky,
     stars: sky !== 'none',
-    skyType: sky === 'earth' ? 'earth' : 'galaxy',
+    skyType: sky === 'earth' ? 'earth' : sky === 'flight' ? 'flight' : 'galaxy',
     ...skyExtras(n),
+    flightSpeed: n.sky.flightSpeed,
+    flightAt: n.sky.flightAt,
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     starColours: n.sky.colours, starGlints: n.sky.glints,

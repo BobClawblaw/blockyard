@@ -20,6 +20,7 @@ import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
 import { AGENTS, isAgent, rng, lensFlare, saucerAbove } from './agents.js';
 import { drawLivingSky } from './livingsky.js';
+import { drawGalaxyFlight } from './galflight.js';
 
 const STATE = new WeakMap();
 
@@ -1940,7 +1941,7 @@ function drawPulsar(ctx, view, lw) {
     // are DENSE -- and density needs numbers. Fifteen thousand, which is affordable because the
     // field they move through is evaluated off a sine table (`fastSin`) rather than Math.sin,
     // and because they are stroked as one path per brightness bucket.
-    const N = 20000;                                                // 15000 + a third (2026-09-20)
+    const N = 27000;                                                // 20000 + 35% (2026-09-20, operator)
     const keep = p.store || fx;                                     // the run's record: it outlives the frame
     let W = keep._wind;
     if (!W || W.R0 !== R0) W = keep._wind = { t: now, R0, n: 0, ps: [] };
@@ -4289,10 +4290,12 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   ctx.clearRect(0, 0, pw, ph);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
-  // THE SKY: the star field, or the living sky (livingsky.js: a real day from the clock, with the
-  // star field coming out at night through the same drawStars)
+  // THE SKY: the star field, the living sky (livingsky.js: a real day from the clock, with the
+  // star field coming out at night through the same drawStars), or the galaxy flight
+  // (galflight.js: the camera flying through a wrapping chain of galaxies, after NASA SVS 14950)
   if (starsOn(opts)) {
     if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
+    else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
     else drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
   }
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)

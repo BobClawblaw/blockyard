@@ -90,6 +90,10 @@ test('every panel control names a real setting, and every setting has a control'
   }
   for (const group of Object.keys(DEFAULTS)) {
     for (const key of Object.keys(DEFAULTS[group])) {
+      // the Flight is disabled (2026-09-21): its two keys stay in DEFAULTS -- skyFor spreads
+      // them and restoring 'flight' to SKIES brings the sky and its controls back -- but the
+      // rows are out of the Sky tab, so these two are deliberately controlless
+      if (group === 'sky' && (key === 'flightSpeed' || key === 'flightAt')) continue;
       assert.ok(listed.has(`${group}.${key}`), `${group}.${key} has a control in the panel`);
     }
   }
@@ -770,13 +774,13 @@ test('the v5 -> v6 sky step keeps every installation drawing what it drew, and c
 test('no sky is ever called Space: the word belongs to Block space', () => {
   for (const g of PANEL) {
     for (const r of g.rows) {
-      if (r.kind === 'choice' && r.key === 'sky') assert.deepEqual(r.options.map(([, l]) => l), ['Galaxy', 'Earth', 'None'], `${g.group}.sky offers the two skies by name`);
+      if (r.kind === 'choice' && r.key === 'sky') assert.deepEqual(r.options.map(([, l]) => l), ['Galaxy', 'Earth', 'None'], `${g.group}.sky offers the skies by name`);
       if (g.group === 'sky') assert.ok(!/\bSpace\b/.test(`${r.label} ${r.hint}`), `${r.key}: no sky called Space`);
     }
   }
   const skyGroup = PANEL.find((g) => g.group === 'sky');
   assert.equal(skyGroup.rows[0].kind, 'skymap', 'the Sky tab opens with which board draws which');
-  assert.deepEqual(skyGroup.rows.filter((r) => r.kind === 'heading').map((r) => r.label), ['The Galaxy', 'The Earth']);
+  assert.deepEqual(skyGroup.rows.filter((r) => r.kind === 'heading').map((r) => r.label), ['The Galaxy', 'The Earth'], 'the Flight is disabled (2026-09-21) and so its heading is gone');
   assert.deepEqual(SKY_BOARDS.map((b) => b.group), ['space', 'markets', 'tetrust', 'blockout', 'blockanoid', 'scorched'], 'every board with a sky is on the map');
   for (const b of SKY_BOARDS) assert.ok(SKIES.includes(DEFAULTS[b.group].sky), `${b.group} ships with a sky`);
   assert.equal(DEFAULTS.scorched.sky, 'earth', 'the artillery under the Earth');
