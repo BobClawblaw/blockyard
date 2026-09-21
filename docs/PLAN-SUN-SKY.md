@@ -267,6 +267,19 @@ rules file list; test/settings.test.js pins.
 
 ## 4. Phased plan
 
+**Status, 2026-09-22: M1 (the disk) is built** -- `public/js/sunsky.js`, `test/sunsky.test.js`,
+`scripts/sun-preview.mjs`; `sky.sunSize` was added beyond this plan at the operator's word ("make the sun take up
+the entire screen if we want"). One departure from M1 as written: the surface is the 171 Å picture (the network
+BRIGHT along the lanes over mottled plasma), not visible-light granulation with dark lanes -- that reading drew as
+giraffe skin in gold. Dark-lane granulation appears only at close range, inside the network.
+The same day, at the operator's word ("Where is all the solar activity in ours?!", with SVS 5268 open), the core of
+M2 and M3 was brought forward: streamers, coronal holes, the dark 171 tone, and active regions with loop fans and
+flares (`sunRegions`). Still to do from M3: sunspots proper and the cycle slider.
+Then M5 and M6 (operator: "build the filament eruptions and CMEs next", SVS 5268 and 5239): `sunEruption`,
+`sunEruptionHeight`, the on-disk filament / ribbons / arcade / dimming, and the three-part ejecta with failed
+eruptions. Still to do there: true 3D arcs, flare cusp, and rain down a failed eruption's legs. M4 (quiescent limb
+prominences) and M7 (rain, Kiosk pass) are not started.
+
 Each milestone ends verified: headless chromium screenshots (scratch page + http.server on a
 port picked with `ss -ltn`), numeric checks (PIL/numpy on the PNGs) and the full suite green;
 `doc-counts --fix` LAST. GL verification via in-page readPixels with preserveDrawingBuffer:true

@@ -142,6 +142,8 @@ try {
   // worst case for a clash) -- for looking at, with --look; scripts/form-palettes.mjs scores the same thing in numbers
   if (${process.argv.includes('--palettes')}) { const fg = await import('/js/formgl.js'); for (const pal of Object.keys(fg.FORM_PALETTES)) scenes.push({ name: 'palette-' + pal, board: 'markets', fx: null, extra: { ...st.skyFor({ ...S, markets: { ...S.markets, sky: 'form' } }, 'markets'), formSpeed: 0, formAt: 'center', formPalette: pal }, loose: true }); }
   scenes.push({ name: 'markets-rest-form', board: 'markets', fx: null, extra: { ...st.skyFor({ ...S, markets: { ...S.markets, sky: 'form' } }, 'markets'), formSpeed: 0 }, loose: true });   // (speed 0 holds the mature frame: the harness clock starts inside the loop's fade-in)
+  scenes.push({ name: 'markets-rest-sun', board: 'markets', fx: null, extra: { ...st.skyFor({ ...S, markets: { ...S.markets, sky: 'sun' } }, 'markets'), sunSpin: 0 }, loose: true });
+  scenes.push({ name: 'space-rest-sun', board: 'space', fx: null, extra: { ...st.skyFor({ ...S, space: { ...S.space, sky: 'sun' } }, 'space'), sunSpin: 0 }, loose: true });
   scenes.push({ name: 'space-rest-form', board: 'space', fx: null, extra: { ...st.skyFor({ ...S, space: { ...S.space, sky: 'form' } }, 'space'), formSpeed: 0 }, loose: true });
 
   // ---- the switch is live, in both directions, and leaves the page as it found it

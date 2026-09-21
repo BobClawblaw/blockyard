@@ -21,6 +21,8 @@
 // (the Formation's palettes are data beside its shader; the picker below lists exactly those. formgl.js touches
 // no DOM until it is asked to draw, so the server, which reads this file to settle saved settings, can load it too.)
 import { FORM_PALETTE_LABELS } from './formgl.js';
+// (the Sun's shipped numbers and its placements live beside its shader, as the Formation's do; sunsky.js touches no DOM at module level)
+import { SUN_AT_DEFAULT, SUN_BRIGHTNESS_DEFAULT, SUN_SPIN_DEFAULT, SUN_SPIN_MAX, SUN_SIZE_DEFAULT, SUN_SIZE_MIN, SUN_SIZE_MAX, SUN_PLACEMENT_LABELS, SUN_CYCLE_DEFAULT, SUN_CHANNEL_DEFAULT, SUN_CHANNEL_LABELS, SUN_DETAIL_DEFAULT, SUN_DETAIL_LABELS } from './sunsky.js';
 const FORM_PALETTE_OPTIONS = Object.freeze(FORM_PALETTE_LABELS.map((o) => Object.freeze([...o])));
 
 export const SETTINGS_KEY = 'blockyard.settings';
@@ -191,6 +193,18 @@ export const DEFAULTS = Object.freeze({
     formBrightness: 1,    // 1 is the picture as it was first made
     formFlow: 0.5,        // the pace of the gas itself: its flow inward, its swirl, its turbulence, the outbursts
     formSpeed: 0.4,       // how fast the galaxy and its satellites live; 0 holds them where they are
+    // THE SUN (docs/PLAN-SUN-SKY.md; sunsky.js): SDO's 171 angstrom gold. It ships DIM -- the operator's answer to the
+    // plan, 2026-09-21: "Ship dimmer ... so the chart always wins" -- and these are sunsky.js's own constants, pinned.
+    sunAt: SUN_AT_DEFAULT,                 // where the disk sits: behind the board, or filling a corner
+    sunSize: SUN_SIZE_DEFAULT,             // how big: 1 is the whole disk with room round it; from about 4-7 the surface IS the background
+    sunBrightness: SUN_BRIGHTNESS_DEFAULT, // 1 is the picture as made; 0.6 is what ships
+    sunActivity: true,                     // active regions: loop fans, flares, tufts on the limb (off: the quiet sun alone)
+    sunCycle: SUN_CYCLE_DEFAULT,           // the activity cycle: 0 solar minimum .. 1 maximum (ships high: "near-constant activity, maximum drama")
+    sunChannel: SUN_CHANNEL_DEFAULT,       // which of SDO's false colours: '171' gold | '304' | '193' | '211' | '131' | 'white'
+    sunDetail: SUN_DETAIL_DEFAULT,         // how many pixels the layer draws before it is drawn smaller and stretched: 'low' | 'medium' | 'high'
+    sunProminences: true,                  // quiet prominences: red hedgerows on the limb, dark filaments on the disk
+    sunEruptions: true,                    // filament eruptions and mass ejections from the active regions
+    sunSpin: SUN_SPIN_DEFAULT,             // 1 is a turn of the equator in ten minutes (the real one takes 24.5 days); 0 holds it
   }),
   // `glow` was here and is gone (operator, 2026-09-12: "on markets and price. we should never show
   // the grid glow. that's just terrible"). Never-show makes the switch a control nobody may use,
@@ -477,9 +491,9 @@ export const TAB_ROWS = Object.freeze([
  * should disable it entirely for now"): the choice is gone from every picker, and a store that
  * saved 'flight' falls back to the Galaxy (skyOf). galflight.js and its tests stay, so putting
  * 'flight' back in these lists brings the whole sky back. */
-export const SKIES = Object.freeze(['galaxy', 'form', 'earth', 'none']);
-export const SKY_CHOICES = Object.freeze([['galaxy', 'Galaxy'], ['form', 'Formation'], ['earth', 'Earth'], ['none', 'None']]);
-export const SKY_LABELS = Object.freeze({ galaxy: 'Galaxy', form: 'Formation', earth: 'Earth', none: 'no sky' });
+export const SKIES = Object.freeze(['galaxy', 'form', 'sun', 'earth', 'none']);
+export const SKY_CHOICES = Object.freeze([['galaxy', 'Galaxy'], ['form', 'Formation'], ['sun', 'Sun'], ['earth', 'Earth'], ['none', 'None']]);
+export const SKY_LABELS = Object.freeze({ galaxy: 'Galaxy', form: 'Formation', sun: 'Sun', earth: 'Earth', none: 'no sky' });
 /** Every board that has a sky behind it, in the order the Sky tab's table lists them. */
 export const SKY_BOARDS = Object.freeze([
   Object.freeze({ group: 'space', label: 'Block space', note: 'also the Kiosk\u2019s left panel' }),
@@ -622,6 +636,41 @@ const PANEL_GROUPS = Object.freeze([
         key: 'formAt', label: 'Formation centre', kind: 'choice',
         hint: 'Where the galaxy sits. Behind the board puts it in the middle with the gas all round it; a corner puts it there, drawn larger, with the gas and the satellites\u2019 paths sweeping across the panel toward it',
         options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
+      }),
+      Object.freeze({ key: 'sunHead', label: 'The Sun', kind: 'heading', hint: 'Our sun as the Solar Dynamics Observatory sees it at 171 \u00e5ngstr\u00f6m, in gold: million-degree plasma with the bright lace of the magnetic network over it, turning faster at its equator than at its poles about an axis tipped toward you, darkened toward its limb, with a thin glowing atmosphere. On a machine with no graphics card it is a plain limb-darkened disk' }),
+      Object.freeze({
+        key: 'sunSpin', label: 'Sun rotation', kind: 'range', min: 0, max: SUN_SPIN_MAX, step: 0.25,
+        hint: 'How fast it turns. 1 is one turn of the equator in ten minutes (the real one takes twenty-four and a half days; the poles take longer still, and do here). Zero holds it; the surface keeps boiling',
+      }),
+      Object.freeze({ key: 'sunActivity', label: 'Solar activity', kind: 'toggle', hint: 'Active regions: pairs of white-hot footpoints with fans of coronal loops arching between them, carried round by the rotation at their own latitude, living a few turns and flaring \u2014 mostly small flares, now and then a large one \u2014 with their loops standing off the limb as they cross it. Off leaves the quiet sun' }),
+      Object.freeze({
+        key: 'sunCycle', label: 'Activity cycle', kind: 'range', min: 0, max: 1, step: 0.05, dimWhen: (s) => s.sky.sunActivity === false,
+        hint: 'Where the sun is in its eleven-year cycle. At 0, solar minimum: one quiet region near the equator, rare flares, great dark coronal holes over the poles. At 1, maximum: ten regions out to thirty degrees, flaring and erupting constantly. It ships near the top',
+      }),
+      Object.freeze({
+        key: 'sunChannel', label: 'Sun colours', kind: 'choice',
+        hint: 'Which of the Solar Dynamics Observatory\u2019s false colours the sun wears. 171 \u00e5ngstr\u00f6m gold is the corona and its loops, and what ships; 304 is the red-orange chromosphere; 193 bronze, 211 violet and 131 teal are the hotter channels; white light is the sun as the eye would see it. The prominences stay red in all of them',
+        options: SUN_CHANNEL_LABELS,
+      }),
+      Object.freeze({
+        key: 'sunDetail', label: 'Sun detail', kind: 'choice',
+        hint: 'How finely the sun is drawn. It is one heavy shader: on a big or high-density display a laptop\u2019s graphics may not keep up at full size, so past a number of pixels it is drawn smaller and stretched to fit. Medium draws a 1080p panel in full; High is for a desktop graphics card on a large display; Low is for anything that struggles',
+        options: SUN_DETAIL_LABELS,
+      }),
+      Object.freeze({ key: 'sunProminences', label: 'Prominences', kind: 'toggle', hint: 'Quiet prominences: curtains of cool plasma held up along the field for many turns. Against the sky at the limb they glow red, in fine hanging threads; in front of the disk the same thing is a dark filament. They sit at higher latitudes than the active regions and turn with the surface' }),
+      Object.freeze({ key: 'sunEruptions', label: 'Eruptions', kind: 'toggle', dimWhen: (s) => s.sky.sunActivity === false, hint: 'Filament eruptions, after the Solar Dynamics Observatory\u2019s films: a dark filament beside an active region lights up, rises slowly, then is flung off as a red arch of plasma behind a bright ragged front, leaving a dark cavity; two ribbons and an arcade of loops light up where it was, and the corona round the site dims. About half of them fail, and the material falls back. Needs solar activity on' }),
+      Object.freeze({
+        key: 'sunSize', label: 'Sun size', kind: 'range', min: SUN_SIZE_MIN, max: SUN_SIZE_MAX, step: 0.1,
+        hint: 'How much of the frame it fills. At 1 the whole disk fits with room round it. Turn it up and the sun comes closer: past about 4 with the sun behind the board, or about 7 from a corner, its surface covers the whole panel and becomes the background, with finer structure appearing as it grows',
+      }),
+      Object.freeze({
+        key: 'sunBrightness', label: 'Sun brightness', kind: 'range', min: 0.05, max: 1.5, step: 0.05,
+        hint: 'How bright it is behind the board. 1 is the full picture; it ships at 0.6 so that a chart in front of it always wins',
+      }),
+      Object.freeze({
+        key: 'sunAt', label: 'Sun position', kind: 'choice',
+        hint: 'Where the disk sits. Behind the board puts the whole sun in the middle; a corner draws it larger and part out of frame, a limb filling that corner the way the observatory\u2019s close-ups do',
+        options: SUN_PLACEMENT_LABELS,
       }),
       Object.freeze({ key: 'earthHead', label: 'The Earth', kind: 'heading', hint: 'A real day from this machine\u2019s clock: the sun, clouds, dusk, the moon at its phase, and the stars at night' }),
       Object.freeze({
@@ -1205,7 +1254,7 @@ export function skyFor(n, board) {
   return {
     sky,
     stars: sky !== 'none',
-    skyType: sky === 'earth' ? 'earth' : sky === 'form' ? 'form' : sky === 'flight' ? 'flight' : 'galaxy',
+    skyType: sky === 'earth' ? 'earth' : sky === 'form' ? 'form' : sky === 'sun' ? 'sun' : sky === 'flight' ? 'flight' : 'galaxy',
     ...skyExtras(n),
     flightSpeed: n.sky.flightSpeed,
     flightAt: n.sky.flightAt,
@@ -1214,6 +1263,16 @@ export function skyFor(n, board) {
     formPalette: n.sky.formPalette,
     formBrightness: n.sky.formBrightness,
     formFlow: n.sky.formFlow,
+    sunAt: n.sky.sunAt,
+    sunSize: n.sky.sunSize,
+    sunActivity: n.sky.sunActivity,
+    sunEruptions: n.sky.sunEruptions,
+    sunProminences: n.sky.sunProminences,
+    sunCycle: n.sky.sunCycle,
+    sunChannel: n.sky.sunChannel,
+    sunDetail: n.sky.sunDetail,
+    sunBrightness: n.sky.sunBrightness,
+    sunSpin: n.sky.sunSpin,
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     starColours: n.sky.colours, starGlints: n.sky.glints,

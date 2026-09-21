@@ -43,9 +43,23 @@ All notable changes to this project are documented here. The format follows
   lightning** throws real bolts on both boards -- channels that hold their shape, fork and re-strike -- crackles with
   held tendrils, carries sparks in orbit, and on Markets flies in from beyond the screen's edge and out past the other.
   The grid-tracing ball is the **Plasma ball** now and throws none.
+- **The Sun**, a new sky (Settings, Sky): our sun as the Solar Dynamics Observatory sees it at 171 ångström, in
+  gold -- the bright lace of the magnetic network over boiling plasma, turning faster at its equator than at its poles,
+  darkened toward its limb, with streamers off it -- and **active regions**: white-hot footpoints with fans of coronal
+  loops, carried round at their own latitude's rate, flaring, their loops standing off the limb; and **filament
+  eruptions**, after the observatory's own films: a dark filament lights, lifts and is flung off as a red arch of
+  plasma behind a bright front, ribbons and an arcade of loops light where it was, and the corona dims -- about half
+  fail and fall back. Its loops are true three-dimensional arches (they foreshorten, cross, and stand tall on the limb);
+  there are sunspots, red prominences that show as dark filaments on the disk, coronal rain, flares with their flash,
+  diffraction cross and wave, helmet streamers and polar plumes, an activity-cycle slider from solar minimum to maximum,
+  five other SDO channels as colour palettes, and a detail setting for slower graphics. Sliders for its size (from a small disk to its surface
+  filling the whole panel as the background), brightness, rotation and position. This is the first of seven planned
+  stages; sunspots, loops, prominences, flares and mass ejections are to come (`docs/PLAN-SUN-SKY.md`).
 - **Markets: 1 h, 3 h and 12 h charts**, made of 1-, 5- and 15-minute candles (about sixty bars each) from the same
   five exchanges, on both the flat chart and the 3D board, with minute labels on the time axis. The server fetches a
   finer grain only while a chart that short is open (`/api/markets?tf=`), and stops ten minutes after the last ask.
+- **Gemini** is the sixth exchange on Markets: its price, candles at every grain and its whole order book. With market
+  polling on, the server now also contacts `api.gemini.com` (the security notes and the Settings text list every host).
 - **The block finishes on WebGL**: **Chrome** is new -- a room's strip lights in polished steel, soft bands running
   across the whole board, on both renderers -- and costs what a plain board does (it was twice that); **Satin** is
   rebuilt as brushed metal (a sheen across every face, machined bevels, a brushed grain on WebGL); **Neon** is one

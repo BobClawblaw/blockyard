@@ -774,13 +774,13 @@ test('the v5 -> v6 sky step keeps every installation drawing what it drew, and c
 test('no sky is ever called Space: the word belongs to Block space', () => {
   for (const g of PANEL) {
     for (const r of g.rows) {
-      if (r.kind === 'choice' && r.key === 'sky') assert.deepEqual(r.options.map(([, l]) => l), ['Galaxy', 'Formation', 'Earth', 'None'], `${g.group}.sky offers the skies by name`);
+      if (r.kind === 'choice' && r.key === 'sky') assert.deepEqual(r.options.map(([, l]) => l), ['Galaxy', 'Formation', 'Sun', 'Earth', 'None'], `${g.group}.sky offers the skies by name`);   // (the Sun: 2026-09-22, docs/PLAN-SUN-SKY.md)
       if (g.group === 'sky') assert.ok(!/\bSpace\b/.test(`${r.label} ${r.hint}`), `${r.key}: no sky called Space`);
     }
   }
   const skyGroup = PANEL.find((g) => g.group === 'sky');
   assert.equal(skyGroup.rows[0].kind, 'skymap', 'the Sky tab opens with which board draws which');
-  assert.deepEqual(skyGroup.rows.filter((r) => r.kind === 'heading').map((r) => r.label), ['The Galaxy', 'The Formation', 'The Earth'], 'the Flight is disabled (2026-09-21) and so its heading is gone; the Formation joined 2026-09-21');
+  assert.deepEqual(skyGroup.rows.filter((r) => r.kind === 'heading').map((r) => r.label), ['The Galaxy', 'The Formation', 'The Sun', 'The Earth'], 'the Flight is disabled (2026-09-21) and so its heading is gone; the Formation joined 2026-09-21');
   assert.deepEqual(SKY_BOARDS.map((b) => b.group), ['space', 'markets', 'tetrust', 'blockout', 'blockanoid', 'scorched'], 'every board with a sky is on the map');
   for (const b of SKY_BOARDS) assert.ok(SKIES.includes(DEFAULTS[b.group].sky), `${b.group} ships with a sky`);
   assert.equal(DEFAULTS.scorched.sky, 'earth', 'the artillery under the Earth');

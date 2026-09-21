@@ -22,6 +22,7 @@ import { AGENTS, isAgent, rng, lensFlare, saucerAbove } from './agents.js';
 import { drawLivingSky } from './livingsky.js';
 import { drawGalaxyForm } from './galform.js';
 import { formGlAttach, formGlSupported } from './formgl.js';
+import { sunGlAttach, sunGlSupported, drawSunSky } from './sunsky.js';
 import { drawGalaxyFlight } from './galflight.js';
 import { createGl2d, gl2dSupported } from './gl2d.js';
 import { loadSettings } from './settings.js';
@@ -32,6 +33,15 @@ const STATE = new WeakMap();
 // the sky changes -- see switchSky in the options block below.
 const FORM_GL = new WeakMap();
 const FORM_DEAD = new WeakSet();          // contexts whose Formation layer declined: the 2D fallback from then on
+const SUN_DEAD = new WeakSet();           // ...and the Sun's
+// THE SKIES THAT ARE A FIELD ON THEIR OWN GL CANVAS (the Formation, and since 2026-09-22 the Sun -- docs/PLAN-SUN-SKY.md):
+// one shader over the whole panel, laid under the board, with a 2D fallback where the card declines. One seam for
+// both: which layer a context is running is on its record (`kind`), and asking for the other one drops it first.
+const FIELD_SKIES = {
+  form: { attach: formGlAttach, supported: formGlSupported, dead: FORM_DEAD, noGl: (o) => o.formNoGl === true },
+  sun: { attach: sunGlAttach, supported: sunGlSupported, dead: SUN_DEAD, noGl: (o) => o.sunNoGl === true },
+};
+const fieldSkyRuns = (ctx, opts) => { const F = FIELD_SKIES[opts.skyType]; return !!F && !F.noGl(opts) && !F.dead.has(ctx) && F.supported(); };
 // A CANVAS LAID DIRECTLY UNDER ANOTHER, for a GL layer (a 2D and a GL context cannot share an
 // element). "Directly" is the point: it goes in the SAME stacking layer as `el`, immediately
 // before it in the document, so document order alone puts it beneath -- and nothing else on the
@@ -4922,7 +4932,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // the transparent canvas onto the GL sky beneath. Any other sky: the 2D canvas paints
   //   its own background as always.
   ctx.clearRect(0, 0, pw, ph);
-  if (!(opts.skyType === 'form' && !opts.formNoGl && !FORM_DEAD.has(ctx) && formGlSupported())) {
+  if (!fieldSkyRuns(ctx, opts)) {
     ctx.fillStyle = opts.background;
     ctx.fillRect(0, 0, pw, ph);
   }
@@ -4939,10 +4949,12 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   if (starsOn(opts)) {
     if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
     else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
-    else if (opts.skyType === 'form') {
+    else if (FIELD_SKIES[opts.skyType]) {
+      const FS = FIELD_SKIES[opts.skyType];
       let drew = false;
-      if (!opts.formNoGl && !FORM_DEAD.has(ctx) && formGlSupported()) {
+      if (fieldSkyRuns(ctx, opts)) {
         let st = FORM_GL.get(ctx);
+        if (st && st.kind !== opts.skyType) { dropFormGl(ctx); st = null; }     // the OTHER field sky was running here
         if (!st) {
           // the GL canvas goes directly under this one, glued to its box (layerUnder, above)
           const el = ctx.canvas;
@@ -4950,14 +4962,14 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
           // carries `background: #020906` in app.css): a canvas's transparent pixels show
           // its CSS background, not what sits behind the element. While the GL sky runs,
           // the CSS background must be transparent -- saved here, restored on dispose.
-          st = { canvas: null, ctl: null, gone: false, bg: el.style.background, pos: el.style.position };
+          st = { kind: opts.skyType, canvas: null, ctl: null, gone: false, bg: el.style.background, pos: el.style.position };
           st.canvas = layerUnder(el);
           el.style.background = 'transparent';
           FORM_GL.set(ctx, st);
         }
         glueUnder(st.canvas, ctx.canvas);     // layouts shift it around
         if (!st.ctl && !st.gone) {
-          st.ctl = formGlAttach(st.canvas, { onLost: () => { st.gone = true; } });
+          st.ctl = FS.attach(st.canvas, { onLost: () => { st.gone = true; } });
           if (!st.ctl) st.gone = true;
         }
         if (st.ctl) drew = st.ctl.draw(pw, ph, dpr || 1, view.now ?? 0, opts);
@@ -4966,12 +4978,13 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
         // THIS frame -- which skipped its background fill expecting a sky under it -- paints one.
         // Without this a declined layer left the board canvas clear over nothing at all.
         if (!drew) {
-          FORM_DEAD.add(ctx); dropFormGl(ctx);
+          FS.dead.add(ctx); dropFormGl(ctx);
           ctx.fillStyle = opts.background; ctx.fillRect(0, 0, pw, ph);
         }
       }
       // the fallback paints the 2D layer alone when there is no GL
-      if (!drew) drawGalaxyForm(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+      if (!drew && opts.skyType === 'sun') { dropFormGl(ctx); drawSunSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) }); }
+      else if (!drew) drawGalaxyForm(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
     }
     else {
       // ANY OTHER SKY: the Formation's GL apparatus, if this board ever ran it, must stand
@@ -5466,7 +5479,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt, opts.galaxySpin,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
-    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.formSpeed, opts.formAt, opts.formBrightness, opts.formFlow, opts.formPalette,
+    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.sunAt, opts.sunActivity !== false, opts.sunEruptions !== false, opts.sunProminences !== false, opts.sunCycle, opts.sunChannel, opts.sunDetail, opts.sunSize, opts.sunBrightness, opts.sunSpin, opts.formSpeed, opts.formAt, opts.formBrightness, opts.formFlow, opts.formPalette,
     rendererOf(opts),                     // a parked board repaints when the renderer is switched
     fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,

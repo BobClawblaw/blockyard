@@ -525,17 +525,95 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   slides by its height only. Two fills a face (the room, a near-edge fall-off), on BOTH renderers. Now costs what the
   plain board does on GL (rest 3.9, live 8.1). NOT verified: Software in a real browser -- the harness's 2D canvas is
   CPU-rasterised and gradient faces read 70 ms there against 56 for the old quads.
+- **THE SUN IS A SKY** (`public/js/sunsky.js`; plan and research: `docs/PLAN-SUN-SKY.md`; operator, 2026-09-21: "an
+  animated simulation of our sun ... rotating very slowly ... a rather serious simulation"). **MILESTONE 1 OF 7 IS
+  BUILT (2026-09-22): the disk.** SDO's 171 angstrom gold; one fragment shader on its own GL canvas under the board,
+  on the FORMATION'S SEAM (`FIELD_SKIES` in details3d.js: a context runs one field sky at a time, `kind` on its
+  record, the other dropped first; each has its own DEAD set and 2D fallback). What it draws: a sphere, cells as 3D
+  Voronoi ON the sphere (no seam, no polar pinch), the magnetic NETWORK BRIGHT along the lanes over cloudy plasma
+  (the first cut drew the visible-light picture -- bright tiles, dark edges -- and it read as giraffe skin),
+  limb darkening `1 - 0.6(1 - mu)` from the same constant `limbDarkening()` uses, a bright rim, a glow off the
+  limb. **Differential rotation winds a texture into hairlines**, so only the rigid turn is unbounded; the SHEAR
+  runs on a sawtooth in two cross-faded layers (`sunPhases`, weights sum to one, zero weight at a reset). Clock
+  integrated, phases in doubles. EVERYTHING IS BAND-LIMITED by pixels per cell -- and that is also how
+  **`sky.sunSize`** works (operator, of the first cut: "The sun needs to fill WAY MORE OF THE FRAME! ... a slider
+  to be able to make the sun take up the entire screen ... the entire surface as a background"): 0.3-10, ships 2.6
+  (a great limb across the frame); past ~4 centred or ~7 from a corner the surface covers the panel, and granulation
+  appears inside the network because the pixels now exist. Other settings: `sunAt`, `sunBrightness` (ships 0.6:
+  "so the chart always wins"), `sunSpin` (1 = a turn in ten minutes; real: 24.5 days). All pinned to the module's
+  constants, all through `skyFor`, all in `optSig`. `node scripts/sun-preview.mjs --gpu vulkan --place center
+  --sun-size 1 --brightness 1` to look at it; 0.06-0.5 ms a frame on the 5090.
+  **ACTIVITY (the same day; operator, with NASA SVS 5268 open: "Where is all the solar activity in ours?!")**: beside
+  SDO's own frame the first cut was an evenly lit ball. The real 171 sun is a DARK mottled disk with a handful of
+  blazing ACTIVE REGIONS -- so the ramp went yellow-olive, the quiet sun went dark and fibrous with coronal holes, and
+  `sunRegions(turn, wall)` (pure, doubles, no state) places ten regions in the belts (8-32 degrees, both
+  hemispheres, Joy's-law tilt), carries each round at ITS latitude's rate, gives each a life of a few turns born and
+  ended at nothing, and a flare cycle on the WALL clock (sharp rise, slow fall, a few large). The shader draws a
+  region as a DIPOLE SEEN FROM ABOVE: in the tangent plane with footpoints at (+-1, 0), the field lines are the
+  circles through both, so which circle a pixel is on is ONE DIVISION, and stripes in that number are the loop fan.
+  The same function on the LIMB PLANE makes tufts stand off the limb; the corona has streamers (fbm by position
+  angle). `sky.sunActivity` switches it. Always judge it BESIDE NASA's frame (the stills are one curl away:
+  svs.gsfc.nasa.gov/vis/a000000/a005200/a005268/).
+  **FILAMENT ERUPTIONS AND CMEs** ("build the filament eruptions and CMEs next", with SVS 5268 and 5239; modelled on
+  contact sheets cut from the films with ffmpeg -- the eruption's quadrant, twelve frames, 171 and 304):
+  `sunEruption(k, wall)` runs each region on its own 46-84 s period on the WALL clock: a dark S-bent FILAMENT along
+  the inversion line (it re-forms gradually in the quiet); it lights and rises slowly (`sunEruptionHeight`: slow to
+  0.045 R, then `~t^1.8` out to 2.8 R), and what leaves is the three-part structure -- a thin ragged FRONT, a dark
+  CAVITY, a red CORE -- while two RIBBONS part and an ARCADE lights between them, and the site DIMS. 46% FAIL (rise a
+  fifth of a radius, fall back; no front). The ejecta is drawn in the PICTURE's frame (`sunToScreen`, the exact
+  inverse of the shader's roll-then-tip; `uARs`), hidden by the disk when behind the limb, faded over a long way.
+  **The core is an ARCH, not a pattern**: the first cut striped a blob with a sine and drew sergeant's chevrons; it
+  is the distance to a parabola (apex leading, legs trailing sunward), fibres as noise stretched along it, and
+  FORESHORTENED by `length(cs.xy)` -- face-on it drew a thin red parabola right across the disk. `sky.sunEruptions`.
+  **LOOK AT IT AT THE SHIPPED SIZE, NOT ONLY SMALL** (`sun-preview.mjs --size 1920x1080 --place top-right`): every
+  check of the first cuts was a small centred disk, and at sunSize 2.6 the operator saw none of it -- "I'm still
+  not seeing any surface activity or finer details": a flaring region was a flat white blob with a straight seam
+  (its light was CLIPPED and its cut-off was hard: now an exponential shoulder `arx`, and `edgeK` to zero before the
+  cut), and the surface was cracked-mud tiles (now fibrous fbm at 41x, 127x, 380x, each let in by pixels per grain,
+  bright points pulsing along the network, a faster boil, and `SUN_MAX_PIXELS` 1.4M -> 4.2M so a big display is not
+  drawn at a third of its pixels). **The loops are NOT the dipole's circles** (operator, with a screenshot: "What is
+  that looping shit supposed to be? ... really flat and strange" -- complete rings through both footpoints, a bar
+  magnet's diagram): an ARCADE of arches between the feet that LEAN limbward by their height (`ua = u - ld*lean*H*hp`,
+  which is what makes them read as arches), and FANS whose threads CURVE (`launch`) and fade -- straight they were
+  starbursts. **The erupting arch GROWS** ("The red flares sorta appear out of nowhere... they need to grow"): `born`
+  scales its size and light from nothing through the slow rise. Placements: centre, four corners, middle-left/right.
+  **THE WHOLE POLISH LIST WAS THEN BUILT (the goal, 2026-09-22: "do the entire list. Make this sun ... beautiful. Equal
+  to NASA footage at least")**, each step judged BESIDE NASA's 171 frame (`nasa171.jpg`, one curl away):
+  * **LOOPS ARE 3D** (`loops3d` + `sunLoops`): each a half-ELLIPSE standing off the sphere between two footpoints,
+    28 a region (an arcade of 13, 15 long ones that read as fans). The view is parallel, so an arch's picture is the
+    same ellipse in x,y: per pixel, five samples + four BOUNDED Newton steps on (X-p).X'=0 find the nearest point and
+    its depth, the sun hides it SOFTLY. **Do NOT meet the ray with the loop's plane**: it is closed-form and singular
+    edge-on, and an upright loop seen from above -- the commonest loop on the disk -- IS edge-on (blunt half-arcs,
+    white dashes). The loops' geometry is worked out ONCE A FRAME ON THE CPU into an RGBA32F texture (4 texels a loop,
+    `texelFetch`): built per pixel it was more than half the frame.
+  * sunspots (umbra, striated penumbra, the plage a grainy gold RING, white only at a flare's kernel); quiet
+    PROMINENCES (`sunProminences`: 3D low arches with a hanging curtain, red against the sky, ABSORBING against the
+    disk, heights the measured 0.035-0.095 R); coronal RAIN (it CONDENSES, streaks, goes out -- "dots appearing out
+    of nowhere" was the verdict on knots that switched on); the FLARE (teal flash at the loop tops, SDO's
+    diffraction cross on big ones, a wave over the disk); the eruption WRITHES, drains down its legs, dims from its
+    two feet, and its FRONT shows only against the sky (face-on it drew a yellow worm over the disk); the corona has
+    HELMETS that thin to stalks (a threshold rising with height), polar plumes, outward wind.
+  * `sky.sunCycle` (regions 1..10, latitude band, flare/eruption pace, polar holes), `sky.sunChannel` (171/304/193/
+    211/131/white as ramps over the same picture), `sky.sunDetail` (pixel budget low/medium/high), switches for
+    prominences and eruptions. The quiet sun is DARK and its network BROKEN (every lane lit was a honeycomb).
+  * COST on the 5090: 1080p at size 3.2 went 2.8 -> 1.08 ms (fine structure once, not once a shear layer; loops on
+    the CPU; per-arch bounds). NOT MEASURED on a laptop GPU: `sunDetail` ships 'medium' for that reason.
+  NOT DONE: a Kiosk / game-well look with the Sun chosen; the fallback has region glows but no loops or eruptions;
+  prominences are lens-shaped on the disk (no sinuous spine); nothing here has been watched in MOTION by me.
+  A backtick in a GLSL comment ended the template AGAIN here; a test counts them.
 - **MARKETS HAS SHORT CHARTS** (2026-09-22; operator: "bitcoinity.org/markets has 10m 1h 3h and 12h charts. Why don't
   we? ... Why don't we fetch finer bars like bitcoinity does?" -- there was no reason; hourly-only was the first day's
   simplification). A range names its GRAIN: 1 h = 60 x 1 m, 3 h = 36 x 5 m, 12 h = 48 x 15 m (`RANGES`, `grainOf`,
   `barsOf` in public/js/markets.js; `GRAINS`, `fineUrl`, `pollFine` in server/collect/markets.js). The page asks
   `/api/markets?tf=<grain>`, the reply carries `bars` per exchange, and ONLY A GRAIN SOMEBODY ASKED FOR IN THE LAST TEN
   MINUTES IS POLLED (20 s / 60 s / 2 min). The hourly series is always kept: the table's 24 h figures are made from it.
-  All five exchanges serve all three grains (probed live 2026-09-22: 120 bars each). `chartSeries` returns null while
+  All six exchanges serve all three grains (probed live 2026-09-22: 120 bars each). `chartSeries` returns null while
   the reply still carries another grain, and the note under the table says the chart is still the last range.
-  NOT DONE YET: the 10 m chart (needs bars built from each exchange's trades feed), Gemini (its candles and book
-  answer from here; CEX.IO's candle endpoint returns `[]` and its market is 0.35 BTC a day), a currency picker
-  (Coinbase, Kraken, Bitstamp and Gemini all list BTC/EUR). New exchanges are NEW OUTBOUND HOSTS: docs and the
+  **GEMINI is the sixth exchange** (the same day: "Don't forget to add gemini exchange"): v1 pubticker (its volume is
+  an object), v2 candles `[ms,o,h,l,c,v]` newest first -- which LAG (the newest hourly bar was 1.7 h old), so its live
+  bar is the ticker's or nobody's -- and the whole book. CEX.IO was probed and left out: its candle endpoint returns
+  `[]` and its market was 0.35 BTC in 24 hours. NOT DONE YET: the 10 m chart (needs bars built from each exchange's
+  trades feed) and a currency picker (Coinbase, Kraken, Bitstamp and Gemini all list BTC/EUR). New exchanges are NEW OUTBOUND HOSTS: docs and the
   Settings text name every host contacted.
 - **ON MARKETS, WHAT CROSSES THE BOARD STARTS AND ENDS BEYOND THE PANEL** (operator, 2026-09-22: "Never make an
   effect just blink in out of existence for the market board"). The Markets canvas is far wider than its chart (the
@@ -717,7 +795,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1397 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1409 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1046,7 +1124,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1397 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1409 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
