@@ -8,7 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { STAR_BEAT, beatFrequency, bakeRamp, earClip, parseColour, packColour, arcSegments, arcSweep, isConvex, isSpeck, strokeGeometry, stripGeometry, settleStops, createGl2d, gl2dSupported } from '../public/js/gl2d.js';
-import { rendererOf, rendererIn, RENDERERS, render3d, softStops } from '../public/js/details3d.js';
+import { rendererOf, rendererIn, RENDERERS, render3d, softStops, fpsTick, fpsWanted, GALAXY_SPIN, GALAXY_SPIN_MAX } from '../public/js/details3d.js';
+import { skyFor } from '../public/js/settings.js';
 import { DEFAULTS, PANEL, normalise } from '../public/js/settings.js';
 
 const TAU = Math.PI * 2;
@@ -504,6 +505,114 @@ test('the choice: a setting, an override, Software by default and wherever WebGL
   render3d(canvas, [{ txid: 'a'.repeat(64), vbytes: 5000, rate: 10 }], { renderer: 'webgl', stars: false, idleFx: false });
   assert.ok(fills > 0);
   assert.equal(rendererIn(canvas), 'software');
+});
+
+test('the frame rate: frames actually painted in the last second, shown twice a second, on either renderer', () => {
+  assert.equal(DEFAULTS.appearance.showFps, false, 'off as shipped');
+  assert.ok(PANEL.find((g) => g.group === 'appearance').rows.some((r) => r.key === 'showFps' && r.kind === 'toggle'));
+  assert.equal(fpsWanted({ showFps: true }), true);
+  assert.equal(fpsWanted({ showFps: false }), false);
+  assert.equal(fpsWanted({}), false, 'no override: the setting, which here is the default');
+  const st = {};
+  let text = '';
+  for (let i = 0; i < 90; i++) text = fpsTick(st, 1000 + i * (1000 / 30), 2.5);   // three seconds at thirty a second
+  assert.match(text, /^(29|30|31) fps {2}2\.5 ms$/);
+  const shown = st.fps.text;
+  fpsTick(st, st.fps.at + 100, 2.5);
+  assert.equal(st.fps.text, shown, 'the figure does not flicker every frame');
+  // a board that stopped painting for a while: old frames are not counted
+  assert.match(fpsTick(st, st.fps.at + 60_000, 2.5), /^1 fps/);
+  // it is drawn through the board's own context, top right, whichever renderer that is
+  let label = null, box = null;
+  const c2 = new Proxy({}, { get: (_t, k) => (k === 'createPath' || k === 'gl2d' || k === 'flush' ? undefined : k === 'canvas' ? canvas
+    : k === 'fillText' ? (t, x, y) => { label = [t, x, y]; } : k === 'fillRect' ? (x, y, w, h) => { box = [x, y, w, h]; }
+    : k === 'measureText' ? () => ({ width: 100 }) : typeof k === 'string' && /^(create|get)/.test(k) ? () => null : () => {}), set: () => true });
+  const canvas = { width: 300, height: 200, clientWidth: 300, clientHeight: 200, getContext: () => c2, addEventListener() {}, style: {} };
+  render3d(canvas, [{ txid: 'b'.repeat(64), vbytes: 5000, rate: 10 }], { showFps: true, stars: false, idleFx: false });
+  assert.match(label[0], /fps .* ms {2}Software$/);
+  assert.ok(label[1] > 250 && label[2] < 30, 'top right');
+  assert.ok(box[0] + box[2] <= 300 && box[1] >= 0);
+  label = null;
+  render3d(canvas, [{ txid: 'c'.repeat(64), vbytes: 5000, rate: 10 }], { showFps: false, stars: false, idleFx: false });
+  assert.equal(label, null);
+});
+
+test('the Galaxy sky on WebGL: its gas is baked by a shader, once, and drawn as the bitmap was', () => {
+  // (operator, 2026-09-21: "Can we fix up the nebulas at least so they are not overlapping circles, and make
+  // them proper gas clouds?")
+  const gl = stubGl(); gl.__ret.checkFramebufferStatus = () => 'FRAMEBUFFER_COMPLETE';
+  const ctx = createGl2d(fakeCanvas(), { gl });
+  const glsl = 'uniform vec4 uA[3]; uniform vec4 uGeo; vec4 bake(vec2 px) { return vec4(px / uGeo.xy, 0.0, 1.0); }';
+  const img = ctx.bake({ width: 512, height: 256, glsl, uniforms: { uGeo: [512, 256, 1, 0], 'uA[0]': new Float32Array(12) } });
+  assert.ok(img && img.width === 512 && img.height === 256);
+  assert.ok(gl.calls.some((c) => c[0] === 'viewport' && c[3] === 512 && c[4] === 256), 'rendered at its own size, into its own target');
+  assert.ok(gl.calls.some((c) => c[0] === 'uniform4fv' && c[1] === 'uA[0]' && c[2].length === 12), 'an array of vec4 reaches the shader');
+  assert.ok(gl.calls.some((c) => c[0] === 'drawArrays' && c[3] === 3), 'one full-screen triangle');
+  // and then it is an image like any other: drawn with no upload, the frame's own target restored first
+  const n = gl.calls.length;
+  ctx.drawImage(img, 0, 0); ctx.drawImage(img, 5, 5); ctx.flush();
+  const after = gl.calls.slice(n);
+  assert.equal(after.filter((c) => c[0] === 'texImage2D' || c[0] === 'texSubImage2D').length, 0);
+  assert.ok(after.some((c) => c[0] === 'useProgram') && after.some((c) => c[0] === 'bindFramebuffer'), 'the frame is set up again after the bake');
+  assert.equal(after.filter((c) => c[0] === 'drawArrays').length, 2);
+  img.free();
+  assert.ok(gl.calls.some((c) => c[0] === 'deleteTexture'));
+  // a card that cannot: null, once and for all, and the bitmap of ellipses is baked the old way
+  const bad = stubGl(); let n2 = 0; bad.__ret.getShaderParameter = () => ++n2 <= 2;
+  const ctx2 = createGl2d(fakeCanvas(), { gl: bad });
+  assert.equal(ctx2.bake({ width: 8, height: 8, glsl }), null);
+  assert.equal(ctx2.bake({ width: 8, height: 8, glsl }), null);
+  // the shader itself: nine clouds and fourteen lanes from the SAME seeded lists, laid along their arms, torn by noise
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const g = d3.slice(d3.indexOf('const GAS_GLSL = `'), d3.indexOf('function gasLayerGl('));
+  assert.match(g, /uniform vec4 uNeb\[9\];/); assert.match(g, /uniform vec4 uDust\[14\];/);
+  assert.match(g, /vec2 lw = l \+ [\d.]+ \* warp;/, 'the envelope is warped: a cloud has no oval outline');
+  assert.match(g, /rgb \*= 1\.0 - a;/, 'dust ABSORBS what is under it');
+  assert.equal((g.slice(18).match(/`/g) || []).length, 1, 'no backtick inside the template but its end');
+});
+
+test('the GL renderer\'s own sky: light between the stars, stars as points of light, far galaxies as smudges', () => {
+  // (operator, 2026-09-21: "do all 3")
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const g2 = readFileSync(new URL('../public/js/gl2d.js', import.meta.url), 'utf8');
+  // ONE switch, and the parity check turns it off so the two renderers are compared on the same picture
+  assert.match(d3, /const glSky = ctx\.gl2d === true && opts\.glSky !== false;/);
+  assert.match(readFileSync(new URL('../scripts/gl-compare.mjs', import.meta.url), 'utf8'), /glSky: \$\{LOOK\}/);
+  // the arms' haze is the SAME log spiral the stars, clouds and lanes are laid on, and the bulge is held down
+  const gas = d3.slice(d3.indexOf('const GAS_GLSL = `'), d3.indexOf('function gasLayerGl('));
+  assert.match(gas, /float phase = uArm\.z \* \(th - log\(max\(r, 1e-3\) \/ uArm\.x\) \/ uArm\.w\);/);
+  assert.match(d3, /uArm: \[geo\.inner, geo\.maxR, GALAXY_ARMS, GALAXY_TWIST\]/);
+  const bulge = Number(gas.match(/float ab = clamp\(bulge \* ([\d.]+) \* uOpt\.x/)[1]);
+  assert.ok(bulge <= 0.4, 'the bulge is a glow behind a chart, not a lamp');
+  assert.ok(!/\bfloat (patch|sample|filter|input|output|common|partition|active)\b/.test(gas), 'no GLSL reserved word as a name (patch broke the bake, silently)');
+  // a failed shader is LOGGED, not only fallen back from
+  assert.match(d3, /onCompileError: \(log\) =>/);
+  // stars: a soft point keeps the LIGHT of the square it replaces, and a sub-pixel star is widened and dimmed
+  assert.match(g2, /float rTrue = aPos\.w \* uSoft\.y, rDraw = max\(rTrue, 0\.75\);/);
+  assert.match(g2, /if \(uSoft\.x > 0\.5\) a \*= \(rTrue \* rTrue\) \/ \(rDraw \* rDraw\);/);
+  assert.ok(Math.abs(2 * Math.PI * 0.8 * 0.8 - 4) < 0.05, 'a gaussian of sigma 0.8 r holds what a square of side 2 r did');
+  assert.match(g2, /k = exp\(-d \* d \/ 1\.28\);/);
+  // the context is told, and draws the field in one call either way; soft giants are not given 2D glints as well
+  const gl = stubGl(), ctx = createGl2d(fakeCanvas(), { gl });
+  const stars = []; for (let i = 0; i < 100; i++) stars.push({ x: i, y: i, r: 0.6, c: [255, 240, 220], b: 0.8, f: 0.002, p: i, big: i % 10 === 0 });
+  ctx.starField({ key: {}, stars, soft: true, galaxy: false, colourOf: (st) => st.c }, 0, 0, 1);
+  ctx.starField({ key: {}, stars, soft: false, galaxy: false, colourOf: (st) => st.c }, 0, 0, 1);
+  assert.deepEqual(gl.calls.filter((c) => c[0] === 'uniform2f' && c[1] === 'uSoft').map((c) => c[2]), [1, 0]);
+  assert.match(d3, /if \(!glints \|\| soft\) return;/);
+  // far galaxies: gradient fills (one quad each on this renderer), not four flat ellipses
+  assert.match(d3, /if \(f\.far && opts\.galaxies !== false && glSky\) \{/);
+});
+
+test('the Galaxy sky\'s rotation speed: a setting, and a pace -- not a jump', () => {
+  // (operator, 2026-09-21: "we should add a rotation slider speed for that too")
+  assert.equal(DEFAULTS.sky.galaxySpin, 1, 'the shipped turn in fifteen minutes');
+  const row = PANEL.find((gr) => gr.group === 'sky').rows.find((r) => r.key === 'galaxySpin');
+  assert.ok(row.kind === 'range' && row.min === 0 && row.max === GALAXY_SPIN_MAX);
+  assert.equal(skyFor(normalise({ sky: { galaxySpin: 6 } }), 'space').galaxySpin, 6);
+  assert.ok(Math.abs((Math.PI * 2) / Math.abs(GALAXY_SPIN) - 900_000) < 1, 'rate 1 is a turn in 900 s');
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(d3, /else f\.spinAngle \+= \(now - f\.spinAt\) \* GALAXY_SPIN \* rate;/, 'integrated on the field');
+  assert.ok(!/const spin = galaxy \? now \* GALAXY_SPIN/.test(d3), 'never now x rate: a drag would swing the whole disc');
 });
 
 test('the pixels\' owners keep Software: Scorched Yard reads its land and its sky back', () => {

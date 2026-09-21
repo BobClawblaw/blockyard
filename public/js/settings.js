@@ -18,6 +18,11 @@
 // silently discarded the operator's stored choice. A version and a migration chain make a move
 // survivable, and `sky` below is the first one to take it.
 
+// (the Formation's palettes are data beside its shader; the picker below lists exactly those. formgl.js touches
+// no DOM until it is asked to draw, so the server, which reads this file to settle saved settings, can load it too.)
+import { FORM_PALETTE_LABELS } from './formgl.js';
+const FORM_PALETTE_OPTIONS = Object.freeze(FORM_PALETTE_LABELS.map((o) => Object.freeze([...o])));
+
 export const SETTINGS_KEY = 'blockyard.settings';
 export const SCHEMA_VERSION = 6;
 
@@ -48,6 +53,9 @@ export const DEFAULTS = Object.freeze({
     // renderer"): bloom -- what is bright throws light -- and a dither that takes the bands out of the
     // wide faint glows. 0 is off and the frame is the Software picture, pixel for pixel near enough.
     glow: 0.5,
+    // THE FRAME RATE, top right of every 3D board (operator, 2026-09-21): frames actually painted in
+    // the last second, the processor's milliseconds a frame, and which renderer drew it.
+    showFps: false,
   }),
   space: Object.freeze({
     // OFF by default (operator, 2026-09-12: "make simple cubes the default, disable shadows by
@@ -150,6 +158,7 @@ export const DEFAULTS = Object.freeze({
     brightness: 1,        // multiplies each star's alpha (0.2 .. 1.5)
     galaxy: true,         // the same stars laid on spiral arms, turning once a quarter hour
     galaxyAt: 'bottom-left',   // where its middle sits: behind the board, or any of the corners
+    galaxySpin: 1,             // how fast the disc turns, in multiples of the shipped turn in fifteen minutes; 0 holds it
     // THE LAYERS OF THE SKY, each its own switch (operator, 2026-09-12: "We should have toggles for
     // all these sub-options in preferences"). All on: they were asked for, and a feature shipped
     // behind an off switch is not shipped.
@@ -169,9 +178,18 @@ export const DEFAULTS = Object.freeze({
     flightAt: 'top-right', // where the flight goes: the centre or any corner (shipped: top-right)
     // THE FORMATION (2026-09-21: the RAS TNG50 film "Formation of a single massive galaxy
     // through time"; galform.js) -- gas streams in along filaments, settles into a thin
-    // differentially-rotating disc, and breathes twin polar fountains, white-on-black on a
-    // 140 s loop.
-    formSpeed: 1,         // the loop's speed; 0 holds the mature disc, 4 is four times through
+    // differentially-rotating disc, and breathes twin polar fountains, on a 140 s loop. On a
+    // graphics card it is formgl.js's density field in the film's magma colours; elsewhere the
+    // white-on-black speck renderer here.
+    // THE FOUR BELOW ARE THE OPERATOR'S OWN, read out of their saved settings (2026-09-21: "read the
+    // settings I have selected for the formation, and make those the default settings. It was originally
+    // too bright and was threatening to overpower the chart"): in a corner, off full brightness, and
+    // slow -- a sky behind a chart, not a film in front of one.
+    formAt: 'top-left',   // where its galaxy sits: behind the board, or any of the corners (the Galaxy's own five places)
+    formPalette: 'magma', // its colours: formgl.js FORM_PALETTES (the film's own, and twelve chosen to stay off the chart's)
+    formBrightness: 0.8,  // 1 is the picture as it was first made
+    formFlow: 0.5,        // the pace of the gas itself: its flow inward, its swirl, its turbulence, the outbursts
+    formSpeed: 0.4,       // how fast the galaxy and its satellites live; 0 holds them where they are
   }),
   // `glow` was here and is gone (operator, 2026-09-12: "on markets and price. we should never show
   // the grid glow. that's just terrible"). Never-show makes the switch a control nobody may use,
@@ -495,6 +513,7 @@ const PANEL_GROUPS = Object.freeze([
         key: 'glow', label: 'WebGL glow', kind: 'range', min: 0, max: 1, step: 0.05, dimWhen: (s) => s.appearance.renderer !== 'webgl',
         hint: 'Only the WebGL renderer has this: what is bright on a board -- a neon line, a spark, a white-hot core -- throws real light on what is round it, and the wide faint glows lose their bands. Zero is the Software picture',
       }),
+      Object.freeze({ key: 'showFps', label: 'Show frame rate', kind: 'toggle', hint: 'In the top right corner of every 3D board: the frames it actually painted in the last second, the processor\u2019s milliseconds for one, and which renderer drew it. A board at rest under a sky paints about thirty a second by design; a board with nothing moving paints none, and keeps its last figure' }),
       Object.freeze({ key: 'customBg', label: 'Page', kind: 'colour', hint: 'The colour behind everything. Whether Custom is a light or a dark theme follows from this one: the derived shades go the other way', custom: true }),
       Object.freeze({ key: 'customPanel', label: 'Panels', kind: 'colour', hint: 'Cards, the header, tables and the settings sheet. Raised panels and hovers are this nudged toward the text colour', custom: true }),
       Object.freeze({ key: 'customText', label: 'Text', kind: 'colour', hint: 'Body text and figures', custom: true }),
@@ -568,6 +587,10 @@ const PANEL_GROUPS = Object.freeze([
         hint: 'Where the middle of the spiral sits. A corner crowds the bright centre there and sweeps the arms across; behind the board shows the whole spiral',
         options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
+      Object.freeze({
+        key: 'galaxySpin', label: 'Rotation speed', kind: 'range', min: 0, max: 20, step: 0.5,
+        hint: 'How fast the spiral turns. 1 is one turn in about fifteen minutes; 20 is a turn in under a minute; 0 holds it still. The gas, the dust and the clusters turn with it',
+      }),
       Object.freeze({ key: 'density', label: 'Star density', kind: 'range', min: 0.2, max: 8, step: 0.1, hint: 'How many stars, against the shipped number. High values are a lot of drawing on a big panel' }),
       Object.freeze({ key: 'brightness', label: 'Star brightness', kind: 'range', min: 0.2, max: 1.5, step: 0.1, hint: 'How brightly they burn' }),
       Object.freeze({ key: 'colours', label: 'Star colours', kind: 'toggle', hint: 'Warm old stars in the middle, blue-white young ones in the arms. Off is one colour of starlight' }),
@@ -576,10 +599,28 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'dust', label: 'Dust lanes', kind: 'toggle', hint: 'Dark ribbons along the inner edge of each arm, the way a real spiral carries them' }),
       Object.freeze({ key: 'clusters', label: 'Star clusters', kind: 'toggle', hint: 'Tight knots of stars out in the halo, turning with the arms' }),
       Object.freeze({ key: 'galaxies', label: 'Distant galaxies', kind: 'toggle', hint: 'Other galaxies, small and faint and far, behind everything else' }),
-      Object.freeze({ key: 'formHead', label: 'The Formation', kind: 'heading', hint: 'A galaxy assembling itself on a loop, after the TNG50 film: gas streams in along filaments, boils, settles into a thin turning disc, and breathes twin fountains of wind -- thirteen billion years in a little over two minutes, white-on-black' }),
+      Object.freeze({ key: 'formHead', label: 'The Formation', kind: 'heading', hint: 'A galaxy assembling itself on a loop, after the TNG50 film: gas streams in along filaments, boils, settles into a thin turning disc, and breathes twin fountains of wind -- thirteen billion years in a little over two minutes. On a graphics card it is the film\u2019s own picture: the gas as a glowing field, violet where it is thin, magenta and orange where it is dense, the galaxy a pale spiral at the middle with satellites falling in' }),
       Object.freeze({
         key: 'formSpeed', label: 'Formation speed', kind: 'range', min: 0, max: 4, step: 0.1,
-        hint: 'How fast the thirteen billion years pass. Zero holds the mature disc with its fountains up',
+        hint: 'How fast the galaxy and its satellites live: how quickly the spiral turns and how long a satellite takes to fall in and merge. It never loops and never fades. Zero holds them where they are; the gas keeps flowing',
+      }),
+      Object.freeze({
+        key: 'formPalette', label: 'Formation colours', kind: 'choice',
+        hint: 'The gas\u2019s colours. Magma is the film\u2019s own, and its dense gas sits close to the candles\u2019 red and the price line\u2019s yellow. The other twelve were chosen, and measured, to stay well away from the chart\u2019s green, red and yellow: the cool ones (Midnight, Cobalt & gold, Abyss, Ultraviolet) leave the chart clearest, Silver and Glacier are neutral, and the warm ones (Ember, Sepia) are held dark',
+        options: FORM_PALETTE_OPTIONS,
+      }),
+      Object.freeze({
+        key: 'formBrightness', label: 'Formation brightness', kind: 'range', min: 0.05, max: 1.5, step: 0.05,
+        hint: 'How bright the gas is behind the board. It dims the colours, not the gas, so the violets and oranges stay what they are at any level. 1 is the full picture, which can overpower a chart in front of it; it ships a little under',
+      }),
+      Object.freeze({
+        key: 'formFlow', label: 'Formation flow', kind: 'range', min: 0, max: 4, step: 0.1,
+        hint: 'How fast the gas itself moves: drawn in toward the galaxy, swirled round it, jostled, and blown out in shells. Zero stills the gas. Formation speed above is a different thing: how fast the galaxy turns and its satellites fall in. On a machine with no graphics card the sky is dots, and this does nothing',
+      }),
+      Object.freeze({
+        key: 'formAt', label: 'Formation centre', kind: 'choice',
+        hint: 'Where the galaxy sits. Behind the board puts it in the middle with the gas all round it; a corner puts it there, drawn larger, with the gas and the satellites\u2019 paths sweeping across the panel toward it',
+        options: Object.freeze([['center', 'Behind the board'], ['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']]),
       }),
       Object.freeze({ key: 'earthHead', label: 'The Earth', kind: 'heading', hint: 'A real day from this machine\u2019s clock: the sun, clouds, dusk, the moon at its phase, and the stars at night' }),
       Object.freeze({
@@ -1133,6 +1174,7 @@ export function deepSky(n, sky = 'galaxy') {
   return {
     galaxy: n.sky.galaxy && !off,
     galaxyAt: n.sky.galaxyAt,
+    galaxySpin: n.sky.galaxySpin,
     nebulae: n.sky.nebulae && !off,
     galaxies: n.sky.galaxies && !off,
     dust: n.sky.dust && !off,
@@ -1167,6 +1209,10 @@ export function skyFor(n, board) {
     flightSpeed: n.sky.flightSpeed,
     flightAt: n.sky.flightAt,
     formSpeed: n.sky.formSpeed,
+    formAt: n.sky.formAt,
+    formPalette: n.sky.formPalette,
+    formBrightness: n.sky.formBrightness,
+    formFlow: n.sky.formFlow,
     starDensity: n.sky.density,
     starBrightness: n.sky.brightness,
     starColours: n.sky.colours, starGlints: n.sky.glints,

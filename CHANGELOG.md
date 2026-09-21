@@ -19,8 +19,23 @@ All notable changes to this project are documented here. The format follows
   WebGL also has a finish of its own, *WebGL glow*: neon lines, stars, sparks and white-hot cores
   throw real light (bloom), and wide faint glows lose their bands. The blocks never glow: their
   colour is the feerate.
-- **The Formation**, a fifth sky: a galaxy assembling itself on a loop, after the TNG50 film, on
-  the graphics card where there is one.
+- **The Formation**, a fifth sky: a galaxy assembling itself on a loop, after the TNG50 film. On a
+  graphics card it is the film's own main view -- the gas as a glowing density field, black to
+  violet to magenta to orange, a pale spiral galaxy at the middle, satellites falling in -- and
+  where there is no graphics card it is drawn as specks on the 2D canvas, in the same colours, in the
+  same place, and as perpetual. Its galaxy can sit
+  behind the board or in any corner (*Formation centre*), it has its own *brightness* and *flow*
+  sliders beside *Formation speed*, and thirteen palettes (*Formation colours*): the film's own, and twelve
+  measured to stay clear of the chart's green, red and yellow. It never loops and
+  never fades: satellites keep falling in on new orbits, shed wakes and stir the gas they cross.
+- **The Galaxy sky on WebGL** also has light between its stars (a haze along the arms, a warm bulge), stars
+  that are soft points with halos and diffraction spikes on the brightest, and distant galaxies that are
+  smudges of light rather than stacked ellipses.
+- **The Galaxy sky's nebulae are gas on WebGL**: billowing clouds with filaments, hollows and a second hue,
+  and ragged dust lanes that darken what is under them, where Software stacks translucent ellipses. And a
+  *Rotation speed* slider for the spiral, from still to a turn in under a minute.
+- **Show frame rate** (Settings, Appearance): frames painted in the last second, the processor's
+  milliseconds a frame and the renderer, top right of every 3D board.
 
 
 ## [0.1.3] — 2026-09-19

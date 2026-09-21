@@ -760,7 +760,7 @@ function draw(now = performance.now()) {
       // 1,800 identical resting cubes, twice a blast. A resting grid has one correct order, found by
       // diffing every pixel against the general sort: back rows first, and within a row the columns
       // from the outside in, the right one first where two tie at the centre. Pixel-identical, 7 ms.
-      board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }).sort(landOrder), { ...opts(FIELD), order: 'given', renderer: 'software' });   // fluidFloor reads this canvas's pixels back: the 2D canvas, whatever the setting
+      board3d(land, landTiles(g, { omit: settling ? fallingCells(g) : null }).sort(landOrder), { ...opts(FIELD), order: 'given', renderer: 'software', showFps: false });   // fluidFloor reads this canvas's pixels back: the 2D canvas, whatever the setting (and the actors' canvas over it carries the frame-rate figure)
       G.landKey = key;
     }
     drawWind(now);

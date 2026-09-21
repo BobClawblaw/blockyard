@@ -4,9 +4,14 @@
 // filaments, boils into a turbulent clump, settles into a thin differentially-rotating
 // disc, and in the late epochs breathes out along two polar cones that stall and rain
 // back -- the galactic fountain of the TNG papers. Thirteen billion years in FORM_CYCLE
-// seconds, then it fades to black and begins again.
+// seconds -- and then, since 2026-09-21, it STAYS: mature, turning, its fountains cycling (the operator:
+// "have the scene perpetually evolving. don't fade it out"). It used to fade to black and begin again.
 //
-// The look is the film's: gas DENSITY rendered white-on-black. There is no painted glow
+// COLOUR (2026-09-21): this was white-on-black, under a standing rule of the day -- "desaturated slate,
+// never vivid". The operator, with the film open, overruled it for this sky: "the pinks, purples,
+// oranges". The specks are tinted through the film's ramp now (formgl.js formRamp); everything else
+// below about grain and density stands.
+// The look was the film's inset panel: gas DENSITY rendered white-on-black. There is no painted glow
 // anywhere -- every cloud is a heap of tiny seeded specks and the brightness of the core
 // is nothing but how many specks overlap there (operator, standing rule: gas is grain,
 // density does the work; desaturated slate, never vivid).
@@ -18,6 +23,8 @@
 // Everything is a pure function of the clock: the same `now` paints the same frame, so a
 // replay test can hold the whole film still. No Math.random -- seeded hashes only, the
 // same discipline galflight.js keeps.
+
+import { FORM_PLACEMENTS, FORM_AT_DEFAULT, FORM_SPEED_DEFAULT, formRamp } from './formgl.js';
 
 // ------------------------------------------------------------------- the constants
 /** Seconds of wall clock for one pass through 13.8 Gyr at speed 1. The RAS film runs two minutes. */
@@ -52,7 +59,14 @@ export function formW(r) {
   return 0.075 / (Math.pow(Math.max(0.05, r), 0.55) + 0.18);
 }
 
-/** The loop's fade envelope: black at both ends of the cycle, full by 5% in. Nothing pops. */
+const RAMP_CACHE = {};
+/** The way IN: the web comes up out of black over the first 5% of the assembly, and that is the only fade there is. */
+export function envIn(u) {
+  const s = clamp01(u / 0.05);
+  return s * s;
+}
+
+/** The OLD loop's envelope (black at both ends). Kept for its test and for whoever wants a loop; the sky no longer uses it. */
 export function envAt(u) {
   const s = clamp01(Math.min(u, 1 - u) / 0.05);
   return s * s;
@@ -104,7 +118,7 @@ export function formField(seed = 11, count = 9000) {
  * time the particle is still on its filament, drifting inward with a turbulent wiggle; the
  * join blends it onto the orbit over its own short span.
  */
-export function gasAt(p, u) {
+export function gasAt(p, u, extraSec = 0) {
   // ON THE FILAMENT: distance shrinks as the cycle runs (never below the clump's core radius),
   // the whole web curling slowly, each particle with its own wiggle on the spine.
   const prog = clamp01(u / 0.6);
@@ -117,7 +131,8 @@ export function gasAt(p, u) {
   // ON THE ORBIT: angle advances only with time already served on the disc, so the picture
   // is a pure function of u and the disc visibly turns.
   const joined = smooth((u - p.s0) / p.jd);
-  const sec = Math.max(0, u - p.s0) * FORM_CYCLE;
+  // (extraSec: the seconds lived SINCE the disc matured -- the picture holds its moment, the disc goes on turning)
+  const sec = Math.max(0, u - p.s0) * FORM_CYCLE + extraSec;
   const th = p.th0 + formW(p.r0) * sec;
   const ox = Math.cos(th) * p.r0, oy = Math.sin(th) * p.r0;
   // THE DISC COOLS: squash tightens from a round blob toward the film's thin inclined disc,
@@ -186,27 +201,52 @@ export function farStars(seed = 41, count = 150) {
 let GASL = null, WINDL = null, FARL = null;
 
 /**
- * The Formation sky. `opts.formSpeed` scales the clock: 1 is the shipped 140 s loop, 4 runs
- * it in 35 s, 0 holds FORM_HOLD. Fills only plain rgba specks; the core's white is density.
+ * The Formation sky, where there is no graphics card to draw formgl.js's field. Plain rgba specks
+ * only; the core's brightness is density.
+ *
+ * BROUGHT ALONG WITH THE GL LAYER (operator, 2026-09-21: "bring it along"). Three things are shared:
+ *   - it is PERPETUAL: the galaxy assembles once -- web, infall, disc -- and then STAYS, the disc
+ *     still turning (gasAt's extraSec) and the fountains still cycling through their two bursts. It
+ *     used to loop back to the empty web through a fade to black every 140 s.
+ *   - its galaxy sits where `opts.formAt` says (formgl.js FORM_PLACEMENTS: the middle or a corner,
+ *     drawn larger in a corner), as the GL layer's does.
+ *   - its COLOURS are the film's, through the same ramp the shader is generated from (formRamp):
+ *     the far web violet, infalling gas magenta, the disc orange, the core pale yellow. It was
+ *     white on black.
+ * It has no satellites and no smoke: those are a per-pixel field's, and this is nine thousand dots.
+ * `opts.formSpeed` scales the clock (0 holds FORM_HOLD, a still frame).
  */
 export function drawGalaxyForm(ctx, pw, ph, dpr, now, opts = {}, helpers = {}) {
   if (!GASL) GASL = formField(11, opts.gasCount ?? 9000);
   if (!WINDL) WINDL = windField(29, 700);
   if (!FARL) FARL = farStars(41, 150);
-  const speed = Number.isFinite(opts.formSpeed) ? Math.max(0, Math.min(4, opts.formSpeed)) : 1;
-  const u = speed > 0 ? ((now * speed) / (1000 * FORM_CYCLE)) % 1 : FORM_HOLD;
-  const env = envAt(u);
-  const bright = Number.isFinite(opts.starBrightness) ? Math.min(1.5, Math.max(0, opts.starBrightness)) : 1;
-  const R = Math.min(pw, ph) * 0.55;
-  const cx = pw / 2, cy = ph / 2;
+  const speed = Number.isFinite(opts.formSpeed) ? Math.max(0, Math.min(4, opts.formSpeed)) : FORM_SPEED_DEFAULT;
+  const life = (now * speed) / 1000;                               // seconds lived
+  const grown = FORM_HOLD * FORM_CYCLE;                            // ...of which this many are the assembly
+  const u = speed > 0 ? Math.min(FORM_HOLD, life / FORM_CYCLE) : FORM_HOLD;
+  const extra = speed > 0 ? Math.max(0, life - grown) : 0;
+  // the fountains: through the assembly they follow it; after it they go round their two windows for ever
+  // (both ends of that stretch lie outside a window, so the turn-over shows nothing)
+  const W0 = FORM_WINDOWS[0][0], W1 = FORM_WINDOWS[1][0] + FORM_WINDOWS[1][1];
+  const uWind = extra > 0 ? W0 + ((FORM_HOLD - W0) + extra / FORM_CYCLE) % (W1 - W0) : u;
+  const env = envIn(u);
+  // (sky.formBrightness, as the GL layer reads it: 1 is the picture as first made, and it ships at half)
+  const bright = Number.isFinite(opts.formBrightness) ? Math.min(1.5, Math.max(0, opts.formBrightness)) : (Number.isFinite(opts.starBrightness) ? Math.min(1.5, Math.max(0, opts.starBrightness)) : 1);
+  const place = FORM_PLACEMENTS[opts.formAt] ?? FORM_PLACEMENTS[FORM_AT_DEFAULT];
+  const R = Math.min(pw, ph) * 0.55 * place[2];
+  const cx = pw * place[0], cy = ph * place[1];
   const cs = Math.cos(FORM_TILT), sn = Math.sin(FORM_TILT);
   const dp = dpr || 1;
+  // (the palette is the GL layer's -- formgl.js FORM_PALETTES -- so the two engines wear the same colours)
+  const pal = opts.formPalette ?? '';
+  const cache = (RAMP_CACHE[pal] ??= []);
+  const rgb = (t) => (cache[Math.round(t * 64)] ??= formRamp(Math.round(t * 64) / 64, opts.formPalette).join(','));
 
   // the distant field, dimmest of all
   for (const s of FARL) {
     const a = s.b * env * bright;
     if (a <= 0.006) continue;
-    ctx.fillStyle = `rgba(210,218,236,${a.toFixed(4)})`;
+    ctx.fillStyle = `rgba(${rgb(0.42)},${a.toFixed(4)})`;       // the far field: thin gas, violet
     ctx.beginPath();
     ctx.arc(s.x * pw, s.y * ph, s.r * dp, 0, Math.PI * 2);
     ctx.fill();
@@ -216,13 +256,16 @@ export function drawGalaxyForm(ctx, pw, ph, dpr, now, opts = {}, helpers = {}) {
   // bluer-slate; the joined disc over it, brighter, and inward-heavy so the core saturates
   // by nothing but overlap.
   for (const p of GASL) {
-    const g = gasAt(p, u);
+    const g = gasAt(p, u, extra);
     const px = g.x * cs - g.y * sn;
     const py = g.x * sn + g.y * cs;
     const X = cx + px * R, Y = cy + py * R + g.vz * R * 0.9;
     if (X < -4 || X > pw + 4 || Y < -4 || Y > ph + 4) continue;
     const r = (p.soft ? p.size * 2.2 : p.size) * dp;
-    const tint = g.joined > 0.5 ? '235,241,252' : '196,208,228';
+    // WHERE ON THE RAMP: the web is thin gas (violet to magenta, the brighter specks further along);
+    // joining the disc it runs up through orange, and only the innermost orbits reach the pale end
+    const web = 0.34 + 0.22 * p.b, disc = 0.98 - 0.42 * Math.pow(Math.min(1, p.r0), 0.55);
+    const tint = rgb(lerp(web, disc, g.joined));
     let a = p.b * (p.soft ? 0.35 : 1) * env * bright;
     if (g.joined > 0) a *= lerp(0.85, 1, g.joined) * (1.15 - 0.35 * Math.min(1, p.r0));
     if (a <= 0.006) continue;
@@ -234,13 +277,13 @@ export function drawGalaxyForm(ctx, pw, ph, dpr, now, opts = {}, helpers = {}) {
 
   // THE FOUNTAINS: two cones of wind out of the pole, rising, stalling, raining back.
   for (const p of WINDL) {
-    const w = windAt(p, u);
+    const w = windAt(p, uWind);
     if (!w) continue;
     const X = cx + w.x * R, Y = cy + w.y * R;
     if (X < -4 || X > pw + 4 || Y < -4 || Y > ph + 4) continue;
     const a = w.a * env * bright;
     if (a <= 0.006) continue;
-    ctx.fillStyle = `rgba(224,232,248,${a.toFixed(4)})`;
+    ctx.fillStyle = `rgba(${rgb(0.66)},${a.toFixed(4)})`;        // hot gas thrown out: salmon
     ctx.beginPath();
     ctx.arc(X, Y, p.size * dp, 0, Math.PI * 2);
     ctx.fill();

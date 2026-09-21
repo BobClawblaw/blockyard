@@ -712,25 +712,54 @@ uniform mat3 uM;                         // the context's transform
 uniform vec4 uGalaxy;                    // centre x, y, flatten, 1 if the field turns (else 0)
 uniform vec2 uSpin;                      // cos, sin of the galaxy's turn
 uniform vec2 uClock;                     // now (ms, wrapped to the beat period), overall brightness
+uniform vec2 uSoft;                      // x: 1 = stars are points of LIGHT, 0 = the 2D canvas's squares.  y: device px per unit
 out vec4 vCol;
+out vec3 vQ;                             // the quad's own coordinate in star radii, and whether this is a giant
 void main() {
   int v = gl_VertexID;
   vec2 q = vec2((v == 1 || v == 2 || v == 4) ? 1.0 : -1.0, (v == 2 || v == 4 || v == 5) ? 1.0 : -1.0);
   vec2 c = uGalaxy.w > 0.5
     ? uGalaxy.xy + aPos.x * vec2(aPos.y * uSpin.x - aPos.z * uSpin.y, uGalaxy.z * (aPos.z * uSpin.x + aPos.y * uSpin.y))
     : aPos.xy;
-  vec2 p = (uM * vec3(c + q * aPos.w, 1.0)).xy;
+  // A STAR IS A POINT OF LIGHT, NOT A SQUARE (operator, 2026-09-21: "do all 3"). Soft, its quad reaches
+  // far enough for a gaussian core and a faint halo (a giant's: a broad halo and four diffraction
+  // spikes -- what the 2D canvas draws as a disc and two strokes a star). A star under a pixel and a
+  // half across is held to that and dimmed to the same LIGHT, or it would flicker as the disc turns it
+  // across the pixel grid.
+  float big = aBeat.z > 0.5 ? 1.0 : 0.0;
+  float rTrue = aPos.w * uSoft.y, rDraw = max(rTrue, 0.75);
+  float reach = uSoft.x > 0.5 ? (big > 0.5 ? 9.0 : 3.4) : 1.0;
+  float halfSide = uSoft.x > 0.5 ? (rDraw / uSoft.y) * reach : aPos.w;
+  vQ = vec3(q * reach, big);
+  vec2 p = (uM * vec3(c + q * halfSide, 1.0)).xy;
   float w = 0.5 + 0.5 * sin(uClock.x * aBeat.x + aBeat.y);
   float a = min(1.0, aLook.a * (aBeat.z + (1.0 - aBeat.z) * w * w) * uClock.y);
+  if (uSoft.x > 0.5) a *= (rTrue * rTrue) / (rDraw * rDraw);
   vCol = vec4(aLook.rgb * a, a);
   gl_Position = vec4(p.x * 2.0 / uView.x - 1.0, 1.0 - p.y * 2.0 / uView.y, 0.0, 1.0);
 }`;
 const STAR_FS = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec4 vCol;
+in vec3 vQ;
+uniform vec2 uSoft;
 layout(location=0) out vec4 o;
 layout(location=1) out vec4 oE;          // a star throws light (the finish's bloom)
-void main() { o = vCol; oE = vCol; }`;
+void main() {
+  float k = 1.0;
+  if (uSoft.x > 0.5) {
+    float d = length(vQ.xy);
+    // the core carries the light the square did (2 pi s^2 = 4 r^2 at s = 0.8 r): the sky is as bright
+    k = exp(-d * d / 1.28);
+    if (vQ.z > 0.5) {
+      k += 0.20 * exp(-d / 2.0);                                                              // a giant's halo
+      vec2 s = abs(vQ.xy);
+      k += 0.55 * (exp(-s.y * 3.2) * exp(-s.x / 3.0) + exp(-s.x * 3.2) * exp(-s.y / 3.0));   // and its spikes
+      k *= 1.0 - smoothstep(6.5, 9.0, d);
+    } else { k += 0.06 * exp(-d / 1.1); k *= 1.0 - smoothstep(2.6, 3.4, d); }
+  }
+  o = vCol * k; oE = o;
+}`;
 /** The twinkle's clock wraps every STAR_BEAT ms, and every star's frequency is a whole number of
  * turns in that time -- so the wrap is seamless, and a float32 on the card never sees a big clock
  * (after eleven days of uptime now * f is two million radians, and the twinkle would stutter). */
@@ -1516,7 +1545,7 @@ export function createGl2d(canvas, hooks = {}) {
         gl.attachShader(starProg, sh(gl.VERTEX_SHADER, STAR_VS)); gl.attachShader(starProg, sh(gl.FRAGMENT_SHADER, STAR_FS));
         gl.linkProgram(starProg);
         if (!gl.getProgramParameter(starProg, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(starProg) || 'star link');
-        for (const n of ['uView', 'uM', 'uGalaxy', 'uSpin', 'uClock']) SU[n] = gl.getUniformLocation(starProg, n);
+        for (const n of ['uView', 'uM', 'uGalaxy', 'uSpin', 'uClock', 'uSoft']) SU[n] = gl.getUniformLocation(starProg, n);
       }
       prepare(); drawBatch();
       if (rec) rec.bad = true;
@@ -1547,6 +1576,7 @@ export function createGl2d(canvas, hooks = {}) {
       gl.uniform4f(SU.uGalaxy, field.cx || 0, field.cy || 0, field.flatten || 1, field.galaxy ? 1 : 0);
       gl.uniform2f(SU.uSpin, Math.cos(spin), Math.sin(spin));
       gl.uniform2f(SU.uClock, now % STAR_BEAT, bright);
+      gl.uniform2f(SU.uSoft, field.soft ? 1 : 0, P.scale());
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, set.n);
       stats.draws++; stats.stars = set.n;
       // back to the batch's own program and buffers
@@ -1695,6 +1725,71 @@ void main() {
     try { for (const b of ps.bufs) gl.deleteBuffer(b); for (const v of [...ps.vaos, ...ps.drawVaos]) gl.deleteVertexArray(v); gl.deleteProgram(ps.step); gl.deleteProgram(ps.draw); gl.deleteTransformFeedback(ps.tf); } catch { /* a dead context */ }
   }
 
+  // ---- PICTURES BAKED ON THE CARD (2026-09-21; operator: "Can we fix up the nebulas at least so they are
+  // not overlapping circles, and make them proper gas clouds?"). The Galaxy sky's gas is a bitmap made
+  // once and turned with the disc every frame. On the 2D canvas that bitmap is stacked flat ellipses,
+  // because that is what a 2D canvas can fill; here it is a FRAGMENT SHADER run once into a texture --
+  // noise, warps, anything per-pixel -- and then drawn exactly as the bitmap was: drawImage, one quad.
+  //   bake({ width, height, glsl, uniforms }) -> something drawImage takes, or null (the caller bakes
+  //   its bitmap the old way). glsl defines  vec4 bake(vec2 px)  -- premultiplied -- and declares its
+  //   own uniforms; a Float32Array value is a vec4 array. Half-float where the card can, so a faint
+  //   gas has the steps to be faint in; else 8 bits (dither in the shader).
+  const bakers = new Map(); let bakeBroken = false;
+  function bake(spec) {
+    if (lost || bakeBroken) return null;
+    try {
+      let pr = bakers.get(spec.glsl);
+      if (!pr) {
+        const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x) || 'bake shader'); return x; };
+        pr = gl.createProgram();
+        gl.attachShader(pr, sh(gl.VERTEX_SHADER, POST_VS));
+        gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `#version 300 es\nprecision highp float;\nprecision highp int;\n${spec.glsl}\nout vec4 o;\nvoid main() { o = bake(gl_FragCoord.xy); }`));
+        gl.linkProgram(pr);
+        if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr) || 'bake link');
+        bakers.set(spec.glsl, pr);
+      }
+      prepare(); drawBatch();
+      if (rec) rec.bad = true;
+      const w = Math.max(1, spec.width | 0), h = Math.max(1, spec.height | 0);
+      const half = !!gl.getExtension('EXT_color_buffer_half_float') || !!gl.getExtension('EXT_color_buffer_float');
+      const tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      if (half) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+      else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { gl.deleteFramebuffer(fbo); gl.deleteTexture(tex); throw new Error('bake target incomplete'); }
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.BLEND); gl.disable(gl.STENCIL_TEST);
+      gl.useProgram(pr); gl.bindVertexArray(null);
+      for (const [name, v] of Object.entries(spec.uniforms || {})) {
+        const loc = gl.getUniformLocation(pr, name);
+        if (loc == null) continue;
+        if (v instanceof Float32Array) gl.uniform4fv(loc, v);
+        else if (typeof v === 'number') gl.uniform1f(loc, v);
+        else if (v.length === 2) gl.uniform2f(loc, v[0], v[1]); else if (v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]); else gl.uniform4f(loc, v[0], v[1], v[2], v[3]);
+      }
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      stats.draws++; stats.bakes = (stats.bakes || 0) + 1;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fbo);
+      prepared = false;                                       // the next call sets the frame's own target, program and blend again
+      // (no flip: bake() is handed gl_FragCoord, and reads its y as DOWN from the picture's top -- which
+      // puts row y of the picture at texture row y, exactly where an uploaded canvas has it)
+      const img = { width: w, height: h, __v: 1, __baked: true, free() { try { gl.deleteTexture(tex); } catch { /* a dead context */ } textures.delete(img); } };
+      textures.set(img, { tex, v: 1, w, h });
+      return img;
+    } catch (e) {
+      bakeBroken = true;
+      try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); prepared = false; hooks.onCompileError?.(`bake: ${String(e?.message ?? e)}`); } catch { /* as above */ }
+      return null;
+    }
+  }
+
   // ---- images and text
   const textures = new WeakMap();
   const textureOf = (src) => {
@@ -1819,7 +1914,7 @@ void main() {
     quadraticCurveTo(cx, cy, x, y) { P.quadraticCurveTo(cx, cy, x, y); },
     bezierCurveTo(ax, ay, bx, by, x, y) { P.bezierCurveTo(ax, ay, bx, by, x, y); },
     createPath() { return new GlPath(); },
-    fill, stroke, retained, starField, particles,
+    fill, stroke, retained, starField, particles, bake,
     fillRect(x, y, w, h) { const keep = P.subs, cur = P.cur; P.subs = []; P.cur = null; P.rect(x, y, w, h); fill(); P.subs = keep; P.cur = cur; },
     clearRect,
     createLinearGradient(x0, y0, x1, y1) { return new GlGradient('linear', [x0, y0, x1, y1]); },

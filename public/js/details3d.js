@@ -31,6 +31,7 @@ const STATE = new WeakMap();
 // canvas and is created lazily on the first frame this sky draws (formgl.js). Cleared when
 // the sky changes -- see switchSky in the options block below.
 const FORM_GL = new WeakMap();
+const FORM_DEAD = new WeakSet();          // contexts whose Formation layer declined: the 2D fallback from then on
 // A CANVAS LAID DIRECTLY UNDER ANOTHER, for a GL layer (a 2D and a GL context cannot share an
 // element). "Directly" is the point: it goes in the SAME stacking layer as `el`, immediately
 // before it in the document, so document order alone puts it beneath -- and nothing else on the
@@ -109,7 +110,9 @@ function surfaceFor(canvas, ctx2d, geom, opts) {
     // of its CSS background (app.css paints one): a canvas's clear pixels show ITS background,
     // not what is behind the element
     L.canvas = layerUnder(canvas);
-    L.ctx = createGl2d(L.canvas, { onLost: () => { L.gone = true; } });
+    // (a shader that will not compile falls back by itself, and SILENTLY -- right for a user, wrong for whoever
+    // wrote the shader. The log goes to the console, and to a list a test page can put on the window.)
+    L.ctx = createGl2d(L.canvas, { onLost: () => { L.gone = true; }, onCompileError: (log) => { try { globalThis.__blockyardGlErrors?.push(String(log)); console.warn?.(`[blockyard] WebGL: ${log}`); } catch { /* a log must not break a frame */ } } });
     if (!L.ctx) { L.gone = true; L.canvas.remove(); canvas.style.position = L.pos; return ctx2d; }
     dropFormGl(ctx2d);                       // the Formation's overlay re-attaches under the GL canvas
     canvas.style.background = 'transparent';
@@ -128,6 +131,43 @@ function surfaceFor(canvas, ctx2d, geom, opts) {
   L.ctx.bloom = glow;
   return L.ctx;
 }
+// ---- THE FRAME RATE (operator, 2026-09-21: "we need to add an option to show FPS in the top right
+// corner of the display in any 3D view"). What is counted is FRAMES THIS CANVAS ACTUALLY PAINTED in
+// the last second -- so a board at rest under a sky reads its resting cadence (about 30), and a
+// parked board with no sky, which paints nothing, keeps the last figure it earned. Beside it, the
+// processor's share of a frame (building and submitting it; the graphics card's own time is not
+// visible from here) and which renderer drew it. The figure changes twice a second, not every frame.
+const clockMs = () => (globalThis.performance?.now ? performance.now() : 0);
+export function fpsWanted(opts) {
+  if (opts?.showFps === true || opts?.showFps === false) return opts.showFps;
+  try { return loadSettings().appearance.showFps === true; } catch { return false; }
+}
+/** Count this frame; answers the text to show. Pure but for `st.fps`. */
+export function fpsTick(st, t, ms) {
+  const f = (st.fps ??= { times: [], ms: 0, text: '', at: -1e9 });
+  f.times.push(t);
+  while (f.times.length && t - f.times[0] > 1000) f.times.shift();
+  f.ms = f.ms ? f.ms * 0.9 + ms * 0.1 : ms;
+  if (t - f.at >= 500 || !f.text) { f.at = t; f.text = `${f.times.length} fps  ${f.ms.toFixed(1)} ms`; }
+  return f.text;
+}
+function drawFps(ctx, geom, text, renderer) {
+  if (typeof ctx.fillText !== 'function' || typeof ctx.save !== 'function') return;
+  const { pw, dpr } = geom, k = dpr || 1, label = `${text}  ${renderer}`;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.emissive = false;                                     // (the GL renderer's bloom: a readout is read, not lit)
+  ctx.font = `${Math.round(11 * k)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  const w = (ctx.measureText?.(label)?.width ?? label.length * 7 * k), pad = 5 * k, m = 6 * k, h = 11 * k;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(pw - m - w - pad * 2, m, w + pad * 2, h + pad * 2);
+  ctx.fillStyle = 'rgba(170,255,210,0.95)';
+  ctx.fillText(label, pw - m - pad, m + pad);
+  ctx.restore();
+  ctx.emissive = true;
+}
+
 /** Which renderer drew this canvas's last frame ('webgl' | 'software'), for the panel and the tests. */
 export function rendererIn(canvas) { return GL_LAYER.get(canvas)?.ctx ? 'webgl' : 'software'; }
 /** The GL renderer's running counts on this canvas (draw calls, vertices, stencil passes, frames), or null. */
@@ -4004,6 +4044,8 @@ export const GALAXY_FLATTEN = 0.80;                    // seen from above the di
 // the tips in FRONT of the rotation: leading arms, which is not what disc galaxies do. A density
 // wave leaves the arms trailing, so the disc has to turn against the way they wind.
 export const GALAXY_SPIN = -(Math.PI * 2) / 900_000;   // one turn in fifteen minutes: "slowly"
+/** The most the rotation slider multiplies that by (sky.galaxySpin): a turn in under a minute. */
+export const GALAXY_SPIN_MAX = 20;
 export const GALAXY_ARMS = 4;
 export const GALAXY_TWIST = 0.30;                      // how tightly the arms wind
 const GALAXY_BOOST = 7;                                // an arm needs many more stars than a scatter
@@ -4091,7 +4133,7 @@ export function nebulaClouds(pw, ph, at = GALAXY_AT_DEFAULT, seed = 11) {
         a: 0.020 + 0.030 * rnd(),
       });
     }
-    out.push({ gr: rad, ga: ang, tint, puffs });
+    out.push({ gr: rad, ga: ang, tint, size, puffs });
   }
   return out;
 }
@@ -4144,7 +4186,7 @@ export function dustLanes(pw, ph, at = GALAXY_AT_DEFAULT, seed = 17) {
     for (let k = 0; k < n; k++) {
       puffs.push({ dx: (rnd() - 0.5) * size * 2.6, dy: (rnd() - 0.5) * size * 0.8, rx: size * (0.25 + 0.4 * rnd()), sq: 0.5 + 0.5 * rnd(), a: 0.05 + 0.06 * rnd() });
     }
-    out.push({ gr: rad, ga: ang, puffs });
+    out.push({ gr: rad, ga: ang, size, puffs });
   }
   return out;
 }
@@ -4296,9 +4338,16 @@ export function starField(pw, ph, dpr = 1, seed = 7, density = 1, galaxy = false
 const GAS_MAX = 2048;
 function gasLayer(f, pw, ph, bright, opts) {
   const nebulae = opts.nebulae !== false && !!f.nebulae, dust = opts.dust !== false && !!f.dust;
-  if (!nebulae && !dust) return null;
+  if (!nebulae && !dust && !opts.__glCtx) return null;      // (on WebGL there is still the arms' haze to bake)
   const key = `${bright.toFixed(3)}|${nebulae}|${dust}`;
-  if (f.gas && f.gas.key === key) return f.gas;
+  if (f.gas && f.gas.key === key && f.gas.ctx === (opts.__glCtx ?? null)) return f.gas;
+  // ON THE GL RENDERER THE GAS IS BAKED BY A SHADER (gasLayerGl, below): real clouds. It falls
+  // through to the bitmap of ellipses where the card cannot, and on the 2D canvas always.
+  if (opts.__glCtx) {
+    const baked = gasLayerGl(opts.__glCtx, f, pw, ph, bright, nebulae, dust, key);
+    if (baked) return baked;
+    if (!nebulae && !dust) return null;                     // (no card to bake the haze, and nothing else to bake)
+  }
   if (f.gas === null) return null;                        // tried once and could not
   let bmp = null;
   try {
@@ -4337,7 +4386,120 @@ function gasLayer(f, pw, ph, bright, opts) {
   }
   g.setTransform(1, 0, 0, 1, 0, 0);
   bmp.__v = (bmp.__v | 0) + 1;          // the GL renderer uploads a stamped bitmap once per stamp (gl2d.js textureOf)
-  f.gas = { key, bmp, q, D };
+  f.gas = { key, bmp, q, D, ctx: null };
+  return f.gas;
+}
+
+// THE GAS AS GAS (operator, 2026-09-21: "Can we fix up the nebulas at least so they are not overlapping
+// circles, and make them proper gas clouds?"). The bitmap above is what a 2D canvas can fill: each
+// nebula two or three dozen flat translucent ellipses, and however they are shuffled the eye finds the
+// rims. A fragment shader has no rims to find. The same clouds -- same places on the arms, same sizes,
+// same tints, from the same seeded lists -- are each a soft envelope laid ALONG its spiral arm, broken
+// into billows and filaments by warped noise, whiter where they are dense, with a second hue riding the
+// filaments (the pink of hydrogen on a blue cloud, the blue of reflected starlight on a rose one). The
+// dust is ragged ribbons that ABSORB what is under them, not black ovals. Baked once (gl2d.js bake) into
+// a texture the size the bitmap was, and drawn the way the bitmap is: one turned quad a frame.
+const GAS_GLSL = `
+uniform vec4 uGeo;                  // the picture's size in px, px per disc unit, the log-spiral's pitch angle
+uniform vec4 uOpt;                  // brightness, nebulae on, dust on
+uniform vec4 uArm;                  // the spiral: inner radius, outer radius, arms, twist (disc units)
+uniform vec4 uNeb[9];               // x, y (disc units), size, the angle it lies at
+uniform vec4 uTint[9];              // r, g, b (0..1), a seed
+uniform vec4 uDust[14];             // x, y, size, angle
+uint pcg(uint v) { uint s = v * 747796405u + 2891336453u; uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u; return (w >> 22u) ^ w; }
+float h2(vec2 i) { ivec2 c = ivec2(i); uint n = (uint(c.x) * 1597334677u) ^ (uint(c.y) * 3812015801u); n ^= n >> 16; n *= 0x7feb352du; n ^= n >> 15; n *= 0x846ca68bu; n ^= n >> 16; return float(n >> 8) / 16777216.0; }
+float vn(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), u.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), u.x), u.y); }
+const mat2 ROT = mat2(0.8, 0.6, -0.6, 0.8);
+float fbm(vec2 p, int oct) { float a = 0.5, s = 0.0; for (int k = 0; k < 6; k++) { if (k >= oct) break; s += a * vn(p); p = ROT * p * 2.03 + 17.3; a *= 0.5; } return s; }
+float ridged(vec2 p, int oct) { float a = 0.5, s = 0.0, w = 1.0; for (int k = 0; k < 6; k++) { if (k >= oct) break; float n = 1.0 - abs(vn(p) * 2.0 - 1.0); n *= n; s += a * n * w; w = clamp(n * 1.6, 0.0, 1.0); p = ROT * p * 2.07 + 9.1; a *= 0.55; } return s; }
+vec4 bake(vec2 px) {
+  vec2 P = (px - 0.5 * uGeo.xy) / uGeo.z;                  // disc units, the middle of the picture the middle of the disc
+  vec3 rgb = vec3(0.0); float alpha = 0.0;
+  // THE LIGHT BETWEEN THE STARS: a real spiral's arms are luminous -- unresolved young stars and the gas
+  // they light -- and its middle is a warm glow of old ones. The field of separate stars alone reads as
+  // a scatter with a shape; this is what makes it read as a GALAXY. The arms are the same log spiral the
+  // stars, the clouds and the lanes are laid on (theta = arm + ln(r / inner) / twist), blue-white, patchy,
+  // fading outward; the bulge is warm and sits over them.
+  {
+    float r = length(P), th = atan(P.y, P.x);
+    float phase = uArm.z * (th - log(max(r, 1e-3) / uArm.x) / uArm.w);
+    float arm = pow(0.5 + 0.5 * cos(phase), 2.4);
+    float reachOut = exp(-r / (uArm.y * 0.33)) * smoothstep(uArm.x * 0.6, uArm.x * 2.2, r);
+    vec2 np = P / uArm.y * 9.0;
+    float patchy = 0.35 + 1.1 * fbm(np + 3.0 * (vec2(fbm(np * 0.7, 3), fbm(np * 0.7 + 4.1, 3)) - 0.5), 5);
+    float a = clamp(arm * reachOut * patchy * 0.17 * uOpt.x, 0.0, 0.4);
+    vec3 c = mix(vec3(0.36, 0.52, 1.00), vec3(0.95, 0.55, 0.75), 0.35 * smoothstep(0.55, 0.9, fbm(np * 2.3 + 7.0, 3)));   // blue-white, with the pink of star-forming knots
+    rgb = c * a; alpha = a;
+    // (kept small and under half strength: this sky stands BEHIND a chart, and the first cut's bulge was a lamp)
+    float bulge = exp(-r / (uArm.x * 1.25)) * 0.8 + exp(-r * r / (uArm.x * uArm.x * 0.35)) * 0.45;
+    float ab = clamp(bulge * 0.36 * uOpt.x, 0.0, 0.6);
+    vec3 cb = mix(vec3(1.00, 0.80, 0.55), vec3(1.0, 0.95, 0.85), smoothstep(0.3, 0.9, bulge));
+    rgb = rgb * (1.0 - ab) + cb * ab; alpha = alpha + ab * (1.0 - alpha);
+  }
+  if (uOpt.y > 0.5) for (int i = 0; i < 9; i++) {
+    vec4 nb = uNeb[i]; if (nb.z <= 0.0) continue;
+    vec2 v = P - nb.xy;
+    if (dot(v, v) > nb.z * nb.z * 9.0) continue;
+    float ca = cos(nb.w), sa = sin(nb.w);
+    vec2 l = vec2(ca * v.x + sa * v.y, -sa * v.x + ca * v.y) / nb.z;      // along the arm, across it; 1 = the cloud's size
+    float seed = uTint[i].a * 57.0;
+    vec2 warp = vec2(fbm(l * 1.3 + seed, 4), fbm(l * 1.3 + seed + 5.2, 4)) - 0.5;
+    vec2 lw = l + 0.9 * warp;                              // the ENVELOPE is warped too: a cloud has no oval outline
+    float env = exp(-(lw.x * lw.x / 0.85 + lw.y * lw.y / 0.30));
+    float billow = fbm(l * 2.1 + 2.2 * warp + seed * 1.7, 5);
+    float fil = ridged(l * 3.0 + 2.6 * warp + seed * 0.9, 5);
+    float d = env * smoothstep(0.18, 0.95, billow * 1.25 + 0.30 * fil) * 1.7 + env * env * 0.25;
+    d *= 0.75 + 0.5 * fil;
+    // hollows: the dark globules and bays every real nebula has
+    d *= 1.0 - 0.75 * smoothstep(0.55, 0.78, fbm(l * 1.7 - 1.5 * warp + seed * 2.3, 4));
+    d = clamp(d, 0.0, 1.6);
+    // (the tints are dark paint -- 48,122,196 is a deep blue made to be laid on thinly, thirty times over.
+    // Here a cloud is laid ONCE, so its colour is the tint at full strength; the first bake used them as
+    // they were and whitened the dense parts, and the clouds came out grey)
+    vec3 tint = uTint[i].rgb / max(uTint[i].r, max(uTint[i].g, uTint[i].b));
+    tint = mix(vec3(dot(tint, vec3(0.3, 0.5, 0.2))), tint, 1.25);      // and a little past it: gas is vivid
+    vec3 other = tint.b > tint.r ? vec3(0.92, 0.36, 0.52) : vec3(0.40, 0.58, 0.95);   // hydrogen's pink on the cold ones, reflected blue on the warm
+    vec3 c = mix(tint, other, 0.40 * smoothstep(0.45, 0.85, fil) * (1.0 - 0.5 * env));
+    c = mix(c, vec3(1.0, 0.96, 0.92), 0.30 * smoothstep(1.0, 1.6, d));              // only the densest knots glow toward white
+    float a = (1.0 - exp(-d * 0.62)) * 0.62 * uOpt.x;
+    rgb = rgb * (1.0 - a) + c * a; alpha = alpha + a * (1.0 - alpha);
+  }
+  if (uOpt.z > 0.5) for (int i = 0; i < 14; i++) {
+    vec4 du = uDust[i]; if (du.z <= 0.0) continue;
+    vec2 v = P - du.xy;
+    if (dot(v, v) > du.z * du.z * 16.0) continue;
+    float ca = cos(du.w), sa = sin(du.w);
+    vec2 l = vec2(ca * v.x + sa * v.y, -sa * v.x + ca * v.y) / du.z;
+    float seed = float(i) * 13.0 + 3.0;
+    vec2 warp = vec2(fbm(l * 1.1 + seed, 3), fbm(l * 1.1 + seed + 3.7, 3)) - 0.5;
+    vec2 lw = l + 0.8 * warp;
+    float env = exp(-(lw.x * lw.x / 1.9 + lw.y * lw.y / 0.11));                      // a ribbon: long, thin
+    float tear = ridged(l * vec2(1.6, 4.0) + 2.0 * warp + seed, 4);
+    float a = clamp(env * (0.25 + 1.2 * tear) * 0.62, 0.0, 0.85);
+    rgb *= 1.0 - a; alpha = alpha + a * (1.0 - alpha);      // it darkens what is under it, the gas and the sky alike
+  }
+  rgb += (h2(px) - 0.5) / 255.0 * step(0.001, alpha);       // (where the target is 8-bit, a faint gas bands without this)
+  return vec4(max(rgb, 0.0), alpha);
+}`;
+function gasLayerGl(ctx, f, pw, ph, bright, nebulae, dust, key) {
+  if (typeof ctx.bake !== 'function' || f.gasGlFailed === ctx) return null;
+  const { cx, cy } = f;
+  const reach = Math.max(Math.hypot(cx, cy), Math.hypot(pw - cx, cy), Math.hypot(cx, ph - cy), Math.hypot(pw - cx, ph - cy)) / GALAXY_FLATTEN + 64;
+  const q = Math.min(1, GAS_MAX / (2 * reach));
+  const D = Math.ceil(2 * reach * q);
+  const pitch = Math.atan2(1, GALAXY_TWIST);                // a log spiral crosses every radius at this one angle
+  const geo = galaxyGeometry(pw, ph, f.galaxy === true ? GALAXY_AT_DEFAULT : f.galaxy);
+  const neb = new Float32Array(9 * 4), tint = new Float32Array(9 * 4), du = new Float32Array(14 * 4);
+  (f.nebulae ?? []).slice(0, 9).forEach((c, i) => {
+    const t = String(c.tint).split(',').map(Number);
+    neb.set([c.gr * Math.cos(c.ga), c.gr * Math.sin(c.ga), c.size * 1.25, c.ga + pitch], i * 4);
+    tint.set([t[0] / 255, t[1] / 255, t[2] / 255, (i + 1) / 10], i * 4);
+  });
+  (f.dust ?? []).slice(0, 14).forEach((d, i) => du.set([d.gr * Math.cos(d.ga), d.gr * Math.sin(d.ga), d.size * 1.3, d.ga + pitch], i * 4));
+  const bmp = ctx.bake({ width: D, height: D, glsl: GAS_GLSL, uniforms: { uGeo: [D, D, q, pitch], uOpt: [bright, nebulae ? 1 : 0, dust ? 1 : 0, 0], uArm: [geo.inner, geo.maxR, GALAXY_ARMS, GALAXY_TWIST], 'uNeb[0]': neb, 'uTint[0]': tint, 'uDust[0]': du } });
+  if (!bmp) { f.gasGlFailed = ctx; return null; }
+  if (f.gas?.bmp?.free) f.gas.bmp.free();                   // the last bake's texture, given back
+  f.gas = { key, bmp, q, D, ctx };
   return f.gas;
 }
 
@@ -4382,8 +4544,10 @@ function drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, opts) {
   // no buckets, one draw. Only the giants' glints below still need a place, and there are a few
   // hundred of them, so theirs is worked out alone. `bk` is the key: it is rebuilt exactly when the
   // stars or their colours are.
-  if (ctx.gl2d === true && ctx.starField({ key: bk, stars, galaxy: !!galaxy, cx: f.cx, cy: f.cy, flatten: GALAXY_FLATTEN, colourOf: (s) => (colours || !s.c0 ? s.c : s.c0) }, spin, now, bright)) {
-    if (!glints) return;
+  const soft = opts.__softStars === true;
+  if (ctx.gl2d === true && ctx.starField({ key: bk, stars, soft, galaxy: !!galaxy, cx: f.cx, cy: f.cy, flatten: GALAXY_FLATTEN, colourOf: (s) => (colours || !s.c0 ? s.c : s.c0) }, spin, now, bright)) {
+    // (soft stars carry their own halo and spikes, in the shader: the giants' glints are not drawn twice)
+    if (!glints || soft) return;
     const bigs = (bk.bigs ??= stars.reduce((l, s, i) => { if (s.big) l.push(i); return l; }, []));
     const cs = Math.cos(spin), sn = Math.sin(spin);
     for (const i of bigs) {
@@ -4483,10 +4647,42 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
     };
     STARS.set(key, f);
   }
+  // THE GL RENDERER'S OWN SKY (operator, 2026-09-21: "how can we improve the visuals on the spiral galaxy
+  // background for webgl?" ... "do all 3"): gas baked by a shader with a haze along the arms and a glow at
+  // the bulge, stars as points of light, far galaxies as soft smudges. `glSky: false` draws the sky as the
+  // 2D canvas does, on WebGL too -- the parity check in scripts/gl-compare.mjs compares the two renderers
+  // on the SAME picture, and this one is different on purpose.
+  const glSky = ctx.gl2d === true && opts.glSky !== false;
   ctx.__starBright = bright;
-  const spin = galaxy ? now * GALAXY_SPIN : 0;
+  // HOW FAST IT TURNS is a setting (operator, 2026-09-21: "we should add a rotation slider speed for that
+  // too"): sky.galaxySpin, in multiples of the shipped turn in fifteen minutes; 0 holds the disc still.
+  // The angle is INTEGRATED on the field (as the Formation's clocks are): now x rate would swing the whole
+  // disc round on every tick of a drag -- an hour in, 1 -> 1.5 is two turns at once.
+  const rate = Number.isFinite(opts.galaxySpin) ? Math.max(0, Math.min(GALAXY_SPIN_MAX, opts.galaxySpin)) : 1;
+  if (f.spinAt == null || now < f.spinAt) f.spinAngle = now * GALAXY_SPIN * rate;
+  else f.spinAngle += (now - f.spinAt) * GALAXY_SPIN * rate;
+  f.spinAt = now;
+  const spin = galaxy ? f.spinAngle : 0;
   // the deep field first: distant galaxies, small and still
-  if (f.far && opts.galaxies !== false && typeof ctx.ellipse === 'function') {
+  if (f.far && opts.galaxies !== false && glSky) {
+    // SMUDGES OF LIGHT WITH A SHAPE TO THEM: a soft disc that fades to nothing, a brighter elongated
+    // bar or bulge inside it a little off its axis, and a core -- three gradient fills each, where the
+    // 2D canvas stacks four flat ellipses whose rims show. (One quad a fill: gl2d.js discs.)
+    const glowAt = (x, y, rot, rx, ry, stops) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(1, ry / rx);
+      const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+      for (const [o, c] of stops) gr.addColorStop(o, c);
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, rx, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    };
+    f.far.forEach((g, i) => {
+      const R = g.rx * dpr * 1.35, t = g.tint, b = bright;
+      const A = (v) => [...String(t).split(',').map(Number), Math.min(1, v * b)];
+      glowAt(g.x, g.y, g.rot, R, R * g.ratio, [[0, A(0.20)], [0.35, A(0.085)], [0.7, A(0.025)], [1, A(0)]]);
+      glowAt(g.x, g.y, g.rot + 0.5 + 0.4 * ((i * 0.618) % 1), R * 0.55, R * 0.55 * Math.min(1, g.ratio * 0.55), [[0, A(0.16)], [0.6, A(0.05)], [1, A(0)]]);
+      glowAt(g.x, g.y, g.rot, R * 0.16, R * 0.16 * Math.max(0.6, g.ratio), [[0, [255, 250, 235, Math.min(1, 0.55 * b)]], [0.5, A(0.18)], [1, A(0)]]);
+    });
+  } else if (f.far && opts.galaxies !== false && typeof ctx.ellipse === 'function') {
     for (const g of f.far) {
       for (const [k, a] of [[1, 0.035], [0.72, 0.05], [0.48, 0.08], [0.22, 0.16]]) {
         ctx.fillStyle = `rgba(${g.tint},${(a * bright).toFixed(3)})`;
@@ -4498,7 +4694,7 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
   }
   // then the gas: the stars stand IN it, not behind it. Baked to a bitmap where the page can
   // make one (gasLayer) and drawn turned in one call; the live loops below are the fallback.
-  const gas = galaxy ? gasLayer(f, pw, ph, bright, opts) : null;
+  const gas = galaxy ? gasLayer(f, pw, ph, bright, glSky ? { ...opts, __glCtx: ctx } : opts) : null;
   if (gas) {
     const q = gas.q, cs = Math.cos(spin), sn = Math.sin(spin);
     // local (unflattened, unturned) disc -> panel: turn by the spin, squash y by the flatten,
@@ -4533,7 +4729,7 @@ function drawStars(ctx, pw, ph, dpr, now, opts = {}) {
       }
     }
   }
-  drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, opts);
+  drawStarField(ctx, f, pw, ph, dpr, now, spin, galaxy, bright, glSky ? { ...opts, __softStars: true } : opts);
   // the clusters last, over the field: dense specks with a fuzzy edge, steady (no twinkle)
   if (galaxy && f.clusters && opts.clusters !== false) {
     for (const k of f.clusters) {
@@ -4590,7 +4786,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // the transparent canvas onto the GL sky beneath. Any other sky: the 2D canvas paints
   //   its own background as always.
   ctx.clearRect(0, 0, pw, ph);
-  if (!(opts.skyType === 'form' && !opts.formNoGl && formGlSupported())) {
+  if (!(opts.skyType === 'form' && !opts.formNoGl && !FORM_DEAD.has(ctx) && formGlSupported())) {
     ctx.fillStyle = opts.background;
     ctx.fillRect(0, 0, pw, ph);
   }
@@ -4609,7 +4805,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
     else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
     else if (opts.skyType === 'form') {
       let drew = false;
-      if (!opts.formNoGl && formGlSupported()) {
+      if (!opts.formNoGl && !FORM_DEAD.has(ctx) && formGlSupported()) {
         let st = FORM_GL.get(ctx);
         if (!st) {
           // the GL canvas goes directly under this one, glued to its box (layerUnder, above)
@@ -4629,6 +4825,14 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
           if (!st.ctl) st.gone = true;
         }
         if (st.ctl) drew = st.ctl.draw(pw, ph, dpr || 1, view.now ?? 0, opts);
+        // THE LAYER DECLINED (no shader, a lost context, a software rasteriser -- formgl.js): it
+        // stands down for good on this board, its canvas and the CSS background given back, and
+        // THIS frame -- which skipped its background fill expecting a sky under it -- paints one.
+        // Without this a declined layer left the board canvas clear over nothing at all.
+        if (!drew) {
+          FORM_DEAD.add(ctx); dropFormGl(ctx);
+          ctx.fillStyle = opts.background; ctx.fillRect(0, 0, pw, ph);
+        }
       }
       // the fallback paints the 2D layer alone when there is no GL
       if (!drew) drawGalaxyForm(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
@@ -5081,11 +5285,12 @@ export function render3d(canvas, cells, options = {}) {
   const optSig = [opts.shadows !== false, opts.edges !== false, opts.grid !== false, !!opts.space,
     starsOn(opts),
     opts.seamAlpha, opts.facetPx, opts.crownPx, opts.dome, opts.idleFx !== false,
-    opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt,
+    opts.starDensity, opts.starBrightness, opts.galaxy === true, opts.galaxyAt, opts.galaxySpin,
     opts.nebulae !== false, opts.galaxies !== false, opts.dust !== false, opts.clusters !== false,
     opts.starColours !== false, opts.starGlints !== false,
-    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.formSpeed,
+    opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.formSpeed, opts.formAt, opts.formBrightness, opts.formFlow, opts.formPalette,
     rendererOf(opts),                     // a parked board repaints when the renderer is switched
+    fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
     opts.transition ? `${opts.transition.rise}/${opts.transition.travel}/${opts.transition.drop}` : 'default'].join('|');
@@ -5228,9 +5433,13 @@ export function render3d(canvas, cells, options = {}) {
         }
       }
     }
+    const tA = clockMs();
     const frame = frameAt(st.plan, t, view);
     const surface = surfaceFor(canvas, ctx, geom, opts);
     paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
+    // THE FRAME RATE, top right, where it is asked for (appearance.showFps). On a canvas that has a
+    // board on it: a game's sky canvas behind its well is the same view, and one figure is enough.
+    if (frame.ops.length && fpsWanted(opts)) drawFps(surface, geom, fpsTick(st, t, clockMs() - tA), surface.gl2d === true ? 'WebGL' : 'Software');
     surface.flush?.();                       // the GL renderer batches; the 2D context has no such call
     st.lastFit = frame.__fit ?? st.lastFit;
     st.lastOps = frame.ops;

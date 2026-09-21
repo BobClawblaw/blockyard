@@ -42,6 +42,7 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>gl-compare</title>
 <script type="module">
 const out = { scenes: [], errors: [] };
 window.__out = out;
+window.__blockyardGlErrors = out.errors;               // a shader that fails to compile falls back silently: here it is an ERROR
 window.addEventListener('error', (e) => out.errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => out.errors.push(String(e.reason)));
 try {
@@ -105,7 +106,7 @@ try {
   const shot = (board, fx, at, renderer, extra) => {
     seed = 1; VT = 1000; q.length = 0;
     const canvas = stage();
-    boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, ...extra });
+    boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, showFps: ${process.argv.includes('--fps')}, glSky: ${LOOK}, ...extra });   // (--fps: the frame-rate figure on, to look at it on both renderers)
     pump(200, 50);
     if (fx) { d3.triggerIdle(canvas, fx); }
     // the effect's OWN length: a flat six seconds sampled the pulsar 2.7 s into a 26 s run, before
@@ -131,7 +132,11 @@ try {
   for (const k of d3.SPACE_FX) scenes.push({ name: 'space-' + k, board: 'space', fx: k });
   for (const k of d3.MARKET_FX) scenes.push({ name: 'markets-' + k, board: 'markets', fx: k });
 
-  scenes.push({ name: 'space-rest-form', board: 'space', fx: null, extra: { ...st.skyFor({ ...S, space: { ...S.space, sky: 'form' } }, 'space') }, loose: true });
+  // --palettes: the Markets chart over the Formation in EVERY palette, the galaxy dead behind the chart (the
+  // worst case for a clash) -- for looking at, with --look; scripts/form-palettes.mjs scores the same thing in numbers
+  if (${process.argv.includes('--palettes')}) { const fg = await import('/js/formgl.js'); for (const pal of Object.keys(fg.FORM_PALETTES)) scenes.push({ name: 'palette-' + pal, board: 'markets', fx: null, extra: { ...st.skyFor({ ...S, markets: { ...S.markets, sky: 'form' } }, 'markets'), formSpeed: 0, formAt: 'center', formPalette: pal }, loose: true }); }
+  scenes.push({ name: 'markets-rest-form', board: 'markets', fx: null, extra: { ...st.skyFor({ ...S, markets: { ...S.markets, sky: 'form' } }, 'markets'), formSpeed: 0 }, loose: true });   // (speed 0 holds the mature frame: the harness clock starts inside the loop's fade-in)
+  scenes.push({ name: 'space-rest-form', board: 'space', fx: null, extra: { ...st.skyFor({ ...S, space: { ...S.space, sky: 'form' } }, 'space'), formSpeed: 0 }, loose: true });
 
   // ---- the switch is live, in both directions, and leaves the page as it found it
   if (!ONLY.length || ONLY.includes('switch')) {

@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   hash01, formField, gasAt, windField, windAt, farStars,
-  drawGalaxyForm, envAt, formW, FORM_CYCLE, FORM_HOLD, FORM_WINDOWS,
+  drawGalaxyForm, envAt, envIn, formW, FORM_CYCLE, FORM_HOLD, FORM_WINDOWS,
 } from '../public/js/galform.js';
 
 test('the field is seeded: the same seed, the same gas', () => {
@@ -131,4 +131,46 @@ test('the draw runs on a stub context: all specks, all rgba, deterministic', () 
   drawGalaxyForm(makeCtx(mid), 800, 500, 2, (FORM_CYCLE / 2) * 1000, { starBrightness: 1 });
   const hot = mid.map((f) => Number(f.style.match(/,(0?\.\d+|1)\)$/)[1])).filter((a) => a > 0.05);
   assert.ok(hot.length > 200, `a bright core by overlap (${hot.length} specks above 0.05)`);
+});
+
+test('brought along with the GL layer: perpetual, placed, and in the film\'s colours', async () => {
+  const { FORM_PLACEMENTS, formRamp } = await import('../public/js/formgl.js');
+  const makeCtx = (fills) => ({ canvas: null, fillStyle: '', beginPath() {}, arc(x, y, r) { fills.push({ style: this.fillStyle, x, y, r }); }, fill() {}, fillRect() {}, ellipse() {} });
+  // (the middle, at speed 1, unless a case says otherwise: the shipped place and pace are the operator's own)
+  const at = (now, o = {}) => { const f = []; drawGalaxyForm(makeCtx(f), 800, 500, 1, now, { starBrightness: 1, formAt: 'center', formSpeed: 1, ...o }); return f; };
+  // PERPETUAL: long after the assembly it is still there (it used to be fading to black every 140 s, and
+  // at exactly 140 s and 280 s drew nothing at all) -- and the disc is still TURNING
+  for (const s of [140, 280, 3600, 86400]) assert.ok(at(s * 1000).length > 1500, `drawn at ${s} s`);
+  const a = at(600_000), b = at(620_000);
+  assert.equal(a.length > 1500 && b.length > 1500, true);
+  assert.notDeepEqual(a.map((f) => [f.x.toFixed(1), f.y.toFixed(1)]), b.map((f) => [f.x.toFixed(1), f.y.toFixed(1)]), 'twenty seconds on, the specks have moved');
+  // the only fade is the way IN
+  assert.equal(envIn(0), 0); assert.equal(envIn(0.05), 1); assert.equal(envIn(0.86), 1);
+  // the fountains keep cycling: over one further cycle there are moments with wind and moments without
+  // (the gas's count is fixed once mature, so what varies in the number of specks drawn IS the wind)
+  const drawn = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130].map((sec) => at((1000 + sec) * 1000).length);
+  assert.ok(Math.max(...drawn) - Math.min(...drawn) > 100, `bursts that come and go, not a steady state (${drawn})`);
+  // PLACED: the brightest specks gather where formAt says, and a corner is drawn larger
+  // (the CORE: the forty brightest specks. An average over all the bright ones is dragged inward in a
+  // corner, because what falls outside the panel is never drawn.)
+  const centreOf = (f) => { const hot = f.map((q) => [Number(q.style.match(/,([\d.]+)\)$/)[1]), q]).sort((x, y) => y[0] - x[0]).slice(0, 40).map((v) => v[1]); return [hot.reduce((t, q) => t + q.x, 0) / hot.length, hot.reduce((t, q) => t + q.y, 0) / hot.length]; };
+  const mid = centreOf(at(400_000)), tr = centreOf(at(400_000, { formAt: 'top-right' }));
+  assert.ok(Math.abs(mid[0] - 400) < 25 && Math.abs(mid[1] - 250) < 25, `the middle (${mid})`);
+  assert.ok(Math.abs(tr[0] - 800 * FORM_PLACEMENTS['top-right'][0]) < 40 && Math.abs(tr[1] - 500 * FORM_PLACEMENTS['top-right'][1]) < 40, `top right (${tr})`);
+  const tl = centreOf(at(400_000, { formAt: 'nowhere' }));
+  assert.ok(Math.abs(tl[0] - 800 * FORM_PLACEMENTS['top-left'][0]) < 40 && Math.abs(tl[1] - 500 * FORM_PLACEMENTS['top-left'][1]) < 40, `an unknown place is the shipped one, top left (${tl})`);
+  // DIMMED by the same slider as the GL layer (sky.formBrightness): every speck's alpha, its colour untouched
+  const full = at(400_000, { formBrightness: 1 }), half = at(400_000, { formBrightness: 0.5 });
+  const alphaOf = (f) => Number(f.style.match(/,([\d.]+)\)$/)[1]);
+  const sumA = (f) => f.reduce((t, q) => t + alphaOf(q), 0);
+  assert.ok(half.length <= full.length && Math.abs(sumA(half) / sumA(full) - 0.5) < 0.03, 'half the light');
+  assert.deepEqual(new Set(half.map((f) => f.style.replace(/,[\d.]+\)$/, ''))).size <= new Set(full.map((f) => f.style.replace(/,[\d.]+\)$/, ''))).size, true, 'no new colours');
+  // COLOURS: every tint is a colour of the shared ramp, the core is its pale end and the web its violet
+  const ramp = new Set(); for (let i = 0; i <= 64; i++) ramp.add(formRamp(i / 64).join(','));
+  const tints = new Set(at(400_000).map((f) => f.style.replace(/^rgba\(/, '').replace(/,[\d.]+\)$/, '')));
+  for (const t of tints) assert.ok(ramp.has(t), `${t} is on the ramp`);
+  const [r, g, bl] = [...tints].map((t) => t.split(',').map(Number)).sort((x, y) => (y[0] + y[1] + y[2]) - (x[0] + x[1] + x[2]))[0];
+  assert.ok(r > 240 && g > 200 && bl > 120, 'the core reaches the pale end');
+  assert.ok([...tints].some((t) => { const [rr, gg, bb] = t.split(',').map(Number); return bb > rr && bb > gg; }), 'and thin gas is violet');
+  assert.ok(![...tints].some((t) => { const [rr, gg, bb] = t.split(',').map(Number); return Math.abs(rr - gg) < 12 && Math.abs(gg - bb) < 25 && rr > 150; }), 'nothing is the old grey-white');
 });

@@ -378,6 +378,85 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   stencil passes a frame -> 30 and 4.
 - **`ctx.gl2d === true`, never truthy**: the suite's catch-all Proxy stubs answer every property
   with a function.
+- **The Formation's GL layer is a FIELD, not particles** (`formgl.js` v3; operator, with the film open:
+  "It looks nothing like the reference material ... the pinks, purples, oranges"). v1/v2 were blue
+  sprites because nobody had LOOKED at the film; its main view is gas density through a magma ramp.
+  One fragment shader: halo x warped ridged noise (wisps, a finer tangled layer), streams sampled at
+  direction * r^k and bent hard by the warp (straight down the radius they were a sunburst round a
+  dark hole), a rigid-pattern log spiral (a differential turn wound the arms into rings), satellites
+  as knot + haze. **Gas tops out at orange; only stars reach pale yellow** (two tone curves), and
+  the corners fall to black. `precision highp int` is REQUIRED: a fragment shader's ints are
+  mediump, the hash is 32-bit, and without it the picture is television static. It declines on a
+  software rasteriser (`isSoftwareGl`: 0.11 ms a frame on the 5090, 64 ms on SwiftShader) and a
+  declined layer stands down for good (`FORM_DEAD`) with the frame's background painted.
+  **The gas is ADVECTED, not slid** (operator: "I'm not seeing any shifting of the filaments"): two
+  layers half a life apart, each pulled in and swirled from rest and cross-faded (weights sum to
+  one), on the WALL clock so speed 0 still flows, phases computed in doubles on the CPU. Keep the
+  warp's churn SLOW (`FLOW_CHURN`): ridged noise decorrelates under a small warp change, and at
+  five times this rate features lost their identity in two seconds -- boiling, not flowing.
+  `form-preview.mjs --times 100000,101000,102000 --speed 0` prints how much of the picture moved.
+  It is measured against the PANEL'S aspect (`wide`, `pe`), not its short side, or a wide board gets a
+  disc with empty sides. What says "flowing": clumps that RUN down the streams (noise sampled at
+  direction x (radius + phase)), a small jostle on the gas's position (`pj` -- never on the galaxy or
+  the satellites, which are placed from `p`), wakes laid where a satellite HAS BEEN, and ragged
+  outburst shells from the galaxy (bipolar, along its minor axis) and from each satellite (a thin
+  even ring reads as a donut: keep them broad and torn by the smoke). A backtick inside the GLSL
+  template's comments ends the template. Judge it
+  by looking: `node scripts/form-preview.mjs --gpu vulkan --times 200000,201000,202000`, next to the film.
+  **It is PERPETUAL** (operator: "have the scene perpetually evolving. don't fade it out"): no loop
+  fraction, no envelope. The galaxy is grown and breathes (`BREATHE`); each satellite lives its own
+  wall-clock life out of step with the others and is reborn on ANOTHER orbit (its life number is in
+  every hash); phases are doubles on the CPU, fractions on the card. **Satellites move the gas, they
+  are not drawn over it**: the smoke's sampling place is turned round each one and dragged along its
+  path (`STIR`, `DRAG`, and weaker at three places it has just been) BEFORE the smoke is looked up --
+  a knot laid over the smoke passes through it like a ghost. A wake sample is never narrower than
+  the gap to the last, or a fast outer satellite trails a string of beads.
+  Its galaxy sits in the middle or a corner (`sky.formAt`, `FORM_PLACEMENTS`: the Galaxy sky's five
+  places and fractions, plus a scale -- in a corner the scene is drawn 1.55x, or the far half of the
+  panel is empty). A satellite ARRIVES: born beyond the frame (`SAT_R0`), its cloud eased up over
+  nearly half its life, its knot condensing later; born inside the frame it popped.
+  **Its shipped place, level and pace are the OPERATOR'S OWN saved settings** (2026-09-21: "It was
+  originally too bright and was threatening to overpower the chart"): `formAt` top-left,
+  `formBrightness` 0.8, `formFlow` 0.5, `formSpeed` 0.4 -- a sky behind a chart, not a film in front
+  of one. They are one set of numbers (settings.js DEFAULTS.sky == formgl.js FORM_*_DEFAULT, pinned).
+  **Thirteen palettes** (`FORM_PALETTES`, picker `sky.formPalette`, the shader's ramp a UNIFORM so a palette is
+  a setting and not a recompile; the fallback wears it too). The chart is the most important thing on the
+  board, so a palette is judged in NUMBERS against the chart's real colours (`node scripts/form-palettes.mjs`:
+  CIELAB distance over the gas range to #1fc98a, #ef4d5e and the yellow line): the film's magma is 23 from the
+  candles' red, every other one >= 46 from everything, and a test holds them there. `settings.js` imports the
+  labels from formgl.js -- which the SERVER loads too, so formgl.js must stay free of DOM at module level.
+  Two sliders: `sky.formBrightness` (1 = the picture as first made; it scales the COLOUR --
+  scaling the tone slides orange down the ramp to magenta) and `sky.formFlow` (the gas's own pace;
+  `formSpeed` is how fast the galaxy and satellites LIVE). **Both clocks are INTEGRATED in the layer's
+  state, never `now x speed`**: that clock jumps when the speed changes -- an hour in, 1.0 -> 1.1 is six
+  minutes of scene per tick of the drag. A fresh layer still starts at now x speed, so a first frame
+  is a pure function of the clock.
+  **The no-GPU fallback (`galform.js`) was brought along**: perpetual (assembles once, then stays,
+  the disc turning on `gasAt`'s extraSec and the fountains going round their two windows), placed by
+  the same `formAt`, and tinted through `formRamp` -- ONE ramp, `FORM_RAMP`, from which the shader's
+  magma() is GENERATED. It has no satellites and no smoke: those are a field's, this is 9,000 dots.
+- **The Galaxy sky's gas is BAKED BY A SHADER on WebGL** (`ctx.bake` in gl2d.js: a fragment shader run
+  once into a texture that `drawImage` then draws like any bitmap; `GAS_GLSL` + `gasLayerGl` in
+  details3d.js). Same nine clouds and fourteen lanes from the same seeded lists (they carry `size` now),
+  each laid ALONG its arm (a log spiral's pitch is one angle: atan2(1, GALAXY_TWIST)), its envelope
+  WARPED as well as its inside, hollows cut in it, dust that ABSORBS. The tints are dark paint made to
+  be laid thirty times over; laid once they must be normalised to full strength or the clouds are grey.
+  Software keeps the bitmap of ellipses. So the two renderers now DIFFER on this sky by design (mean
+  4-7 of 255): the parity check passes `glSky: false` so it still compares like with like, and
+  `--look` shows the clouds. `sky.galaxySpin` paces the turn, integrated on the field.
+  The same bake lays THE LIGHT BETWEEN THE STARS -- a blue-white haze along the same log spiral, a warm
+  bulge held under 0.4 (this sky stands behind a chart) -- stars are POINTS OF LIGHT (`uSoft`: a gaussian
+  core holding the square's light, sub-pixel stars widened and dimmed so they do not flicker as the disc
+  turns, halo and diffraction spikes on the giants in the shader, no 2D glints on top), and far galaxies
+  are gradient smudges. All of it is `glSky`; `glSky: false` is the 2D canvas's sky on WebGL (parity).
+  **A shader that fails to compile falls back SILENTLY**: `patch` is a GLSL reserved word, the bake
+  died, and the old ellipses came back looking like "nothing changed". The log now goes to the console
+  and to `window.__blockyardGlErrors`, which gl-compare reports as an ERROR.
+- **The frame rate** (`appearance.showFps`, `options.showFps`): top right of any board that has tiles,
+  drawn through the frame's own context so it is the same on both renderers. It counts frames THIS
+  canvas painted in the last second (a resting board under a sky reads about 30 by design; a parked
+  board keeps its last figure) and the processor's ms a frame -- the card's time is not visible
+  from script. Scorched's land passes `showFps: false`: the actors' canvas over it carries the figure.
 - **Verify in a browser, both renderers, the same frame**: `node scripts/gl-compare.mjs` (headless
   chromium, SwiftShader or `--gpu vulkan` for the real card -- it prints the renderer it got -- virtual clock, seeded Math.random; 52 scenes, the live switch, restore
   and lost-context fallback; PNG pairs with `--out`). Measured 2026-09-21: mean difference 0.6-1.8
@@ -527,7 +606,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1371 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1382 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -856,7 +935,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1371 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1382 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
