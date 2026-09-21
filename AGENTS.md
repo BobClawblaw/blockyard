@@ -525,6 +525,25 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   slides by its height only. Two fills a face (the room, a near-edge fall-off), on BOTH renderers. Now costs what the
   plain board does on GL (rest 3.9, live 8.1). NOT verified: Software in a real browser -- the harness's 2D canvas is
   CPU-rasterised and gradient faces read 70 ms there against 56 for the old quads.
+- **ON MARKETS, WHAT CROSSES THE BOARD STARTS AND ENDS BEYOND THE PANEL** (operator, 2026-09-22: "Never make an
+  effect just blink in out of existence for the market board"). The Markets canvas is far wider than its chart (the
+  chart is about the middle half), so "past the board's edge" is in plain view. Anything that travels measures the
+  PANEL from `st.lastFit` (`pw`, `tx`, `scaleX`, `unit`): the storm ball per side, the pulsar (it ran 14-86% of the
+  board and was faded up where it stood). A sweeping front (scan, tide, xray, wave, outline) gets `fx.margin` = the
+  panel's overhang ALONG ITS OWN DIRECTION (`mx*|dx| + my*|dy|`); it used to be the largest overhang on any side --
+  the price board's depth overhang, three times the hours' -- and the scan's saucer spent two thirds of its run out
+  of sight. `node scripts/gl-compare.mjs --edges` prints where every Markets effect's pixels are at the ends of its
+  run (noisy: a constant 16-40 px box is baseline, not an effect). LEFT AS DESIGNED, because they GROW out of the
+  chart rather than blink: the bulge and the pulse (exactly tube-sized at the line's ends, the operator's 09-14
+  design) and the black hole ("still while it opens and while it closes", 09-15). Ask before changing those.
+- **A RESTING BOARD IS BUILT ONCE** (2026-09-22: "cache the settled scene so a resting board isn't rebuilt every
+  frame"). `draw` keeps the settled frame on `st.restFrame` and reuses it while the plan and the closure are the same
+  and there is no effect and no hover glow -- everything else `buildScene` reads is a constant of that closure, which
+  holds ONLY because nothing writes to `opts` in place (a test holds that): a new look or size is a new `render3d`
+  call. **If you add a scene input that changes while a board rests** (something read from `view.now`, a new per-frame
+  map like `hoverGlow`), add it to that condition or the board will not repaint. Resting WebGL boards on the 5090 at
+  2560x1300: plain 3.9 -> 1.0 ms, chrome 3.5 -> 1.6, satin 5.6 -> 0.8, neon 4.5 -> 1.8. Software is raster-bound
+  and did not move.
 - **SATIN is brushed metal** (rebuilt 2026-09-22: "still too muted and not metallic enough" -- it was a gleam along
   one edge over flat paint). A broad sheen across every face from a board-wide ramp like chrome's but gentle (never
   blown out, never black: that difference IS the two finishes), the colour pulled a little toward steel, each bevel
@@ -686,7 +705,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1392 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1394 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1015,7 +1034,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1392 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1394 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

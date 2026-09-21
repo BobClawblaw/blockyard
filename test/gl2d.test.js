@@ -776,3 +776,35 @@ test('a cube face goes straight to the batch (fillPoly), and a finish\'s ramp is
   assert.match(d3, /if \(op\.grain === true && neonSoft\) ctx\.grain = false;/, 'and off again after');
   assert.match(d3, /if \(a\.ramp \|\| b\.ramp\) \{/, 'and a kept board compares its ramps');
 });
+
+test('a resting board is built once: the settled frame is reused until a plan, an effect or a hover changes it', () => {
+  // (operator, 2026-09-22: "cache the settled scene so a resting board isn't rebuilt every frame". Under a sky the loop
+  // repaints for the stars, and each of those frames rebuilt every cube to arrive at the ops of the frame before.)
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(d3, /if \(kept && kept\.plan === st\.plan && kept\.draw === draw && !view\.fx && !view\.hoverGlow\) frame = kept\.frame;/,
+    'the same plan, the same closure (its options and panel), no effect, no hover');
+  assert.match(d3, /st\.restFrame = frame\.settled && !view\.fx && !view\.hoverGlow \? \{ plan: st\.plan, draw, frame \} : null;/,
+    'kept only once settled -- a frame of a transition, an effect or a hover is never kept, and ends the cache');
+  // everything else buildScene reads is a constant of that closure: nothing may write to the options in place
+  assert.ok(!/Object\.assign\(opts\b/.test(d3) && !/\bopts\.[A-Za-z]+ = /.test(d3), 'the options are never mutated');
+  // and the GL renderer's kept board sees the very same ops array
+  assert.match(d3, /if \(was && was\.ops === ops && !now\.fx && !was\.fx && was\.opts === opts/);
+});
+
+test('what crosses the Markets panel starts and ends beyond the PANEL, measured along its own way', () => {
+  // (operator, 2026-09-22: "audit every effect that travels from one side of the market board to the other, and make sure
+  // they all start off screen and end off-screen. Never make an effect just blink in out of existence". The Markets
+  // canvas is far wider than its board, so "past the board's edge" is in plain view. scripts/gl-compare.mjs --edges
+  // prints where every Markets effect's pixels are at the ends of its run.)
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  // the pulsar: it ran 14%..86% of the board and was faded up where it stood
+  const pul = d3.slice(d3.indexOf("if (f.kind === 'pulsar') {"), d3.indexOf('out.pulsar = {'));
+  assert.match(pul, /xa = -\(fit\.tx \/ per\) - reach; xb = \(fit\.pw - fit\.tx\) \/ per \+ reach;/, 'from beyond one edge of the panel to beyond the other');
+  assert.match(pul, /travel = 0\.5 \* t \+ 0\.5 \* \(t \* t \* \(3 - 2 \* t\)\);/, 'moving the whole time: no standing start on screen');
+  // a sweeping front's margin is the panel's overhang ALONG ITS DIRECTION (it was the largest on any side: the price
+  // board's depth overhang, three times the hours', so the scan's saucer was out of sight for two thirds of its run)
+  assert.match(d3, /view\.fx\.margin = Math\.max\(ax \+ ay > 0 \? mx \* ax \+ my \* ay : Math\.max\(mx, my\), 4\) \+ 3;/);
+  // the storm ball measures its own, per side
+  const ag = readFileSync(new URL('../public/js/agents.js', import.meta.url), 'utf8');
+  assert.match(ag, /mL = Math\.max\(margin, fit\.tx \/ per \+ clear\);\s*\n\s*mR = Math\.max\(margin, \(fit\.pw - fit\.tx\) \/ per - W \+ clear\);/);
+});

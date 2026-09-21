@@ -103,8 +103,9 @@ try {
     for (const el of canvas.parentElement.querySelectorAll('canvas')) g.drawImage(el, 0, 0, w, h);   // DOM order IS the stacking order
     return { c, data: g.getImageData(0, 0, w, h).data, w, h };
   };
+  let SEED0 = 1;
   const shot = (board, fx, at, renderer, extra) => {
-    seed = 1; VT = 1000; q.length = 0;
+    seed = SEED0; VT = 1000; q.length = 0;
     const canvas = stage();
     boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, showFps: ${process.argv.includes('--fps')}, glSky: ${LOOK}, softGlow: ${LOOK}, ...extra });   // (--fps: the frame-rate figure on, to look at it on both renderers)
     pump(200, 50);
@@ -170,6 +171,33 @@ try {
     boards.space(canvas, { renderer: 'webgl' }); pump(30000, 500);
     check('and does not try again on that canvas', d3.rendererIn(canvas) === 'software');
     out.switchChecked = true;
+  }
+
+  // --edges: WHERE IS AN EFFECT WHEN IT BEGINS AND ENDS? (operator, 2026-09-22: "audit every effect that travels from one
+  // side of the market board to the other, and make sure they all start off screen and end off-screen. Never make an
+  // effect just blink in out of existence"). Every Markets effect, under no sky so the rest picture is constant, at
+  // the first and last moments of its run, for a few seeds (its direction is a roll): the box of pixels that differ
+  // from the resting board, as fractions of the panel. A box in mid-panel at 0.4% of the run blinked in.
+  if (${process.argv.includes('--edges')}) {
+    out.edges = [];
+    const none = st.skyFor({ ...S, markets: { ...S.markets, sky: 'none' } }, 'markets');
+    for (const sd of [1, 2, 3]) {
+      SEED0 = sd;
+      const rest = shot('markets', null, 0, 'webgl', none);
+      for (const k of d3.MARKET_FX) {
+        if (ONLY.length && !ONLY.some((o) => k.includes(o))) continue;
+        for (const at of [0.004, 0.02, 0.05, 0.1, 0.9, 0.95, 0.98, 0.996]) {
+          const g = shot('markets', k, at, 'webgl', none);
+          let x0 = g.w, x1 = -1, y0 = g.h, y1 = -1, n = 0;
+          for (let y = 0; y < g.h; y += 2) for (let x = 0; x < g.w; x += 2) {
+            const i = (y * g.w + x) * 4;
+            if (Math.abs(g.data[i] - rest.data[i]) + Math.abs(g.data[i + 1] - rest.data[i + 1]) + Math.abs(g.data[i + 2] - rest.data[i + 2]) > 36) { n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          }
+          out.edges.push({ fx: k, seed: sd, at, n, x0: x0 / g.w, x1: x1 / g.w, y0: y0 / g.h, y1: y1 / g.h });
+        }
+      }
+    }
+    SEED0 = 1; scenes.length = 0;
   }
 
   for (const sc of scenes) {
@@ -255,6 +283,11 @@ try {
     const bad = s.used !== 'webgl' || !LOOK && s.mean > (s.loose ? 40 : BUDGET) || s.litGl < s.litSoft * 0.8;
     if (bad) code = 1;
     console.log(`${s.name.padEnd(30)} ${s.used.padEnd(9)} ${s.mean.toFixed(2).padStart(5)}  ${(s.far * 100).toFixed(2).padStart(5)}   ${(s.litSoft * 100).toFixed(1).padStart(5)}/${(s.litGl * 100).toFixed(1).padEnd(5)}   ${s.msSoft.toFixed(1).padStart(7)} -> ${s.msGl.toFixed(1).padEnd(7)} ${s.worstGl ? `worst ${s.worstSoft}/${s.worstGl}ms @${s.worstGlAt.toFixed(2)} ` : ''}${s.per ? `${Math.round(s.per.draws)} draws ${Math.round(s.per.stencils)} stencils ${Math.round(s.per.verts / 1000)}k verts${s.live ? ` (board live: ${s.live})` : ''}` : ''}${bad ? '   <-- LOOK' : ''}`);
+  }
+  const edges = JSON.parse(await evl('JSON.stringify(window.__out.edges ?? null)') ?? 'null');
+  if (edges) {
+    console.log('\nMarkets effects at the ends of their runs: the box of changed pixels, as % of the panel (x0-x1, y0-y1), and how many');
+    for (const e of edges) console.log(`  ${e.fx.padEnd(10)} seed ${e.seed}  at ${(e.at * 100).toFixed(1).padStart(5)}%  ${e.n ? `x ${(e.x0 * 100).toFixed(0).padStart(3)}-${(e.x1 * 100).toFixed(0).padStart(3)}  y ${(e.y0 * 100).toFixed(0).padStart(3)}-${(e.y1 * 100).toFixed(0).padStart(3)}  ${String(e.n).padStart(7)} px` : 'nothing'}`);
   }
   const trace = JSON.parse(await evl('JSON.stringify(window.__out.trace)') ?? 'null');
   if (trace) { console.log('\nstencil passes by call site'); for (const [k, v] of trace) console.log(`  ${String(v).padStart(7)}  ${k}`); }

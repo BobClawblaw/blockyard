@@ -691,9 +691,24 @@ function fxNow(st, t) {
     const H = (k) => hash01(f.seed + 100 + k);
     // the crossing: a fifth of the way in from each edge, easing at both ends, so the arrival
     // and the exit are watched, not cut (the black hole's travel, the same shape)
-    const travel = u < 0.1 ? 0 : u > 0.9 ? 1 : (() => { const t = (u - 0.1) / 0.8; return t * t * (3 - 2 * t); })();
+    // IT FLIES IN FROM OFF SCREEN AND OUT THE OTHER SIDE (operator, 2026-09-22: "audit every effect that travels from
+    // one side of the market board to the other, and make sure they all start off screen and end off-screen. Never
+    // make an effect just blink in out of existence"). This one did: it ran from 14% to 86% of the BOARD, held still at
+    // both ends, and was faded up where it stood -- a star materialising inside the chart. The Markets panel is far
+    // wider than its board, so the ends are MEASURED from the frame's fit, as the storm ball's are: beyond the
+    // panel's edge by the passage's own reach (the disk and the gas round it). The run moves the whole time -- no
+    // standing start -- and gently: it is on the chart through the three acts, which are keyed to the run.
+    // No fit yet (a test, a first frame): the old crossing.
+    let xa = st.gridW * 0.14, xb = st.gridW * 0.86, travel;
+    const fit = st.lastFit;
+    if (line?.length > 1 && fit && fit.pw > 0 && fit.scaleX > 0 && fit.unit > 0) {
+      const per = fit.scaleX * fit.unit, reach = boundedRadius(8.5, 0.186, st.gridW) + 3;   // (the disk and its gas: measured on a 1600-wide panel, 21 units kept it out of sight for a fifth of the run at each end)
+      xa = -(fit.tx / per) - reach; xb = (fit.pw - fit.tx) / per + reach;
+      const t = Math.max(0, Math.min(1, (u - 0.02) / 0.96));
+      travel = 0.5 * t + 0.5 * (t * t * (3 - 2 * t));                  // (half linear: never at rest on screen, never abrupt)
+    } else travel = u < 0.1 ? 0 : u > 0.9 ? 1 : (() => { const t = (u - 0.1) / 0.8; return t * t * (3 - 2 * t); })();
     const dir = (f.dx || 0) !== 0 ? Math.sign(f.dx) : H(9) < 0.5 ? 1 : -1;
-    const px = st.gridW * (0.14 + 0.72 * travel) * (dir > 0 ? 1 : 0) + st.gridW * (0.86 - 0.72 * travel) * (dir > 0 ? 0 : 1);
+    const px = dir > 0 ? xa + (xb - xa) * travel : xb - (xb - xa) * travel;
     // the wind: a diagonal swath of gas across the board, its own height at each edge; the
     // pulsar's path runs through it, wobbling a little, entering one side and leaving the other
     const sa = st.gridH * (0.12 + 0.66 * H(1)), sb = st.gridH * (0.12 + 0.66 * H(2));
@@ -702,7 +717,7 @@ function fxNow(st, t) {
     // units against the hours' width, but enough that the crossing is not a ruled line in y either
     const wob = (Math.sin(travel * Math.PI * (1.6 + H(14)) + H(3) * 6.283) * 0.7
       + Math.sin(travel * Math.PI * 3.3 + H(15) * 6.283) * 0.3) * sw * 0.42;
-    const py = sa + (sb - sa) * (px / st.gridW) + wob;
+    const py = sa + (sb - sa) * Math.max(0, Math.min(1, px / st.gridW)) + wob;   // (off the board's ends it holds the edge's depth)
     // THROUGH SPACE, NOT ALONG THE LINE (operator, 2026-09-20: "I don't want it riding the line.
     // I want it moving randomly across the screen like the black hole does"), NOT ALWAYS CLOSE TO
     // IT (the lanes in pulsarHeights), and NOT IN A RULED LINE ("Have it moving more like the
@@ -4882,6 +4897,8 @@ function sameBoard(ctx, ops, opts, view, geom, gridN, gridH, blockRows) {
     // what it draws over the board is drawn after it -- so a supernova plays over a kept board
     fx: !!view.fx && (view.fx.kind === 'ripple' || view.fx.kind === 'outline' || view.fx.kind === 'tide' || !!view.fx.ball) };
   LAST_BOARD.set(ctx, now);
+  if (was && was.ops === ops && !now.fx && !was.fx && was.opts === opts && was.pw === now.pw && was.ph === now.ph && was.gridN === gridN && was.gridH === gridH
+    && was.blockRows === blockRows && was.rise === now.rise) return true;      // (a resting board's cached frame: the very same ops)
   if (!was || now.fx || was.fx || was.opts !== opts || was.pw !== now.pw || was.ph !== now.ph || was.gridN !== gridN || was.gridH !== gridH
     || was.blockRows !== blockRows || was.rise !== now.rise || was.ops.length !== ops.length) return false;
   for (let i = 0; i < ops.length; i++) {
@@ -5577,7 +5594,15 @@ export function render3d(canvas, cells, options = {}) {
     // sight instead of appearing in the middle of the picture (fxFront)
     if (view.fx && view.viewRect) {
       const r = view.viewRect;
-      view.fx.margin = Math.max(0 - r.x0, r.x1 - st.gridW, 0 - r.y0, r.y1 - st.gridH, 4) + 3;
+      // ALONG THE WAY IT TRAVELS (2026-09-22, found auditing the Markets board's crossings): this was the LARGEST
+      // overhang on any side, and the price board is eight units deep under a panel a hundred tall -- so a front that
+      // runs along the hours was given the DEPTH's overhang, about three times what it needed. Measured on a
+      // 1600-wide panel: the scan's saucer crossed the whole panel in a third of its run and spent the other two
+      // thirds out of sight, a third before and a third after. A rectangle's reach in a direction is its support
+      // function: the x overhang by |dx| plus the y overhang by |dy|.
+      const mx = Math.max(0 - r.x0, r.x1 - st.gridW, 0), my = Math.max(0 - r.y0, r.y1 - st.gridH, 0);
+      const ax = Math.abs(view.fx.dx ?? 0), ay = Math.abs(view.fx.dy ?? 0);
+      view.fx.margin = Math.max(ax + ay > 0 ? mx * ax + my * ay : Math.max(mx, my), 4) + 3;
       // the scan's beam: its half-width, so fxAt lights exactly the swath the cone covers
       // (its old `pan` out-and-back motion is gone -- one pass, 2026-09-20), and -- on the block
       // board -- the beam's AIM: the pan rides along from fxNow (fx.scanPan), but the landing
@@ -5597,7 +5622,21 @@ export function render3d(canvas, cells, options = {}) {
     }
     const tA = clockMs();
     const surface = surfaceFor(canvas, ctx, geom, opts);
-    const frame = frameAt(st.plan, t, view);
+    // A RESTING BOARD IS BUILT ONCE (operator, 2026-09-22: "cache the settled scene so a resting board isn't rebuilt
+    // every frame"). Under a sky the loop repaints some thirty times a second for the stars' sake, and every one of
+    // those frames sampled every tween, built every cube's faces and sorted them -- about 8 ms for 484 cubes,
+    // measured in node -- to arrive at the ops of the frame before. What a scene is built FROM: the plan's tiles
+    // (still, once it has settled), the effect (none), the hover glow (none), and the options and the panel, which
+    // are this closure's own constants (a new look or a new size is a new render3d call, and a new `draw`). So
+    // while all of that holds, the frame is the last one -- the same object, so the GL renderer's kept board sees
+    // the very same ops array. An effect, a hover or a new plan builds again, and the cache starts over.
+    const kept = st.restFrame;
+    let frame;
+    if (kept && kept.plan === st.plan && kept.draw === draw && !view.fx && !view.hoverGlow) frame = kept.frame;
+    else {
+      frame = frameAt(st.plan, t, view);
+      st.restFrame = frame.settled && !view.fx && !view.hoverGlow ? { plan: st.plan, draw, frame } : null;
+    }
     paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
     // THE FRAME RATE, top right, where it is asked for (appearance.showFps). On a canvas that has a
     // board on it: a game's sky canvas behind its well is the same view, and one figure is enough.
