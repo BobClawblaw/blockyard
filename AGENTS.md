@@ -459,7 +459,9 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   go after it) makes any stroke that wide AND faint fade across itself in the shader (flag 4 in the disc
   word, beside 1 disc and 2 emissive), through `softStrokeGeometry`: a FAN on the outside of each bend, one
   mitre point inside, half-fans at the ends. A plain strip has one point per corner and stood a little
-  flame on every peak of the chart -- found by zooming in, isolated by switching the glow off
+  flame on every peak of the chart. A GRADIENT paint that is faint all the way along is soft too (the
+  energy pulse paints the halo along its length; it used to fall to the stencil, banded, while it ran).
+  Found by zooming in, isolated by switching the glow off
   (`softGlow: false`, which the parity check also passes).
 - **The frame rate** (`appearance.showFps`, `options.showFps`): top right of any board that has tiles,
   drawn through the frame's own context so it is the same on both renderers. It counts frames THIS

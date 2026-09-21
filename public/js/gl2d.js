@@ -1540,6 +1540,21 @@ export function createGl2d(canvas, hooks = {}) {
       if (!direct && n) { bboxAdd(geo.x0, geo.y0); bboxAdd(geo.x1, geo.y1); }
       return true;
     };
+    // (the soft glow, for a plain colour and for a gradient alike: see where it is called)
+    const softGlow = (strength, packed) => {
+      if (!(softMin > 0 && S.lineWidth >= softMin && strength < 0.4)) return false;
+      direct = true; col = packed;
+      const softTri = (x0, y0, l0, x1, y1, l1, x2, y2, l2) => {
+        room(3);                                             // (first: making room may draw the batch, and the index below must be taken after)
+        const i0 = nv * 9;
+        tri(x0, y0, x1, y1, x2, y2);
+        f32[i0 + 6] = l0; f32[i0 + 15] = l1; f32[i0 + 24] = l2;
+        f32[i0 + 7] = f32[i0 + 16] = f32[i0 + 25] = 0;
+        f32[i0 + 8] = f32[i0 + 17] = f32[i0 + 26] = 4 + emissive;
+      };
+      for (const s of live) softStrokeGeometry(user(s), s.closed, w * 1.35, softTri, k);
+      return true;
+    };
     const full = () => {
       if (kept('full', (t) => { for (const s of live) strokeGeometry(user(s), s.closed, w, S.lineCap, S.lineJoin, S.miterLimit, t, k); })) return;
       for (const s of live) strokeGeometry(user(s), s.closed, w, S.lineCap, S.lineJoin, S.miterLimit, tri, k);
@@ -1595,18 +1610,7 @@ export function createGl2d(canvas, hooks = {}) {
       // halo): softStrokeGeometry, a little wider than asked so it carries the same light, fading across
       // itself in the shader. No stencil: nothing in it is laid twice but the inside of a very tight bend,
       // and that is at the pen's inner EDGE, where the light is nearly nothing.
-      if (softMin > 0 && S.lineWidth >= softMin && paint.colour[3] * alpha < 0.4) {
-        direct = true; col = packColour(paint.colour, alpha); setSolid();
-        const softTri = (x0, y0, l0, x1, y1, l1, x2, y2, l2) => {
-          const i0 = nv * 9;
-          tri(x0, y0, x1, y1, x2, y2);
-          f32[i0 + 6] = l0; f32[i0 + 15] = l1; f32[i0 + 24] = l2;
-          f32[i0 + 7] = f32[i0 + 16] = f32[i0 + 25] = 0;
-          f32[i0 + 8] = f32[i0 + 17] = f32[i0 + 26] = 4 + emissive;
-        };
-        for (const s of live) softStrokeGeometry(user(s), s.closed, w * 1.35, softTri, k);
-        return;
-      }
+      if (softMin > 0) { setSolid(); if (softGlow(paint.colour[3] * alpha, packColour(paint.colour, alpha))) return; }
       if ((one && w * k <= 3) || w * k <= 1.5) {
         direct = true; col = packColour(paint.colour, alpha); setSolid();
         // THE SEAM ROUND A FACE, thousands a frame whenever the board is moving (the black hole has
@@ -1617,6 +1621,18 @@ export function createGl2d(canvas, hooks = {}) {
         if (one && one.closed && one.pts.length <= 16 && !(path instanceof GlPath) && m[1] === 0 && m[2] === 0 && Math.abs(Math.abs(m[0]) - Math.abs(m[3])) < 1e-9 && seam(one.pts, (w * k) / 2, col)) return;
         if (!kept('strip', (t) => { for (const s of live) stripGeometry(user(s), s.closed, w, S.lineCap, t); })) for (const s of live) stripGeometry(user(s), s.closed, w, S.lineCap, tri);
         return;
+      }
+    }
+    // A GRADIENT CAN BE A GLOW TOO (operator, 2026-09-22: "fix the banding during the energy pulse too"). The
+    // pulse paints the line's halo with a gradient ALONG it -- wire-yellow, white-hot behind the head -- and a
+    // gradient paint used to go straight to the stencil below, as three flat bands again for as long as the
+    // pulse ran. Where the gradient rides the atlas (every linear one does) the same soft geometry carries
+    // it: the ramp gives each pixel its colour along the line, the fade across the pen its strength.
+    if (paint.grad && softMin > 0) {
+      const strongest = Math.max(...paint.stops.map((st) => st[1][3])) * alpha;      // (faint all the way along, or it is a core and stays hard)
+      if (strongest < 0.4 && S.lineWidth >= softMin) {
+        setSolid();
+        if (aimGradient(paint)) { const done = softGlow(strongest, packColour([255, 255, 255, 1], alpha)); G.row = -1; if (done) return; }
       }
     }
     // polygons under a per-sample stencil: the one-pass union is exact (paintedOnce)

@@ -634,6 +634,17 @@ test('the price line\'s halo on WebGL is a GLOW: soft across the pen, round over
   assert.equal(word()[1], 4 + 2, 'soft (4) and emissive (2)');
   ctx.strokeStyle = 'rgba(255,246,150,1)'; ctx.lineWidth = 12; line();
   assert.notEqual(word()[1], 6, 'the line\'s CORE is wide enough but not faint: it stays a hard stroke');
+  // A GRADIENT ALONG THE LINE IS A GLOW TOO (operator, 2026-09-22: "fix the banding during the energy pulse too"): the
+  // pulse paints the halo wire-yellow to white-hot along its length. Faint all the way along: soft, from the atlas,
+  // no stencil. With one strong stop it is a core, and stays a hard stroke through the stencil as before.
+  const before = ctx.stats.stencils;
+  const faint = ctx.createLinearGradient(0, 0, 200, 0); faint.addColorStop(0, 'rgba(255,225,40,0.22)'); faint.addColorStop(1, 'rgba(255,255,215,0.22)');
+  ctx.strokeStyle = faint; ctx.lineWidth = 30; line();
+  assert.equal(ctx.stats.stencils, before, 'a faint gradient halo: no stencil');
+  { const c = gl.calls.filter((x) => x[0] === 'bufferSubData').at(-1)[3]; assert.equal(c[8], 6, 'soft and emissive'); assert.ok(c[5] >= 0, 'and it carries its ramp\'s row'); }
+  const strong = ctx.createLinearGradient(0, 0, 200, 0); strong.addColorStop(0, 'rgba(255,225,40,0.22)'); strong.addColorStop(1, 'rgba(255,255,215,1)');
+  ctx.strokeStyle = strong; line();
+  assert.equal(ctx.stats.stencils, before + 1, 'a gradient that is strong anywhere is a core: hard, stencilled');
   ctx.softStrokeMin = 0;
   assert.equal(ctx.softStrokeMin, 0);
   // the shader fades it, and reads the three flags apart
