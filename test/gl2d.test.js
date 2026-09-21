@@ -657,6 +657,60 @@ test('the price line\'s halo on WebGL is a GLOW: soft across the pen, round over
   assert.match(d3, /priceLine\(ctx, view, opts\.axes\); if \(ctx\.gl2d === true\) ctx\.softStrokeMin = 0;/);
 });
 
+test('a quad drawn by its own shader, live: in paint order, emissive, and false where it cannot run', () => {
+  const gl = stubGl(), ctx = createGl2d(fakeCanvas(), { gl });
+  const glsl = 'uniform vec4 uA; vec4 shade(vec2 uv) { return vec4(uv, uA.x, 1.0); }';
+  ctx.fillStyle = '#123'; ctx.fillRect(0, 0, 10, 10);
+  ctx.setTransform(2, 0, 0, 2, 5, 7);
+  assert.equal(ctx.shade({ glsl, x: 10, y: 20, w: 30, h: 40, uniforms: { uA: [1, 2, 3, 4], uT: 0.5 } }), true);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillRect(0, 0, 5, 5); ctx.flush();
+  const iRect = gl.calls.findIndex((c) => c[0] === 'drawArrays'), iQuad = gl.calls.findIndex((c) => c[0] === 'drawArrays' && c[3] === 6 && gl.calls.indexOf(c) > iRect);
+  assert.ok(iRect >= 0 && iQuad > iRect, 'what was batched before it is drawn before it');
+  const q = gl.calls.find((c) => c[0] === 'uniform2fv' && c[1] === 'uQ[0]')[2];
+  assert.deepEqual([...q], [25, 47, 85, 47, 85, 127, 25, 127], 'the quad\'s corners through the transform of the moment');
+  assert.ok(gl.calls.some((c) => c[0] === 'uniform4f' && c[1] === 'uA' && c[5] === 4));
+  assert.ok(gl.calls.slice(iQuad).some((c) => c[0] === 'drawArrays'), 'and the batch goes on after it');
+  const n = gl.calls.filter((c) => c[0] === 'createProgram').length;
+  ctx.shade({ glsl, x: 0, y: 0, w: 1, h: 1 }); assert.equal(gl.calls.filter((c) => c[0] === 'createProgram').length, n, 'compiled once');
+  const bad = stubGl(); let k = 0; bad.__ret.getShaderParameter = () => ++k <= 2;
+  const ctx2 = createGl2d(fakeCanvas(), { gl: bad });
+  assert.equal(ctx2.shade({ glsl, x: 0, y: 0, w: 1, h: 1 }), false);
+  assert.equal(ctx2.shade({ glsl, x: 0, y: 0, w: 1, h: 1 }), false, 'once and for all: the caller draws it the ordinary way');
+});
+
+test('the supernova\'s cloud on WebGL is NASA\'s: soft billows in three depths and not one line, on the operator\'s own sizes', () => {
+  // (operator, 2026-09-22, svs.gsfc.nasa.gov/20413: "the supernova really needs to be improved to look more like
+  // this source material -- It's close, but needs more work in WebGL at the very least")
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  const g = d3.slice(d3.indexOf('const NOVA_GLSL = `'), d3.indexOf('function drawSupernova('));
+  assert.equal((g.slice(19).match(/`/g) || []).length, 1, 'no backtick inside the template but its end');
+  assert.ok(!/\bfloat (patch|sample|filter|input|output|common|partition|active)\b/.test(g), 'no GLSL reserved word as a name');
+  for (const part of ['THE OUTER GAS', 'THE MAIN CLOUD', 'magenta heart']) assert.ok(g.includes(part), part);
+  // (operator, 2026-09-22: "We still aren't looking as lush and gassy as the nasa footage. What's with the blue
+  // squigly lines coming out of the explosion?") Ridged noise is creases, and sub-pixel octaves through a warp and a
+  // threshold are scribbles: neither is in it.
+  assert.ok(!/ridged\s*\(/.test(g.replace(/\/\/.*$/gm, '')), 'no ridged noise: a crease draws as a line');
+  assert.match(g, /float fbm\(vec2 p, int oct, float cell\)/, 'the noise is band-limited...');
+  assert.match(g, /smoothstep\(3\.0, 9\.0, cell\)/, '...an octave under a few pixels a cell is left out');
+  assert.match(g, /float C = uA\.x \/ 1\.25 \/ max\(fwidth\(uv\.x\), 1e-5\);[^\n]*\n\s*if \(r > 1\.0\) return/, 'measured in pixels, before any early return (a derivative)');
+  assert.ok(!/fbm\([^;]*\b[3-9]\.\d* \* w[12]/.test(g), 'and no warp strong enough to fold the field into threads');
+  assert.match(g, /vec2 q = uv \/ max\(uA\.x, 1e-3\)/, 'the texture expands WITH the cloud: a remnant expands in proportion');
+  assert.match(g, /rgb = max\(mix\(vec3\(luma\), rgb, 1\.\d+\), 0\.0\);/, 'vivid: beside the film the first cut was grey');
+  assert.match(g, /return vec4\(min\(rgb, vec3\(a\)\)/, 'and held inside its own opacity (premultiplied)');
+  const sn = d3.slice(d3.indexOf('function drawSupernova('));
+  // the staging is drawSupernova's own -- the same radii and weights the blobs use -- and the blobs are the fallback
+  assert.match(sn, /uniforms: \{ uA: \[shell \/ Q, blueShell \/ Q, f,/);
+  assert.match(sn, /if \(!shaded\) \{\s*\n\s*gasCloud\(ctx, c\.x, c\.y, blueShell,/, 'where the shader cannot run, the three blob clouds as before');
+  // (operator, 2026-09-22: "fix the breakout frame next") the film's breakout is one smooth white-hot lump: in the
+  // shader it has no gaps and a tight edge while it is early, and the blob gas is kept off it
+  assert.match(g, /float holes = mix\(smoothstep\([^;]*\), 1\.0, early\);/, 'no gaps in the breakout');
+  assert.match(g, /float halo = early \* uB\.x/, 'and a glow standing off it');
+  assert.match(sn, /if \(!shadedCloud\) gasCloud\(ctx, c\.x, c\.y, R0 \* \(1\.0 \+ 2\.2 \* t\)/, 'the flash\'s white blobs are not laid over the shader\'s lump');
+  assert.match(sn, /const clear = shadedCloud \? Math\.max\(0, Math\.min\(1, \(dist - shellNow \* 0\.75\)/, 'a plume shows once it has left the lump');
+  assert.match(sn, /const pool = shaded \? 0 : 1;/, 'the pale pools made to light the blobs are not laid over the shader\'s cloud');
+  assert.match(sn, /const cool = ctx\.gl2d === true \? Math\.min\(1, t \* 1\.6\) : 0;/, 'the operator\'s white plumes stay, and cool to blue as they go');
+});
+
 test('the Galaxy sky\'s rotation speed: a setting, and a pace -- not a jump', () => {
   // (operator, 2026-09-21: "we should add a rotation slider speed for that too")
   assert.equal(DEFAULTS.sky.galaxySpin, 1, 'the shipped turn in fifteen minutes');

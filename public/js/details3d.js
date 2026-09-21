@@ -25,6 +25,7 @@ import { formGlAttach, formGlSupported } from './formgl.js';
 import { drawGalaxyFlight } from './galflight.js';
 import { createGl2d, gl2dSupported } from './gl2d.js';
 import { loadSettings } from './settings.js';
+import { boltShape, strokeLight, strokesAt, seeded } from './lightning.js';
 
 const STATE = new WeakMap();
 // The Formation's WebGL layer, one per 2D context: the GL canvas rides over the board's own
@@ -2526,6 +2527,90 @@ function plumeLayer(ctx, fx) {
   L.ctx.setTransform(m.a / 2, m.b / 2, m.c / 2, m.d / 2, m.e / 2, m.f / 2);
   return L;
 }
+// THE SUPERNOVA'S DEBRIS CLOUD AS A SHADER (operator, 2026-09-22, with NASA's animation open -- svs.gsfc.nasa.gov/20413:
+// "the supernova really needs to be improved to look more like this source material -- It's close, but needs more
+// work in WebGL at the very least"). I pulled the film and looked at it frame by frame. What it has that a heap
+// of soft round blobs cannot: FINE CONTINUOUS TURBULENCE -- smoke, at every scale -- in three depths of colour:
+//   OUTER GAS flung ahead, soft deep-blue billows (the first cut drew this as RIDGED noise -- thin bright creases --
+//     and the operator asked what the blue squiggly lines were: there is no ridged noise in it now);
+//   a BODY, a full lumpy volume, white-hot cyan at the breakout (the film's 13-16 s: a ball plainly not round),
+//     then lavender and violet, the tops of its puffs lit;
+//   a MAGENTA HEART deep inside it, with the pulsar at the middle.
+// The texture EXPANDS WITH THE CLOUD (a remnant expands in proportion: every part keeps its place in the whole),
+// and churns slowly on the clock. Every size, weight and moment here is drawSupernova's own -- the shell radii,
+// `bright`, the blue shell's fade, the heart's rise -- so what the operator settled about how big it is, how
+// thin ("reads as gas the chart shows through") and how long it lingers still holds. Only what DRAWS it changed.
+const NOVA_GLSL = `
+uniform vec4 uA;     // x: the main shell's radius, y: the blue shell's, as shares of the quad's half-side; z: f, how far through the expansion; w: a seed
+uniform vec4 uB;     // x: bright, y: the blue shell's brightness, z: the heart's rise (0..1), w: the clock (s)
+uint pcg(uint v) { uint s = v * 747796405u + 2891336453u; uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u; return (w >> 22u) ^ w; }
+float h2(vec2 i) { ivec2 c = ivec2(i); uint n = (uint(c.x) * 1597334677u) ^ (uint(c.y) * 3812015801u); n ^= n >> 16; n *= 0x7feb352du; n ^= n >> 15; n *= 0x846ca68bu; n ^= n >> 16; return float(n >> 8) / 16777216.0; }
+float vn(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0); return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), u.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), u.x), u.y); }
+const mat2 ROT = mat2(0.8, 0.6, -0.6, 0.8);
+// BAND-LIMITED: 'cell' is how many PIXELS one cell of the first octave covers, and an octave whose cells are under
+// about six pixels is left out (faded, not cut). The cloud is a hundred pixels across on the Markets board and six
+// hundred on a wall display: without this the small one is five octaves of sub-pixel noise, which through a warp
+// and a threshold draws as thin bright scribbles -- the "blue squiggly lines" were that as much as the ridges.
+float fbm(vec2 p, int oct, float cell) { float a = 0.5, s = 0.0, tot = 0.0; for (int k = 0; k < 6; k++) { if (k >= oct) break; float w = a * (k == 0 ? 1.0 : smoothstep(3.0, 9.0, cell)); s += w * vn(p); tot += w; p = ROT * p * 2.03 + 17.3; a *= 0.5; cell /= 2.03; } return s / max(tot, 1e-4); }
+vec4 shade(vec2 uv) {
+  float r = length(uv);
+  float C = uA.x / 1.25 / max(fwidth(uv.x), 1e-5);                    // pixels to one unit of q (before any early return: a derivative)
+  if (r > 1.0) return vec4(0.0);
+  float f = uA.z, seed = uA.w * 37.0, t = uB.w;
+  // LUSH AND GASSY, AND NOT ONE LINE IN IT (operator, 2026-09-22: "We still aren't looking as lush and gassy as the
+  // nasa footage. What's with the blue squigly lines coming out of the explosion?"). The lines were mine: the flame
+  // shell was RIDGED noise, whose whole character is thin bright creases -- right for lightning, wrong for an
+  // explosion. The film's cloud is soft thick VOLUME: billows, with lit tops, its colour changing through its depth.
+  // So: no ridged() anywhere below. Billows are fbm through TWO warps (smoke's look); the cloud is a full volume,
+  // not a thin shell; colour is a function of DEPTH INTO IT, bent by the billows so it never rings; and a second
+  // field lights the tops of the puffs.
+  vec2 q = uv / max(uA.x, 1e-3) * 1.25 + seed;                       // the cloud's own coordinates: it expands in proportion
+  vec2 w1 = vec2(fbm(q * 0.85 + vec2(0.0, t * 0.045), 4, C / 0.85), fbm(q * 0.85 + vec2(5.2, 1.3 - t * 0.04), 4, C / 0.85)) - 0.5;
+  vec2 w2 = vec2(fbm(q * 1.7 + 2.2 * w1 + vec2(t * 0.03, 2.0), 4, C / 1.7), fbm(q * 1.7 + 2.2 * w1 + vec2(8.3, -t * 0.03), 4, C / 1.7)) - 0.5;
+  float billow = fbm(q * 1.35 + 1.8 * w2, 5, C / 1.35);                          // 0..1, soft, puffy
+  float puff = fbm(q * 2.4 + 1.6 * w2 + 11.0, 4, C / 2.4);                      // a finer one: the lit tops
+  float lump = fbm(q * 0.6 + 1.5 * w1 + 4.0, 3, C / 0.6);                       // a slow one: the cloud's lumpy outline
+  float rs = r / max(uA.x, 1e-3), rb = r / max(uA.y, 1e-3);
+  float early = 1.0 - smoothstep(0.08, 0.42, f);                       // the breakout: a white-hot lumpy ball
+  // THE MAIN CLOUD: a full volume to its lumpy edge, puffy toward the rim and solid toward the middle
+  float edgeR = 0.78 + 0.55 * lump;
+  // THE BREAKOUT (the film's 13-16 s; operator, 2026-09-22: "fix the breakout frame next"): ONE SMOOTH LUMP, plainly
+  // not round, white-hot to a crisp cyan rim, a blue glow standing off it. It was the blob plumes' grainy grey ball.
+  // So while it is early the edge is tight, there are no gaps in it, and it is solid.
+  float inside = 1.0 - smoothstep(edgeR - mix(0.30, 0.10, early), edgeR + mix(0.10, 0.04, early), rs);
+  float holes = mix(smoothstep(0.20, 0.52, billow + 0.60 * (1.0 - rs)), 1.0, early);   // gaps open only out near the rim, and only later
+  float aMain = inside * mix(holes, 1.0, 0.45 * (1.0 - smoothstep(0.0, 0.7, rs))) * (0.86 + 0.14 * early) * uB.x;
+  // depth into the cloud, bent by the billows: magenta heart, violet-lavender body, cyan-blue out at the rim
+  float depth = clamp(rs / max(edgeR, 0.3) + 0.55 * (billow - 0.5) + 0.2 * (puff - 0.5), 0.0, 1.3);
+  vec3 heartC = vec3(1.00, 0.16, 0.60), bodyC = mix(vec3(0.62, 0.50, 1.00), vec3(0.50, 0.24, 0.98), smoothstep(0.2, 0.9, f));
+  vec3 rimC = mix(vec3(0.20, 0.42, 1.00), vec3(0.32, 0.92, 1.00), 1.0 - smoothstep(0.0, 0.6, f));   // cyan at first, electric blue later
+  float heartIn = uB.z * (1.0 - smoothstep(0.10, 0.50, depth));
+  vec3 col = mix(bodyC, rimC, smoothstep(0.55, 0.98, depth));
+  col = mix(col, heartC, heartIn);
+  // the lit tops of the puffs: toward white, tinted by where they are
+  float lit = smoothstep(0.42, 0.85, puff) * (0.35 + 0.65 * billow);
+  col = mix(col, mix(vec3(1.0, 0.86, 0.95), vec3(0.86, 1.0, 1.0), smoothstep(0.3, 0.9, depth)), 0.55 * lit);
+  float rimE = smoothstep(edgeR - 0.34, edgeR - 0.02, rs);                                               // toward the lump's own edge
+  vec3 hotC = mix(vec3(1.0, 1.0, 1.0), vec3(0.45, 0.96, 1.0), rimE * rimE);                              // white-hot, cyan only at the rim
+  hotC = mix(hotC, vec3(0.80, 0.97, 1.0), 0.22 * (1.0 - billow) * (1.0 - rimE));                         // the faintest mottling: a surface, not a sticker
+  col = mix(col, hotC, early);
+  // THE OUTER GAS, flung ahead of the cloud: the same soft billows, thinner, deep blue -- haze, never lines
+  float outer = (1.0 - smoothstep(0.55 + 0.45 * lump, 1.02 + 0.35 * lump, rb)) * smoothstep(0.30, 0.78, billow * 0.75 + 0.45 * puff);
+  float aOut = outer * 0.62 * uB.y * (1.0 - 0.6 * early);
+  // the glow standing off the breakout: smooth, deep blue, following the lump's outline, gone as the cloud opens
+  float halo = early * uB.x * 0.55 * (1.0 - smoothstep(edgeR, edgeR + 1.1, rs)) * smoothstep(edgeR - 0.2, edgeR, rs);
+  vec3 outC = mix(vec3(0.06, 0.16, 0.95), vec3(0.22, 0.62, 1.00), 0.6 * lit + 0.4 * (1.0 - smoothstep(0.0, 0.5, f)));
+  // back to front: the outer gas, then the cloud over it
+  vec3 rgb = outC * aOut; float a = aOut;
+  rgb = rgb * (1.0 - halo) + vec3(0.16, 0.50, 1.0) * halo; a = a + halo * (1.0 - a);
+  rgb = rgb * (1.0 - aMain) + col * aMain; a = a + aMain * (1.0 - a);
+  a *= 1.0 - smoothstep(0.90, 1.0, r);                                // (the quad's own edge is never seen)
+  rgb *= 1.0 - smoothstep(0.90, 1.0, r);
+  float luma = dot(rgb, vec3(0.30, 0.55, 0.15));
+  rgb = max(mix(vec3(luma), rgb, 1.35), 0.0);                         // vivid: beside the film the first cut was grey
+  return vec4(min(rgb, vec3(a)) * step(0.001, a), a);
+}`;
+
 function drawSupernova(ctx, view, lw) {
   const fx = view.fx;
   if (!fx || fx.kind !== 'flare') return;
@@ -2561,6 +2646,7 @@ function drawSupernova(ctx, view, lw) {
   const cool = Math.max(0, Math.min(1, (u - 0.14) / 0.86));
   const rc = cool < 0.3 ? mixc([255, 255, 255], [150, 195, 255], cool / 0.3) : mixc([150, 195, 255], [175, 110, 255], (cool - 0.3) / 0.7);
   const rcs = rc.join(',');
+  let shadedCloud = false, shellNow = 0;                 // (the GL renderer's shader cloud drew this frame, and how big)
   // --- ignition: a white nebula, not a ball (operator, 2026-09-15: "Don't use a white ball visual
   // at the beginning of the animation. Use white nebula effects"): a small cloud of white gas
   // gathering and brightening round the star, blue-shifting as the blast nears
@@ -2600,41 +2686,61 @@ function drawSupernova(ctx, view, lw) {
     // SMOOTH (operator, 2026-09-15: "We see too much of the radial texture. Lets try to smoothen
     // that up"): more and larger blobs at a lower weight, barely stretched, so they melt into one
     // another instead of reading as radial streaks
-    gasCloud(ctx, c.x, c.y, blueShell, f, now, fx.seed + 31337, blueBright * 0.32, [150, 195, 255], grad, disc, 140, [70, 110, 220], (front, ff, H) => {
-      const t = Math.min(1, ff / 0.5);
-      return [Math.round(215 - 65 * t), Math.round(235 - 40 * t), 255].map((v, i) => Math.round(v * (0.75 + 0.25 * front) + (i === 2 ? 0 : 0)));
-    }, 0.85, 1.25);
-    // THIN, NOT SOLID (2026-09-15, the Kiosk: "far too much solid white"): overlapping discs sum
-    // toward opaque however faint each is -- 320 blobs saturated, and 170 at a third still did --
-    // so the cloud is ninety blobs at an eighth of the weight, which peaks near half opacity at the
-    // centre and reads as gas the chart shows through
-    gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright * 0.17, rc, grad, disc, 220, [60, 30, 120], (front, ff, H) => {
-      // SOONER (operator, 2026-09-15: "we need more of the third stage purple and violet nebula
-      // becoming prominent as it starts the blink phase"): the patches turn violet between a tenth
-      // and four tenths of the run, so the cloud is mostly purple by the time the pulsar wakes
-      const start = 0.1 + 0.3 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.2));   // when this patch turns violet
-      const white = [225, 235, 255], violet = [170, 105, 255], deep = [95, 45, 170];   // blue-white, not solid white (2026-09-15)
-      const c1 = white.map((v, i) => v + (violet[i] - v) * on);
-      const shade = 0.55 + 0.45 * front;
-      return c1.map((v, i) => Math.round(deep[i] + (v - deep[i]) * shade));
-    }, 0.85, 1.25);
-    if (f > 0.2) {
-      // the violet heart, sooner and heavier (the same request): rising from a fifth of the run,
-      // full by the blink, and a second wider violet cloud behind it that keeps growing
-      const inner = Math.min(1, (f - 0.2) / 0.18);
-      gasCloud(ctx, c.x, c.y, shell * 0.7, f, now, fx.seed + 777, bright * 0.3 * inner, [160, 90, 255], grad, disc, 90, [60, 25, 130], null, 0.9, 1.25);
-      gasCloud(ctx, c.x, c.y, shell * 1.05, f, now, fx.seed + 778, bright * 0.16 * inner, [175, 115, 255], grad, disc, 90, [70, 30, 140], null, 1.1, 1.3);
+    // ON THE GL RENDERER THE CLOUD IS ONE SHADER QUAD (NOVA_GLSL, above): the same radii, the same weights, the
+    // same moments -- fine turbulence where the blobs below are soft discs. Where it cannot run, the blobs.
+    const Q = Math.max(shell, blueShell) * 1.6;
+    const inner0 = f > 0.2 ? Math.min(1, (f - 0.2) / 0.18) : 0;
+    const shaded = ctx.gl2d === true && typeof ctx.shade === 'function' && ctx.shade({
+      glsl: NOVA_GLSL, x: c.x - Q, y: c.y - Q, w: Q * 2, h: Q * 2,
+      uniforms: { uA: [shell / Q, blueShell / Q, f, (fx.seed % 97) + 1], // (the BLOB blue cloud thins to nothing early -- the operator's "as the blue clouds continue to disperse ahead"
+      // -- but the film's blue tendrils are there to the last frame, dispersed and dim: never under 0.55 of the cloud)
+      uB: [bright, Math.max(0.55 * bright, Math.min(1, blueBright / Math.max(0.001, gf))), inner0, now / 1000] },
+    });
+    if (!shaded) {
+      gasCloud(ctx, c.x, c.y, blueShell, f, now, fx.seed + 31337, blueBright * 0.32, [150, 195, 255], grad, disc, 140, [70, 110, 220], (front, ff, H) => {
+        const t = Math.min(1, ff / 0.5);
+        return [Math.round(215 - 65 * t), Math.round(235 - 40 * t), 255].map((v, i) => Math.round(v * (0.75 + 0.25 * front) + (i === 2 ? 0 : 0)));
+      }, 0.85, 1.25);
+      // THIN, NOT SOLID (2026-09-15, the Kiosk: "far too much solid white"): overlapping discs sum
+      // toward opaque however faint each is -- 320 blobs saturated, and 170 at a third still did --
+      // so the cloud is ninety blobs at an eighth of the weight, which peaks near half opacity at the
+      // centre and reads as gas the chart shows through
+      gasCloud(ctx, c.x, c.y, shell, f, now, fx.seed, bright * 0.17, rc, grad, disc, 220, [60, 30, 120], (front, ff, H) => {
+        // SOONER (operator, 2026-09-15: "we need more of the third stage purple and violet nebula
+        // becoming prominent as it starts the blink phase"): the patches turn violet between a tenth
+        // and four tenths of the run, so the cloud is mostly purple by the time the pulsar wakes
+        const start = 0.1 + 0.3 * H(11), on = Math.max(0, Math.min(1, (ff - start) / 0.2));   // when this patch turns violet
+        const white = [225, 235, 255], violet = [170, 105, 255], deep = [95, 45, 170];   // blue-white, not solid white (2026-09-15)
+        const c1 = white.map((v, i) => v + (violet[i] - v) * on);
+        const shade = 0.55 + 0.45 * front;
+        return c1.map((v, i) => Math.round(deep[i] + (v - deep[i]) * shade));
+      }, 0.85, 1.25);
+      if (f > 0.2) {
+        // the violet heart, sooner and heavier (the same request): rising from a fifth of the run,
+        // full by the blink, and a second wider violet cloud behind it that keeps growing
+        const inner = Math.min(1, (f - 0.2) / 0.18);
+        gasCloud(ctx, c.x, c.y, shell * 0.7, f, now, fx.seed + 777, bright * 0.3 * inner, [160, 90, 255], grad, disc, 90, [60, 25, 130], null, 0.9, 1.25);
+        gasCloud(ctx, c.x, c.y, shell * 1.05, f, now, fx.seed + 778, bright * 0.16 * inner, [175, 115, 255], grad, disc, 90, [70, 30, 140], null, 1.1, 1.3);
+      }
     }
+    shadedCloud = !!shaded; shellNow = shell;
     // and the interior glow: the cloud lit from within
-    softStops(ctx, c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.1 * bright).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.05 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
+    // (the shader's cloud carries its own light: the pale pools below, made to give the BLOBS a glow, washed it to grey)
+    const pool = shaded ? 0 : 1;
+    softStops(ctx, c.x, c.y, shell * 0.8, [[0, `rgba(${rcs},${(0.1 * bright * pool).toFixed(3)})`], [0.6, `rgba(${rcs},${(0.05 * bright * pool).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
     // the shock band at the cloud's leading edge, soft, in the cloud's colour
     if (u < 0.6) {
       const fr = (u - 0.14) / 0.46, r = R0 * 4.5 * (1 - Math.pow(1 - fr, 2.2));
-      softStops(ctx, c.x, c.y, r, [[0, 'rgba(235,240,255,0)'], [0.7, `rgba(235,240,255,${(0.05 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(240,245,255,${(0.14 * (1 - fr) * gf).toFixed(3)})`]]);
-      band(r, R0 * (0.3 + 0.6 * (1 - fr)), rcs, 0.4 * (1 - fr) * gf);
+      // (with the shader's cloud the shock is a thin CYAN ring, as the film's breakout rim is -- the grey-white disc
+      // that stood in for it filled the whole cloud with haze)
+      if (shaded) band(r, R0 * (0.18 + 0.3 * (1 - fr)), '110,235,255', 0.5 * (1 - fr) * gf);
+      else {
+        softStops(ctx, c.x, c.y, r, [[0, 'rgba(235,240,255,0)'], [0.7, `rgba(235,240,255,${(0.05 * (1 - fr) * gf).toFixed(3)})`], [1, `rgba(240,245,255,${(0.14 * (1 - fr) * gf).toFixed(3)})`]]);
+        band(r, R0 * (0.3 + 0.6 * (1 - fr)), rcs, 0.4 * (1 - fr) * gf);
+      }
     }
     // a wide pool of the cloud's colour on everything near
-    softStops(ctx, c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.08 * bright).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
+    softStops(ctx, c.x, c.y, shell * 1.9, [[0, `rgba(${rcs},${(0.08 * bright * pool).toFixed(3)})`], [1, `rgba(${rcs},0)`]]);
   }
   // --- the breakout: the whole picture goes white and comes back
   if (u >= 0.12 && u < 0.4) {
@@ -2667,7 +2773,8 @@ function drawSupernova(ctx, view, lw) {
     // white gas in the initial explosion"): the dense cloud at the flash, and the plumes of
     // white gas thrown from it in every direction (below), each its own cloud flying outward on
     // its own speed and growing as it goes, the fast ones out ahead and thinning first
-    gasCloud(ctx, c.x, c.y, R0 * (1.0 + 2.2 * t), t, now, fx.seed + 999, 0.1 * f, [255, 255, 255], grad, disc, 80, [200, 210, 240], null, 0.9, 1.25);
+    // (not over the shader's cloud: eighty grey-white blobs on a smooth white lump are the grain in it)
+    if (!shadedCloud) gasCloud(ctx, c.x, c.y, R0 * (1.0 + 2.2 * t), t, now, fx.seed + 999, 0.1 * f, [255, 255, 255], grad, disc, 80, [200, 210, 240], null, 0.9, 1.25);
     // (no lens flare here: its turning rays were the "opening rotating glints" the operator had
     // taken out on 2026-09-15; the white-out alone is the breakout)
   }
@@ -2693,7 +2800,19 @@ function drawSupernova(ctx, view, lw) {
       const reach = R0 * (0.6 + 9 * t) * sp, ease = 1 - Math.exp(-2.2 * t);
       const px = c.x + Math.cos(ang) * reach * ease, py = c.y + Math.sin(ang) * 0.75 * reach * ease;
       const shell = R0 * (0.5 + 2.8 * t) * (0.7 + 0.6 * H(3));
-      gasCloud(pc, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.09 * g * (1 - 0.3 * sp), [245, 248, 255], pgrad, pdisc, 10, [180, 195, 235], null, 1.3, 1.3);
+      // THE PLUMES ARE THE OPERATOR'S ("white gas in the initial explosion ... disperse further out and linger") and
+      // they stay. But over the shader's vivid cloud, plumes that stay WHITE as they thin read as grey smoke beside
+      // it -- and in the film what is flung furthest out is blue. On the GL renderer they leave white and COOL to
+      // blue as they go, so late on they are the film's outer wisps and not a haze.
+      const cool = ctx.gl2d === true ? Math.min(1, t * 1.6) : 0;
+      const hot = [245, 248, 255].map((v, i) => Math.round(v + ([70, 140, 255][i] - v) * cool));
+      const cold = [180, 195, 235].map((v, i) => Math.round(v + ([30, 70, 220][i] - v) * cool));
+      // ...and a plume is seen once it has LEFT the shader's lump, not while it is still inside it: they are painted
+      // over the cloud, and a hundred and twenty-eight of them piled on the breakout made a smooth white ball grainy
+      const dist = Math.hypot(px - c.x, (py - c.y) / 0.75);
+      const clear = shadedCloud ? Math.max(0, Math.min(1, (dist - shellNow * 0.75) / (shellNow * 0.5))) : 1;
+      if (clear <= 0) continue;
+      gasCloud(pc, px, py, shell, t, now, fx.seed + 5000 + k * 131, 0.09 * g * (1 - 0.3 * sp) * clear, hot, pgrad, pdisc, 10, cold, null, 1.3, 1.3);
     }
     if (layer) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layer.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height); ctx.restore(); }
   }
@@ -2775,21 +2894,68 @@ function drawBall(ctx, view, lw) {
     [0.68, `rgba(160,205,255,${(0.1 * flick).toFixed(3)})`],
     [1, 'rgba(160,200,255,0)'],
   ], 26);
+  // THE LIGHTNING (operator, 2026-09-22: "we need to dramatically improve the lightning effect for the lightning
+  // ball", after volcanic lightning over Fuego). What was here drew four to seven six-point zig-zags and
+  // re-randomised them EVERY FRAME, which at sixty frames a second is fuzz: no channel lasted long enough to
+  // be seen. lightning.js has the model -- a channel that HOLDS ITS SHAPE while its brightness slams on,
+  // re-strikes and dies; tortuous at every scale; forking, the forks petering out; several alive at once
+  // and out of step. Here it is given somewhere to strike and drawn: a wide violet glow, a pale sheath, a
+  // white core, each fork thinner and fainter than its parent. On the GL renderer the glow is a soft stroke
+  // and all of it is emissive, so the bloom lights the board round every stroke; on the 2D canvas the same
+  // channels are plain strokes.
   const z0 = b.z - 0.9;
-  const bolts = 4 + ((Math.random() * 4) | 0);
-  for (let i = 0; i < bolts; i++) {
-    const end = P(Math.round(b.x + (Math.random() - 0.5) * 7), Math.round(b.y + (Math.random() - 0.5) * 7), z0);
-    const pts = [c];
-    for (let s = 1; s < 5; s++) {
-      const f = s / 5;
-      pts.push({ x: c.x + (end.x - c.x) * f + (Math.random() - 0.5) * U * 1.1, y: c.y + (end.y - c.y) * f + (Math.random() - 0.5) * U * 1.1 });
+  const now = view.now ?? 0, seed = (view.fx?.seed ?? 1) >>> 0;
+  // how far a stroke may reach, in grid units -- capped by the board's width, so on the Kiosk's small panels
+  // the storm stays a storm round the ball and does not fill the panel (the supernova's lesson)
+  const reach = boundedRadius(22, 0.46, view.fx?.gridW ?? 44);
+  const alive = strokesAt(now, seed, 5);
+  let surge = 0;
+  const soft = ctx.gl2d === true;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const k of alive) {
+    const light = strokeLight(k.age, k.life, k.seed);
+    if (light < 0.04) continue;
+    surge = Math.max(surge, light);
+    // where THIS firing strikes: a cell near the ball, fixed for the stroke's life (its seed is the firing's)
+    const r = seeded(k.seed ^ 0x9e3779b9);
+    // (most strike out to the middle distance; one firing in four is a LONG one, right across the board)
+    const ang = r() * Math.PI * 2, dist = reach * (r() < 0.25 ? 0.85 + 0.15 * r() : 0.3 + 0.4 * Math.sqrt(r()));
+    const end = P(Math.round(b.x + Math.cos(ang) * dist), Math.round(b.y + Math.sin(ang) * dist), z0);
+    // (the shape is built in the BALL'S frame and moved to where the ball is now: it travels with the ball
+    // through its life rather than being left behind or redrawn)
+    const shape = boltShape(k.seed, 0, 0, end.x - c.x, end.y - c.y, { rough: 0.2, forks: 6, depth: 2 });
+    const A = Math.min(1, light);
+    // THE MAIN CHANNEL IS A BLINDING BAR AND ITS FORKS ARE HAIRS (the footage the operator sent: Pecos Hank's
+    // strikes). The first cut drew every channel a hairline with a faint glow, and over a board of bright
+    // cubes the storm was a few cracks. So the widths are in CELLS of the board, not in board hairlines (lw is
+    // about half a pixel; a cell is what the ball itself is sized in, so a small Kiosk panel gets a small storm): the main channel a fat white core in a wide lavender glow, a fork a fraction of
+    // it by the SQUARE of its weight -- thin and dim beside its parent, as they are -- and the glow is two
+    // soft strokes, the outer one very wide and faint, which with the bloom is the light the channel throws.
+    const k0 = U / Math.max(1e-6, lw) / 15;                  // (the numbers below are pixels at a 15 px cell)
+    for (const ch of shape) {
+      const pts = [];
+      for (let i = 0; i < ch.pts.length; i += 2) pts.push({ x: c.x + ch.pts[i], y: c.y + ch.pts[i + 1] });
+      const w = ch.weight, thin = ch.level === 0 ? 1 : w * w * 1.6, dim = ch.level === 0 ? 1 : 0.35 + 0.65 * w;
+      // (every stroke of a bolt is SOFT on the GL renderer, the core too: a beam with a hot middle, and no
+      // stencil pass -- as hard translucent polylines the sheaths and cores were ninety passes a frame)
+      if (soft) { ctx.softStrokeMin = lw * 1e-6; ctx.softStrokeAny = true; }
+      stroke(pts, k0 * 64 * thin, `rgba(120,96,255,${(0.16 * A * dim).toFixed(3)})`);        // the light it throws
+      stroke(pts, k0 * 26 * thin, `rgba(150,128,255,${(0.34 * A * dim).toFixed(3)})`);       // the lavender glow
+      stroke(pts, k0 * 11 * thin, `rgba(196,186,255,${(0.38 * A * dim).toFixed(3)})`);
+      stroke(pts, k0 * 5.0 * thin, `rgba(226,228,255,${Math.min(1, 0.95 * A * dim).toFixed(3)})`);   // the sheath
+      stroke(pts, k0 * 2.4 * thin, `rgba(255,255,255,${Math.min(1, light * dim).toFixed(3)})`);      // the core
+      if (soft) { ctx.softStrokeMin = 0; ctx.softStrokeAny = false; }
     }
-    pts.push(end);
-    stroke(pts, 5, 'rgba(110,180,255,0.18)');
-    stroke(pts, 1.8, 'rgba(170,220,255,0.7)');
-    stroke(pts, 0.8, 'rgba(255,255,255,0.95)');
-    ctx.fillStyle = 'rgba(200,235,255,0.5)';
-    ctx.beginPath(); ctx.arc(end.x, end.y, 0.35 * U, 0, Math.PI * 2); ctx.fill();
+    // where it lands: a flare on the cell, as bright as the stroke is at this instant
+    softStops(ctx, end.x, end.y, U * (1.6 + 2.6 * A), [[0, `rgba(255,255,255,${Math.min(1, 1.0 * A).toFixed(3)})`], [0.12, `rgba(240,240,255,${(0.9 * A).toFixed(3)})`], [0.35, `rgba(180,170,255,${(0.42 * A).toFixed(3)})`], [1, 'rgba(130,110,255,0)']], 18);
+  }
+  // THE BALL SURGES WITH ITS STROKES, and throws light: what a stroke does to an ash cloud it does to the
+  // air round the ball -- a wide faint flash, gone as fast as the stroke is
+  if (surge > 0.05) {
+    const S = Math.min(1.3, surge);
+    // (wide: a stroke lights the whole neighbourhood for the instant it lives, as it does a sky)
+    softStops(ctx, c.x, c.y, R * (2.6 + 2.2 * S), [[0, `rgba(190,185,255,${(0.22 * S).toFixed(3)})`], [0.4, `rgba(140,125,255,${(0.10 * S).toFixed(3)})`], [1, 'rgba(120,100,255,0)']], 26);
+    softStops(ctx, c.x, c.y, R * 0.55, [[0, `rgba(255,255,255,${Math.min(1, 0.85 * S).toFixed(3)})`], [1, 'rgba(225,230,255,0)']], 12);
   }
   ctx.lineWidth = lw;
 }

@@ -49,6 +49,7 @@ import {
 // The tetris drop points the real rules at the board instead of a well: pure, and already
 // tested in its own right, so the piece shapes and their rotations are not reinvented here.
 import { PIECES, cellsOf } from './tetris.js';
+import { boltShape, strokeLight } from './lightning.js';
 
 // a cheap deterministic 0..1 from an integer. details3d.js keeps its own copy for the price-line
 // pulse; duplicating six lines is better than widening that module's public surface for a helper.
@@ -831,11 +832,22 @@ defineAgent('stormball', {
     const arcs = [];
     // ...a fifth quieter again ("Reduce ball lighting electricity chance by 20%"), then 15% more
     // ("increase the ball lightning strike chance by +15%"): 2.5 / 1.15
-    const every = line?.length > 1 ? 2.17 : 1;
+    // ...AND THEN (operator, 2026-09-22, of the price board): "Ball Lightning effect should throw off fucking
+    // lightning bolts in market view". The three tonings-down above were of the OLD bolt -- a fat zig-zag
+    // flailing at 60 Hz -- and left the price board with a burst about every two seconds: long stretches with
+    // nothing alive at all (two of four frames sampled). With lightning.js's channel the answer is the
+    // opposite: MORE strokes, SHORTER lived -- a staccato -- and reaching further along the candles. The run
+    // there is 27.5 s, so the same step in `u` is two and a half times as long in seconds: hence the numbers.
+    const price = line?.length > 1;
+    // (0.42 at first: measured, 2-4 bolts alive at once and hardly ever none -- and the operator, the same
+    // hour: "Way too violent for the market display. It needs to shoot bolts at least half as much as it
+    // does now". 1.0 is a burst every second or so: most of the time one bolt or none, the chart always legible.)
+    const every = price ? 1.0 : 1;
+    const lifeK = price ? 0.4 : 1, reachK = price ? 1.7 : 1;
     for (let u = 0.03; u < 0.97; u += (0.016 + 0.035 * rnd()) * every) {
       const n = 1 + Math.floor(rnd() * 4);
       for (let k = 0; k < n; k++) {
-        const arc = { u0: u + rnd() * 0.01, life: 0.02 + 0.035 * rnd(), ang: rnd() * Math.PI * 2, reach: 3.5 + 8 * rnd(), seed: Math.floor(rnd() * 1e9) };
+        const arc = { u0: u + rnd() * 0.01, life: (0.02 + 0.035 * rnd()) * lifeK, ang: rnd() * Math.PI * 2, reach: (3.5 + 8 * rnd()) * reachK, seed: Math.floor(rnd() * 1e9) };
         // one strike in five flares: a lens flare blooms where it lands (operator, 2026-09-15:
         // "Consider adding the lense flare effect on occasional lightning strikes")
         if (rnd() < 0.2) arc.flare = true;
@@ -907,7 +919,7 @@ defineAgent('stormball', {
       // the block the arc strikes: the tallest cell near where it is thrown, and none if the floor is bare
       const hit = strike(p.x + Math.cos(arc.ang) * arc.reach, p.y + Math.sin(arc.ang) * arc.reach);
       if (!hit) continue;
-      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6, age, flare: !!arc.flare });
+      if (age <= 1) live.push({ to: hit, seed: arc.seed, strength: 1 - age * 0.6, age, life: arc.life, flare: !!arc.flare });
       // THE BLOCK IT TOUCHES IS ELECTRIFIED: a hard blue flare that flickers while the arc lives and
       // dies away after it -- lit through fxAt's heads, so only the cubes actually struck light up
       const flicker = 0.7 + 0.3 * Math.sin(u * 900 + arc.seed);
@@ -930,7 +942,7 @@ defineAgent('stormball', {
         const age2 = age / 1.2;
         const to = strike(from.x + Math.cos(link.ang) * link.reach, from.y + Math.sin(link.ang) * link.reach, struck);
         if (!to) break;
-        if (age2 <= 1) live.push({ from, to, seed: link.seed, strength: Math.min(1, 1.2 * (1 - age2 * 0.5)), chain: hop, age: age2 });
+        if (age2 <= 1) live.push({ from, to, seed: link.seed, strength: Math.min(1, 1.2 * (1 - age2 * 0.5)), chain: hop, age: age2, life: arc.life * 1.2 });
         const glow2 = age2 <= 1 ? 0.7 + 0.3 * Math.sin(u * 900 + link.seed) : Math.max(0, 1 - (age2 - 1) / 1.2) * 0.7;
         heads.push({ x: to.x, y: to.y, color: [200, 255, 225], alpha: Math.min(1, glow2 * 1.25), r: 2.2 });
         struck.push(to); from = to; link = link.next; hop++;
@@ -993,11 +1005,34 @@ defineAgent('stormball', {
       // a chained arc leaves the block the first one struck, not the ball
       const from = arc.from ? project(arc.from.x, arc.from.y, arc.from.z, view) : c;
       const rnd = rollFrom(arc.seed);
-      const main = bolt(from, end, 0.11, rnd);
+      // THE CHANNEL IS lightning.js's NOW (operator, 2026-09-22, of the new lightning: "not working with market
+      // view lightning effects" -- the Markets board's lightning is THIS agent, which had been left on its
+      // own older channel: sixteen segments and two or three plain forks, re-rolled every 60 ms). The same
+      // model the lightning ball draws: tortuous at every scale, shedding dendritic forks that are thin by the
+      // square of their weight. It HOLDS ITS SHAPE through a re-strike and is a new channel for the next
+      // (about every 240 ms: an arc on the price board lives over a second, and one shape held that long is
+      // a frozen wire), and its light is a stroke's -- the slam, the re-strikes, out at nothing -- on top of
+      // the flash, the bead, the sparks and the rings, which are all still here. Kept from before, because
+      // the operator asked for them: the widths come from the BALL'S radius (thin on the price board, whose
+      // ball is small: "too big and jagged"), and a chain is electric green.
+      const lifeMs = Math.max(120, (arc.life ?? 0.04) * (view.fx?.ms ?? 11000));
+      const ageMs = (arc.age ?? 0) * lifeMs;
+      const strike = Math.floor(ageMs / 240);
+      const shape = boltShape(((arc.seed >>> 0) ^ Math.imul(strike + 1, 0x9e3779b1)) >>> 0 || 1, 0, 0, end.x - from.x, end.y - from.y, { rough: 0.14, forks: 5, depth: 2 });
+      const asPts = (flat) => { const o = []; for (let i = 0; i < flat.length; i += 2) o.push({ x: from.x + flat[i], y: from.y + flat[i + 1] }); return o; };
+      const main = asPts(shape[0].pts);
+      // the stroke's own flicker within each strike, over the arc's slow fade
+      const flick = 0.55 + 0.55 * Math.min(1.3, strokeLight(ageMs - strike * 240, 240, (arc.seed ^ strike) >>> 0 || 1));
       // a chain (hop 1 or 2 from the block) is electric green, so it reads as the block discharging, not the ball
       const [halo, body, edge] = arc.chain ? ['20,200,110', '110,255,170', '215,255,235'] : ['30,120,255', '60,170,255', '140,220,255'];
-      const sz = (arc.chain ? 0.85 : 1) * R;
-      const stroke = (pts, col, w, a) => line(ctx, pts, `rgba(${col},${a.toFixed(3)})`, Math.max(lw, w));
+      // A BOLT IS SIZED BY THE BOARD, NOT BY THE BALL. It was the ball's radius, and on the price board the
+      // ball was shrunk twice, to a quarter ("still too large") -- and took its bolts down to threads with it.
+      // A cell is what everything else here is measured in; the lightning ball's bolts are sized the same way.
+      const sz = (arc.chain ? 0.85 : 1) * Math.max(R, U * 5.2);
+      const stroke = (pts, col, w, a) => line(ctx, pts, `rgba(${col},${Math.min(1, a * flick).toFixed(3)})`, Math.max(lw, w));
+      // (on the GL renderer every stroke of a channel is SOFT, the core too, and emissive: a beam in a glow)
+      const softOn = () => { if (ctx.gl2d === true) { ctx.softStrokeMin = lw * 1e-6; ctx.softStrokeAny = true; } };
+      const softOff = () => { if (ctx.gl2d === true) { ctx.softStrokeMin = 0; ctx.softStrokeAny = false; } };
       // THE FLASH (2026-09-15: "the lightning bolts still need much more visual flash and effects
       // to them"): the first fifth of an arc's life is the strike -- the halo blazes at three
       // times its weight and a white flash blooms where it lands -- then a bead of light runs the
@@ -1005,19 +1040,23 @@ defineAgent('stormball', {
       // thing settles to the steady glow. `age` is 0 at the strike and 1 at the end.
       const age = arc.age ?? (1 - arc.strength) / 0.6;
       const flash = Math.max(0, 1 - age / 0.2);
+      softOn();
+      stroke(main, halo, sz * (0.62 + 0.4 * flash), (0.16 + 0.3 * flash) * arc.strength);      // the light it throws: wide, faint
       stroke(main, halo, sz * (0.30 + 0.25 * flash), (0.28 + 0.5 * flash) * arc.strength);
       stroke(main, body, sz * 0.12, 0.6 * arc.strength);
       stroke(main, edge, sz * 0.055, 0.95 * arc.strength);
-      stroke(main, '245,252,255', sz * (0.022 + 0.02 * flash), arc.strength);
-      if (flash > 0) bloom(ctx, end.x, end.y, R * 1.6 * (1.2 - flash * 0.5), [255, 255, 255], 0.9 * flash);
+      stroke(main, '245,252,255', sz * (0.030 + 0.025 * flash), arc.strength * 1.2);
+      softOff();
+      const Rs = Math.max(R, U * 2.4);                       // (the strike's own light, sized by the board as the bolt is)
+      if (flash > 0) bloom(ctx, end.x, end.y, Rs * 1.6 * (1.2 - flash * 0.5), [255, 255, 255], 0.9 * flash);
       // the landing lights its surroundings: a hazy white pool that outlives the flash
-      if (age < 0.8) bloom(ctx, end.x, end.y, R * 2.6, [230, 242, 255], 0.35 * (1 - age / 0.8) * arc.strength);
+      if (age < 0.8) bloom(ctx, end.x, end.y, Rs * 2.6, [230, 242, 255], 0.35 * (1 - age / 0.8) * arc.strength);
       // the occasional strike flares: an anamorphic streak through the landing, four turning
       // rays, and a run of ghosts off toward the picture's middle, over the first third of the arc
       if (arc.flare && age < 0.35) lensFlare(ctx, end.x, end.y, R * 2.2, arc.chain ? [110, 255, 170] : [140, 220, 255], Math.pow(1 - age / 0.35, 1.5), view, lw);
       // the bead: a bright knot of light running the channel in the first third of the arc's life
       const run = Math.min(1, age / 0.35), bi = Math.min(main.length - 1, Math.floor(run * (main.length - 1)));
-      if (age < 0.5) bloom(ctx, main[bi].x, main[bi].y, sz * 0.22, [235, 250, 255], 0.9 * (1 - age));
+      if (age < 0.5) bloom(ctx, main[bi].x, main[bi].y, sz * 0.13, [235, 250, 255], 0.9 * (1 - age));
       // the sparks: a dozen short lines flung from the strike point, longer and fainter as they go,
       // drifting down, gone by half the arc's life
       if (age < 0.55) {
@@ -1031,19 +1070,17 @@ defineAgent('stormball', {
           line(ctx, [{ x: x0, y: y0 }, { x: x1, y: y1 }], `rgba(${edge},${(0.9 * (1 - life) * arc.strength).toFixed(3)})`, Math.max(lw, sz * 0.02));
         }
       }
-      // the branches: two or three leave the channel a third to two thirds along, at 20-45
-      // degrees, a quarter to a half of the remaining length, and fade toward their tips
-      const forks = 2 + (rnd() < 0.5 ? 1 : 0);
-      for (let f = 0; f < forks; f++) {
-        const k = Math.floor(main.length * (0.3 + 0.4 * rnd()));
-        const at = main[k], dx = end.x - at.x, dy = end.y - at.y;
-        const ang = (rnd() < 0.5 ? 1 : -1) * (0.35 + 0.45 * rnd()), len = 0.25 + 0.25 * rnd();
-        const tip = { x: at.x + (dx * Math.cos(ang) - dy * Math.sin(ang)) * len, y: at.y + (dx * Math.sin(ang) + dy * Math.cos(ang)) * len };
-        const br = bolt(at, tip, 0.14, rnd, 3);
-        stroke(br, body, sz * 0.06, 0.35 * arc.strength);
-        stroke(br, edge, sz * 0.028, 0.7 * arc.strength);
-        stroke(br, '245,252,255', sz * 0.012, 0.8 * arc.strength);
+      // the forks: the model's -- shed early, shorter, some forking again, each THIN AND DIM BY THE SQUARE of
+      // its weight beside the channel it left, and dying in the air before it reaches anything
+      softOn();
+      for (const ch of shape.slice(1)) {
+        const br = asPts(ch.pts), w2 = ch.weight * ch.weight * 1.7, dim = 0.35 + 0.65 * ch.weight;
+        stroke(br, halo, sz * 0.22 * w2, 0.22 * dim * arc.strength);
+        stroke(br, body, sz * 0.085 * w2, 0.4 * dim * arc.strength);
+        stroke(br, edge, sz * 0.04 * w2, 0.75 * dim * arc.strength);
+        stroke(br, '245,252,255', Math.max(lw * 0.8, sz * 0.02 * w2), 0.9 * dim * arc.strength);
       }
+      softOff();
       // ...and a ring bursting from the block a chain lands on, the moment it lands
       if (arc.chain && arc.age < 0.6) {
         const f = arc.age / 0.6;

@@ -195,6 +195,7 @@ public/              index.html, login.html, css/, js/{app,panels,charts,fmt}.js
                      arrivals are born there, departures end there.
   (page #space)      the viewer at window size + being-built and tip panels
                      (renderBlockSpace in mining.js)
+  js/lightning.js    a bolt's shape from a seed, a stroke's life from the clock (pure; the lightning ball)
   js/gl2d.js         the WebGL renderer: the viewer's Canvas 2D subset on WebGL2 (appearance.renderer)
   js/goggles.js      the 2D treemap maps (squarify) that the 3D viewer sits beside
   js/x86.js, dospc.js, soundcard.js, dosworker.js, dosaudio.js, dosio.js, dosgame.js, wolf3d.js, doom.js, quake.js
@@ -463,6 +464,36 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   energy pulse paints the halo along its length; it used to fall to the stencil, banded, while it ran).
   Found by zooming in, isolated by switching the glow off
   (`softGlow: false`, which the parity check also passes).
+- **Lightning is a CHANNEL THAT HOLDS ITS SHAPE** (`public/js/lightning.js`, pure; the lightning ball draws it).
+  The ball used to re-randomise six-point zig-zags every frame -- at 60 fps that is fuzz, not lightning.
+  `boltShape(seed, A, B)`: midpoint displacement (tortuous at every scale) plus forks that leave the parent
+  early, shorter, and thin by the SQUARE of their weight. `strokesAt(now, seed)`: five slots out of step, each
+  firing a NEW bolt, alight ~a fifth of a second, then dark -- a function of the clock, no state, no
+  Math.random. `strokeLight(age, life)`: the return stroke's slam, one to three re-strikes, out at nothing.
+  Drawn in CELLS (a small Kiosk board gets a small storm; reach capped by `boundedRadius`), a fat white core
+  in a wide lavender glow with a flare where it lands; on WebGL every stroke of a bolt is SOFT
+  (`softStrokeAny`: the core too -- as hard translucent polylines they were ~90 stencil passes a frame, now 7)
+  and emissive. One firing in four is a long one. A single captured frame can be a DARK GAP (about 8% are):
+  look at several instants (`gl-compare.mjs --at 0.30` / `0.37` / `0.52`) before deciding nothing is drawn.
+- **The Markets board's lightning is the STORM BALL** (agents.js `stormball`; settings calls it "Ball lightning"),
+  not the lightning ball, and it draws lightning.js's channels too -- held through each ~240 ms re-strike, soft and
+  emissive on WebGL -- keeping its own flash, bead, sparks, rings and green chains. Its bolts are sized by the BOARD
+  (`max(R, 5.2 U)`), not the ball's radius: on the price board the ball was shrunk twice and took its bolts down to
+  threads. RATE, the operator's history: half the block board's ("tone down ... 50%"), then far more ("should throw
+  off fucking lightning bolts in market view"), then the same hour "Way too violent ... at least half as much":
+  `every = 1.0`, under half the block board's bolts a second, no bolt alive 25-75% of the time (a test holds both).
+- **The supernova's debris cloud is a live SHADER on WebGL** (`ctx.shade`: a quad drawn every frame by its own GLSL,
+  in paint order, emissive; `NOVA_GLSL`). From NASA's film itself, frame by frame (svs.gsfc.nasa.gov/20413 publishes
+  the mp4; `ffmpeg -ss` pulls frames): soft deep-blue OUTER GAS, a BODY that breaks out as one smooth
+  white-hot lump with a cyan rim and then opens into lavender-violet billows with lit tops, a MAGENTA HEART -- a full
+  volume that expands WITH the cloud. **NO RIDGED NOISE, AND THE NOISE IS BAND-LIMITED** (operator: "What's with the
+  blue squigly lines"): ridges are creases, and on Markets the cloud is ~100 px across, where five octaves are
+  sub-pixel and draw as scribbles through a warp and a threshold -- `fbm(p, oct, cell)` fades an octave out under
+  3-9 px a cell (`fwidth`, taken before any early return). On GL the flash's white blobs are skipped and a plume is
+  drawn only once it has left the lump (`clear`), or they grain the breakout. Blobs can never be that. Staging (radii, `bright`, the heart's rise) is drawSupernova's own, so the operator's
+  sizes and timing hold; the blobs are the fallback. Beside the film the first cuts were GREY: mixed toward white,
+  under the old white glow pools (`pool = shaded ? 0 : 1`), a grey shock disc (a thin cyan ring on GL), and the
+  operator's white plumes thinning to smoke (they cool to blue on GL). Put ours ABOVE the film's frame to judge.
 - **The frame rate** (`appearance.showFps`, `options.showFps`): top right of any board that has tiles,
   drawn through the frame's own context so it is the same on both renderers. It counts frames THIS
   canvas painted in the last second (a resting board under a sky reads about 30 by design; a parked
@@ -617,7 +648,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1383 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1391 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -946,7 +977,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1383 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1391 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

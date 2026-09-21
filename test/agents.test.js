@@ -492,5 +492,18 @@ test('on the price board the light cycles ride in from the left and the right, a
   // ...and half as often as on the block board, per unit of the run (operator: "Tone down chance of emitting lightning by 50%")
   const onCandles = AGENTS.stormball.build({ st: { axes: { y: 3.7, line } }, seed: 3, W, H, tiles, tops: null, rnd: rng(3) }).arcs.length;
   const onBlocks = AGENTS.stormball.build({ st: {}, seed: 3, W, H, tiles, tops: null, rnd: rng(3) }).arcs.length;
-  assert.ok(onCandles < onBlocks * 0.65 && onCandles > onBlocks * 0.35, `about half the bursts on the candles (${onCandles} against ${onBlocks})`);
+  // ...measured in bolts a SECOND, which is what anybody sees. The run on the price board is 27.5 s against 11 s,
+  // and a bolt there lives 0.4 as long. History: half the block board's count a run ("tone down ... by 50%"), when
+  // the bolt was a fat flailing zig-zag; then, with lightning.js's channel, far MORE ("should throw off fucking
+  // lightning bolts in market view") -- 2-4 alive at once, never none; then, the same hour, "Way too violent for
+  // the market display. It needs to shoot bolts at least half as much as it does now". Where it rests: well under
+  // half the block board's rate a second, and the chart clear of bolts for a good part of the time.
+  const perSecCandles = onCandles / 27.5, perSecBlocks = onBlocks / 11;
+  assert.ok(perSecCandles < perSecBlocks * 0.5 && perSecCandles > perSecBlocks * 0.2, `under half the block board's bolts a second on the candles (${perSecCandles.toFixed(1)} against ${perSecBlocks.toFixed(1)})`);
+  {
+    const a2 = AGENTS.stormball.build({ st: { axes: { y: 3.7, line } }, seed: 3, W, H, tiles, tops: null, rnd: rng(3) });
+    let none = 0, on = 0, most = 0;
+    for (let u = 0.05; u < 0.95; u += 0.002) { const f2 = AGENTS.stormball.frame(a2, u).stormball; if (f2.at.x < 0 || f2.at.x > W) continue; on++; const k = f2.arcs.filter((q) => !q.chain).length; if (!k) none++; most = Math.max(most, k); }
+    assert.ok(none / on > 0.25 && none / on < 0.75, `not violent, not dead: no bolt alive in ${(100 * none / on).toFixed(0)}% of frames`);
+  }
 });

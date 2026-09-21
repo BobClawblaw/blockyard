@@ -34,6 +34,13 @@ All notable changes to this project are documented here. The format follows
 - **The Galaxy sky's nebulae are gas on WebGL**: billowing clouds with filaments, hollows and a second hue,
   and ragged dust lanes that darken what is under them, where Software stacks translucent ellipses. And a
   *Rotation speed* slider for the spiral, from still to a turn in under a minute.
+- **The lightning ball's lightning** is lightning: channels that hold their shape while they slam on, re-strike
+  and die, tortuous at every scale, forking into hair-thin branches, several alive at once, with a flare where
+  each lands. On WebGL they glow. (It was a handful of zig-zags re-randomised every frame.)
+- **The supernova on WebGL** is after NASA's animation frame by frame: a smooth white-hot breakout with a cyan
+  rim, opening into lavender and violet billows round a magenta heart, soft blue gas ahead of it: a continuous
+  volume of gas where there were soft blobs. **Ball
+  lightning** on Markets throws the same real bolts as the lightning ball.
 - **Show frame rate** (Settings, Appearance): frames painted in the last second, the processor's
   milliseconds a frame and the renderer, top right of every 3D board.
 

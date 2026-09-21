@@ -1161,6 +1161,7 @@ export function createGl2d(canvas, hooks = {}) {
   };
   // the atlas gradient the next vertices carry (G.row < 0: none): device -> gradient coordinate is affine
   let emissive = 2;                                         // 2 or 0: rides in the disc word (see the shader)
+  let softAny = false;                                      // ...and however strong they are (ctx.softStrokeAny): a bolt's white-hot core is a beam, not a ruled line
   let softMin = 0;                                          // strokes this wide or wider, and faint, are drawn SOFT (0: none) -- ctx.softStrokeMin
   const G = { row: -1, a: 0, b: 0, c: 0, d: 0, e: 0, f: 0 };
   const vert = (x, y, col) => {
@@ -1542,7 +1543,7 @@ export function createGl2d(canvas, hooks = {}) {
     };
     // (the soft glow, for a plain colour and for a gradient alike: see where it is called)
     const softGlow = (strength, packed) => {
-      if (!(softMin > 0 && S.lineWidth >= softMin && strength < 0.4)) return false;
+      if (!(softMin > 0 && S.lineWidth >= softMin && (softAny || strength < 0.4))) return false;
       direct = true; col = packed;
       const softTri = (x0, y0, l0, x1, y1, l1, x2, y2, l2) => {
         room(3);                                             // (first: making room may draw the batch, and the index below must be taken after)
@@ -1901,6 +1902,63 @@ void main() {
     }
   }
 
+  // ---- A QUAD DRAWN BY ITS OWN SHADER, LIVE (2026-09-22; operator, of the supernova against NASA's animation:
+  // "It's close, but needs more work in WebGL at the very least"). bake() runs a shader once into a texture;
+  // this runs one EVERY FRAME, inside one quad of the picture, in paint order with everything else -- for the
+  // things a heap of soft discs can never be: fine continuous turbulence, a cloud whose every pixel is worked
+  // out. shade({ glsl, x, y, w, h, uniforms }): the quad in user space; glsl defines
+  //     vec4 shade(vec2 uv)      // uv runs -1..1 across the quad; the colour PREMULTIPLIED
+  // and declares its own uniforms. What it draws throws light (the bloom). False where it cannot run: the
+  // caller draws the thing its ordinary way.
+  const shaders = new Map(); let shadeBroken = false;
+  function shade(spec) {
+    if (lost || shadeBroken) return false;
+    try {
+      let sp = shaders.get(spec.glsl);
+      if (!sp) {
+        const sh = (type, src) => { const x = gl.createShader(type); gl.shaderSource(x, src); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x) || 'shade shader'); return x; };
+        const pr = gl.createProgram();
+        gl.attachShader(pr, sh(gl.VERTEX_SHADER, `#version 300 es
+uniform vec2 uView; uniform vec2 uQ[4];
+out vec2 vUv;
+void main() {
+  int v = gl_VertexID;
+  int k = (v == 0 || v == 3) ? 0 : (v == 1) ? 1 : (v == 2 || v == 4) ? 2 : 3;
+  vUv = vec2((k == 1 || k == 2) ? 1.0 : -1.0, (k >= 2) ? 1.0 : -1.0);
+  vec2 p = uQ[k];
+  gl_Position = vec4(p.x * 2.0 / uView.x - 1.0, 1.0 - p.y * 2.0 / uView.y, 0.0, 1.0);
+}`));
+        gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `#version 300 es\nprecision highp float;\nprecision highp int;\n${spec.glsl}\nin vec2 vUv;\nlayout(location=0) out vec4 o;\nlayout(location=1) out vec4 oE;\nvoid main() { o = shade(vUv); oE = o; }`));
+        gl.linkProgram(pr);
+        if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr) || 'shade link');
+        sp = { pr, locs: new Map() };
+        shaders.set(spec.glsl, sp);
+      }
+      prepare(); drawBatch();
+      if (rec) rec.bad = true;
+      const loc = (n) => { let l = sp.locs.get(n); if (l === undefined) { l = gl.getUniformLocation(sp.pr, n); sp.locs.set(n, l); } return l; };
+      const m = P.m, { x, y, w, h } = spec;
+      const q = new Float32Array(8);
+      [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].forEach(([ux, uy], i) => { q[2 * i] = m[0] * ux + m[2] * uy + m[4]; q[2 * i + 1] = m[1] * ux + m[3] * uy + m[5]; });
+      gl.useProgram(sp.pr); gl.bindVertexArray(null);
+      gl.uniform2f(loc('uView'), canvas.width, canvas.height);
+      gl.uniform2fv(loc('uQ[0]'), q);
+      for (const [name, v] of Object.entries(spec.uniforms || {})) {
+        const l = loc(name);
+        if (l == null) continue;
+        if (typeof v === 'number') gl.uniform1f(l, v); else if (v.length === 2) gl.uniform2f(l, v[0], v[1]); else if (v.length === 3) gl.uniform3f(l, v[0], v[1], v[2]); else gl.uniform4f(l, v[0], v[1], v[2], v[3]);
+      }
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      stats.draws++;
+      gl.useProgram(prog); gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      return true;
+    } catch (e) {
+      shadeBroken = true;
+      try { gl.useProgram(prog); gl.bindVertexArray(vao); gl.bindBuffer(gl.ARRAY_BUFFER, vbo); hooks.onCompileError?.(`shade: ${String(e?.message ?? e)}`); } catch { /* as above */ }
+      return false;
+    }
+  }
+
   // ---- images and text
   const textures = new WeakMap();
   const textureOf = (src) => {
@@ -2025,7 +2083,7 @@ void main() {
     quadraticCurveTo(cx, cy, x, y) { P.quadraticCurveTo(cx, cy, x, y); },
     bezierCurveTo(ax, ay, bx, by, x, y) { P.bezierCurveTo(ax, ay, bx, by, x, y); },
     createPath() { return new GlPath(); },
-    fill, stroke, retained, starField, particles, bake,
+    fill, stroke, retained, starField, particles, bake, shade,
     fillRect(x, y, w, h) { const keep = P.subs, cur = P.cur; P.subs = []; P.cur = null; P.rect(x, y, w, h); fill(); P.subs = keep; P.cur = cur; },
     clearRect,
     createLinearGradient(x0, y0, x1, y1) { return new GlGradient('linear', [x0, y0, x1, y1]); },
@@ -2040,6 +2098,8 @@ void main() {
      * switches it off round the cubes, whose colours are data. */
     get emissive() { return emissive === 2; }, set emissive(v) { emissive = v ? 2 : 0; },
     /** Strokes at least this wide (user units) and faint (alpha under 0.4) are drawn as SOFT glows; 0 turns it off. GL only. */
+    /** With softStrokeMin set: soft strokes however STRONG they are (a lightning bolt's core), not only faint glows. */
+    get softStrokeAny() { return softAny; }, set softStrokeAny(v) { softAny = v === true; },
     get softStrokeMin() { return softMin; }, set softStrokeMin(v) { const n = Number(v); softMin = Number.isFinite(n) && n > 0 ? n : 0; },
     get bloom() { return bloom; }, set bloom(v) { const n = Number(v); bloom = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0; },
     /** Give the context back: buffers, textures, the listener. The canvas is the caller's. */
