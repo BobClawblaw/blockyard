@@ -101,16 +101,28 @@ test('the storm: several slots out of step, dark gaps, a NEW bolt each firing, a
   assert.ok(held > 100, 'frame after frame, the same channel');
 });
 
-test('the lightning ball draws it: no dice a frame, sized by the board, soft and emissive on WebGL', () => {
+test('ball lightning (the storm ball) draws it -- bolts, crackle and all -- and the plasma ball throws none', () => {
+  // THE NAMES WERE CROSSED (operator, 2026-09-22: "We need to remove the lightning effect on the plasma ball. Only the
+  // lightning ball should emit lightning bolts", and, shown the storm ball: "this is the one that needs to emit
+  // lightning bolts, not the other effect"). His lightning ball is agents.js's storm ball; his plasma ball is `ball`.
   const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  const ball = d3.slice(d3.indexOf('function drawBall(ctx, view, lw) {'), d3.indexOf('function drawGround('));
-  const bolts = ball.slice(ball.indexOf('// THE LIGHTNING'));
-  assert.ok(bolts.length > 1500);
-  assert.ok(!/Math\.random/.test(bolts.replace(/\/\/.*$/gm, '')), 'the bolts ask Math.random for nothing: a channel re-rolled every frame is fuzz');
-  assert.match(bolts, /strokesAt\(now, seed, 5\)/); assert.match(bolts, /boltShape\(k\.seed,/); assert.match(bolts, /strokeLight\(k\.age, k\.life, k\.seed\)/);
-  assert.match(bolts, /const reach = boundedRadius\(\d+, 0\.\d+, view\.fx\?\.gridW/, 'its reach is capped by the board\'s width (the Kiosk\'s panels are small)');
-  assert.match(bolts, /const k0 = U \/ Math\.max\(1e-6, lw\) \/ \d+;/, 'and its widths are in cells, so a small board has a small storm');
-  assert.match(bolts, /ctx\.softStrokeAny = true;/); assert.match(bolts, /ctx\.softStrokeMin = 0; ctx\.softStrokeAny = false;/);
-  // a fork is thin by the SQUARE of its weight beside the main channel
-  assert.match(bolts, /thin = ch\.level === 0 \? 1 : w \* w \* [\d.]+/);
+  const ball = d3.slice(d3.indexOf('function drawBall(ctx, view, lw) {'), d3.indexOf('function drawGround(')).replace(/\/\/.*$/gm, '');
+  assert.ok(!/boltShape|strokesAt|strokeLight/.test(ball), 'the plasma ball draws no lightning');
+  assert.ok(!/from '\.\/lightning\.js'/.test(d3), 'and details3d.js no longer needs lightning.js at all');
+  const ag = readFileSync(new URL('../public/js/agents.js', import.meta.url), 'utf8');
+  const storm = ag.slice(ag.indexOf("defineAgent('stormball'"), ag.indexOf('BATCH FIVE'));
+  assert.match(storm, /boltShape\(\(\(arc\.seed >>> 0\)/, 'its arcs are lightning.js channels, on either board');
+  assert.match(storm, /for \(let u = 0\.03; u < 0\.97;/, 'and they are built for the block board as for the price board');
+  // THE CRACKLE AND THE SPARKS (the same day: "we need to improve the energy crackles on it, as well as whatever those
+  // dots are that are orbiting it"): held tendrils from the clock, not fourteen hairs re-rolled from Math.random a frame
+  const crackle = storm.slice(storm.indexOf('// THE CRACKLE'));
+  assert.ok(!/Math\.random/.test(crackle.replace(/\/\/.*$/gm, '')), 'no dice a frame in the crackle');
+  assert.match(crackle, /for \(const k of strokesAt\(now, fseed, \d+\)\)/); assert.match(crackle, /boltShape\(k\.seed, x0, y0, x1, y1,/);
+  assert.match(crackle, /strokeLight\(k\.age, k\.life, k\.seed\)/);
+  // sized by the ball, which is sized by the board's unit: a small Kiosk panel gets a small crackle
+  assert.match(crackle, /len = R \* \(/);
+  const sparks = storm.slice(storm.indexOf('// THE SPARKS IN ORBIT'), storm.indexOf('// THE CRACKLE'));
+  assert.match(sparks, /const PLANES = \[\[/, 'three tilted orbits');
+  assert.match(sparks, /if \(back && Math\.hypot\(head\.x - c\.x, head\.y - c\.y\) < R \* 1\.0\) return;/, 'a spark behind the ball is not seen');
+  assert.match(storm, /sparkAt\(i, true\);[\s\S]*\/\/ the ball:[\s\S]*sparkAt\(i, false\);/, 'the far ones under the ball, the near ones over it');
 });

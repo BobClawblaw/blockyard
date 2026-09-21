@@ -464,7 +464,16 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   energy pulse paints the halo along its length; it used to fall to the stencil, banded, while it ran).
   Found by zooming in, isolated by switching the glow off
   (`softGlow: false`, which the parity check also passes).
-- **Lightning is a CHANNEL THAT HOLDS ITS SHAPE** (`public/js/lightning.js`, pure; the lightning ball draws it).
+- **TWO BALLS, AND THE NAMES ARE CROSSED.** The operator's "lightning ball" / "ball lightning" is the STORM BALL
+  (agents.js `stormball`, on both boards): it throws the bolts. His "plasma ball" is `ball` (details3d.js `drawBall`,
+  Block space only, Settings now says "Plasma ball"): the sphere tracing the grid, and since 2026-09-22 it throws NO
+  bolts ("Only the lightning ball should emit lightning bolts ... this is the one", with a picture of the storm
+  ball). The first day's lightning work went on the wrong one. When he names a ball, ask for a screenshot.
+  The storm ball's CRACKLE is held tendrils from the clock (`strokesAt`, twelve slots, forked, a bead at the tip) --
+  it was fourteen hairs re-rolled from Math.random every frame -- and its orbiting dots are sixteen sparks on three
+  tilted orbits with tails, passing behind the ball and in front of it. On Markets its run starts and ends beyond the
+  PANEL's edge, measured from `st.lastFit` (`pw` is in it for this): the Markets canvas is far wider than its board.
+- **Lightning is a CHANNEL THAT HOLDS ITS SHAPE** (`public/js/lightning.js`, pure; the storm ball draws it; what follows about the "lightning ball" drawing it in cells was `drawBall`, whose bolts are gone).
   The ball used to re-randomise six-point zig-zags every frame -- at 60 fps that is fuzz, not lightning.
   `boltShape(seed, A, B)`: midpoint displacement (tortuous at every scale) plus forks that leave the parent
   early, shorter, and thin by the SQUARE of their weight. `strokesAt(now, seed)`: five slots out of step, each

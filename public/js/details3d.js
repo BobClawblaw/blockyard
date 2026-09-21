@@ -25,7 +25,6 @@ import { formGlAttach, formGlSupported } from './formgl.js';
 import { drawGalaxyFlight } from './galflight.js';
 import { createGl2d, gl2dSupported } from './gl2d.js';
 import { loadSettings } from './settings.js';
-import { boltShape, strokeLight, strokesAt, seeded } from './lightning.js';
 
 const STATE = new WeakMap();
 // The Formation's WebGL layer, one per 2D context: the GL canvas rides over the board's own
@@ -2840,9 +2839,9 @@ function drawSupernova(ctx, view, lw) {
   ctx.lineWidth = lw;
 }
 
-// THE LIGHTNING BALL, over the cubes: the grid line it has traced burning behind it and cooling
-// over 16 units, a plasma ball of one pale gradient with a white-hot heart, and bolts jumping from it
-// to the grid crossings round it, new every frame. Plain rgba fills and strokes only.
+// THE PLASMA BALL (`ball`), over the cubes: the grid line it has traced burning behind it and cooling
+// over 16 units, a plasma ball of one pale gradient with a white-hot heart. It throws no bolts: those are
+// the storm ball's (agents.js). Plain rgba fills and strokes only.
 function drawBall(ctx, view, lw) {
   const b = view.fx?.ball;
   if (!b) return;
@@ -2894,69 +2893,12 @@ function drawBall(ctx, view, lw) {
     [0.68, `rgba(160,205,255,${(0.1 * flick).toFixed(3)})`],
     [1, 'rgba(160,200,255,0)'],
   ], 26);
-  // THE LIGHTNING (operator, 2026-09-22: "we need to dramatically improve the lightning effect for the lightning
-  // ball", after volcanic lightning over Fuego). What was here drew four to seven six-point zig-zags and
-  // re-randomised them EVERY FRAME, which at sixty frames a second is fuzz: no channel lasted long enough to
-  // be seen. lightning.js has the model -- a channel that HOLDS ITS SHAPE while its brightness slams on,
-  // re-strikes and dies; tortuous at every scale; forking, the forks petering out; several alive at once
-  // and out of step. Here it is given somewhere to strike and drawn: a wide violet glow, a pale sheath, a
-  // white core, each fork thinner and fainter than its parent. On the GL renderer the glow is a soft stroke
-  // and all of it is emissive, so the bloom lights the board round every stroke; on the 2D canvas the same
-  // channels are plain strokes.
-  const z0 = b.z - 0.9;
-  const now = view.now ?? 0, seed = (view.fx?.seed ?? 1) >>> 0;
-  // how far a stroke may reach, in grid units -- capped by the board's width, so on the Kiosk's small panels
-  // the storm stays a storm round the ball and does not fill the panel (the supernova's lesson)
-  const reach = boundedRadius(22, 0.46, view.fx?.gridW ?? 44);
-  const alive = strokesAt(now, seed, 5);
-  let surge = 0;
-  const soft = ctx.gl2d === true;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  for (const k of alive) {
-    const light = strokeLight(k.age, k.life, k.seed);
-    if (light < 0.04) continue;
-    surge = Math.max(surge, light);
-    // where THIS firing strikes: a cell near the ball, fixed for the stroke's life (its seed is the firing's)
-    const r = seeded(k.seed ^ 0x9e3779b9);
-    // (most strike out to the middle distance; one firing in four is a LONG one, right across the board)
-    const ang = r() * Math.PI * 2, dist = reach * (r() < 0.25 ? 0.85 + 0.15 * r() : 0.3 + 0.4 * Math.sqrt(r()));
-    const end = P(Math.round(b.x + Math.cos(ang) * dist), Math.round(b.y + Math.sin(ang) * dist), z0);
-    // (the shape is built in the BALL'S frame and moved to where the ball is now: it travels with the ball
-    // through its life rather than being left behind or redrawn)
-    const shape = boltShape(k.seed, 0, 0, end.x - c.x, end.y - c.y, { rough: 0.2, forks: 6, depth: 2 });
-    const A = Math.min(1, light);
-    // THE MAIN CHANNEL IS A BLINDING BAR AND ITS FORKS ARE HAIRS (the footage the operator sent: Pecos Hank's
-    // strikes). The first cut drew every channel a hairline with a faint glow, and over a board of bright
-    // cubes the storm was a few cracks. So the widths are in CELLS of the board, not in board hairlines (lw is
-    // about half a pixel; a cell is what the ball itself is sized in, so a small Kiosk panel gets a small storm): the main channel a fat white core in a wide lavender glow, a fork a fraction of
-    // it by the SQUARE of its weight -- thin and dim beside its parent, as they are -- and the glow is two
-    // soft strokes, the outer one very wide and faint, which with the bloom is the light the channel throws.
-    const k0 = U / Math.max(1e-6, lw) / 15;                  // (the numbers below are pixels at a 15 px cell)
-    for (const ch of shape) {
-      const pts = [];
-      for (let i = 0; i < ch.pts.length; i += 2) pts.push({ x: c.x + ch.pts[i], y: c.y + ch.pts[i + 1] });
-      const w = ch.weight, thin = ch.level === 0 ? 1 : w * w * 1.6, dim = ch.level === 0 ? 1 : 0.35 + 0.65 * w;
-      // (every stroke of a bolt is SOFT on the GL renderer, the core too: a beam with a hot middle, and no
-      // stencil pass -- as hard translucent polylines the sheaths and cores were ninety passes a frame)
-      if (soft) { ctx.softStrokeMin = lw * 1e-6; ctx.softStrokeAny = true; }
-      stroke(pts, k0 * 64 * thin, `rgba(120,96,255,${(0.16 * A * dim).toFixed(3)})`);        // the light it throws
-      stroke(pts, k0 * 26 * thin, `rgba(150,128,255,${(0.34 * A * dim).toFixed(3)})`);       // the lavender glow
-      stroke(pts, k0 * 11 * thin, `rgba(196,186,255,${(0.38 * A * dim).toFixed(3)})`);
-      stroke(pts, k0 * 5.0 * thin, `rgba(226,228,255,${Math.min(1, 0.95 * A * dim).toFixed(3)})`);   // the sheath
-      stroke(pts, k0 * 2.4 * thin, `rgba(255,255,255,${Math.min(1, light * dim).toFixed(3)})`);      // the core
-      if (soft) { ctx.softStrokeMin = 0; ctx.softStrokeAny = false; }
-    }
-    // where it lands: a flare on the cell, as bright as the stroke is at this instant
-    softStops(ctx, end.x, end.y, U * (1.6 + 2.6 * A), [[0, `rgba(255,255,255,${Math.min(1, 1.0 * A).toFixed(3)})`], [0.12, `rgba(240,240,255,${(0.9 * A).toFixed(3)})`], [0.35, `rgba(180,170,255,${(0.42 * A).toFixed(3)})`], [1, 'rgba(130,110,255,0)']], 18);
-  }
-  // THE BALL SURGES WITH ITS STROKES, and throws light: what a stroke does to an ash cloud it does to the
-  // air round the ball -- a wide faint flash, gone as fast as the stroke is
-  if (surge > 0.05) {
-    const S = Math.min(1.3, surge);
-    // (wide: a stroke lights the whole neighbourhood for the instant it lives, as it does a sky)
-    softStops(ctx, c.x, c.y, R * (2.6 + 2.2 * S), [[0, `rgba(190,185,255,${(0.22 * S).toFixed(3)})`], [0.4, `rgba(140,125,255,${(0.10 * S).toFixed(3)})`], [1, 'rgba(120,100,255,0)']], 26);
-    softStops(ctx, c.x, c.y, R * 0.55, [[0, `rgba(255,255,255,${Math.min(1, 0.85 * S).toFixed(3)})`], [1, 'rgba(225,230,255,0)']], 12);
-  }
+  // NO BOLTS HERE (operator, 2026-09-22: "We need to remove the lightning effect on the plasma ball. Only the
+  // lightning ball should emit lightning bolts" -- and, shown the other one, "this is the one that needs to emit
+  // lightning bolts, not the other effect"). THE NAMES ARE CROSSED: this effect is `ball`, which Settings used to
+  // call "Lightning ball", and the operator calls it the PLASMA ball; what he calls the lightning ball is the storm
+  // ball in agents.js ("Ball lightning"), which draws lightning.js's channels on both boards. This one is the
+  // sphere, the grid line burning behind it, and its charge trail.
   ctx.lineWidth = lw;
 }
 
@@ -5050,7 +4992,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   //   pinhole: grid x 0..bw -> canvas 0..pw, grid y -bh..0 -> canvas ph..0 (row 0 on the floor)
   //   oblique: the board centred, the sphere filling the rest (obliqueFit)
   ctx.setTransform(fit.scaleX, 0, 0, fit.scaleY, fit.tx, fit.ty);
-  frame.__fit = { scaleX: fit.scaleX, scaleY: fit.scaleY, tx: fit.tx, ty: fit.ty, ph, unit: opts.unit };
+  frame.__fit = { scaleX: fit.scaleX, scaleY: fit.scaleY, tx: fit.tx, ty: fit.ty, ph, pw, unit: opts.unit };
   ctx.lineWidth = Math.max(0.5, 0.6 / Math.min(fit.scaleX, fit.scaleY));
   ctx.lineJoin = 'round';
 

@@ -49,7 +49,7 @@ import {
 // The tetris drop points the real rules at the board instead of a well: pure, and already
 // tested in its own right, so the piece shapes and their rotations are not reinvented here.
 import { PIECES, cellsOf } from './tetris.js';
-import { boltShape, strokeLight } from './lightning.js';
+import { boltShape, strokeLight, strokesAt, seeded } from './lightning.js';
 
 // a cheap deterministic 0..1 from an integer. details3d.js keeps its own copy for the price-line
 // pulse; duplicating six lines is better than widening that module's public surface for a helper.
@@ -823,8 +823,22 @@ defineAgent('stormball', {
     // from the centre and the trail seven behind, and at 8 the run ended with the glow still
     // on the chart and cut off dead
     const margin = st?.axes?.line?.length > 1 ? 20 : Math.max(W, H) * 0.55 + 6;
-    const from = { x: leftToRight ? -margin : W + margin, y: H * (0.22 + 0.56 * rnd()) };
-    const to = { x: leftToRight ? W + margin : -margin, y: H * (0.22 + 0.56 * rnd()) };
+    // THE PRICE BOARD'S PANEL IS WIDER THAN ITS BOARD NOW (operator, 2026-09-22: "On the markets page, the ball
+    // lightning needs to start off screen, and disappear off-screen. Right now it just appears and disappears in the
+    // markets view"). The note above was true when the view was fitted to the board's width; since the Markets
+    // canvas took the whole display the chart sits in the middle of it with a third of the panel clear on either
+    // side, and twenty units past the board's edge is in plain view. So the margin is MEASURED, per side, from the
+    // frame's own fit (how many units of panel lie beyond each edge), plus the board's depth (the oblique camera
+    // leans a deep row sideways) and the corona's reach and the trail's. No fit yet (a test, a first frame): as before.
+    let mL = margin, mR = margin;
+    const fit = st?.lastFit;
+    if (st?.axes?.line?.length > 1 && fit && fit.pw > 0 && fit.scaleX > 0 && fit.unit > 0) {
+      const per = fit.scaleX * fit.unit, clear = H + 20;
+      mL = Math.max(margin, fit.tx / per + clear);
+      mR = Math.max(margin, (fit.pw - fit.tx) / per - W + clear);
+    }
+    const from = { x: leftToRight ? -mL : W + mR, y: H * (0.22 + 0.56 * rnd()) };
+    const to = { x: leftToRight ? W + mR : -mL, y: H * (0.22 + 0.56 * rnd()) };
     const weave = { amp: 1.5 + 2 * rnd(), cycles: 1 + rnd() * 1.5, phase: rnd() * Math.PI * 2 };
     // bursts of arcs: a few a second, one to three at a time, each alive for a moment -- half as
     // often on the price board (operator, 2026-09-15: "Tone down chance of emitting lightning by
@@ -1134,28 +1148,78 @@ defineAgent('stormball', {
     // the corona: wide, electric, breathing
     const breath = 1 + 0.06 * Math.sin(t * 5.3) + 0.04 * Math.sin(t * 8.9);
     radial(c.x, c.y, R * 3.6 * breath, [[0, 'rgba(60,160,255,0.5)'], [0.3, 'rgba(40,120,255,0.22)'], [0.6, 'rgba(90,50,230,0.08)'], [1, 'rgba(90,50,230,0)']]);
-    // sparks in orbit: motes of light circling at their own speeds and radii, each a tiny gradient
-    for (let i = 0; i < 26; i++) {
-      const sp = 0.6 + (i % 7) * 0.23, ph = i * 2.399, rr = R * (1.5 + ((i * 37) % 11) / 11 * 2.2);
-      const ang = t * sp + ph, wob = 1 + 0.18 * Math.sin(t * 3.1 + i);
-      const x = c.x + Math.cos(ang) * rr * wob, y = c.y + Math.sin(ang) * rr * 0.55 * wob;
-      const tone = i % 3 === 0 ? '255,120,230' : i % 3 === 1 ? '120,200,255' : '200,160,255';
-      radial(x, y, Math.max(1.5, U * 0.22), [[0, `rgba(${tone},0.95)`], [0.4, `rgba(${tone},0.45)`], [1, `rgba(${tone},0)`]]);
-    }
+    // THE SPARKS IN ORBIT (operator, 2026-09-22: "we need to improve the energy crackles on it, as well as whatever
+    // those dots are that are orbiting it"). They were twenty-six flat dots in three party colours on one squashed
+    // ellipse -- "whatever those dots are" is the verdict. Now they are CHARGE CAUGHT ROUND THE BALL: sixteen sparks
+    // on three tilted orbits (an orbit seen at an angle is an ellipse; three at different angles are a sphere of
+    // them), quicker the closer in, each a white-hot point with a tail along the path it has just flown, passing
+    // BEHIND the ball -- dimmer there, hidden where the ball covers it -- and in front of it.
+    const soft = ctx.gl2d === true;
+    const softOn = () => { if (soft) { ctx.softStrokeMin = lw * 1e-6; ctx.softStrokeAny = true; } };
+    const softOff = () => { if (soft) { ctx.softStrokeMin = 0; ctx.softStrokeAny = false; } };
+    const PLANES = [[1.15, 0.35], [0.55, -0.95], [0.9, 1.9]];              // an orbit's tilt toward the eye, and its turn on the screen
+    const sparkAt = (i, back) => {
+      const h = (q) => { const v = Math.sin(i * 127.1 + q * 311.7) * 43758.5453; return v - Math.floor(v); };
+      const [inc, rot0] = PLANES[i % 3], rot = rot0 + t * 0.04 * (i % 2 ? 1 : -1);
+      const rr = R * (1.3 + 1.0 * h(1)), speed = (i % 2 ? 1 : -1) * 2.6 / Math.pow(rr / R, 1.5), a0 = t * speed + h(2) * Math.PI * 2;
+      const at = (a) => {
+        const px = Math.cos(a) * rr, py = Math.sin(a) * rr * Math.cos(inc), d = Math.sin(a) * Math.sin(inc);
+        return { x: c.x + px * Math.cos(rot) - py * Math.sin(rot), y: c.y + px * Math.sin(rot) + py * Math.cos(rot), d };
+      };
+      const head = at(a0);
+      if ((head.d < 0) !== back) return;
+      if (back && Math.hypot(head.x - c.x, head.y - c.y) < R * 1.0) return;          // behind the ball: not seen
+      const near = back ? 0.5 : 1, tw = (0.72 + 0.28 * Math.sin(t * 9 + i * 1.7)) * near;
+      const tone = i % 5 === 0 ? [255, 150, 235] : i % 2 ? [150, 215, 255] : [205, 185, 255];
+      // the tail: where it has just been, thinner and fainter going back
+      const N = 9, span = 0.95 * Math.sign(speed);
+      ctx.lineCap = 'round';
+      softOn();
+      for (let k = 0; k < N; k++) {
+        const f = 1 - k / N, p0 = at(a0 - span * (k / N)), p1 = at(a0 - span * ((k + 1) / N));
+        line(ctx, [p0, p1], `rgba(${tone[0]},${tone[1]},${tone[2]},${(0.8 * f * f * tw).toFixed(3)})`, Math.max(lw * 1.4, R * 0.075 * (0.3 + 0.7 * f) * near));
+      }
+      softOff();
+      const hr = Math.max(1.6, R * 0.13 * near);
+      radial(head.x, head.y, hr * 3, [[0, `rgba(${tone[0]},${tone[1]},${tone[2]},${(0.6 * tw).toFixed(3)})`], [1, `rgba(${tone[0]},${tone[1]},${tone[2]},0)`]]);
+      radial(head.x, head.y, hr, [[0, `rgba(255,255,255,${Math.min(1, 1.1 * tw).toFixed(3)})`], [0.45, `rgba(${tone[0]},${tone[1]},${tone[2]},${(0.8 * tw).toFixed(3)})`], [1, `rgba(${tone[0]},${tone[1]},${tone[2]},0)`]]);
+    };
+    for (let i = 0; i < 16; i++) sparkAt(i, true);
     // the ball: white-hot centre through cyan to a violet rim, one gradient
     radial(c.x, c.y, R * 1.35 * breath, [
       [0, 'rgba(255,255,255,1)'], [0.18, 'rgba(235,250,255,1)'], [0.4, 'rgba(150,225,255,0.95)'],
       [0.62, 'rgba(60,170,255,0.8)'], [0.82, 'rgba(90,80,255,0.45)'], [1, 'rgba(120,60,255,0)'],
     ]);
-    // THE CRACKLE: short filaments skittering over and just off the surface, new every frame
-    for (let i = 0; i < 14; i++) {
-      const ang = Math.random() * Math.PI * 2, r0 = R * (0.35 + 0.5 * Math.random()), r1 = R * (1.05 + 0.55 * Math.random());
-      const p = { x: c.x + Math.cos(ang) * r0, y: c.y + Math.sin(ang) * r0 };
-      const q = { x: c.x + Math.cos(ang + (Math.random() - 0.5) * 0.9) * r1, y: c.y + Math.sin(ang + (Math.random() - 0.5) * 0.9) * r1 };
-      const pts = bolt(p, q, 0.16, rollFrom(i * 7919 + 17), 3);
-      line(ctx, pts, 'rgba(90,190,255,0.55)', Math.max(lw * 1.6, R * 0.035));
-      line(ctx, pts, 'rgba(230,248,255,0.95)', Math.max(lw, R * 0.012));
+    // THE CRACKLE (the same request). It was fourteen straight-ish filaments RE-ROLLED EVERY FRAME from Math.random --
+    // at sixty frames a second that is a fuzz of hairs round the ball, the very thing lightning.js was written to
+    // replace in the bolts. Now it is a plasma globe's: tendrils that leave the white heart, hold their shape for
+    // the fifth of a second they live, flicker on the return stroke's curve, fork, and end in a bead of light
+    // in the air -- twelve slots out of step, so there are always a few and never the same few. No dice a frame.
+    const now = view.now ?? 0, fseed = ((view.fx?.seed ?? 1) * 2654435761) >>> 0;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const k of strokesAt(now, fseed, 12)) {
+      const light = strokeLight(k.age, k.life, k.seed);
+      if (light < 0.04) continue;
+      const r = seeded(k.seed ^ 0x2c1b3c6d), A = Math.min(1, light);
+      const ang = r() * Math.PI * 2, len = R * (1.5 + 1.5 * r() * r());
+      const x0 = Math.cos(ang) * R * 0.5, y0 = Math.sin(ang) * R * 0.5, bend = (r() - 0.5) * 0.9;
+      const x1 = Math.cos(ang + bend) * len, y1 = Math.sin(ang + bend) * len;
+      const shape = boltShape(k.seed, x0, y0, x1, y1, { rough: 0.24, forks: 3, depth: 1 });
+      softOn();
+      for (const ch of shape) {
+        const pts = [];
+        for (let i = 0; i < ch.pts.length; i += 2) pts.push({ x: c.x + ch.pts[i], y: c.y + ch.pts[i + 1] });
+        const w = ch.weight, thin = ch.level === 0 ? 1 : w * w * 1.5, dim = ch.level === 0 ? 1 : 0.4 + 0.6 * w;
+        line(ctx, pts, `rgba(110,120,255,${(0.22 * A * dim).toFixed(3)})`, Math.max(lw * 6, R * 0.42 * thin));
+        line(ctx, pts, `rgba(130,200,255,${(0.5 * A * dim).toFixed(3)})`, Math.max(lw * 2.8, R * 0.15 * thin));
+        line(ctx, pts, `rgba(240,250,255,${Math.min(1, light * dim).toFixed(3)})`, Math.max(lw * 1.3, R * 0.055 * thin));
+      }
+      softOff();
+      // the bead at its tip: the charge it carried, let go into the air
+      radial(c.x + x1, c.y + y1, Math.max(2, R * 0.22), [[0, `rgba(255,255,255,${Math.min(1, 0.95 * A).toFixed(3)})`], [0.35, `rgba(150,215,255,${(0.55 * A).toFixed(3)})`], [1, 'rgba(110,120,255,0)']]);
     }
+    for (let i = 0; i < 16; i++) sparkAt(i, false);
+    ctx.lineWidth = lw;
   },
 });
 

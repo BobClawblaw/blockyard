@@ -40,7 +40,9 @@ All notable changes to this project are documented here. The format follows
 - **The supernova on WebGL** is after NASA's animation frame by frame: a smooth white-hot breakout with a cyan
   rim, opening into lavender and violet billows round a magenta heart, soft blue gas ahead of it: a continuous
   volume of gas where there were soft blobs. **Ball
-  lightning** on Markets throws the same real bolts as the lightning ball.
+  lightning** throws real bolts on both boards -- channels that hold their shape, fork and re-strike -- crackles with
+  held tendrils, carries sparks in orbit, and on Markets flies in from beyond the screen's edge and out past the other.
+  The grid-tracing ball is the **Plasma ball** now and throws none.
 - **Show frame rate** (Settings, Appearance): frames painted in the last second, the processor's
   milliseconds a frame and the renderer, top right of every 3D board.
 

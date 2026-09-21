@@ -397,7 +397,7 @@ const FX_ROW = Object.freeze({
   scan: Object.freeze({ label: 'Scan line', hint: 'A UFO crosses the board in one pass while its beam pans back and forth perpendicular to its flight, to each side of the board and back, blocks under it x-rayed: a white core, soft cyan faces, raster rippling down it, a glowing pool with sparks, motes in the beam' }),
   xray: Object.freeze({ label: 'X-ray', hint: 'A front sweeps the board and everything behind it goes x-ray -- bodies to glass, edges and a raster lit -- then develops back to solid' }),
   lightcycle: Object.freeze({ label: 'Light cycles', hint: 'Two riders from opposite edges, leaving light walls, until one crashes' }),
-  ball: Object.freeze({ label: 'Lightning ball', hint: 'A plasma ball tracing the grid, throwing bolts and a dust trail' }),
+  ball: Object.freeze({ label: 'Plasma ball', hint: 'A plasma ball tracing the grid, the line it has travelled burning behind it, and a dust trail. It throws no bolts: those are Ball lightning\u2019s' }),
   pulse: Object.freeze({ label: 'Energy pulse', hint: 'The surge that runs the price line on Markets, blue behind the head' }),
   bulge: Object.freeze({ label: 'Pipe bulge', hint: 'On Markets: a glowing sphere rolls through the price line left to right, and the pipe swells around it as it passes' }),
   breathe: Object.freeze({ label: 'Breathe', hint: 'The price line breathes: three slow swells from the plain wire to the pulse\u2019s white heat and back' }),
