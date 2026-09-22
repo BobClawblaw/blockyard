@@ -15,6 +15,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { loadConfig, ROOT } from '../server/config.js';
 import { UserStore, ROLES } from '../server/auth/users.js';
+import { SessionStore } from '../server/auth/sessions.js';
 
 const cfg = loadConfig();
 // Accounts are OFF by default, so this CLI can edit a user file the running server
@@ -27,6 +28,24 @@ if (!cfg.auth.enabled) {
 }
 const file = path.join(cfg.auth.dataDir, 'users.json');
 const store = new UserStore(file, cfg.auth);
+// REVOKED, NOT JUST CHANGED (audit 2026-09-22, M2). This is the lost-password/locked-out
+// recovery tool -- which is also, unavoidably, what an operator reaches for during a
+// SUSPECTED COMPROMISE. `passwd` used to leave every existing session for the account valid
+// for up to 72h (the absolute session TTL) after the reset, with only a printed reminder to
+// "sign them out from the UI if needed" -- not a real option when the reason you're on the
+// CLI is that you don't trust the account to sign anyone out from. `/api/password` (the web
+// route for changing your own password) already revokes; this now matches it, and does the
+// same for `disable`, which had the identical gap (the web route for disabling a user does
+// revoke, at server/http/api.js -- this CLI command did not).
+const sessions = new SessionStore(path.join(cfg.auth.dataDir, 'sessions.json'), cfg.auth);
+await sessions.load();
+async function revokeSessions(username) {
+  const user = store.find(username);
+  if (!user) return 0;
+  const n = sessions.destroyForUser(user.id);
+  if (n) await sessions.save();
+  return n;
+}
 
 const [cmd, ...args] = process.argv.slice(2);
 
@@ -91,7 +110,11 @@ async function main() {
     case 'passwd': {
       const username = args[0] || await ask('username: ');
       const pw = await ask('new password (stdin, not echoed): ', { hidden: true });
-      try { await store.setPassword(username, pw); process.stdout.write(`password set for ${username}; all their sessions were left intact -- sign them out from the UI if needed\n`); }
+      try {
+        await store.setPassword(username, pw);
+        const n = await revokeSessions(username);
+        process.stdout.write(`password set for ${username}; ${n} existing session(s) signed out\n`);
+      }
       catch (err) { process.stderr.write(`${err.message}\n`); process.exitCode = 1; }
       break;
     }
@@ -105,7 +128,11 @@ async function main() {
     case 'disable':
     case 'enable': {
       const username = args[0] || await ask('username: ');
-      try { const r = await store.setDisabled(username, cmd === 'disable'); process.stdout.write(`${r.username} ${r.disabled ? 'disabled' : 'enabled'}\n`); }
+      try {
+        const r = await store.setDisabled(username, cmd === 'disable');
+        const n = cmd === 'disable' ? await revokeSessions(username) : 0;
+        process.stdout.write(`${r.username} ${r.disabled ? 'disabled' : 'enabled'}${n ? `; ${n} existing session(s) signed out` : ''}\n`);
+      }
       catch (err) { process.stderr.write(`${err.message}\n`); process.exitCode = 1; }
       break;
     }
