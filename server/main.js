@@ -7,6 +7,7 @@ import { History } from './store/history.js';
 import { AuditLog } from './store/audit.js';
 import { UserStore, randomPassword } from './auth/users.js';
 import { SessionStore, RateLimiter, LoginGuard } from './auth/sessions.js';
+import { UserSettingsStore } from './store/user-settings.js';
 import { StreamHub } from './http/sse.js';
 import { createAppServer } from './http/server.js';
 import { adminGate, adminGateLine } from './admin-gate.js';
@@ -117,6 +118,13 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   const userLoad = await app.users.load();
   app.sessions = new SessionStore(path.join(cfg.auth.dataDir, 'sessions.json'), cfg.auth);
   await app.sessions.load();
+  // PER-ACCOUNT DISPLAY SETTINGS (operator, 2026-09-22: "per-user options for storing configs
+  // on either the browser, or server ... allow per-user settings also on server side"). Beside
+  // users.json/sessions.json, not beside the shared blob (app.settingsFile, config/blockyard.json):
+  // that one is deployment config a person chose (kiosk-wide, admin-only to write); this is
+  // runtime state a specific account owns, the same category users.json/sessions.json are in.
+  app.userSettings = new UserSettingsStore(path.join(cfg.auth.dataDir, 'user-settings.json'));
+  await app.userSettings.load();
   app.guard = new LoginGuard(cfg.auth);
   app.limiter = new RateLimiter({ capacity: 120, perSec: 40 });
   // A second, separate bucket for /api/login only. LoginGuard answers "this

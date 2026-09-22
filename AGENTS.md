@@ -670,6 +670,61 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   reads as a renderer bug. A look change arriving mid-transition is parked until the board lands.
   `test/gl2d.test.js` holds the geometry and the context against a recording WebGL stub.
 
+## Current state (2026-09-22): three places to keep Display settings
+
+**Operator: "We really need to add per-user options for storing configs on either the browser, or
+server. Only admins should have the ability to store settings on servers" -- then, mid-turn, "I take
+that back. Allow per-user settings also on server side."** Before this, Display settings had exactly
+one home: the shared blob in `config/blockyard.json` (`GET`/`POST /api/settings`), admin-only to
+write once accounts exist (`configWriteAllowed`) -- right for a Kiosk on a wall, wrong for "I, a
+signed-in viewer, want my own look without changing what the Kiosk shows." Now a browser picks one
+of three, in the settings panel's new "Store settings" row above the tabs (`public/js/app.js`'s
+`drawStorage`, `public/js/settings.js`'s `settingsMode`/`setSettingsMode`, own localStorage key
+`blockyard.settingsMode`, default `'shared'` -- unchanged behaviour for anyone who never touches it):
+
+- **Shared** -- today's behaviour, unchanged. One file, every viewer of this deployment sees it,
+  admin-only to write once accounts are on.
+- **This browser** -- never leaves the device (`setSettingsPush` gets a `null` pusher; the existing
+  `blockyard.settings` localStorage cache IS the whole store, same as before `/api/settings` existed
+  at all).
+- **My account** -- `GET`/`POST /api/settings/mine`, `server/store/user-settings.js`'s
+  `UserSettingsStore`, one record per signed-in user in `data/user-settings.json` (beside
+  `users.json`/`sessions.json`, not beside the shared blob: it is account-owned runtime state, not
+  deployment config). **Open to any signed-in role, on purpose** -- the operator's own walk-back,
+  and the one place this route disagrees with the shared one. Unusable in open mode (no account to
+  key a personal record by; `ownSettingsAllowed` 403s as `accounts_disabled`), and `activeSettingsMode()`
+  in app.js quietly treats a browser stuck on 'account' from before accounts were enabled as 'shared'
+  rather than erroring.
+
+What will bite:
+
+- **The mode is meta, not a setting.** It lives outside `DEFAULTS`/`normalise()`/`PANEL` on purpose,
+  so it never needs a schema migration and never trips `test/settings.test.js`'s "every PANEL row
+  names a real setting, every setting has a control" assertion.
+  Adding a fourth store means touching `SETTINGS_MODES`, `pushFor()` and `activeSettingsMode()` in
+  app.js, and the boot's `Promise.all` -- not `DEFAULTS`.
+- **Switching modes live re-seeds from the newly active store immediately** (the click handler on
+  `#cfgStorage` in app.js), rather than waiting up to 15s for the next `refreshSettings` poll -- a
+  poll that itself is mode-aware now (`'browser'` mode polls nothing; `'account'` polls
+  `/api/settings/mine`).
+  **`seedSettings` always writes through the ONE `blockyard.settings` localStorage key**, whichever
+  mode is active -- there are not three parallel caches. That is deliberate: `loadSettings()` must
+  answer synchronously for every board paint (rule 8's chart cache, `markets.js`, `mining.js`), and
+  only one mode is ever "active" for a given browser tab at a time, so one cache is enough. What
+  changes between modes is only where the boot seeds FROM and where a save gets PUSHED TO.
+- **An account's settings record does not outlive the account.** `scripts/manage-users.js rm` calls
+  `UserSettingsStore.remove(user.id)` before `store.deleteUser`, or a reused username would silently
+  inherit a stranger's saved look. There is no HTTP route for deleting a user at all (admin suite
+  aside), so this is CLI-only; nothing else needs the same cleanup.
+- **The server still knows nothing about the schema, on either route.** `settingsBodyText()` in
+  api.js is now shared by `/api/settings` and `/api/settings/mine` -- same 256 KiB cap, same "send
+  `{ settings: {...} }` or 400" -- and neither route validates past that; `public/js/settings.js`'s
+  `normalise()` is still the only place a value is clamped.
+- Tests: `test/settings-mine.test.js` (the HTTP routes: role-open where the shared route is
+  admin-only, open-mode refusal, cross-account isolation, size cap, CSRF), `test/user-settings-store.test.js`
+  (the store class: atomic write, 0600, corrupt-file-refuses-to-load, remove), `test/settings-mode.test.js`
+  (the client-side mode functions).
+
 ## Current state (2026-09-15): DOOM
 
 **DOOM is the fourth Diversion** (operator: "I've added doom_dos to the project directory. Get DOOM
@@ -812,7 +867,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1435 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1455 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -979,8 +1034,9 @@ half-block art seams, and 256 open file descriptors on a platform that allows 25
   `data/pool-map.json` overrides it, `BLOCKYARD_POOL_MAP` overrides both.
 - **The descriptor limit.** `IndexStore` holds no file open (it kept 256+ for the life of the
   process; macOS `ulimit -n` is 256); a lookup opens and closes the one file it reads.
-- **CI** runs the suite on Ubuntu, macOS and Windows, on Node 22 and 24. Display settings are
-  stored on the server (`config/blockyard.json`). The block-flow cards' stat columns size to content.
+- **CI** runs the suite on Ubuntu, macOS and Windows, on Node 22 and 24. Display settings were
+  stored on the server only (`config/blockyard.json`) as of this date -- see the 2026-09-22 entry
+  above for the browser/account stores added since. The block-flow cards' stat columns size to content.
 
 **What to do next, in order:** the Mac install again from clean (`git clone`, `npm run setup`,
 this time with the server building the index); the re-audit; then move `v0.0.9` to the release
@@ -1141,7 +1197,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1435 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1455 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

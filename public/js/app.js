@@ -11,7 +11,8 @@ import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } fr
 import { viewerIdle } from './details3d.js';
 import {
   loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush, settingsPushPending, normalise as normaliseSettings,
-  SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue, SKY_BOARDS, SKY_CHOICES } from './settings.js';
+  SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue, SKY_BOARDS, SKY_CHOICES,
+  settingsMode, setSettingsMode, SETTINGS_MODES } from './settings.js';
 // APPEARANCE (2026-09-16): the theme goes on <html> before the first paint, from the browser's copy
 // of the settings, and follows every change after (followTheme); the cards' swatches are painted
 // through the CSSOM because the CSP refuses a style attribute in markup
@@ -1054,14 +1055,28 @@ async function boot() {
       .then((suite) => { if (suite) state.adminSuite = suite; })
       .catch(() => { /* not this build, or not this configuration */ });
   }
-  const [nodes, cfg, saved] = await Promise.all([
+  // WHICH STORE THIS BROWSER READS (settings.js settingsMode/SETTINGS_MODES; operator, 2026-09-22:
+  // "per-user options for storing configs on either the browser, or server ... allow per-user
+  // settings also on server side"). 'account' needs a real signed-in identity to key by -- in open
+  // mode there is none, so it quietly behaves as 'shared' rather than erroring on a mode a browser
+  // picked before accounts were ever turned on.
+  const activeSettingsMode = () => (settingsMode() === 'account' && !state.accounts ? 'shared' : settingsMode());
+  const pushFor = (m) => (m === 'shared'
+    ? (s) => api('/api/settings', { method: 'POST', body: { settings: s } })
+    : m === 'account'
+      ? (s) => api('/api/settings/mine', { method: 'POST', body: { settings: s } })
+      : null);                    // 'browser': never leaves this device
+  const bootMode = activeSettingsMode();
+  const [nodes, cfg, saved, mine] = await Promise.all([
     api('/api/nodes'),
     api('/api/config'),
     // Display settings belong to the deployment, not to one browser: this is a server
     // app, so a phone and a desktop pointed at it see the same monitor. A server that
     // cannot answer still boots -- the browser's own settings stand in, which is
-    // exactly the behaviour there was before the file existed.
+    // exactly the behaviour there was before the file existed. Fetched even off 'shared'
+    // mode, cheaply, so switching back to it later has something to show immediately.
     api('/api/settings').catch(() => null),
+    bootMode === 'account' ? api('/api/settings/mine').catch(() => null) : Promise.resolve(null),
   ]);
   state.nodes = nodes.nodes;
   // Land on a node that is doing something. Defaulting to config order meant a
@@ -1084,8 +1099,12 @@ async function boot() {
   state.cfg = cfg;
   // Seed before the first paint: every later reader calls loadSettings(), so settings
   // applied after a render would show this browser's copy and then visibly swap it.
-  if (saved?.stored && saved.settings) seedSettings(saved.settings);
-  else if (saved && saved.stored === false) {
+  // 'browser' mode seeds nothing here -- the local cache (this device's own last save, or the
+  // shipped defaults if it has none) is already the answer, exactly as before the server had
+  // any settings store at all.
+  const bootSource = bootMode === 'account' ? mine : bootMode === 'shared' ? saved : null;
+  if (bootSource?.stored && bootSource.settings) seedSettings(bootSource.settings);
+  else if (bootSource && bootSource.stored === false) {
     // A FRESH SERVER STARTS AT THE SHIPPED DEFAULTS (operator, 2026-09-22, of a fresh clone on a laptop:
     // "Why are shadows and metallic checked by default. That should be off. We need to maximize
     // performance out of the box" -- and "Did enable market polling get defaulted to checked?!").
@@ -1094,11 +1113,12 @@ async function boot() {
     // had shadows, the sheen and market polling on, so a fresh server came up with all three -- and
     // with the one switch that makes an outbound connection, which nothing but a deliberate click
     // should turn on. The browser's copy is reset to the defaults instead, and nothing is uploaded
-    // until someone changes a setting here.
+    // until someone changes a setting here. Same reasoning applies the first time an account has
+    // never saved its own record.
     seedSettings(normaliseSettings(null));
   }
-  // From here on every save reaches the server too; settings.js debounces the push.
-  setSettingsPush((s) => api('/api/settings', { method: 'POST', body: { settings: s } }));
+  // From here on every save reaches the active store too; settings.js debounces the push.
+  setSettingsPush(pushFor(bootMode));
   await checkBuild();
   // Re-check on a timer, because the failure this exists for happens while the tab
   // is open: the operator deploys, the tab does not reload, and every subsequent
@@ -1113,7 +1133,9 @@ async function boot() {
   // change is still on its way up (the local edit is the newer one), and only when what came back actually differs.
   const refreshSettings = async () => {
     if (document.hidden || settingsPushPending() || document.getElementById('settingsWrap')?.classList?.contains('hidden') === false) return;
-    const got = await api('/api/settings').catch(() => null);
+    const m = activeSettingsMode();
+    if (m === 'browser') return;      // nothing on any server to have drifted from
+    const got = await api(m === 'account' ? '/api/settings/mine' : '/api/settings').catch(() => null);
     if (!got?.stored || !got.settings || settingsPushPending()) return;
     const mine = JSON.stringify(loadSettings()), theirs = JSON.stringify(normaliseSettings(got.settings));
     if (mine !== theirs) { seedSettings(got.settings); render(); }
@@ -1321,11 +1343,47 @@ async function boot() {
       el.style.setProperty('--th-bg', el.dataset.faceBg); el.style.setProperty('--th-fg', el.dataset.faceFg); el.style.setProperty('--th-line', el.dataset.faceLine);
     }
   };
+  // STORAGE MODE (operator, 2026-09-22: "per-user options for storing configs on either the
+  // browser, or server ... allow per-user settings also on server side"). Drawn once above the
+  // tabs, not inside PANEL/SETTINGS_PANEL -- it picks which store the settings above are read from
+  // and pushed to, it is not itself one of them. "My account" only appears once accounts are on:
+  // in open mode there is no account to key a per-user record by (server/http/api.js
+  // ownSettingsAllowed says the same thing if it is ever reached anyway).
+  const STORAGE_LABEL = { shared: 'Shared', browser: 'This browser', account: 'My account' };
+  const STORAGE_HINT = {
+    shared: 'Saved on the server for everyone who opens this monitor -- a Kiosk on a wall and your laptop see the same board. Changing it needs admin once accounts are on.',
+    browser: 'Kept only in this browser. Never sent to the server, never seen from another device, and survives a server restart or reinstall exactly as much as any other local browser data does.',
+    account: `Saved on the server under your own account (${me.user?.username ?? 'you'}). Follows you to any device you sign into here, and changes nobody else's view.`,
+  };
+  const cfgStorage = document.getElementById('cfgStorage');
+  const drawStorage = () => {
+    if (!cfgStorage) return;
+    const m = activeSettingsMode();
+    const modes = state.accounts ? SETTINGS_MODES : SETTINGS_MODES.filter((x) => x !== 'account');
+    cfgStorage.innerHTML = `<div class="cfgrow"><b><label>Store settings</label></b><span class="cfgseg" role="radiogroup" aria-label="Store settings">${
+      modes.map((mv) => `<button type="button" class="cfgsegbtn${mv === m ? ' on' : ''}" role="radio" aria-checked="${mv === m}" data-cfgstorage="${mv}">${STORAGE_LABEL[mv]}</button>`).join('')
+    }</span><i>${STORAGE_HINT[m]}</i></div>`;
+  };
+  cfgStorage?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-cfgstorage]');
+    if (!btn || btn.dataset.cfgstorage === activeSettingsMode()) return;
+    const m = setSettingsMode(btn.dataset.cfgstorage);
+    setSettingsPush(pushFor(m));
+    // Pull from the newly active store right away, so switching modes shows what THAT store
+    // holds rather than waiting up to 15s for the next poll (or, for 'browser', polling never).
+    if (m === 'shared' || m === 'account') {
+      const got = await api(m === 'account' ? '/api/settings/mine' : '/api/settings').catch(() => null);
+      seedSettings(got?.stored && got.settings ? got.settings : normaliseSettings(null));
+    }
+    drawStorage();
+    drawSettings();
+    render();
+  });
   const openSettings = (open) => {
     cfgWrap.classList.toggle('hidden', !open);
     cfgGear.classList.toggle('on', open);
     cfgGear.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) drawSettings();
+    if (open) { drawStorage(); drawSettings(); }
   };
   cfgGear.addEventListener('click', () => openSettings(cfgWrap.classList.contains('hidden')));
   document.getElementById('cfgClose').addEventListener('click', () => openSettings(false));

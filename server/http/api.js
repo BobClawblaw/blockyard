@@ -98,6 +98,31 @@ function configWriteAllowed(app, ctx) {
   if (app.cfg.auth.enabled) needRole(ctx, 'admin');
 }
 
+// A SIGNED-IN ACCOUNT, NOT JUST A SESSION (for /api/settings/mine). `auth: 'any'` on a route means
+// "any authenticated role", but in open mode that is ANONYMOUS_USER -- a role ceiling, not an
+// account, with no identity to key a PER-USER record by. Sharing one record across everyone who
+// happens to be anonymous would not be "per user" at all; it would just be a second, worse copy of
+// the shared blob. So this needs real accounts on, checked separately from the route's own auth.
+function ownSettingsAllowed(app, ctx) {
+  if (!app.cfg.auth.enabled) {
+    throw new HttpError(403, 'accounts are disabled, so there is no account to keep personal settings for; use "this browser" instead, or start with BLOCKYARD_AUTH=1', { code: 'accounts_disabled' });
+  }
+}
+
+/** Shared by /api/settings and /api/settings/mine: same shape, same size cap, either store. */
+function settingsBodyText(ctx) {
+  const s = ctx.body?.settings;
+  if (!s || typeof s !== 'object' || Array.isArray(s)) {
+    throw new HttpError(400, 'send { settings: { ... } }', { code: 'bad_settings' });
+  }
+  // A cap, because this is a body from a browser and the file is written to disk. The whole
+  // settled object is a couple of kilobytes; 256 KB is room to grow and still far from a way
+  // to fill a disk one POST at a time.
+  const text = `${JSON.stringify(s, null, 2)}\n`;
+  if (text.length > 262_144) throw new HttpError(413, 'settings too large', { code: 'too_large' });
+  return { s, text };
+}
+
 // THE NODE CONNECTION IN OPEN MODE: FROM THIS MACHINE ONLY (audit 2026-09-16, M1 and M2).
 //
 // The open-mode cross-site check refuses a browser on another origin, because a browser cannot
@@ -1012,15 +1037,7 @@ export const routes = [
     method: 'POST', path: '/api/settings', auth: 'any', csrf: true, body: true,
     handler: async (ctx, app) => {
       configWriteAllowed(app, ctx);
-      const s = ctx.body?.settings;
-      if (!s || typeof s !== 'object' || Array.isArray(s)) {
-        throw new HttpError(400, 'send { settings: { ... } }', { code: 'bad_settings' });
-      }
-      // A cap, because this is a body from a browser and the file is written to disk. The whole
-      // settled object is a couple of kilobytes; 256 KB is room to grow and still far from a way
-      // to fill a disk one POST at a time.
-      const text = `${JSON.stringify(s, null, 2)}\n`;
-      if (text.length > 262_144) throw new HttpError(413, 'settings too large', { code: 'too_large' });
+      const { text } = settingsBodyText(ctx);
 
       await fsp.mkdir(path.dirname(app.settingsFile), { recursive: true });
       const tmp = `${app.settingsFile}.tmp`;
@@ -1031,6 +1048,31 @@ export const routes = [
       await fsp.rename(tmp, app.settingsFile);
 
       return { ok: true, file: pathFor(ctx, app.settingsFile), bytes: text.length };
+    },
+  },
+
+  // PER-ACCOUNT, NOT SHARED (operator, 2026-09-22: "per-user options for storing configs on either
+  // the browser, or server ... allow per-user settings also on server side"). /api/settings above
+  // is the one blob every viewer sees -- a Kiosk, an anonymous visitor, everyone -- and writing it
+  // is rightly admin-only once accounts exist (configWriteAllowed). This is the other half: a
+  // record ANY signed-in role can write, that touches nobody's view but their own and follows them
+  // across their own devices, the way the shared blob follows a Kiosk. No admin check here on
+  // purpose -- the operator's own words, after first asking for admin-only.
+  {
+    method: 'GET', path: '/api/settings/mine', auth: 'any',
+    handler: async (ctx, app) => {
+      ownSettingsAllowed(app, ctx);
+      const s = app.userSettings.get(ctx.user.id);
+      return { settings: s, stored: s != null };
+    },
+  },
+  {
+    method: 'POST', path: '/api/settings/mine', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      ownSettingsAllowed(app, ctx);
+      const { s } = settingsBodyText(ctx);
+      await app.userSettings.set(ctx.user.id, s);
+      return { ok: true, bytes: JSON.stringify(s).length };
     },
   },
 ];

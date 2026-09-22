@@ -83,6 +83,9 @@ test('a FRESH server starts at the shipped defaults, whatever the first browser 
   // settings to the new server on first contact, which used to be the rule.)
   const app = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
   assert.ok(!/hasLocalSettings/.test(app), 'no browser hands its settings up to a server that has none');
-  assert.match(app, /else if \(saved && saved\.stored === false\) \{[\s\S]*?seedSettings\(normaliseSettings\(null\)\);/, 'the browser\'s copy is reset to the defaults instead');
+  // 2026-09-22: the single shared-only `saved` fetch became mode-aware `bootSource` (settings.js
+  // per-account/per-browser storage, docs/AGENTS.md "three places to keep Display settings") --
+  // same behaviour, renamed variable.
+  assert.match(app, /else if \(bootSource && bootSource\.stored === false\) \{[\s\S]*?seedSettings\(normaliseSettings\(null\)\);/, 'the browser\'s copy is reset to the defaults instead');
   assert.ok(!/stored === false\) \{[\s\S]*?api\('\/api\/settings', \{ method: 'POST'/.test(app.slice(app.indexOf('stored === false'), app.indexOf('setSettingsPush('))), 'and nothing is uploaded until someone changes a setting');
 });

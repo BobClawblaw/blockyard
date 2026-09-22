@@ -16,6 +16,7 @@ import readline from 'node:readline';
 import { loadConfig, ROOT } from '../server/config.js';
 import { UserStore, ROLES } from '../server/auth/users.js';
 import { SessionStore } from '../server/auth/sessions.js';
+import { UserSettingsStore } from '../server/store/user-settings.js';
 
 const cfg = loadConfig();
 // Accounts are OFF by default, so this CLI can edit a user file the running server
@@ -45,6 +46,17 @@ async function revokeSessions(username) {
   const n = sessions.destroyForUser(user.id);
   if (n) await sessions.save();
   return n;
+}
+// AN ACCOUNT'S OWN SETTINGS DO NOT OUTLIVE IT (2026-09-22, added alongside per-user server-side
+// settings, server/store/user-settings.js). Nothing reads a deleted user's id again, so a
+// left-behind record is not a security issue -- just clutter that would grow the file forever if
+// usernames were ever reused.
+const userSettings = new UserSettingsStore(path.join(cfg.auth.dataDir, 'user-settings.json'));
+await userSettings.load();
+async function removeOwnSettings(username) {
+  const user = store.find(username);
+  if (!user) return;
+  await userSettings.remove(user.id);
 }
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -140,7 +152,11 @@ async function main() {
       const username = args[0] || await ask('username to delete: ');
       const sure = await ask(`delete ${username}? type the username to confirm: `);
       if (sure !== username) { process.stdout.write('not deleted\n'); break; }
-      try { const r = await store.deleteUser(username); process.stdout.write(`deleted ${r.deleted}\n`); }
+      try {
+        await removeOwnSettings(username);
+        const r = await store.deleteUser(username);
+        process.stdout.write(`deleted ${r.deleted}\n`);
+      }
       catch (err) { process.stderr.write(`${err.message}\n`); process.exitCode = 1; }
       break;
     }

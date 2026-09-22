@@ -28,6 +28,33 @@ const FORM_PALETTE_OPTIONS = Object.freeze(FORM_PALETTE_LABELS.map((o) => Object
 export const SETTINGS_KEY = 'blockyard.settings';
 export const SCHEMA_VERSION = 6;
 
+// WHERE THIS BROWSER KEEPS THE BLOB ABOVE (operator, 2026-09-22: "per-user options for storing
+// configs on either the browser, or server ... allow per-user settings also on server side"). This
+// is meta -- which store `loadSettings`/`saveSettings` push through -- not a setting a board reads,
+// so it is deliberately its own key and outside DEFAULTS/normalise()/PANEL: it never needs a
+// migration, and it must not trip the test that holds PANEL and DEFAULTS to the same keys.
+// 'shared' is the pre-2026-09-22 behaviour (one deployment-wide file, GET/POST /api/settings,
+// admin-only to write once accounts exist); 'browser' never leaves this device; 'account' is one
+// signed-in user's own record (GET/POST /api/settings/mine), open to any role, unusable in open
+// mode because there is no account to key it by.
+export const SETTINGS_MODE_KEY = 'blockyard.settingsMode';
+export const SETTINGS_MODES = Object.freeze(['shared', 'browser', 'account']);
+
+/** Which store this browser is currently pointed at. Falls back to 'shared' -- today's only
+ * behaviour before this setting existed -- for anything unset or unrecognised. */
+export function settingsMode(storage = globalThis.localStorage) {
+  try {
+    const m = storage?.getItem(SETTINGS_MODE_KEY);
+    return SETTINGS_MODES.includes(m) ? m : 'shared';
+  } catch { return 'shared'; }
+}
+
+export function setSettingsMode(mode, storage = globalThis.localStorage) {
+  if (!SETTINGS_MODES.includes(mode)) throw new TypeError(`unknown settings mode "${mode}" (want ${SETTINGS_MODES.join('/')})`);
+  try { storage?.setItem(SETTINGS_MODE_KEY, mode); } catch { /* private mode, quota: stands for this load only */ }
+  return mode;
+}
+
 export const DEFAULTS = Object.freeze({
   // APPEARANCE (operator, 2026-09-16: "add an appearance section in preferences to change the colors
   // of our layout. Our current scheme should be the default appearance ... as well as options for

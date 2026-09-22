@@ -213,15 +213,19 @@ Everything the monitor writes lives in its data directory (`./data` by default,
 |---|---|---|
 | `users.json` | account names, roles, scrypt hashes and salts | **secret** (mode 0600) |
 | `sessions.json` | hashed session tokens | **secret** |
+| `user-settings.json` | Display settings saved under "My account" (GET/POST `/api/settings/mine`, 2026-09-22): one blob per signed-in user, keyed by account id, open to any role -- not the shared blob below. Dropped for an account by `node scripts/manage-users.js rm` | private (mode 0600); no secrets, no RPC access, just colours and switches |
 | `audit.jsonl` (+ rotations) | who called what and when; rotated by size (8 MiB, 5 kept); hash-chained (each entry's `hash` covers the one before it), so an entry edited or removed in place breaks the chain from there on -- `npm run verify-audit` (or `blockyard verify-audit`) checks it. Tamper-evident, not tamper-proof: there is no secret key, so someone with write access to `data/` who regenerates the whole chain leaves no trace this alone can catch | private |
 | history snapshots | chart time series for the retention window (72 h by default) | private |
 | `pool-aliases.json`, `pool-map.json` | optional mining-pool labels: `pool-aliases.json` is human-edited; `data/pool-map.json` is what `node scripts/pool-map.js` fetches, and it overrides the curated `config/pool-map.json` that ships with the code (mempool.space/mining-pools, MIT, 151 pools) | not secret |
 | the address index (`addressIndex`, `data/index` by default) | the explorer's address index: ~124 GB of sorted rows built from the node's block files, plus the follower's `live.log` and `layers/` | public chain data, not secret |
 
 `config/local.json` may hold an RPC password; keep it readable only by the service account.
-Both it and `data/` are git-ignored. Display settings (the gear) are stored in
-`config/blockyard.json`, so every browser sees the same board; they change how things are drawn,
-never what is measured.
+Both it and `data/` are git-ignored. Display settings (the gear) have three stores, picked per
+browser (2026-09-22): "Shared" -- the pre-2026-09-22 default -- in `config/blockyard.json`, so
+every browser sees the same board (write needs admin once accounts are on); "This browser", kept
+only in that browser's own localStorage and never sent to the server at all; and "My account", the
+`user-settings.json` row above, open to any signed-in role and following that account across
+devices. All three change how things are drawn, never what is measured.
 
 Logs go to standard output (the systemd journal). They record requests, node state changes
 and errors; they never contain passwords, session tokens or RPC credentials.
