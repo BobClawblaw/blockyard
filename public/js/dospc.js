@@ -69,6 +69,20 @@ export function loadLE(buf, mem, delta = LOAD_DELTA) {
   }
   const dataPages = stub + u32(0x80);
   const opt = le + u32(0x48), fpt = le + u32(0x68), frt = le + u32(0x6c);
+  // HEADER FIELDS CHECKED AGAINST THE ACTUAL FILE, BEFORE THE LOOP THAT TRUSTS THEM (audit
+  // 2026-09-22, L2/D1). `nPages` and every object's `nPages`/`base` come straight out of the file's
+  // own header with nothing to bound them against the file's real length or the machine's memory.
+  // Harmless for the shareware .EXEs this loader has only ever been fed -- but this is the loader
+  // for ANY file dropped in games/, and an absurd nPages used to be an effectively unbounded loop
+  // (a hang, not a crash), while a corrupt object base/page count reaching past the 32 MB `mem`
+  // buffer only failed because Uint8Array#set happens to throw on an out-of-range destination --
+  // useful, but a native RangeError three calls deep is not a diagnosis. Checked once, up front,
+  // against what the file could possibly contain, with a message that says what was wrong.
+  if (!(nPages >= 0 && nPages <= buf.length)) throw new Error(`LE header: nPages (${nPages}) does not fit a ${buf.length}-byte file`);
+  for (const ob of objs) {
+    if (!(ob.nPages >= 0 && ob.nPages <= nPages)) throw new Error(`LE header: an object claims ${ob.nPages} pages, over the file's own ${nPages}`);
+    if (!(ob.base >= 0 && ob.base + ob.nPages * pageSize <= mem.length)) throw new Error(`LE header: an object at 0x${ob.base.toString(16)} of ${ob.nPages} pages runs past the machine's memory`);
+  }
   const pageAddr = [];
   for (const ob of objs) {
     for (let p = 0; p < ob.nPages; p++) {
@@ -76,6 +90,7 @@ export function loadLE(buf, mem, delta = LOAD_DELTA) {
       const num = (buf[e] << 16) | (buf[e + 1] << 8) | buf[e + 2];
       const src = dataPages + (num - 1) * pageSize;
       const len = num === nPages ? lastPage : pageSize;
+      if (!(src >= 0 && src + len <= buf.length)) throw new Error(`LE header: page ${num}'s data (offset ${src}, ${len} bytes) runs past the end of the file`);
       mem.set(buf.subarray(src, src + len), ob.base + p * pageSize);
       pageAddr[num] = ob.base + p * pageSize;
     }
@@ -133,6 +148,12 @@ export function parseCoff(buf) {
   if (coff + 20 > buf.length || dv.getUint16(coff, true) !== 0x14c) return null;
   const nsec = dv.getUint16(coff + 2, true), optSize = dv.getUint16(coff + 16, true);
   if (optSize < 28) return null;
+  // NSEC BOUNDED AGAINST THE FILE (audit 2026-09-22, L2/D1), so the header can only ask for as many
+  // section-header slots as the file could actually hold; a corrupt count used to read past the
+  // buffer until DataView's own bounds check happened to throw, which is safe but not a diagnosis --
+  // and a section's fileOff/size were never checked at all before being handed to a later mem.set
+  // in bootCoff (below).
+  if ((coff + 20 + optSize + nsec * 40) > buf.length) return null;
   const entry = dv.getUint32(coff + 20 + 16, true);
   const sections = [];
   let end = 0;
@@ -140,7 +161,9 @@ export function parseCoff(buf) {
     const h = coff + 20 + optSize + i * 40;
     const name = String.fromCharCode(...buf.subarray(h, h + 8)).replace(/\0.*$/, '');
     const vaddr = dv.getUint32(h + 12, true), size = dv.getUint32(h + 16, true), fileOff = dv.getUint32(h + 20, true), flags = dv.getUint32(h + 36, true);
-    sections.push({ name, vaddr, size, fileOff: coff + fileOff, bss: (flags & 0x80) !== 0 });
+    const bss = (flags & 0x80) !== 0;
+    if (!bss && (fileOff < 0 || coff + fileOff + size > buf.length)) throw new Error(`COFF section "${name}": file data (offset ${coff + fileOff}, ${size} bytes) runs past the end of the file`);
+    sections.push({ name, vaddr, size, fileOff: coff + fileOff, bss });
     end = Math.max(end, vaddr + size);
   }
   // the stub's own parameters live in its image: "go32stub" then the size, stack and transfer buffer
@@ -1275,6 +1298,10 @@ export function createPC({ files = {}, args = '', now = () => 0, onWrite = null,
     const block = allocBlock(img.size);
     for (const sec of img.sections) {
       if (sec.bss) continue;
+      // Destination bounded against the machine's own memory (audit 2026-09-22, L2/D1): parseCoff
+      // already checked the section's FILE data against the file's length; this is the other half,
+      // a vaddr that would carry a section past `mem`'s end.
+      if (block.base + sec.vaddr + sec.size > mem.length) throw new Error(`COFF section "${sec.name}": vaddr 0x${sec.vaddr.toString(16)} of ${sec.size} bytes runs past the machine's memory`);
       mem.set(exe.subarray(sec.fileOff, sec.fileOff + sec.size), block.base + sec.vaddr);
     }
     const csSel = newSelector(block.base), dsSel = newSelector(block.base);
