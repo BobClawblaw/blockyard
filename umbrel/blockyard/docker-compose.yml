@@ -9,7 +9,7 @@ services:
   app:
     # Pinned by digest, as the store requires. Replace after each
     # publish-umbrel-image.yml run; the workflow prints the manifest digest.
-    image: ghcr.io/bobclawblaw/blockyard:0.1.4@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: ghcr.io/bobclawblaw/blockyard:0.1.4@sha256:9d6241a1a89b790ccedf779949ae8b54e2501e23be7518e3bca920167c608b49
     restart: on-failure
     stop_grace_period: 1m
     user: "1000:1000"
