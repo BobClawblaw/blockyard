@@ -2,9 +2,25 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { parseIp } from '../netinfo.js';
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+// AN IPv6 /64, NOT THE FULL ADDRESS (audit 2026-09-22, L6). A routed /64 is trivially available
+// to anyone (many providers hand out a /64 or wider per customer by default), and LoginGuard's
+// finer-grained buckets (`p:` per username+address, `i:` per address) used the full address --
+// so rotating the low 64 bits got a fresh bucket on every attempt, degrading those two tiers to
+// nothing while leaving only the per-username-across-every-address tier (`u:`) to catch a
+// sustained attack. Collapsing to the /64 the way an ISP actually allocates one closes that
+// without touching IPv4 (no equivalent trivial-rotation story there) or anything outside this
+// module: the CIDR gate and the audit trail still see and record the real address.
+export function loginThrottleKey(ip) {
+  const parsed = parseIp(ip);
+  if (!parsed || parsed.family !== 'ipv6') return String(ip ?? '');
+  const net = Buffer.from(parsed.bytes.slice(0, 8)).toString('hex');
+  return `v6:${net}`;
 }
 
 export class SessionStore {
@@ -182,9 +198,10 @@ export class LoginGuard {
   }
 
   _keys(username, ip) {
+    const bucket = loginThrottleKey(ip);
     return [
-      [`p:${username}\u0000${ip}`, this.maxAttempts],
-      [`i:${ip}`, this.maxAttempts * 5],
+      [`p:${username}\u0000${bucket}`, this.maxAttempts],
+      [`i:${bucket}`, this.maxAttempts * 5],
       [`u:${username}`, this.maxAttempts * 10],
     ];
   }
