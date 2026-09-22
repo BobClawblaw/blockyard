@@ -1412,7 +1412,7 @@ map, which is the whole answer to "which settings apply to which panel":
 | board | draws |
 |---|---|
 | **Block space** (and the Kiosk's left panel) | Galaxy |
-| **Markets & Price** (and the Kiosk's right panel) | Galaxy |
+| **Markets & Price** (and the Kiosk's right panel) | Formation |
 | **Tetrust**, **Blockout**, **Blockanoid** | Galaxy |
 | **Scorched Yard** | Earth |
 
@@ -1455,7 +1455,7 @@ on the 2D canvas, in the same colours and the same place.
 | **Formation colours** | Thirteen palettes: the film's own magma, and twelve measured to stay clear of the chart's green, red and yellow. **Cobalt & gold** ships. |
 | **Formation brightness** | Dims the colours, not the gas; 1 is the full picture. A warm palette can overpower a chart in front of it. |
 | **Formation flow** | The pace of the gas itself: inward, swirling, jostled, blown out in shells. 0 stills it. |
-| **Formation centre** | Behind the board, or any corner, where it is drawn larger with the gas sweeping across the panel toward it. |
+| **Formation centre** | Behind the board, or any corner (bottom left ships), where it is drawn larger with the gas sweeping across the panel toward it. |
 
 ![The Sun](images/sky-sun-limb.jpg)
 

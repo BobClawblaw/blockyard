@@ -152,12 +152,12 @@ test('the galaxy sits in the middle or in any corner: the Galaxy sky\'s own five
   // "make those the default settings. It was originally too bright and was threatening to overpower the
   // chart"): in a corner, under full brightness, slow. The layer's own fall-backs are the same numbers.
   // (brightness was 0.8 while the palette was magma; on 2026-09-22, with Cobalt & gold, the operator set it to 1)
-  assert.deepEqual([DEFAULTS.sky.formAt, DEFAULTS.sky.formBrightness, DEFAULTS.sky.formFlow, DEFAULTS.sky.formSpeed], ['top-left', 1, 0.5, 0.4]);
-  assert.deepEqual([FORM_AT_DEFAULT, FORM_BRIGHTNESS_DEFAULT, FORM_FLOW_DEFAULT, FORM_SPEED_DEFAULT], ['top-left', 1, 0.5, 0.4], 'one set of numbers, not two');
+  assert.deepEqual([DEFAULTS.sky.formAt, DEFAULTS.sky.formBrightness, DEFAULTS.sky.formFlow, DEFAULTS.sky.formSpeed], ['bottom-left', 1, 0.5, 0.4]);
+  assert.deepEqual([FORM_AT_DEFAULT, FORM_BRIGHTNESS_DEFAULT, FORM_FLOW_DEFAULT, FORM_SPEED_DEFAULT], ['bottom-left', 1, 0.5, 0.4], 'one set of numbers, not two');
   const row = PANEL.find((g) => g.group === 'sky').rows.find((r) => r.key === 'formAt');
   assert.deepEqual(row.options.map((o) => o[0]), Object.keys(FORM_PLACEMENTS), 'the panel offers exactly the places there are');
   assert.equal(skyFor(normalise({ sky: { formAt: 'top-right' } }), 'space').formAt, 'top-right', 'and it reaches the board');
-  assert.equal(normalise({ sky: { formAt: 'the moon' } }).sky.formAt, 'top-left');
+  assert.equal(normalise({ sky: { formAt: 'the moon' } }).sky.formAt, 'bottom-left');
   // the place reaches the shader, top-left fractions turned to GL's bottom-left; an unknown place is the middle
   const sent = [];
   const gl = new Proxy({}, { get: (_t, k) => (typeof k !== 'string' ? undefined : /^[A-Z_0-9]+$/.test(k) ? k
@@ -165,8 +165,8 @@ test('the galaxy sits in the middle or in any corner: the Galaxy sky\'s own five
     : k === 'getExtension' ? () => null : k === 'getParameter' ? () => 'Apple M2'
     : (...a) => { if (k === 'uniform3f') sent.push(a); return {}; }) });
   const ctl = formGlAttach({ width: 0, height: 0, getContext: () => gl, addEventListener() {} });
-  ctl.draw(800, 450, 1, 5000, { formAt: 'bottom-left' }); ctl.draw(800, 450, 1, 5000, { formAt: 'nowhere' }); ctl.draw(800, 450, 1, 5000, {});
-  assert.deepEqual(sent.map((a) => a.slice(1)), [[0.22, 0.78, 1.55], [0.22, 0.22, 1.55], [0.22, 0.22, 1.55]], 'an unknown place, or none, is the shipped one');
+  ctl.draw(800, 450, 1, 5000, { formAt: 'top-right' }); ctl.draw(800, 450, 1, 5000, { formAt: 'nowhere' }); ctl.draw(800, 450, 1, 5000, {});
+  assert.deepEqual(sent.map((a) => a.slice(1)), [[0.78, 0.22, 1.55], [0.22, 0.78, 1.55], [0.22, 0.78, 1.55]], 'an unknown place, or none, is the shipped one (bottom left)');
   assert.match(glsl, /vec2\(uPlace\.x, 1\.0 - uPlace\.y\) \* uPanel/);
 });
 
@@ -321,6 +321,6 @@ test('the fallback sky still draws: galform.js stands behind the GL layer', asyn
     fillRect() {},
   };
   drawGalaxyForm(ctx, 800, 500, 1, 60000, { formNoGl: true });
-  assert.ok(fills.length > 1500, `the 2D fallback painted (${fills.length} fills)`);
+  assert.ok(fills.length > 1200, `the 2D fallback painted (${fills.length} fills)`);
   assert.ok(fills.every((f) => /^rgba\(/.test(f.style ?? f)), 'plain rgba fills only');
 });

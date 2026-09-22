@@ -82,7 +82,7 @@ export const FORM_PLACEMENTS = Object.freeze({
   'bottom-left': [0.22, 0.78, 1.55],
   'bottom-right': [0.78, 0.78, 1.55],
 });
-export const FORM_AT_DEFAULT = 'top-left';               // (the operator's own choice, as are the three defaults below: settings.js)
+export const FORM_AT_DEFAULT = 'bottom-left';            // (operator, 2026-09-22: "make formation the default 3d background view for markets. default position bottom left"; top-left before, also the operator's own choice, as are the three defaults below: settings.js)
 /** How bright it ships (sky.formBrightness): 1, the full picture. In magma that threatened to overpower the chart and
  * shipped at 0.8; in the blues it does not (the operator's own setting, 2026-09-22). */
 export const FORM_BRIGHTNESS_DEFAULT = 1;

@@ -75,3 +75,14 @@ test('BLOCKYARD_MARKETS=0 is the hard off: the switch cannot turn it on', async 
   assert.equal(r.polling, undefined);
   assert.match(r.note, /cannot turn it on/);
 });
+
+test('a FRESH server starts at the shipped defaults, whatever the first browser remembers', () => {
+  // (operator, 2026-09-22, of a fresh clone on a laptop whose browser had settings from an earlier install:
+  // "Why are shadows and metallic checked by default ... We need to maximize performance out of the box";
+  // "Did enable market polling get defaulted to checked?!". They were not: that browser had uploaded its old
+  // settings to the new server on first contact, which used to be the rule.)
+  const app = fs.readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  assert.ok(!/hasLocalSettings/.test(app), 'no browser hands its settings up to a server that has none');
+  assert.match(app, /else if \(saved && saved\.stored === false\) \{[\s\S]*?seedSettings\(normaliseSettings\(null\)\);/, 'the browser\'s copy is reset to the defaults instead');
+  assert.ok(!/stored === false\) \{[\s\S]*?api\('\/api\/settings', \{ method: 'POST'/.test(app.slice(app.indexOf('stored === false'), app.indexOf('setSettingsPush('))), 'and nothing is uploaded until someone changes a setting');
+});

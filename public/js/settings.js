@@ -188,7 +188,7 @@ export const DEFAULTS = Object.freeze({
     // too bright and was threatening to overpower the chart"): in a corner and slow -- a sky behind a chart,
     // not a film in front of one. (That brightness was 0.8, in magma. On 2026-09-22, living in the blues, they
     // set it back to 1 and made Cobalt & gold the palette: "Set brightness to 1.0 as I've set the default now".)
-    formAt: 'top-left',   // where its galaxy sits: behind the board, or any of the corners (the Galaxy's own five places)
+    formAt: 'bottom-left', // where its galaxy sits: behind the board, or any of the corners (the Galaxy's own five places); bottom-left since 2026-09-22 (formgl.js FORM_AT_DEFAULT)
     formPalette: 'cobaltGold', // its colours: formgl.js FORM_PALETTES (the film's own, and twelve chosen to stay off the chart's)
     formBrightness: 1,    // 1 is the picture as it was first made
     formFlow: 0.5,        // the pace of the gas itself: its flow inward, its swirl, its turbulence, the outbursts
@@ -214,7 +214,7 @@ export const DEFAULTS = Object.freeze({
     // of the box, so a fresh monitor makes no outbound connection but to the node. The server
     // reads it from the shared settings file on every market request (http/api.js).
     polling: false,
-    sky: 'galaxy',        // 'galaxy' | 'earth' | 'none'
+    sky: 'form',          // the Formation (operator, 2026-09-22: "make formation the default 3d background view for markets"); 'galaxy' | 'form' | 'sun' | 'earth' | 'none'
     effects: true,        // the idle effects and the flight when the candles refresh
     // THE TOOLBAR REMEMBERS (operator, 2026-09-12: "We need to remember the user settings for the
     // Markets page"). Which exchange and how many hours were a click that survived until the tab

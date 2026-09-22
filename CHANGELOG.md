@@ -39,6 +39,12 @@ from this release, as it is from every release. 1,445 tests, from 1,070.
   security notes list every host contacted.
 - **Nothing to migrate.** No setting was renamed, no file moved. The renderer ships on Software, as before;
   WebGL is a choice in Display settings, Appearance.
+- **A fresh server starts at the shipped defaults.** Since 0.1.0 a server with no settings file took whatever the
+  first browser to reach it remembered from an earlier install -- which on a laptop reused for a fresh clone meant
+  shadows, the metallic sheen and market polling all on. It starts at the defaults now (shadows off, simple cubes,
+  sheen off, polling off), and nothing is uploaded until someone changes a setting. An install that already has
+  `config/blockyard.json` is untouched; **reset** in Display settings puts it back to the defaults.
+- **The Markets board ships under the Formation**, in the bottom-left corner.
 
 ### Added
 

@@ -9,8 +9,9 @@ is the same post in BBCode for the forum, generated from it so the two cannot dr
 pictures are marked `IMAGE-URL-FOR:<file>` until they are uploaded to talkimg.com and the links put
 in: `overview.jpg` at the top; `sky-sun.jpg`, `sky-sun-limb.jpg`, `sky-formation.jpg`, `finish-chrome.jpg`,
 `effect-ball-lightning-markets.jpg` and `markets-1h.jpg` through the skies section; `about.jpg` (the
-Bitcoin Machine Code card) beside that section; `chain.jpg` (Chain & Sync) beside the charts. The other
-screenshots are here too, for the thread.
+Bitcoin Machine Code card) beside that section; `chain.jpg` (Chain & Sync) beside the charts. The nine
+are copied into `talkimg/`, on their own, to drag on to talkimg in one go. The other screenshots are
+here too, for the thread.
 
 Every picture was shot at 0.1.3 on 2026-09-22 against the local Core node -- the pages with
 `scripts/shots.mjs`, the skies and finishes on WebGL with a GPU-backed headless browser, the two effect

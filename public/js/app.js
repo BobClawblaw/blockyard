@@ -1010,12 +1010,6 @@ function setPage(route) {
   render();
 }
 
-// Reading localStorage is not merely empty in a locked-down context, it throws, and
-// boot() is not the place to find that out.
-function hasLocalSettings() {
-  try { return !!globalThis.localStorage?.getItem(SETTINGS_KEY); } catch { return false; }
-}
-
 async function boot() {
   let me = null;
   try {
@@ -1091,11 +1085,17 @@ async function boot() {
   // Seed before the first paint: every later reader calls loadSettings(), so settings
   // applied after a render would show this browser's copy and then visibly swap it.
   if (saved?.stored && saved.settings) seedSettings(saved.settings);
-  else if (hasLocalSettings()) {
-    // A server with no file yet, reached from a browser that already has settings:
-    // hand them up rather than make someone pick them all again. Silent on refusal --
-    // a viewer without write access still gets a working page, just not a saved one.
-    api('/api/settings', { method: 'POST', body: { settings: loadSettings() } }).catch(() => {});
+  else if (saved && saved.stored === false) {
+    // A FRESH SERVER STARTS AT THE SHIPPED DEFAULTS (operator, 2026-09-22, of a fresh clone on a laptop:
+    // "Why are shadows and metallic checked by default. That should be off. We need to maximize
+    // performance out of the box" -- and "Did enable market polling get defaulted to checked?!").
+    // Since 2026-09-13 a server with no settings file took whatever the first browser to reach it
+    // remembered from some EARLIER install, to spare re-picking; on that laptop the earlier install
+    // had shadows, the sheen and market polling on, so a fresh server came up with all three -- and
+    // with the one switch that makes an outbound connection, which nothing but a deliberate click
+    // should turn on. The browser's copy is reset to the defaults instead, and nothing is uploaded
+    // until someone changes a setting here.
+    seedSettings(normaliseSettings(null));
   }
   // From here on every save reaches the server too; settings.js debounces the push.
   setSettingsPush((s) => api('/api/settings', { method: 'POST', body: { settings: s } }));

@@ -489,9 +489,10 @@ test('the arms are arms: the stars bunch along the spiral instead of spreading e
 
 test('the galaxy reaches both boards, because the sky belongs to neither', async () => {
   assert.equal(spaceOptions({ sky: { galaxy: true } }).galaxy, true, 'the block-space board');
-  assert.equal(marketsOptions({ sky: { galaxy: true } }).galaxy, true, 'and the candle board');
+  assert.equal(marketsOptions({ sky: { galaxy: true }, markets: { sky: 'galaxy' } }).galaxy, true, 'and the candle board, under the Galaxy');
   assert.equal(spaceOptions({}).galaxy, true, 'ON by default since 2026-09-13: it is the shipped look, no longer opt-in');
-  assert.equal(marketsOptions({}).galaxy, true);
+  // (the candle board ships under the FORMATION since 2026-09-22; the Galaxy's own switch still reaches it when it is chosen)
+  assert.equal(marketsOptions({ sky: { galaxy: true }, markets: { sky: 'galaxy' } }).galaxy, true);
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /f\.galaxy !== galaxy/, 'the field is rebuilt when the shape changes, not every frame');
   // The forbidden canvas shortcuts are NOT re-checked here. viewer-canvas-rules.test.js owns that
@@ -784,5 +785,6 @@ test('no sky is ever called Space: the word belongs to Block space', () => {
   assert.deepEqual(SKY_BOARDS.map((b) => b.group), ['space', 'markets', 'tetrust', 'blockout', 'blockanoid', 'scorched'], 'every board with a sky is on the map');
   for (const b of SKY_BOARDS) assert.ok(SKIES.includes(DEFAULTS[b.group].sky), `${b.group} ships with a sky`);
   assert.equal(DEFAULTS.scorched.sky, 'earth', 'the artillery under the Earth');
-  assert.ok(SKY_BOARDS.filter((b) => b.group !== 'scorched').every((b) => DEFAULTS[b.group].sky === 'galaxy'), 'and everything else under the Galaxy');
+  assert.equal(DEFAULTS.markets.sky, 'form', 'the candles under the Formation (operator, 2026-09-22)');
+  assert.ok(SKY_BOARDS.filter((b) => b.group !== 'scorched' && b.group !== 'markets').every((b) => DEFAULTS[b.group].sky === 'galaxy'), 'and everything else under the Galaxy');
 });

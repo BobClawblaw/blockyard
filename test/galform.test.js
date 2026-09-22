@@ -9,6 +9,7 @@ import {
   hash01, formField, gasAt, windField, windAt, farStars,
   drawGalaxyForm, envAt, envIn, formW, FORM_CYCLE, FORM_HOLD, FORM_WINDOWS,
 } from '../public/js/galform.js';
+import { FORM_AT_DEFAULT } from '../public/js/formgl.js';
 
 test('the field is seeded: the same seed, the same gas', () => {
   const a = formField(11, 500), b = formField(11, 500);
@@ -108,7 +109,7 @@ test('the draw runs on a stub context: all specks, all rgba, deterministic', () 
   });
   const fills = [];
   drawGalaxyForm(makeCtx(fills), 800, 500, 2, 60000, { starBrightness: 1 });
-  assert.ok(fills.length > 1500, `the gas painted (${fills.length} fills)`);
+  assert.ok(fills.length > 1200, `the gas painted (${fills.length} fills)`);   // (1488 at 800x500 from the bottom-left corner: more of the disc is off the panel there than from the top-left)
   assert.ok(fills.every((f) => /^rgba\(/.test(f.style)), 'every fill is a plain rgba, per the canvas rules');
   // determinism: the same clock reading paints the same picture
   const fills2 = [];
@@ -158,7 +159,7 @@ test('brought along with the GL layer: perpetual, placed, and in the film\'s col
   assert.ok(Math.abs(mid[0] - 400) < 25 && Math.abs(mid[1] - 250) < 25, `the middle (${mid})`);
   assert.ok(Math.abs(tr[0] - 800 * FORM_PLACEMENTS['top-right'][0]) < 40 && Math.abs(tr[1] - 500 * FORM_PLACEMENTS['top-right'][1]) < 40, `top right (${tr})`);
   const tl = centreOf(at(400_000, { formAt: 'nowhere' }));
-  assert.ok(Math.abs(tl[0] - 800 * FORM_PLACEMENTS['top-left'][0]) < 40 && Math.abs(tl[1] - 500 * FORM_PLACEMENTS['top-left'][1]) < 40, `an unknown place is the shipped one, top left (${tl})`);
+  assert.ok(Math.abs(tl[0] - 800 * FORM_PLACEMENTS[FORM_AT_DEFAULT][0]) < 40 && Math.abs(tl[1] - 500 * FORM_PLACEMENTS[FORM_AT_DEFAULT][1]) < 40, `an unknown place is the shipped one, bottom left (${tl})`);
   // DIMMED by the same slider as the GL layer (sky.formBrightness): every speck's alpha, its colour untouched
   const full = at(400_000, { formBrightness: 1 }), half = at(400_000, { formBrightness: 0.5 });
   const alphaOf = (f) => Number(f.style.match(/,([\d.]+)\)$/)[1]);
