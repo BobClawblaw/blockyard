@@ -37,6 +37,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { resolveCookie } from '../config.js';
+import { WALLET_METHODS } from './allowlist.js';
 
 
 /**
@@ -381,8 +382,28 @@ export class RpcClient {
   // `key` makes this poll-coalescable: pass the same key for a recurring tier so
   // a fresh request supersedes one still waiting. Never pass a key for a
   // user-initiated call -- those must each be answered.
-  async batch(calls, { timeoutMs, heavy = false, key = null, maxWaitMs = null, priority = 5, walletPath = '', ignoreBreaker = false } = {}) {
+  async batch(calls, { timeoutMs, heavy = false, key = null, maxWaitMs = null, priority = 5, walletPath = '', ignoreBreaker = false, adminAuthorized = false } = {}) {
     if (!calls.length) return [];
+    // NO WALLET METHOD LEAVES THIS CLIENT UNLESS THE CALLER SAYS SO, EXPLICITLY (audit 2026-09-22,
+    // M1). This is the one place every RPC call in the process passes through -- `call()` above
+    // and the admin suite's `walletCall` (server/admin/wallet.js) both fold into here -- and until
+    // now it enforced NOTHING: the read-only console's default-deny allowlist (classifyMethod) is
+    // checked at the HTTP route, and the admin suite's own capability gate (adminCallAllowed) is
+    // checked in walletCall, but RpcClient itself, the actual transport, trusted whatever method
+    // name it was given. That made "no wallet RPC is ever sent" depend entirely on every present
+    // and FUTURE caller remembering to check one of those two gates first -- exactly the shape of
+    // gap the release-guard test already covers for the admin suite's FILES (test/release-guard.
+    // test.js) but never covered for its CAPABILITY. A new module anywhere in the tree that
+    // imported RpcClient directly and called `rpc.call('sendtoaddress', ...)` would have reached
+    // the node with nothing in its way. Now it does not: any WALLET_METHODS call without
+    // `adminAuthorized: true` is refused here, before any network request is built, whatever else
+    // does or does not check it. `adminAuthorized` is set in exactly one place, walletCall, itself
+    // gated on `adminCallAllowed` -- so setting it anywhere else is precisely the thing a reviewer
+    // should ask about.
+    if (!adminAuthorized) {
+      const wallet = calls.find((c) => WALLET_METHODS.has(c.method));
+      if (wallet) throw new RpcError(`"${wallet.method}" is a wallet method and was not admin-authorized; refused at the RPC client, before any request was sent`, { kind: 'wallet-unauthorized' });
+    }
     const idOf = (i) => `c${i}`;
     const payload = calls.map((c, i) => ({ jsonrpc: '1.0', id: idOf(i), method: c.method, params: c.params ?? [] }));
     const single = calls.length === 1;

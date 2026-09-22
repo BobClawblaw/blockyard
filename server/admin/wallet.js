@@ -121,7 +121,10 @@ export async function walletCall(app, { node, wallet, capability, method, args =
   // `walletPath` note in server/rpc/client.js. Encoded, because a wallet name is a path
   // component and Core allows names this monitor must not paste raw into a URL.
   const walletPath = wallet ? `/wallet/${encodeURIComponent(wallet)}` : '';
-  return m.rpc.call(method, args, { ...rpc, walletPath });
+  // adminAuthorized: the one flag RpcClient's batch() requires before a WALLET_METHODS call is
+  // allowed to leave the process at all (audit 2026-09-22, M1) -- set here, and only here, because
+  // this line is only reached after adminCallAllowed(capability, method, args) has already said yes.
+  return m.rpc.call(method, args, { ...rpc, walletPath, adminAuthorized: true });
 }
 
 /**
