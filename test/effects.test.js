@@ -573,3 +573,33 @@ test('THE PULSAR\'S DURATION FOLLOWS ITS SPAN -- widening the crossing does not 
   const narrow = { gridW, axes: { line }, lastFit: { pw: gridW * 6 * 0.72, tx: gridW * 6 * 0.14, scaleX: 1, unit: 6 } };
   assert.ok(fxMsFor(narrow, 'pulsar') >= base, 'a panel this narrow never gets slower than the tuned baseline');
 });
+
+test('THE BULGE\'S DURATION FOLLOWS THE PANEL\'S WIDTH -- a wide Markets view does not rush it', () => {
+  // Found live, 2026-09-22 ("the bulge effects on the priceline ... running too fast on wider
+  // views"): the ball crosses the WHOLE drawn price line -- first point to last -- over one fixed
+  // ms, by design (BULGE_GRAVITY redistributes where in that fixed time it spends climbing vs
+  // falling; it never adds to or takes from the total). But the line itself is drawn in screen
+  // pixels, already projected by the time drawBulge sees it, and a wider Markets panel draws a
+  // proportionally wider line -- so the same fixed ms covered more pixels, and it visibly rushed
+  // on a wide display. Unlike the pulsar (whose SPAN changed), the bulge's span was always the
+  // whole line; what changes here is the PANEL, so the fix keys off st.lastFit.pw directly against
+  // the codebase's own 1600 px reference size, not off gridW or a recomputed curve length.
+  const base = fxMs('bulge');
+  const gridW = 48, line = [{ z: 10 }, { z: 20 }];
+  assert.equal(fxMsFor({ gridW, axes: { line } }, 'bulge'), base, 'no fit yet: the tuned baseline');
+  assert.equal(fxMsFor({ gridW, axes: null }, 'bulge'), base, 'off the price board (bulge never runs there), the plain lookup');
+  // at the reference width itself: no change
+  assert.equal(fxMsFor({ gridW, axes: { line }, lastFit: { pw: 1600, scaleX: 1.88, unit: 6 } }, 'bulge'), base, 'exactly the reference width: unchanged');
+  // wider than the reference: longer, and by exactly the panel's own ratio (the relationship is
+  // exact, not approximate -- the line's pixel width is provably linear in the panel's for a
+  // fixed board, see fxMsFor's own comment)
+  for (const pw of [2560, 3840, 5120]) {
+    const ms = fxMsFor({ gridW, axes: { line }, lastFit: { pw, scaleX: 1.88, unit: 6 } }, 'bulge');
+    const want = Math.round(base * (pw / 1600));
+    assert.equal(ms, want, `pw=${pw}: wanted x${(pw / 1600).toFixed(2)} (${want} ms), got ${ms} ms`);
+    assert.ok(ms > base, `pw=${pw}: must be longer than the tuned baseline, not just equal`);
+  }
+  // narrower than the reference: never shorter than the tuned baseline
+  const narrow = fxMsFor({ gridW, axes: { line }, lastFit: { pw: 900, scaleX: 1.88, unit: 6 } }, 'bulge');
+  assert.equal(narrow, base, 'a panel narrower than the reference never gets faster than the tuned baseline');
+});

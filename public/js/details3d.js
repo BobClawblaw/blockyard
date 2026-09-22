@@ -582,13 +582,31 @@ export function fxOrigin(st, rnd = Math.random) {
 // picture" lesson the front effects (scan) already paid for on 2026-09-15, paid again. So its `ms`
 // scales with the span it actually has to cross this time, against the span it was tuned at
 // (2026-09-20, before the off-panel entrance existed): 0.72 of the board, the old 14%..86% crossing.
+// THE BULGE HAS THE SAME SHAPE OF BUG, FOR A DIFFERENT REASON (found live, 2026-09-22: "the bulge
+// effects on the priceline for the 3D view is running too fast on wider views"). Its ball crosses
+// the WHOLE drawn price line, first point to last, over one fixed ms -- by design, so a steep
+// line spends more of that time climbing and less falling (BULGE_GRAVITY), never more or less of
+// it overall. But the LINE ITSELF is drawn in screen pixels (`pts` is already projected before
+// drawBulge ever sees it), and a wider Markets panel draws a proportionally wider line -- so the
+// same fixed ms now covers more pixels, and the ball visibly rushes on a wide display. Measured
+// directly: for a fixed board (gridW held constant, which it is for the life of one effect), the
+// line's pixel width is EXACTLY proportional to the panel's pixel width (obliqueFit's tag-space
+// carve-out is itself a fixed share of pw, so the proportionality is exact, not approximate,
+// confirmed by computing it at three panel widths and two board widths). So the panel's own width
+// against the codebase's own reference size for these measurements (1600 px, used throughout for
+// exactly this kind of tuning) is the ratio -- no need to also reconstruct the curve itself.
+const BULGE_REF_PW = 1600;
 export function fxMsFor(st, kind) {
   const base = (onPriceBoard(st) ? MARKET_MS[kind] : null) ?? FX_MS[kind] ?? 4500;
-  if (kind !== 'pulsar' || !onPriceBoard(st)) return base;
-  const { xa, xb } = pulsarSpan(st);
-  const span = xb - xa, tunedSpan = 0.72 * st.gridW;
-  if (!(span > 0) || !(tunedSpan > 0)) return base;
-  return Math.round(base * Math.max(1, span / tunedSpan));
+  if (kind === 'pulsar' && onPriceBoard(st)) {
+    const { xa, xb } = pulsarSpan(st);
+    const span = xb - xa, tunedSpan = 0.72 * st.gridW;
+    if (span > 0 && tunedSpan > 0) return Math.round(base * Math.max(1, span / tunedSpan));
+  }
+  if (kind === 'bulge' && onPriceBoard(st) && st.lastFit?.pw > 0) {
+    return Math.round(base * Math.max(1, st.lastFit.pw / BULGE_REF_PW));
+  }
+  return base;
 }
 function startFx(st, kind, now) {
   const d = fxDirection(kind, st);
