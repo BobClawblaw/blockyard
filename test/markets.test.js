@@ -602,3 +602,41 @@ test('the chart series for a short range is made of the bars the reply carries, 
   const ticks = timeTicks(ser.candles[0].t, ser.candles.at(-1).t, 900);
   assert.ok(ticks.length >= 4 && ticks.every((q) => q.t % 300_000 === 0 && /^\d\d:\d\d$/.test(q.label)), ticks.map((q) => q.label).join(' '));
 });
+
+test('the Kiosk honours what the Markets page chose: the store is read every time, re-read while a page stays open, and the caption says the span', async () => {
+  // (operator, 2026-09-22: "Kiosk is not honoring market settings selected in the market screen". Three causes: the
+  // Markets module copied exchange/range/view ONCE and kept its own; settings were fetched from the server only at
+  // boot, so a Kiosk on a wall never saw a change made elsewhere; and the caption counted candles as hours.)
+  const src = readFileSync(new URL('../public/js/markets.js', import.meta.url), 'utf8');
+  const prefs = src.slice(src.indexOf('function prefs() {'), src.indexOf('// ONE VIEW OR THE OTHER'));
+  assert.ok(!/if \(M\.ex === null/.test(prefs), 'no read-once cache of the three settings');
+  assert.match(prefs, /const mk = loadSettings\(\)\.markets;\s*\n\s*M\.ex = mk\.exchange;/);
+  assert.match(src, /const bo = barsOf\(M\.range\), shown = b\.c3\.hours \* bo\.sec;/, 'the caption is the span in its own units, not the number of candles');
+  const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /setInterval\(refreshSettings, 15_000\);/);
+  assert.match(app, /document\.addEventListener\('visibilitychange', \(\) => \{ if \(!document\.hidden\) refreshSettings\(\); \}\);/);
+  assert.match(app, /if \(document\.hidden \|\| settingsPushPending\(\) \|\| document\.getElementById\('settingsWrap'\)\?\.classList\?\.contains\('hidden'\) === false\) return;/,
+    'never while the panel is open here or a local change is still on its way up: the local edit is the newer one');
+  assert.match(app, /if \(mine !== theirs\) \{ seedSettings\(got\.settings\); render\(\); \}/, 'and only when what came back differs');
+  const st = await import('../public/js/settings.js');
+  assert.equal(st.settingsPushPending(), false);
+});
+
+
+test('the price tags always fit beside the board, and the kept price line knows its panel', () => {
+  // (operator, 2026-09-22, the Kiosk on a tablet: "Price getting cut off in market screen with 1h chart" -- the room
+  // for the tags was nine GRID UNITS, and with sixty one-minute bars a unit is six pixels; and "Artifacting with old
+  // price line visible after switching back and forth from market to kiosk" -- the kept segment is device pixels, and
+  // its signature did not include the panel)
+  for (const [pw, ph, bars] of [[1940, 1160, 60], [970, 580, 60], [970, 580, 36], [2560, 1300, 72], [720, 450, 24], [490, 290, 48]]) {
+    const gridW = bars * C3.slot, zMax = fitZ(ph / pw, gridW);
+    const opts = { ...DEFAULTS, ...CAMERA_3D, oblique: { ...CAMERA_3D.oblique, headroom: C3.zBase + zMax + 2 } };
+    const f = obliqueFit(pw, ph, gridW, C3.depth, opts);
+    const right = pw - (f.tx + f.k * gridW * opts.unit);
+    assert.ok(right >= 0.088 * pw - 1e-6, `${pw}x${ph}, ${bars} bars: ${right.toFixed(0)} px beside the board`);
+    assert.ok(f.tx >= -1e-6, 'and the board is not pushed off the left to make it');
+  }
+  const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
+  assert.match(d3, /const extra = low \? Math\.max\(9, tagPx \/ \(k1 \* u\)\) : 0;/, 'a share of the panel, with the old nine units as the floor');
+  assert.match(d3, /const sig = `\$\{CURVE\.key\}\|\$\{lw\}\|\$\{ctx\.canvas\?\.width\}x\$\{ctx\.canvas\?\.height\}\|/, 'the panel\'s pixels and the transform are part of what "the same line" means');
+});

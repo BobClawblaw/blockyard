@@ -480,17 +480,17 @@ export function pulsarHeights(lo, hi, zTop, h6, h7, h8) {
       : [floor, loC - (loC - floor) * 0.15];
   const at = (h) => clamp(span[0] + (span[1] - span[0]) * h);
   let za = at(h6), zb = at(h7);
-  // A SKEW WORTH SEEING: two draws from the same band land close together as often as not, and a
-  // passage that arrives and leaves at the same height is a horizontal rule across the panel. The
-  // far end is pushed out to at least a third of the lane's span, on whichever side it already
-  // favoured (2026-09-20, with the wander below: "a bit of vertical skew between the start and
-  // end point").
-  const wide = Math.abs(span[1] - span[0]);
-  if (wide > 0.2 && Math.abs(zb - za) < wide * 0.33) {
-    const away = zb >= za ? 1 : -1;
-    zb = clamp(za + away * wide * 0.33);
-    if (Math.abs(zb - za) < wide * 0.2) zb = clamp(za - away * wide * 0.33);   // the other way, at a wall
-  }
+  // IT CROSSES THE HEIGHT OF THE BOARD, NOT ONE BAND OF IT (operator, 2026-09-22: "The pulsar wind effect really needs
+  // more vertical travel as it moves across the board"). Both ends used to be drawn from the SAME lane -- above the
+  // line, through it, or below -- pushed apart by a third of that lane at most: on a chart whose prices fill their
+  // axis a lane is a few units tall, and the passage was a near-level run across a panel that is mostly height.
+  // The lane still says where it ARRIVES (so the mix of passages above, through and below the line is what it
+  // was); where it LEAVES is somewhere else altogether: between 45% and 80% of the panel's whole height away, toward
+  // whichever side has the room for it -- or either, by the seed, when both do.
+  const full = ceil - floor, want = full * (0.45 + 0.35 * h7);
+  const up = ceil - za, down = za - floor;
+  const dir = up >= want && down >= want ? (h7 * 7.3 % 1 < 0.5 ? 1 : -1) : up >= down ? 1 : -1;
+  zb = clamp(za + dir * want);
   return { za, zb, lane, floor, ceil };
 }
 /**
@@ -519,7 +519,10 @@ export function pulsarZ(h, travel, h10 = 0.5, h11 = 0.5, h12 = 0.5, h13 = 0.5) {
   // swell by the tighter side would leave those passages flying the ruled line the wander exists
   // to break. The result is clamped either way, so such a passage simply bows the one way it can.
   const room = Math.max(h.ceil - Math.max(h.za, h.zb), Math.min(h.za, h.zb) - h.floor);
-  const amp = Math.max(0, Math.min(room * 0.75, (h.ceil - h.floor) * 0.16));
+  // (0.16 of the height at first; with the ends now far apart the roomier side is often small, so the swell is sized
+  // by the panel and the clamp below does the rest: it bows the way it can)
+  void room;
+  const amp = (h.ceil - h.floor) * 0.24;
   if (amp <= 0.01) return base;
   const env = Math.sin(Math.PI * Math.max(0, Math.min(1, travel)));          // nothing at either end
   const w = Math.sin(travel * Math.PI * (1.4 + h10 * 1.2) + h11 * 6.283) * 0.72
@@ -3137,13 +3140,21 @@ export function obliqueFit(pw, ph, gridW, gridH, opts) {
   // headroom above it only, and room on the right for the price labels the axes draw there
   const low = ob.anchor === 'bottom';
   const dS = ob.dy ?? 1;             // the board's depth as drawn (a lower camera draws it shorter)
-  const extra = low ? 9 : 0;
+  // ROOM FOR THE PRICE TAGS, AS A SHARE OF THE PANEL (operator, 2026-09-22, the Kiosk's 1 h chart on a tablet: "Price
+  // getting cut off in market screen with 1h chart"). It was nine GRID UNITS -- the same mistake the hours' strip below
+  // once made. A tag is a fixed number of PIXELS wide (nine figures of 11 px monospace and its padding: ~80 css px),
+  // and a unit is whatever the board's width leaves: with sixty one-minute bars on a 970 px panel a unit was six
+  // pixels, the room fifty-four, and the current price ran off the edge. Nine units stays the floor.
   // the strip under the front edge where the axes write the hours: a share of the panel, not a
   // number of grid units -- in a short panel 2.4 units was ~14 px and the labels were cut off
   // (operator, 2026-09-11: "The bottom of the chart is getting cut off by the text")
   const foot = low ? 0.055 * ph : 0;
+  const kv = (ph - foot) / ((gridH * dS + head * ob.oy + 1.2) * u);
+  const tagPx = 0.088 * pw;
+  const k1 = low ? Math.min((pw - tagPx) / ((gridW + 2 * head * ob.ox) * u), kv) : 0;
+  const extra = low ? Math.max(9, tagPx / (k1 * u)) : 0;
   const k = low
-    ? Math.min(pw / ((gridW + extra + 2 * head * ob.ox) * u), (ph - foot) / ((gridH * dS + head * ob.oy + 1.2) * u))
+    ? Math.min(pw / ((gridW + extra + 2 * head * ob.ox) * u), kv)
     : Math.min(pw / ((gridW + 2 * head * ob.ox) * u), ph / ((gridH * dS + 2 * head * ob.oy) * u));
   const tx = pw / 2 - (k * (gridW + extra) * u) / 2;
   const ty = low ? ph - foot : ph / 2 + (k * gridH * dS * u) / 2;
@@ -3696,7 +3707,13 @@ function priceLine(ctx, view, axes) {
     // built and nothing is uploaded. (The lens and the pulsar's bend go in that key already.)
     const wire = () => { for (const [w, c, a] of [...GLOW, ...CORE]) stroke(w, `rgba(${c[0]},${c[1]},${c[2]},${a})`); };
     if (ctx.gl2d === true && path) {
-      const sig = `${CURVE.key}|${lw}`, was = WIRE_SIG.get(ctx);
+      // ...AND THE PANEL (operator, 2026-09-22, of the Kiosk: "Artifacting with old price line visible after switching
+      // back and forth from market to kiosk"). A kept segment is triangles in DEVICE pixels; the curve's key is the
+      // line's points in the BOARD's units, which do not change when the panel does. A page that is switched away
+      // is laid out at another size, the segment was kept there, and on coming back the same key replayed the old
+      // size's line over the new picture. The panel's pixels and the transform are part of what "the same" means.
+      const tm = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+      const sig = `${CURVE.key}|${lw}|${ctx.canvas?.width}x${ctx.canvas?.height}|${tm ? [tm.a, tm.d, tm.e, tm.f].map((v) => v.toFixed(3)).join(',') : ''}`, was = WIRE_SIG.get(ctx);
       WIRE_SIG.set(ctx, sig);
       ctx.retained('wire', was === sig, wire);
     } else wire();

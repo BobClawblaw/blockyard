@@ -24,6 +24,8 @@ import { INK } from './theme.js';
 import { renderDepth } from './depthchart.js';
 
 export const REFRESH_MS = 15_000;
+// (10 m and 30 m were built on 2026-09-22 -- ten-second bars assembled from the exchanges' trades feeds -- and taken
+// out the same hour at the operator's word: "Nuke 10 minutes and 30 minutes". One hour is the shortest chart.)
 export const RANGES = [[1, '1 h'], [3, '3 h'], [12, '12 h'], [24, '24 h'], [48, '48 h'], [168, '7 d']];
 // THE SHORT CHARTS ARE FINER BARS, NOT FEWER HOURS (operator, 2026-09-22: "bitcoinity.org/markets has 10m 1h 3h and 12h
 // charts. Why don't we?"). An hour of hourly candles is one candle. So a range names its GRAIN -- 1 h of 1-minute
@@ -89,12 +91,15 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 // where it was left -- on this browser, like every other display setting.
 const M = { data: null, at: 0, busy: false, error: null, ex: null, range: null, view: null, hover: null, bound: false };
 function prefs() {
-  if (M.ex === null || M.range === null || M.view === null) {
-    const mk = loadSettings().markets;
-    M.ex = mk.exchange;
-    M.range = Number(mk.range);
-    M.view = mk.priceView;
-  }
+  // THE STORE IS THE TRUTH, every time (operator, 2026-09-22: "Kiosk is not honoring market settings selected in the
+  // market screen"). This used to copy the three settings ONCE, on first use, and keep its own -- so anything that
+  // changed them afterwards without going through this module's click handler (the Display settings panel, or another
+  // browser's Markets page arriving through the settings refresh in app.js) was ignored until a reload. A Kiosk on a
+  // wall is exactly the page that is never reloaded. loadSettings() is a cached read; it is called on every paint anyway.
+  const mk = loadSettings().markets;
+  M.ex = mk.exchange;
+  M.range = Number(mk.range);
+  M.view = mk.priceView;
   return M;
 }
 
@@ -382,7 +387,11 @@ export function renderMarketsBoard(id, h) {
   const b = drawBoard(id);
   if (!b) return null;
   const last = b.ser.candles.at(-1)?.c;
-  return { label: `${b.ser.base.name} ${b.ser.base.pair} · last ${b.c3.hours} h${last != null ? ` · $${money(last)}` : ''}` };
+  // (the SPAN, in its own units: `c3.hours` is the number of CANDLES, which was hours only while every candle was one --
+  // with the short ranges a 3 h chart of five-minute bars was captioned "last 36 h")
+  const bo = barsOf(M.range), shown = b.c3.hours * bo.sec;
+  const span = shown >= 86400 && shown % 86400 === 0 ? `${shown / 86400} d` : shown >= 3600 ? `${+(shown / 3600).toFixed(1)} h` : `${Math.round(shown / 60)} min`;
+  return { label: `${b.ser.base.name} ${b.ser.base.pair} · last ${span}${bo.grain ? ` · ${bo.sec / 60}-minute bars` : ''}${last != null ? ` · $${money(last)}` : ''}` };
 }
 
 export function renderMarkets(s, state, h) {

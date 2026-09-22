@@ -233,14 +233,14 @@ trimming one board's effects leaves the other's alone.
 | **X-ray** | a front sweeps the board and everything behind it goes x-ray — bodies to glass, edges and a raster lit — then develops back to solid |
 | **Cascade**, **Twinkle**, **Sparkle** | the blocks light in fee-rate order; scattered flashes; a constellation, each block its own colour |
 | **Light cycles** | a TRON-style race in blue and orange from opposite edges, leaving light walls, until one crashes and de-rezzes |
-| **Lightning ball** | a pale plasma ball entering from off-screen, tracing the grid, throwing bolts and trailing electrical dust |
+| **Plasma ball** | a pale plasma ball entering from off-screen, tracing the grid, the line it has travelled burning behind it, trailing electrical dust |
 | **Shockwave**, **Nova**, **Fireworks**, **Supernova** | a hard ring that throws blocks into the air; an implosion then a brighter blast; a fireworks display; a supernova — a star swells white-hot and crackles, blows out in a flash and a lens flare, a shockwave rings out, plasma is flung on every side, and a ring nebula expands and cools gold → red → violet round a white dwarf, lighting everything near it as it goes |
 | **Wave**, **Quake**, **Checkerboard**, **Combo chain** | crests rolling across; the board shaking itself out; squares flipping against each other; a chain reaction down the diagonal |
 | **Code rain**, **Radar**, **Vortex** | a drop falling down every column; a sweep hand with a phosphor tail; spiral arms draining inward |
 | **Power-up**, **Aurora**, **Plasma** | the board charging from the floor up in gold; drifting curtains of colour; the demoscene plasma |
 | **Centipede**, **Interception**, **Collapse** | a body that weaves down the board and splits in two; arcs raining down against interceptors rising to meet them; the board giving way from a point, cubes collapsing outward |
 | **Tractor beam** | a UFO that draws the tallest transaction up into its beam, flies off with it and drops it back under gravity |
-| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, a hazy white light on everything it passes, its arcs electrifying the blocks they strike and lighting where they land — and half the arcs chain on from the struck block to another as a green discharge, half of those on to a third; on Markets it flies through the chart, striking candles and charging the price line where it passes |
+| **Ball lightning** | a plasma sphere in a nebula drifting across the whole view from off-screen to off-screen, crackling with tendrils that hold their shape, sparks in orbit round it, a hazy white light on everything it passes, its bolts — real lightning: channels that hold, fork and re-strike — electrifying the blocks they strike and lighting where they land — and half the arcs chain on from the struck block to another as a green discharge, half of those on to a third; on Markets it flies through the chart, striking candles and charging the price line where it passes |
 | **Energy pulse** | the surge that runs the neon price line on Markets: the pipe swells round its head and goes white-hot behind it, cooling back to the wire through hot gold, with a warm cloud, crackle and motes — nothing blue |
 | **Breathe** | on Markets: the price line breathes, three slow swells from the plain wire to the pulse's white heat and back |
 | **Light saber** | on Markets: the price line ignites from its left end as a light saber — blue, green, red or purple by the run — hums, spits sparks, and retracts |
@@ -256,7 +256,7 @@ never toward you**, and lights the candles or the line. Its list is the **sixtee
 translate to a chart: **Ripple**, **Outline sweep**, **Tide**, **Cascade**, **Twinkle**, **Scan
 line**, **X-ray**, **Fireworks**, **Supernova**, **Wave**, and the price line's own **Energy pulse**,
 **Pipe bulge**, **Breathe**, **Light saber**, **Black hole** and **Ball lightning** (a quarter of its
-Block space size there). Fronts run along the
+Block space size there, fewer bolts, and it flies in from beyond the screen's edge). Fronts run along the
 chart, rings start on the candle row, the candles light where they stand. Nothing on it waits
 its turn: the pulse, the bulge and ball lightning are picks like any other, and how often you
 see one is the length of the list you leave switched on.
@@ -478,7 +478,10 @@ range.
 - **Exchange buttons**: Coinbase, Kraken, Bitstamp, Bitfinex, Gemini, OKX. Only exchanges
   with candle data are listed. The selected exchange provides the candles, and the
   others appear on the flat chart as lines.
-- **Range**: **24 h**, **48 h** or **7 d**.
+- **Range**: **1 h**, **3 h**, **12 h**, **24 h**, **48 h** or **7 d**. The three short ones are
+  finer bars — sixty one-minute, thirty-six five-minute, forty-eight fifteen-minute — fetched from
+  the exchanges only while a chart that short is open, on both views, with minutes on the time
+  axis; the note under the table says what a chart is made of.
 - **View**: **2D** or **3D**. One at a time; they draw the same hours.
 - **Summary strip**: the **USD median** across books, the **spread across
   exchanges**, **24 h volume**, and how many USD books are reporting.
@@ -1359,6 +1362,22 @@ Explorer's block and transaction pages keep their own dark cards.
 Like every other setting these are saved on the server, so the theme is the same on every screen
 of this monitor; the sign-in page draws in the theme this browser last saw.
 
+Below the colours, the renderer:
+
+- **3D renderer** — **Software** (the 2D canvas, drawn on the processor; the default, and it works
+  everywhere) or **WebGL** (the same picture drawn on the graphics card). Every 3D board, sky and
+  effect draws on either, and the switch is live. A browser without WebGL2, a shader that will not
+  compile or a lost graphics context goes back to Software by itself; a board is never blank.
+  On a large or high-density display WebGL is many times faster (a resting Block space board at
+  2560×1300 measured 32 ms a frame on Software and 1 ms on WebGL).
+- **WebGL glow** — WebGL's own finish, 0 to 1: neon lines, stars, sparks and white-hot cores throw
+  real light, and wide faint glows lose their bands. The blocks never glow, because their colour is
+  the feerate. At 0 WebGL draws exactly the Software picture. Dimmed on Software.
+- **Show frame rate** — a figure top right of every 3D board: frames painted in the last second,
+  the processor's milliseconds a frame, and which renderer drew it. A resting board under a sky
+  reads about 30 by design (it repaints for the stars); the graphics card's own time is not visible
+  from a page, so the milliseconds are the processor's alone.
+
 ### Block space
 
 The 3D board on Overview, Block space, Mempool and Kiosk. If the board is heavy on your machine,
@@ -1377,17 +1396,17 @@ these are the settings that buy it back, roughly most expensive first:
 | **Neon blocks** | Each block becomes a dim solid body in its own fee-rate colour under lit neon tubes along every edge it shows. Works at every level of detail, Simple cubes included. |
 | **Neon colour from** | *The block's fee-rate colour* keeps the palette, so the tubes still tell you what the block costs. *One colour* lights every block the same. |
 | **Neon colour** / **Neon brightness** | The one colour, when you have chosen it, and how hard the tubes glow (0.2x to 2x). |
-| **Metallic sheen** | A specular highlight along the lit edge of each block's top face and a dark roll-off on the far one. Works on Simple cubes too. |
-| **Metallic finish** | *Chrome* mirrors a horizon in every face, and the reflection slides as the blocks move; *satin* is the softer highlight along the lit edge. Needs Metallic sheen on. |
+| **Metallic sheen** | A metal finish on every block, at every level of detail, Simple cubes included. Which metal is the next row. |
+| **Metallic finish** | *Chrome* is polished steel reflecting a room: soft bands of light and dark lie across the whole board and run on from block to block, with a blown-out strip that glints where it meets a block's edge, and the reflection slides only as a block flies. *Satin* is brushed metal: a gentle sheen across every face, the colour pulled a little toward steel, machined bevel rims, and on WebGL a fine brushed grain. Needs Metallic sheen on. |
 | **Departures and arrivals** | How blocks leave and rejoin the board on a refresh. |
 | **Depth** | How much height foreshortens, 0 to 0.001. 0 is the flat parallel camera the board shipped with: a cube is the same size however high it flies. Raise it and a cube's top grows a little wider than its base and a flying block swells slightly as it rises. |
-| **Sky** | Which sky stands behind the board: the **Galaxy**, the **Earth**, or none. What each sky is made of is the **Sky** tab; this is only the choice, and the Kiosk's left panel follows it. The Galaxy twinkles, so the board keeps repainting while it is up; none saves that. |
+| **Sky** | Which sky stands behind the board: the **Galaxy**, the **Formation**, the **Sun**, the **Earth**, or none. What each sky is made of is the **Sky** tab; this is only the choice, and the Kiosk's left panel follows it. A sky animates, so the board keeps repainting while one is up; none saves that. |
 | **Board curve** | How far the board bows toward you. 0 is flat. |
 | **Light** | Where the lamp hangs: *straight above* (the default) lights the whole board evenly, which keeps the front rows as bright as the middle; a corner shades the far slope of the curve and the sides turned away from it. |
 
 ### Sky
 
-There are two skies, and every board that has a sky behind it chooses one. The tab opens with the
+There are four skies, and every board that has a sky behind it chooses one. The tab opens with the
 map, which is the whole answer to "which settings apply to which panel":
 
 | board | draws |
@@ -1397,10 +1416,10 @@ map, which is the whole answer to "which settings apply to which panel":
 | **Tetrust**, **Blockout**, **Blockanoid** | Galaxy |
 | **Scorched Yard** | Earth |
 
-Those are the shipped choices; each row is a select with **Galaxy**, **Earth** and **None**, and
-changing it here is the same setting as the **Sky** row at the top of that board's own tab. The
-games also carry a **sky** button on their panels that goes round the three. Below the map, the
-two skies themselves, each with only its own controls; neither is ever dimmed, because any board
+Those are the shipped choices; each row is a select with **Galaxy**, **Formation**, **Sun**, **Earth** and
+**None**, and changing it here is the same setting as the **Sky** row at the top of that board's own tab.
+The games also carry a **sky** button on their panels that goes round the five. Below the map, the
+four skies themselves, each with only its own controls; none is ever dimmed, because any board
 may be using it.
 
 **The Galaxy** is the star field, BlockYard's own sky: one set of stars shared by every board that
@@ -1413,7 +1432,54 @@ draws it, so the density you choose applies to Block space, the candles and the 
 | **Star density** / **Star brightness** | How many stars (up to 8x the shipped number) and how strongly they burn. |
 | **Star colours** | Warm old stars in the nucleus, blue-white young ones in the arms. Off is one colour of starlight. |
 | **Star glints** | The halo and cross glint on the brightest stars. |
+| **Rotation speed** | How fast the spiral turns, from still to a turn in under a minute; 1 is the shipped quarter of an hour. |
 | **Nebulae**, **Dust lanes**, **Star clusters**, **Distant galaxies** | The layers of the sky, each its own switch: gas clouds along the arms, dark ribbons on their inner edges, tight knots out in the halo, and small faint galaxies in the deep field behind everything. |
+
+On WebGL the Galaxy is richer than the switches say: the nebulae are billowing gas with filaments
+and hollows and dust that darkens what is under it, there is light between the stars along the
+arms and a warm bulge at the centre, the stars are soft points with halos and diffraction spikes on
+the brightest, and the distant galaxies are smudges of light. Software draws the same sky with its
+stacked ellipses.
+
+![The Formation](images/sky-formation.jpg)
+
+**The Formation** is a galaxy assembling itself, after the TNG50 simulation film: gas streaming in
+along filaments, boiling, settling into a thin turning disc, with satellite galaxies falling in on
+new orbits, shedding wakes and stirring the gas they cross. It never loops and never fades. On a
+graphics card it is the film's own view, a glowing density field; without one it is drawn as specks
+on the 2D canvas, in the same colours and the same place.
+
+| setting | what it does |
+|---|---|
+| **Formation speed** | How fast the galaxy and its satellites live. 0 holds them; the gas keeps flowing. |
+| **Formation colours** | Thirteen palettes: the film's own magma, and twelve measured to stay clear of the chart's green, red and yellow. **Cobalt & gold** ships. |
+| **Formation brightness** | Dims the colours, not the gas; 1 is the full picture. A warm palette can overpower a chart in front of it. |
+| **Formation flow** | The pace of the gas itself: inward, swirling, jostled, blown out in shells. 0 stills it. |
+| **Formation centre** | Behind the board, or any corner, where it is drawn larger with the gas sweeping across the panel toward it. |
+
+![The Sun](images/sky-sun-limb.jpg)
+
+**The Sun** is our sun as the Solar Dynamics Observatory sees it at 171 ångström, in gold: the
+bright lace of the magnetic network over boiling plasma, turning faster at its equator than at its
+poles (the measured rotation law) about an axis tipped toward you, darkened toward its limb, with
+helmet streamers, polar plumes and wind off it. It is a serious model, not a picture: active
+regions with sunspots and true three-dimensional loops that foreshorten, cross and stand tall on
+the limb, flares with their flash and the telescope's own diffraction cross, filament eruptions
+after the observatory's films (about half of them fail and fall back), red prominences that show as
+dark filaments in front of the disk, and coronal rain. Without a graphics card it is a plain
+limb-darkened disk with the active regions as glows.
+
+| setting | what it does |
+|---|---|
+| **Sun rotation** | 1 is one turn of the equator in ten minutes (the real one takes twenty-four and a half days). 0 holds it; the surface keeps boiling and flaring. |
+| **Solar activity** | The active regions and everything they do. Off is the quiet sun. |
+| **Activity cycle** | Where in its eleven-year cycle: 0 is solar minimum (one quiet region near the equator, rare flares, great polar holes), 1 is maximum (ten regions, flaring and erupting constantly). It ships near the top. |
+| **Sun colours** | Which of the observatory's false colours: 171 Å gold (ships), 304 Å red, 193 Å bronze, 211 Å violet, 131 Å teal, or white light. |
+| **Sun detail** | How many pixels the sun is drawn at before it is drawn smaller and stretched: Medium (ships) draws a 1080p panel in full; High is for a desktop graphics card on a large display; Low for graphics that struggle. |
+| **Prominences** / **Eruptions** | The quiet prominences on the limb, and the filament eruptions. |
+| **Sun size** | From a small disk (1) to its surface filling the whole panel as the background (past about 4 centred, 7 from a corner). Finer structure appears as it grows. |
+| **Sun brightness** | 1 is the full picture; it ships at 0.6 so that a chart in front of it always wins. |
+| **Sun position** | Behind the board, a corner, or the middle of either side. |
 
 **The Earth** is a real day drawn from this machine's clock: the sun climbs and sets, the dome
 goes through night, dawn, day and dusk by the sun's height, clouds drift lit from the sun's side,
@@ -1468,8 +1534,9 @@ everything that moves on this board, both the idle effects and the flight when t
 refresh. Which idle effects may play is the **Market effects** tab.
 
 Your toolbar choices are remembered too: the **exchange** whose candles are drawn and the
-**range** (24 hours, 48 hours or 7 days). Click them on the Markets page or set them here; either
-way the page opens where you left it.
+**range** (1, 3 or 12 hours, 24 or 48 hours, or 7 days). Click them on the Markets page or set
+them here; either way the page opens where you left it, and the Kiosk's candle board follows the
+same choice within seconds, on every screen.
 
 | setting | what it does |
 |---|---|

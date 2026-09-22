@@ -27,7 +27,7 @@ The agents that stayed:
 | kind | what it is |
 |---|---|
 | `lightcycle` | two riders laying light walls until one crashes |
-| `ball` | the lightning ball tracing the grid |
+| `ball` | the plasma ball tracing the grid (no bolts since 2026-09-22: those are `stormball`'s) |
 | `centipede` | a body that weaves down and splits in two |
 | `tractor` | a saucer that draws the tallest transaction up and puts it back |
 | `missile` | arcs raining down against interceptors rising to meet them |

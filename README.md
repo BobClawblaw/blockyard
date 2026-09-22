@@ -97,7 +97,7 @@ Everything else in BlockYard works the same against Bitcoin Core; bmc is where i
 
 | | |
 |---|---|
-| **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with **34 idle effects**, from ripples and light cycles to a lightning ball, ball lightning, a UFO's tractor beam, Missile Command, fireworks, code rain and a demoscene plasma. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
+| **Block space, in 3D.** The next block's worth of the mempool as a board of glowing tiles: area is vbytes, colour is feerate. Refreshes are choreographed — blocks lift, travel in collision-free lanes and land under gravity — and the board comes alive at rest with **34 idle effects**, from ripples and light cycles to a plasma ball, ball lightning with real forking bolts, a UFO's tractor beam, Missile Command, fireworks, code rain and a demoscene plasma. Two viewer modes: **Simple** (the richest few hundred transactions as cubes) and **Detailed** (every transaction in the block). | ![Block space, Detailed mode](docs/images/block-space-mode2.jpg) |
 | **A board you can tune.** Neon-tube blocks, a metallic sheen or a chrome finish that mirrors a horizon, a movable lamp, a touch of perspective, a spiral galaxy behind the board, and a switch for every one of the 34 effects — in a tabbed settings panel. Stored on the server (`config/blockyard.json`), so every screen sees the same board; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
 | **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so BlockYard builds its own from the node's block files (**a few hours** on first start, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
 | **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Off until you tick **Enable market polling** — it is the one thing that talks to anyone but your node — and, once on, fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
@@ -113,8 +113,20 @@ Nous, GitHub, Catppuccin, or nine colours of your own.
 
 The 3D boards, their skies and every effect draw on either of **two renderers**, picked in the
 same panel: **Software** (the 2D canvas, on the processor; the default, and it works everywhere)
-or **WebGL** (the same picture on the graphics card). A browser without WebGL2 stays on Software
-by itself. Both are hand-written here, like everything else: no library.
+or **WebGL** (the same picture on the graphics card, many times faster on a big display, with a
+glow of its own). A browser without WebGL2 stays on Software by itself. Both are hand-written
+here, like everything else: no library.
+
+Behind every board stands a **sky**: the **Galaxy** (a turning spiral of stars with gas along its
+arms), the **Formation** (a galaxy assembling itself, after the TNG50 film), the **Sun** (our sun
+as the Solar Dynamics Observatory sees it at 171 Å — differential rotation, sunspots, true 3D
+coronal loops, flares, filament eruptions, prominences, coronal rain, an activity-cycle slider —
+drawn as a model, not a picture), or the **Earth** (a real day from the clock, weather and moon
+included).
+
+![The Sun behind Block space](docs/images/sky-sun.jpg)
+
+![The Formation behind the Markets board](docs/images/sky-formation.jpg)
 
 ## Quick start
 
@@ -130,7 +142,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1409 unit tests, all built in
+npm test            # optional: 1411 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -221,7 +233,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1409 unit tests (node:test, no dependencies)
+npm test             # 1411 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -243,7 +255,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1409 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1411 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

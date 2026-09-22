@@ -1,4 +1,4 @@
-# [ANN] BlockYard 0.1.3 — built beside Bitcoin Machine Code, an RPC lane four calls wide, and charts that tell the truth about a syncing node
+# [ANN] BlockYard 0.1.3 — a WebGL renderer, the Sun as a sky, a galaxy forming behind the chart, and a companion node
 
 **Repository:** https://github.com/BobClawblaw/blockyard
 **Release:** https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.3
@@ -7,9 +7,33 @@
 
 ![Overview](IMAGE-URL-FOR:overview.jpg)
 
-Two days after 0.1.2, here is 0.1.3. It is a release about the node BlockYard was built beside, and about the charts that watch a node while it syncs. **Bitcoin Machine Code** — an experimental, Core-compatible node written in x86-64 assembly — is now named as BlockYard's first-class companion, and the monitor reads its log line by line. The **RPC lane** keeps up to four calls in flight per node instead of one at a time. And a run of **chart fixes** came from watching a node in initial sync beside a synced one.
+Five days after 0.1.2, here is 0.1.3, and it is two releases in one. The first half is the **skies and the renderer**: every 3D board, sky and effect now draws on either of two renderers — Software, as before, or **WebGL**, the same picture on the graphics card, many times faster on a big display, with a glow of its own — and two new skies stand behind the boards. The **Formation** is a galaxy assembling itself after the TNG50 film. The **Sun** is our star as the Solar Dynamics Observatory sees it at 171 Å, built as a model rather than a picture: it turns faster at its equator than at its poles, its active regions carry sunspots and true three-dimensional coronal loops, it flares, its filaments erupt after the observatory's own films, and there is a slider from solar minimum to maximum. The block finishes were rebuilt, ball lightning throws real lightning, the supernova follows NASA's animation frame by frame, and the Markets page gained 1 h, 3 h and 12 h charts and a sixth exchange, Gemini. The second half is the release prepared on 2026-09-19 and held for this: the node BlockYard was built beside, **Bitcoin Machine Code** — an experimental, Core-compatible node in x86-64 assembly — named as its first-class companion, the RPC lane four calls wide, and the chart fixes that came from watching a node in initial sync beside a synced one.
 
 If you are new here: BlockYard is a self-hosted web app you point at **your own Bitcoin node**. You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, and a kiosk view. It is plain JavaScript on Node.js with **zero dependencies** and **zero telemetry**, read-only toward your node, and it ships hardened: bound to this machine, sign-in on, HTTPS with a certificate it makes itself.
+
+## The Sun, the Formation, and WebGL
+
+![The Sun behind Block space](IMAGE-URL-FOR:sky-sun.jpg)
+
+**The Sun** is a fragment shader on its own canvas under the board, and everything in it is a model with a measurement behind it (the research is `docs/PLAN-SUN-SKY.md`). The surface turns by the measured rotation law — the equator in one period, latitude sixty in a longer one — about an axis tipped 7.25°, darkened toward the limb by the same law the observatory measures. Ten active regions are carried round at their own latitude's rate: each has sunspots with a striated penumbra, plage, and a fan of coronal loops that are real arches standing off the sphere — they foreshorten as a region turns, cross in front of one another, are hidden by the sun, and stand tall against the dark on the limb. They flare, with a flash at the loop tops, the telescope's own diffraction cross on the big ones, and a wave that spreads over the disk. Their filaments erupt after the films of the 21 March 2024 double eruption: a dark thread lights and lifts, then is flung off as a red arch behind a bright front, leaving a cavity, ribbons and an arcade of loops — and about half fail and fall back. Quiet prominences stand red on the limb and show as dark filaments in front of the disk; rain condenses in the loops and streaks down their legs; the corona has helmet streamers, polar plumes and wind. A slider runs the eleven-year cycle from a nearly blank disk with great polar holes to a storm, another makes the sun fill the whole panel as a background, and five other SDO channels (304 red, 193 bronze, 211 violet, 131 teal, white light) are palettes. It ships dim, so a chart in front of it always wins.
+
+![The Sun on the limb of the Markets board](IMAGE-URL-FOR:sky-sun-limb.jpg)
+
+**The Formation** is the TNG50 film's own view — gas streaming in along filaments as a glowing density field, settling into a thin turning disc, satellite galaxies falling in on new orbits, shedding wakes and stirring the gas they cross. It never loops and never fades. Thirteen palettes, twelve of them measured to stay clear of the chart's colours.
+
+![The Formation behind the Markets board](IMAGE-URL-FOR:sky-formation.jpg)
+
+**WebGL.** The viewer's drawing calls were implemented a second time on WebGL2, so every one of the thirty-odd effects runs on both renderers without a rewrite, and a browser without WebGL2 stays on Software by itself. On an RTX 5090 at 2560×1300 a resting Block space board went from 32 ms a frame to 1; the supernova from 90 to 10. WebGL has a glow of its own — neon lines, stars, sparks and white-hot cores throw real light — and the blocks never glow, because their colour is the feerate. The Galaxy sky's nebulae became billowing gas with dust lanes; the finishes were rebuilt: **chrome** is polished steel reflecting a room, **satin** brushed metal with machined bevels, and **neon** tubes are one soft stroke with a white core.
+
+![Chrome](IMAGE-URL-FOR:finish-chrome.jpg)
+
+**Effects.** Ball lightning throws lightning that behaves like lightning — channels that hold their shape while they slam on, re-strike and die, forking into hair-thin branches — and on Markets it flies in from beyond the screen's edge. The supernova on WebGL follows NASA's animation frame by frame: a smooth white-hot breakout with a cyan rim opening into lavender and violet billows round a magenta heart. The pulsar wind crosses the whole height of the board.
+
+![Ball lightning on Markets](IMAGE-URL-FOR:effect-ball-lightning-markets.jpg)
+
+**Markets** has **1 h, 3 h and 12 h** charts — sixty one-minute, thirty-six five-minute and forty-eight fifteen-minute bars, fetched only while a chart that short is open — and **Gemini** as a sixth exchange. The Kiosk follows whatever the Markets page chose, on every screen, within seconds.
+
+![Markets, the 1 h chart](IMAGE-URL-FOR:markets-1h.jpg)
 
 ## Built alongside Bitcoin Machine Code
 
@@ -57,7 +81,8 @@ Watching a node in initial sync beside a synced one showed how many charts only 
 `npm install -g blockyard` (or `git pull`), then restart.
 
 - **The RPC lane keeps up to four calls in flight per node.** If you watch a node that serves one connection at a time, give its entry `"rpc": { "maxInFlight": 1 }`.
-- **Nothing to migrate.** No setting was renamed and no file moved.
+- **One more outbound host, only with market polling on:** `api.gemini.com`, for the sixth exchange.
+- **Nothing to migrate.** No setting was renamed and no file moved. The renderer ships on Software; WebGL is a choice in Display settings, Appearance.
 
 ## How it was made
 

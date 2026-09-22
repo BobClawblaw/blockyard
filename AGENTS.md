@@ -601,6 +601,24 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   NOT DONE: a Kiosk / game-well look with the Sun chosen; the fallback has region glows but no loops or eruptions;
   prominences are lens-shaped on the disk (no sinuous spine); nothing here has been watched in MOTION by me.
   A backtick in a GLSL comment ended the template AGAIN here; a test counts them.
+- **DISPLAY SETTINGS ARE RE-READ WHILE A PAGE IS OPEN** (2026-09-22; operator: "Kiosk is not honoring market settings
+  selected in the market screen"). They live on the server so every browser shows the same monitor, but they were
+  fetched ONCE, at boot -- so a Kiosk on a wall, which nobody reloads, went on showing the old exchange and range.
+  app.js `refreshSettings`: every 15 s and on becoming visible; never while the settings panel is open here or a
+  local change is still on its way up (`settingsPushPending`), and only when what came back differs. **A module
+  must not keep its own copy of a setting**: markets.js `prefs()` read exchange/range/view once and kept them, so
+  even a fresh store was ignored; it reads `loadSettings()` every time now. And the Kiosk's caption counted CANDLES
+  as hours ("last 36 h" for a 3 h chart of five-minute bars): it says the span and the bar size.
+- **ROOM ON A BOARD IS PIXELS, NOT GRID UNITS, WHEREVER TEXT GOES** (2026-09-22, the Kiosk on a tablet: "Price
+  getting cut off in market screen with 1h chart"). `obliqueFit` kept nine GRID UNITS for the price tags; with sixty
+  one-minute bars a unit is six pixels and the tag ran off the panel. It is 8.8% of the panel now, nine units the
+  floor -- the hours' strip under the chart had made the same mistake a fortnight earlier. **And a KEPT SEGMENT IS
+  DEVICE PIXELS** ("old price line visible after switching back and forth from market to kiosk"): the price line's
+  `WIRE_SIG` was the curve's key, which is in BOARD units and does not change when the panel does -- a page switched
+  away is laid out at another size, and coming back replayed that size's line. The panel's pixels and the transform
+  are in the signature. Any new `ctx.retained` needs the same.
+  (10 m and 30 m charts were built the same day -- ten-second bars from the exchanges' trades feeds -- and removed
+  within the hour at the operator's word: "Nuke 10 minutes and 30 minutes". One hour is the shortest chart.)
 - **MARKETS HAS SHORT CHARTS** (2026-09-22; operator: "bitcoinity.org/markets has 10m 1h 3h and 12h charts. Why don't
   we? ... Why don't we fetch finer bars like bitcoinity does?" -- there was no reason; hourly-only was the first day's
   simplification). A range names its GRAIN: 1 h = 60 x 1 m, 3 h = 36 x 5 m, 12 h = 48 x 15 m (`RANGES`, `grainOf`,
@@ -612,8 +630,7 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   **GEMINI is the sixth exchange** (the same day: "Don't forget to add gemini exchange"): v1 pubticker (its volume is
   an object), v2 candles `[ms,o,h,l,c,v]` newest first -- which LAG (the newest hourly bar was 1.7 h old), so its live
   bar is the ticker's or nobody's -- and the whole book. CEX.IO was probed and left out: its candle endpoint returns
-  `[]` and its market was 0.35 BTC in 24 hours. NOT DONE YET: the 10 m chart (needs bars built from each exchange's
-  trades feed) and a currency picker (Coinbase, Kraken, Bitstamp and Gemini all list BTC/EUR). New exchanges are NEW OUTBOUND HOSTS: docs and the
+  `[]` and its market was 0.35 BTC in 24 hours. NOT DONE YET: a currency picker (Coinbase, Kraken, Bitstamp and Gemini all list BTC/EUR). New exchanges are NEW OUTBOUND HOSTS: docs and the
   Settings text name every host contacted.
 - **ON MARKETS, WHAT CROSSES THE BOARD STARTS AND ENDS BEYOND THE PANEL** (operator, 2026-09-22: "Never make an
   effect just blink in out of existence for the market board"). The Markets canvas is far wider than its chart (the
@@ -795,7 +812,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1409 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1411 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1124,7 +1141,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1409 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1411 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

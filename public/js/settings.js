@@ -1133,6 +1133,8 @@ let push = null;           // injected by app.js: (settled) => Promise, debounce
 let pushTimer = null;
 /** app.js hands us the poster once it has a CSRF-capable api(). */
 export function setSettingsPush(fn) { push = fn; }
+/** Is a local change still on its way to the server? (A refresh from the server must not overwrite it meanwhile.) */
+export function settingsPushPending() { return pushTimer != null; }
 
 /**
  * Seed the cache from the server, before the first paint.

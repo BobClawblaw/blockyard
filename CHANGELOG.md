@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.3] — 2026-09-22
+
+A release in two halves. The first is the **skies and the renderer**: every 3D board, sky and
+effect now draws on either of two renderers -- **Software**, as before, or **WebGL**, the same
+picture on the graphics card, many times faster on a big display, with a glow of its own -- and two
+new skies stand behind the boards: the **Formation**, a galaxy assembling itself after the TNG50
+film, and the **Sun**, our star as the Solar Dynamics Observatory sees it at 171 Å, built as a
+model rather than a picture -- differential rotation, sunspots, three-dimensional coronal loops,
+flares, filament eruptions and mass ejections after the observatory's own films, prominences,
+coronal rain, an activity cycle. The block finishes were rebuilt (chrome is polished steel now,
+satin brushed metal, neon real tubes), ball lightning throws real lightning, the supernova is NASA's
+frame by frame, and the Markets page gained **1 h, 3 h and 12 h charts** and a sixth exchange,
+**Gemini**. The second half, prepared on 2026-09-19, is about the node BlockYard was built beside:
+**Bitcoin Machine Code** -- an experimental, Core-compatible node in x86-64 assembly -- is named as
+BlockYard's first-class companion; the monitor reads every line of its log (100% of every current
+log, where it read 53% a release ago) and its RPC is measured against Core's. The **RPC lane**
+keeps up to four calls in flight per node, a run of **chart fixes** came from watching a syncing
+node beside a synced one, **Wolfenstein 3D**'s menu takes keys again, and every **shareware** game
+ships whole with its own terms. The administrative suite grew to M7 on the way and is excluded
+from this release, as it is from every release. 1,445 tests, from 1,070.
+
+### Upgrading from 0.1.2
+
+- **The RPC lane now keeps up to four calls in flight per node** (`rpc.maxInFlight`, default 4,
+  matching Bitcoin Core's four RPC threads). It does not ask any node for more calls a second.
+  A node that serves one connection at a time should get `"rpc": { "maxInFlight": 1 }` on its own
+  entry.
+- **One more outbound host, only with market polling on:** `api.gemini.com`, for the sixth exchange. The
+  security notes list every host contacted.
+- **Nothing to migrate.** No setting was renamed, no file moved. The renderer ships on Software, as before;
+  WebGL is a choice in Display settings, Appearance.
+
 ### Added
 
 - **A second renderer: WebGL.** Settings, Appearance, *3D renderer*: **Software** (the 2D canvas,
@@ -53,11 +87,12 @@ All notable changes to this project are documented here. The format follows
   there are sunspots, red prominences that show as dark filaments on the disk, coronal rain, flares with their flash,
   diffraction cross and wave, helmet streamers and polar plumes, an activity-cycle slider from solar minimum to maximum,
   five other SDO channels as colour palettes, and a detail setting for slower graphics. Sliders for its size (from a small disk to its surface
-  filling the whole panel as the background), brightness, rotation and position. This is the first of seven planned
-  stages; sunspots, loops, prominences, flares and mass ejections are to come (`docs/PLAN-SUN-SKY.md`).
+  filling the whole panel as the background), brightness, rotation and position. The research and the plan are `docs/PLAN-SUN-SKY.md`.
 - **Markets: 1 h, 3 h and 12 h charts**, made of 1-, 5- and 15-minute candles (about sixty bars each) from the same
   five exchanges, on both the flat chart and the 3D board, with minute labels on the time axis. The server fetches a
   finer grain only while a chart that short is open (`/api/markets?tf=`), and stops ten minutes after the last ask.
+- **The Kiosk follows the Markets page**: the exchange and range chosen on Markets -- on this browser or any other --
+  reach an open Kiosk within seconds, without a reload; its caption gives the chart's real span and bar size.
 - **Gemini** is the sixth exchange on Markets: its price, candles at every grain and its whole order book. With market
   polling on, the server now also contacts `api.gemini.com` (the security notes and the Settings text list every host).
 - **The block finishes on WebGL**: **Chrome** is new -- a room's strip lights in polished steel, soft bands running
@@ -67,29 +102,23 @@ All notable changes to this project are documented here. The format follows
 - **Show frame rate** (Settings, Appearance): frames painted in the last second, the processor's
   milliseconds a frame and the renderer, top right of every 3D board.
 
+### Fixed (2026-09-22)
 
-## [0.1.3] — 2026-09-19
+- **The Kiosk follows the Markets page.** The exchange and range chosen on Markets -- on this browser or any
+  other -- reach an open Kiosk within seconds, without a reload. Display settings were fetched once, at page load,
+  so a Kiosk on a wall kept the old choice for days; every open page now re-reads them every fifteen seconds and
+  when its tab comes back into view (never over a change it is still saving). The Kiosk's caption gives the chart's
+  real span and bar size -- it counted candles as hours, so a 3 h chart of five-minute bars read "last 36 h".
+- **The price was cut off on a short chart.** The room kept beside the 3D candle board for the price tags was nine
+  grid units; with sixty one-minute bars a unit is six pixels on a tablet and the current price ran off the panel.
+  It is a share of the panel now, with the old nine units as the floor.
+- **An old price line could show after switching between Markets and the Kiosk** on WebGL: the line kept on the
+  graphics card was reused whenever its data was unchanged, but a page switched away is laid out at another size.
+  The panel's size is part of that check now.
+- **The pulsar wind crosses the height of the board**, not one narrow band of it: a passage covered 22% of the
+  panel's height on average (as little as 7%); it covers 61% now, never under 43%.
 
-A release about the node BlockYard was built beside, and the charts that watch it. **Bitcoin
-Machine Code** -- an experimental, Core-compatible node in x86-64 assembly -- is now named as
-BlockYard's first-class companion: the monitor reads every line of its log -- 100% of every
-current log, where it read 53% a release ago, its boot sequence and index builders included -- and its RPC is measured against Core's (every method in
-Core's list, 16 of 18 calls field for field). The **RPC lane** keeps up to four calls in flight per
-node, where it ran one at a time, at the same call rate. A run of **chart fixes** came from
-watching a node in initial sync beside a synced one: the synced node's block charts were wiped by
-the syncing one, the syncing node's were empty and are now a sample of the whole chain, the Network
-page's Throughput card is drawn again from the right rate, and picking a node refreshes it at once.
-Under Diversions, **Wolfenstein 3D**'s menu takes keys again and moves on both arrows and W A S D,
-and every **shareware** game ships whole with its own terms. The administrative suite grew to M7 on
-the way and is excluded from this release, as it is from every release. 1,292 tests, from 1,070.
-
-### Upgrading from 0.1.2
-
-- **The RPC lane now keeps up to four calls in flight per node** (`rpc.maxInFlight`, default 4,
-  matching Bitcoin Core's four RPC threads). It does not ask any node for more calls a second.
-  A node that serves one connection at a time should get `"rpc": { "maxInFlight": 1 }` on its own
-  entry.
-- **Nothing to migrate.** No setting was renamed, no file moved.
+### The node, the charts and the games (prepared 2026-09-19)
 
 - **Changed: a Bitcoin Machine Code node appears in the node picker only once it is 100% synced.** One still in initial sync is a benchmark run: it is left out of the drop-down, the "also syncing" buttons and the list of nodes needing attention until it finishes. It is hidden, not unconfigured
 

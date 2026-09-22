@@ -512,6 +512,17 @@ test('THE PULSAR STAYS ON SCREEN, and does not always fly down the price line', 
     }
     if (worst > span * 0.02) bowed++;
   }
+  // IT CROSSES THE HEIGHT OF THE BOARD (operator, 2026-09-22: "The pulsar wind effect really needs more vertical travel as
+  // it moves across the board"). Both ends came from the same lane; measured on the Markets board's own shape with
+  // prices filling the axis, a passage covered 22% of the panel's height on average and as little as 7%.
+  { let sum = 0, least = 9, n = 0;
+    for (let i = 0; i < 400; i++) {
+      const h = pulsarHeights(7, 32, 34, fxHash(i * 3 + 1), fxHash(i * 3 + 2), fxHash(i * 3 + 3));
+      let lo2 = Infinity, hi2 = -Infinity;
+      for (let t = 0; t <= 1.0001; t += 0.02) { const z = pulsarZ(h, t, fxHash(i + 4), fxHash(i + 5), fxHash(i + 6), fxHash(i + 7)); lo2 = Math.min(lo2, z); hi2 = Math.max(hi2, z); }
+      const share = (hi2 - lo2) / (h.ceil - h.floor); sum += share; least = Math.min(least, share); n++;
+    }
+    assert.ok(sum / n > 0.5 && least > 0.35, `a passage covers half the panel's height or more (mean ${(sum / n).toFixed(2)}, least ${least.toFixed(2)})`); }
   assert.ok(skewed / runs > 0.8, `most passages end at a different height from where they began (${skewed}/${runs})`);
   assert.ok(bowed / runs > 0.8, `and most wander off the straight run between the two (${bowed}/${runs})`);
   // ONE DIRECTION, ALL THE WAY THROUGH (operator, 2026-09-20: "It should always spin in one

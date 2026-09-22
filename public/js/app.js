@@ -10,7 +10,7 @@ import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
 import { viewerIdle } from './details3d.js';
 import {
-  loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush,
+  loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush, settingsPushPending, normalise as normaliseSettings,
   SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue, SKY_BOARDS, SKY_CHOICES } from './settings.js';
 // APPEARANCE (2026-09-16): the theme goes on <html> before the first paint, from the browser's copy
 // of the settings, and follows every change after (followTheme); the cards' swatches are painted
@@ -1105,6 +1105,21 @@ async function boot() {
   // report describes code that is no longer on disk. Five minutes, because a
   // deploy is slower than that and a reload is cheaper than an hour of doubt.
   setInterval(() => { if (!document.hidden) checkBuild(); }, 300_000);
+  // THE SETTINGS ARE RE-READ WHILE THE PAGE IS OPEN (operator, 2026-09-22: "Kiosk is not honoring market settings
+  // selected in the market screen"). They live on the server so that every browser shows the same monitor -- but they
+  // were fetched ONCE, at boot, so that was only true of a page opened afterwards. A Kiosk on a wall is never
+  // reloaded: change the exchange or the range on a laptop and it went on showing the old one for days. Every
+  // fifteen seconds, and when the tab comes back into view: never while the settings panel is open here or a local
+  // change is still on its way up (the local edit is the newer one), and only when what came back actually differs.
+  const refreshSettings = async () => {
+    if (document.hidden || settingsPushPending() || document.getElementById('settingsWrap')?.classList?.contains('hidden') === false) return;
+    const got = await api('/api/settings').catch(() => null);
+    if (!got?.stored || !got.settings || settingsPushPending()) return;
+    const mine = JSON.stringify(loadSettings()), theirs = JSON.stringify(normaliseSettings(got.settings));
+    if (mine !== theirs) { seedSettings(got.settings); render(); }
+  };
+  setInterval(refreshSettings, 15_000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSettings(); });
 
   const pick = document.getElementById('nodePick');
   const STATE_DOT = { synced: 'ok', ibd: 'accent', catching_up: 'accent', stalled: 'bad', reorg: 'warn', unknown: 'faint' };
