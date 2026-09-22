@@ -76,7 +76,15 @@ export function classifyMethod(method) {
   if (typeof method !== 'string' || !method) return { allowed: false, kind: 'unknown', reason: 'method name must be a string' };
   if (WALLET_METHODS.has(method)) return { allowed: false, kind: 'wallet', reason: 'wallet RPCs are not exposed: some of them return private keys, and the monitor has no use for a wallet' };
   if (DENY_EXACT.has(method)) return { allowed: false, kind: 'write-or-heavy', reason: 'this method mutates state or monopolises the node\'s single-threaded RPC server' };
-  for (const p of DENY_PREFIXES) if (method.startsWith(p) && !ALLOW_PREFIXES.includes(method)) return { allowed: false, kind: 'write', reason: `method starts with "${p}" and is treated as a mutation` };
+  // NO EXCEPTION HERE (audit 2026-09-22, L1). This used to read `&& !ALLOW_PREFIXES.includes(method)`,
+  // which looks like "unless the method is also allow-prefixed" but is not that: `.includes` on an
+  // array of short strings like 'get'/'list' is an EXACT match against `method`, never true for any
+  // real RPC name, so the clause could not fire -- harmless today only because it happened to be
+  // stricter than it read. A later edit that "fixed" it into an actual prefix test would have opened
+  // every DENY_PREFIXES method whose name also happens to start with an ALLOW_PREFIXES entry. A
+  // method that starts with a deny prefix is denied, full stop; there was never a real exception to
+  // this rule, and the code no longer pretends there might be one.
+  for (const p of DENY_PREFIXES) if (method.startsWith(p)) return { allowed: false, kind: 'write', reason: `method starts with "${p}" and is treated as a mutation` };
   if (method === 'help' || method === 'uptime' || method === 'stop') {
     return method === 'stop'
       ? { allowed: false, kind: 'write', reason: 'stop shuts the node down; not exposed to the web UI' }
