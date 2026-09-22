@@ -167,6 +167,71 @@ runtime is good:
 npm test
 ```
 
+**Or, from the published package, no checkout at all:**
+
+```bash
+npm install -g blockyard
+blockyard          # with no command, prints the command list, the version, and where it keeps state
+```
+
+This installs the read-only edition (the same one `npm pack` produces from this checkout; the
+administrative suite never ships — see the top of [AGENTS.md](../AGENTS.md) if you're reading the
+source). A global install has no `config/` or `data/` directory of its own to live in, so it keeps
+both under `~/.blockyard` (`local.json` for the config, `data/` for state and the address index)
+unless `BLOCKYARD_HOME`, `BLOCKYARD_CONFIG` or `BLOCKYARD_DATA` say otherwise. Every command below
+that reads `npm run <x>` in a checkout is `blockyard <x>` here instead:
+
+| checkout | npm install -g |
+|---|---|
+| `npm run setup` | `blockyard setup` |
+| `npm start` | `blockyard start` |
+| `npm run check` | `blockyard check` |
+| `node scripts/index-build.js …` | `blockyard index-build …` |
+| `node scripts/manage-users.js …` | `blockyard users …` |
+| — | `blockyard tls` (remake the self-signed certificate; `--san` to add names) |
+
+There is no `blockyard dev` (the fake-node demo) or `blockyard smoke` — both are checkout-only,
+for working on the code itself. The rest of this document is written for a checkout; substitute
+the table above and `~/.blockyard` for `config/`/`data/` as you go.
+
+**`blockyard: command not found` right after `npm install -g`?** The install worked; npm's global
+`bin/` directory isn't on your `PATH`. Find where npm actually put it and compare against your
+shell's `PATH`:
+
+```bash
+npm config get prefix        # global installs go under <prefix>/bin
+echo $PATH
+```
+
+If `<prefix>/bin` isn't in that list, either add it (`echo 'export
+PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc`) or, better, find out
+*why* npm's prefix isn't one of the normal ones already on your `PATH` (Homebrew's, nvm's,
+`/usr/local`, or a deliberate no-`sudo` choice like `~/.local` with `~/.local/bin` already on
+`PATH`) — `npm config list -l | grep prefix`, and check for a stray `prefix=` in `~/.npmrc` or an
+`NPM_CONFIG_PREFIX` in a shell rc file. A non-default prefix is not itself a problem — only one
+that lands outside every `PATH` your shells actually load is. A correctly configured npm needs
+none of this: a plain `npm install -g blockyard` followed by `blockyard setup` is the whole
+install.
+
+**Without `-g`** (`npm install blockyard`): the package lands in `node_modules/` in whatever
+directory you run it from, not on your `PATH` — a local install never touches `PATH`, on any OS.
+Running the plain `blockyard` command in your shell afterwards fails with "command not found";
+`npx` is what knows to look in `./node_modules/.bin` first, so use it in front of every command:
+
+```bash
+mkdir blockyard && cd blockyard
+npm install blockyard
+npx blockyard setup      # not "blockyard setup" -- npm never put it on PATH
+npx blockyard start
+```
+
+(`./node_modules/.bin/blockyard setup` works too, without `npx`, if you'd rather spell it out.)
+It still keeps its config and data under `~/.blockyard` by the same rule above — a local install
+changes nothing about *where the package runs from*, only how you invoke it.
+
+See [Uninstalling](#12-uninstalling) for removing a global install, and
+[Updating](#11-updating) for `npm update -g blockyard` in place of `git pull`.
+
 ## 3. Try it without a node
 
 ```bash
@@ -491,6 +556,9 @@ sudo -u blockyard git pull
 sudo systemctl restart blockyard
 ```
 
+**Installed from npm:** `npm update -g blockyard` (or `npm install -g blockyard@latest`), then
+restart it (`blockyard start`, or your service's restart command). `~/.blockyard` is untouched.
+
 Your `config/local.json` and `data/` directory are untouched by updates. Read
 [CHANGELOG.md](../CHANGELOG.md) for anything that needs your attention. The browser picks
 up new front-end files on the next page load; the header shows a notice when the page you
@@ -524,6 +592,11 @@ it, and it leaves the node as it found it. Removing it is deleting those directo
 npm uninstall -g blockyard
 rm -rf ~/.blockyard               # local.json, data/ (history, accounts, the audit trail) and data/index
 ```
+
+**Installed from npm, without `-g`** (`npm install blockyard` into some directory): stop it, then
+delete that directory (removes `node_modules/blockyard` along with everything else there) and,
+separately, `rm -rf ~/.blockyard` — the config and data directory is outside `node_modules` and
+survives deleting it.
 
 **A checkout** run with `npm start`: stop it and delete the checkout; `config/` and `data/`,
 the index included, live inside it. If you pointed the index elsewhere at setup time

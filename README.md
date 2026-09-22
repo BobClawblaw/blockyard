@@ -148,7 +148,27 @@ npm start           # builds the address index in the background (a few hours); 
                     # and sign in as admin with the password the first start prints once
 ```
 
-`npm run setup` asks for the node's data directory, reads its `bitcoin.conf` for the rest,
+**Or from npm**, without a checkout:
+
+```bash
+npm install -g blockyard
+blockyard setup     # same installer; config and the index live under ~/.blockyard, not the package
+blockyard start
+```
+
+Without `-g` (`npm install blockyard`), the `blockyard` command isn't on your `PATH` — a local
+install never is. Use `npx` in front of it:
+
+```bash
+mkdir blockyard && cd blockyard
+npm install blockyard
+npx blockyard setup     # not "blockyard setup" -- npm never put it on PATH
+npx blockyard start
+```
+
+Details: [docs/INSTALL.md §2](docs/INSTALL.md#2-get-the-code).
+
+`npm run setup` (or `blockyard setup`) asks for the node's data directory, reads its `bitcoin.conf` for the rest,
 proves the credentials, the chain, `txindex`, the block files and how fast the node answers,
 writes `config/local.json`, and offers to start BlockYard there and then. The address index is
 built **by BlockYard itself, in the background**, the first time it starts, and **it takes a few

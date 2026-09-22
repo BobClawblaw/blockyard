@@ -5,7 +5,7 @@
 [b]npm:[/b] [tt]npm install -g blockyard[/tt]
 [b]Licence:[/b] Apache-2.0
 
-[img width=800]IMAGE-URL-FOR:overview.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U02gx8.jpg[/img]
 
 Five days after 0.1.2, here is 0.1.3, and it is two releases in one. The first half is the [b]skies and the renderer[/b]: every 3D board, sky and effect now draws on either of two renderers — Software, as before, or [b]WebGL[/b], the same picture on the graphics card, many times faster on a big display, with a glow of its own — and two new skies stand behind the boards. The [b]Formation[/b] is a galaxy assembling itself after the TNG50 film. The [b]Sun[/b] is our star as the Solar Dynamics Observatory sees it at 171 Å, built as a model rather than a picture: it turns faster at its equator than at its poles, its active regions carry sunspots and true three-dimensional coronal loops, it flares, its filaments erupt after the observatory's own films, and there is a slider from solar minimum to maximum. The block finishes were rebuilt, ball lightning throws real lightning, the supernova follows NASA's animation frame by frame, and the Markets page gained 1 h, 3 h and 12 h charts and a sixth exchange, Gemini. The second half is the release prepared on 2026-09-19 and held for this: the node BlockYard was built beside, [b]Bitcoin Machine Code[/b] — an experimental, Core-compatible node in x86-64 assembly — named as its first-class companion, the RPC lane four calls wide, and the chart fixes that came from watching a node in initial sync beside a synced one.
 
@@ -13,31 +13,31 @@ If you are new here: BlockYard is a self-hosted web app you point at [b]your own
 
 [size=12pt][b]The Sun, the Formation, and WebGL[/b][/size]
 
-[img width=800]IMAGE-URL-FOR:sky-sun.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U02Krw.jpg[/img]
 
 [b]The Sun[/b] is a fragment shader on its own canvas under the board, and everything in it is a model with a measurement behind it (the research is [tt]docs/PLAN-SUN-SKY.md[/tt]). The surface turns by the measured rotation law — the equator in one period, latitude sixty in a longer one — about an axis tipped 7.25°, darkened toward the limb by the same law the observatory measures. Ten active regions are carried round at their own latitude's rate: each has sunspots with a striated penumbra, plage, and a fan of coronal loops that are real arches standing off the sphere — they foreshorten as a region turns, cross in front of one another, are hidden by the sun, and stand tall against the dark on the limb. They flare, with a flash at the loop tops, the telescope's own diffraction cross on the big ones, and a wave that spreads over the disk. Their filaments erupt after the films of the 21 March 2024 double eruption: a dark thread lights and lifts, then is flung off as a red arch behind a bright front, leaving a cavity, ribbons and an arcade of loops — and about half fail and fall back. Quiet prominences stand red on the limb and show as dark filaments in front of the disk; rain condenses in the loops and streaks down their legs; the corona has helmet streamers, polar plumes and wind. A slider runs the eleven-year cycle from a nearly blank disk with great polar holes to a storm, another makes the sun fill the whole panel as a background, and five other SDO channels (304 red, 193 bronze, 211 violet, 131 teal, white light) are palettes. It ships dim, so a chart in front of it always wins.
 
-[img width=800]IMAGE-URL-FOR:sky-sun-limb.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U028P3.jpg[/img]
 
 [b]The Formation[/b] is the TNG50 film's own view — gas streaming in along filaments as a glowing density field, settling into a thin turning disc, satellite galaxies falling in on new orbits, shedding wakes and stirring the gas they cross. It never loops and never fades. Thirteen palettes, twelve of them measured to stay clear of the chart's colours.
 
-[img width=800]IMAGE-URL-FOR:sky-formation.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U02bO9.jpg[/img]
 
 [b]WebGL.[/b] The viewer's drawing calls were implemented a second time on WebGL2, so every one of the thirty-odd effects runs on both renderers without a rewrite, and a browser without WebGL2 stays on Software by itself. On an RTX 5090 at 2560×1300 a resting Block space board went from 32 ms a frame to 1; the supernova from 90 to 10. WebGL has a glow of its own — neon lines, stars, sparks and white-hot cores throw real light — and the blocks never glow, because their colour is the feerate. The Galaxy sky's nebulae became billowing gas with dust lanes; the finishes were rebuilt: [b]chrome[/b] is polished steel reflecting a room, [b]satin[/b] brushed metal with machined bevels, and [b]neon[/b] tubes are one soft stroke with a white core.
 
-[img width=800]IMAGE-URL-FOR:finish-chrome.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U024iG.jpg[/img]
 
 [b]Effects.[/b] Ball lightning throws lightning that behaves like lightning — channels that hold their shape while they slam on, re-strike and die, forking into hair-thin branches — and on Markets it flies in from beyond the screen's edge. The supernova on WebGL follows NASA's animation frame by frame: a smooth white-hot breakout with a cyan rim opening into lavender and violet billows round a magenta heart. The pulsar wind crosses the whole height of the board.
 
-[img width=800]IMAGE-URL-FOR:effect-ball-lightning-markets.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U029Nf.jpg[/img]
 
 [b]Markets[/b] has [b]1 h, 3 h and 12 h[/b] charts — sixty one-minute, thirty-six five-minute and forty-eight fifteen-minute bars, fetched only while a chart that short is open — and [b]Gemini[/b] as a sixth exchange. The Kiosk follows whatever the Markets page chose, on every screen, within seconds.
 
-[img width=800]IMAGE-URL-FOR:markets-1h.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U02B4Z.jpg[/img]
 
 [size=12pt][b]Built alongside Bitcoin Machine Code[/b][/size]
 
-[url=[url]https://github.com/BobClawblaw/bitcoinmachinecode]Bitcoin[/url] Machine Code[/url] ([tt]bmc[/tt]) is a full validating Bitcoin node for Linux x86-64, written in NASM assembly with a C orchestration layer. Like BlockYard, every line of it is AI-authored. It verifies the chain from genesis, keeps a UTXO set proven byte-identical to Bitcoin Core's (MuHash-exact), follows mainnet live, runs a Core-policy mempool and relay, and serves Bitcoin Core's JSON-RPC.
+[url=https://github.com/BobClawblaw/bitcoinmachinecode]Bitcoin Machine Code[/url] ([tt]bmc[/tt]) is a full validating Bitcoin node for Linux x86-64, written in NASM assembly with a C orchestration layer. Like BlockYard, every line of it is AI-authored. It verifies the chain from genesis, keeps a UTXO set proven byte-identical to Bitcoin Core's (MuHash-exact), follows mainnet live, runs a Core-policy mempool and relay, and serves Bitcoin Core's JSON-RPC.
 
 [b]It is an academic, experimental development build, not ready for primetime.[/b] It has had internal and external security review but no independent human audit of its consensus and cryptographic assembly. Run it to study and evaluate, on a machine you can afford to lose, with no funds near it. For a production node, run Bitcoin Core. It is getting more solid every day, and BlockYard is how that is watched and measured.
 
@@ -49,7 +49,7 @@ What BlockYard does for it:
 • [b]It runs mempool.space out of the box.[/b] mempool.space needs a Core-compatible RPC and an Esplora REST API. On Core that REST API is a second program with an index of its own. bmc serves both from the node process, and builds every index mempool uses during its initial sync — no Electrum server, no separate indexer, no rebuild afterwards, no patch to mempool. (Set the index options before the first sync.)
 • [b]A bmc node joins the node picker once it is 100% synced.[/b] One still in initial sync is a benchmark run, and stays out of the list until it finishes.
 
-[img width=800]IMAGE-URL-FOR:about.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U027uD.jpg[/img]
 
 [size=12pt][b]The RPC lane, four calls wide[/b][/size]
 
@@ -67,7 +67,7 @@ Watching a node in initial sync beside a synced one showed how many charts only 
 • [b]Switching node showed the old figures.[/b] Every switch now pulls at once, and an answer for the node you just left is dropped.
 • [b]The node's own progress rows were blank[/b], because they read field names the monitor never stored. [b]About showed the node's version as "–"[/b], because the snapshot carried two keys called [tt]network[/tt]. Both are fixed.
 
-[img width=800]IMAGE-URL-FOR:chain.jpg[/img]
+[img width=800]https://talkimg.com/images/2026/09/22/U02ovj.jpg[/img]
 
 [size=12pt][b]Diversions[/b][/size]
 
