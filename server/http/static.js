@@ -53,6 +53,13 @@ export const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=()',
+  // No SharedArrayBuffer anywhere in this codebase (checked: the DOS emulator's worker uses
+  // plain postMessage and transferable ArrayBuffers, never shared memory), so nothing here
+  // needs cross-origin isolation -- these are cheap, standard defense-in-depth rather than a
+  // requirement (audit 2026-09-22, L4): same-origin windows can't hold a reference into this
+  // page, and this page's own responses can't be pulled into another origin as a subresource.
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
   'Content-Security-Policy': CSP_BASE.join('; '),
 };
 
@@ -150,6 +157,14 @@ export class StaticFiles {
     let decoded;
     try { decoded = decodeURIComponent(urlPath.split('?')[0]); } catch { return { error: 400 }; }
     if (decoded.includes('\0')) return { error: 400 };
+    // REFUSED ON EVERY PLATFORM, NOT ONLY WHERE IT MATTERS (audit 2026-09-22, L10). `%5C` decodes
+    // to a literal backslash, which path.normalize/path.join treat as an ordinary filename
+    // character on POSIX but as a path SEPARATOR on Windows -- an untested edge this suite runs CI
+    // for (.github/workflows/test.yml, windows-latest) but never exercised. No file this server
+    // ever serves has a backslash in its real name, so refusing the character outright costs
+    // nothing on any platform and closes the edge without needing a Windows box to prove it: a
+    // string that can never mean a directory separator here cannot be used to build one there.
+    if (decoded.includes('\\')) return { error: 400 };
     if (decoded === '/') decoded = '/index.html';
     if (decoded === '/login') decoded = '/login.html';
     const candidate = path.join(this.root, path.normalize(decoded));
