@@ -130,7 +130,7 @@ export function createAppServer(app) {
       if (app.hub.countFor(streamKey) >= app.hub.limits.maxPerKey) {
         return sendJson(req, res, 429, { error: { message: `too many open streams (${app.hub.limits.maxPerKey}) for this ${openAccess ? 'address' : 'account'}`, kind: 'ratelimited' } });
       }
-      const client = app.hub.add(req, res, { user: user.user, nodeId: wantNode, key: streamKey });
+      const client = app.hub.add(req, res, { user: user.user, nodeId: wantNode, key: streamKey, headers: H() });
       app.log({ level: 'info', msg: `sse #${client.id} opened by ${user.user.username} (${ip})` });
       req.on('close', () => app.log({ level: 'info', msg: `sse #${client.id} closed (${Math.round((Date.now() - started) / 1000)}s)` }));
       return undefined;
@@ -155,7 +155,13 @@ export function createAppServer(app) {
       // The DOS Diversions' game files (http/games.js). Behind the session when accounts are on:
       // twenty megabytes of somebody else's games are not a public asset of this monitor.
       if (path.startsWith('/games/')) {
-        if (!openAccess && !resolveSession(req, app)) return sendJson(req, res, 401, { error: { message: 'authentication required', kind: 'auth' }, login: '/login' });
+        const gameSession = openAccess ? null : resolveSession(req, app);
+        if (!openAccess && !gameSession) return sendJson(req, res, 401, { error: { message: 'authentication required', kind: 'auth' }, login: '/login' });
+        // RATE-LIMITED, LIKE EVERY OTHER SIZE-HEAVY ROUTE HERE (audit 2026-09-22, L3/D2). This had
+        // neither a request-rate cap nor a throughput cap, unlike /api/stream's per-key limit and
+        // login's throttle -- an 18 MB file with nothing pacing repeat requests for it.
+        const grl = app.gamesLimiter.check(openAccess ? `ip:${ip}` : `user:${gameSession.user.id}`, 1);
+        if (!grl.ok) return sendJson(req, res, 429, { error: { message: `too many game-asset requests; retry in ${Math.ceil(grl.retryAfterMs / 1000)}s`, kind: 'ratelimited' } });
         const done = await serveGame(req, res, path, app.gamesDir, { tls: app.tls, hstsMs });
         if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
       }
@@ -251,7 +257,7 @@ export function createAppServer(app) {
       }
     }
 
-    // OPEN MODE STILL HAS TO REFUSE CROSS-SITE WRITES.
+    // NO SESSION IS NOT THE SAME AS NO RISK.
     //
     // The check above is skipped without a session, on the reasoning that there is no credential
     // to ride. That is true of READS, and false of every route that makes the SERVER act. The node
@@ -260,10 +266,21 @@ export function createAppServer(app) {
     // is no preflight to stop it -- and pointed a credentialed RPC probe at an attacker's URL.
     //
     // A page on another origin cannot suppress Origin on a form post, nor forge Sec-Fetch-Site, so
-    // these two are exactly the signal open mode has left. A non-browser client (curl, a script)
-    // sends neither and is unaffected: it can already reach the port, and this check is about what
-    // a BROWSER can be made to do on somebody's behalf.
-    if (route.csrf && !session) {
+    // these two are exactly the signal left for a route with no session to protect it. A non-browser
+    // client (curl, a script) sends neither and is unaffected: it can already reach the port, and
+    // this check is about what a BROWSER can be made to do on somebody's behalf.
+    //
+    // NOT GATED ON `route.csrf` (audit 2026-09-22, M3). `/api/login` is `csrf: false` -- correctly,
+    // there is no session yet to double-submit against -- but that also skipped THIS check, which
+    // does not need one either. A cross-site auto-submitting <form method=post
+    // action=".../api/login"> with the attacker's own credentials in hidden fields logged the
+    // victim's browser into the attacker's account (login CSRF): SameSite=Strict does not stop it,
+    // because it governs sending an EXISTING cookie cross-site, not accepting a Set-Cookie from this
+    // same-site-destination POST. Every state-changing request reachable with no session -- which is
+    // every POST/PUT/DELETE/PATCH this route table has, login included -- gets this check; GET/HEAD
+    // never mutate anything, so they are left alone.
+    const mutating = !['GET', 'HEAD'].includes(req.method);
+    if (mutating && !session) {
       const origin = req.headers.origin;
       const site = req.headers['sec-fetch-site'];
       let crossSite = false;
@@ -274,9 +291,9 @@ export function createAppServer(app) {
       }
       if (site && !['same-origin', 'none'].includes(site)) crossSite = true;
       if (crossSite) {
-        await app.audit({ type: 'csrf-rejected', username: null, path, ip, reason: 'cross-site request in open mode' });
+        await app.audit({ type: 'csrf-rejected', username: null, path, ip, reason: openAccess ? 'cross-site request in open mode' : 'cross-site request with no session' });
         return sendJson(req, res, 403, {
-          error: { message: 'cross-site request refused: this endpoint changes state, and with accounts off there is no token to check', kind: 'csrf' },
+          error: { message: 'cross-site request refused: this endpoint changes state and there is no session-bound token to check yet', kind: 'csrf' },
         });
       }
     }

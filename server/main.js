@@ -127,6 +127,14 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   // (~50 ms, 16 MB) on the request thread, so this is also the only thing keeping
   // a cheap flood from becoming a CPU denial of service on the monitor.
   app.loginLimiter = new RateLimiter({ capacity: 10, perSec: 0.5 });
+  // A third, separate bucket for /games/* (audit 2026-09-22, L3/D2). The general limiter above
+  // (120 burst, 40/s) is sized for ordinary API calls, not for a route whose files run to 18 MB
+  // (Quake's PAK) -- at that rate it throttles almost nothing meaningful for a route with no
+  // per-request cost signal of its own. 40 requests, refilling one every second, comfortably
+  // covers a real page load (Wolfenstein alone is half a dozen small files) with room to spare,
+  // while still bounding repeated/automated requests for the same large file the way every other
+  // size-heavy route here already is (SSE's per-key stream cap, the login throttle).
+  app.gamesLimiter = new RateLimiter({ capacity: 40, perSec: 1 });
   app.hub = new StreamHub({ log: app.log });
 
   // First run has to produce a credential somehow. Env-provided wins; otherwise

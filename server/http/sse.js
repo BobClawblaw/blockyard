@@ -64,12 +64,18 @@ export class StreamHub {
     return n;
   }
 
-  add(req, res, { user = null, nodeId = null, key = null } = {}) {
+  add(req, res, { user = null, nodeId = null, key = null, headers = {} } = {}) {
     const id = ++this.seq;
     const client = new Client(res, user, id);
     client.nodeId = nodeId;
     client.key = key;
+    // SECURITY HEADERS ON EVERY RESPONSE, SSE INCLUDED (audit 2026-09-22, M4). This was the one
+    // response class the app's CSP/X-Frame-Options/nosniff/Referrer-Policy/Permissions-Policy
+    // policy did not reach -- HTML, JSON, error pages and the games route all carry it, this
+    // route only carried its own stream headers. `headers` is server.js's own securityHeaders()
+    // result, so it is the exact same policy, not a second copy that can drift from the first.
     res.writeHead(200, {
+      ...headers,
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Connection': 'keep-alive',
