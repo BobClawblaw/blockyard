@@ -27,11 +27,23 @@ export const ROW = 21;
 export const MAX_POS = 0xffff;
 export const MAX_HEIGHT = 0xffffff;
 
+// BOUNDS-CHECKED, CHEAPLY (audit 2026-09-22, L8). `buf[i]` past the end reads `undefined`, not a
+// throw, and `Buffer#subarray` clips silently rather than throwing -- so a corrupted length field
+// used to be able to hand a truncated script to onOutput with no error raised at that point at
+// all, relying entirely on a later fixed-width read happening to land past the end (which does
+// throw) or on blockRows' own final `st.pos !== body.length` check catching it by coincidence.
+// server/chain/tx.js's Reader class already bounds-checks every read the same way this file's
+// walkTx does; this file stayed unchecked because it is the one deliberately kept lean (see the
+// header comment -- the whole point of this module is not paying the heavier decoder's cost over
+// the whole chain), so the fix is the cheapest possible check at each read, not a Reader wrapper.
+function need(buf, pos, n) { if (pos + n > buf.length) throw new RangeError(`truncated: need ${n} bytes at ${pos} of ${buf.length}`); }
 function varint(buf, st) {
+  need(buf, st.pos, 1);
   const b = buf[st.pos++];
   if (b < 0xfd) return b;
-  if (b === 0xfd) { const v = buf.readUInt16LE(st.pos); st.pos += 2; return v; }
-  if (b === 0xfe) { const v = buf.readUInt32LE(st.pos); st.pos += 4; return v; }
+  if (b === 0xfd) { need(buf, st.pos, 2); const v = buf.readUInt16LE(st.pos); st.pos += 2; return v; }
+  if (b === 0xfe) { need(buf, st.pos, 4); const v = buf.readUInt32LE(st.pos); st.pos += 4; return v; }
+  need(buf, st.pos, 8);
   const v = Number(buf.readBigUInt64LE(st.pos)); st.pos += 8; return v;
 }
 
@@ -45,20 +57,22 @@ export function scriptKey(script) {
  * number of inputs. Leaves st.pos after the transaction.
  */
 function walkTx(buf, st, onOutput) {
-  st.pos += 4;                                                   // version
+  need(buf, st.pos, 4); st.pos += 4;                              // version
   let segwit = false;
   if (buf[st.pos] === 0 && buf[st.pos + 1] === 1) { segwit = true; st.pos += 2; }
   const nin = varint(buf, st);
-  for (let i = 0; i < nin; i++) { st.pos += 36; const len = varint(buf, st); st.pos += len + 4; }
+  for (let i = 0; i < nin; i++) { need(buf, st.pos, 36); st.pos += 36; const len = varint(buf, st); need(buf, st.pos, len + 4); st.pos += len + 4; }
   const nout = varint(buf, st);
   for (let o = 0; o < nout; o++) {
+    need(buf, st.pos, 8);
     const value = Number(buf.readBigUInt64LE(st.pos)); st.pos += 8;
     const len = varint(buf, st);
+    need(buf, st.pos, len);
     onOutput(value, buf.subarray(st.pos, st.pos + len));
     st.pos += len;
   }
-  if (segwit) for (let i = 0; i < nin; i++) { const items = varint(buf, st); for (let k = 0; k < items; k++) { const len = varint(buf, st); st.pos += len; } }
-  st.pos += 4;                                                   // locktime
+  if (segwit) for (let i = 0; i < nin; i++) { const items = varint(buf, st); for (let k = 0; k < items; k++) { const len = varint(buf, st); need(buf, st.pos, len); st.pos += len; } }
+  need(buf, st.pos, 4); st.pos += 4;                              // locktime
   return nin;
 }
 
