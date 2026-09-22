@@ -530,7 +530,16 @@ server {
     location / {
         proxy_pass http://127.0.0.1:21000;
         proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # OVERWRITE, NOT APPEND (security audit 2026-09-22, H1). $proxy_add_x_forwarded_for
+        # appends nginx's view of the client onto whatever X-Forwarded-For the CLIENT already
+        # sent, so a request arriving with a forged header keeps that forged value as the
+        # first entry -- and clientIp() below trusts the first entry, exactly because that is
+        # only safe when the proxy is the one writing it. Use $remote_addr here: it is what
+        # nginx itself observed the connection to be, not something a client can put words in
+        # front of. If you truly have more than one hop in front of this proxy, use a real
+        # X-Forwarded-For chain and change clientIp() to trust the address YOUR trusted hop
+        # added, not the client-supplied end of the chain.
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     location /api/stream {
@@ -546,7 +555,10 @@ server {
 
 Then set `"server": { "trustProxy": true }` so the monitor uses the forwarded client
 address for rate limits and the CIDR gate, and `BLOCKYARD_SECURE_COOKIE=1` so the session
-cookie is marked `Secure` behind the proxy's TLS.
+cookie is marked `Secure` behind the proxy's TLS. **Only turn `trustProxy` on if the proxy
+in front overwrites `X-Forwarded-For` the way the snippet above does** — `docs/CONFIGURATION.md`
+says why: with an appending proxy, a client's own forged header survives as the entry the
+monitor trusts, walking straight past `allowCidrs` and every per-address rate limit.
 
 ## 11. Updating
 
