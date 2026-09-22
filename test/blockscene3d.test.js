@@ -1336,3 +1336,23 @@ test('the cubes under a racing head flash in its colour', () => {
   assert.ok(under.glow > 0.8 && under.color[0] === 80, 'the cube it rides over lights in TRON blue');
   assert.equal(far.glow, 0, 'and one far away does not');
 });
+
+test('THE BLACK HOLE\'S ORBIT SPINS BY THE EFFECT\'S OWN CLOCK, NOT THE PAGE\'S UPTIME', () => {
+  // 2026-09-22: "shit is rotating around the black hole effect way too quickly" -- on a Kiosk, or
+  // any tab left open a while. `o.now` (the page's own performance.now(), unbounded, never reset)
+  // was fed straight into the swing formula: by the time a black hole opens on an old tab, `now`
+  // is already huge, and while the pull ramps in (peak changing fast) the swing's RATE, not just
+  // its offset, scales with it (2*peak*peak'*now*0.00035) -- a burst invisible in any short-lived
+  // test or a freshly loaded page, which is exactly why it went unnoticed. The fix reads elapsed
+  // time off the effect's own u * ms, which is bounded by its own duration whatever the tab's age:
+  // two calls differing only in an old-tab-sized `now` must draw the identical cube.
+  const head = { x: 5, y: 5, z: 0, color: [255, 160, 60], alpha: 1, r: 2.3, rPeak: 2.3, scale: 0, pull: 1, release: 1, lean: 1, shrink: false };
+  const tile = { txid: 'a', x: 5, y: 5, s: 2, z: 0, color: feeColor(5) };
+  const at = (u, now) => buildScene([tile], { unit: 10, fx: { kind: 'blackhole', u, ms: 26000, heads: [head], gridW: 40, gridH: 40 }, now })
+    .ops.find((o2) => o2.txid === 'a' && o2.face === 'top').points.map((p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`).join('|');
+  const freshTab = at(0.3, 7800);                       // 7.8 s into a fresh page load
+  const oldTab = at(0.3, 1000 * 60 * 60 * 6 + 7800);    // the very same moment of the effect, six hours into an open tab
+  assert.equal(freshTab, oldTab, 'the orbit does not care how long the tab has been open');
+  // not an accidental no-op: it does turn as the effect's own u advances
+  assert.notEqual(freshTab, at(0.5, 7800), 'the orbit does turn as the effect itself runs on');
+});

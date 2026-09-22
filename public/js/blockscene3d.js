@@ -1457,8 +1457,18 @@ export function buildScene(tiles, o = {}) {
       const dx = cx0 - hp.x, dy = cy0 - hp.y, r0 = Math.hypot(dx, dy) || 1, a0 = Math.atan2(dy, dx);
       // HALF THE SPEED (operator, 2026-09-15: "The bars sping around much much too quickly. Try to
       // calm it down by at least half to start" -- then "slow the spin ... by another half. Want it
-      // smoother and calmer"): 0.00035 a millisecond at full pull, a quarter of the 0.0014 it was
-      const swing = peak * peak * (o.now ?? 0) * 0.00035 + 0.5 * peak;   // clockwise on screen, Keplerian
+      // smoother and calmer"): 0.00035 a millisecond at full pull, a quarter of the 0.0014 it was.
+      // AGAINST THE EFFECT'S OWN CLOCK, NOT THE PAGE'S (2026-09-22: "shit is rotating around the
+      // black hole effect way too quickly" -- on a Kiosk or any tab left open a while). `o.now` is
+      // the page's own uptime (performance.now() since load), unbounded and never reset; this used
+      // it directly, so on a long-lived tab `now` is already huge by the time any black hole opens,
+      // and peak's own ramp-in multiplies it -- the swing's RATE OF CHANGE during the capture spiked
+      // with page age (2*peak*peak'*now*0.00035, and peak' is not small while the hole is opening),
+      // not just its offset. A five-minute-old tab does not look like this in a five-second test,
+      // which is why it was never caught: the elapsed time has to be the effect's own age, which
+      // never exceeds its ms whatever the tab's.
+      const elapsed = (o.fx?.u ?? 0) * (o.fx?.ms ?? 0);
+      const swing = peak * peak * elapsed * 0.00035 + 0.5 * peak;   // clockwise on screen, Keplerian
       // ROUND THE HOLE, on the block board (operator, 2026-09-15: "the blocks don't look right"):
       // part-way home from a hole twenty units up left the cubes hanging in the middle distance;
       // each is carried instead to its own ring round the hole, one and a half to three reaches
