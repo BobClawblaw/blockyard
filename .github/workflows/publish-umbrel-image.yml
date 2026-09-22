@@ -37,6 +37,16 @@ jobs:
           want='${{ inputs.version }}'
           test "$have" = "$want" || { echo "package.json says $have, you asked for $want"; exit 1; }
 
+      # A DOCKER TAG MUST BE LOWERCASE; A GITHUB OWNER NAME NEED NOT BE. `github.repository_owner`
+      # is this account's real-cased login (BobClawblaw), which `docker/build-push-action` refused
+      # outright the first time this workflow ran ('repository name must be lowercase') -- the
+      # workflow expression language has no case-folding function, so it's done here, once, in
+      # the shell, and every later step reads the env var instead of the raw context.
+      - name: lowercase the owner, for the image tag
+        run: echo "OWNER_LC=${OWNER,,}" >> "$GITHUB_ENV"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -55,14 +65,14 @@ jobs:
           push: true
           provenance: false   # the store's linter reads a plain manifest list
           tags: |
-            ghcr.io/${{ github.repository_owner }}/blockyard:${{ inputs.version }}
-            ${{ inputs.latest && format('ghcr.io/{0}/blockyard:latest', github.repository_owner) || '' }}
+            ghcr.io/${{ env.OWNER_LC }}/blockyard:${{ inputs.version }}
+            ${{ inputs.latest && format('ghcr.io/{0}/blockyard:latest', env.OWNER_LC) || '' }}
 
       # This is the number that goes into umbrel/blockyard/docker-compose.yml.
       - name: the digest to pin
         run: |
           echo "### pin this in umbrel/blockyard/docker-compose.yml" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "    image: ghcr.io/${{ github.repository_owner }}/blockyard:${{ inputs.version }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "    image: ghcr.io/${{ env.OWNER_LC }}/blockyard:${{ inputs.version }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "NOTE: the package must be made PUBLIC once, at ghcr.io -- a private package cannot be installed by an Umbrel." >> "$GITHUB_STEP_SUMMARY"
