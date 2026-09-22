@@ -69,11 +69,18 @@ function scan(file) {
 function sortBucket(bucket, dir, expectSize = null, expectCrc = null) {
   const t0 = performance.now();
   const name = (s) => path.join(dir, `bucket-${bucket.toString(16).padStart(2, '0')}${s}`);
+  // fd CLOSED ON EVERY PATH, INCLUDING A READ ERROR (audit 2026-09-22, L7): fstatSync/readSync can
+  // throw on a genuine disk fault, and this worker process is long-lived (a build can run for
+  // hours, per docs/MEASUREMENTS.md 28-30) -- an uncaught throw here used to skip closeSync
+  // entirely, leaking one fd per failure. readChainFile in blockfile.js already gets this right;
+  // matching it here.
   const fd = openSync(name('.unsorted'), 'r');
-  const size = fstatSync(fd).size;
-  const buf = Buffer.allocUnsafe(size);
-  for (let got = 0; got < size;) { const k = readSync(fd, buf, got, size - got, got); if (!k) break; got += k; }
-  closeSync(fd);
+  let size, buf;
+  try {
+    size = fstatSync(fd).size;
+    buf = Buffer.allocUnsafe(size);
+    for (let got = 0; got < size;) { const k = readSync(fd, buf, got, size - got, got); if (!k) break; got += k; }
+  } finally { closeSync(fd); }
   const hex = bucket.toString(16).padStart(2, '0');
   if (expectSize != null && size !== expectSize) throw new Error(`bucket ${hex} does not hold what the scan wrote: ${size} bytes, and the scan wrote ${expectSize}`);
   if (expectCrc != null && crc32(buf) !== expectCrc) throw new Error(`bucket ${hex} does not hold what the scan wrote: its CRC-32 is ${crc32(buf)}, and the scan's was ${expectCrc}`);
