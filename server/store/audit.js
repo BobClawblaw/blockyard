@@ -14,7 +14,36 @@
 import fsp from 'node:fs/promises';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { appendJsonl, fchmodOwnerOnly } from './history.js';
+
+// HASH-CHAINED, SO EDITING ONE ENTRY BREAKS EVERY ONE AFTER IT (audit 2026-09-22, L5). Before this,
+// audit.jsonl was plain newline-delimited JSON with filesystem permissions (0600) as its only
+// protection -- nothing detected an entry edited or removed in place. Each row now carries `hash`,
+// sha256 of the PREVIOUS row's hash plus this row's own canonical content; verifyChain() walks the
+// file recomputing that and reports the first row that does not match.
+//
+// WHAT THIS DOES AND DOES NOT PROVE, STATED PLAINLY (never fabricate a guarantee, the same rule
+// this file's own header follows for the log itself): there is no secret key, because a key stored
+// on the same machine an attacker with data/ write access already reaches proves nothing extra --
+// they could read it too. So this is tamper-EVIDENT, not tamper-PROOF: it detects a partial edit
+// (one line changed or removed without regenerating everything after it, which is the realistic
+// shape of accidental corruption, a bug elsewhere writing where it should not, or a lazy tamper
+// attempt), and it does NOT stop someone with full read/write access to data/ from regenerating a
+// self-consistent chain from scratch. That residual gap is inherent to any tamper-evidence scheme
+// with no independent, externally-stored checkpoint -- closing it needs one (an operator copying a
+// chain tip hash off-box periodically, or a remote log sink), which is a deployment choice, not
+// something this file can manufacture on its own.
+const GENESIS_HASH = '0'.repeat(64);
+function canonicalJson(v) {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
+  const keys = Object.keys(v).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(v[k])}`).join(',')}}`;
+}
+function chainHash(prevHash, row) {
+  return crypto.createHash('sha256').update(prevHash).update(canonicalJson(row)).digest('hex');
+}
 
 export class AuditLog {
   constructor(file, { maxBytes = 8 * 1024 * 1024, keep = 5, log = () => {} } = {}) {
@@ -25,6 +54,7 @@ export class AuditLog {
     this.rotations = 0;
     this.bytes = 0;
     this.droppedLines = 0;
+    this.lastHash = GENESIS_HASH;
   }
 
   /** audit.jsonl, audit.1.jsonl, … newest first. */
@@ -35,7 +65,8 @@ export class AuditLog {
   }
 
   async append(row) {
-    const line = JSON.stringify(row);
+    const chained = { ...row, hash: chainHash(this.lastHash, row) };
+    const line = JSON.stringify(chained);
     // The cheap in-memory counter decides *whether to look*; the on-disk size decides
     // whether to rotate. A counter alone drifts (an entry written by another process,
     // a hand-edited file after an incident) and a budget that drifts is a rumour.
@@ -45,9 +76,10 @@ export class AuditLog {
       this.bytes = Math.max(this.bytes, onDisk);
       if (onDisk >= this.maxBytes) await this.rotate();
     }
-    await appendJsonl(this.file, row);
+    await appendJsonl(this.file, chained);
     this.bytes += Buffer.byteLength(line) + 1;
-    return row;
+    this.lastHash = chained.hash;
+    return chained;
   }
 
   async currentSize() {
@@ -134,11 +166,64 @@ export class AuditLog {
     // whatever the umask gave it. Opened without following a symlink where the platform allows, and
     // fchmod'ed through the descriptor.
     for (const f of this.chain()) await fchmodOwnerOnly(f);
+    // THE CHAIN CONTINUES ACROSS A RESTART, RATHER THAN RESTARTING ITSELF (audit 2026-09-22, L5): a
+    // fresh process has no in-memory `lastHash`, and starting over from GENESIS_HASH on every boot
+    // would make every restart look, to verifyChain(), exactly like the file had been replaced --
+    // indistinguishable from real tampering. So the last entry actually on disk (there may be none
+    // yet) supplies the hash the next append chains from.
+    for (const f of this.chain()) {
+      const last = await lastLine(f);
+      if (last) { try { this.lastHash = JSON.parse(last).hash ?? GENESIS_HASH; } catch { /* corrupt tail: leave lastHash at genesis, verifyChain will say why */ } break; }
+    }
     try {
       this.bytes = (await fsp.stat(this.file)).size;
       return { adopted: this.bytes };
     } catch { return { adopted: 0 }; }
   }
+
+  /**
+   * Walk the retained chain OLDEST TO NEWEST, recomputing each row's hash from the one before it.
+   * Returns { ok: true, checked } or { ok: false, checked, brokenAt: { file, line, reason } } naming
+   * the first row that does not match -- everything before it chains cleanly, everything from it
+   * onward is now unverifiable against what came before (which is exactly what "the file was
+   * edited here" means). The oldest row anywhere in the retained chain has nothing before it to
+   * check against and is trusted as the starting point -- see the header note on what this can and
+   * cannot prove.
+   */
+  async verifyChain() {
+    let prev = null, checked = 0;
+    for (const file of [...this.chain()].reverse()) {
+      let raw;
+      try { raw = await fsp.readFile(file, 'utf8'); } catch { continue; }
+      const lines = raw.split('\n').filter(Boolean);
+      for (let i = 0; i < lines.length; i++) {
+        let row;
+        try { row = JSON.parse(lines[i]); } catch { return { ok: false, checked, brokenAt: { file: path.basename(file), line: i + 1, reason: 'not valid JSON' } }; }
+        const { hash, ...rest } = row;
+        // A ROW FROM BEFORE THIS EXISTED HAS NO `hash` AT ALL, and every install that upgrades
+        // into this has some: nothing to check it against, and nothing after it was chained from
+        // it either. Treated as a fresh start, exactly as adopt() falls back to GENESIS_HASH when
+        // the last entry actually on disk predates chaining -- so the first entry appended after
+        // an upgrade verifies against GENESIS_HASH here too, matching how it was really computed.
+        if (hash === undefined) { prev = GENESIS_HASH; checked++; continue; }
+        if (prev !== null) {
+          const want = chainHash(prev, rest);
+          if (hash !== want) return { ok: false, checked, brokenAt: { file: path.basename(file), line: i + 1, reason: 'hash does not match the entry before it' } };
+        }
+        prev = hash;
+        checked++;
+      }
+    }
+    return { ok: true, checked };
+  }
+}
+
+/** The last non-empty line of a file, or null. Reads the whole file -- audit files are bounded by maxBytes. */
+async function lastLine(file) {
+  let raw;
+  try { raw = await fsp.readFile(file, 'utf8'); } catch { return null; }
+  const lines = raw.split('\n').filter(Boolean);
+  return lines.length ? lines[lines.length - 1] : null;
 }
 
 function rotated(file, i) {

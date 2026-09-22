@@ -53,6 +53,7 @@
     "dev": "BLOCKYARD_CONFIG=none BLOCKYARD_BIND=127.0.0.1 BLOCKYARD_PORT=18088 BLOCKYARD_FAKE_NODE=1 node server/main.js",
     "fake-node": "node scripts/fake-node.js",
     "user": "node scripts/manage-users.js",
+    "verify-audit": "node scripts/verify-audit.js",
     "test": "node --test \"test/**/*.test.js\"",
     "counts": "node scripts/doc-counts.js",
     "counts:check": "node scripts/doc-counts.js --check",
