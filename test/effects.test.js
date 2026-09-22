@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fxAt, fxHash } from '../public/js/blockscene3d.js';
-import { FX_KINDS, SPACE_FX, MARKET_FX, MARKET_MS, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard, pulsarHeights, pulsarZ, pulsarSpin } from '../public/js/details3d.js';
+import { FX_KINDS, SPACE_FX, MARKET_FX, MARKET_MS, fxMs, fxMsFor, pulsarSpan, board3d, triggerIdle, chooseIdleFx, fxDirection, fxOrigin, onPriceBoard, pulsarHeights, pulsarZ, pulsarSpin } from '../public/js/details3d.js';
 import { DEFAULTS, PANEL, enabledEffects, spaceOptions, marketsOptions, fxCadence } from '../public/js/settings.js';
 
 test('there are at least twenty-five effects, and every one has a switch of its own', () => {
@@ -538,4 +538,38 @@ test('THE PULSAR STAYS ON SCREEN, and does not always fly down the price line', 
     if (s > 0) cw++;
   }
   assert.ok(cw > 60 && cw < 140, `both directions actually happen (${cw}/200 clockwise)`);
+});
+
+test('THE PULSAR\'S DURATION FOLLOWS ITS SPAN -- widening the crossing does not speed it up', () => {
+  // 2026-09-22: the pulsar's travel was widened from a fixed 0.72 of the board (fully on screen)
+  // to beyond the panel's own edges (pulsarSpan, from st.lastFit) -- correct for the "never blink
+  // in or out of existence" fix, but left at a flat ms it meant crossing several times the
+  // distance in the same wall-clock time, i.e. the same regression "duration follows the span"
+  // already names for the front effects (scan, 2026-09-15). fxMsFor is the fix: unaffected with
+  // no panel fit (a test, a first frame, or the block board -- which never runs this kind at
+  // all), longer wherever the actual span it has to cross is wider than what it was tuned at.
+  const base = fxMs('pulsar');
+  const gridW = 48, line = [{ z: 10 }, { z: 20 }];   // onPriceBoard(st) needs axes.line.length > 1
+  // no fit yet: unchanged
+  assert.equal(fxMsFor({ gridW, axes: { line } }, 'pulsar'), base, 'no fit yet: the tuned baseline');
+  // the block board never asks for it (pulsar is price-board only), so a lookup there is inert
+  assert.equal(fxMsFor({ gridW, axes: null }, 'pulsar'), base, 'off the price board, the plain FX_MS lookup');
+  // a panel far wider than the board (the Markets canvas beside its narrow board): the span pulsarSpan
+  // reports is several times 0.72 * gridW, and the duration grows by the same factor, never shrinks it
+  for (const fit of [
+    { pw: 2560, tx: 1300, scaleX: 2.92, unit: 6 },
+    { pw: 1600, tx: 900, scaleX: 1.88, unit: 6 },
+  ]) {
+    const st = { gridW, axes: { line }, lastFit: fit };
+    const { xa, xb } = pulsarSpan(st);
+    const span = xb - xa, tunedSpan = 0.72 * gridW;
+    const ms = fxMsFor(st, 'pulsar');
+    assert.ok(span > tunedSpan * 2, `a wide panel gives it much more than the tuned span (${span} vs ${tunedSpan})`);
+    assert.ok(ms >= base, 'never shorter than the tuned baseline');
+    const ratio = span / tunedSpan, gotRatio = ms / base;
+    assert.ok(Math.abs(gotRatio - ratio) / ratio < 0.01, `ms scales with the span (want x${ratio.toFixed(2)}, got x${gotRatio.toFixed(2)})`);
+  }
+  // a panel no wider than the board it was tuned against: no slower than the tuned baseline either
+  const narrow = { gridW, axes: { line }, lastFit: { pw: gridW * 6 * 0.72, tx: gridW * 6 * 0.14, scaleX: 1, unit: 6 } };
+  assert.ok(fxMsFor(narrow, 'pulsar') >= base, 'a panel this narrow never gets slower than the tuned baseline');
 });

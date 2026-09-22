@@ -554,6 +554,18 @@ export function fxDirection(kind, st, rnd = Math.random) {
     : [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7071, 0.7071], [-0.7071, -0.7071], [0.7071, -0.7071]];
   return dirs[(rnd() * dirs.length) | 0];
 }
+// WHERE THE PULSAR'S PASSAGE STARTS AND ENDS (shared by fxNow, which draws it, and startFx, which
+// times it -- one geometry, read twice, never copied, so the two cannot drift apart the way the
+// duration did on 2026-09-22). No fit yet (a test, a first frame): the pre-panel-fit crossing,
+// which is also what the duration below treats as its reference span.
+export function pulsarSpan(st) {
+  const gridW = st.gridW, fit = st.lastFit;
+  if (fit && fit.pw > 0 && fit.scaleX > 0 && fit.unit > 0) {
+    const per = fit.scaleX * fit.unit, reach = boundedRadius(8.5, 0.186, gridW) + 3;   // (the disk and its gas: measured on a 1600-wide panel, 21 units kept it out of sight for a fifth of the run at each end)
+    return { xa: -(fit.tx / per) - reach, xb: (fit.pw - fit.tx) / per + reach };
+  }
+  return { xa: gridW * 0.14, xb: gridW * 0.86 };
+}
 /** Where a ring (ripple, shockwave, nova) starts: anywhere on the block board; on the candles' own row on the price board, so it spreads along them. */
 export function fxOrigin(st, rnd = Math.random) {
   const x = rnd() * st.gridW;
@@ -561,6 +573,23 @@ export function fxOrigin(st, rnd = Math.random) {
   return { x, y: rnd() * st.gridH };
 }
 
+// HOW LONG AN EFFECT RUNS, and -- for the pulsar alone -- WHY IT ISN'T A CONSTANT. Every other
+// kind's `ms` is a flat lookup, because its travel is a fixed share of a fixed-size board. The
+// pulsar's isn't any more: since 2026-09-22 it flies from beyond one edge of the (panel-relative,
+// screen-width-dependent) frame to beyond the other (pulsarSpan), so a wide Markets panel gives it
+// several times the board's own width to cross. Left at a flat 26000 ms, that crossing sped up
+// with the panel -- the same "duration follows the span, or widening the travel speeds up the
+// picture" lesson the front effects (scan) already paid for on 2026-09-15, paid again. So its `ms`
+// scales with the span it actually has to cross this time, against the span it was tuned at
+// (2026-09-20, before the off-panel entrance existed): 0.72 of the board, the old 14%..86% crossing.
+export function fxMsFor(st, kind) {
+  const base = (onPriceBoard(st) ? MARKET_MS[kind] : null) ?? FX_MS[kind] ?? 4500;
+  if (kind !== 'pulsar' || !onPriceBoard(st)) return base;
+  const { xa, xb } = pulsarSpan(st);
+  const span = xb - xa, tunedSpan = 0.72 * st.gridW;
+  if (!(span > 0) || !(tunedSpan > 0)) return base;
+  return Math.round(base * Math.max(1, span / tunedSpan));
+}
 function startFx(st, kind, now) {
   const d = fxDirection(kind, st);
   const origin = fxOrigin(st);
@@ -583,7 +612,7 @@ function startFx(st, kind, now) {
     const tiles = st.restTiles || [];
     agent = spec.build({ st, seed, W, H, tiles, tops: cellTops(tiles, W, H), rnd: rng(seed) });
   }
-  st.fx = { kind, t0: now, ms: (onPriceBoard(st) ? MARKET_MS[kind] : null) ?? FX_MS[kind] ?? 4500, x: origin.x, y: origin.y, dx: d[0], dy: d[1], rank, seed, agent,
+  st.fx = { kind, t0: now, ms: fxMsFor(st, kind), x: origin.x, y: origin.y, dx: d[0], dy: d[1], rank, seed, agent,
     // `paths`/`crashes` stay on the record because drawCycles reads view.fx.cycles, which the
     // agent's frame() produces from them; nothing outside agents.js builds them any more.
     paths: agent?.paths ?? null, crashes: agent?.crashes ?? null };
@@ -712,11 +741,10 @@ function fxNow(st, t) {
     // panel's edge by the passage's own reach (the disk and the gas round it). The run moves the whole time -- no
     // standing start -- and gently: it is on the chart through the three acts, which are keyed to the run.
     // No fit yet (a test, a first frame): the old crossing.
-    let xa = st.gridW * 0.14, xb = st.gridW * 0.86, travel;
+    const { xa, xb } = pulsarSpan(st);
     const fit = st.lastFit;
+    let travel;
     if (line?.length > 1 && fit && fit.pw > 0 && fit.scaleX > 0 && fit.unit > 0) {
-      const per = fit.scaleX * fit.unit, reach = boundedRadius(8.5, 0.186, st.gridW) + 3;   // (the disk and its gas: measured on a 1600-wide panel, 21 units kept it out of sight for a fifth of the run at each end)
-      xa = -(fit.tx / per) - reach; xb = (fit.pw - fit.tx) / per + reach;
       const t = Math.max(0, Math.min(1, (u - 0.02) / 0.96));
       travel = 0.5 * t + 0.5 * (t * t * (3 - 2 * t));                  // (half linear: never at rest on screen, never abrupt)
     } else travel = u < 0.1 ? 0 : u > 0.9 ? 1 : (() => { const t = (u - 0.1) / 0.8; return t * t * (3 - 2 * t); })();

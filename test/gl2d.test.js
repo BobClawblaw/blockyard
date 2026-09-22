@@ -797,9 +797,13 @@ test('what crosses the Markets panel starts and ends beyond the PANEL, measured 
   // canvas is far wider than its board, so "past the board's edge" is in plain view. scripts/gl-compare.mjs --edges
   // prints where every Markets effect's pixels are at the ends of its run.)
   const d3 = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  // the pulsar: it ran 14%..86% of the board and was faded up where it stood
+  // the pulsar: it ran 14%..86% of the board and was faded up where it stood. Its span is
+  // pulsarSpan (shared with fxMsFor, which is what keeps the crossing from speeding up -- see
+  // the "duration follows the span" test in effects.test.js), not inlined in fxNow any more.
+  const span = d3.slice(d3.indexOf('export function pulsarSpan'), d3.indexOf('export function fxOrigin'));
+  assert.match(span, /xa: -\(fit\.tx \/ per\) - reach, xb: \(fit\.pw - fit\.tx\) \/ per \+ reach/, 'from beyond one edge of the panel to beyond the other');
   const pul = d3.slice(d3.indexOf("if (f.kind === 'pulsar') {"), d3.indexOf('out.pulsar = {'));
-  assert.match(pul, /xa = -\(fit\.tx \/ per\) - reach; xb = \(fit\.pw - fit\.tx\) \/ per \+ reach;/, 'from beyond one edge of the panel to beyond the other');
+  assert.match(pul, /const \{ xa, xb \} = pulsarSpan\(st\);/, 'fxNow draws the same span it was timed against');
   assert.match(pul, /travel = 0\.5 \* t \+ 0\.5 \* \(t \* t \* \(3 - 2 \* t\)\);/, 'moving the whole time: no standing start on screen');
   // a sweeping front's margin is the panel's overhang ALONG ITS DIRECTION (it was the largest on any side: the price
   // board's depth overhang, three times the hours', so the scan's saucer was out of sight for two thirds of its run)
