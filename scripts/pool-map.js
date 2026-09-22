@@ -107,6 +107,14 @@ export function redirectTarget(location, from) {
   return next.toString();
 }
 
+// BOUNDED, LIKE markets.js's readJsonCapped (audit 2026-09-22, L9). This is a manually-run,
+// operator-triggered refresh against one pinned raw.githubusercontent.com URL with
+// --expect-sha256 pinning already in place, so the realistic risk was always small -- but
+// nothing here capped the accumulated response, unlike the server's own outbound calls,
+// and a DNS hijack or a compromised CDN edge serving an oversized body would otherwise grow
+// this process's memory without limit on whatever machine runs the refresh.
+export const MAX_POOL_MAP_BYTES = 8 * 1024 * 1024;
+
 export function getOverHttps(url, redirectsLeft = 3, extra = {}) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { family: 4, ...extra, headers: { 'user-agent': 'BlockYard pool-map/1' }, timeout: 20_000 }, (res) => {
@@ -117,8 +125,15 @@ export function getOverHttps(url, redirectsLeft = 3, extra = {}) {
         return resolve(getOverHttps(next, redirectsLeft - 1));
       }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error(`GET ${url} -> HTTP ${res.statusCode}`)); }
+      const declared = Number(res.headers['content-length']);
+      if (Number.isFinite(declared) && declared > MAX_POOL_MAP_BYTES) { res.resume(); return reject(new Error(`GET ${url} declares ${declared} bytes, over the ${MAX_POOL_MAP_BYTES}-byte cap`)); }
       const chunks = [];
-      res.on('data', (c) => chunks.push(c));
+      let got = 0;
+      res.on('data', (c) => {
+        got += c.length;
+        if (got > MAX_POOL_MAP_BYTES) { res.destroy(); return reject(new Error(`GET ${url} exceeded the ${MAX_POOL_MAP_BYTES}-byte cap`)); }
+        chunks.push(c);
+      });
       res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
       res.on('error', reject);
     });
