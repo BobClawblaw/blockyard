@@ -76,13 +76,16 @@ The last enabled admin cannot be demoted, disabled or deleted.
   after sign-in whatever happens.
   Roles are re-read on every request, so a demotion takes effect immediately.
 - **CSRF**: every state-changing request must carry an `X-CSRF-Token` header matching the
-  session; the cookie alone is never accepted as proof. With accounts off there is no session
-  to ride, so the token check has nothing to compare -- and until 2026-09-13 that meant those
-  routes had no cross-site protection at all. An audit proved it with a working exploit against
-  the node-connection test. Open mode now refuses any state-changing request whose `Origin` is
-  not this server, or whose `Sec-Fetch-Site` says cross-site. A client that sends neither header
-  (curl, a script) is not stopped by that check, which only guards against what a *browser* can be
-  made to do. So the one form where a script could do real harm, the node connection (a saved
+  session; the cookie alone is never accepted as proof. With accounts off, or for `/api/login`
+  itself (which by definition has no session yet), there is no token to compare -- and until
+  2026-09-13 that meant those routes had no cross-site protection at all. An audit proved it
+  with a working exploit against the node-connection test. Every state-changing request with no
+  session -- open-mode writes and `/api/login` alike -- is refused instead whenever its `Origin`
+  is not this server, or its `Sec-Fetch-Site` says cross-site (a second audit, 2026-09-22, found
+  `/api/login` had been left out of this check: a cross-site auto-submitting form could log a
+  visitor's browser into an attacker-chosen account). A client that sends neither header (curl, a
+  script) is not stopped by that check, which only guards against what a *browser* can be made to
+  do. So the one form where a script could do real harm, the node connection (a saved
   address decides where the node's cookie goes after a restart, and its test makes the server
   connect somewhere), answers only a loopback caller while accounts are off (audit 2026-09-16).
   A save that moves the node to a different host drops the old endpoint's `rpcUser`,
@@ -106,6 +109,14 @@ The last enabled admin cannot be demoted, disabled or deleted.
   return private keys), spending, peer-control, chain-mutating and very heavy methods are refused
   by name — including `getnewaddress` and
   `getrawchangeaddress`, which start with "get" but create keys. Unknown methods are refused.
+- **The refusal does not depend on every caller remembering to check first** (audit 2026-09-22, M1).
+  The allowlist above is enforced at the HTTP route; the administrative suite (which does call
+  wallet methods, deliberately, when it ships at all — see the next section) has its own separate
+  capability check. Both sit in front of `RpcClient`, the actual transport — but `RpcClient` itself
+  now refuses any wallet-classified method outright unless the caller explicitly marks the call
+  `adminAuthorized: true`, which only the suite's one gated call site ever sets. So a method that
+  moves funds or reveals keys cannot leave this process through any code path, present or future,
+  that skips both of those checks — the transport itself is the backstop, not just the route.
 - **A bounded lane per node.** At most `rpc.maxInFlight` requests at once (four by default, one
   for a node configured as single-threaded), their starts spaced by a minimum interval and a
   calls-per-second ceiling, with batching, priorities and a stale-drop rule. It cannot be used to
@@ -170,7 +181,8 @@ Every call and every refusal is appended to the audit trail.
   (`style-src 'self'` with no attribute exception). Every data-driven style is applied through
   the CSSOM instead of `style="…"` attributes.
 - Also sent: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: no-referrer`.
+  `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`,
+  `Cross-Origin-Resource-Policy: same-origin`.
 - The browser loads nothing from third parties: no CDN, no web fonts, no analytics. Market
   data reaches the browser only through the monitor's own API.
 
@@ -201,7 +213,7 @@ Everything the monitor writes lives in its data directory (`./data` by default,
 |---|---|---|
 | `users.json` | account names, roles, scrypt hashes and salts | **secret** (mode 0600) |
 | `sessions.json` | hashed session tokens | **secret** |
-| `audit.jsonl` (+ rotations) | who called what and when; rotated by size (8 MiB, 5 kept) | private |
+| `audit.jsonl` (+ rotations) | who called what and when; rotated by size (8 MiB, 5 kept); hash-chained (each entry's `hash` covers the one before it), so an entry edited or removed in place breaks the chain from there on -- `npm run verify-audit` (or `blockyard verify-audit`) checks it. Tamper-evident, not tamper-proof: there is no secret key, so someone with write access to `data/` who regenerates the whole chain leaves no trace this alone can catch | private |
 | history snapshots | chart time series for the retention window (72 h by default) | private |
 | `pool-aliases.json`, `pool-map.json` | optional mining-pool labels: `pool-aliases.json` is human-edited; `data/pool-map.json` is what `node scripts/pool-map.js` fetches, and it overrides the curated `config/pool-map.json` that ships with the code (mempool.space/mining-pools, MIT, 151 pools) | not secret |
 | the address index (`addressIndex`, `data/index` by default) | the explorer's address index: ~124 GB of sorted rows built from the node's block files, plus the follower's `live.log` and `layers/` | public chain data, not secret |
