@@ -2,7 +2,7 @@ manifestVersion: 1
 id: blockyard
 category: bitcoin
 name: BlockYard
-version: "0.1.3"
+version: "0.1.4"
 tagline: Live monitor, 3D block-space viewer and explorer for your Bitcoin node
 description: >-
   BlockYard is a live web monitor for your Bitcoin node.

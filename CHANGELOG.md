@@ -8,6 +8,60 @@ All notable changes to this project are documented here. The format follows
 
 Nothing yet.
 
+## [0.1.4] — 2026-09-22
+
+**A fifth AI security audit, every finding fixed the same day** — brutally honest and extremely
+technical by request, with the DOS Diversions (the x86 interpreter and everything around it) read
+hardest of all: it came back the best-defended part of the codebase (a provably sound memory
+model, no `eval`/`Function`/WebAssembly anywhere in the client, a corrupted game binary contained
+to its own worker), with one real gap, now closed. 1 HIGH, 4 MEDIUM, 10 LOW/informational, 15 in
+total, all fixed against a regression test that failed first
+([SECURITY-AUDIT-2026-09-22.md](docs/SECURITY-AUDIT-2026-09-22.md),
+[REMEDIATION-2026-09-22.md](docs/REMEDIATION-2026-09-22.md)). The headline fix reaches past the
+finding that prompted it: the RPC allowlist that keeps every wallet method off this monitor is now
+enforced by the RPC transport itself, not only by the route that happens to check it first, so no
+future code path can reach a wallet method by skipping a check. Two effect-timing bugs from 0.1.3's
+WebGL work are fixed alongside it.
+
+### Security
+
+- **The RPC transport itself refuses a wallet method with no explicit authorization**, not only
+  the console route in front of it. Verified against a real regtest node's wallet flow, not a mock.
+- **The audit trail is hash-chained.** Each entry's hash covers the one before it, so an entry
+  edited or removed in place is detectable — `npm run verify-audit` checks it. Tamper-evident, not
+  tamper-proof: there is no secret key, and the report says exactly what that does and does not
+  cover.
+- **Login gets the same cross-site protection every other state-changing route has.** A cross-site
+  form could previously log a visitor's browser into an attacker-chosen account.
+- A reverse-proxy documentation bug that would have let a client spoof the address the rate limits
+  and the CIDR gate trust, once `trustProxy` was turned on following the (now-fixed) example.
+- `manage-users.js passwd`/`disable` revoke a user's existing sessions, matching the web routes.
+- SSE responses carry the same CSP and security headers every other response does.
+- The DOS Diversions' executable loaders validate header fields against the real file length
+  instead of trusting them.
+- `/games/*` is rate-limited; `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` are
+  sent; an IPv6 /64 can no longer rotate past the login throttle; a decoded backslash is refused in
+  static file serving on every platform, not only where it would matter; a file descriptor leak and
+  a missing bounds check in the address-index build; a dead exception clause in the RPC allowlist;
+  a response-size cap on the pool-map refresh script.
+
+### Fixed
+
+- **The pulsar wind effect's duration now follows its (much wider) span.** 0.1.3's fix for effects
+  blinking in and out on the Markets board widened the pulsar's crossing to fly from beyond one
+  edge of the panel to beyond the other, without lengthening its time to match — so the same
+  duration now covered several times the distance, and the passage rushed by. Its duration is
+  derived from the actual span it has to cross, so a wide panel gets a proportionally longer
+  passage instead of a faster one.
+- **The black hole's orbit runs on the effect's own clock, not the page's.** The candles/cubes it
+  pulls in span were timed off the page's own uptime (`performance.now()` since load, unbounded,
+  never reset) rather than the effect's elapsed time — invisible on a freshly loaded page, and
+  increasingly wrong on a Kiosk display or any tab left open for hours, where the same brief
+  capture ramp could whip everything round many extra turns before settling. Fixed to read elapsed
+  time off the effect's own bounded progress.
+
+1,468 tests, from 1,445.
+
 ## [0.1.3] — 2026-09-22
 
 A release in two halves. The first is the **skies and the renderer**: every 3D board, sky and

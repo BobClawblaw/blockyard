@@ -263,9 +263,9 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.1.3** (2026-09-19) — Bitcoin Machine Code as BlockYard's first-class companion node,
-an RPC lane that keeps four calls in flight, and a run of chart fixes for nodes in initial sync.
-Pre-release software: the
+Version **0.1.4** (2026-09-22) — a fifth AI security audit, every finding fixed the same day
+(the RPC transport itself now refuses a wallet method with no explicit authorization, and the
+audit trail is hash-chained), plus two effect-timing fixes. Pre-release software: the
 word is meant literally. Releases are published on [npm](https://www.npmjs.com/package/blockyard)
 as `blockyard`, as [GitHub releases](https://github.com/BobClawblaw/blockyard/releases),
 and announced on
