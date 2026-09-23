@@ -712,6 +712,19 @@ What will bite:
   answer synchronously for every board paint (rule 8's chart cache, `markets.js`, `mining.js`), and
   only one mode is ever "active" for a given browser tab at a time, so one cache is enough. What
   changes between modes is only where the boot seeds FROM and where a save gets PUSHED TO.
+- **A switch INTO 'shared' or 'account' PULLS AND CAN DISCARD, so it asks first when the two
+  differ** (operator, 2026-09-23: "so if I change settings in 'This Browser', does it save out
+  when I switch to 'Shared'?" -- it did not: the first cut pulled the newly active store's value
+  over the local cache unconditionally, with nothing said about it, so a browser-only edit was
+  gone the moment someone switched to Shared). The click handler now pulls the candidate value
+  FIRST, compares it to `loadSettings()`, and only `seedSettings()`s over the local cache -- one
+  `window.confirm` -- if they actually differ; a no-op switch (nothing changed since the last
+  pull) asks nothing. **Switching TO 'browser' still pulls and asks nothing**, because it keeps
+  whatever is already in the local cache rather than replacing it -- there is nothing to lose.
+  This is a discard warning, not a merge or an autosave: there is still no way to push a
+  'browser'-mode edit INTO the shared or account store short of switching to it, in effect
+  writing it there yourself. Tests: `test/settings-mode.test.js` (source-level, since app.js has
+  no DOM test harness -- see that file's other tests for the same pattern).
 - **An account's settings record does not outlive the account.** `scripts/manage-users.js rm` calls
   `UserSettingsStore.remove(user.id)` before `store.deleteUser`, or a reused username would silently
   inherit a stranger's saved look. There is no HTTP route for deleting a user at all (admin suite
@@ -867,7 +880,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1455 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1456 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1197,7 +1210,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1455 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1456 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

@@ -1366,15 +1366,28 @@ async function boot() {
   };
   cfgStorage?.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-cfgstorage]');
-    if (!btn || btn.dataset.cfgstorage === activeSettingsMode()) return;
-    const m = setSettingsMode(btn.dataset.cfgstorage);
+    const prevMode = activeSettingsMode();
+    if (!btn || btn.dataset.cfgstorage === prevMode) return;
+    const m = btn.dataset.cfgstorage;
+    // PULL BEFORE COMMITTING (2026-09-23; the operator asked whether a "This browser" edit
+    // survives a switch to "Shared" -- it did not: this used to seed the newly active store's
+    // value over the local cache unconditionally, discarding whatever was on screen with no
+    // warning. 'browser' still pulls nothing -- it keeps the local cache exactly as it was,
+    // the same as before this control existed -- so only 'shared'/'account' can lose anything.
+    let pulled = null;
+    if (m === 'shared' || m === 'account') {
+      const got = await api(m === 'account' ? '/api/settings/mine' : '/api/settings').catch(() => null);
+      pulled = got?.stored && got.settings ? normaliseSettings(got.settings) : normaliseSettings(null);
+      if (JSON.stringify(loadSettings()) !== JSON.stringify(pulled)
+        && !window.confirm(`Switch to "${STORAGE_LABEL[m]}"? This replaces what's on screen with that store's saved settings -- anything here that isn't saved anywhere else will be lost.`)) {
+        return;
+      }
+    }
+    setSettingsMode(m);
     setSettingsPush(pushFor(m));
     // Pull from the newly active store right away, so switching modes shows what THAT store
     // holds rather than waiting up to 15s for the next poll (or, for 'browser', polling never).
-    if (m === 'shared' || m === 'account') {
-      const got = await api(m === 'account' ? '/api/settings/mine' : '/api/settings').catch(() => null);
-      seedSettings(got?.stored && got.settings ? got.settings : normaliseSettings(null));
-    }
+    if (pulled) seedSettings(pulled);
     drawStorage();
     drawSettings();
     render();
