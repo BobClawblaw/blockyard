@@ -284,6 +284,69 @@ silently ate another test's result line — rule 22.
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
 
+## Current state (2026-09-23): the bake -- one bmc, one Core, nothing else
+
+**Operator, 2026-09-23: "I only want one current bmc production server running, and one core
+production serving. We are done with this phase of development, and now we bake."** The
+benchmark phase (runs 27-29 against the `core31` Core rerun; the last report is
+`bitcoinmachinecode/docs/reports/2026-09-22-run29-vs-core.md`) is over, and this box now runs
+exactly this, all `enabled` and all verified to start themselves at boot from this boot's journal:
+
+| what | unit | how BlockYard reaches it |
+|---|---|---|
+| **Core production** (the authoritative oracle: "must stay up -- every IBD capstone compares against it") | `bitcoin-oracle.service`, P2P 8333 / RPC 8335, datadir `/storage/core-oracle` | node `main` -- first in the config, so the primary; cookie auth; owns the address index at `~/blockyard-index`; **no `logFile`** (Core's log is never parsed, see the log note above) |
+| **bmc production** | `bmcbitcoind.service`, P2P on the LAN address only (`bind=192.0.2.10`, port 8332 -- the documentation address stands in for the real one here, as everywhere in this file) / RPC `127.0.0.1:8331`, datadir `/storage/bitcoinmachinecode/data` | node `bmc`; cookie `data/main/.cookie`; `logFile` `/storage/bitcoinmachinecode/logs/main/bitcoin.main.log` (logrotate `copytruncate` at 2 MB -- the follower handles truncation); measured live after the switch: `log.health.ratio` 1.0, five shapes watched, none silent |
+| the monitor | `blockyard.service`, 21000, HTTPS (self-signed), open mode | `config/local.json` = **exactly these two nodes**, both `optional: true` so one restarting does not take the monitor down |
+
+**`config/local.json` holds the two production nodes and nothing else.** The rule from 2026-09-19
+("Don't add to the config. It screws up the benchmarks") still holds for any future BENCHMARK node
+-- BlockYard's polling perturbs an initial-sync timing -- but the bmc production entry is the
+operator's deliberate choice, not a violation of it. Backups of every earlier config are beside it
+(`config/local.json.bak-*`; the 2026-09-23 one is the last with `core-nvme`).
+
+What was stopped that day, and how to get it back if ever wanted:
+
+- **`bitcoin-oracle-nvme.service`** (Core v31.1 on `/mnt/nvme8tb/core-oracle`, RPC 8337 -- created
+  09-17 as the queued Core benchmark, meant to become "a permanent oracle" on faster storage): stopped
+  cleanly ("Shutdown done" after its flush) and **disabled**. Its synced datadir is intact;
+  `sudo systemctl enable --now bitcoin-oracle-nvme` brings it back. Removed from `config/local.json`
+  as `core-nvme` -- until then BlockYard logged `ECONNREFUSED 127.0.0.1:8337` every few seconds.
+- **The benchmark data**: `run28/`, `run29/` and `core31/` under `/mnt/nvme8tb/bench/` (about 1 TB
+  each) deleted after their small logs were copied and byte-compared into `run28-logs/`,
+  `run29-logs/` and `core31-logs/` beside the pre-existing `run27-logs/` -- every file the reports
+  cite as a source (`phase.log`, `progress.log`, `debug.log`, `RESULT`, the conf). 2.9 TB freed.
+  `core31-FAILED-…` (18 MB, "moved aside, not deleted" per the run28 report) and `core31-watch/` were
+  left alone. The run29 daemon and three leaked regtest bitcoinds from old test runs (`/tmp/blockyard-money-*`,
+  `/tmp/blockyard-tx-*`, a scratchpad demo) plus the `blockyard-manager` regtest dev node were
+  SIGTERMed -- clean exits verified in each one's own log.
+- **The anonymity transports**: `cjdroute.service` stopped and disabled (the `tun0` `fc00::/8`
+  interface is gone), and bmc's two drop-ins that referred to Tor and cjdns moved aside as
+  `bmcbitcoind.service.d/30-tor-control.conf.disabled-20260923` and `40-cjdns.conf.disabled-20260923`
+  (systemd reads only `*.conf`; a `mv` restores either). Tor and i2pd were already not running and
+  not configured. Measured on the live node before the change: `getnetworkinfo` said `onion: no,
+  i2p: no, cjdns: no` and all 13 peers were IPv4 -- the daemons were wired on 2026-08-31 and had
+  since dropped out of the conf, so nothing bmc was using went away. bmc itself was NOT restarted
+  (same process since 2026-09-19); its running process keeps the `debian-tor` group until it is.
+
+What will bite:
+
+- **`npm run check` exits 1 on this box, and that is the checker, not the node.** For the `bmc`
+  entry it prints two ✗ lines -- "version `/BitcoinMachineCode:0.0.1/` … needs Core 25.0" and
+  "block files `…/data/blocks`: ENOENT" -- which are its Core-centric address-index checks: bmc
+  keeps its `blk*.dat` directly under `data/main/` and serves its own address index
+  (`addrindex=1`), and the checker itself then says "BlockYard does not need to build its own".
+  Everything else on that node passes (cookie, RPC in 29 ms, txindex, coinstatsindex, `getblock 3`,
+  mempool, node kind `bitcoinmachinecode` with the Esplora facade on :3005). Teaching `scripts/check.js`
+  to skip those two for a bmc node is a small, unstarted piece of work.
+- **The monitor answers HTTPS only on 21000** (the self-signed certificate the server makes;
+  `curl -sk https://127.0.0.1:21000/api/health`). A plain `http://` request gets nothing, which
+  looked like "the server is down" for one minute on 2026-09-23. The notes above that say the port
+  answers plain HTTP describe 2026-09-11.
+- **bmc's `Restart=on-failure`** (Core's and BlockYard's units are `Restart=always`): a crash comes
+  back, a clean stop stays down until boot or a hand start. Left as is; the operator was told.
+  `bmcbitcoind.service` also declares no `RequiresMountsFor=` for `/storage` (Core's does) -- fine
+  while `/storage` is a hard fstab mount without `nofail`.
+
 ## Current state (2026-09-21): two renderers, Software and WebGL
 
 **Every 3D board, sky and effect draws on either renderer** (operator: "a second rendering option to
