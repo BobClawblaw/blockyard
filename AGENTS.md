@@ -330,14 +330,17 @@ What was stopped that day, and how to get it back if ever wanted:
 
 What will bite:
 
-- **`npm run check` exits 1 on this box, and that is the checker, not the node.** For the `bmc`
-  entry it prints two ✗ lines -- "version `/BitcoinMachineCode:0.0.1/` … needs Core 25.0" and
-  "block files `…/data/blocks`: ENOENT" -- which are its Core-centric address-index checks: bmc
-  keeps its `blk*.dat` directly under `data/main/` and serves its own address index
-  (`addrindex=1`), and the checker itself then says "BlockYard does not need to build its own".
-  Everything else on that node passes (cookie, RPC in 29 ms, txindex, coinstatsindex, `getblock 3`,
-  mempool, node kind `bitcoinmachinecode` with the Esplora facade on :3005). Teaching `scripts/check.js`
-  to skip those two for a bmc node is a small, unstarted piece of work.
+- **`npm run check` asks what KIND of node it is FIRST** (`probeCapabilities` in `scripts/check.js`,
+  2026-09-23). The first run against the `bmc` entry printed two ✗ -- "version
+  `/BitcoinMachineCode:0.0.1/` (1) … needs Core 25.0" and "block files `…/data/blocks`: ENOENT" --
+  and then, a few lines later, "the node serves it (addrindex=1) -- BlockYard does not need to build
+  its own", and exited 1 on its own contradiction. The Core 25.0 floor, the block files and the
+  `debug.log` all exist for the address-index follower BlockYard runs against Core; a node that
+  serves its own address index needs none of them (and bmc keeps its `blk*.dat` under `data/main/`,
+  not `blocks/`). Now `bmcgetcapabilities` is probed before the version check, and on an
+  `addrindex` node those three read as `·` info lines -- the log line naming the configured
+  `logFile` the monitor follows (a `warn` if the file is not there) -- while Core is judged exactly
+  as before (an old Core is still ✗). Exit 0 on this box; `test/setup.test.js` holds both sides.
 - **The monitor answers HTTPS only on 21000** (the self-signed certificate the server makes;
   `curl -sk https://127.0.0.1:21000/api/health`). A plain `http://` request gets nothing, which
   looked like "the server is down" for one minute on 2026-09-23. The notes above that say the port
@@ -943,7 +946,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1456 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1457 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1273,7 +1276,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1456 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1457 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

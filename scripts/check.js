@@ -60,11 +60,24 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   if (node.chainHint && node.chainHint !== chain) add('chain', 'fail', `config says chainHint "${node.chainHint}" but the node is on "${chain}"`);
   if (info.result.pruned) add('pruned', 'fail', 'a pruned node has discarded old block files; the address index needs every one of them');
 
+  // WHAT KIND OF NODE, asked FIRST (2026-09-23), because three checks below depend on the answer:
+  // the Core 25.0 floor, the block files and the debug.log all exist for the address-index
+  // follower BlockYard runs against Core -- and a node that serves its own address index
+  // (bmc, addrindex=1) needs none of them. Until this moved up, `npm run check` printed two ✗
+  // for the production bmc node ("version /BitcoinMachineCode:0.0.1/ (1) needs Core 25.0",
+  // "data/blocks: ENOENT") and then, a few lines later, said the node serves its own index so
+  // BlockYard does not need to build one -- and exited 1 on that contradiction. The 'node kind'
+  // line itself is still printed last, where it always was.
+  const caps = await probeCapabilities(one, facts);
+  const ownIndex = facts.nodeCapabilities?.addrindex === true;
+
   const net = await one('getnetworkinfo');
   if (net.ok) {
     facts.version = net.result.version; facts.subversion = net.result.subversion;
     const v = net.result.version;
-    add('version', v >= CORE_VERSION_MIN ? 'ok' : 'fail', `${net.result.subversion} (${v})${v < CORE_VERSION_MIN ? ` -- the address index follower needs getblock verbosity 3, Bitcoin Core 25.0 or later` : ''}`);
+    if (v >= CORE_VERSION_MIN) add('version', 'ok', `${net.result.subversion} (${v})`);
+    else if (ownIndex) add('version', 'info', `${net.result.subversion} (${v}) -- not a Bitcoin Core version number; the Core 25.0 floor is the address index follower's, and this node serves its own address index`);
+    else add('version', 'fail', `${net.result.subversion} (${v}) -- the address index follower needs getblock verbosity 3, Bitcoin Core 25.0 or later`);
   } else add('version', 'warn', `getnetworkinfo: ${net.error.message}`);
 
   const idx = await one('getindexinfo');
@@ -95,12 +108,22 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
     add('mempool', slow ? 'warn' : 'ok', `${n.toLocaleString()} transactions, verbose, in ${mp.ms}${slow ? ' -- slow: the board and the block being built will lag behind this' : ''}`);
   } else add('mempool', 'warn', `getrawmempool verbose: ${mp.error.message} after ${mp.ms}`);
   const addr = await one('getaddresstxids', [{ addresses: [] }]);
-  add('address index rpc', 'info', addr.ok ? 'the node has insight-style address RPCs (unused: BlockYard keeps its own index)' : 'the node has no address index, as expected of Bitcoin Core; BlockYard builds its own');
+  add('address index rpc', 'info', ownIndex
+    ? 'the node serves address history itself (bmcgetcapabilities: addrindex) -- BlockYard reads it from the node'
+    : addr.ok ? 'the node has insight-style address RPCs (unused: BlockYard keeps its own index)' : 'the node has no address index, as expected of Bitcoin Core; BlockYard builds its own');
 
   // the data directory: block files and the log
   if (!node.datadir) add('datadir', 'fail', 'no datadir configured: the address index is built from the node\'s block files');
   else if (!fs.existsSync(node.datadir)) add('datadir', 'fail', `${node.datadir} does not exist on this machine`);
-  else {
+  else if (ownIndex) {
+    // BlockYard never opens this node's block files (no index to build from them), and bmc does
+    // not keep a Core-shaped blocks/ directory anyway: its blk*.dat sit under data/<chain>/.
+    add('block files', 'info', 'not needed: the node serves its own address index, so BlockYard never reads its block files');
+    if (node.logFile) {
+      if (fs.existsSync(node.logFile)) { const st = fs.statSync(node.logFile); facts.logFile = node.logFile; add('node log', 'info', `${node.logFile} (${(st.size / 1e6).toFixed(1)} MB) -- the monitor follows it`); }
+      else add('node log', 'warn', `${node.logFile}: not found -- config names a logFile the monitor cannot open`);
+    } else add('node log', 'info', 'no logFile configured -- the monitor runs on RPC alone for this node');
+  } else {
     const blocksDir = path.join(node.datadir, 'blocks');
     let names = null;
     try { names = fs.readdirSync(blocksDir); } catch (err) { add('block files', 'fail', `${blocksDir}: ${err.message}`); }
@@ -161,40 +184,42 @@ export async function runChecks(node, { rpc, fs = { existsSync, statSync, readdi
   // Every field it returns is LIVE STATE rather than a compile-time list, so
   // "the node serves address history" means it is serving it now, not that the
   // binary could if configured.
-  {
-    const caps = await one('bmcgetcapabilities', [], 5000);
-    if (!caps.ok) {
-      facts.nodeKind = 'core';
-      add('node kind', 'ok', 'Bitcoin Core (or a node without bmcgetcapabilities) — BlockYard supplies the address index itself');
-    } else {
-      const r = caps.result ?? {};
-      const x = r.extensions ?? {};
-      facts.nodeKind = r.node ?? 'bitcoinmachinecode';
-      facts.nodeBuild = r.build?.commit ?? null;
-      facts.nodeCapabilities = {
-        addrindex: Boolean(x.addrindex),
-        esploraPort: Number(x.esploraport ?? 0) || 0,
-        mempoolJournal: Boolean(x.mempooljournal?.enabled),
-        mempoolJournalCapacity: x.mempooljournal?.enabled ? Number(x.mempooljournal.capacity) : 0,
-        downloadInfo: Boolean(x.downloadinfo),
-        rpcComplete: Boolean(r.rpc_complete?.peerinfo && r.rpc_complete?.nettotals),
-      };
-      const have = [];
-      if (facts.nodeCapabilities.addrindex) have.push('address history from the node');
-      if (facts.nodeCapabilities.esploraPort) have.push(`Esplora facade on :${facts.nodeCapabilities.esploraPort}`);
-      if (facts.nodeCapabilities.mempoolJournal) have.push(`mempool departure journal (${facts.nodeCapabilities.mempoolJournalCapacity.toLocaleString()} records)`);
-      if (facts.nodeCapabilities.downloadInfo) have.push('download worker map');
-      add('node kind', 'ok',
-          `${facts.nodeKind} ${facts.nodeBuild ? `(${facts.nodeBuild}${r.build?.dirty ? ', dirty' : ''}) ` : ''}in ${caps.ms}`
-          + (have.length ? ` — ${have.join(', ')}` : ' — no extensions enabled'));
-      // The one that changes what BlockYard has to DO: with the node serving
-      // address history there is no reason to build and follow a second copy.
-      if (facts.nodeCapabilities.addrindex)
-        add('address index', 'ok', 'the node serves it (addrindex=1) — BlockYard does not need to build its own');
-    }
+  // (probed at the top, see probeCapabilities; reported here so the summary reads as it always did)
+  if (!caps.ok) add('node kind', 'ok', 'Bitcoin Core (or a node without bmcgetcapabilities) — BlockYard supplies the address index itself');
+  else {
+    const have = [];
+    if (facts.nodeCapabilities.addrindex) have.push('address history from the node');
+    if (facts.nodeCapabilities.esploraPort) have.push(`Esplora facade on :${facts.nodeCapabilities.esploraPort}`);
+    if (facts.nodeCapabilities.mempoolJournal) have.push(`mempool departure journal (${facts.nodeCapabilities.mempoolJournalCapacity.toLocaleString()} records)`);
+    if (facts.nodeCapabilities.downloadInfo) have.push('download worker map');
+    add('node kind', 'ok',
+        `${facts.nodeKind} ${facts.nodeBuild ? `(${facts.nodeBuild}${caps.result?.build?.dirty ? ', dirty' : ''}) ` : ''}in ${caps.ms}`
+        + (have.length ? ` — ${have.join(', ')}` : ' — no extensions enabled'));
+    // The one that changes what BlockYard has to DO: with the node serving
+    // address history there is no reason to build and follow a second copy.
+    if (ownIndex) add('address index', 'ok', 'the node serves it (addrindex=1) — BlockYard does not need to build its own');
   }
 
   return { ok: !checks.some((c) => c.status === 'fail'), checks, facts };
+}
+
+/** bmcgetcapabilities into `facts`; a node without the method is Core, and that is not a failure. */
+async function probeCapabilities(one, facts) {
+  const caps = await one('bmcgetcapabilities', [], 5000);
+  if (!caps.ok) { facts.nodeKind = 'core'; return caps; }
+  const r = caps.result ?? {};
+  const x = r.extensions ?? {};
+  facts.nodeKind = r.node ?? 'bitcoinmachinecode';
+  facts.nodeBuild = r.build?.commit ?? null;
+  facts.nodeCapabilities = {
+    addrindex: Boolean(x.addrindex),
+    esploraPort: Number(x.esploraport ?? 0) || 0,
+    mempoolJournal: Boolean(x.mempooljournal?.enabled),
+    mempoolJournalCapacity: x.mempooljournal?.enabled ? Number(x.mempooljournal.capacity) : 0,
+    downloadInfo: Boolean(x.downloadinfo),
+    rpcComplete: Boolean(r.rpc_complete?.peerinfo && r.rpc_complete?.nettotals),
+  };
+  return caps;
 }
 
 export function printChecks(label, { ok, checks }) {

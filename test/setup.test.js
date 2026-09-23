@@ -31,14 +31,19 @@ function datadir(root, { chain = 'main', cookie = true } = {}) {
 }
 
 // a node that answers the way Core 29 does, with knobs for what an install can get wrong
-function stubRpc({ chain = 'main', txindex = true, pruned = false, version = 290000, refuse = false, prevouts = true } = {}) {
+// `bmc: true` answers the way the production Bitcoin Machine Code node does (measured 2026-09-23):
+// version 1 under a non-Core subversion, and bmcgetcapabilities saying it serves its own address index
+function stubRpc({ chain = 'main', txindex = true, pruned = false, version = 290000, refuse = false, prevouts = true, bmc = false } = {}) {
   const genesis = FX.genesis.expect.hash;
   return { batch: async (calls) => {
     if (refuse) { const e = new Error('connect ECONNREFUSED 127.0.0.1:8332'); e.kind = 'transport'; throw e; }
     return calls.map(({ method, params }) => {
       switch (method) {
         case 'getblockchaininfo': return { ok: true, result: { chain, blocks: 0, headers: 0, initialblockdownload: false, pruned } };
-        case 'getnetworkinfo': return { ok: true, result: { version, subversion: `/Satoshi:${(version / 10000).toFixed(1)}.0/` } };
+        case 'getnetworkinfo': return { ok: true, result: bmc ? { version: 1, subversion: '/BitcoinMachineCode:0.0.1/' } : { version, subversion: `/Satoshi:${(version / 10000).toFixed(1)}.0/` } };
+        case 'bmcgetcapabilities': return bmc
+          ? { ok: true, result: { node: 'bitcoinmachinecode', build: { commit: '3f02898a' }, extensions: { addrindex: true, esploraport: 3005 } } }
+          : { ok: false, error: { code: -32601, message: 'Method not found' } };
         case 'getindexinfo': return { ok: true, result: txindex ? { txindex: { synced: true, best_block_height: 0 } } : {} };
         case 'getbestblockhash': return { ok: true, result: genesis };
         case 'getblock': return params[1] === 3
@@ -127,6 +132,41 @@ test('EACH THING AN INSTALL CAN GET WRONG IS A FAIL BY NAME', async () => {
       assert.equal(byName(r)['index writable'].status, 'fail');
       chmodSync(ro, 0o700);
     }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('A NODE THAT SERVES ITS OWN ADDRESS INDEX PASSES WITHOUT CORE\'S VERSION, BLOCK FILES OR DEBUG.LOG', async () => {
+  // (2026-09-23, the production bmc node put into config/local.json: `npm run check` printed
+  // "version /BitcoinMachineCode:0.0.1/ (1) -- needs Core 25.0" and "data/blocks: ENOENT" as ✗,
+  // then said "the node serves it (addrindex=1) -- BlockYard does not need to build its own", and
+  // exited 1 on its own contradiction. The three checks exist for the address-index follower Core
+  // needs; a node with addrindex needs none of them, and bmc keeps blk*.dat under data/<chain>/.)
+  const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-setup-'));
+  try {
+    const dir = path.join(root, 'bmc'); mkdirSync(path.join(dir, 'main'), { recursive: true });   // no blocks/ at all
+    writeFileSync(path.join(dir, 'main', '.cookie'), '__cookie__:secret');
+    const logFile = path.join(root, 'bitcoin.main.log'); writeFileSync(logFile, '2026-09-23 22:54:57.135 [txrelay] addrv2 gossip\n');
+    const node = { id: 'bmc', rpcUrl: 'http://127.0.0.1:8331', datadir: dir, cookieFile: path.join(dir, 'main', '.cookie'), chainHint: 'main', logFile };
+    const r = await runChecks(node, { rpc: stubRpc({ bmc: true }) });
+    const c = byName(r);
+    assert.equal(r.ok, true, JSON.stringify(r.checks, null, 1));
+    assert.ok(!r.checks.some((x) => x.status === 'fail'), 'no ✗ anywhere');
+    assert.equal(c.version.status, 'info'); assert.match(c.version.detail, /BitcoinMachineCode.*serves its own address index/);
+    assert.equal(c['block files'].status, 'info'); assert.match(c['block files'].detail, /never reads its block files/);
+    assert.ok(!c['read a block'], 'no block file is opened');
+    assert.equal(c['address index rpc'].status, 'info'); assert.match(c['address index rpc'].detail, /serves address history itself/);
+    assert.equal(c['node log'].status, 'info'); assert.match(c['node log'].detail, /bitcoin\.main\.log .* the monitor follows it/, 'the configured logFile, not a debug.log under the datadir');
+    assert.equal(c['node kind'].status, 'ok'); assert.match(c['node kind'].detail, /bitcoinmachinecode \(3f02898a\).*Esplora facade on :3005/);
+    assert.equal(c['address index'].status, 'ok'); assert.match(c['address index'].detail, /addrindex=1/);
+    assert.equal(r.facts.nodeKind, 'bitcoinmachinecode'); assert.equal(r.facts.logFile, logFile);
+    // a logFile the config names but the machine does not have is said, as a warning, not hidden
+    const missing = await runChecks({ ...node, logFile: path.join(root, 'nope.log') }, { rpc: stubRpc({ bmc: true }) });
+    assert.equal(byName(missing)['node log'].status, 'warn'); assert.match(byName(missing)['node log'].detail, /not found/);
+    assert.equal(missing.ok, true, 'a missing log is a warning: the monitor still runs on RPC');
+    // and Core is judged exactly as before: an old Core is still a FAIL, with no capabilities to excuse it
+    const old = await runChecks({ ...node, cookieFile: undefined, datadir: datadir(path.join(root, 'core')) }, { rpc: stubRpc({ version: 240000 }) });
+    assert.equal(byName(old).version.status, 'fail'); assert.match(byName(old).version.detail, /25\.0/);
+    assert.equal(byName(old)['block files'].status, 'ok', 'Core\'s block files are still read');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
