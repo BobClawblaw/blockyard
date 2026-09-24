@@ -686,6 +686,20 @@ const RULES = [
   // the corpus parse ratio fall to 73.4% today while costing no measurement at all --
   // parsed so the ratio means something again, and so book growth is a figure. `addr gossip`
   // (v1 addr messages, since 2026-09-12) is the same line and the same figure.
+  // [dial-handoff] 203.0.113.61:8333: helper hands fd over 445ms after the dial began (v1) pend=0 first=- eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED
+  // [dial-handoff] 203.0.113.61:8333: worker received fd 41 461ms after the dial began pend=1150 first=sendcmpct eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED
+  // bmc's handoff probe (1dcb859f, 2026-09-24): the helper's side and the worker's side of
+  // one dial. `pend` is bytes already waiting on the socket, `first` the first message in them.
+  {
+    name: 'dialHandoff',
+    keys: ['dial-handoff'],
+    re: /\[dial-handoff\]\s*(\S+): (?:helper hands fd over|worker received fd \d+) (\d+)ms after the dial began(?: \((v\d)\))? pend=(\d+) first=(\S+) eof=(\d+) hup=(\d+) err=(\d+) so_error=(\d+) tcp=(\S+)/,
+    apply: (m) => ({
+      kind: 'dial_handoff', side: m[0].includes('helper hands') ? 'helper' : 'worker',
+      host: m[1].replace(/:\d+$/, ''), ms: +m[2], transport: m[3] ?? null, pend: +m[4], first: m[5] === '-' ? null : m[5],
+      eof: +m[6], hup: +m[7], err: +m[8], soError: +m[9], tcp: m[10],
+    }),
+  },
   { name: 'addrGossip', re: /\[txrelay\]\s*addr(?:v2)? gossip:\s*\+(\d+)\s*address\(es\)\s*to the book/, apply: (m) => ({ kind: 'addr_gossip', added: +m[1] }) },
   // [dl] outbound top-up: 4 dial(s) failed, first 172.104.174.241:8333: peer lacks NODE_WITNESS
   // The reason is the finding, so it is kept verbatim: 'peer lacks NODE_WITNESS' and

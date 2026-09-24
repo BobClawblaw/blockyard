@@ -152,7 +152,7 @@ test('a build that counts nothing yields an absent rate, never 0 B/s', async () 
     ['getmempoolinfo', { size: 0 }],
     ['getconnectioncount', 16],
     ['getnettotals', totals[0]],
-    ['uptime', 100],
+    ['uptime', 3600],
   ]);
   await m.tier_fast();
   await m.tier_fast();
@@ -176,6 +176,31 @@ test('a build that counts nothing yields an absent rate, never 0 B/s', async () 
   await m.tier_fast();
   assert.ok(m.state.net.inBps > 0, `expected a positive rate, got ${m.state.net.inBps}`);
   assert.equal(m.quality.find((x) => x.key === 'nettotals-zero'), undefined, 'the flag must clear once the counters move');
+});
+
+test('a node that has just started, or has no peers, has moved no bytes: not a build fault', async () => {
+  // Measured 2026-09-24: bmc answered 0/0 for its first half-minute after a restart, and the
+  // flag said the build does not count its traffic. It counted 20 MB a few minutes later.
+  const zero = { totalbytesrecv: 0, totalbytessent: 0, timemillis: 1, uploadtarget: { target: 0 } };
+  const at = (uptime, conns) => async () => new Map([
+    ['getblockchaininfo', { blocks: 1, headers: 1, verificationprogress: 1, chain: 'main' }],
+    ['getmempoolinfo', { size: 0 }],
+    ['getconnectioncount', conns],
+    ['getnettotals', zero],
+    ['uptime', uptime],
+  ]);
+  const m = makeMonitor({ logFile: null });
+  m.callList = at(30, 3);
+  await m.tier_fast();
+  await m.tier_fast();
+  assert.equal(m.quality.find((x) => x.key === 'nettotals-zero'), undefined, '30 s up');
+  assert.equal(m.state.net.inBps, null, 'and still no 0 B/s reading');
+  m.callList = at(3600, 0);
+  await m.tier_fast();
+  assert.equal(m.quality.find((x) => x.key === 'nettotals-zero'), undefined, 'no peers, nothing to count');
+  m.callList = at(3600, 12);
+  await m.tier_fast();
+  assert.match(m.quality.find((x) => x.key === 'nettotals-zero').text, /after 60 min up with 12 peer\(s\) connected/);
 });
 
 test('an impossible in/out ratio withholds the upload rate instead of publishing 0 B/s', async () => {

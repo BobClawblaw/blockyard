@@ -150,7 +150,8 @@ test('323 handshake failures aggregate instead of flooding the feed', async () =
   m.on('events', (rows) => { fed += rows.length; });
   const fail = SHAPES.find((l) => l.includes('v2 handshake failed'));
   const shut = SHAPES.find((l) => l.includes('[serve] shutting down'));
-  m.onLogEvents(Array.from({ length: 323 }, () => parseLine(fail)));
+  // Stamped now: the flag counts a 10-minute window, and 2026-09-18 is not in it.
+  m.onLogEvents(Array.from({ length: 323 }, () => ({ ...parseLine(fail), ts: Date.now() - 1000 })));
   assert.equal(fed, 0, 'individual dropped handshakes do not belong in the feed');
   const q = m.quality.find((x) => x.key === 'inbound-handshake-failing');
   assert.ok(q);

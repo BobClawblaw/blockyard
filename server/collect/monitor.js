@@ -63,6 +63,9 @@ const RARE_CALLS = Object.freeze([
 export const RARE_TIMEOUT_MS = 10_000;   // the rare tier's own time limit (tier_rare)
 export const RETRY_SOON_MS = 60_000;     // how soon a tier that timed out tries again
 export const RPC_FAIL_WINDOW_MS = 600_000; // rpc-timeouts counts failures this recent (recordRpc)
+export const NETTOTALS_GRACE_SEC = 120;    // nettotals-zero waits this long after the node starts
+export const HANDSHAKE_WINDOW_MS = 600_000; // inbound-handshake-failing counts failures this recent
+export const HANDSHAKE_WARN_AT = 10;        // ...and warns at this many inside the window
 
 export class NodeMonitor extends EventEmitter {
   constructor(nodeCfg, { rpc, poll, store, log, history, logCfg, miningCfg }) {
@@ -471,7 +474,15 @@ export class NodeMonitor extends EventEmitter {
       if (nt.totalbytesrecv === 0 && nt.totalbytessent === 0 && prevRecv === 0) {
         this.state.net.inBps = null;
         this.state.net.outBps = null;
-        this.flagQuality('nettotals-zero', `getnettotals reports 0 bytes sent and received, so this build does not count the download worker's traffic; bandwidth${this.logEnabled ? ' comes from the node log instead' : ' has no source at all in RPC-only mode and is shown as –'}`, 'warn');
+        // A NODE THAT HAS JUST STARTED HAS MOVED NO BYTES YET (2026-09-24): bmc answered 0/0 for
+        // its first half-minute after a restart, before any peer had connected, and this flag
+        // blamed the build for it. Zeros only say "does not count" once the node has been up
+        // a while with peers to count; until then there is nothing to say.
+        if (up != null && up >= NETTOTALS_GRACE_SEC && cc > 0) {
+          this.flagQuality('nettotals-zero', `getnettotals reports 0 bytes sent and received after ${Math.round(up / 60)} min up with ${cc} peer(s) connected, so this build does not count its traffic there; bandwidth${this.logEnabled ? ' comes from the node log instead' : ' has no source at all in RPC-only mode and is shown as –'}`, 'warn');
+        } else {
+          this.clearQuality('nettotals-zero');
+        }
       } else {
         this.clearQuality('nettotals-zero');
         // One sample per poll. add() used to be called twice per value here, which
@@ -1310,6 +1321,7 @@ export class NodeMonitor extends EventEmitter {
   //     rewrote [dlc] and 1 of its 1,006 tick lines parsed.
   // None of the three is visible in the data itself, which is why the flag exists.
   async checkLogHealth() {
+    this.handshakeCheck();
     if (!this.tail) return this.logHealthStats;
     const st = this.tail.status();
     const now = Date.now();
@@ -1631,12 +1643,14 @@ export class NodeMonitor extends EventEmitter {
         // push every real event out of the feed and say less: the finding is the
         // rate and the source, not the individual dropped socket.
         if (/handshake failed/i.test(ev.reason ?? '')) {
-          const w = (this.handshakeFails ??= { count: 0, hosts: new Map(), firstAt: ev.ts, lastAt: ev.ts });
+          const w = (this.handshakeFails ??= { count: 0, hosts: new Map(), firstAt: ev.ts, lastAt: ev.ts, recent: [] });
           w.count += 1;
           w.hosts.set(ev.host ?? '?', (w.hosts.get(ev.host ?? '?') ?? 0) + 1);
           w.lastAt = ev.ts;
-          const [topHost, topN] = [...w.hosts.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['?', 0];
-          this.flagQuality('inbound-handshake-failing', `${w.count} inbound connection(s) failed the ${ev.transport ?? 'BIP324'} handshake and were dropped, ${topN} of them from ${topHost}; these peers never reach the protocol layer, so getpeerinfo cannot show them`, 'warn');
+          w.transport = ev.transport ?? w.transport;
+          w.recent.push({ at: ev.ts ?? now, host: ev.host ?? '?' });
+          if (w.recent.length > 10_000) w.recent.splice(0, w.recent.length - 10_000);
+          this.handshakeCheck(now);
           return [];
         }
         this.peerEvents.unshift({ ...ev });
@@ -1653,6 +1667,18 @@ export class NodeMonitor extends EventEmitter {
         // zero better than the count does, and it is worth one line per boot.
         this.flagQuality('ipv6-unreachable', `the node reports no global IPv6 route on this host, so ipv6 peers are unreachable${ev.caveat ? ` (${ev.caveat})` : ''}; the ipv6 peer count is a host capability, not a node fault`, 'info');
         return [ev];
+      case 'dial_handoff': {
+        // bmc's [dial-handoff] probe (bmc 1dcb859f, 2026-09-24): one line when the dial helper
+        // hands a connected socket over, one when the worker takes it. A diagnostic, a line per
+        // dial, so aggregated like gossip. The figures worth keeping are how long a handoff
+        // takes and how many sockets were already dead when the worker got them.
+        const d = (this.dialHandoff ??= { helper: 0, worker: 0, dead: 0, maxMs: 0, sumMs: 0, firstAt: ev.ts, lastAt: ev.ts });
+        d[ev.side] += 1;
+        if (ev.ms != null) { d.sumMs += ev.ms; d.maxMs = Math.max(d.maxMs, ev.ms); }
+        if (ev.tcp !== 'ESTABLISHED' || ev.eof || ev.soError) d.dead += 1;
+        d.lastAt = ev.ts;
+        return [];
+      }
       case 'addr_gossip': {
         // Median 22 s apart on production: aggregate, never per-line.
         const g = (this.addrGossip ??= { added: 0, updates: 0, firstAt: ev.ts, lastAt: ev.ts });
@@ -2460,6 +2486,26 @@ export class NodeMonitor extends EventEmitter {
     this.log({ level: severity === 'warn' ? 'warn' : 'debug', msg: `[quality:${key}] ${text}` });
   }
 
+  /**
+   * inbound-handshake-failing, over a window (2026-09-24). It used to go up on the first
+   * failure and stay for the life of the process: 3 dropped handshakes in a node's first
+   * minutes of listening -- scanners and old clients, which any listening node draws -- read
+   * as a warning an hour later. A rate is the finding (323 in half an hour from one host was
+   * the case that made this flag), so it warns at HANDSHAKE_WARN_AT inside the window and
+   * clears when the window falls below it. Re-run from checkLogHealth, since a quiet window
+   * sends no event to clear it.
+   */
+  handshakeCheck(now = Date.now()) {
+    const w = this.handshakeFails;
+    if (!w) return;
+    w.recent = w.recent.filter((f) => now - f.at < HANDSHAKE_WINDOW_MS);
+    if (w.recent.length < HANDSHAKE_WARN_AT) { this.clearQuality('inbound-handshake-failing'); return; }
+    const hosts = new Map();
+    for (const f of w.recent) hosts.set(f.host, (hosts.get(f.host) ?? 0) + 1);
+    const [topHost, topN] = [...hosts.entries()].sort((a, b) => b[1] - a[1])[0];
+    this.flagQuality('inbound-handshake-failing', `${w.recent.length} inbound connection(s) failed the ${w.transport ?? 'BIP324'} handshake and were dropped in the last ${HANDSHAKE_WINDOW_MS / 60000} min (${w.count} since this monitor started), ${topN} of them from ${topHost}; these peers never reach the protocol layer, so getpeerinfo cannot show them`, 'warn');
+  }
+
   clearQuality(key) {
     const i = this.quality.findIndex((q) => q.key === key);
     if (i >= 0) this.quality.splice(i, 1);
@@ -2653,6 +2699,13 @@ export class NodeMonitor extends EventEmitter {
         rpcRows: s.peers.list.length,
         rpcRowsUpdatedAt: s.peers.listUpdatedAt,
         addrGossip: this.addrGossip ? { added: this.addrGossip.added, updates: this.addrGossip.updates, lastAt: this.addrGossip.lastAt } : null,
+        dialHandoff: this.dialHandoff
+          ? {
+            handedOver: this.dialHandoff.helper, received: this.dialHandoff.worker, deadOnArrival: this.dialHandoff.dead,
+            avgMs: this.dialHandoff.helper + this.dialHandoff.worker ? Math.round(this.dialHandoff.sumMs / (this.dialHandoff.helper + this.dialHandoff.worker)) : null,
+            maxMs: this.dialHandoff.maxMs, lastAt: this.dialHandoff.lastAt,
+          }
+          : null,
         dialFailures: this.dialFails
           ? {
             failed: this.dialFails.failed, rounds: this.dialFails.events, lastAt: this.dialFails.lastAt,

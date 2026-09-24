@@ -114,3 +114,39 @@ test('relay shapes are not watched while the node is in IBD', async () => {
   const synced = await run(false);
   assert.match(flag(synced, 'log-shape-silent').text, /accepts and rejects/, 'a synced node going quiet is still news');
 });
+
+test('handshake failures warn at a rate, not on the first one, and clear when it passes', async () => {
+  const m = mk();
+  const now = Date.now();
+  const fail = (host, ts) => ({ kind: 'peer_reject', reason: 'v2 handshake failed', transport: 'BIP324', host, ts });
+  m.onLogEvents([fail('203.0.113.82', now - 60_000), fail('198.51.100.4', now - 50_000), fail('198.51.100.8', now - 40_000)]);
+  assert.equal(flag(m, 'inbound-handshake-failing'), undefined, 'three is what any listening node draws');
+  m.onLogEvents(Array.from({ length: 9 }, (_, i) => fail('127.0.0.1', now - 30_000 + i)));
+  const q = flag(m, 'inbound-handshake-failing');
+  assert.match(q.text, /^12 inbound connection\(s\) failed the BIP324 handshake and were dropped in the last 10 min \(12 since/);
+  assert.match(q.text, /9 of them from 127\.0\.0\.1/);
+  m.handshakeCheck(now + 11 * 60_000);
+  assert.equal(flag(m, 'inbound-handshake-failing'), undefined, 'the window passed with no more');
+  assert.equal(m.snapshot({}).peers.handshakeFailures.count, 12, 'the lifetime count is still there to read');
+  await m.stop();
+});
+
+test('[dial-handoff] lines are claimed and aggregated, not a new tag and not the feed', async () => {
+  const m = mk();
+  let fed = 0;
+  m.on('events', (rows) => { fed += rows.length; });
+  const lines = [
+    '2026-09-24 21:40:00.000 [dial-handoff] 203.0.113.61:8333: helper hands fd over 445ms after the dial began (v1) pend=0 first=- eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED',
+    '2026-09-24 21:40:00.020 [dial-handoff] 203.0.113.61:8333: worker received fd 41 461ms after the dial began pend=1150 first=sendcmpct eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED',
+    '2026-09-24 21:40:01.000 [dial-handoff] 198.51.100.4:8333: worker received fd 33 90ms after the dial began pend=0 first=- eof=1 hup=1 err=1 so_error=32 tcp=CLOSE',
+  ];
+  const evs = lines.map(parseLine);
+  assert.deepEqual(evs.map((e) => e.kind), ['dial_handoff', 'dial_handoff', 'dial_handoff']);
+  assert.equal(evs[1].first, 'sendcmpct');
+  m.onLogEvents(Array.from({ length: 30 }, () => evs).flat());
+  assert.equal(fed, 0);
+  assert.equal(m.unseenTags.has('[dial-handoff]'), false);
+  const d = m.snapshot({}).peers.dialHandoff;
+  assert.deepEqual([d.handedOver, d.received, d.deadOnArrival, d.maxMs], [30, 60, 30, 461]);
+  await m.stop();
+});

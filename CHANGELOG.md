@@ -19,6 +19,19 @@ All notable changes to this project are documented here. The format follows
     problem. Real damage (a frame that will not read, a body that does not hash) still warns.
   - The four relay line shapes (relay legs, accepts and rejects, orphans, address gossip) are
     watched for silence only outside IBD, as the two download shapes are watched only inside it.
+  - `nettotals-zero` waits until the node has been up two minutes with peers connected. A node
+    that has just restarted has moved no bytes yet, and the flag blamed the build for it.
+  - `inbound-handshake-failing` warns at 10 failures in 10 minutes and clears when the rate
+    drops. It used to go up on the first failure and stay: 3 dropped handshakes in a node's
+    first minutes of listening are what any listening node draws.
+
+### Added
+
+- bmc's `[dial-handoff]` probe lines are read: a count of sockets handed over and received,
+  the handoff time (average and worst), and how many sockets were already dead when the worker
+  got them, as `peers.dialHandoff`. They were raising `log-new-tag`.
+  - `nettotals-zero` waits until the node has been up two minutes with peers connected. A node
+    that has just restarted has moved no bytes yet, and the flag blamed the build for it.
 
 ## [0.1.4] — 2026-09-22
 
