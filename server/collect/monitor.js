@@ -1675,7 +1675,9 @@ export class NodeMonitor extends EventEmitter {
         const d = (this.dialHandoff ??= { helper: 0, worker: 0, dead: 0, maxMs: 0, sumMs: 0, firstAt: ev.ts, lastAt: ev.ts });
         d[ev.side] += 1;
         if (ev.ms != null) { d.sumMs += ev.ms; d.maxMs = Math.max(d.maxMs, ev.ms); }
-        if (ev.tcp !== 'ESTABLISHED' || ev.eof || ev.soError) d.dead += 1;
+        // Counted on the worker's side only: that is the socket the download actually got, and
+        // counting both sides would count one dial twice.
+        if (ev.side === 'worker' && (ev.tcp !== 'ESTABLISHED' || ev.eof || ev.soError)) d.dead += 1;
         d.lastAt = ev.ts;
         return [];
       }

@@ -362,3 +362,29 @@ test('the snapshot keeps the node\'s own network info beside the Mining page\'s 
   about.renderAbout(s, {}, { api: async () => ({}), toast: () => {}, fmt: F, render: () => {} });
   assert.match(String(el('abNode').innerHTML), /BitcoinMachineCode:0\.0\.1/, 'About shows the node\'s version');
 });
+
+test('the dial handoff card shows bmc\'s probe, and says why when there is none', () => {
+  const { el } = installDom();
+  const state = { page: 'node', node: 'main', byNode: new Map(), events: [], snap: null, series: {}, cfg: { sources: [] } };
+  const h = {
+    api: async () => ({}), toast: () => {}, state, fmt: F, charts,
+    setText: (id, v) => { el(id).innerHTML = String(v); },
+    canvas: (id) => el(id),
+    renderFeed: () => {}, render: () => {}, renderSyncHero: () => {}, peersDetail: async () => [],
+  };
+  const frame = (extra) => ({ label: 'n', chain: 'main', rpc: { url: '' }, app: { uptimeSec: 120 }, ...extra });
+  // Measured on mainnet bmc, 2026-09-24: 19 dials, one socket closed before the worker had it.
+  panels.renderNode(frame({ peers: { dialHandoff: { handedOver: 19, received: 19, deadOnArrival: 1, avgMs: 531, maxMs: 1456, lastAt: Date.now() - 5000 } } }), state, h);
+  const card = el('ndHandoff').innerHTML.replace(/<[^>]*>/g, ' ');
+  assert.match(card, /handed over\s+19/);
+  assert.match(card, /dead on arrival\s+1\s+\(5\.3%\)/);
+  assert.match(card, /531 ms/);
+  assert.match(card, /1,?456 ms/);
+  assert.match(el('ndHandoffNote').innerHTML, /Since this monitor started/);
+
+  panels.renderNode(frame({}), state, h);
+  assert.equal(el('ndHandoff').innerHTML, '', 'no figures invented for a node that writes no such line');
+  assert.match(el('ndHandoffNote').innerHTML, /does not write them/);
+  panels.renderNode(frame({ log: { source: 'disabled' } }), state, h);
+  assert.match(el('ndHandoffNote').innerHTML, /running on RPC alone/);
+});

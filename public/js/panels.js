@@ -590,6 +590,29 @@ export function renderNode(s, state, h) {
       : '–'],
   ]));
 
+  // bmc's [dial-handoff] probe: the dial helper hands each connected socket to a download
+  // worker, and both sides log it. Aggregated server-side (peers.dialHandoff); a node that does
+  // not write the line -- Core, an older bmc, or the log source off -- has nothing here.
+  const dh = s.peers?.dialHandoff ?? null;
+  if (dh) {
+    const seen = dh.received ?? 0;
+    const dead = dh.deadOnArrival ?? 0;
+    h.setText('ndHandoff', kv([
+      ['handed over', fmt.num(dh.handedOver)],
+      ['received by worker', fmt.num(dh.received)],
+      ['dead on arrival', raw(`<span class="${dead ? 'warn' : ''}">${fmt.num(dead)}</span>${seen ? ` <span class="faint tiny">(${(dead / seen * 100).toFixed(1)}%)</span>` : ''}`)],
+      ['avg handoff', dh.avgMs != null ? `${fmt.num(dh.avgMs)} ms` : '–'],
+      ['slowest', dh.maxMs ? `${fmt.num(dh.maxMs)} ms` : '–'],
+      ['last seen', dh.lastAt ? fmt.ago(dh.lastAt) : '–'],
+    ]));
+    h.setText('ndHandoffNote', 'Since this monitor started. Times run from the start of the dial; "dead on arrival" is a socket the worker received already closed or in error.');
+  } else {
+    h.setText('ndHandoff', '');
+    h.setText('ndHandoffNote', t.source === 'disabled'
+      ? 'Needs the node\'s log; this monitor is running on RPC alone.'
+      : 'No [dial-handoff] lines seen: this node does not write them (Bitcoin Core, or a bmc before 2026-09-24).');
+  }
+
   const src = state.cfg?.sources ?? [];
   h.setText('ndSources', src.length
     ? `<table class="t"><thead><tr><th>panel</th><th>source</th><th>why</th></tr></thead><tbody>${

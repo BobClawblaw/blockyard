@@ -30,6 +30,10 @@ All notable changes to this project are documented here. The format follows
 - bmc's `[dial-handoff]` probe lines are read: a count of sockets handed over and received,
   the handoff time (average and worst), and how many sockets were already dead when the worker
   got them, as `peers.dialHandoff`. They were raising `log-new-tag`.
+- **A Dial handoff card on the node page** shows those figures: sockets handed over and
+  received, how many were dead on arrival (and what share), average and slowest handoff, and
+  when the last one was seen. A node that writes no such line says so rather than showing zeros.
+  Dead-on-arrival counts the worker's side only, so one dial is never counted twice.
   - `nettotals-zero` waits until the node has been up two minutes with peers connected. A node
     that has just restarted has moved no bytes yet, and the flag blamed the build for it.
 
