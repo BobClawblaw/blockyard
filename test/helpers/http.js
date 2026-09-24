@@ -53,17 +53,32 @@ export async function withApp({ nodes = 1, config = {}, adminPassword = null, tl
   const port = await freePort();
   const nodeDefs = [];
   for (let i = 0; i < nodes; i++) {
-    const fport = await freePort();
-    const fake = await startFakeNode({
-      port: fport,
-      // Wallets this fake node has loaded, for the administrative suite's tests. None by
-      // default, which is what every other test wants and what a node without a wallet
-      // actually answers.
-      ...(wallets && i === 0 ? { wallets } : {}),
-      logFile: path.join(dir, `fake-${i}.log`),
-      ibd: i === 0 && nodes > 1 ? false : true,
-      catchupBlocksPerSec: 9,
-    });
+    // THE FAKE NODE GETS THE SAME RETRY THE APP'S BIND HAS (below, 2026-09-18): freePort()
+    // closes the socket before handing the number over, and test files run in parallel
+    // processes, so between that close and this bind the port is anybody's. Seen 2026-09-23
+    // as test/admin-daemon.test.js failing once with "fake node could not bind 127.0.0.1:38331
+    // - something is already listening there", green on its own -- the app-boot retry never
+    // covered this bind.
+    let fake = null;
+    for (let attempt = 0; ; attempt++) {
+      const fport = await freePort();
+      try {
+        fake = await startFakeNode({
+          port: fport,
+          // Wallets this fake node has loaded, for the administrative suite's tests. None by
+          // default, which is what every other test wants and what a node without a wallet
+          // actually answers.
+          ...(wallets && i === 0 ? { wallets } : {}),
+          logFile: path.join(dir, `fake-${i}.log`),
+          ibd: i === 0 && nodes > 1 ? false : true,
+          catchupBlocksPerSec: 9,
+        });
+        break;
+      } catch (err) {
+        const taken = /could not bind|EADDRINUSE/i.test(err?.message ?? '');
+        if (!taken || attempt >= 4) throw err;
+      }
+    }
     fakes.push(fake);
     nodeDefs.push({
       id: i === 0 ? 'node-a' : `node-${i}`,
