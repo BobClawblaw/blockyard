@@ -6,7 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **Quality flags no longer outlive their cause.** Seen 2026-09-24 on a healthy mainnet bmc at
+  93% of its sync, whose node page showed five warnings, none of them current:
+  - `rpc-timeouts` counts failures in the last 10 minutes, not since the monitor started. 48
+    refused connections from one three-minute node restart read as "the node is under load"
+    three hours later.
+  - `tip-stale` clears when the chain advances. bmc need not ever log "tip fresh again".
+  - A block archive laid out out of height order (how a parallel download writes it) is an
+    `info` fact, not a warning, and is no longer counted a second time as a `check-problems`
+    problem. Real damage (a frame that will not read, a body that does not hash) still warns.
+  - The four relay line shapes (relay legs, accepts and rejects, orphans, address gossip) are
+    watched for silence only outside IBD, as the two download shapes are watched only inside it.
 
 ## [0.1.4] — 2026-09-22
 

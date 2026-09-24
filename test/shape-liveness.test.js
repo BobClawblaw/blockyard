@@ -105,6 +105,8 @@ test('a measurement that stops arriving while the log keeps moving is flagged', 
   const now = Date.now();
   const old = now - 10 * 60_000;
   const stamp = (line, ts) => ({ ...parseLine(line), ts });
+  // Synced: address gossip is a relay shape, watched only outside IBD.
+  m.state.chainInfo = { blocks: 966036, headers: 966036, initialblockdownload: false };
 
   m.onLogEvents([stamp(hb, old)]);                       // the shape armed itself here
   m.onLogEvents(Array.from({ length: 40 }, (_, i) => stamp(

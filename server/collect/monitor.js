@@ -62,6 +62,7 @@ const RARE_CALLS = Object.freeze([
 ]);
 export const RARE_TIMEOUT_MS = 10_000;   // the rare tier's own time limit (tier_rare)
 export const RETRY_SOON_MS = 60_000;     // how soon a tier that timed out tries again
+export const RPC_FAIL_WINDOW_MS = 600_000; // rpc-timeouts counts failures this recent (recordRpc)
 
 export class NodeMonitor extends EventEmitter {
   constructor(nodeCfg, { rpc, poll, store, log, history, logCfg, miningCfg }) {
@@ -407,6 +408,14 @@ export class NodeMonitor extends EventEmitter {
       this.state.chain = bc.chain;
       this.state.chainInfo = bc;
       this.state.lastGoodAt = Date.now();
+      // bmc says "tip stale" and, measured 2026-09-24, need not ever say "tip fresh again":
+      // the flag sat for 2.5 hours over a node syncing at 8 blocks a second. The chain
+      // advancing is the answer, whether or not the log gets round to it.
+      const ts = this.state.logState?.tipStale;
+      if (ts?.stale && bc.blocks != null && (ts.blocksAt == null || bc.blocks > ts.blocksAt)) {
+        if (ts.blocksAt == null) ts.blocksAt = bc.blocks;
+        else { ts.stale = false; this.clearQuality('tip-stale'); }
+      }
       if (bc.blocks != null) { this.blockRate.add(bc.blocks); this.blockRateFast.add(bc.blocks); }
       if (prev && bc.blocks != null) {
         if (this.lastTip == null) this.lastTip = bc.blocks;
@@ -1381,6 +1390,14 @@ export class NodeMonitor extends EventEmitter {
         });
         continue;
       }
+      if (spec.syncedOnly && (ibdish || !ibdKnown)) {
+        shapes.push({
+          shape: spec.shape, armed: true, watching: false, lastAt: rec.lastAt, matches: rec.matches, gateMs: gate,
+          reason: ibdKnown ? 'node is in IBD: it has no mempool to relay into, so this line may stop'
+            : 'IBD state unknown (no chainInfo yet); not watched on a guess',
+        });
+        continue;
+      }
       const ageMs = (this.lastLineAt ?? now) - rec.lastAt;
       const silent = ageMs > gate;
       shapes.push({ shape: spec.shape, armed: true, watching: true, lastAt: rec.lastAt, ageSec: Math.round(ageMs / 1000), matches: rec.matches, gateMs: gate, silent });
@@ -1590,7 +1607,14 @@ export class NodeMonitor extends EventEmitter {
         ls.lastNewBlock = { height: ev.height, at: ev.ts, jump: ev.jump };
         return [ev];
       case 'archive_hole':
-        this.flagQuality('archive-hole', `block data is not laid out monotonically (first break at height ${ev.height}); the node refuses truncation and pruning above it`, 'warn');
+        // A NODE THAT DOWNLOADS IN PARALLEL WRITES BLOCKS IN ARRIVAL ORDER, so this is how a
+        // bmc archive normally looks, not damage (2026-09-24: first break at height 1 on a
+        // healthy mainnet sync). What it costs is stated, no more: bmc's prune refuses, and a
+        // reorg's truncation falls back to index-only (archive_truncate_safe), which works but
+        // does not hand the disk back. The same check prints its summary next, and counts this
+        // as one of its problems -- `layoutBreakAt` is how that line knows.
+        ls.layoutBreakAt = ev.ts;
+        this.flagQuality('archive-hole', `block data is not laid out in height order (first break at height ${ev.height}), as a parallel download writes it; pruning will not run and a reorg truncates the index without reclaiming disk -- a layout fact, not damage`, 'info');
         return [ev];
       case 'peer_connect':
       case 'peer_drop':
@@ -1954,9 +1978,17 @@ export class NodeMonitor extends EventEmitter {
         return ev.applyWaited ? [ev] : [];
       case 'checklevel':
         ls.lastCheck = { at: ev.ts, level: ev.level, examined: ev.examined, holes: ev.holes, problems: ev.problems };
-        if (ev.problems > 0) this.flagQuality('check-problems', `checklevel=${ev.level} over ${ev.blocks} block(s) [${ev.from}..${ev.to}] found ${ev.problems} problem(s) and ${ev.holes} hole(s)`, 'warn');
-        else this.clearQuality('check-problems');
-        return ev.problems > 0 ? [ev] : [];
+        {
+          // bmc's archive_check adds ONE problem for a layout break and prints that line just
+          // before this one; archive-hole already says it. What is left is damage: a frame
+          // that will not read, a bad magic, a body that does not hash to its index record.
+          const layout = ls.layoutBreakAt != null && Math.abs(ev.ts - ls.layoutBreakAt) < 1000 ? 1 : 0;
+          const damage = Math.max(0, ev.problems - layout);
+          if (!layout) this.clearQuality('archive-hole');
+          if (damage > 0) this.flagQuality('check-problems', `checklevel=${ev.level} over ${ev.blocks} block(s) [${ev.from}..${ev.to}] found ${damage} problem(s) in the block data itself and ${ev.holes} hole(s)${layout ? ' (plus the layout break, counted separately)' : ''}`, 'warn');
+          else this.clearQuality('check-problems');
+          return damage > 0 ? [ev] : [];
+        }
       case 'peer_identify': {
         // Identity that neither build's getpeerinfo gives in full: the peer's own
         // height, user agent and protocol, per peer.
@@ -2118,6 +2150,7 @@ export class NodeMonitor extends EventEmitter {
       case 'tip_stale':
         // THE NODE SAYING IT HAS SEEN NO BLOCK FOR HALF AN HOUR. News both ways.
         ls.tipStale = { at: ev.ts, stale: ev.stale, minutes: ev.minutes, wantOutbound: ev.wantOutbound };
+        if (ev.stale) ls.tipStale.blocksAt = this.state.chainInfo?.blocks ?? null;
         if (ev.stale && now - ev.ts < 600_000) this.flagQuality('tip-stale', `the node has seen no new block for ${ev.minutes} min and is reaching for ${ev.wantOutbound} outbound peers (its own words: "tip stale")`, 'warn');
         else if (!ev.stale) this.clearQuality('tip-stale');
         return [ev];
@@ -2435,8 +2468,19 @@ export class NodeMonitor extends EventEmitter {
   recordRpc() {
     const t = this.rpc.telemetry();
     const slowAt = this.rpc.cfg.slowLatencyMs ?? 5000;
-    if (t.failedCalls) {
-      this.flagQuality('rpc-timeouts', `${t.failedCalls} RPC attempt(s) failed outright, most recently after ${t.lastLatencyMs ?? '?'}ms; ${this.indexBuild ? 'the address index build on this machine is competing for the disk (it pauses while the node is slow)' : 'the node is under load'}, so panels may lag or show no data`, 'warn');
+    // FAILURES IN A WINDOW, NOT SINCE START (2026-09-24). failedCalls only ever grows, so this
+    // used to stay up for the life of the process: 48 ECONNREFUSED from one three-minute node
+    // restart read as "the node is under load" three hours later, refreshed every poll.
+    const failed = t.failedCalls ?? 0;
+    const now = Date.now();
+    if (failed > (this.rpcFailSeen ?? 0)) (this.rpcFails ??= []).push({ at: now, n: failed - (this.rpcFailSeen ?? 0) });
+    this.rpcFailSeen = failed;
+    this.rpcFails = (this.rpcFails ?? []).filter((f) => now - f.at < RPC_FAIL_WINDOW_MS);
+    const recent = this.rpcFails.reduce((a, f) => a + f.n, 0);
+    if (recent) {
+      this.flagQuality('rpc-timeouts', `${recent} RPC attempt(s) failed outright in the last ${RPC_FAIL_WINDOW_MS / 60000} min (${failed} since this monitor started), most recently after ${t.lastLatencyMs ?? '?'}ms; ${this.indexBuild ? 'the address index build on this machine is competing for the disk (it pauses while the node is slow)' : 'the node is under load or restarting'}, so panels may lag or show no data`, 'warn');
+    } else {
+      this.clearQuality('rpc-timeouts');
     }
     if ((t.avgLatencyMs ?? 0) > slowAt) {
       this.flagQuality('rpc-slow', `the node's RPC is answering in ~${(t.avgLatencyMs / 1000).toFixed(1)}s (the lane this monitor gives it allows ${this.rpc.cfg.maxInFlight} call(s) in flight)${this.indexBuild ? ' -- the address index build on this machine is competing for the disk and pauses while this lasts' : ''}, so polling has slowed itself down rather than queueing up`, 'warn');

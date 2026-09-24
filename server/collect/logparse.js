@@ -2609,14 +2609,21 @@ export const RULE_KEYS_FOR_TEST = { byKey: RULES_BY_KEY, any: RULES_ANY };
 // build differences are handled without a build table: the bench build never emits
 // `heartbeat`, and production emits a bandwidth tick twice in several hours because
 // it is synced. Neither should be a warning.
+//
+// The four relay shapes are the mirror image: watched only OUTSIDE IBD (syncedOnly). Their
+// cadences were measured on synced nodes; a node in initial sync has no mempool to relay
+// into. Measured 2026-09-24 on a mainnet bmc at 93%: `[tx_accept]` was all missing-inputs
+// rejects against "mempool 0" and stopped for good at 19:16 when the two relay peers closed
+// their end, while the download ran on at 11 MB/s. Flagging that as a reworded line was
+// wrong for two hours straight.
 export const SHAPES = [
   { shape: 'bandwidth rate', rules: ['bandwidthTick', 'bandwidthTickFields'], gateMs: 600_000, ibdOnly: true },
   { shape: 'download progress', rules: ['dlcProgressFields'], gateMs: 600_000, ibdOnly: true },
   { shape: 'heartbeat', rules: ['heartbeat'], gateMs: 1_200_000 },
-  { shape: 'relay legs', rules: ['txRelay', 'txRelayBare'], gateMs: 960_000 },
-  { shape: 'accepts and rejects', rules: ['txAccept'], gateMs: 720_000 },
-  { shape: 'orphans', rules: ['orphans'], gateMs: 1_200_000 },
-  { shape: 'address gossip', rules: ['addrGossip'], gateMs: 720_000 },
+  { shape: 'relay legs', rules: ['txRelay', 'txRelayBare'], gateMs: 960_000, syncedOnly: true },
+  { shape: 'accepts and rejects', rules: ['txAccept'], gateMs: 720_000, syncedOnly: true },
+  { shape: 'orphans', rules: ['orphans'], gateMs: 1_200_000, syncedOnly: true },
+  { shape: 'address gossip', rules: ['addrGossip'], gateMs: 720_000, syncedOnly: true },
 ];
 
 // The shape a rule belongs to, for the liveness bookkeeping in the monitor.
