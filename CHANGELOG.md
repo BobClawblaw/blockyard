@@ -34,6 +34,13 @@ All notable changes to this project are documented here. The format follows
   received, how many were dead on arrival (and what share), average and slowest handoff, and
   when the last one was seen. A node that writes no such line says so rather than showing zeros.
   Dead-on-arrival counts the worker's side only, so one dial is never counted twice.
+- **The Dial handoff card separates worker wait from dial time, and starts over when the node
+  does.** *Worker wait* is how long a socket the helper had handed over sat before the worker
+  took it: the node's own delay, highlighted from 2 s. *Dial time* runs from the start of the
+  dial, so it includes the peer's connect and handshake. Both used to be one averaged figure over
+  the whole log, so the card still read "slowest 10,820 ms" hours after bitcoinmachinecode#301
+  fixed the cause. Replayed over the real log: worker wait topped out at 10,359 ms on the build
+  before #301, and 776 ms and 297 ms on the two processes since.
   - `nettotals-zero` waits until the node has been up two minutes with peers connected. A node
     that has just restarted has moved no bytes yet, and the flag blamed the build for it.
 

@@ -597,15 +597,22 @@ export function renderNode(s, state, h) {
   if (dh) {
     const seen = dh.received ?? 0;
     const dead = dh.deadOnArrival ?? 0;
+    const ms = (v) => (v != null ? `${fmt.num(v)} ms` : '–');
+    // A ready socket left waiting 2 s is the worker being held up, not the network: the
+    // 5 s reap (bmc#301) showed as 5,000-10,000 ms here, a healthy worker as tens to hundreds.
+    const slowWait = (dh.waitMaxMs ?? 0) >= 2000;
     h.setText('ndHandoff', kv([
+      ['since node start', dh.since ? fmt.ago(dh.since) : '–'],
+      ['last seen', dh.lastAt ? fmt.ago(dh.lastAt) : '–'],
       ['handed over', fmt.num(dh.handedOver)],
       ['received by worker', fmt.num(dh.received)],
+      ['worker wait, avg', ms(dh.waitAvgMs)],
+      ['worker wait, slowest', raw(`<span class="${slowWait ? 'warn' : ''}">${fmt.esc(ms(dh.waitMaxMs))}</span>`)],
+      ['dial time, avg', ms(dh.dialAvgMs)],
+      ['dial time, slowest', ms(dh.dialMaxMs)],
       ['dead on arrival', raw(`<span class="${dead ? 'warn' : ''}">${fmt.num(dead)}</span>${seen ? ` <span class="faint tiny">(${(dead / seen * 100).toFixed(1)}%)</span>` : ''}`)],
-      ['avg handoff', dh.avgMs != null ? `${fmt.num(dh.avgMs)} ms` : '–'],
-      ['slowest', dh.maxMs ? `${fmt.num(dh.maxMs)} ms` : '–'],
-      ['last seen', dh.lastAt ? fmt.ago(dh.lastAt) : '–'],
     ]));
-    h.setText('ndHandoffNote', 'Since this monitor started. Times run from the start of the dial; "dead on arrival" is a socket the worker received already closed or in error.');
+    h.setText('ndHandoffNote', 'Since the node last started. <b>Worker wait</b> is how long a socket the helper had handed over sat before the worker took it: the node\'s own delay. <b>Dial time</b> runs from the start of the dial to the worker having the socket, so it includes the peer\'s connect and handshake. "Dead on arrival" is a socket the worker received already closed or in error.');
   } else {
     h.setText('ndHandoff', '');
     h.setText('ndHandoffNote', t.source === 'disabled'

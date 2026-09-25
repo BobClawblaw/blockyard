@@ -147,6 +147,32 @@ test('[dial-handoff] lines are claimed and aggregated, not a new tag and not the
   assert.equal(fed, 0);
   assert.equal(m.unseenTags.has('[dial-handoff]'), false);
   const d = m.snapshot({}).peers.dialHandoff;
-  assert.deepEqual([d.handedOver, d.received, d.deadOnArrival, d.maxMs], [30, 60, 30, 461]);
+  assert.deepEqual([d.handedOver, d.received, d.deadOnArrival], [30, 60, 30]);
+  assert.equal(d.dialMaxMs, 461, 'dial time is the worker\'s line, from the start of the dial');
+  assert.equal(d.waitMaxMs, 16, 'worker wait is 461 - 445 for the same host; the unmatched worker line adds no wait');
+  assert.equal(d.waitMatched, 30);
+  await m.stop();
+});
+
+test('dial-handoff figures describe the running process: a node start begins them again', async () => {
+  // 2026-09-25: the card still read "slowest 10,820 ms" nine hours after bmc#301 went live,
+  // because the monitor replays the whole log and that line predated the fix's restart.
+  const m = mk();
+  const at = (t) => `2026-09-24 ${t}`;
+  const L = (t, rest) => parseLine(`${at(t)} ${rest}`);
+  m.onLogEvents([
+    L('22:53:09.130', '[dial-handoff] 203.0.113.12:8333: helper hands fd over 461ms after the dial began (v1) pend=0 first=- eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED'),
+    L('22:53:19.488', '[dial-handoff] 203.0.113.12:8333: worker received fd 42 10820ms after the dial began pend=2075 first=sendcmpct eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED'),
+  ]);
+  let d = m.snapshot({}).peers.dialHandoff;
+  assert.equal(d.waitMaxMs, 10359, 'the 5 s reap, twice: a ready socket waited 10.4 s');
+  m.onLogEvents([
+    L('23:57:49.909', '[boot] logging to /data/bmc/main/debug.log (debuglogfile) and to the console (printtoconsole=1)'),
+    L('23:59:48.188', '[dial-handoff] 203.0.113.22:8333: helper hands fd over 423ms after the dial began (v1) pend=0 first=- eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED'),
+    L('23:59:48.423', '[dial-handoff] 203.0.113.22:8333: worker received fd 32 657ms after the dial began pend=0 first=- eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED'),
+  ]);
+  d = m.snapshot({}).peers.dialHandoff;
+  assert.equal(d.since, parseLine(`${at('23:57:49.909')} [boot] logging to /data/bmc/main/debug.log (debuglogfile)`).ts, 'since = the start line');
+  assert.deepEqual([d.handedOver, d.received, d.waitMaxMs, d.dialMaxMs], [1, 1, 234, 657], 'nothing from before the restart');
   await m.stop();
 });

@@ -373,14 +373,23 @@ test('the dial handoff card shows bmc\'s probe, and says why when there is none'
     renderFeed: () => {}, render: () => {}, renderSyncHero: () => {}, peersDetail: async () => [],
   };
   const frame = (extra) => ({ label: 'n', chain: 'main', rpc: { url: '' }, app: { uptimeSec: 120 }, ...extra });
-  // Measured on mainnet bmc, 2026-09-24: 19 dials, one socket closed before the worker had it.
-  panels.renderNode(frame({ peers: { dialHandoff: { handedOver: 19, received: 19, deadOnArrival: 1, avgMs: 531, maxMs: 1456, lastAt: Date.now() - 5000 } } }), state, h);
-  const card = el('ndHandoff').innerHTML.replace(/<[^>]*>/g, ' ');
+  // Measured on mainnet bmc after bmc#301, 2026-09-25: 19 dials, one socket closed before the
+  // worker had it, ready sockets taken within 776 ms.
+  const dh = { since: Date.now() - 3_600_000, handedOver: 19, received: 19, deadOnArrival: 1, dialAvgMs: 700, dialMaxMs: 1342, waitMatched: 19, waitAvgMs: 120, waitMaxMs: 776, lastAt: Date.now() - 5000 };
+  panels.renderNode(frame({ peers: { dialHandoff: dh } }), state, h);
+  const html = el('ndHandoff').innerHTML;
+  const card = html.replace(/<[^>]*>/g, ' ');
   assert.match(card, /handed over\s+19/);
   assert.match(card, /dead on arrival\s+1\s+\(5\.3%\)/);
-  assert.match(card, /531 ms/);
-  assert.match(card, /1,?456 ms/);
-  assert.match(el('ndHandoffNote').innerHTML, /Since this monitor started/);
+  assert.match(card, /worker wait, avg\s+120 ms/);
+  assert.match(card, /worker wait, slowest\s+776 ms/);
+  assert.match(card, /dial time, slowest\s+1,?342 ms/);
+  assert.match(card, /since node start\s+60m ago/);
+  assert.equal(/class="warn">776/.test(html), false, 'a sub-second wait is not flagged');
+  assert.match(el('ndHandoffNote').innerHTML, /Since the node last started/);
+  // The bug's own reading: a ready socket that waited out two 5 s reaps.
+  panels.renderNode(frame({ peers: { dialHandoff: { ...dh, waitMaxMs: 10359 } } }), state, h);
+  assert.match(el('ndHandoff').innerHTML, /class="warn">10,?359 ms/, 'a multi-second wait is');
 
   panels.renderNode(frame({}), state, h);
   assert.equal(el('ndHandoff').innerHTML, '', 'no figures invented for a node that writes no such line');

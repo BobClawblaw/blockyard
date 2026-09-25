@@ -1672,12 +1672,35 @@ export class NodeMonitor extends EventEmitter {
         // hands a connected socket over, one when the worker takes it. A diagnostic, a line per
         // dial, so aggregated like gossip. The figures worth keeping are how long a handoff
         // takes and how many sockets were already dead when the worker got them.
-        const d = (this.dialHandoff ??= { helper: 0, worker: 0, dead: 0, maxMs: 0, sumMs: 0, firstAt: ev.ts, lastAt: ev.ts });
+        //
+        // Two figures, kept apart (2026-09-25). DIAL TIME is the worker's line: dial began ->
+        // the worker has the socket, which includes a stranger's TCP connect and handshake.
+        // WORKER WAIT is the worker's ms minus the helper's for the same host: how long a socket
+        // that was ready sat before the worker took it. The 5 s reap bug (bmc#301) lived only
+        // in the second, and a slow peer lives only in the first. Reset at each node start
+        // (boot_start), so a figure describes the process that is running.
+        const d = (this.dialHandoff ??= {
+          since: this.dialHandoffSince ?? null, helper: 0, worker: 0, dead: 0, dialN: 0, dialSum: 0, dialMax: 0,
+          waitN: 0, waitSum: 0, waitMax: 0, pending: new Map(), firstAt: ev.ts, lastAt: ev.ts,
+        });
         d[ev.side] += 1;
-        if (ev.ms != null) { d.sumMs += ev.ms; d.maxMs = Math.max(d.maxMs, ev.ms); }
-        // Counted on the worker's side only: that is the socket the download actually got, and
-        // counting both sides would count one dial twice.
-        if (ev.side === 'worker' && (ev.tcp !== 'ESTABLISHED' || ev.eof || ev.soError)) d.dead += 1;
+        if (ev.side === 'helper') {
+          if (ev.host != null && ev.ms != null) {
+            d.pending.set(ev.host, ev.ms);
+            if (d.pending.size > 64) d.pending.delete(d.pending.keys().next().value);   // a dial the worker never took
+          }
+        } else {
+          if (ev.ms != null) { d.dialN += 1; d.dialSum += ev.ms; d.dialMax = Math.max(d.dialMax, ev.ms); }
+          const handed = ev.host != null ? d.pending.get(ev.host) : undefined;
+          if (handed != null && ev.ms != null) {
+            const wait = Math.max(0, ev.ms - handed);
+            d.waitN += 1; d.waitSum += wait; d.waitMax = Math.max(d.waitMax, wait);
+            d.pending.delete(ev.host);
+          }
+          // Counted on the worker's side only: that is the socket the download actually got,
+          // and counting both sides would count one dial twice.
+          if (ev.tcp !== 'ESTABLISHED' || ev.eof || ev.soError) d.dead += 1;
+        }
         d.lastAt = ev.ts;
         return [];
       }
@@ -1801,6 +1824,9 @@ export class NodeMonitor extends EventEmitter {
       // where the other twenty-four would be noise.
       case 'boot_start':
         ls.boot = { startedAt: ev.ts, via: ev.via, steps: [], dnsSeeds: [], inProgress: null };
+        // The dial-handoff figures describe one process: a new start begins them again.
+        this.dialHandoff = null;
+        this.dialHandoffSince = ev.ts;
         return [];
       case 'boot_chain': Object.assign(this.bootRecord(ev.ts), { chain: ev.chain, port: ev.port, dnsseed: ev.dnsseed }); return [];
       case 'boot_config': this.bootRecord(ev.ts).config = ev.settings; return [];
@@ -2703,9 +2729,14 @@ export class NodeMonitor extends EventEmitter {
         addrGossip: this.addrGossip ? { added: this.addrGossip.added, updates: this.addrGossip.updates, lastAt: this.addrGossip.lastAt } : null,
         dialHandoff: this.dialHandoff
           ? {
+            since: this.dialHandoff.since,
             handedOver: this.dialHandoff.helper, received: this.dialHandoff.worker, deadOnArrival: this.dialHandoff.dead,
-            avgMs: this.dialHandoff.helper + this.dialHandoff.worker ? Math.round(this.dialHandoff.sumMs / (this.dialHandoff.helper + this.dialHandoff.worker)) : null,
-            maxMs: this.dialHandoff.maxMs, lastAt: this.dialHandoff.lastAt,
+            dialAvgMs: this.dialHandoff.dialN ? Math.round(this.dialHandoff.dialSum / this.dialHandoff.dialN) : null,
+            dialMaxMs: this.dialHandoff.dialN ? this.dialHandoff.dialMax : null,
+            waitMatched: this.dialHandoff.waitN,
+            waitAvgMs: this.dialHandoff.waitN ? Math.round(this.dialHandoff.waitSum / this.dialHandoff.waitN) : null,
+            waitMaxMs: this.dialHandoff.waitN ? this.dialHandoff.waitMax : null,
+            lastAt: this.dialHandoff.lastAt,
           }
           : null,
         dialFailures: this.dialFails
