@@ -154,6 +154,15 @@ test('[dial-handoff] lines are claimed and aggregated, not a new tag and not the
   await m.stop();
 });
 
+test('a v2 leg\'s [dial-handoff] line parses, with no command name made up from its ciphertext', () => {
+  // 2026-09-25: two of 33 worker lines went uncounted -- `first=` on a v2 socket is ciphertext,
+  // and this one has a space in it.
+  const ev = parseLine('2026-09-25 11:22:55.263 [dial-handoff] 203.0.113.51:8333: worker received fd 23 1011ms after the dial began pend=1138 first=g..{.>J3.| w eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED');
+  assert.equal(ev.kind, 'dial_handoff');
+  assert.deepEqual([ev.side, ev.ms, ev.pend, ev.first, ev.eof, ev.tcp], ['worker', 1011, 1138, null, 0, 'ESTABLISHED']);
+  assert.equal(parseLine('2026-09-25 11:22:55.263 [dial-handoff] 203.0.113.51:8333: worker received fd 23 1011ms after the dial began pend=1150 first=sendcmpct eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED').first, 'sendcmpct');
+});
+
 test('dial-handoff figures describe the running process: a node start begins them again', async () => {
   // 2026-09-25: the card still read "slowest 10,820 ms" nine hours after bmc#301 went live,
   // because the monitor replays the whole log and that line predated the fix's restart.

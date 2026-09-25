@@ -693,10 +693,13 @@ const RULES = [
   {
     name: 'dialHandoff',
     keys: ['dial-handoff'],
-    re: /\[dial-handoff\]\s*(\S+): (?:helper hands fd over|worker received fd \d+) (\d+)ms after the dial began(?: \((v\d)\))? pend=(\d+) first=(\S+) eof=(\d+) hup=(\d+) err=(\d+) so_error=(\d+) tcp=(\S+)/,
+    // `first=` is the first 12 bytes waiting on the socket, unprintables as dots. On a v2 leg
+    // those bytes are ciphertext, spaces included (2026-09-25: `first=......j.. ..` and
+    // `first=g..{.>J3.| w`), so it is read up to ` eof=` and kept only when it is a command name.
+    re: /\[dial-handoff\]\s*(\S+): (?:helper hands fd over|worker received fd \d+) (\d+)ms after the dial began(?: \((v\d)\))? pend=(\d+) first=(.{0,12}?) eof=(\d+) hup=(\d+) err=(\d+) so_error=(\d+) tcp=(\S+)/,
     apply: (m) => ({
       kind: 'dial_handoff', side: m[0].includes('helper hands') ? 'helper' : 'worker',
-      host: m[1].replace(/:\d+$/, ''), ms: +m[2], transport: m[3] ?? null, pend: +m[4], first: m[5] === '-' ? null : m[5],
+      host: m[1].replace(/:\d+$/, ''), ms: +m[2], transport: m[3] ?? null, pend: +m[4], first: /^[a-z][a-z0-9]{0,11}$/.test(m[5]) ? m[5] : null,
       eof: +m[6], hup: +m[7], err: +m[8], soError: +m[9], tcp: m[10],
     }),
   },

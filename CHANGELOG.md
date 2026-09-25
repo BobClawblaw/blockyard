@@ -41,6 +41,10 @@ All notable changes to this project are documented here. The format follows
   the whole log, so the card still read "slowest 10,820 ms" hours after bitcoinmachinecode#301
   fixed the cause. Replayed over the real log: worker wait topped out at 10,359 ms on the build
   before #301, and 776 ms and 297 ms on the two processes since.
+- **A v2 connection's `[dial-handoff]` line is read.** On an encrypted socket, the probe's
+  `first=` field is ciphertext and can contain spaces, which the rule did not expect: 2 of 33
+  worker receipts went uncounted, so the card showed 33 handed over against 31 received when
+  the node's log had 33 of each. `first` is now kept only when it is a command name.
   - `nettotals-zero` waits until the node has been up two minutes with peers connected. A node
     that has just restarted has moved no bytes yet, and the flag blamed the build for it.
 
