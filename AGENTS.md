@@ -383,6 +383,14 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   and keeps the pointer; its CSS background is let go and restored.
 - **Whoever reads pixels back keeps Software**: Scorched Yard's land (`fluidFloor`) and sky
   (scorchedwind.js) pass `renderer: 'software'`. A new getImageData on a board canvas needs the same.
+- **Software keeps a resting board too** (2026-09-26, `keptBoard` in details3d.js): once `sameBoard` says a
+  frame's board is the last frame's, it is drawn once into an offscreen canvas the panel's size and blitted
+  under the price line and effects every later frame. `sameBoard` is the ONE condition both renderers trust,
+  so a board input that is not in the ops must go into it (as for the GL renderer). The board closure takes the
+  context it draws on. **Software also has its own resolution** (`appearance.softwareScale`: full / 1 / 0.5,
+  `softwareScaleOf`), applied in `render3d`'s `sizeCanvas` only where Software draws, so the board canvas can
+  have fewer pixels than the screen: `hitTest` reads the canvas's own ratio, and anything new that maps a
+  pointer to canvas pixels must do the same (never `window.devicePixelRatio`).
 - **A cached bitmap drawn with drawImage carries a `__v` stamp** (gasLayer, the Living sky's dome),
   bumped when it is repainted; unstamped sources are uploaded on every draw.
 - **Fallback is silent and final per canvas**: no WebGL2, a compile failure, a lost context.
@@ -946,7 +954,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1468 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1472 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1276,7 +1284,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1468 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1472 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

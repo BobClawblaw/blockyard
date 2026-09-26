@@ -27,6 +27,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The Software renderer keeps a resting board.** Once a board has stopped moving it is drawn once
+  into an offscreen layer, and each frame the sky asks for is that layer blitted over the sky. The
+  WebGL renderer already kept a resting board on the graphics card. Measured in headless Chromium
+  at 2560x1300 under a star field, ms a frame: plain cubes 13 -> 4, satin 39 -> 2.6, chrome 42 -> 3,
+  neon 25 -> 4. A moving board draws straight on, as before.
+- **Settings, Appearance: "Software resolution".** Full (every device pixel, as before), 1x (one
+  pixel per CSS pixel: a quarter of the work on a high-density screen) or half that. WebGL always
+  draws at full resolution. At half, the galaxy sky went from 21 to 12 ms a frame in the same test.
+
 - bmc's `[dial-handoff]` probe lines are read: a count of sockets handed over and received,
   the handoff time (average and worst), and how many sockets were already dead when the worker
   got them, as `peers.dialHandoff`. They were raising `log-new-tag`.

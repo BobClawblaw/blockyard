@@ -96,6 +96,13 @@ export function rendererOf(opts) {
   if (want !== 'software' && want !== 'webgl') { try { want = loadSettings().appearance.renderer; } catch { want = 'software'; } }
   return want === 'webgl' ? 'webgl' : 'software';
 }
+/** Software's pixel cap (settings.js appearance.softwareScale): device pixels per CSS pixel, or Infinity for all of them. */
+export function softwareScaleOf(opts) {
+  let want = opts?.softwareScale;
+  if (want == null) { try { want = loadSettings().appearance.softwareScale; } catch { want = 'full'; } }
+  const k = Number(want);
+  return k === 1 || k === 0.5 ? k : Infinity;
+}
 function dropGlLayer(canvas) {
   const L = GL_LAYER.get(canvas);
   if (!L || !L.ctx) return;
@@ -4985,6 +4992,50 @@ function sameBoard(ctx, ops, opts, view, geom, gridN, gridH, blockRows) {
   return true;
 }
 
+// SOFTWARE'S KEPT BOARD (operator, 2026-09-26: "is there any way for us to improve the software renderer
+// performance" ... "do 1 and 3"). The GL renderer keeps a resting board on the card (gl2d.js retained);
+// Software drew every face again on every frame the sky asked for -- some thirty a second. Measured
+// 2026-09-26 in headless chromium at 2560x1300 under a star field: plain cubes 11-16 ms a frame, satin 35-41,
+// chrome 42-50, the difference being every face's gradient filled afresh. Now, once sameBoard says a frame's
+// board is the last frame's, the board is drawn ONCE into an offscreen canvas the panel's size and each frame
+// after is one drawImage of it over the sky. The picture is the same: the board is painted over the sky and
+// never reads it, and painting over is associative. A moving board is never kept -- it would pay a second
+// canvas for nothing -- so it draws straight on as before; the first still frame builds the layer.
+const KEPT_BOARD = new WeakMap();          // the frame's 2D context -> { canvas, ctx, ok }
+function keptBoard(ctx, geom, fit, same, board) {
+  let K = KEPT_BOARD.get(ctx);
+  if (!same) { if (K) K.ok = false; board(ctx); return; }
+  if (!K) {
+    let canvas = null, c2 = null;
+    try {
+      canvas = typeof globalThis.document?.createElement === 'function' ? document.createElement('canvas') : null;
+      c2 = canvas?.getContext?.('2d') ?? null;
+    } catch { c2 = null; }
+    // (a canvas with nothing to make one from -- the tests' recording canvas -- draws the board live, as it always did)
+    K = c2 && typeof ctx.drawImage === 'function' ? { canvas, ctx: c2, ok: false } : { canvas: null, ctx: null, ok: false };
+    KEPT_BOARD.set(ctx, K);
+  }
+  if (!K.ctx) { board(ctx); return; }
+  if (!K.ok) {
+    const c = K.canvas, k = K.ctx;
+    if (c.width !== geom.pw) c.width = geom.pw;
+    if (c.height !== geom.ph) c.height = geom.ph;
+    k.setTransform(1, 0, 0, 1, 0, 0);
+    k.clearRect(0, 0, geom.pw, geom.ph);
+    // the frame's own state at this point (paintFrame, just above): the fit, the pen, the joins
+    k.setTransform(fit.scaleX, 0, 0, fit.scaleY, fit.tx, fit.ty);
+    k.lineWidth = ctx.lineWidth;
+    k.lineJoin = ctx.lineJoin;
+    board(k);
+    K.ok = true;
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(K.canvas, 0, 0);
+  ctx.setTransform(fit.scaleX, 0, 0, fit.scaleY, fit.tx, fit.ty);
+  // ...and the pen as the board left it, which is what the effects after it are handed (paintFrame: ctx.lineWidth)
+  ctx.lineWidth = K.ctx.lineWidth; ctx.lineJoin = K.ctx.lineJoin; ctx.lineCap = K.ctx.lineCap;
+}
+
 function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
   const { pw, ph, dpr } = geom;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -5097,7 +5148,8 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // after frame while nothing moves, and on the GL renderer it is then kept on the graphics card
   // instead of being built again (gl2d.js retained): sameBoard compares this frame's ops with the
   // last frame's, value for value, so "the same" is measured, never assumed.
-  const board = () => {
+  // (it takes the context it draws on: the frame's, or Software's kept layer -- keptBoard, below)
+  const board = (ctx) => {
     ctx.emissive = true;
     let glow = opts.grid ? drawGrid(ctx, view, opts, gridN, blockRows, gridH) : null;
     let wall = opts.axes ? () => drawAxes(ctx, view, opts.axes, gridN) : null;
@@ -5172,8 +5224,8 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
     if (glow) glow();   // a board with no cubes on it
     if (wall) wall();
   };
-  if (ctx.gl2d === true) ctx.retained('board', sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), board);
-  else board();
+  if (ctx.gl2d === true) ctx.retained('board', sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), () => board(ctx));
+  else keptBoard(ctx, geom, fit, sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), board);
   ctx.emissive = true;                       // (a replayed board never ran the line that leaves it on)
   if (opts.axes?.line) { priceLine(ctx, view, opts.axes); if (ctx.gl2d === true) ctx.softStrokeMin = 0; }   // (whichever way priceLine left: the glow rule is the line's alone)
   // THE LABELS ARE READ, NOT LIT (operator, 2026-09-21, of the current price on the WebGL board with
@@ -5302,9 +5354,10 @@ export function hitTest(canvas, clientX, clientY) {
   const st = STATE.get(canvas);
   if (!st || !st.lastFit || !st.restTiles || !st.settled) return null;
   const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: canvas.clientWidth, height: canvas.clientHeight };
-  const dpr = (globalThis.window && window.devicePixelRatio) || 1;
+  // the CANVAS's pixels per CSS pixel, not the screen's: a board may draw at fewer (maxDpr, Software's resolution)
+  const dpr = rect.width > 0 && canvas.width > 0 ? canvas.width / rect.width : ((globalThis.window && window.devicePixelRatio) || 1);
   const px = (clientX - rect.left) * dpr;
-  const py = (clientY - rect.top) * dpr;
+  const py = (clientY - rect.top) * (rect.height > 0 && canvas.height > 0 ? canvas.height / rect.height : dpr);
   const f = st.lastFit;
   // WHAT IS DRAWN THERE, not whose footprint is under it: a market candle floats far above its
   // footprint, and a tall cube covers the floor behind it. The topmost face drawn at the pointer.
@@ -5544,6 +5597,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starColours !== false, opts.starGlints !== false,
     opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.sunAt, opts.sunActivity !== false, opts.sunEruptions !== false, opts.sunProminences !== false, opts.sunCycle, opts.sunChannel, opts.sunDetail, opts.sunSize, opts.sunBrightness, opts.sunSpin, opts.formSpeed, opts.formAt, opts.formBrightness, opts.formFlow, opts.formPalette,
     rendererOf(opts),                     // a parked board repaints when the renderer is switched
+    softwareScaleOf(opts),                // ...or Software's resolution is (render3d sizes the canvas by it)
     fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
@@ -5624,7 +5678,14 @@ export function render3d(canvas, cells, options = {}) {
   if (st.raf != null && globalThis.cancelAnimationFrame) cancelAnimationFrame(st.raf);
   st.raf = null;
 
-  const geom = sizeCanvas(canvas, Number.isFinite(opts.maxDpr) ? Math.max(0.5, opts.maxDpr) : Infinity);
+  // SOFTWARE DRAWS AT ITS OWN RESOLUTION (settings.js appearance.softwareScale): its cost is the pixels
+  // it fills, so a high-density screen at full resolution is four times the work of the same picture at
+  // one pixel per CSS pixel. Only where Software draws: WebGL chosen and working keeps every pixel -- WebGL
+  // chosen on a browser without it is Software, and capped (a canvas whose GL layer dies mid-run carries on
+  // at the size it had until the next render3d call).
+  const soft = rendererOf(opts) !== 'webgl' || !!GL_LAYER.get(canvas)?.gone || typeof document === 'undefined' || !gl2dSupported();
+  const cap = Math.min(Number.isFinite(opts.maxDpr) ? opts.maxDpr : Infinity, soft ? softwareScaleOf(opts) : Infinity);
+  const geom = sizeCanvas(canvas, Number.isFinite(cap) ? Math.max(0.5, cap) : Infinity);
   // Device pixels per grid unit, from the CONSTANT board transform (pw across
   // gridW units), so a stone's level of detail can never flicker mid-flight.
   const pxPerUnit = geom.pw / Math.max(1, st.gridW);

@@ -82,6 +82,11 @@ export const DEFAULTS = Object.freeze({
     // renderer"): bloom -- what is bright throws light -- and a dither that takes the bands out of the
     // wide faint glows. 0 is off and the frame is the Software picture, pixel for pixel near enough.
     glow: 0.5,
+    // SOFTWARE'S RESOLUTION (operator, 2026-09-26: "is there any way for us to improve the software renderer
+    // performance" -- then "do 1 and 3"). Software's cost grows with the pixels it fills: 'full' draws one
+    // pixel per device pixel as it always has, '1' at most one per CSS pixel (a quarter of the work on a 2x
+    // screen), '0.5' half that again, stretched up by the browser. WebGL is never capped by this.
+    softwareScale: 'full',
     // THE FRAME RATE, top right of every 3D board (operator, 2026-09-21): frames actually painted in
     // the last second, the processor's milliseconds a frame, and which renderer drew it.
     showFps: false,
@@ -554,6 +559,11 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({
         key: 'glow', label: 'WebGL glow', kind: 'range', min: 0, max: 1, step: 0.05, dimWhen: (s) => s.appearance.renderer !== 'webgl',
         hint: 'Only the WebGL renderer has this: what is bright on a board -- a neon line, a spark, a white-hot core -- throws real light on what is round it, and the wide faint glows lose their bands. Zero is the Software picture',
+      }),
+      Object.freeze({
+        key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== 'software',
+        hint: 'How many pixels the Software renderer draws. Full is one for every pixel of the screen. 1x is one for every CSS pixel: the same picture on an ordinary screen, and a quarter of the work on a high-density one, a little softer. \u00bdx is half that again, stretched up: soft, and fast on a slow machine. WebGL always draws at full resolution',
+        options: Object.freeze([['full', 'Full'], ['1', '1x'], ['0.5', '\u00bdx']]),
       }),
       Object.freeze({ key: 'showFps', label: 'Show frame rate', kind: 'toggle', hint: 'In the top right corner of every 3D board: the frames it actually painted in the last second, the processor\u2019s milliseconds for one, and which renderer drew it. A board at rest under a sky paints about thirty a second by design; a board with nothing moving paints none, and keeps its last figure' }),
       Object.freeze({ key: 'customBg', label: 'Page', kind: 'colour', hint: 'The colour behind everything. Whether Custom is a light or a dark theme follows from this one: the derived shades go the other way', custom: true }),
