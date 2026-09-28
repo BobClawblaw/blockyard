@@ -265,7 +265,7 @@ test('cubes lean away from the middle of the board, not all one way', async () =
 
 test('the renderer honours the option names the settings hand it', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  assert.match(src, /drawStars\(ctx, pw, ph, dpr \|\| 1, view\.now \?\? 0, opts\)/, 'star options reach drawStars');
+  assert.match(src, /drawStars\(sc, sw, sh, sd, view\.now \?\? 0, opts\)/, 'star options reach drawStars (on the sky surface: skySurface)');
   // the galaxy joins density as something the FIELD is built from, not something painted over it
   // afterwards: the stars are laid on arms at generation, and only the angle moves per frame
   assert.match(src, /starField\(pw, ph, dpr, 7, density, galaxy\)/, 'density and the galaxy reach the field');

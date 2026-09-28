@@ -5052,6 +5052,42 @@ function keptBoard(ctx, geom, fit, same, board) {
   ctx.lineWidth = K.ctx.lineWidth; ctx.lineJoin = K.ctx.lineJoin; ctx.lineCap = K.ctx.lineCap;
 }
 
+// SOFTWARE'S RESOLUTION IS THE SKY'S (settings.js appearance.softwareScale; operator, 2026-09-26: "is there
+// any way for us to improve the software renderer performance", then 2026-09-28 of the first cut, which shrank
+// the whole canvas: "it's too blurry at 0.5x"). What a Software frame pays for at rest is the sky -- a star
+// field or a galaxy filled across the whole panel some thirty times a second; the board is a kept bitmap and
+// the labels are cheap. So the sky alone is drawn into a buffer with fewer pixels (one per CSS pixel at '1',
+// half that at '0.5') and stretched over the panel with one drawImage, and everything drawn after it -- the
+// floor, the cubes, the seams, the price line, the tags -- is at every device pixel, sharp. A sky the browser
+// stretches is a little soft; a cube or a figure never is. The buffer is kept per context so the star field's
+// cache (keyed on the canvas it draws to) holds from frame to frame. Nothing here for WebGL, which is never
+// capped, nor for a GL field sky, which draws on its own canvas. A context that cannot make a canvas (the
+// tests' recording stub) draws the sky straight on, as it always did.
+const SKY_BUF = new WeakMap();             // the frame's 2D context -> { canvas, ctx }
+function skySurface(ctx, geom, opts) {
+  const { pw, ph } = geom, dpr = geom.dpr || 1;
+  const k = Math.min(1, softwareScaleOf(opts) / dpr);
+  const direct = { ctx, pw, ph, dpr, done: null };
+  if (!(k < 1) || ctx.gl2d === true) return direct;
+  let B = SKY_BUF.get(ctx);
+  if (!B) {
+    try {
+      const canvas = typeof globalThis.document?.createElement === 'function' ? document.createElement('canvas') : null;
+      const c2 = canvas?.getContext?.('2d') ?? null;
+      B = c2 && typeof ctx.drawImage === 'function' ? { canvas, ctx: c2 } : { canvas: null, ctx: null };
+    } catch { B = { canvas: null, ctx: null }; }
+    SKY_BUF.set(ctx, B);
+  }
+  if (!B.ctx) return direct;
+  const bw = Math.max(1, Math.round(pw * k)), bh = Math.max(1, Math.round(ph * k));
+  if (B.canvas.width !== bw) B.canvas.width = bw;
+  if (B.canvas.height !== bh) B.canvas.height = bh;
+  B.ctx.setTransform(1, 0, 0, 1, 0, 0);
+  B.ctx.fillStyle = opts.background;
+  B.ctx.fillRect(0, 0, bw, bh);
+  return { ctx: B.ctx, pw: bw, ph: bh, dpr: dpr * k, done: () => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(B.canvas, 0, 0, pw, ph); } };
+}
+
 function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
   const { pw, ph, dpr } = geom;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -5077,8 +5113,11 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // GL context cannot share an element) and only exists while this sky is chosen.
   ctx.emissive = !earthSky(opts);           // the stars throw light; a day sky, bright all over, must not
   if (starsOn(opts)) {
-    if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
-    else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
+    // the 2D skies draw on S: the frame's own context, or Software's smaller sky buffer (skySurface)
+    const S = skySurface(ctx, geom, opts);
+    const sc = S.ctx, sw = S.pw, sh = S.ph, sd = S.dpr;
+    if (earthSky(opts)) drawLivingSky(sc, sw, sh, sd, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(sc, sw, sh, sd, view.now ?? 0, o) });
+    else if (opts.skyType === 'flight') drawGalaxyFlight(sc, sw, sh, sd, view.now ?? 0, opts, { drawStars: (o) => drawStars(sc, sw, sh, sd, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
     else if (FIELD_SKIES[opts.skyType]) {
       const FS = FIELD_SKIES[opts.skyType];
       let drew = false;
@@ -5113,18 +5152,20 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
         }
       }
       // the fallback paints the 2D layer alone when there is no GL
-      if (!drew && opts.skyType === 'sun') { dropFormGl(ctx); drawSunSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) }); }
-      else if (!drew) drawGalaxyForm(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+      if (!drew && opts.skyType === 'sun') { dropFormGl(ctx); drawSunSky(sc, sw, sh, sd, view.now ?? 0, opts, { drawStars: (o) => drawStars(sc, sw, sh, sd, view.now ?? 0, o) }); }
+      else if (!drew) drawGalaxyForm(sc, sw, sh, sd, view.now ?? 0, opts);
+      else S.done = null;                   // (the GL sky drew: the buffer, if one was made, holds nothing for this frame)
     }
     else {
       // ANY OTHER SKY: the Formation's GL apparatus, if this board ever ran it, must stand
       // down -- the CSS background restored, the GL canvas removed -- or it would keep
       // drawing behind (and, with its own clear, blank out) every other sky.
       dropFormGl(ctx);
-      if (earthSky(opts)) drawLivingSky(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, o) });
-      else if (opts.skyType === 'flight') drawGalaxyFlight(ctx, pw, ph, dpr || 1, view.now ?? 0, opts, { drawStars: (o) => drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
-      else drawStars(ctx, pw, ph, dpr || 1, view.now ?? 0, opts);
+      if (earthSky(opts)) drawLivingSky(sc, sw, sh, sd, view.now ?? 0, opts, { softStops, drawStars: (o) => drawStars(sc, sw, sh, sd, view.now ?? 0, o) });
+      else if (opts.skyType === 'flight') drawGalaxyFlight(sc, sw, sh, sd, view.now ?? 0, opts, { drawStars: (o) => drawStars(sc, sw, sh, sd, view.now ?? 0, { ...o, galaxy: false, galaxies: false, nebulae: false, dust: false, clusters: false }) });
+      else drawStars(sc, sw, sh, sd, view.now ?? 0, opts);
     }
+    S.done?.();                              // the sky buffer, stretched over the panel
   }
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
@@ -5818,13 +5859,12 @@ export function render3d(canvas, cells, options = {}) {
   if (st.raf != null && globalThis.cancelAnimationFrame) cancelAnimationFrame(st.raf);
   st.raf = null;
 
-  // SOFTWARE DRAWS AT ITS OWN RESOLUTION (settings.js appearance.softwareScale): its cost is the pixels
-  // it fills, so a high-density screen at full resolution is four times the work of the same picture at
-  // one pixel per CSS pixel. Only where Software draws: WebGL chosen and working keeps every pixel -- WebGL
-  // chosen on a browser without it is Software, and capped (a canvas whose GL layer dies mid-run carries on
-  // at the size it had until the next render3d call).
-  const soft = rendererOf(opts) !== 'webgl' || !!GL_LAYER.get(canvas)?.gone || typeof document === 'undefined' || !gl2dSupported();
-  const cap = Math.min(Number.isFinite(opts.maxDpr) ? opts.maxDpr : Infinity, soft ? softwareScaleOf(opts) : Infinity);
+  // THE CANVAS IS EVERY DEVICE PIXEL, whatever Software's resolution setting says (appearance.softwareScale):
+  // that setting scales the SKY alone, drawn into a smaller buffer and stretched (skySurface, in paintFrame).
+  // It used to shrink this canvas -- cubes, seams, price tags and all -- and at half the picture was a blur
+  // (operator, 2026-09-28: "it's too blurry at 0.5x"). The sky is where a Software frame's cost is (a resting
+  // board is a kept bitmap, keptBoard); the board and every label stay sharp. Only a board's own maxDpr caps it.
+  const cap = Number.isFinite(opts.maxDpr) ? opts.maxDpr : Infinity;
   const geom = sizeCanvas(canvas, Number.isFinite(cap) ? Math.max(0.5, cap) : Infinity);
   // Device pixels per grid unit, from the CONSTANT board transform (pw across
   // gridW units), so a stone's level of detail can never flicker mid-flight.

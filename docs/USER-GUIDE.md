@@ -1375,14 +1375,16 @@ Below the colours, the renderer:
   flat, with no sky, no idle effects, no flight between layouts (a refresh lands where it is), no
   shadows and no finishes; the price line is one plain stroke. It paints one frame when the data
   or the pointer changes and nothing in between: a resting board costs no frames a second on
-  either the processor or the graphics card. Hover and click-through work as before. The Sky and
-  effects settings are kept but have no effect while 2.5D is chosen.
+  either the processor or the graphics card. Hover and click-through work as before. The Sky,
+  effects and Software resolution settings are kept but have no effect while 2.5D is chosen.
 - **WebGL glow** — WebGL's own finish, 0 to 1: neon lines, stars, sparks and white-hot cores throw
   real light, and wide faint glows lose their bands. The blocks never glow, because their colour is
   the feerate. At 0 WebGL draws exactly the Software picture. Dimmed on Software and 2.5D.
-- **Software resolution** — how many pixels the Software and 2.5D renderers draw: every device
-  pixel, one per CSS pixel, or half that, stretched up. Dimmed on WebGL, which always draws every
-  pixel.
+- **Software resolution** — how many pixels the Software renderer draws the *sky* with: every
+  device pixel, one per CSS pixel, or half that, stretched up. The sky is most of what a resting
+  board costs on Software; the board itself, its seams, the price line and every label are always
+  drawn at full resolution, so nothing but the stars goes soft. Dimmed on WebGL, which never scales,
+  and on 2.5D, which draws no sky.
 - **Show frame rate** — a figure top right of every 3D board: frames painted in the last second,
   the processor's milliseconds a frame, and which renderer drew it. A resting board under a sky
   reads about 30 by design (it repaints for the stars); the graphics card's own time is not visible

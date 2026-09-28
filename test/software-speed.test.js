@@ -2,7 +2,8 @@
 // performance" ... "do 1 and 3"). Two things, both driven through the real render3d here:
 //   1. a resting board is drawn ONCE into a kept layer and blitted under every later frame of the sky
 //      (details3d.js keptBoard), and a moving board is never kept;
-//   2. Software draws at its own resolution (settings.js appearance.softwareScale), and WebGL does not.
+//   2. Software draws its SKY at its own resolution (settings.js appearance.softwareScale) and the board at
+//      every device pixel, and WebGL scales nothing.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, render3d, hitTest, softwareScaleOf } from '../public/js/details3d.js';
@@ -105,14 +106,27 @@ test('SOFTWARE\'S RESOLUTION: full is every device pixel, 1x one per CSS pixel, 
   assert.equal(softwareScaleOf({ softwareScale: '1' }), 1);
   assert.equal(softwareScaleOf({ softwareScale: '0.5' }), 0.5);
 
-  const sized = (extra) => { const { canvas } = stage({ dpr: 2 }); render3d(canvas, [], { ...OPTS, laid: TILES, ...extra }); return [canvas.width, canvas.height]; };
-  assert.deepEqual(sized({ softwareScale: 'full' }), [800, 600]);
-  assert.deepEqual(sized({ softwareScale: '1' }), [400, 300]);
-  assert.deepEqual(sized({ softwareScale: '0.5' }), [200, 150]);
-  // a board's own maxDpr still wins where it is lower
-  assert.deepEqual(sized({ softwareScale: '1', maxDpr: 0.5 }), [200, 150]);
-  // WebGL chosen on a browser WITHOUT it (this stub has none) is Software -- so it is capped too
-  assert.deepEqual(sized({ softwareScale: '1', renderer: 'webgl' }), [400, 300]);
+  // THE SKY SCALES, THE BOARD DOES NOT (operator, 2026-09-28, of the first cut, which shrank the whole
+  // canvas: "it's too blurry at 0.5x"). The board canvas is every device pixel at every setting; the
+  // sky is drawn into a buffer with fewer and stretched over the panel with one drawImage.
+  const sized = (extra) => {
+    const h = stage({ dpr: 2 });
+    render3d(h.canvas, [], { ...OPTS, laid: TILES, ...extra });
+    h.pump(200);
+    const buf = h.made.find((c) => c.width > 0 && c.width < h.canvas.width && c.ops.some((o) => o === 'fillRect' || o === 'fill'));
+    return { canvas: [h.canvas.width, h.canvas.height], sky: buf ? [buf.width, buf.height] : null, blitted: !!buf && h.live.includes(`drawImage:${buf.__id}`) };
+  };
+  assert.deepEqual(sized({ softwareScale: 'full' }), { canvas: [800, 600], sky: null, blitted: false }, 'full: the sky is drawn straight on the canvas');
+  assert.deepEqual(sized({ softwareScale: '1' }), { canvas: [400 * 2, 300 * 2], sky: [400, 300], blitted: true }, '1x: the sky at one pixel per CSS pixel, the canvas at two');
+  assert.deepEqual(sized({ softwareScale: '0.5' }), { canvas: [800, 600], sky: [200, 150], blitted: true }, 'half: the sky at half that');
+  // a board's own maxDpr still caps the CANVAS (a game's sky canvas asks for it), and the sky follows it
+  assert.deepEqual(sized({ softwareScale: '1', maxDpr: 0.5 }).canvas, [200, 150]);
+  assert.deepEqual(sized({ softwareScale: '1', maxDpr: 0.5 }).sky, null, 'already fewer pixels than the setting asks: nothing to scale');
+  // WebGL chosen on a browser WITHOUT it (this stub has none) is Software -- so its sky is scaled too
+  assert.deepEqual(sized({ softwareScale: '1', renderer: 'webgl' }).sky, [400, 300]);
+  // a sky-less board has no buffer to make
+  const bare = stage({ dpr: 2 }); render3d(bare.canvas, [], { ...OPTS, laid: TILES, stars: false, softwareScale: '0.5' });
+  assert.ok(!bare.made.some((c) => c.width === 200 && c.height === 150), 'no sky, no sky buffer');
 });
 
 test('the pointer finds a tile on a board drawn at fewer pixels than the screen has', () => {

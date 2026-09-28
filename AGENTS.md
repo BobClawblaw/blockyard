@@ -407,9 +407,17 @@ already drew through ONE seam, the context `render3d` hands `paintFrame`, so tha
   under the price line and effects every later frame. `sameBoard` is the ONE condition both renderers trust,
   so a board input that is not in the ops must go into it (as for the GL renderer). The board closure takes the
   context it draws on. **Software also has its own resolution** (`appearance.softwareScale`: full / 1 / 0.5,
-  `softwareScaleOf`), applied in `render3d`'s `sizeCanvas` only where Software draws, so the board canvas can
-  have fewer pixels than the screen: `hitTest` reads the canvas's own ratio, and anything new that maps a
-  pointer to canvas pixels must do the same (never `window.devicePixelRatio`).
+  `softwareScaleOf`) -- and since 2026-09-28 it scales THE SKY ALONE (`skySurface` in paintFrame: the 2D skies
+  draw into a smaller buffer kept per context, stretched over the panel with one drawImage; a GL field sky is
+  untouched). The first cut shrank the whole canvas in `render3d`'s `sizeCanvas` and the operator's verdict was
+  "it's too blurry at 0.5x": cubes, seams and price tags all went soft for a saving that lives in the sky. The
+  board canvas is every device pixel again, capped only by a board's own `maxDpr` (a game's sky canvas), so
+  `hitTest` still reads the canvas's own ratio, and anything new that maps a pointer to canvas pixels must do
+  the same (never `window.devicePixelRatio`). A sky painter takes `(ctx, pw, ph, dpr, ...)` and must keep
+  taking them from its arguments, never from `ctx.canvas`'s size or the window's ratio, or it draws for the
+  wrong surface. Measured 2026-09-28 (`--gpu vulkan`, 2560x1300 at 1x, sixty resting frames after a warm-up):
+  Block space under the galaxy 23 ms -> 17 at half; Markets 3.2 -> 3.0. Modest on a 1x panel, by design: the
+  board is no longer scaled, and on a 1x panel "1x" and "full" are the same pixels.
 - **A cached bitmap drawn with drawImage carries a `__v` stamp** (gasLayer, the Living sky's dome),
   bumped when it is repainted; unstamped sources are uploaded on every draw.
 - **Fallback is silent and final per canvas**: no WebGL2, a compile failure, a lost context.

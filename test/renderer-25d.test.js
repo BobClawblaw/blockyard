@@ -65,9 +65,9 @@ test('the choice: a third renderer, offered by the panel, accepted by normalise,
   assert.equal(normalise({ appearance: { renderer: '2.5d' } }).appearance.renderer, '2.5d');
   assert.equal(rendererOf({ renderer: '2.5d' }), '2.5d');
   assert.equal(rendererOf({ renderer: 'flat' }), 'software', 'an unknown override falls to the setting');
-  // the resolution setting is Software's AND 2.5D's: dimmed only on WebGL
+  // the resolution setting scales the SKY, and 2.5D draws none: dimmed there as on WebGL
   const res = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'softwareScale');
-  assert.equal(res.dimWhen({ appearance: { renderer: '2.5d' } }), false);
+  assert.equal(res.dimWhen({ appearance: { renderer: '2.5d' } }), true);
   assert.equal(res.dimWhen({ appearance: { renderer: 'webgl' } }), true);
   assert.equal(res.dimWhen({ appearance: { renderer: 'software' } }), false);
 });

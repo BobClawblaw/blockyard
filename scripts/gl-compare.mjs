@@ -34,6 +34,7 @@ const LOOK = process.argv.includes('--look');
 const GPU = process.argv.includes('--gpu') ? (arg('--gpu', '').startsWith('--') || !arg('--gpu', '') ? true : arg('--gpu')) : false;
 const AT = Number(arg('--at', '0.45'));                 // how far through the effect the pictures are taken
 const BUDGET = Number(arg('--budget', '6'));             // mean absolute difference per channel, 0-255
+const SOFT_SCALE = arg('--soft-scale', 'full');          // Software's sky resolution (appearance.softwareScale): full | 1 | 0.5
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>gl-compare</title>
@@ -107,7 +108,7 @@ try {
   const shot = (board, fx, at, renderer, extra) => {
     seed = SEED0; VT = 1000; q.length = 0;
     const canvas = stage();
-    boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, showFps: ${process.argv.includes('--fps')}, glSky: ${LOOK}, softGlow: ${LOOK}, ...extra });   // (--fps: the frame-rate figure on, to look at it on both renderers)
+    boards[board](canvas, { renderer, glow: ${LOOK ? 'undefined' : '0'}, showFps: ${process.argv.includes('--fps')}, glSky: ${LOOK}, softGlow: ${LOOK}, softwareScale: ${JSON.stringify(SOFT_SCALE)}, ...extra });   // (--fps: the frame-rate figure on, to look at it on both renderers)
     pump(200, 50);
     if (fx) { d3.triggerIdle(canvas, fx); }
     // the effect's OWN length: a flat six seconds sampled the pulsar 2.7 s into a 26 s run, before

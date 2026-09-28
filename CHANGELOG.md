@@ -32,7 +32,7 @@ All notable changes to this project are documented here. The format follows
   effects, no flight between layouts, no shadows or finishes, the price line as one stroke. It
   paints one frame when the data or the pointer changes and nothing in between, so a resting board
   costs no frames a second on either the processor or the graphics card. Hover, click-through and
-  a game's own overlay work as before. The "Software resolution" setting applies to it too.
+  a game's own overlay work as before.
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`).
 - **The Software renderer keeps a resting board.** Once a board has stopped moving it is drawn once
@@ -40,9 +40,15 @@ All notable changes to this project are documented here. The format follows
   WebGL renderer already kept a resting board on the graphics card. Measured in headless Chromium
   at 2560x1300 under a star field, ms a frame: plain cubes 13 -> 4, satin 39 -> 2.6, chrome 42 -> 3,
   neon 25 -> 4. A moving board draws straight on, as before.
-- **Settings, Appearance: "Software resolution".** Full (every device pixel, as before), 1x (one
-  pixel per CSS pixel: a quarter of the work on a high-density screen) or half that. WebGL always
-  draws at full resolution. At half, the galaxy sky went from 21 to 12 ms a frame in the same test.
+- **Settings, Appearance: "Software resolution".** How many pixels the Software renderer draws the
+  sky with: full (every device pixel, as before), 1x (one pixel per CSS pixel: a quarter of the work
+  on a high-density screen) or half that. The sky is drawn into a smaller buffer and stretched over
+  the panel; the board, its seams, the price line and every label are always drawn at full
+  resolution, sharp. (The first cut shrank the whole canvas, and at half the cubes and the price
+  tags were a blur.) WebGL never scales; 2.5D draws no sky. Measured in headless Chromium on the
+  card at 2560x1300 (a 1x panel, so "1x" is "full" there), resting Block space under the galaxy,
+  ms a frame: full 23, half 17; the Markets board, whose sky is the smaller part, 3.2 and 3.0. On a
+  2x screen the sky is four times the pixels and the saving is larger.
 
 - bmc's `[dial-handoff]` probe lines are read: a count of sockets handed over and received,
   the handoff time (average and worst), and how many sockets were already dead when the worker
