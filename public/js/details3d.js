@@ -5782,7 +5782,11 @@ export function render3d(canvas, cells, options = {}) {
   // every call below (Tetrust hands a new frame each time); this board's callers poll once a
   // second with the same data, and each of those paints would be a panel composited for nothing.
   // A hover left it dirty: one frame, from the parked loop, then it parks again.
-  if (unchanged && st.plan && flat) {
+  // NOT FOR A STILL BOARD (2026-09-28; operator: "scorched yard doesn't work in 2.5d mode"): a game hands
+  // this a frame at a time and draws its own events through `overlay` at the frame's own instant -- a blast,
+  // a fire -- so the same tiles twice are NOT the same picture, and the game's boards paint on every call
+  // as they do on Software (Tetrust, 2026-09-12: "a still board is drawn AS LAID, every frame").
+  if (unchanged && st.plan && flat && opts.still !== true) {
     if (st.dirty && st.raf == null) st.wake?.();
     return { tiles, settled: true, replanned: false };
   }

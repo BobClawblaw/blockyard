@@ -225,3 +225,21 @@ test('2.5D stamps the page still, and the stylesheet stops every infinite animat
   assert.ok(infinite.length >= 6, `the stylesheet's infinite animations were found (${infinite.length})`);
   for (const s of infinite) assert.ok(still.includes(`html[data-motion="still"] ${s}`), `the still block names ${s}`);
 });
+
+// A GAME'S BOARD PAINTS ON EVERY CALL (operator, 2026-09-28: "scorched yard doesn't work in 2.5d mode"). Its
+// tiles can be the same frame after frame while its blasts and fires -- drawn through `overlay` at the call's
+// own instant -- are not, so the same-data shortcut above must not apply to a still board.
+test('a still board (a game) repaints on every call under 2.5D, and its overlay runs each time', () => {
+  const h = harness();
+  let overlays = 0;
+  const tiles = [{ txid: 'tank', x: 3, y: 2, s: 1, tall: 1, color: '#33cc99' }, { txid: 'shell', x: 5, y: 4, s: 1, sphere: true, color: '#ffffff' }];
+  const opts = { renderer: '2.5d', gridW: 12, gridH: 8, still: true, hover: false, stars: false, idleFx: false, background: 'rgba(0,0,0,0)', grid: false, space: true, overlay: () => { overlays++; } };
+  board3d(h.canvas, tiles, opts);
+  assert.equal(overlays, 1);
+  assert.ok(h.ops.filter((o) => o === 'fill').length >= 4, 'the tank and the ball are drawn');
+  const n = h.ops.length;
+  for (let i = 0; i < 3; i++) { harness.t += 16; board3d(h.canvas, tiles, opts); }
+  assert.equal(overlays, 4, 'the same tiles again: the overlay still ran, once a call');
+  assert.ok(h.ops.length > n, 'and the board was painted again');
+  assert.equal(h.pending(), false, 'and still nothing runs between calls');
+});

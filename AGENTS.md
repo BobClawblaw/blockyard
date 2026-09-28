@@ -359,7 +359,10 @@ and I would like to have a low-fidelity version that doesn't stress the GPU at a
 everything that would make a board repaint on its own (sky, idle effects, shadows, finishes, the facets
 and crowns) before `render3d` reads a single option, the board is `still` (every layout lands where it
 is), the unchanged-data path returns without touching the context, hover lights and lets go in one frame
-(`flatGlow`; `glowAnimating` is false), `triggerIdle` refuses, and `paintFlat` draws the same fit, projection
+(`flatGlow`; `glowAnimating` is false) -- EXCEPT a `still: true` board, which paints on every call as on Software,
+because a game draws its events through `overlay` at the call's own instant and the same tiles twice are not the
+same picture (2026-09-28, "scorched yard doesn't work in 2.5d mode": the blasts and fires never appeared) --
+`triggerIdle` refuses, and `paintFlat` draws the same fit, projection
 and ops as `paintFrame` with plain fills and strokes -- so `hitTest`, the axis labels and a game's `overlay`
 need no second path. A resting 2.5D board paints ZERO frames a second; `test/renderer-25d.test.js` holds
 that (no rAF pending after a paint, not one context call on a same-data poll), and `node
@@ -990,7 +993,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1484 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1485 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1320,7 +1323,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1484 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1485 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
