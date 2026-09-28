@@ -370,6 +370,15 @@ call) against 1,875. Measured 2026-09-28. Scorched Yard's land and
 sky still pass `renderer: 'software'` and get it: an override beats the setting on every renderer.
 What it does NOT do: a game's sky canvas under 2.5D is a black panel (no sky is the point), and a look
 that only the finishes give (neon tubes, chrome) is off however the Space switches are set.
+**THE BOARDS WERE NOT THE WHOLE COST** (the same day; operator, with 2.5D live: "still eating 50% of gpu on
+mac"). Measured on the live monitor in headless chromium (CDP tracing, DrawFrame events in 10 s) with every
+board parked: Overview 600, Block space 595, Mining 596, Kiosk 598 -- and Mempool 6, Markets 5, Node 6. Not
+one rAF caller on any of them; the difference was the stylesheet's INFINITE animations (`livepulse` on the
+live dot, `meteredge` on the block meter, `railmove`, `due`): a running CSS animation composites the whole
+page every vsync on the card, however cheap the property. So `applyTheme` stamps `<html data-motion="still">`
+while the renderer is 2.5D and app.css stops every infinite animation under it (one block beside the
+reduced-motion rules, which it mirrors). A NEW INFINITE ANIMATION MUST BE ADDED TO THAT BLOCK, and
+`test/renderer-25d.test.js` fails if the stylesheet gains one that the block does not name.
 
 **Every 3D board, sky and effect draws on either renderer** (operator: "a second rendering option to
 blockyard for WebGL rendering, and port all existing effects over to the new system. Supporting
@@ -981,7 +990,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1483 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1484 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1311,7 +1320,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1483 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1484 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

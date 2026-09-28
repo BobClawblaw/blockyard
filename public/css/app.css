@@ -583,6 +583,16 @@ pre.output-box {
 tr.cpfp td:first-child::before { content: '↳ '; color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) { .live { animation: none } }
+/* A STILL PAGE (theme.js applyTheme: `data-motion="still"` while the 2.5D renderer is chosen). Every
+   infinite animation in this file, and the block flow's transitions, stop here -- the same list the
+   prefers-reduced-motion rules below keep, in one place, because a running animation composites the
+   whole page every frame on the graphics card and 2.5D is the mode that exists to leave it idle
+   (measured 2026-09-28: 600 frames in 10 s with these running, 6 without). Every figure stays. */
+html[data-motion="still"] .live, html[data-motion="still"] .pulse .dot, html[data-motion="still"] .rail,
+html[data-motion="still"] .flow.shift .flowpast, html[data-motion="still"] .bcard.arrive,
+html[data-motion="still"] .bcard.tip.overdue, html[data-motion="still"] .bcard.next.overdue,
+html[data-motion="still"] .bmeter i.new, html[data-motion="still"] .bmeter i.edge span, html[data-motion="still"] .bmeter i.next { animation: none }
+html[data-motion="still"] .flowpast, html[data-motion="still"] .bnextfill span { transition: none }
 @media (prefers-reduced-motion: reduce) { .rail, .flow.shift .flowpast, .bcard.arrive { animation: none } .flowpast, .bnextfill span { transition: none } }
 
 /* ------------------------------------------------- the pipeline in motion */

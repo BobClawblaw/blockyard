@@ -32,9 +32,12 @@ All notable changes to this project are documented here. The format follows
   effects, no flight between layouts, no shadows or finishes, the price line as one stroke. It
   paints one frame when the data or the pointer changes and nothing in between, so a resting board
   costs no frames a second on either the processor or the graphics card. Hover, click-through and
-  a game's own overlay work as before.
+  a game's own overlay work as before. The page's own pulses (the live dot, the block rail and
+  meter, the overdue warning) hold still with it: with every board parked, those alone kept the
+  page compositing 60 frames a second on the graphics card.
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
-  thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`).
+  thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
+  pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
 - **The Software renderer keeps a resting board.** Once a board has stopped moving it is drawn once
   into an offscreen layer, and each frame the sky asks for is that layer blitted over the sky. The
   WebGL renderer already kept a resting board on the graphics card. Measured in headless Chromium

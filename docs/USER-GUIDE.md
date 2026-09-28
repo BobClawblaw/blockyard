@@ -1377,6 +1377,9 @@ Below the colours, the renderer:
   or the pointer changes and nothing in between: a resting board costs no frames a second on
   either the processor or the graphics card. Hover and click-through work as before. The Sky,
   effects and Software resolution settings are kept but have no effect while 2.5D is chosen.
+  The page's own pulses stop with it: the live dot, the block rail and meter, the overdue-block
+  warning and the arriving-block slide hold still (every figure stays), because any running
+  animation makes the browser composite the whole page every frame on the graphics card.
 - **WebGL glow** — WebGL's own finish, 0 to 1: neon lines, stars, sparks and white-hot cores throw
   real light, and wide faint glows lose their bands. The blocks never glow, because their colour is
   the feerate. At 0 WebGL draws exactly the Software picture. Dimmed on Software and 2.5D.

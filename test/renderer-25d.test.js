@@ -197,3 +197,31 @@ test('the docs and the changelog name the renderer', () => {
   const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
   assert.ok(/2\.5D/.test(log.split('## [0.1')[0]), 'the Unreleased section carries it');
 });
+
+// THE PAGE HOLDS STILL WITH IT (operator, with 2.5D live: "still eating 50% of gpu on mac"). Measured on the
+// live monitor with every board parked: the pages carrying an infinite CSS animation composited ~60 frames
+// a second, the others under one. A running animation is a frame every vsync on the graphics card.
+test('2.5D stamps the page still, and the stylesheet stops every infinite animation under it', async () => {
+  const { applyTheme } = await import('../public/js/theme.js');
+  const root = () => { const attrs = new Map(), props = new Map(); return { attrs, props, style: { setProperty: (k, v) => props.set(k, v) }, setAttribute: (k, v) => attrs.set(k, v) }; };
+  const win = { matchMedia: () => ({ matches: false }) };
+  let r = root(); applyTheme(normalise({ appearance: { renderer: '2.5d' } }), { root: r, win });
+  assert.equal(r.attrs.get('data-motion'), 'still');
+  r = root(); applyTheme(normalise({ appearance: { renderer: 'software' } }), { root: r, win });
+  assert.equal(r.attrs.get('data-motion'), 'live');
+  r = root(); applyTheme(normalise(null), { root: r, win });
+  assert.equal(r.attrs.get('data-motion'), 'live', 'the shipped page moves');
+  // every selector whose rule runs an infinite animation is named in the still block
+  const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const still = css.match(/html\[data-motion="still"\][^}]*\{ animation: none \}/)?.[0];
+  assert.ok(still, 'the still block exists');
+  const chunks = css.split('}');
+  const infinite = [];
+  for (const ch of chunks) {
+    const i = ch.indexOf('{'); if (i < 0) continue;
+    const sel = ch.slice(0, i).trim(), body = ch.slice(i + 1);
+    if (/animation:[^;]*\binfinite\b/.test(body) && !sel.startsWith('@') && !sel.startsWith('html[data-motion')) for (const s of sel.split(',')) infinite.push(s.trim());
+  }
+  assert.ok(infinite.length >= 6, `the stylesheet's infinite animations were found (${infinite.length})`);
+  for (const s of infinite) assert.ok(still.includes(`html[data-motion="still"] ${s}`), `the still block names ${s}`);
+});

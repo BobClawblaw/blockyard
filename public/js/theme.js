@@ -213,6 +213,15 @@ export function applyTheme(settings, { root = globalThis.document?.documentEleme
     root.style.setProperty('color-scheme', f.scheme);
     root.setAttribute?.('data-theme', f.scheme);
     root.setAttribute?.('data-palette', f.id);
+    // THE PAGE'S OWN MOTION FOLLOWS THE RENDERER (2026-09-28; operator, with 2.5D chosen: "still eating
+    // 50% of gpu on mac"). Measured on the live monitor in headless chromium with every board parked:
+    // Overview, Block space, Mining and Kiosk still composited ~60 frames a second, Mempool and Markets
+    // under one -- the difference being the stylesheet's INFINITE animations (the live dot's pulse, the
+    // block rail, the meter's brightness pulse, the overdue warning). A running animation makes the
+    // browser composite the whole page every vsync, on the graphics card, whatever the canvases do. So
+    // 2.5D -- the renderer that exists to leave the card alone -- stamps the page `still`, and app.css
+    // stops them under it, as it does under prefers-reduced-motion. Every figure stays; only the motion goes.
+    root.setAttribute?.('data-motion', settings?.appearance?.renderer === '2.5d' ? 'still' : 'live');
   }
   Object.assign(INK, inkOf(f));
   Object.assign(COL, { grid: f.lineSoft, axis: f.line, text: f.faint, textDim: INK.textDim, accent: f.accent, ok: f.ok, warn: f.warn, bad: f.bad, info: f.info, purple: f.purple, cyan: f.cyan, pink: f.pink });
