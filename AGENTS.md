@@ -382,6 +382,18 @@ page every vsync on the card, however cheap the property. So `applyTheme` stamps
 while the renderer is 2.5D and app.css stops every infinite animation under it (one block beside the
 reduced-motion rules, which it mirrors). A NEW INFINITE ANIMATION MUST BE ADDED TO THAT BLOCK, and
 `test/renderer-25d.test.js` fails if the stylesheet gains one that the block does not name.
+**THE SLOW SKY** (the same day; operator: "Is there no way we can get some basic animations in 2.5D mode ... or
+is that just too much stress" -- "yes, build the slow sky at 2 fps"). `appearance.flatSky` 'slow' (shipped) /
+'off'. A sky's cost is its FRAMES, so under 2.5D the board's sky stays (`flatOptions` keeps `stars` and the
+galaxy/Earth `skyType`; the Formation, the Sun and the flight fall to the star field) and is repainted from a
+TIMER (`armSky`, `FLAT_SKY_MS` 500) that fires one frame through the parked loop, never from the rAF sky loop:
+inside `render3d`, `liveSky` (a sky that needs the loop) is what the loop gates on now, not `starsOn`. The sky
+painter is `paintSky`, shared by paintFrame and paintFlat. A board that asks for Software BY NAME while the
+setting is 2.5D (Scorched Yard's sky canvas; `flatSetting`) draws as Software but paces its sky the same way.
+Test hooks: `skyArmed(canvas)`, `skyTick(canvas)`. Measured on the live monitor after the change (composited frames
+in 10 s, the same CDP trace): Overview 33, Block space 34, Kiosk 54 (two boards, timers out of step), Markets 27 --
+against 600 with the shipped sky, and 13 / 14 / 15 / 5 with the 2.5D sky off. Every one of those is the sky's two
+frames a second plus the once-a-second data update.
 
 **Every 3D board, sky and effect draws on either renderer** (operator: "a second rendering option to
 blockyard for WebGL rendering, and port all existing effects over to the new system. Supporting
@@ -993,7 +1005,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1485 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1488 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1323,7 +1335,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1485 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1488 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

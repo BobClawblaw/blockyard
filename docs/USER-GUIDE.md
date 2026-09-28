@@ -1380,6 +1380,13 @@ Below the colours, the renderer:
   The page's own pulses stop with it: the live dot, the block rail and meter, the overdue-block
   warning and the arriving-block slide hold still (every figure stays), because any running
   animation makes the browser composite the whole page every frame on the graphics card.
+- **2.5D sky** — only for 2.5D. **Slow** (the default) keeps the board's sky, the star field and
+  galaxy or the Earth sky, and repaints it twice a second from a timer: the stars drift and the day
+  passes at about a fiftieth of what the full sky costs the graphics card. **Off** is a plain dark
+  panel. The Formation and the Sun are drawn on the graphics card, so the star field stands in for
+  them here. Effects and the flights between layouts stay off either way. A board that must draw on
+  the 2D canvas whatever the setting (Scorched Yard's sky, whose pixels the wind plane reads) paces
+  its sky the same way while 2.5D is chosen.
 - **WebGL glow** — WebGL's own finish, 0 to 1: neon lines, stars, sparks and white-hot cores throw
   real light, and wide faint glows lose their bands. The blocks never glow, because their colour is
   the feerate. At 0 WebGL draws exactly the Software picture. Dimmed on Software and 2.5D.

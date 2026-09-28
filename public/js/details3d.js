@@ -107,10 +107,28 @@ export function rendererOf(opts) {
   if (!RENDERERS.includes(want)) { try { want = loadSettings().appearance.renderer; } catch { want = 'software'; } }
   return want === 'webgl' ? 'webgl' : want === '2.5d' ? '2.5d' : 'software';
 }
+/** 2.5D's sky (settings.js appearance.flatSky): 'off', or 'slow' -- the board's sky at FLAT_SKY_MS a frame. */
+export function flatSkyOf(opts) {
+  let want = opts?.flatSky;
+  if (want !== 'off' && want !== 'slow') { try { want = loadSettings().appearance.flatSky; } catch { want = 'off'; } }
+  return want === 'slow' ? 'slow' : 'off';
+}
+export const FLAT_SKY_MS = 500;            // the slow sky: two frames a second (operator, 2026-09-28: "build the slow sky at 2 fps")
 /** What 2.5D takes away from a board's options: everything that would make it repaint on its own. */
 export function flatOptions(opts) {
   // (facetPx / crownPx past any pixel count: every stone is a plain slab, a top and two sides)
-  return { ...opts, stars: false, skyType: 'none', idleFx: false, shadows: false, neon: false, sheen: false, facetPx: Infinity, crownPx: Infinity };
+  const out = { ...opts, stars: false, skyType: 'none', idleFx: false, shadows: false, neon: false, sheen: false, facetPx: Infinity, crownPx: Infinity };
+  // THE SLOW SKY (operator, 2026-09-28: "Is there no way we can get some basic animations in 2.5D mode ... or
+  // is that just too much stress" -- "yes, build the slow sky at 2 fps"). What a sky costs is its frames: the
+  // shipped one repaints thirty times a second; at two, the star field's drift and the Earth sky's day cost
+  // about a fiftieth of that. So with appearance.flatSky 'slow' the board's sky stays -- the star field, the
+  // galaxy, the Earth -- and render3d repaints it on a timer, not the animation loop (armSky). A shader sky
+  // (the Formation, the Sun) or the galaxy flight is the plain star field here: those live on the card.
+  if (flatSkyOf(opts) === 'slow' && starsOn(opts)) {
+    out.stars = true;
+    out.skyType = earthSky(opts) ? opts.skyType : 'galaxy';
+  }
+  return out;
 }
 /** Software's pixel cap (settings.js appearance.softwareScale): device pixels per CSS pixel, or Infinity for all of them. */
 export function softwareScaleOf(opts) {
@@ -201,6 +219,16 @@ function drawFps(ctx, geom, text, renderer) {
   ctx.emissive = true;
 }
 
+/** Is a slow sky's timer armed on this canvas? (2.5D; the tests.) */
+export function skyArmed(canvas) { return !!STATE.get(canvas)?.skyTimer; }
+/** Fire this canvas's slow-sky timer now, as the clock would (the tests, which cannot wait 500 ms). */
+export function skyTick(canvas) {
+  const st = STATE.get(canvas);
+  if (!st?.skyTimer) return false;
+  clearTimeout(st.skyTimer); st.skyTimer = null;
+  st.dirty = true; st.wake?.();
+  return true;
+}
 /** Which renderer drew this canvas's last frame ('webgl' | 'software'), for the panel and the tests. */
 export function rendererIn(canvas) { return GL_LAYER.get(canvas)?.ctx ? 'webgl' : STATE.get(canvas)?.flat ? '2.5d' : 'software'; }
 /** The GL renderer's running counts on this canvas (draw calls, vertices, stencil passes, frames), or null. */
@@ -5088,29 +5116,14 @@ function skySurface(ctx, geom, opts) {
   return { ctx: B.ctx, pw: bw, ph: bh, dpr: dpr * k, done: () => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(B.canvas, 0, 0, pw, ph); } };
 }
 
-function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
+// THE SKY, on either painter (paintFrame; paintFlat when 2.5D's sky is 'slow'): the star field, the living
+// sky (livingsky.js: a real day from the clock, with the star field coming out at night through the same
+// drawStars), the galaxy flight (galflight.js: the camera flying through a wrapping chain of galaxies, after
+// NASA SVS 14950), or a field sky (the Formation, the Sun) on its own GL canvas under this one, with a 2D
+// fallback where there is no GL. The caller has painted the background already (or left the canvas clear
+// for a GL sky underneath: fieldSkyRuns).
+function paintSky(ctx, geom, opts, view) {
   const { pw, ph, dpr } = geom;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  // THE GL SKY DREW THIS FRAME -> THE BOARD CANVAS STAYS TRANSPARENT. The GL layer lives
-  // UNDER this canvas (form: the overlay is glued to the board's box below); the board's
-  // usual opaque background fill would hide it entirely. The GL clear supplies the black,
-  // the gas draws on it, and everything after this point (tiles, grid, labels) paints over
-  // the transparent canvas onto the GL sky beneath. Any other sky: the 2D canvas paints
-  //   its own background as always.
-  ctx.clearRect(0, 0, pw, ph);
-  if (!fieldSkyRuns(ctx, opts)) {
-    ctx.fillStyle = opts.background;
-    ctx.fillRect(0, 0, pw, ph);
-  }
-  // THE SKY: the star field, the living sky (livingsky.js: a real day from the clock, with the
-  // star field coming out at night through the same drawStars), the galaxy flight
-  // (galflight.js: the camera flying through a wrapping chain of galaxies, after NASA SVS 14950),
-  // or the Formation (galform.js: a galaxy assembling on a loop, after the TNG50 film --
-  // white-on-black gas density, filaments to disc to twin fountains). The Formation runs on
-  // WEBGL where the browser offers it (formgl.js: 40k additive-blended GPU particles, the
-  // film's coloured plasma look), and falls back to the 2D speck renderer where it does not:
-  // headless browsers, VMs, blocklisted GPUs. The GL canvas sits OVER the 2D one (a 2D and a
-  // GL context cannot share an element) and only exists while this sky is chosen.
   ctx.emissive = !earthSky(opts);           // the stars throw light; a day sky, bright all over, must not
   if (starsOn(opts)) {
     // the 2D skies draw on S: the frame's own context, or Software's smaller sky buffer (skySurface)
@@ -5167,6 +5180,32 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
     }
     S.done?.();                              // the sky buffer, stretched over the panel
   }
+}
+
+function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
+  const { pw, ph, dpr } = geom;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // THE GL SKY DREW THIS FRAME -> THE BOARD CANVAS STAYS TRANSPARENT. The GL layer lives
+  // UNDER this canvas (form: the overlay is glued to the board's box below); the board's
+  // usual opaque background fill would hide it entirely. The GL clear supplies the black,
+  // the gas draws on it, and everything after this point (tiles, grid, labels) paints over
+  // the transparent canvas onto the GL sky beneath. Any other sky: the 2D canvas paints
+  //   its own background as always.
+  ctx.clearRect(0, 0, pw, ph);
+  if (!fieldSkyRuns(ctx, opts)) {
+    ctx.fillStyle = opts.background;
+    ctx.fillRect(0, 0, pw, ph);
+  }
+  // THE SKY: the star field, the living sky (livingsky.js: a real day from the clock, with the
+  // star field coming out at night through the same drawStars), the galaxy flight
+  // (galflight.js: the camera flying through a wrapping chain of galaxies, after NASA SVS 14950),
+  // or the Formation (galform.js: a galaxy assembling on a loop, after the TNG50 film --
+  // white-on-black gas density, filaments to disc to twin fountains). The Formation runs on
+  // WEBGL where the browser offers it (formgl.js: 40k additive-blended GPU particles, the
+  // film's coloured plasma look), and falls back to the 2D speck renderer where it does not:
+  // headless browsers, VMs, blocklisted GPUs. The GL canvas sits OVER the 2D one (a 2D and a
+  // GL context cannot share an element) and only exists while this sky is chosen.
+  paintSky(ctx, geom, opts, view);
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
   if (!frame.bounds && !opts.oblique) return;
@@ -5320,6 +5359,8 @@ function paintFlat(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN
   ctx.clearRect(0, 0, pw, ph);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
+  // the slow sky (flatOptions keeps it when appearance.flatSky is 'slow'; render3d's armSky paces it)
+  if (starsOn(opts)) paintSky(ctx, geom, opts, view);
   if (!frame.bounds && !opts.oblique) return;
   const bw = Math.max(1, gridN * opts.unit);
   const bh = Math.max(1, gridH * opts.unit);
@@ -5626,6 +5667,14 @@ export function render3d(canvas, cells, options = {}) {
   // caller had switched them off -- one seam, not thirty `if`s
   const flat = rendererOf(options) === '2.5d';
   const opts = flat ? flatOptions({ ...DEFAULTS, ...options }) : { ...DEFAULTS, ...options };
+  // ...AND A BOARD THAT ASKED FOR SOFTWARE BY NAME WHILE THE SETTING IS 2.5D (Scorched Yard's sky, whose
+  // pixels are read back) draws as Software but paces its sky like 2.5D: the operator chose 2.5D to leave
+  // the card alone, and a Living sky at thirty frames a second behind a game is the same card
+  const flatSetting = rendererOf({}) === '2.5d';
+  // the SKY LOOP: a sky keeps the animation loop alive for its twinkle (about thirty frames a second) --
+  // unless the renderer is 2.5D, where a sky is either off or repainted from a timer (skyMs, armSky)
+  const liveSky = starsOn(opts) && !flat && !flatSetting;
+  const skyMs = starsOn(opts) && (flat || flatSetting) && flatSkyOf(opts) === 'slow' ? FLAT_SKY_MS : 0;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
@@ -5788,6 +5837,7 @@ export function render3d(canvas, cells, options = {}) {
   // as they do on Software (Tetrust, 2026-09-12: "a still board is drawn AS LAID, every frame").
   if (unchanged && st.plan && flat && opts.still !== true) {
     if (st.dirty && st.raf == null) st.wake?.();
+    st.armSky?.();                          // (a slow sky whose timer stopped while the page was hidden starts again)
     return { tiles, settled: true, replanned: false };
   }
   // `still` governs the TILES, never the SKY (2026-09-12, operator: "why can't we get the galaxy
@@ -5795,8 +5845,8 @@ export function render3d(canvas, cells, options = {}) {
   // seconds, frozen, not slow). A still board skipped this cheap path, and the park below
   // returned before requestAnimationFrame, so a board that asked for no choreography also got no
   // twinkle and no galaxy spin: it repainted only when its page happened to call board3d again.
-  if (unchanged && st.plan && (!still || starsOn(opts))) {
-    if (st.raf == null && (st.dirty || starsOn(opts) || !frameAt(st.plan, now, { unit: opts.unit, zUnit: opts.zUnit, vanishX: st.gridW * opts.unit / 2, vanishY: -st.gridH * opts.unit / 2, persp: opts.persp }).settled)) st.wake?.();
+  if (unchanged && st.plan && (!still || liveSky)) {
+    if (st.raf == null && (st.dirty || liveSky || !frameAt(st.plan, now, { unit: opts.unit, zUnit: opts.zUnit, vanishX: st.gridW * opts.unit / 2, vanishY: -st.gridH * opts.unit / 2, persp: opts.persp }).settled)) st.wake?.();
     return { tiles, settled: now >= st.plan.settleAt, yaw: st.yaw, replanned: false };
   }
 
@@ -5970,8 +6020,24 @@ export function render3d(canvas, cells, options = {}) {
     st.lastOps = frame.ops;
     st.settled = frame.settled;
     st.dirty = false;
+    armSky();                                // a slow sky: the next frame is a timer's, not the loop's
     return frame;
   };
+  // THE SLOW SKY'S CLOCK (2.5D; see flatOptions). One timer per canvas; it fires a single frame through the
+  // parked loop (dirty + wake) and the paint arms the next. A hidden canvas lets it lapse -- the next render3d
+  // call from its page arms it again -- so a board nobody can see paints nothing.
+  const armSky = () => {
+    if (!skyMs || st.skyTimer || typeof setTimeout !== 'function') return;
+    st.skyTimer = setTimeout(() => {
+      st.skyTimer = null;
+      if (canvas.isConnected === false || canvas.offsetParent === null) return;
+      st.dirty = true;
+      st.wake?.();
+    }, skyMs);
+    st.skyTimer.unref?.();
+  };
+  st.armSky = skyMs ? armSky : null;
+  if (!skyMs && st.skyTimer) { clearTimeout(st.skyTimer); st.skyTimer = null; }   // (the sky was switched off, or the renderer changed)
 
   const step = () => {
     const t = (globalThis.performance && performance.now()) || 0;
@@ -5979,7 +6045,7 @@ export function render3d(canvas, cells, options = {}) {
     // still -- and stops it while the canvas is hidden (another tab of the app); the next
     // render3d call wakes it (see the unchanged-layout branch). It is the STARS that need the
     // repaint, not the board style, so a space-styled board with the sky off parks like any other.
-    if (starsOn(opts)) {
+    if (liveSky) {
       // ABSENT COUNTS AS HIDDEN, and this is the sky loop's only exit: 2218 re-arms when the
       // frame is throttled, 2242 re-arms otherwise, and the park at 2234 is gated behind
       // !starsOn -- so a starry board that cannot answer "am I visible?" never unwinds. The
@@ -5998,7 +6064,7 @@ export function render3d(canvas, cells, options = {}) {
     // landed -- cutting the effect off exactly as before. It is also the live path: stars ship on
     // by default, so this is the branch a real board takes, and guarding only the entry above
     // would have looked correct and done nothing.
-    if (starsOn(opts) && frame.settled && st.pending && !fxNow(st, t) && !fxResting(st, t)) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
+    if (liveSky && frame.settled && st.pending && !fxNow(st, t) && !fxResting(st, t)) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     // keep the loop alive while the choreography runs OR the camera is moving;
     // park otherwise, because repainting a still picture is a heater
     if (frame.settled && !st.dirty && !fxNow(st, t)) {
@@ -6011,7 +6077,7 @@ export function render3d(canvas, cells, options = {}) {
         st.atRest = true;
         scheduleFx(canvas, st, opts, !afterEffect);
       }
-      if (!starsOn(opts) && !glowAnimating(st, t)) {
+      if (!liveSky && !glowAnimating(st, t)) {
         st.raf = null;
         if (st.pending) {
           // the loop parks here (no stars to keep it running), so the rest is kept by a timer
@@ -6033,7 +6099,7 @@ export function render3d(canvas, cells, options = {}) {
   if (first.settled) { st.atRest = true; scheduleFx(canvas, st, opts, true); }   // at rest already, stars or not
   // Park when nothing is moving: a settled board, or one that asked for no choreography at all.
   // Stars are motion in their own right, so a sky keeps the loop whatever the tiles are doing.
-  if (!globalThis.requestAnimationFrame || (!starsOn(opts) && (still || first.settled))) {
+  if (!globalThis.requestAnimationFrame || (!liveSky && (still || first.settled))) {
     return { tiles, settled: true };
   }
   st.raf = requestAnimationFrame(step);

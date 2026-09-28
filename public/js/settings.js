@@ -92,6 +92,11 @@ export const DEFAULTS = Object.freeze({
     // board, its seams and every label stay at full resolution -- the first cut shrank the whole canvas and
     // was "too blurry at 0.5x" (2026-09-28). WebGL is never capped by this.
     softwareScale: 'full',
+    // 2.5D'S SKY (operator, 2026-09-28: "Is there no way we can get some basic animations in 2.5D mode ...
+    // or is that just too much stress" -- "yes, build the slow sky at 2 fps"). 'slow' keeps the board's sky
+    // under 2.5D and repaints it twice a second (details3d.js FLAT_SKY_MS): the star field drifts, the Earth
+    // sky's day passes, at about a fiftieth of the shipped sky's frames. 'off' is a plain dark panel.
+    flatSky: 'slow',
     // THE FRAME RATE, top right of every 3D board (operator, 2026-09-21): frames actually painted in
     // the last second, the processor's milliseconds a frame, and which renderer drew it.
     showFps: false,
@@ -566,8 +571,13 @@ const PANEL_GROUPS = Object.freeze([
         hint: 'Only the WebGL renderer has this: what is bright on a board -- a neon line, a spark, a white-hot core -- throws real light on what is round it, and the wide faint glows lose their bands. Zero is the Software picture',
       }),
       Object.freeze({
-        key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== 'software',
-        hint: 'How many pixels the Software renderer draws the SKY with -- the star field or galaxy behind a board, which is most of what a resting board costs. Full is one for every pixel of the screen. 1x is one for every CSS pixel: the same sky on an ordinary screen, and a quarter of the work on a high-density one. \u00bdx is half that again, stretched up: a softer sky, and fast on a slow machine. The board itself, its seams, the price line and every label are always drawn at full resolution, sharp. WebGL never scales; 2.5D draws no sky',
+        key: 'flatSky', label: '2.5D sky', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== '2.5d',
+        hint: 'Only the 2.5D renderer has this. Slow keeps the board\u2019s sky -- the star field and galaxy, or the Earth sky -- and repaints it twice a second: the stars drift and the day passes, at about a fiftieth of what the full sky costs the graphics card. Off is a plain dark panel. The Formation and the Sun are drawn on the graphics card and stand in as the star field here; effects and the flights between layouts stay off either way',
+        options: Object.freeze([['off', 'Off'], ['slow', 'Slow']]),
+      }),
+      Object.freeze({
+        key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer === 'webgl',
+        hint: 'How many pixels the Software and 2.5D renderers draw the SKY with -- the star field or galaxy behind a board, which is most of what a resting board costs. Full is one for every pixel of the screen. 1x is one for every CSS pixel: the same sky on an ordinary screen, and a quarter of the work on a high-density one. \u00bdx is half that again, stretched up: a softer sky, and fast on a slow machine. The board itself, its seams, the price line and every label are always drawn at full resolution, sharp. WebGL never scales; 2.5D draws no sky',
         options: Object.freeze([['full', 'Full'], ['1', '1x'], ['0.5', '\u00bdx']]),
       }),
       Object.freeze({ key: 'showFps', label: 'Show frame rate', kind: 'toggle', hint: 'In the top right corner of every 3D board: the frames it actually painted in the last second, the processor\u2019s milliseconds for one, and which renderer drew it. A board at rest under a sky paints about thirty a second by design; a board with nothing moving paints none, and keeps its last figure' }),
