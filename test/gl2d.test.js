@@ -489,7 +489,7 @@ test('a lost context stops drawing and tells its owner once', () => {
 });
 
 test('the choice: a setting, an override, Software by default and wherever WebGL cannot be had', () => {
-  assert.deepEqual([...RENDERERS], ['software', 'webgl']);
+  assert.deepEqual([...RENDERERS], ['software', 'webgl', '2.5d']);   // (the third is test/renderer-25d.test.js's)
   assert.equal(DEFAULTS.appearance.renderer, 'software', 'the shipped renderer is the one every browser has');
   const row = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'renderer');
   assert.deepEqual(row.options.map((o) => o[0]), [...RENDERERS], 'the panel offers exactly what the viewer knows');

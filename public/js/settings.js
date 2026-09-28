@@ -77,6 +77,9 @@ export const DEFAULTS = Object.freeze({
     // option ... Supporting either WebGL or Software rendering"). 'software' is the 2D canvas the
     // project has always drawn on and stays the shipped choice; 'webgl' draws the same frame
     // through gl2d.js, and falls back to Software by itself where WebGL2 is missing or dies.
+    // '2.5d' (operator, 2026-09-28: "a low-fidelity version that doesn't stress the GPU at all") keeps
+    // the board and drops everything that repaints -- sky, effects, choreography, finishes -- so a
+    // resting board paints no frames at all (details3d.js RENDERERS).
     renderer: 'software',
     // WEBGL'S OWN FINISH (operator, 2026-09-21: "The WebGL should look much better than the software
     // renderer"): bloom -- what is bright throws light -- and a dither that takes the bands out of the
@@ -553,16 +556,16 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['blockyard', 'BlockYard'], ['mono', 'Mono'], ['nous', 'Nous'], ['github', 'GitHub'], ['catppuccin', 'Catppuccin'], ['custom', 'Custom']]),
       }),
       Object.freeze({
-        key: 'renderer', label: '3D renderer', kind: 'segment', hint: 'What draws the 3D boards, their skies and every effect. Software is the 2D canvas, on the processor: it works everywhere. WebGL draws the same picture on the graphics card -- smoother gradients, and far less work for the processor when a heavy effect plays -- and goes back to Software by itself where the browser has no WebGL2',
-        options: Object.freeze([['software', 'Software'], ['webgl', 'WebGL']]),
+        key: 'renderer', label: '3D renderer', kind: 'segment', hint: 'What draws the 3D boards, their skies and every effect. Software is the 2D canvas, on the processor: it works everywhere. WebGL draws the same picture on the graphics card -- smoother gradients, and far less work for the processor when a heavy effect plays -- and goes back to Software by itself where the browser has no WebGL2. 2.5D is the low-fidelity board for a machine whose graphics are not to be worked: the same cubes under the same camera, flat, with no sky, no effects, no flights and no finishes -- it paints one frame when the data or the pointer changes and nothing at all in between',
+        options: Object.freeze([['software', 'Software'], ['webgl', 'WebGL'], ['2.5d', '2.5D']]),
       }),
       Object.freeze({
         key: 'glow', label: 'WebGL glow', kind: 'range', min: 0, max: 1, step: 0.05, dimWhen: (s) => s.appearance.renderer !== 'webgl',
         hint: 'Only the WebGL renderer has this: what is bright on a board -- a neon line, a spark, a white-hot core -- throws real light on what is round it, and the wide faint glows lose their bands. Zero is the Software picture',
       }),
       Object.freeze({
-        key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== 'software',
-        hint: 'How many pixels the Software renderer draws. Full is one for every pixel of the screen. 1x is one for every CSS pixel: the same picture on an ordinary screen, and a quarter of the work on a high-density one, a little softer. \u00bdx is half that again, stretched up: soft, and fast on a slow machine. WebGL always draws at full resolution',
+        key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer === 'webgl',
+        hint: 'How many pixels the Software and 2.5D renderers draw. Full is one for every pixel of the screen. 1x is one for every CSS pixel: the same picture on an ordinary screen, and a quarter of the work on a high-density one, a little softer. \u00bdx is half that again, stretched up: soft, and fast on a slow machine. WebGL always draws at full resolution',
         options: Object.freeze([['full', 'Full'], ['1', '1x'], ['0.5', '\u00bdx']]),
       }),
       Object.freeze({ key: 'showFps', label: 'Show frame rate', kind: 'toggle', hint: 'In the top right corner of every 3D board: the frames it actually painted in the last second, the processor\u2019s milliseconds for one, and which renderer drew it. A board at rest under a sky paints about thirty a second by design; a board with nothing moving paints none, and keeps its last figure' }),

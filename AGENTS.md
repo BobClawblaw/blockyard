@@ -352,6 +352,25 @@ What will bite:
 
 ## Current state (2026-09-21): two renderers, Software and WebGL
 
+**Since 2026-09-28 there is a THIRD renderer, 2.5D** (operator: "add a '2d' only mode for our '3d' work.
+Make it another renderer along with software and webgl. Both paths consume way too much GPU processing,
+and I would like to have a low-fidelity version that doesn't stress the GPU at all" -- "Call it '2.5D'").
+`appearance.renderer: '2.5d'`. It is NOT a third drawing seam: `flatOptions` in details3d.js switches off
+everything that would make a board repaint on its own (sky, idle effects, shadows, finishes, the facets
+and crowns) before `render3d` reads a single option, the board is `still` (every layout lands where it
+is), the unchanged-data path returns without touching the context, hover lights and lets go in one frame
+(`flatGlow`; `glowAnimating` is false), `triggerIdle` refuses, and `paintFlat` draws the same fit, projection
+and ops as `paintFrame` with plain fills and strokes -- so `hitTest`, the axis labels and a game's `overlay`
+need no second path. A resting 2.5D board paints ZERO frames a second; `test/renderer-25d.test.js` holds
+that (no rAF pending after a paint, not one context call on a same-data poll), and `node
+scripts/renderer-25d-check.mjs --size 2560x1300` measures it in headless chromium under the SHIPPED settings
+(sky on, effects on): frames painted in thirty seconds at rest, 2.5D 0 against Software 1,875 on Block space
+and on Markets; after a hover 1 against 125; after a refresh with new data 0 (the frame is painted inside the
+call) against 1,875. Measured 2026-09-28. Scorched Yard's land and
+sky still pass `renderer: 'software'` and get it: an override beats the setting on every renderer.
+What it does NOT do: a game's sky canvas under 2.5D is a black panel (no sky is the point), and a look
+that only the finishes give (neon tubes, chrome) is off however the Space switches are set.
+
 **Every 3D board, sky and effect draws on either renderer** (operator: "a second rendering option to
 blockyard for WebGL rendering, and port all existing effects over to the new system. Supporting
 either WebGL or Software rendering"). Not thirty-five effects rewritten as shaders: everything
@@ -954,7 +973,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1472 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1483 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1284,7 +1303,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1472 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1483 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

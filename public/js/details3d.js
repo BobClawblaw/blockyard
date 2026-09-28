@@ -89,12 +89,28 @@ function dropFormGl(ctx) {
 // whose PIXELS are read back by its owner (Scorched Yard's land and sky), which only the 2D
 // canvas can answer. No WebGL2, a failed compile or a lost context is Software, silently and for
 // good on that canvas: a board must never be blank because a GPU was blocklisted.
-export const RENDERERS = Object.freeze(['software', 'webgl']);
+// ...AND A THIRD, 2.5D (operator, 2026-09-28: "add a '2d' only mode for our '3d' work. Make it another
+// renderer along with software and webgl. Both paths consume way too much GPU processing, and I would
+// like to have a low-fidelity version that doesn't stress the GPU at all" -- "Call it '2.5D'"). What
+// costs a graphics card is not a frame, it is the FRAMES: under a sky a board repaints some thirty
+// times a second for the twinkle, an effect runs sixty, a transition flies for seconds, and each one
+// is a panel-sized canvas composited again. 2.5D keeps the board -- the same oblique camera, the same
+// cubes with their top and two sides, the same hover and hit test -- and drops everything that
+// repaints: no sky, no idle effects, no choreography (a new layout lands where it is), no shadows or
+// finishes, the price line as one stroke. A frame is drawn when the data or the pointer changes, and
+// then nothing runs at all: the loop is parked, so a resting board costs zero frames a second on
+// either processor. It draws on the 2D context (paintFlat, below), at Software's resolution setting.
+export const RENDERERS = Object.freeze(['software', 'webgl', '2.5d']);
 const GL_LAYER = new WeakMap();           // the board canvas -> its GL layer
 export function rendererOf(opts) {
   let want = opts?.renderer;
-  if (want !== 'software' && want !== 'webgl') { try { want = loadSettings().appearance.renderer; } catch { want = 'software'; } }
-  return want === 'webgl' ? 'webgl' : 'software';
+  if (!RENDERERS.includes(want)) { try { want = loadSettings().appearance.renderer; } catch { want = 'software'; } }
+  return want === 'webgl' ? 'webgl' : want === '2.5d' ? '2.5d' : 'software';
+}
+/** What 2.5D takes away from a board's options: everything that would make it repaint on its own. */
+export function flatOptions(opts) {
+  // (facetPx / crownPx past any pixel count: every stone is a plain slab, a top and two sides)
+  return { ...opts, stars: false, skyType: 'none', idleFx: false, shadows: false, neon: false, sheen: false, facetPx: Infinity, crownPx: Infinity };
 }
 /** Software's pixel cap (settings.js appearance.softwareScale): device pixels per CSS pixel, or Infinity for all of them. */
 export function softwareScaleOf(opts) {
@@ -186,7 +202,7 @@ function drawFps(ctx, geom, text, renderer) {
 }
 
 /** Which renderer drew this canvas's last frame ('webgl' | 'software'), for the panel and the tests. */
-export function rendererIn(canvas) { return GL_LAYER.get(canvas)?.ctx ? 'webgl' : 'software'; }
+export function rendererIn(canvas) { return GL_LAYER.get(canvas)?.ctx ? 'webgl' : STATE.get(canvas)?.flat ? '2.5d' : 'software'; }
 /** The GL renderer's running counts on this canvas (draw calls, vertices, stencil passes, frames), or null. */
 export function rendererStats(canvas) { const c = GL_LAYER.get(canvas)?.ctx; return c ? { ...c.stats } : null; }
 
@@ -945,7 +961,7 @@ function scheduleFx(canvas, st, opts, soon = false) {
 // wait on a timer. Returns false for a canvas the renderer has not seen.
 export function triggerIdle(canvas, kind = 'ripple') {
   const st = STATE.get(canvas);
-  if (!st || !FX_MS[kind]) return false;
+  if (!st || !FX_MS[kind] || st.flat) return false;     // (2.5D plays no effects: nothing may set a board repainting)
   startFx(st, kind, (globalThis.performance && performance.now()) || 0);
   st.wake?.();
   return true;
@@ -5250,6 +5266,110 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
+// 2.5D'S FRAME (see RENDERERS above). The same fit, the same projection and the same ops as
+// paintFrame -- so hitTest, the labels and a game's overlay need no second path -- painted plainly:
+// a flat floor, thin grid lines, the block line, each face filled with its own colour and stroked
+// with its seam, the price line as one stroke, the tags. No sky is drawn and no GL layer is kept
+// under the canvas. Everything here is a plain fill or stroke of rgba: no gradients, no clip, no
+// globalAlpha, no composite modes -- the same vocabulary rule as the rest of the file.
+function paintFlat(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN) {
+  const { pw, ph, dpr } = geom;
+  dropFormGl(ctx);                         // a field sky's GL canvas from before the switch: nothing draws under this board
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, pw, ph);
+  ctx.fillStyle = opts.background;
+  ctx.fillRect(0, 0, pw, ph);
+  if (!frame.bounds && !opts.oblique) return;
+  const bw = Math.max(1, gridN * opts.unit);
+  const bh = Math.max(1, gridH * opts.unit);
+  const of = opts.oblique ? obliqueFit(pw, ph, gridN, gridH, opts) : null;
+  const fit = of ? { scaleX: of.k, scaleY: of.k, tx: of.tx, ty: of.ty } : { scaleX: pw / bw, scaleY: ph / bh, tx: 0, ty: ph };
+  ctx.setTransform(fit.scaleX, 0, 0, fit.scaleY, fit.tx, fit.ty);
+  frame.__fit = { scaleX: fit.scaleX, scaleY: fit.scaleY, tx: fit.tx, ty: fit.ty, ph, pw, unit: opts.unit };
+  const lw = Math.max(0.5, 0.6 / Math.min(fit.scaleX, fit.scaleY));
+  ctx.lineWidth = lw;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const P = (gx, gy) => project(gx, gy, 0, view);
+  // (on a domed board a straight line is a curve: a polyline, as drawGrid draws it)
+  const seg = (x0, y0, x1, y1) => {
+    const S = view.dome ? Math.max(8, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 1.5)) : 1;
+    ctx.beginPath();
+    for (let i = 0; i <= S; i++) {
+      const q = P(x0 + ((x1 - x0) * i) / S, y0 + ((y1 - y0) * i) / S);
+      if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
+    }
+    ctx.stroke();
+  };
+  const ring = (x0, y0, x1, y1, fill) => {
+    const S = 24, pts = [];
+    for (let i = 0; i <= S; i++) pts.push(P(x0 + ((x1 - x0) * i) / S, y0));
+    for (let i = 1; i <= S; i++) pts.push(P(x1, y0 + ((y1 - y0) * i) / S));
+    for (let i = S - 1; i >= 0; i--) pts.push(P(x0 + ((x1 - x0) * i) / S, y1));
+    for (let i = S - 1; i > 0; i--) pts.push(P(x0, y0 + ((y1 - y0) * i) / S));
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+    ctx.closePath();
+    ctx.fill();
+  };
+  if (opts.grid) {
+    if (opts.space && opts.floorLine) {
+      // the Markets board: the one line along the front edge, under the candles and over the hours
+      ctx.strokeStyle = opts.gridEdgeColor; ctx.lineWidth = lw * 1.6; seg(0, 0, gridN, 0);
+    } else {
+      // the floor: the board alone on a space board, else as far as the panel sees (the sphere
+      // carries on past the board under the oblique camera -- drawGrid, groundExtent)
+      const vr = view.oblique && view.viewRect;
+      const { X0, X1, Y0, Y1 } = !opts.space && vr ? groundExtent(view, vr) : { X0: 0, X1: gridN, Y0: 0, Y1: gridH };
+      ring(X0, Y0, X1, Y1, opts.space ? (opts.spaceFloor ?? 'rgba(0,0,0,0.62)') : opts.floor);
+      ctx.strokeStyle = opts.gridColor; ctx.lineWidth = lw;
+      for (let i = Math.ceil(X0 / opts.gridStep) * opts.gridStep; i <= X1; i += opts.gridStep) seg(i, Y0, i, Y1);
+      for (let i = Math.ceil(Y0 / opts.gridStep) * opts.gridStep; i <= Y1; i += opts.gridStep) seg(X0, i, X1, i);
+      ctx.strokeStyle = opts.gridEdgeColor; ctx.lineWidth = lw * 1.6;
+      seg(0, 0, gridN, 0); seg(gridN, 0, gridN, gridH); seg(gridN, gridH, 0, gridH); seg(0, gridH, 0, 0);
+      // the block line: where one block's worth ends
+      if (blockRows > 0 && blockRows < gridH) { ctx.strokeStyle = opts.blockLineColor; seg(0, blockRows, gridN, blockRows); }
+    }
+    ctx.lineWidth = lw;
+  }
+  if (opts.axes) drawAxes(ctx, view, opts.axes, gridN);
+  // the cubes: every face filled with the colour buildScene gave it and stroked with its seam.
+  // A ramp (a finish's gradient) is ignored for the flat fill under it; a lamp (a neon tube, a
+  // glint) is not drawn at all -- neither exists with the finishes off, and neither belongs here
+  for (const op of frame.ops) {
+    const p = op.points;
+    if (!p || p.length < 3 || op.face === 'shadow' || op.face === 'neon' || op.neonPart === true || op.lamp === true) continue;
+    ctx.beginPath();
+    ctx.moveTo(p[0].x, p[0].y);
+    for (let i = 1; i < p.length; i++) ctx.lineTo(p[i].x, p[i].y);
+    ctx.closePath();
+    ctx.fillStyle = op.fill;
+    ctx.fill();
+    if (op.stroke && opts.edges) {
+      ctx.strokeStyle = op.stroke;
+      if (op.lw) { ctx.lineWidth = lw * op.lw; ctx.stroke(); ctx.lineWidth = lw; }
+      else ctx.stroke();
+    }
+  }
+  // the price line: ONE stroke of the same curve priceLine draws six times, in its core's colour
+  if (opts.axes?.line) {
+    const pts = opts.axes.line.map((q) => project(q.x, opts.axes.y ?? 0, q.z, view));
+    if (pts.length >= 2) {
+      ctx.strokeStyle = 'rgba(255,236,70,1)';
+      ctx.lineWidth = lw * 3;
+      ctx.beginPath();
+      traceCurve(ctx, pts);
+      ctx.stroke();
+      ctx.lineWidth = lw;
+    }
+  }
+  if (opts.axes) axisLabels(ctx, view, opts.axes, gridN, fit.scaleX, dpr || 1);
+  // a game's own layer, in the board's projection, with the same primitives (paintFrame: opts.overlay)
+  if (typeof opts.overlay === 'function') opts.overlay(ctx, view, { project, softStops, lw });
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
 // THE LOOK (operator, 2026-09-11: "absolutely spectacular ... make them feel
 // like they are in The Matrix"): a green-black field, a phosphor floor and
 // grid, and Tetris cells with a metallic finish for transactions (see
@@ -5408,7 +5528,13 @@ function glowMap(st, t) {
   }
   return m.size ? m : null;
 }
+/** 2.5D's hover: the tile under the pointer fully lit, nothing fading (glowMap's tween is frames). */
+function flatGlow(st) {
+  if (st.glow?.size) for (const [id, g] of st.glow) if (g.off != null || id !== st.hoverId) st.glow.delete(id);
+  return st.hoverId ? new Map([[st.hoverId, 1]]) : null;
+}
 function glowAnimating(st, t) {
+  if (st.flat) return false;                 // (2.5D: lit at once, let go at once -- flatGlow)
   for (const g of st.glow?.values() ?? []) {
     if (g.off != null ? glowLevel(g, t) > 0.005 : glowLevel(g, t) < 1) return true;
   }
@@ -5454,7 +5580,11 @@ function bindHover(canvas, st) {
 
 export function render3d(canvas, cells, options = {}) {
   if (!canvas || !canvas.getContext) return null;
-  const opts = { ...DEFAULTS, ...options };
+  // 2.5D (flatOptions): the sky, the effects, the shadows and the finishes are off before any of the
+  // code below can ask for them, so every `starsOn` / `idleFx` test downstream answers as if the
+  // caller had switched them off -- one seam, not thirty `if`s
+  const flat = rendererOf(options) === '2.5d';
+  const opts = flat ? flatOptions({ ...DEFAULTS, ...options }) : { ...DEFAULTS, ...options };
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
@@ -5463,6 +5593,7 @@ export function render3d(canvas, cells, options = {}) {
     st = { prev: [], raf: null, plan: null, dirty: false };
     STATE.set(canvas, st);
   }
+  st.flat = flat;
   st.noHover = opts.hover === false;        // see bindHover: playfields do not light up under the pointer
 
   // FLUSH WITH THE VIEWPORT (operator, 2026-09-11: "Blocks are being shown
@@ -5573,7 +5704,8 @@ export function render3d(canvas, cells, options = {}) {
   // reshuffle -- so a tetromino handed to it came down one cell at a time. A still board is drawn
   // AS LAID, every frame, with nothing planned: a piece moves as one shape because nothing moves
   // it, the frame simply changes.
-  const still = reducedMotion() || opts.still === true;
+  // ...and 2.5D lands every layout where it is: a transition is seconds of repainting
+  const still = reducedMotion() || opts.still === true || flat;
 
   // THE BUG THIS GUARDS (2026-09-10, operator: "redrawn instead of ...
   // smoothly moving"): mining.js calls this on every fast-tier paint, about
@@ -5605,6 +5737,14 @@ export function render3d(canvas, cells, options = {}) {
   const lookChanged = st.optSig !== undefined && st.optSig !== optSig;
   st.optSig = optSig;
   const unchanged = sig === st.sig && !lookChanged;
+  // 2.5D: the same tiles, the same look -- NOTHING to draw. A still board re-plans and repaints on
+  // every call below (Tetrust hands a new frame each time); this board's callers poll once a
+  // second with the same data, and each of those paints would be a panel composited for nothing.
+  // A hover left it dirty: one frame, from the parked loop, then it parks again.
+  if (unchanged && st.plan && flat) {
+    if (st.dirty && st.raf == null) st.wake?.();
+    return { tiles, settled: true, replanned: false };
+  }
   // `still` governs the TILES, never the SKY (2026-09-12, operator: "why can't we get the galaxy
   // smoothly animating in the background for tetrust?" -- measured: zero repaints in three
   // seconds, frozen, not slow). A still board skipped this cheap path, and the park below
@@ -5700,7 +5840,9 @@ export function render3d(canvas, cells, options = {}) {
       boardW: st.gridW * opts.unit, boardH: st.gridH * opts.unit, dome: opts.dome, gridW: st.gridW, gridH: st.gridH,
       // the camera, plus settings.js space.perspective folded in: `rise` is how much height
       // foreshortens, and 0 (the default) is the parallel camera this board has always drawn
-      seamAlpha: opts.seamAlpha, fx: fxNow(st, t), now: t, light: opts.light, order: opts.order, hoverGlow: glowMap(st, t),
+      seamAlpha: opts.seamAlpha, fx: flat ? null : fxNow(st, t), now: t, light: opts.light, order: opts.order,
+      // (2.5D: the hovered tile is lit at once and let go at once -- a fade is frames)
+      hoverGlow: flat ? flatGlow(st) : glowMap(st, t),
       axes: opts.axes ?? null,   // the price board's axes: buildScene lights candle sides where these exist
       oblique: opts.obliqueRise ? { ...opts.oblique, rise: opts.obliqueRise } : opts.oblique,
       // the departure path (settings.js space.departures): it reaches the geometry AND the paint
@@ -5774,10 +5916,11 @@ export function render3d(canvas, cells, options = {}) {
       frame = frameAt(st.plan, t, view);
       st.restFrame = frame.settled && !view.fx && !view.hoverGlow ? { plan: st.plan, draw, frame } : null;
     }
-    paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
+    if (flat) paintFlat(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
+    else paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
     // THE FRAME RATE, top right, where it is asked for (appearance.showFps). On a canvas that has a
     // board on it: a game's sky canvas behind its well is the same view, and one figure is enough.
-    if (frame.ops.length && fpsWanted(opts)) drawFps(surface, geom, fpsTick(st, t, clockMs() - tA), surface.gl2d === true ? 'WebGL' : 'Software');
+    if (frame.ops.length && fpsWanted(opts)) drawFps(surface, geom, fpsTick(st, t, clockMs() - tA), surface.gl2d === true ? 'WebGL' : flat ? '2.5D' : 'Software');
     surface.flush?.();                       // the GL renderer batches; the 2D context has no such call
     st.lastFit = frame.__fit ?? st.lastFit;
     st.lastOps = frame.ops;
