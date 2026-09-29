@@ -1370,31 +1370,31 @@ Below the colours, the renderer:
   compile or a lost graphics context goes back to Software by itself; a board is never blank.
   On a large or high-density display WebGL is many times faster (a resting Block space board at
   2560×1300 measured 32 ms a frame on Software and 1 ms on WebGL).
-- **2.5D** — the low-fidelity board, for a machine whose graphics are not to be worked at all: a
+- **Simple** — the low-fidelity board, for a machine whose graphics are not to be worked at all: a
   laptop on battery, a thin client, a tablet on the wall. The same cubes under the same camera,
   flat, with no sky, no idle effects, no flight between layouts (a refresh lands where it is), no
   shadows and no finishes; the price line is one plain stroke. It paints one frame when the data
   or the pointer changes and nothing in between: a resting board costs no frames a second on
   either the processor or the graphics card. Hover and click-through work as before. The Sky,
-  effects and Software resolution settings are kept but have no effect while 2.5D is chosen.
+  effects and Software resolution settings are kept but have no effect while Simple is chosen.
   The page's own pulses stop with it: the live dot, the block rail and meter, the overdue-block
   warning and the arriving-block slide hold still (every figure stays), because any running
   animation makes the browser composite the whole page every frame on the graphics card.
-- **2.5D sky** — only for 2.5D. **Slow** (the default) keeps the board's sky, the star field and
+- **Simple sky** — only for Simple. **Slow** (the default) keeps the board's sky, the star field and
   galaxy or the Earth sky, and repaints it twice a second from a timer: the stars drift and the day
   passes at about a fiftieth of what the full sky costs the graphics card. **Off** is a plain dark
   panel. The Formation and the Sun are drawn on the graphics card, so the star field stands in for
   them here. Effects and the flights between layouts stay off either way. A board that must draw on
   the 2D canvas whatever the setting (Scorched Yard's sky, whose pixels the wind plane reads) paces
-  its sky the same way while 2.5D is chosen.
+  its sky the same way while Simple is chosen.
 - **WebGL glow** — WebGL's own finish, 0 to 1: neon lines, stars, sparks and white-hot cores throw
   real light, and wide faint glows lose their bands. The blocks never glow, because their colour is
-  the feerate. At 0 WebGL draws exactly the Software picture. Dimmed on Software and 2.5D.
+  the feerate. At 0 WebGL draws exactly the Software picture. Dimmed on Software and Simple.
 - **Software resolution** — how many pixels the Software renderer draws the *sky* with: every
   device pixel, one per CSS pixel, or half that, stretched up. The sky is most of what a resting
   board costs on Software; the board itself, its seams, the price line and every label are always
   drawn at full resolution, so nothing but the stars goes soft. Dimmed on WebGL, which never scales,
-  and on 2.5D, which draws no sky.
+  and on Simple, which draws no sky.
 - **Show frame rate** — a figure top right of every 3D board: frames painted in the last second,
   the processor's milliseconds a frame, and which renderer drew it. A resting board under a sky
   reads about 30 by design (it repaints for the stars); the graphics card's own time is not visible

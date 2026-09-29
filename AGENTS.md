@@ -352,7 +352,9 @@ What will bite:
 
 ## Current state (2026-09-21): two renderers, Software and WebGL
 
-**Since 2026-09-28 there is a THIRD renderer, 2.5D** (operator: "add a '2d' only mode for our '3d' work.
+**Since 2026-09-28 there is a THIRD renderer, 2.5D -- SHOWN AS "Simple" since 2026-09-29** (operator, 09-29: "Rename 2.5D to
+'Simple' rendering"; the stored value, the code's names and everything below stayed `2.5d`, so a saved settings file still
+loads and the Block space's own "Simple" VIEWER MODE is a different thing on a different row) (operator, 09-28: "add a '2d' only mode for our '3d' work.
 Make it another renderer along with software and webgl. Both paths consume way too much GPU processing,
 and I would like to have a low-fidelity version that doesn't stress the GPU at all" -- "Call it '2.5D'").
 `appearance.renderer: '2.5d'`. It is NOT a third drawing seam: `flatOptions` in details3d.js switches off

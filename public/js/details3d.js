@@ -100,6 +100,7 @@ function dropFormGl(ctx) {
 // finishes, the price line as one stroke. A frame is drawn when the data or the pointer changes, and
 // then nothing runs at all: the loop is parked, so a resting board costs zero frames a second on
 // either processor. It draws on the 2D context (paintFlat, below), at Software's resolution setting.
+// (SHOWN AS "Simple" since 2026-09-29 -- operator: "Rename 2.5D to 'Simple' rendering"; the value and the names here stayed '2.5d')
 export const RENDERERS = Object.freeze(['software', 'webgl', '2.5d']);
 const GL_LAYER = new WeakMap();           // the board canvas -> its GL layer
 export function rendererOf(opts) {
@@ -6014,7 +6015,7 @@ export function render3d(canvas, cells, options = {}) {
     else paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
     // THE FRAME RATE, top right, where it is asked for (appearance.showFps). On a canvas that has a
     // board on it: a game's sky canvas behind its well is the same view, and one figure is enough.
-    if (frame.ops.length && fpsWanted(opts)) drawFps(surface, geom, fpsTick(st, t, clockMs() - tA), surface.gl2d === true ? 'WebGL' : flat ? '2.5D' : 'Software');
+    if (frame.ops.length && fpsWanted(opts)) drawFps(surface, geom, fpsTick(st, t, clockMs() - tA), surface.gl2d === true ? 'WebGL' : flat ? 'Simple' : 'Software');
     surface.flush?.();                       // the GL renderer batches; the 2D context has no such call
     st.lastFit = frame.__fit ?? st.lastFit;
     st.lastOps = frame.ops;

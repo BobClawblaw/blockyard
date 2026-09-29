@@ -27,18 +27,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- **A third renderer, 2.5D** (Settings, Appearance, "3D renderer"), for a machine whose graphics
+- **A third renderer, Simple** (Settings, Appearance, "3D renderer"; `2.5d` in a saved settings file), for a machine whose graphics
   are not to be worked at all. The same cubes under the same oblique camera, flat: no sky, no idle
   effects, no flight between layouts, no shadows or finishes, the price line as one stroke. It
   paints one frame when the data or the pointer changes and nothing in between, so a resting board
   costs no frames a second on either the processor or the graphics card. Hover, click-through and
   a game's own overlay work as before. The page's own pulses (the live dot, the block rail and
   meter, the overdue warning) hold still with it: with every board parked, those alone kept the
-  page compositing 60 frames a second on the graphics card. **"2.5D sky"** (Slow, the default, or
+  page compositing 60 frames a second on the graphics card. **"Simple sky"** (Slow, the default, or
   Off) keeps the board's sky and repaints it twice a second from a timer, about a fiftieth of the
   shipped sky's frames: the stars drift and the Earth sky's day passes. The Formation and the Sun
   stand down to the star field there. Measured on the live monitor, composited frames in ten
-  seconds: Block space 600 with the shipped sky, 14 with the 2.5D sky off, 34 with it slow.
+  seconds: Block space 600 with the shipped sky, 14 with the Simple sky off, 34 with it slow.
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
   pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
@@ -52,7 +52,7 @@ All notable changes to this project are documented here. The format follows
   on a high-density screen) or half that. The sky is drawn into a smaller buffer and stretched over
   the panel; the board, its seams, the price line and every label are always drawn at full
   resolution, sharp. (The first cut shrank the whole canvas, and at half the cubes and the price
-  tags were a blur.) WebGL never scales; 2.5D draws no sky. Measured in headless Chromium on the
+  tags were a blur.) WebGL never scales; Simple draws no sky. Measured in headless Chromium on the
   card at 2560x1300 (a 1x panel, so "1x" is "full" there), resting Block space under the galaxy,
   ms a frame: full 23, half 17; the Markets board, whose sky is the smaller part, 3.2 and 3.0. On a
   2x screen the sky is four times the pixels and the saving is larger.

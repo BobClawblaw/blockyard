@@ -63,7 +63,7 @@ test('the choice: a third renderer, offered by the panel, accepted by normalise,
   assert.equal(DEFAULTS.appearance.renderer, 'software', 'the shipped renderer is unchanged');
   const row = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'renderer');
   assert.deepEqual(row.options.map((o) => o[0]), [...RENDERERS]);
-  assert.equal(row.options.find((o) => o[0] === '2.5d')[1], '2.5D', 'named as the operator named it');
+  assert.equal(row.options.find((o) => o[0] === '2.5d')[1], 'Simple', 'shown as Simple (2026-09-29), stored as 2.5d');
   assert.equal(normalise({ appearance: { renderer: '2.5d' } }).appearance.renderer, '2.5d');
   assert.equal(rendererOf({ renderer: '2.5d' }), '2.5d');
   assert.equal(rendererOf({ renderer: 'flat' }), 'software', 'an unknown override falls to the setting');
@@ -190,14 +190,14 @@ test('the Markets board: the line is one stroke, the tags are written, and it co
 
 test('the frame-rate readout names it', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
-  assert.ok(/flat \? '2\.5D' : 'Software'/.test(src));
+  assert.ok(/flat \? 'Simple' : 'Software'/.test(src));
 });
 
 test('the docs and the changelog name the renderer', () => {
   const guide = readFileSync(new URL('../docs/USER-GUIDE.md', import.meta.url), 'utf8');
-  assert.ok(/\*\*2\.5D\*\*/.test(guide), 'the user guide describes 2.5D beside Software and WebGL');
+  assert.ok(/\*\*Simple\*\*/.test(guide), 'the user guide describes Simple beside Software and WebGL');
   const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
-  assert.ok(/2\.5D/.test(log.split('## [0.1')[0]), 'the Unreleased section carries it');
+  assert.ok(/renderer, Simple/.test(log.split('## [0.1')[0]), 'the Unreleased section carries it');
 });
 
 // THE PAGE HOLDS STILL WITH IT (operator, with 2.5D live: "still eating 50% of gpu on mac"). Measured on the

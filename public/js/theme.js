@@ -213,7 +213,7 @@ export function applyTheme(settings, { root = globalThis.document?.documentEleme
     root.style.setProperty('color-scheme', f.scheme);
     root.setAttribute?.('data-theme', f.scheme);
     root.setAttribute?.('data-palette', f.id);
-    // THE PAGE'S OWN MOTION FOLLOWS THE RENDERER (2026-09-28; operator, with 2.5D chosen: "still eating
+    // THE PAGE'S OWN MOTION FOLLOWS THE RENDERER (2026-09-28; operator, with 2.5D -- "Simple" on the panel -- chosen: "still eating
     // 50% of gpu on mac"). Measured on the live monitor in headless chromium with every board parked:
     // Overview, Block space, Mining and Kiosk still composited ~60 frames a second, Mempool and Markets
     // under one -- the difference being the stylesheet's INFINITE animations (the live dot's pulse, the
