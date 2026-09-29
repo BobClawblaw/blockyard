@@ -1350,10 +1350,12 @@ export function spaceOptions(s) {
     neon: sp.neon,
     sheen: sp.sheen,
     sheenStyle: sp.sheenStyle,
-    // `space` is the board STYLE (no deck texture, a translucent floor); `stars` is the sky. They
-    // travel together here, which is the block-space board's shipped behaviour, but they are two
-    // options now so the markets board can keep its style while turning its sky off.
-    space: skyOf(n, 'space') !== 'none',
+    // `space` is the board STYLE (no deck texture, a translucent floor); `stars` is the sky. ALWAYS
+    // the space style, as on the markets board (operator, 2026-09-29: "When I select 'None', both
+    // backgrounds should just be black. It works on Markets, but not on Block Space view. Block space
+    // has a texture"): this used to follow the sky choice, so 'none' brought back the slate-teal deck
+    // of plates and rivets over the whole panel instead of the plain black the other board shows.
+    space: true,
     dome: sp.dome,
     facetPx: d.facetPx,
     crownPx: d.crownPx,

@@ -102,3 +102,16 @@ test('the settings hand every switch to both boards, and the look signature watc
     assert.ok(sig.includes(o), `${o} is part of the look, so flipping it repaints at once`);
   }
 });
+
+test("sky 'none' is a black background on the block board too, not the deck texture", () => {
+  // (operator, 2026-09-29: "When I select 'None', both backgrounds should just be black. It works on
+  // Markets, but not on Block Space view. Block space has a texture.") The board STYLE is `space`
+  // on both boards whatever the sky: no plates, a translucent black floor, the background showing.
+  const none = { space: { sky: 'none' }, markets: { sky: 'none' } };
+  for (const opt of [spaceOptions(none), marketsOptions(none)]) {
+    assert.equal(opt.space, true, 'the space style, on either board');
+    assert.equal(opt.stars, false, 'and no sky drawn over the background');
+    assert.equal(opt.sky, 'none');
+  }
+  assert.equal(spaceOptions({}).space, true, 'and with the galaxy as well: the style never follows the sky');
+});

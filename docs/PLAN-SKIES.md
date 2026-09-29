@@ -139,4 +139,6 @@ the rename, then the docs. Each step leaves the suite green and the boards drawi
   business and stays.
 * No third sky. The catalogue shape makes adding one a section and a value, later.
 * The internal option name `space` on the Block space board (its deck texture and floor style) is
-  not renamed: it is a board style, not a sky, and nothing in the sheet shows the word.
+  not renamed: it is a board style, not a sky, and nothing in the sheet shows the word. Since
+  2026-09-29 it is `true` on that board whatever the sky, as it always was on Markets: with the sky
+  set to None the board sits on plain black, not on the old deck of plates.
