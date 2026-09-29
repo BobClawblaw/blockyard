@@ -384,9 +384,14 @@ page every vsync on the card, however cheap the property. So `applyTheme` stamps
 while the renderer is 2.5D and app.css stops every infinite animation under it (one block beside the
 reduced-motion rules, which it mirrors). A NEW INFINITE ANIMATION MUST BE ADDED TO THAT BLOCK, and
 `test/renderer-25d.test.js` fails if the stylesheet gains one that the block does not name.
-**THE SLOW SKY** (the same day; operator: "Is there no way we can get some basic animations in 2.5D mode ... or
-is that just too much stress" -- "yes, build the slow sky at 2 fps"). `appearance.flatSky` 'slow' (shipped) /
-'off'. A sky's cost is its FRAMES, so under 2.5D the board's sky stays (`flatOptions` keeps `stars` and the
+**THE STILL SKY IS SHIPPED (2026-09-29; operator: "just add a simple space background that does not rotate at all.
+Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good").** `appearance.flatSky`
+'still': `flatOptions` keeps the star field alone (`skyType` 'galaxy', `galaxy: false`, `skyStill: true`) whatever sky
+the board chose, `paintFlat` draws it at ONE instant (`STILL_SKY_NOW`), so every paint is the same picture and no timer
+runs (`skyMs` 0). `flatSkyOf` is in `optSig`, so switching between the three repaints a parked board.
+**THE SLOW SKY** (2026-09-28; operator: "Is there no way we can get some basic animations in 2.5D mode ... or
+is that just too much stress" -- "yes, build the slow sky at 2 fps"). `appearance.flatSky` 'slow' (shipped 09-28,
+an option since 09-29) / 'off'. A sky's cost is its FRAMES, so under 2.5D the board's sky stays (`flatOptions` keeps `stars` and the
 galaxy/Earth `skyType`; the Formation, the Sun and the flight fall to the star field) and is repainted from a
 TIMER (`armSky`, `FLAT_SKY_MS` 500) that fires one frame through the parked loop, never from the rAF sky loop:
 inside `render3d`, `liveSky` (a sky that needs the loop) is what the loop gates on now, not `starsOn`. The sky
@@ -1007,7 +1012,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1489 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1490 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1337,7 +1342,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1489 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1490 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

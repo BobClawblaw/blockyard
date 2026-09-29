@@ -108,13 +108,19 @@ export function rendererOf(opts) {
   if (!RENDERERS.includes(want)) { try { want = loadSettings().appearance.renderer; } catch { want = 'software'; } }
   return want === 'webgl' ? 'webgl' : want === '2.5d' ? '2.5d' : 'software';
 }
-/** 2.5D's sky (settings.js appearance.flatSky): 'off', or 'slow' -- the board's sky at FLAT_SKY_MS a frame. */
+/** 2.5D's sky (settings.js appearance.flatSky): 'off', 'still' -- a star field drawn once, at one instant -- or 'slow', the board's sky at FLAT_SKY_MS a frame. */
 export function flatSkyOf(opts) {
   let want = opts?.flatSky;
-  if (want !== 'off' && want !== 'slow') { try { want = loadSettings().appearance.flatSky; } catch { want = 'off'; } }
-  return want === 'slow' ? 'slow' : 'off';
+  if (want !== 'off' && want !== 'slow' && want !== 'still') { try { want = loadSettings().appearance.flatSky; } catch { want = 'off'; } }
+  return want === 'slow' ? 'slow' : want === 'still' ? 'still' : 'off';
 }
 export const FLAT_SKY_MS = 500;            // the slow sky: two frames a second (operator, 2026-09-28: "build the slow sky at 2 fps")
+// THE STILL SKY'S INSTANT (operator, 2026-09-29: "just add a simple space background that does not rotate at all.
+// Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good"): the star field is
+// a function of the clock -- each star's twinkle, the disc's turn -- so drawn at ONE fixed instant it is one
+// picture, the same on every paint, and nothing has to repaint it. No galaxy (a disc that never turns is a
+// stain), so no nebulae, dust or clusters either: stars, their colours, the giants' glints, the far galaxies.
+export const STILL_SKY_NOW = 0;
 /** What 2.5D takes away from a board's options: everything that would make it repaint on its own. */
 export function flatOptions(opts) {
   // (facetPx / crownPx past any pixel count: every stone is a plain slab, a top and two sides)
@@ -125,9 +131,16 @@ export function flatOptions(opts) {
   // about a fiftieth of that. So with appearance.flatSky 'slow' the board's sky stays -- the star field, the
   // galaxy, the Earth -- and render3d repaints it on a timer, not the animation loop (armSky). A shader sky
   // (the Formation, the Sun) or the galaxy flight is the plain star field here: those live on the card.
-  if (flatSkyOf(opts) === 'slow' && starsOn(opts)) {
+  const fs = flatSkyOf(opts);
+  if (fs === 'slow' && starsOn(opts)) {
     out.stars = true;
     out.skyType = earthSky(opts) ? opts.skyType : 'galaxy';
+  } else if (fs === 'still' && starsOn(opts)) {
+    // THE STILL SKY (shipped; see STILL_SKY_NOW): the star field alone, whatever sky the board chose, at one instant
+    out.stars = true;
+    out.skyType = 'galaxy';
+    out.galaxy = false;
+    out.skyStill = true;
   }
   return out;
 }
@@ -5360,8 +5373,9 @@ function paintFlat(ctx, geom, frame, opts, view, gridN, blockRows, gridH = gridN
   ctx.clearRect(0, 0, pw, ph);
   ctx.fillStyle = opts.background;
   ctx.fillRect(0, 0, pw, ph);
-  // the slow sky (flatOptions keeps it when appearance.flatSky is 'slow'; render3d's armSky paces it)
-  if (starsOn(opts)) paintSky(ctx, geom, opts, view);
+  // the slow sky (flatOptions keeps it when appearance.flatSky is 'slow'; render3d's armSky paces it), or the
+  // still one (flatOptions' skyStill: the same picture on every paint, drawn at STILL_SKY_NOW)
+  if (starsOn(opts)) paintSky(ctx, geom, opts, opts.skyStill ? { ...view, now: STILL_SKY_NOW } : view);
   if (!frame.bounds && !opts.oblique) return;
   const bw = Math.max(1, gridN * opts.unit);
   const bh = Math.max(1, gridH * opts.unit);
@@ -5820,6 +5834,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.starColours !== false, opts.starGlints !== false,
     opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.sunAt, opts.sunActivity !== false, opts.sunEruptions !== false, opts.sunProminences !== false, opts.sunCycle, opts.sunChannel, opts.sunDetail, opts.sunSize, opts.sunBrightness, opts.sunSpin, opts.formSpeed, opts.formAt, opts.formBrightness, opts.formFlow, opts.formPalette,
     rendererOf(opts),                     // a parked board repaints when the renderer is switched
+    flatSkyOf(opts),                      // ...or the Simple sky is (off, still, slow)
     softwareScaleOf(opts),                // ...or Software's resolution is (render3d sizes the canvas by it)
     fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,

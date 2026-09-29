@@ -249,16 +249,27 @@ test('a still board (a game) repaints on every call under 2.5D, and its overlay 
 // THE SLOW SKY (operator, 2026-09-28: "Is there no way we can get some basic animations in 2.5D mode ... or is
 // that just too much stress" -- "yes, build the slow sky at 2 fps"). A sky's cost is its frames: the board's sky
 // stays under 2.5D and is repainted from a timer, twice a second, never from the animation loop.
-test('the 2.5D sky setting: slow as shipped, a panel row, a fiftieth of the frames', () => {
-  assert.equal(DEFAULTS.appearance.flatSky, 'slow');
+test('the 2.5D sky setting: still as shipped, slow at a fiftieth of the frames, a panel row', () => {
+  // (operator, 2026-09-29: "just add a simple space background that does not rotate at all. Just a nice simple
+  // star field for simple mode. the 2fps anims rotating don't look so good")
+  assert.equal(DEFAULTS.appearance.flatSky, 'still');
   assert.equal(FLAT_SKY_MS, 500, 'two frames a second');
   const row = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'flatSky');
-  assert.deepEqual(row.options.map((o) => o[0]), ['off', 'slow']);
+  assert.deepEqual(row.options.map((o) => o[0]), ['off', 'still', 'slow']);
   assert.equal(row.dimWhen({ appearance: { renderer: 'software' } }), true, 'only 2.5D has it');
   assert.equal(row.dimWhen({ appearance: { renderer: '2.5d' } }), false);
   assert.equal(normalise({ appearance: { flatSky: 'off' } }).appearance.flatSky, 'off');
-  assert.equal(normalise({ appearance: { flatSky: 'fast' } }).appearance.flatSky, 'slow', 'an unknown value is the default');
-  assert.equal(flatSkyOf({ flatSky: 'off' }), 'off'); assert.equal(flatSkyOf({ flatSky: 'slow' }), 'slow');
+  assert.equal(normalise({ appearance: { flatSky: 'slow' } }).appearance.flatSky, 'slow');
+  assert.equal(normalise({ appearance: { flatSky: 'fast' } }).appearance.flatSky, 'still', 'an unknown value is the default');
+  assert.equal(flatSkyOf({ flatSky: 'off' }), 'off'); assert.equal(flatSkyOf({ flatSky: 'slow' }), 'slow'); assert.equal(flatSkyOf({ flatSky: 'still' }), 'still');
+  // the still sky: the star field alone, whatever the board chose, no galaxy to turn
+  for (const skyType of ['galaxy', 'earth', 'form', 'sun', 'flight']) {
+    const st = flatOptions({ flatSky: 'still', stars: true, skyType, galaxy: true, idleFx: true, shadows: true });
+    assert.equal(st.stars, true); assert.equal(st.skyType, 'galaxy'); assert.equal(st.galaxy, false); assert.equal(st.skyStill, true);
+    assert.equal(st.idleFx, false); assert.equal(st.shadows, false);
+  }
+  assert.equal(flatOptions({ flatSky: 'still', stars: false, skyType: 'galaxy' }).stars, false, 'a board with no sky gets none');
+  assert.equal(flatOptions({ flatSky: 'slow', stars: true, skyType: 'galaxy' }).skyStill, undefined);
   // flatOptions keeps the sky when it is slow: the star field and the Earth as they are, a shader sky as stars
   const keep = flatOptions({ flatSky: 'slow', stars: true, skyType: 'galaxy', galaxy: true, idleFx: true, shadows: true });
   assert.equal(keep.stars, true); assert.equal(keep.skyType, 'galaxy'); assert.equal(keep.idleFx, false); assert.equal(keep.shadows, false);
@@ -288,6 +299,31 @@ test('a 2.5D board with the slow sky: one paint, a timer, one frame per tick, ne
   render3d(h.canvas, cells, SPACE);
   assert.equal(skyArmed(h.canvas), false);
   assert.equal(h.pending(), false);
+});
+
+test('a 2.5D board with the still sky: the star field painted, no timer, no loop, the same picture on every paint', () => {
+  const h = harness();
+  const STILL = { ...SPACE, flatSky: 'still' };
+  render3d(h.canvas, cells, STILL);
+  assert.equal(h.pending(), false, 'no animation frame');
+  assert.equal(skyArmed(h.canvas), false, 'no sky timer either: nothing to repaint');
+  const first = h.ops.slice();
+  assert.ok(first.filter((o) => o === 'rect').length > 100, 'a star field was painted (a star is a rect)');
+  const n = h.ops.length;
+  for (let i = 0; i < 3; i++) { harness.t += 1000; render3d(h.canvas, cells, STILL); }
+  assert.equal(h.ops.length, n, 'polls with the same data paint nothing');
+  // a repaint with new data, a second later: the sky is drawn at the same instant, so its ops are the same
+  harness.t += 1000;
+  render3d(h.canvas, cells2, STILL);
+  assert.equal(h.pending(), false, 'painted inside the call; nothing pending');
+  const second = h.ops.slice(n);
+  // the sky is everything before the board's own transform (the second setTransform of a paint)
+  // (the harness's own `ctx.canvas = canvas` is recorded by the proxy before any paint: not a paint op)
+  const skyOf = (ops) => { ops = ops.filter((o) => !o.startsWith('set:canvas=')); let seen = 0; for (let i = 0; i < ops.length; i++) if (ops[i].startsWith('setTransform:') && ++seen === 2) return ops.slice(0, i); return ops; };
+  assert.ok(skyOf(first).filter((o) => o === 'rect').length > 100, 'and the sky is where it is looked for');
+  assert.deepEqual(skyOf(second), skyOf(first), 'the same star field, star for star: nothing turned, nothing twinkled');
+  assert.notDeepEqual(second, first, 'while the board itself changed');
+  assert.equal(rendererIn(h.canvas), '2.5d');
 });
 
 test('a board that asks for Software by name under the 2.5D setting draws as Software but paces its sky like 2.5D', () => {

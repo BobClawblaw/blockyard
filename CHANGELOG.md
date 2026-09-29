@@ -34,9 +34,10 @@ All notable changes to this project are documented here. The format follows
   costs no frames a second on either the processor or the graphics card. Hover, click-through and
   a game's own overlay work as before. The page's own pulses (the live dot, the block rail and
   meter, the overdue warning) hold still with it: with every board parked, those alone kept the
-  page compositing 60 frames a second on the graphics card. **"Simple sky"** (Slow, the default, or
-  Off) keeps the board's sky and repaints it twice a second from a timer, about a fiftieth of the
-  shipped sky's frames: the stars drift and the Earth sky's day passes. The Formation and the Sun
+  page compositing 60 frames a second on the graphics card. **"Simple sky"**: Still (the default) is
+  a star field drawn once and left alone, no galaxy, nothing turning; Slow keeps the board's sky and
+  repaints it twice a second from a timer, about a fiftieth of the shipped sky's frames, so the
+  stars drift and the Earth sky's day passes; Off is a plain dark panel. The Formation and the Sun
   stand down to the star field there. Measured on the live monitor, composited frames in ten
   seconds: Block space 600 with the shipped sky, 14 with the Simple sky off, 34 with it slow.
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in

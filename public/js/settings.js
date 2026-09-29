@@ -98,7 +98,10 @@ export const DEFAULTS = Object.freeze({
     // or is that just too much stress" -- "yes, build the slow sky at 2 fps"). 'slow' keeps the board's sky
     // under Simple and repaints it twice a second (details3d.js FLAT_SKY_MS): the star field drifts, the Earth
     // sky's day passes, at about a fiftieth of the shipped sky's frames. 'off' is a plain dark panel.
-    flatSky: 'slow',
+    // 'still' (shipped since 2026-09-29; operator: "just add a simple space background that does not rotate at
+    // all. Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good"): a star
+    // field drawn once, no galaxy, no timer -- the same picture on every paint (details3d.js STILL_SKY_NOW).
+    flatSky: 'still',
     // THE FRAME RATE, top right of every 3D board (operator, 2026-09-21): frames actually painted in
     // the last second, the processor's milliseconds a frame, and which renderer drew it.
     showFps: false,
@@ -574,8 +577,8 @@ const PANEL_GROUPS = Object.freeze([
       }),
       Object.freeze({
         key: 'flatSky', label: 'Simple sky', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== '2.5d',
-        hint: 'Only the Simple renderer has this. Slow keeps the board\u2019s sky -- the star field and galaxy, or the Earth sky -- and repaints it twice a second: the stars drift and the day passes, at about a fiftieth of what the full sky costs the graphics card. Off is a plain dark panel. The Formation and the Sun are drawn on the graphics card and stand in as the star field here; effects and the flights between layouts stay off either way',
-        options: Object.freeze([['off', 'Off'], ['slow', 'Slow']]),
+        hint: 'Only the Simple renderer has this. Still (the default) is a star field drawn once and left alone: no galaxy, nothing turns, nothing repaints, whichever sky the board chose. Slow keeps the board\u2019s sky -- the star field and galaxy, or the Earth sky -- and repaints it twice a second: the stars drift and the day passes, at about a fiftieth of what the full sky costs the graphics card. Off is a plain dark panel. The Formation and the Sun are drawn on the graphics card and stand in as the star field here; effects and the flights between layouts stay off either way',
+        options: Object.freeze([['off', 'Off'], ['still', 'Still'], ['slow', 'Slow']]),
       }),
       Object.freeze({
         key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer === 'webgl',
