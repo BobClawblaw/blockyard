@@ -76,10 +76,10 @@ test('Software, Detailed viewer: the dense board keeps its squares too (packStab
   harness.t += 5000;
   const b = where(render3d(h.canvas, next, DENSE));
   assert.ok(moved(a, b) <= 2, `${moved(a, b)} survivors moved`);
-  // (and drawn at once, not flown, since 2026-09-30: a flight frame repaints every tile, and with the pool pushed every
-  // 5 s the Detailed board was in flight most of the time -- the Kiosk's other board starved)
+  // (it flies -- "I'm not seeing animations. Just new blocks appearing on the board" -- over a kept board of the tiles
+  // that do not move: test/retained-layer.test.js)
   const frames = h.pump();
-  assert.ok(frames <= 1, `a kept-layout update on Detailed is one paint (${frames} frames)`);
+  assert.ok(frames > 5 && frames * 16 <= 22_000, `a kept-layout update on Detailed animates and settles (${frames} frames)`);
 });
 
 test('the pool routes are gzipped when asked (they carry public data only); others never are', async () => {

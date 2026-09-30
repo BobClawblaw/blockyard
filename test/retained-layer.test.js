@@ -75,3 +75,20 @@ test('a see-through effect (the x-ray) is drawn whole: its cubes over their rest
   const during = fillsPerFrame(s.live.slice(at)).filter((n) => n > 0);
   assert.ok(during.some((n) => n > 900), 'drawn live');
 });
+
+test('a Detailed flight is drawn over a kept board of the tiles that do not move', () => {
+  const s = stage();
+  render3d(s.canvas, dense, OPTS);
+  s.pump(10);
+  const restFills = Math.max(...fillsPerFrame(s.live));
+  // a small update, as the live pool makes them: a few leave, a few cheap ones arrive at the top (a rich arrival that
+  // would sit above cheaper ones trips the order re-sort, a whole re-pack -- that flight is every tile)
+  const next = dense.slice(0, -12).concat(Array.from({ length: 8 }, (_, i) => ({ txid: `n${i}`.padEnd(64, 'x'), vbytes: 400, rate: 5 })));
+  render3d(s.canvas, next, OPTS);
+  const at = s.live.length;
+  s.pump(30);
+  const during = fillsPerFrame(s.live.slice(at)).filter((n) => n > 0);
+  assert.ok(during.length > 10, `it animates (${during.length} frames)`);
+  const most = during.sort((a, b) => a - b)[Math.floor(during.length / 2)];
+  assert.ok(most < restFills / 3, `a typical flight frame fills ${most} faces, not the board's ${restFills}`);
+});

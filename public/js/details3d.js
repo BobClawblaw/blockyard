@@ -14,7 +14,7 @@
 //  3. Zero dependencies, no CDN.
 
 import { packBlock, packDenseStable, packExact, packExactStable, vbytesPerUnit, vsizeForSide } from './blockpack.js';
-import { planTransition, isTrickle, TRICKLE, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
+import { planTransition, isTrickle, TRICKLE, frameAt, buildScene, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
@@ -6010,14 +6010,14 @@ export function render3d(canvas, cells, options = {}) {
   const firstPaint = !st.prev.length;
   // a look change on the same tiles is not a transition: land it where it already is
   const lookOnly = lookChanged && sig === st.sig;
-  // THE DETAILED BOARD'S SMALL UPDATES ARE DRAWN, NOT FLOWN (2026-09-30; operator, of the Kiosk: "shit gets really slow now
-  // when objects are crossing the screen on the market panel... did we regress somewhere?"). Yes: with the pool pushed every
-  // 5 s and the kept layout settling (packDenseStable), nearly every update moved a few dozen of its ~3,000 one-unit tiles,
-  // so the board flew most of the time -- and a flight frame repaints every tile, 12-23 ms of the page's one thread
-  // (profiled: the paint, not the scene), which the Kiosk's Markets panel shares. A kept-layout update is drawn at once;
-  // a re-pack (a found block, the order re-sort) still flies. The Simple renderer's slide is not affected (it is cheap).
+  // THE DETAILED BOARD'S SMALL UPDATES (2026-09-30). They were drawn at once for an hour (operator, of the Kiosk: "shit gets
+  // really slow now when objects are crossing the screen on the market panel"): with the pool pushed every 5 s the board
+  // flew after nearly every update, and a flight frame repainted all ~3,000 tiles. Then: "I'm not seeing animations. Just
+  // new blocks appearing on the board" -- so they fly again, and the flight is drawn over a KEPT board of the tiles that
+  // do not move (draw(): frame.overlay during a Detailed flight). A kept-layout update is still not a landing for the
+  // effect timers (plan.trickle).
   const denseSmall = !!keptDense && !firstPaint && !lookOnly;
-  const plan = (still || firstPaint || lookOnly || denseSmall)
+  const plan = (still || firstPaint || lookOnly)
     // gridN matters even for a no-op plan: the camera constant is derived
     // from it, and a first paint on a different camera than every later
     // frame is exactly the load-time artefact this guards.
@@ -6167,6 +6167,19 @@ export function render3d(canvas, cells, options = {}) {
       // outline, tide, the ball), no hover -- is drawn as its resting self plus the touched cubes over it
       const gridFx = view.fx && (view.fx.kind === 'ripple' || view.fx.kind === 'outline' || view.fx.kind === 'tide' || !!view.fx.ball);
       const rb = st.restBase;
+      // ...AND A DETAILED FLIGHT (the same evening): the holds -- tiles that keep their square and their colour for the
+      // whole plan -- are one kept board, built once per plan; the tiles in flight (and a mover sitting at either end
+      // of its flight) are drawn over it. Such a tile is drawn after the holds rather than in its exact place in the
+      // order: on the Detailed board's 1.2-unit slabs that is a sliver, and only until the settled frame, which is drawn
+      // whole in its true order.
+      if (!flat && opts.dither && !frame.settled && !view.fx && !view.hoverGlow && st.plan.tweens.length > 200) {
+        let hb = st.holdBase;
+        if (!hb || hb.plan !== st.plan || hb.draw !== draw) {
+          const holds = st.plan.tweens.filter((tw) => tw.kind === 'hold' && tw.from.color === tw.to.color).map((tw) => ({ ...tw.to, z: 0, alpha: 1, lock: 0 }));
+          hb = st.holdBase = { plan: st.plan, draw, ops: buildScene(holds, { ...view, faceMemo: null }).ops, ids: new Set(holds.map((h) => h.txid)) };
+        }
+        frame = { ...frame, baseOps: hb.ops, overlay: frame.ops.filter((op) => !hb.ids.has(op.txid)) };
+      }
       if (!flat && view.fx && !gridFx && frame.settled && !frame.liveOnly && frame.touched && !view.hoverGlow
         && rb && rb.plan === st.plan && rb.draw === draw) {
         // ...and only OPAQUE faces: a see-through face (the x-ray) drawn over its resting copy shows that copy, not the

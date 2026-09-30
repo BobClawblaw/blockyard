@@ -77,9 +77,11 @@ All notable changes to this project are documented here. The format follows
   stormball 43-45 -> 27-29, radar 69-75 -> 63-69.
 - **The Kiosk no longer stutters beside a Detailed board.** With the pool pushed every 5 seconds and the
   Detailed layout settling after each update, that board was animating most of the time. Each
-  animated frame repaints all of its ~3,000 tiles, 12-23 ms of the page's only main thread, which
-  starved the Markets panel beside it. Small updates on the Detailed board are now drawn at once; a
-  found block and the periodic re-sort still fly. A resting cube's faces are also reused between
+  animated frame repainted all of its ~3,000 tiles, 12-23 ms of the page's only main thread, which
+  starved the Markets panel beside it. For about an hour small updates were drawn at once, until
+  the operator saw no animation at all ("Just new blocks appearing on the board"). Now they fly
+  again, drawn over a kept board of the tiles that do not move, so a flight frame paints only the
+  tiles in the air. A resting cube's faces are also reused between
   frames of a flight instead of being rebuilt. Measured on the Kiosk with WebGL and Detailed: the
   page's main thread went from 70% busy to 50%, with heavy frames down from 324 to 145 in 15
   seconds.

@@ -453,9 +453,13 @@ has >11k shades) and buildScene's faceMemo now running under effects (key + roun
 gl2d was tried and measured WORSE (recording each op's slice cost more than the hits saved); do not bring it back without
 a better recording path. Bench: `node scripts/gl-compare.mjs --gpu vulkan --bench --gl-only --dense --size 2560x1300`;
 `GL_ROOT=<checkout>/public` times another checkout on the same scenes. Runs on this box vary +-30% (other sessions'
-browsers): compare in pairs, twice. `test/retained-layer.test.js`. THE DETAILED BOARD'S SMALL UPDATES ARE DRAWN, NOT FLOWN (the same evening; operator, of the Kiosk: "shit gets really
-slow now when objects are crossing the screen on the market panel"): render3d `denseSmall` (a kept-layout update from
-packDenseStable) plans still; re-packs fly. Profiled: a Detailed flight frame is dominated by the PAINT (details3d
+browsers): compare in pairs, twice. `test/retained-layer.test.js`. THE DETAILED BOARD'S SMALL UPDATES FLY OVER A KEPT BOARD (the same evening). They were planned still for an hour (the
+Kiosk: "shit gets really slow now ...") until "I'm not seeing animations. Just new blocks appearing on the board": now a
+Detailed (dither) flight draws `st.holdBase` -- buildScene of the plan's colour-constant holds, once per plan -- as the
+kept board and only the other tiles over it (frame.overlay). A mover at rest at either end of its flight is drawn after
+the holds rather than in its exact order (a sliver on 1.2-unit slabs) until the settled frame. `denseSmall` now only
+marks the plan a trickle for the effect timers. NOTE on Software: a frame is dominated by the sky and the full-canvas
+blit (Kiosk traced: ~57-68 ms a paint at dpr 2), so the flights cost little beyond what the sky loop already paints. Profiled: a Detailed flight frame is dominated by the PAINT (details3d
 `board`, `drawGround`/trace), not buildScene -- ~3,000 tiles' ops issued every frame. Kiosk WebGL+Detailed main
 thread 70% -> 50%. buildScene also keeps a resting cube's ops for the layout (`o.faceMemo`, st.faceMemo per plan;
 key = every tile field + hover; off under fx, cube-on-cube shadows, non-oblique). STILL OPEN: an effect or re-sort
@@ -1154,7 +1158,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1546 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1547 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1484,7 +1488,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1546 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1547 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
