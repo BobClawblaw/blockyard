@@ -437,7 +437,10 @@ plan with a few movers rather than a pure trickle. It also packs fresh when `fee
 `DENSE_ORDER_MIN` 0.95 -- operator, of a board whose rich arrivals had parked in the top rows: "what is this garbage?"
 (Core live: 1.00 -> 0.87 in ten updates without it; with it 0.95-1.00, a fresh pack about every 25 s). The big squares
 in that screenshot were real: 41 transactions of 5 kvB or more were 56% of the next block's worth. `space.motion` 'still' ("None") carries `transition.none`, which render3d folds into `still` (no plan, no trickle,
-no Simple slide) -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
+no Simple slide) AND makes a static board (then: "I don't want any animations with none. Shit just redraws. Even in
+Software and WebGL modes"): idleFx off, `skyStill` (the sky at STILL_SKY_NOW in paintFrame too), no sky loop or timer,
+`st.static` (effects refused, hover at once), and the same-data shortcut Simple has. Chromium, None: 22 frames / 10 s,
+GPU 0.3%. Markets with its effects off passes its own `{rise 0, travel 1, drop 0}`, NOT MOTION.still, and keeps its sky -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
 having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. A found block re-packs fresh and flies the chosen reshuffle: `space.motion` 'rapid' ships since the same evening
 (settings.js MOTION.rapid: every phase and stagger short and liftMin 10 -- 2,875 blocks moving settled at 4,139 ms
 against 20,260 'full' and 9,538 'quick'; operator: "a new shuffle animation that doesn't take so long. Something much
@@ -1115,7 +1118,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1537 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1538 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1445,7 +1448,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1537 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1538 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

@@ -62,9 +62,14 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
-- **"None" in Refresh animation now means none.** Each new board is drawn as it is, on every
-  renderer. Before, arrivals still fell in under gravity, departures still flew off, small updates
-  played the 3-second trickle, and the Simple renderer's slide ignored the setting.
+- **"None" in Refresh animation now means a still board, on every renderer.** Each new board is
+  drawn as it is, and nothing moves in between: no flights, falls, trickles or slides, no idle
+  effects, the sky held at one instant, and hover lit at once. Before, arrivals still fell in under
+  gravity, departures flew off, small updates played the 3-second trickle, the Simple slide ignored
+  the setting, and effects and the sky kept the board repainting. Measured in Chromium on Block space
+  under None: 22 composited frames in 10 seconds on Software and on WebGL (one per pool update, plus
+  the pulse ticks), with the GPU process 0.3% busy. The Markets board with its effects off keeps its
+  moving sky, as before.
 - **The Detailed board stays in feerate order.** Kept squares stay put and new transactions take
   whatever space is free, so the layout drifted from richest-at-the-bottom. High-fee arrivals parked
   in the top rows, and on Core's live pool only 87% of tile pairs were in fee order after ten updates.

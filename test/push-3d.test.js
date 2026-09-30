@@ -133,3 +133,20 @@ test('"None" draws each new board as it is: no flight, no trickle, no slide, on 
     }
   }
 });
+
+test('"None" on Software is a still board: a sky and idle effects on, and yet at rest not one frame', async () => {
+  const { MOTION } = await import('../public/js/settings.js');
+  const { triggerIdle } = await import('../public/js/details3d.js');
+  const o = { renderer: 'software', stars: true, galaxy: true, idleFx: true, transition: MOTION.still };
+  const base = mk(200, 'k').concat([{ vbytes: 500000, rate: 0.8, aggregate: 30000 }]);
+  const h = harness();
+  render3d(h.canvas, base, o);
+  assert.equal(h.pending(), false, 'the sky does not keep a loop going');
+  assert.equal(triggerIdle(h.canvas, 'ripple'), false, 'no idle effect can start');
+  for (let i = 0; i < 3; i++) { harness.t += 1000; render3d(h.canvas, base, o); }
+  assert.equal(h.pending(), false, 'the same data again: nothing to draw');
+  harness.t += 5000;
+  const r = render3d(h.canvas, base.slice(0, 150).concat(mk(5, 'n', 40)), o);
+  assert.equal(r.settled, true, 'new data: one paint, at once');
+  assert.equal(h.pending(), false);
+});

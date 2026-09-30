@@ -1026,7 +1026,7 @@ function scheduleFx(canvas, st, opts, soon = false) {
 // wait on a timer. Returns false for a canvas the renderer has not seen.
 export function triggerIdle(canvas, kind = 'ripple') {
   const st = STATE.get(canvas);
-  if (!st || !FX_MS[kind] || st.flat) return false;     // (2.5D plays no effects: nothing may set a board repainting)
+  if (!st || !FX_MS[kind] || st.static) return false;     // (2.5D plays no effects: nothing may set a board repainting)
   startFx(st, kind, (globalThis.performance && performance.now()) || 0);
   st.wake?.();
   return true;
@@ -5242,7 +5242,7 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // film's coloured plasma look), and falls back to the 2D speck renderer where it does not:
   // headless browsers, VMs, blocklisted GPUs. The GL canvas sits OVER the 2D one (a 2D and a
   // GL context cannot share an element) and only exists while this sky is chosen.
-  paintSky(ctx, geom, opts, view);
+  paintSky(ctx, geom, opts, opts.skyStill ? { ...view, now: STILL_SKY_NOW } : view);   // ("None": the sky at one instant)
   // with nothing on the board -- every block in the air between two layouts (a viewer-mode switch)
   // -- the oblique board still draws itself: its transform is a constant, not fitted to the blocks
   if (!frame.bounds && !opts.oblique) return;
@@ -5654,7 +5654,7 @@ function flatGlow(st) {
   return st.hoverId ? new Map([[st.hoverId, 1]]) : null;
 }
 function glowAnimating(st, t) {
-  if (st.flat) return false;                 // (2.5D: lit at once, let go at once -- flatGlow)
+  if (st.static) return false;               // (2.5D and "None": lit at once, let go at once -- flatGlow)
   for (const g of st.glow?.values() ?? []) {
     if (g.off != null ? glowLevel(g, t) > 0.005 : glowLevel(g, t) < 1) return true;
   }
@@ -5704,15 +5704,22 @@ export function render3d(canvas, cells, options = {}) {
   // code below can ask for them, so every `starsOn` / `idleFx` test downstream answers as if the
   // caller had switched them off -- one seam, not thirty `if`s
   const flat = rendererOf(options) === '2.5d';
-  const opts = flat ? flatOptions({ ...DEFAULTS, ...options }) : { ...DEFAULTS, ...options };
+  // "NONE" IS A STILL BOARD, ON EVERY RENDERER (2026-09-30; operator: "I don't want any animations with none. Shit just
+  // redraws. Even in Software and WebGL modes"). settings.js MOTION.still carries `transition.none`: no flight, no
+  // trickle, no slide (below, `still`), and none of what keeps a board repainting on its own -- no idle effect, a sky
+  // drawn at ONE instant (skyStill, as the Simple renderer's still sky is), a hover lit at once. Each new layout is
+  // one paint; at rest the board paints nothing.
+  const noMotion = options.transition?.none === true;
+  const base = flat ? flatOptions({ ...DEFAULTS, ...options }) : { ...DEFAULTS, ...options };
+  const opts = noMotion ? { ...base, idleFx: false, skyStill: true } : base;
   // ...AND A BOARD THAT ASKED FOR SOFTWARE BY NAME WHILE THE SETTING IS 2.5D (Scorched Yard's sky, whose
   // pixels are read back) draws as Software but paces its sky like 2.5D: the operator chose 2.5D to leave
   // the card alone, and a Living sky at thirty frames a second behind a game is the same card
   const flatSetting = rendererOf({}) === '2.5d';
   // the SKY LOOP: a sky keeps the animation loop alive for its twinkle (about thirty frames a second) --
   // unless the renderer is 2.5D, where a sky is either off or repainted from a timer (skyMs, armSky)
-  const liveSky = starsOn(opts) && !flat && !flatSetting;
-  const skyMs = starsOn(opts) && (flat || flatSetting) && flatSkyOf(opts) === 'slow' ? FLAT_SKY_MS : 0;
+  const liveSky = starsOn(opts) && !flat && !flatSetting && !noMotion;
+  const skyMs = starsOn(opts) && (flat || flatSetting) && !noMotion && flatSkyOf(opts) === 'slow' ? FLAT_SKY_MS : 0;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
@@ -5722,6 +5729,7 @@ export function render3d(canvas, cells, options = {}) {
     STATE.set(canvas, st);
   }
   st.flat = flat;
+  st.static = flat || noMotion;            // nothing on this board animates by itself: effects refused, hover at once
   st.noHover = opts.hover === false;        // see bindHover: playfields do not light up under the pointer
 
   // FLUSH WITH THE VIEWPORT (operator, 2026-09-11: "Blocks are being shown
@@ -5855,7 +5863,6 @@ export function render3d(canvas, cells, options = {}) {
   // it, the frame simply changes.
   // ...and 2.5D lands every layout where it is: a transition is seconds of repainting
   // ...and "None" in the Refresh animation (settings.js MOTION.still, `transition.none`): each new layout drawn as it is
-  const noMotion = opts.transition?.none === true;
   const still = reducedMotion() || opts.still === true || flat || noMotion;
 
   // THE BUG THIS GUARDS (2026-09-10, operator: "redrawn instead of ...
@@ -5899,7 +5906,7 @@ export function render3d(canvas, cells, options = {}) {
   // this a frame at a time and draws its own events through `overlay` at the frame's own instant -- a blast,
   // a fire -- so the same tiles twice are NOT the same picture, and the game's boards paint on every call
   // as they do on Software (Tetrust, 2026-09-12: "a still board is drawn AS LAID, every frame").
-  if (unchanged && st.plan && flat && opts.still !== true) {
+  if (unchanged && st.plan && (flat || noMotion) && opts.still !== true) {   // (and "None": nothing to draw either)
     if (st.dirty && st.raf == null) st.wake?.();
     st.armSky?.();                          // (a slow sky whose timer stopped while the page was hidden starts again)
     return { tiles, settled: true, replanned: false };
@@ -6014,7 +6021,7 @@ export function render3d(canvas, cells, options = {}) {
       // foreshortens, and 0 (the default) is the parallel camera this board has always drawn
       seamAlpha: opts.seamAlpha, fx: flat ? null : fxNow(st, t), now: t, light: opts.light, order: opts.order,
       // (2.5D: the hovered tile is lit at once and let go at once -- a fade is frames)
-      hoverGlow: flat ? flatGlow(st) : glowMap(st, t),
+      hoverGlow: st.static ? flatGlow(st) : glowMap(st, t),
       axes: opts.axes ?? null,   // the price board's axes: buildScene lights candle sides where these exist
       oblique: opts.obliqueRise ? { ...opts.oblique, rise: opts.obliqueRise } : opts.oblique,
       // the departure path (settings.js space.departures): it reaches the geometry AND the paint

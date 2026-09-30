@@ -679,7 +679,7 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
       }),
       Object.freeze({
-        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Rapid (the default) is the whole flight in about four seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is: nothing flies, falls or slides, on any renderer',
+        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Rapid (the default) is the whole flight in about four seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
         options: Object.freeze([['rapid', 'Rapid'], ['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
       }),
       Object.freeze({
@@ -1538,7 +1538,9 @@ export function marketsOptions(s) {
     // for disable effects in the market and price"). The candle board inherited idleFx from the
     // renderer's defaults and ran the refresh flight, and neither had a control of its own: the
     // Block space switches next to them govern a different board entirely.
-    ...(mk.effects ? {} : { idleFx: false, transition: MOTION.still }),
+    // (NOT MOTION.still: that is "None", a board that never moves by itself, sky included -- the price board with its
+    // effects off keeps its sky and lands a new candle at once, as it did before "None" meant none)
+    ...(mk.effects ? {} : { idleFx: false, transition: { rise: 0, travel: 1, drop: 0 } }),
     // ITS OWN SWITCHES (operator, 2026-09-14: "settings specific to market panel"): the Market
     // effects group, not the block board's
     // the market effects go off under the Earth the way the Space effects do: a supernova over a
