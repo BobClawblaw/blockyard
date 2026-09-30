@@ -658,21 +658,34 @@ function installShutdown(app) {
   // to stop it, so every test that wanted to speak HTTP had to shell out to
   // scripts/smoke.sh. Teardown being unreachable is why this repo had no in-process
   // integration test for sessions, headers or the login throttle.
+  // STOP LISTENING FIRST (2026-09-30; operator, of a Kiosk showing "the live link kept failing" for 44 s after a
+  // deploy). The listeners used to close LAST, after the monitors stopped and the history was saved: a page whose
+  // stream had just been closed reconnected inside that window (measured: a new stream opened 3 s into the shutdown),
+  // the server took it, and server.close() then waited on it for ever -- systemd killed the process at its 45 s
+  // stop timeout, five restarts out of seven that day. Now the listeners stop taking connections at once, the streams
+  // are closed, the state is saved, and whatever connection is left is closed outright.
   const close = async ({ saveHistory = true } = {}) => {
     if (closing) return { alreadyClosed: true };
     closing = true;
-    for (const t of app.timers ?? []) clearInterval(t);
-    app.hub?.closeAll();
-    for (const m of app.monitors.values()) await m.stop().catch(() => {});
-    app.markets?.stop();
-    if (saveHistory) await app.history?.stop?.().catch((err) => app.log({ level: 'error', msg: `history save failed: ${err.message}` }));
-    await app.sessions?.save?.().catch(() => {});
-    await new Promise((r) => {
-      const open = (app.servers ?? [app.server]).filter(Boolean);
+    const t0 = Date.now();
+    const step = (what) => app.log({ level: 'debug', msg: `shutdown: ${what} at ${Date.now() - t0} ms` });
+    const open = (app.servers ?? [app.server]).filter(Boolean);
+    const listenersClosed = new Promise((r) => {
       if (!open.length) return r();
       let left = open.length;
       for (const s of open) s.close(() => { if (--left <= 0) r(); });
     });
+    for (const t of app.timers ?? []) clearInterval(t);
+    app.hub?.closeAll();
+    for (const m of app.monitors.values()) await m.stop().catch(() => {});
+    step('monitors stopped');
+    app.markets?.stop();
+    if (saveHistory) await app.history?.stop?.().catch((err) => app.log({ level: 'error', msg: `history save failed: ${err.message}` }));
+    step('history saved');
+    await app.sessions?.save?.().catch(() => {});
+    for (const s of open) s.closeAllConnections?.();
+    await listenersClosed;
+    step('listeners closed');
     if (app.fakeNode) await app.fakeNode.stop().catch(() => {});
     return { closed: true };
   };
@@ -681,8 +694,12 @@ function installShutdown(app) {
   const bye = async (sig) => {
     if (closing) return;
     app.log({ level: 'info', msg: `${sig}: shutting down` });
+    // Whatever the shutdown is waiting on, the process is gone well inside systemd's stop timeout (45 s): a hang
+    // here is a monitor that cannot be reached for as long as it lasts.
+    setTimeout(() => { app.log({ level: 'warn', msg: 'shutdown did not finish in 8 s: exiting anyway' }); process.exit(0); }, 8000).unref();
+    const t0 = Date.now();
     await close();
-    app.log({ level: 'info', msg: 'bye' });
+    app.log({ level: 'info', msg: `bye (${Date.now() - t0} ms)` });
     // Do not hang on a socket that refused to close; history is already durable.
     setTimeout(() => process.exit(0), 1500).unref();
   };

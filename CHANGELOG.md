@@ -62,6 +62,14 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **A restart no longer leaves pages without data for 45 seconds.** The server used to keep taking
+  connections until the very end of its shutdown. A page reconnecting in that window held the
+  shutdown open until systemd killed it at its 45-second limit, which happened on five of seven
+  restarts that day, and every page showed "the live link kept failing" meanwhile. The server now
+  stops listening first, closes whatever connection is left after saving, and exits within 8 seconds
+  whatever happens. A restart now takes about 2 seconds.
+- **The label beside "refresh now" counts down again,** from the "Refresh every" interval, restarting
+  each time a new pool is taken or the button is pressed.
 - **Refresh every** (Settings, Block space, "Refresh every (seconds)"): how often the pool boards take
   a new picture of the mempool, from 5 seconds (the default, every update the server pushes) to 120.
   The refresh button still takes one at once. The label beside it and the note under the board say

@@ -1567,10 +1567,13 @@ async function boot() {
   // a second. Text and a CSS variable only -- nothing is re-rendered.
   setInterval(() => {
     if (document.hidden) return;
+    // A COUNTDOWN, from the operator's own interval (settings.js space.refreshEvery; operator, 2026-09-30: "never counts
+    // down from the new time"): with the pool pushed the next refresh is due refreshEvery after the last one taken
+    // (state.poolAdoptedAt, which the refresh button restarts too), so it counts down from exactly that
     const pushed = poolPushed(state.snap);
-    const { text, frac } = pushed
-      ? { text: state.paused ? 'refresh paused' : `live, every ${Math.round(refreshEveryMs(state.snap) / 1000)} s`, frac: 1 }
-      : refreshLabel(state.poolFetchedAt ? state.poolFetchedAt + MEMPOOL_DETAIL_MS : NaN, Date.now(), { paused: state.paused, period: MEMPOOL_DETAIL_MS });
+    const every = pushed ? refreshEveryMs(state.snap) : MEMPOOL_DETAIL_MS;
+    const lastAt = pushed ? (state.poolAdoptedAt ?? state.poolFetchedAt) : state.poolFetchedAt;
+    const { text, frac } = refreshLabel(lastAt ? lastAt + every : NaN, Date.now(), { paused: state.paused, period: every });
     for (const el of document.querySelectorAll('[data-refresh]')) {
       if (el.textContent !== text) el.textContent = text;
       el.style.setProperty('--p', `${Math.round(frac * 100)}%`);
