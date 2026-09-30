@@ -43,6 +43,25 @@ All notable changes to this project are documented here. The format follows
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
   pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
+- **Software and WebGL are much lighter on the graphics card.** Three changes, each measured in
+  Chromium on Block space at 1600x1000 CSS pixels and device scale 2, over 10 seconds:
+  - **The page's pulses tick instead of animating** (Settings, Appearance, "Page pulses": Tick is
+    the default, Smooth is the old continuous fade, Still holds them). The live dot, the block
+    meter's edge and the overdue warning were endless CSS animations. Any endless animation makes
+    the browser redraw the whole page at every refresh of the screen, 120 times a second on a
+    ProMotion display. Now one attribute flips every 1.3 seconds. Software went from 1,206
+    composited frames in 10 seconds to 426. Stepped CSS timing was tried first and did not help
+    (1,202). The Simple renderer keeps its pulses still, as before.
+  - **WebGL draws at one pixel per CSS pixel** (Settings, Appearance, "WebGL resolution": 1x is
+    the default, with Full and ¾x). On a Retina screen that is a quarter of the pixels. The GPU
+    process went from 33% busy to 21.5%, and its compositor from 25-31% to 17%. The glow setting
+    made no measurable difference.
+  - **A frame-rate cap** (Settings, Appearance, "Frame rate cap": 60 is the default, with 30 and
+    Full). A moving board paints at most 60 frames a second instead of at every refresh. A resting
+    sky still repaints at most 30 a second. Between paints the board now waits on a timer rather
+    than asking for animation frames it will not paint, because every frame asked for is a frame
+    composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
+    30; now it asks for 30.
 - **The Detailed board no longer collects streaks of holes between blocks.** It keeps its layout
   across the 5-second updates, and a departing transaction's square used to stay empty until an
   arrival happened to fit it. Over the minutes between blocks the gaps piled up into dark streaks

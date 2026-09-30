@@ -593,6 +593,20 @@ html[data-motion="still"] .flow.shift .flowpast, html[data-motion="still"] .bcar
 html[data-motion="still"] .bcard.tip.overdue, html[data-motion="still"] .bcard.next.overdue,
 html[data-motion="still"] .bmeter i.new, html[data-motion="still"] .bmeter i.edge span, html[data-motion="still"] .bmeter i.next { animation: none }
 html[data-motion="still"] .flowpast, html[data-motion="still"] .bnextfill span { transition: none }
+/* THE TICKING PAGE (theme.js: `data-motion="tick"`, appearance.pagePulse, the default off the Simple renderer since
+   2026-09-30). The same endless animations stop -- each composites the whole page at every refresh of the screen --
+   and app.js flips `data-pulse` on the root every 1.3 s; each pulse shows its bright or dim phase from that. The
+   rail, a moving texture, holds still: a texture that jumps once a second reads as a fault. */
+html[data-motion="tick"] .live, html[data-motion="tick"] .pulse .dot, html[data-motion="tick"] .rail,
+html[data-motion="tick"] .bcard.tip.overdue, html[data-motion="tick"] .bcard.next.overdue,
+html[data-motion="tick"] .bmeter i.edge span, html[data-motion="tick"] .bmeter i.next { animation: none }
+html[data-motion="tick"] .bmeter i.edge span { filter: brightness(.9) }
+html[data-motion="tick"] .bmeter i.next { background: rgba(235, 245, 255, .04) }
+html[data-motion="tick"][data-pulse="1"] .live { opacity: .25 }
+html[data-motion="tick"][data-pulse="1"] .pulse .dot { opacity: .28 }
+html[data-motion="tick"][data-pulse="1"] .bcard.tip.overdue, html[data-motion="tick"][data-pulse="1"] .bcard.next.overdue { box-shadow: 0 0 0 1px var(--bad), 0 0 16px #ef5a5a66 }
+html[data-motion="tick"][data-pulse="1"] .bmeter i.edge span { filter: brightness(1.7) }
+html[data-motion="tick"][data-pulse="1"] .bmeter i.next { background: rgba(235, 245, 255, .16) }
 @media (prefers-reduced-motion: reduce) { .rail, .flow.shift .flowpast, .bcard.arrive { animation: none } .flowpast, .bnextfill span { transition: none } }
 
 /* ------------------------------------------------- the pipeline in motion */

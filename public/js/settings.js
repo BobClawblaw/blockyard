@@ -102,6 +102,23 @@ export const DEFAULTS = Object.freeze({
     // all. Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good"): a star
     // field drawn once, no galaxy, no timer -- the same picture on every paint (details3d.js STILL_SKY_NOW).
     flatSky: 'still',
+    // THE GRAPHICS CARD'S BUDGET ON SOFTWARE AND WEBGL (2026-09-30; operator: "Is there no way to improve the
+    // performance of our software and webgl modes? They really eat all the GPU up" -- "yes, build all three").
+    // Measured in chromium on Block space at 1600x1000, device scale 2, ten seconds:
+    //   PAGE PULSES: the live dot, the block meter, the overdue warning and the rail were endless CSS animations,
+    //   and an endless animation composites the whole page every refresh: 1,206 frames (120 a second) on Software,
+    //   434 with them stopped. Stepped timing (steps()) did not help: 1,202. So 'tick' (the default) stops them and
+    //   flips one attribute every 1.3 s (app.js), each pulse drawn at its bright or dim phase; 'smooth' is the
+    //   old animation, 'still' none. The Simple renderer is always still.
+    pagePulse: 'tick',
+    // WEBGL'S RESOLUTION: device pixels per CSS pixel it draws at ('full' = every device pixel). At 1 on a
+    // device-scale-2 screen the GPU process was 21% busy against 33% at full, its compositor 18% against 25%.
+    // The WebGL glow made no measurable difference. Text on the board is drawn at the same resolution.
+    webglScale: '1',
+    // THE FRAME CAP for the 3D boards: the most frames a second a board paints, flights and slides included
+    // ('full' = every refresh -- 120 a second on a ProMotion display). The sky repaints at most 30 a second
+    // either way.
+    frameCap: '60',
     // Simple'S SLIDE (operator, 2026-09-30: "a shifting tiles animation in 2D like mempool space app does" --
     // "1s slide with the row wave"). 'slide': a new layout eases into place in the plane over one second, the
     // bottom row first (details3d.js flatSlideOf, flatslide.js), and the board parks again. 'off': it lands at once.
@@ -596,6 +613,21 @@ const PANEL_GROUPS = Object.freeze([
         key: 'flatSlide', label: 'Simple slide', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== '2.5d',
         hint: 'Only the Simple renderer has this. Slide (the default): when the pool refreshes, every block eases from where it was to where it goes, in the plane, over one second -- the bottom row first, the rest following up the board -- arrivals drop in from above their place and departures shrink away. Then the board is still again: one second of frames per refresh, none in between. Off: the new layout appears at once',
         options: Object.freeze([['slide', 'Slide'], ['off', 'Off']]),
+      }),
+      Object.freeze({
+        key: 'webglScale', label: 'WebGL resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== 'webgl',
+        hint: 'How many pixels the WebGL renderer draws the board, its sky and its effects with. 1x (the default) is one for every CSS pixel: the same picture on an ordinary screen, and a quarter of the graphics card\u2019s work on a high-density one (measured: its busy time down by a third), with the board\u2019s text as sharp as on an ordinary screen. Full is every pixel of the screen. \u00bex is softer again, and lighter',
+        options: Object.freeze([['1', '1x'], ['full', 'Full'], ['0.75', '\u00bex']]),
+      }),
+      Object.freeze({
+        key: 'frameCap', label: 'Frame rate cap', kind: 'segment', dimWhen: (s) => s.appearance.renderer === '2.5d',
+        hint: 'The most frames a second a 3D board paints while it moves -- a flight, a trickle of arrivals, an effect. 60 (the default) is smooth and half the work of a 120 Hz display; 30 halves it again; Full paints at every refresh of the screen. A board at rest paints nothing, and its sky at most 30 a second, whatever this says',
+        options: Object.freeze([['60', '60'], ['30', '30'], ['full', 'Full']]),
+      }),
+      Object.freeze({
+        key: 'pagePulse', label: 'Page pulses', kind: 'segment', dimWhen: (s) => s.appearance.renderer === '2.5d',
+        hint: 'The live dot, the block meter\u2019s edge, the overdue warning. Tick (the default) switches each one between its bright and dim look every 1.3 seconds; Smooth fades them continuously, which makes the browser redraw the whole page at every refresh of the screen (measured: 120 frames a second against about 40); Still holds them. Under the Simple renderer they are always still',
+        options: Object.freeze([['tick', 'Tick'], ['smooth', 'Smooth'], ['still', 'Still']]),
       }),
       Object.freeze({
         key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer === 'webgl',

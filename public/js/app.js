@@ -1171,6 +1171,13 @@ async function boot() {
     if (mine !== theirs) { seedSettings(got.settings); render(); }
   };
   setInterval(refreshSettings, 15_000);
+  // THE PAGE'S PULSE (app.css "THE TICKING PAGE"; theme.js data-motion="tick"): one attribute flipped every 1.3 s
+  // stands in for six endless CSS animations, each of which had the page composited at every refresh of the screen
+  setInterval(() => {
+    const root = document.documentElement;
+    if (document.hidden || root.dataset.motion !== 'tick') return;
+    root.dataset.pulse = root.dataset.pulse === '1' ? '0' : '1';
+  }, 1300);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSettings(); });
 
   const pick = document.getElementById('nodePick');

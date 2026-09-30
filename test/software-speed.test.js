@@ -47,7 +47,22 @@ function stage({ dpr = 2 } = {}) {
   };
   const c2 = ctxFor(live, canvas);
   canvas.getContext = () => c2;
-  const pump = (ms) => { for (let t = 0; t < ms; t += 50) { now += 50; const run = raf; raf = []; for (const fn of run) fn(now); } };
+  // TIMERS TOO (2026-09-30): a resting sky waits on a timer for its next paint instead of asking for frames it will
+  // not paint (render3d's frame budget), so the stage runs due timers before each round of frames. Installed only
+  // while it pumps, so nothing else in the process sees them.
+  const timers = [];
+  const pump = (ms) => {
+    const realSet = globalThis.setTimeout, realClear = globalThis.clearTimeout;
+    globalThis.setTimeout = (fn, d) => { const h = { at: now + Math.max(0, d || 0), fn, unref() {} }; timers.push(h); return h; };
+    globalThis.clearTimeout = (h) => { const i = timers.indexOf(h); if (i >= 0) timers.splice(i, 1); };
+    try {
+      for (let t = 0; t < ms; t += 50) {
+        now += 50;
+        for (const h of timers.filter((x) => x.at <= now)) { timers.splice(timers.indexOf(h), 1); h.fn(); }
+        const run = raf; raf = []; for (const fn of run) fn(now);
+      }
+    } finally { globalThis.setTimeout = realSet; globalThis.clearTimeout = realClear; }
+  };
   return { canvas, live, made, pump, clock: () => now };
 }
 
@@ -88,11 +103,24 @@ test('a moving board is never kept: it draws straight on, and the layer is built
   const at = live.length;
   board3d(canvas, moved, OPTS);
   pump(400);
-  const flying = frames(live.slice(at)).slice(1, 5);
+  // (until the first block lifts, a frame of the new plan IS the resting board, and blitting the kept copy of it is
+  // right and cheaper -- the frame budget of 2026-09-30 removed a second, stale loop whose extra paints had hidden
+  // that. What must hold: once blocks move, every frame draws its faces live and none blits the old board.)
+  const after = frames(live.slice(at));
+  const firstLive = after.findIndex((f, i) => i > 0 && f.filter((o) => o === 'fill').length > TILES.length * 3);   // (three faces a cube: the sky alone fills fewer)
+  assert.ok(firstLive > 0, 'the flight is drawn live');
+  const flying = after.slice(firstLive, firstLive + 4);
   assert.ok(flying.length >= 3 && flying.every((f) => !f.includes(`drawImage:${kept.__id}`)), 'mid-flight frames never blit the old board');
   assert.ok(flying.every((f) => f.filter((o) => o === 'fill').length > TILES.length), 'they draw their faces live');
   pump(60000);
-  assert.equal(builds(), 2, 'landed, the board is kept again -- once');
+  // landed, the board is kept again -- and at rest it is not built again: every later frame is the one blit.
+  // (A still moment during the flight -- before the first block lifts, between drops -- may keep it too: two
+  // identical frames in a row is what keeping means, and it is one board draw either way.)
+  const landed = builds();
+  assert.ok(landed >= 2, 'landed, the board is kept again');
+  assert.ok(frames(live).at(-1).includes(`drawImage:${kept.__id}`));
+  pump(5000);
+  assert.equal(builds(), landed, 'and at rest it is never built again');
   assert.ok(frames(live).at(-1).includes(`drawImage:${kept.__id}`));
 });
 

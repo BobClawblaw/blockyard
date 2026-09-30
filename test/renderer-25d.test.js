@@ -210,10 +210,17 @@ test('2.5D stamps the page still, and the stylesheet stops every infinite animat
   const win = { matchMedia: () => ({ matches: false }) };
   let r = root(); applyTheme(normalise({ appearance: { renderer: '2.5d' } }), { root: r, win });
   assert.equal(r.attrs.get('data-motion'), 'still');
+  // (since 2026-09-30 the other renderers TICK by default -- appearance.pagePulse; 'smooth' is the old animation)
   r = root(); applyTheme(normalise({ appearance: { renderer: 'software' } }), { root: r, win });
-  assert.equal(r.attrs.get('data-motion'), 'live');
+  assert.equal(r.attrs.get('data-motion'), 'tick');
   r = root(); applyTheme(normalise(null), { root: r, win });
-  assert.equal(r.attrs.get('data-motion'), 'live', 'the shipped page moves');
+  assert.equal(r.attrs.get('data-motion'), 'tick', 'the shipped page ticks');
+  r = root(); applyTheme(normalise({ appearance: { renderer: 'webgl', pagePulse: 'smooth' } }), { root: r, win });
+  assert.equal(r.attrs.get('data-motion'), 'live', 'smooth is the continuous animation');
+  r = root(); applyTheme(normalise({ appearance: { renderer: 'webgl', pagePulse: 'still' } }), { root: r, win });
+  assert.equal(r.attrs.get('data-motion'), 'still');
+  r = root(); applyTheme(normalise({ appearance: { renderer: '2.5d', pagePulse: 'smooth' } }), { root: r, win });
+  assert.equal(r.attrs.get('data-motion'), 'still', 'Simple is always still');
   // every selector whose rule runs an infinite animation is named in the still block
   const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const still = css.match(/html\[data-motion="still"\][^}]*\{ animation: none \}/)?.[0];
@@ -227,6 +234,10 @@ test('2.5D stamps the page still, and the stylesheet stops every infinite animat
   }
   assert.ok(infinite.length >= 6, `the stylesheet's infinite animations were found (${infinite.length})`);
   for (const s of infinite) assert.ok(still.includes(`html[data-motion="still"] ${s}`), `the still block names ${s}`);
+  // ...and the TICK block stops the same ones (it composited at every refresh either way: steps() did not help)
+  const tick = css.match(/html\[data-motion="tick"\][^}]*\{ animation: none \}/)?.[0];
+  assert.ok(tick, 'the tick block exists');
+  for (const s of infinite) if (s !== '.bmeter i.new') assert.ok(tick.includes(`html[data-motion="tick"] ${s}`), `the tick block names ${s}`);
 });
 
 // A GAME'S BOARD PAINTS ON EVERY CALL (operator, 2026-09-28: "scorched yard doesn't work in 2.5d mode"). Its

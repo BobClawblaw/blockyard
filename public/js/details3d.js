@@ -121,7 +121,23 @@ export function flatSlideOf(opts) {
   if (want !== 'off' && want !== 'slide') { try { want = loadSettings().appearance.flatSlide; } catch { want = 'slide'; } }
   return want === 'off' ? 'off' : 'slide';
 }
-export const FLAT_SKY_MS = 500;            // the slow sky: two frames a second (operator, 2026-09-28: "build the slow sky at 2 fps")
+export const FLAT_SKY_MS = 500;
+const SKY_WAIT = -1;                       // st.raf while the loop waits on its timer for the next paint
+/** WebGL's resolution cap (settings.js appearance.webglScale): device pixels per CSS pixel, or Infinity for all of them. */
+export function webglScaleOf(opts) {
+  let want = opts?.webglScale;
+  if (want == null) { try { want = loadSettings().appearance.webglScale; } catch { want = '1'; } }
+  const k = Number(want);
+  return k === 1 || k === 0.75 ? k : Infinity;
+}
+/** The frame cap (settings.js appearance.frameCap) as the least milliseconds between two paints; 0 = every refresh. */
+export function frameGapOf(opts) {
+  let want = opts?.frameCap;
+  if (want == null) { try { want = loadSettings().appearance.frameCap; } catch { want = '60'; } }
+  const n = Number(want);
+  return n === 30 || n === 60 ? 1000 / n : 0;
+}
+export const SKY_GAP_MS = 1000 / 30;          // a resting sky repaints at most this often            // the slow sky: two frames a second (operator, 2026-09-28: "build the slow sky at 2 fps")
 // THE STILL SKY'S INSTANT (operator, 2026-09-29: "just add a simple space background that does not rotate at all.
 // Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good"): the star field is
 // a function of the clock -- each star's twinkle, the disc's turn -- so drawn at ONE fixed instant it is one
@@ -5865,6 +5881,7 @@ export function render3d(canvas, cells, options = {}) {
     flatSkyOf(opts),                      // ...or the Simple sky is (off, still, slow)
     flatSlideOf(opts),                    // ...or Simple's slide is switched
     softwareScaleOf(opts),                // ...or Software's resolution is (render3d sizes the canvas by it)
+    webglScaleOf(opts), frameGapOf(opts), // ...or WebGL's resolution, or the frame cap
     fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
     opts.neonSource, opts.neonColour, opts.neonBrightness, opts.wireWidth,
@@ -5963,7 +5980,8 @@ export function render3d(canvas, cells, options = {}) {
   st.plan = plan;
   st.fx = null;              // a transition takes the stage; idle effects wait for rest
 
-  if (st.raf != null && globalThis.cancelAnimationFrame) cancelAnimationFrame(st.raf);
+  if (st.raf != null && st.raf !== SKY_WAIT && globalThis.cancelAnimationFrame) cancelAnimationFrame(st.raf);
+  if (st.skyWait) { clearTimeout(st.skyWait); st.skyWait = null; }
   st.raf = null;
 
   // THE CANVAS IS EVERY DEVICE PIXEL, whatever Software's resolution setting says (appearance.softwareScale):
@@ -5971,7 +5989,12 @@ export function render3d(canvas, cells, options = {}) {
   // It used to shrink this canvas -- cubes, seams, price tags and all -- and at half the picture was a blur
   // (operator, 2026-09-28: "it's too blurry at 0.5x"). The sky is where a Software frame's cost is (a resting
   // board is a kept bitmap, keptBoard); the board and every label stay sharp. Only a board's own maxDpr caps it.
-  const cap = Number.isFinite(opts.maxDpr) ? opts.maxDpr : Infinity;
+  // (WebGL's own resolution, appearance.webglScale, caps it the same way a game's sky canvas caps itself: the GL
+  // layer is sized from this geometry, so everything on it -- board, sky, effects, text -- is drawn at that density)
+  // -- only while WebGL is really what draws: chosen on a browser without it (or after a lost context), this board is
+  // Software, and keeps Software's every device pixel
+  const glDraws = rendererOf(opts) === 'webgl' && !GL_LAYER.get(canvas)?.gone && typeof document !== 'undefined' && gl2dSupported();
+  const cap = Math.min(Number.isFinite(opts.maxDpr) ? opts.maxDpr : Infinity, glDraws ? webglScaleOf(opts) : Infinity);
   const geom = sizeCanvas(canvas, Number.isFinite(cap) ? Math.max(0.5, cap) : Infinity);
   // Device pixels per grid unit, from the CONSTANT board transform (pw across
   // gridW units), so a stone's level of detail can never flicker mid-flight.
@@ -6108,8 +6131,44 @@ export function render3d(canvas, cells, options = {}) {
   st.armSky = skyMs ? armSky : null;
   if (!skyMs && st.skyTimer) { clearTimeout(st.skyTimer); st.skyTimer = null; }   // (the sky was switched off, or the renderer changed)
 
-  const step = () => {
+  const capGap = frameGapOf(opts);
+  // ONE LOOP PER BOARD, WHATEVER CANCELS OR NOT: a step from an older render3d call (a frame queued before the
+  // cancel, a timer that slipped through) returns without doing anything. With the frame budget an old step could
+  // otherwise PAINT, through its own closure, between the new loop's frames.
+  const gen = (st.gen = (st.gen ?? 0) + 1);
+  // How long until the next paint is due (0 = now): a resting sky SKY_GAP_MS after the last, anything moving capGap after
+  // it; a hover (dirty) at once; a clock that went back, at once.
+  const dueIn = (t) => {
+    if (st.dirty) return 0;
+    const resting = st.settled && !st.pending && !fxNow(st, t);
+    const gap = resting && liveSky ? Math.max(SKY_GAP_MS, capGap) : capGap;
+    const since = t - (st.lastPaint ?? -Infinity);
+    return gap > 0 && since >= 0 && since < gap - 1.5 ? gap - since - 1.5 : 0;
+  };
+  // Wait for it on a TIMER when it is not due (SKY_WAIT marks the loop alive), and only then ask for a frame. True if waiting.
+  const waitFor = (t) => {
+    const ms = dueIn(t);
+    if (ms <= 0) return false;
+    st.raf = SKY_WAIT;
+    st.skyWait = setTimeout(() => { st.skyWait = null; if (st.raf === SKY_WAIT) st.raf = requestAnimationFrame(step); }, Math.max(1, ms));
+    return true;
+  };
+  // the loop's next turn: straight to the timer when the next paint is more than a frame away -- asking for the very
+  // next frame only to find it not due was one composited frame for nothing after every paint (measured in the
+  // simulated 120 Hz display: 60 frames asked for, 30 painted)
+  // (only when it is more than a REFRESH away: st.vsync is the shortest gap seen between two consecutive frames, so
+  // on a 60 Hz screen a 60 fps cap never hands a frame to a timer that could miss the refresh)
+  const again = () => {
     const t = (globalThis.performance && performance.now()) || 0;
+    if (dueIn(t) > (st.vsync ?? 1000 / 60) * 1.1 && waitFor(t)) return;   // (60 Hz until learned)
+    st.raf = requestAnimationFrame(step);
+  };
+  const step = () => {
+    if (st.gen !== gen) return;
+    const t = (globalThis.performance && performance.now()) || 0;
+    if (st.lastStepT != null && st.stepChained) { const dt = t - st.lastStepT; if (dt > 3 && dt < 60) st.vsync = Math.min(st.vsync ?? Infinity, dt); }
+    st.lastStepT = t;
+    st.stepChained = false;
     // THE SKY keeps the loop alive for the twinkle -- about 24 frames a second once the board is
     // still -- and stops it while the canvas is hidden (another tab of the app); the next
     // render3d call wakes it (see the unchanged-layout branch). It is the STARS that need the
@@ -6124,9 +6183,14 @@ export function render3d(canvas, cells, options = {}) {
       // rather than deferring to a real frame). In a browser this is a no-op: isConnected is
       // always a boolean and offsetParent always an Element or null.
       if (!canvas.isConnected || !canvas.offsetParent) { st.raf = null; return; }
-      if (st.settled && !st.dirty && !st.pending && !fxNow(st, t) && t - (st.lastPaint ?? 0) < 33) { st.raf = requestAnimationFrame(step); return; }
-      st.lastPaint = t;
     }
+    // THE NEXT PAINT IS DUE WHEN IT IS DUE (2026-09-30; operator: "They really eat all the GPU up"). Two limits, one
+    // rule: a resting sky repaints at most SKY_GAP_MS apart (it always has), and anything moving -- a flight, a trickle,
+    // an effect, the Simple slide -- at most frameGapOf apart (appearance.frameCap, 60 a second by default; a 120 Hz
+    // display otherwise paints every refresh). Until then the loop waits on a TIMER and asks for no animation frame
+    // (SKY_WAIT marks it alive): a frame asked for is a frame the browser composites whether or not it is painted.
+    if (waitFor(t)) return;
+    st.lastPaint = t;
     const frame = draw(t);
     // THE FLUSH WAITS FOR THE EFFECT AS WELL. `frame.settled` is about the TRANSITION, not the
     // effect, so without the fxNow test this let a parked refresh through the moment the board
@@ -6158,13 +6222,17 @@ export function render3d(canvas, cells, options = {}) {
       if (st.pending) { const p = st.pending; st.pending = null; st.pendingAt = null; st.raf = null; render3d(canvas, p.cells, p.options); return; }
     }
     else st.atRest = false;               // something is moving again: the next rest re-arms
-    st.raf = requestAnimationFrame(step);
+    st.stepChained = true;               // (the next step's gap is one refresh: that is how st.vsync is learned)
+    again();
   };
   st.wake = () => {
+    // (a loop parked on the sky's timer is woken at once: a hover or a new frame should not wait out the 33 ms)
+    if (st.raf === SKY_WAIT && globalThis.requestAnimationFrame) { clearTimeout(st.skyWait); st.skyWait = null; st.raf = requestAnimationFrame(step); return; }
     if (st.raf == null && globalThis.requestAnimationFrame) st.raf = requestAnimationFrame(step);
   };
 
   const first = draw(now);
+  st.lastPaint = now;                      // (the frame cap counts from here: this paint was a frame)
   if (first.settled) { st.atRest = true; scheduleFx(canvas, st, opts, true); }   // at rest already, stars or not
   // Park when nothing is moving: a settled board, or one that asked for no choreography at all.
   // Stars are motion in their own right, so a sky keeps the loop whatever the tiles are doing.

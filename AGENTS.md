@@ -408,7 +408,26 @@ push, `denseAsking`). Both viewers keep their layout on every renderer (render3d
 144-344 holes against 291-427, inside the grid where fresh ran 1-8 rows over). An update where NO tile keeps its id
 and changes its square (`blockscene3d.js isTrickle`) is planned with `TRICKLE` phases (rise 1000, travel 200, drop
 1200, dropStagger 1200): a plan of three arrivals settles at 3,142 ms instead of 20,260; in chromium on the live pool
-every push was a 3.3-3.8 s trickle. THE DETAILED BOARD SETTLES (the same evening; operator, with a screenshot: "Why is it leaving holes like that in
+every push was a 3.3-3.8 s trickle. **THE GPU BUDGET ON SOFTWARE AND WEBGL (2026-09-30; operator: "They really eat all the GPU up" -- "build all three";
+"We should make 60fps the default, not 120fps").** Measured with a CDP trace script (chromium on the 5090, Block space,
+1600x1000 at dpr 2, ten seconds): composited frames, GPU-process busy, the page's main thread. (1) `appearance.pagePulse`
+'tick' (default): theme.js stamps `data-motion="tick"`, app.css's TICKING PAGE block stops the endless animations and
+shows each pulse's phase from `data-pulse`, which app.js flips every 1.3 s -- Software 1,206 -> 426 frames. `steps()`
+timing was tried and composited at full rate anyway (1,202). A NEW ENDLESS ANIMATION MUST JOIN BOTH the still and the
+tick block (renderer-25d.test.js). (2) `appearance.webglScale` '1' (default): render3d caps the dpr when the renderer is
+webgl, exactly as a game's sky canvas caps itself, so the GL layer and everything on it draw at that density -- GPU main
+33 -> 21.5%, compositor ~28 -> 17%; glow made no difference. (3) `appearance.frameCap` '60' (default; 30, 'full'): the
+loop's `dueIn`/`waitFor`/`again` in render3d: a moving board paints at most every 1000/cap ms, a resting sky every
+SKY_GAP_MS; until due it WAITS ON A TIMER (`st.raf === SKY_WAIT`) and asks for no frame -- a frame asked for is a frame
+composited. The loop learns the refresh period (`st.vsync`, the shortest gap between chained steps; 60 Hz until learned)
+and only hands a wait to the timer when it is more than a refresh away, so a 60 Hz screen at cap 60 never loses frames
+to timer jitter. A clock that goes backwards (tests reset it) counts as due. ONE LOOP PER BOARD: each render3d call takes a
+generation (`st.gen`) and a step from an older call returns at once -- a test stage whose cancelAnimationFrame is a
+no-op had been running TWO loops per board all along, and with the budget the stale one painted through its own closure. Tests: `test/gpu-budget.test.js` (a
+simulated 120 Hz display with fake timers). WebGL still composites ~100 frames a second on Block space with the pool
+pushed: the board is moving most of the time (a trickle every 5 s, idle effects) -- at 60 now, not 120.
+
+THE DETAILED BOARD SETTLES (the same evening; operator, with a screenshot: "Why is it leaving holes like that in
 detailed view?"): `packDenseStable` = packStable with `bigFirst` + `settleDown` (every square drops straight down
 as far as the squares under it allow) + a fresh pack past `DENSE_GAP_MAX` 3% interior gaps (`gapShare`: empty
 cells with a square above them in the column -- NOT all empty cells: the unused top rows are not holes, and
@@ -1091,7 +1110,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1528 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1534 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1421,7 +1440,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1528 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1534 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

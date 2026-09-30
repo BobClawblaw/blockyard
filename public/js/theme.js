@@ -221,7 +221,13 @@ export function applyTheme(settings, { root = globalThis.document?.documentEleme
     // browser composite the whole page every vsync, on the graphics card, whatever the canvases do. So
     // 2.5D -- the renderer that exists to leave the card alone -- stamps the page `still`, and app.css
     // stops them under it, as it does under prefers-reduced-motion. Every figure stays; only the motion goes.
-    root.setAttribute?.('data-motion', settings?.appearance?.renderer === '2.5d' ? 'still' : 'live');
+    // ...AND ON EVERY OTHER RENDERER THEY TICK BY DEFAULT (2026-09-30, appearance.pagePulse; operator: "They really eat
+    // all the GPU up"): 'tick' stops the animations and app.js flips `data-pulse` every 1.3 s, so each pulse is drawn at
+    // its bright or dim phase -- two repaints per cycle instead of a composite at every refresh (Software, measured:
+    // 1,206 frames in ten seconds with them running, 434 without; steps() timing did not help, 1,202). 'smooth' is
+    // the old continuous animation, 'still' none.
+    const pulse = settings?.appearance?.pagePulse;
+    root.setAttribute?.('data-motion', settings?.appearance?.renderer === '2.5d' || pulse === 'still' ? 'still' : pulse === 'smooth' ? 'live' : 'tick');
   }
   Object.assign(INK, inkOf(f));
   Object.assign(COL, { grid: f.lineSoft, axis: f.line, text: f.faint, textDim: INK.textDim, accent: f.accent, ok: f.ok, warn: f.warn, bad: f.bad, info: f.info, purple: f.purple, cyan: f.cyan, pink: f.pink });
