@@ -62,6 +62,8 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **Steady (5 s flight)**, a Refresh animation between Rapid (3 s) and Quick (10 s). On a found block
+  over the live pool, with 2,243 blocks moving, it settled in 4.9 s.
 - **Board order** (Settings, Block space): **Exact**, the default, lays the board out afresh on
   every update, richest at the bottom, so the order is always the fee order and most blocks move
   each time. **Stable** keeps every block still waiting in its place and puts new ones in the free

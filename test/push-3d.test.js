@@ -101,7 +101,7 @@ test('the rapid reshuffle: the default, and a whole re-pack settles inside one p
   const { MOTION, DEFAULTS, PANEL, normalise, spaceOptions } = await import('../public/js/settings.js');
   assert.equal(DEFAULTS.space.motion, 'rapid');
   const row = PANEL.find((g) => g.group === 'space').rows.find((r) => r.key === 'motion');
-  assert.deepEqual(row.options.map((o) => o[0]), ['blink', 'swift', 'rapid', 'quick', 'full', 'still']);
+  assert.deepEqual(row.options.map((o) => o[0]), ['blink', 'swift', 'rapid', 'steady', 'quick', 'full', 'still']);
   assert.equal(normalise({ space: { motion: 'full' } }).space.motion, 'full', 'a saved choice is kept');
   assert.deepEqual(spaceOptions(normalise(null)).transition, MOTION.rapid);
   // every block moving: a shifted grid of 600 cubes
@@ -219,4 +219,14 @@ test('Board order: Exact (the default) lays the board out afresh, richest lowest
   const at = (t) => `${t.txid}@${t.x},${t.y},${t.s}`;
   assert.deepEqual(r.tiles.map(at).sort(), fresh.tiles.map(at).sort());
   // (Stable's kept layout and its re-sort are held by the tests above and test/blockpack-stable.test.js)
+});
+
+test('Steady: the five-second flight', async () => {
+  const { MOTION, PANEL } = await import('../public/js/settings.js');
+  const prev = [], next = [];
+  for (let i = 0; i < 600; i++) { prev.push(tile(`t${i}`, i % 40, Math.floor(i / 40))); next.push(tile(`t${i}`, (i + 7) % 40, Math.floor(i / 40) + 1)); }
+  const p = planTransition(prev, next, { now: 0, gridN: 44, maxGrowth: 4, ...MOTION.steady });
+  assert.ok(p.settleAt >= 4_000 && p.settleAt <= 5_500, `steady settles in ${p.settleAt} ms`);
+  const labels = Object.fromEntries(PANEL.find((g) => g.group === 'space').rows.find((r) => r.key === 'motion').options);
+  assert.match(labels.steady, /5 s flight/);
 });

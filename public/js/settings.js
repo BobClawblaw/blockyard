@@ -487,6 +487,9 @@ export const MOTION = {
   // 1/sqrt(g) as long). A found block over the live pool, 2,592 moving: swift 1,923 ms, blink 990 ms.
   swift: { rise: 220, travel: 450, drop: 300, riseStagger: 150, dropStagger: 250, entryMs: 260, lockMs: 80, liftMin: 5, gravity: 3.3 },
   blink: { rise: 110, travel: 240, drop: 160, riseStagger: 70, dropStagger: 130, entryMs: 130, lockMs: 40, liftMin: 4, gravity: 12.8 },
+  // FIVE SECONDS (the same evening; operator: "Need to add 5s Refresh animation"): between Rapid and Quick, gravity as it
+  // is. The same kind of found block over the live pool (2,243 moving): 4,909 ms.
+  steady: { rise: 650, travel: 1500, drop: 900, riseStagger: 450, dropStagger: 900, entryMs: 750, lockMs: 180, liftMin: 12 },
   full: null,                                              // the 20 s choreography (shipped until 2026-09-30)
   quick: { rise: 900, travel: 3200, drop: 1800 },
   // NONE MEANS NONE (2026-09-30; operator: "if I select refresh animation: none, it should just redraw the new board
@@ -698,12 +701,12 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
       }),
       Object.freeze({
-        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Each choice says how long its whole flight takes -- how long the blocks are moving, not how often the board refreshes (that is Refresh every, below): Blink one second and Swift two, with gravity raised to match so the blocks still fall and bounce; Rapid (the default) three, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
+        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Each choice says how long its whole flight takes -- how long the blocks are moving, not how often the board refreshes (that is Refresh every, below): Blink one second and Swift two, with gravity raised to match so the blocks still fall and bounce; Rapid (the default) three, inside one of the pool\u2019s five-second updates; Steady five; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
         // (the seconds each takes, measured on a found block over the live pool: 3.0, 20.3, 9.5 -- operator: "show the
         // number of seconds that each menu item refreshes by")
         // (the FLIGHT's length, said as such: "Rapid \u00b7 3 s" read as a refresh interval beside "Refresh every" --
         // operator, the same evening: "Just clarify the labels")
-        options: Object.freeze([['blink', 'Blink (1 s flight)'], ['swift', 'Swift (2 s flight)'], ['rapid', 'Rapid (3 s flight)'], ['quick', 'Quick (10 s flight)'], ['full', 'Full flight (20 s)'], ['still', 'None (no flight)']]),
+        options: Object.freeze([['blink', 'Blink (1 s flight)'], ['swift', 'Swift (2 s flight)'], ['rapid', 'Rapid (3 s flight)'], ['steady', 'Steady (5 s flight)'], ['quick', 'Quick (10 s flight)'], ['full', 'Full flight (20 s)'], ['still', 'None (no flight)']]),
       }),
       Object.freeze({
         key: 'boardOrder', label: 'Board order', kind: 'segment',

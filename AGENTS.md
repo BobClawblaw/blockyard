@@ -470,7 +470,8 @@ blit (Kiosk traced: ~57-68 ms a paint at dpr 2), so the flights cost little beyo
 `board`, `drawGround`/trace), not buildScene -- ~3,000 tiles' ops issued every frame. Kiosk WebGL+Detailed main
 thread 70% -> 50%. buildScene also keeps a resting cube's ops for the layout (`o.faceMemo`, st.faceMemo per plan;
 key = every tile field + hover; off under fx, cube-on-cube shadows, non-oblique). STILL OPEN: an effect or re-sort
-on Detailed repaints every tile (~23 ms a frame); a retained layer for the unmoved tiles is the next lever. FLIGHTS OF 1 AND 2 SECONDS (the same evening; operator: "Add a 1 and 2 second flight time" -- "Increase gravity to scale
+on Detailed repaints every tile (~23 ms a frame); a retained layer for the unmoved tiles is the next lever. `MOTION.steady` is the 5 s flight (operator: "Need to add 5s Refresh animation"; 4,909 ms on a live found block, normal
+gravity); a small update under it takes the TRICKLE's phases, which are shorter. FLIGHTS OF 1 AND 2 SECONDS (the same evening; operator: "Add a 1 and 2 second flight time" -- "Increase gravity to scale
 with time change"): `MOTION.swift` / `MOTION.blink` carry `gravity` 3.3 / 12.8, which landingOf applies as landingMs /
 sqrt(g) -- the physics was the floor under Rapid's 3 s. Live found block, 2,464 moving: blink 989, swift 1,924, rapid
 3,029 ms. `trickleFaster` in details3d.js: a small update takes TRICKLE's phases only when they are quicker than the
@@ -1165,7 +1166,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1548 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1549 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1495,7 +1496,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1548 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1549 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
