@@ -43,6 +43,20 @@ All notable changes to this project are documented here. The format follows
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
   pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
+- **The pool, pushed.** The Block space, Overview, Mining and Kiosk boards follow the mempool every
+  5 seconds under the Simple renderer, where they used to follow a 30-second poll. The server keeps
+  the node's mempool in memory between full reads and applies its changes: from the node's own ZMQ
+  `sequence` notifications where it publishes them (bmc does; BlockYard speaks ZMTP itself, no
+  dependency), otherwise by comparing the node's transaction ids every 5 seconds. Every 5 seconds,
+  when anything changed, the pool pictures are rebuilt and reach the page on its existing live
+  stream. The full read (47 MB and 0.6 s on Core today, with 77,525 transactions) now runs every
+  10 minutes as a check instead of every 20 seconds. The Simple board also keeps its layout:
+  transactions still waiting stay in their squares, new ones drop into the free space, ones that
+  leave shrink away, and a found block starts a new board. On bmc's live pool, a 5-second update
+  moved 0 of 599 tiles where a fresh pack moved 126-348. Settings: `poll.poolPushMs` (5000; 0 turns
+  it off), `poll.poolResyncMs` (600000), and per node `mempoolPush`: `auto`, `zmq`, `poll` or
+  `off`. The Software and WebGL renderers keep the 30-second poll, since their flights between
+  layouts take 20 seconds. `/api/mempool`'s `feed` says which way each node is fed.
 - **Simple's slide** (Settings, Appearance, "Simple slide"; on by default). When the pool
   refreshes, the Simple renderer's pool boards (Overview, Block space, Mining, Kiosk) no longer jump
   to the new layout: every block eases from where it was to where it goes, in the plane, over one

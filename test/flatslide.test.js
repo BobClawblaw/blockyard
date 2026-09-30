@@ -205,3 +205,22 @@ test('render3d: new data mid-slide starts the next slide from where the tiles ar
   assert.ok(frames <= SLIDE_MS / 16 + 2, `one more second at most (${frames})`);
   assert.equal(h.pending(), false);
 });
+
+test('render3d: under Simple the pool board keeps its squares when the pool changes a little (packExactStable)', () => {
+  const mk = (n, tag) => Array.from({ length: n }, (_, i) => ({ txid: `${tag}-${i}-`.padEnd(64, 'x'), vbytes: 300 + ((i * 7919) % 20000), rate: 90 - i * 0.2 }));
+  const base = mk(200, 'k').concat([{ vbytes: 500000, rate: 0.8, aggregate: 30000 }]);
+  const next = base.filter((c, i) => i % 50 !== 3).concat(mk(3, 'z').map((c) => ({ ...c, rate: 50 })));
+  const where = (r) => new Map(r.tiles.filter((t) => !String(t.txid).startsWith('aggregate')).map((t) => [t.txid, `${t.x},${t.y},${t.s}`]));
+  const moved = (a, b) => [...b].filter(([id, p]) => a.has(id) && a.get(id) !== p).length;
+  let h = harness();
+  const a = where(render3d(h.canvas, base, SIMPLE));
+  harness.t += 5000;
+  const b = where(render3d(h.canvas, next, SIMPLE));
+  assert.equal(moved(a, b), 0, 'Simple: not one survivor moved');
+  h = harness();
+  const SOFT = { ...SIMPLE, renderer: 'software', stars: false, idleFx: false };
+  const c = where(render3d(h.canvas, base, SOFT));
+  h.pump(2000);
+  const d = where(render3d(h.canvas, next, SOFT));
+  assert.ok(moved(c, d) > 0, 'Software still packs fresh');
+});

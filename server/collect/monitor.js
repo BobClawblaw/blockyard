@@ -24,6 +24,8 @@ import { decodeCoinbaseSafe, minerRow, ledgerApply, ledgerRows, aliasFor, matchP
 import { NetworkStats } from './network.js';
 import { summarizeTemplate, packagesFromTemplate, blockEconomy, templateCells } from './nextblock.js';
 import { templateFromMempool, LOCAL_TEMPLATE_NOTE } from './gbt.js';
+import { PoolMirror, idsOf } from './poolmirror.js';
+import { subscribe as zmqSubscribe, parseSequence } from './zmq.js';
 import fs from 'node:fs';
 
 // The statistics getblockstats actually has. 'size', 'weight' and 'strippedsize' are
@@ -140,6 +142,15 @@ export class NodeMonitor extends EventEmitter {
     // from it (gbt.js) rather than asked for, so the template is exactly as fresh as this is.
     this.mempoolRaw = null;
     this.mempoolRawAt = 0;
+    // THE POOL, PUSHED (2026-09-30; poolmirror.js). Between full reads the map is kept current from the
+    // node's `sequence` notifications (ZMQ) or a cheap ids poll, and the pictures are rebuilt from it every
+    // poll.poolPushMs when it changed. Per node `mempoolPush`: 'auto' (ZMQ when the node publishes the
+    // sequence topic on loopback, else the ids poll), 'zmq', 'poll', or 'off' (the full read every poolMs).
+    this.poolPushWant = ['auto', 'zmq', 'poll', 'off'].includes(nodeCfg.mempoolPush) ? nodeCfg.mempoolPush : 'auto';
+    this.poolMirror = null;
+    this.poolZmq = null;                   // { address, up, sub }
+    this.poolPushTimer = null;
+    this.poolRecordedAt = 0;
     this.nextBlockCfg = { freshMs: 15_000, enabled: this.miningCfg.template !== false };
     this.logHealthMs = this.logCfg.healthMs ?? 30_000;
     // Why 30 minutes and not 5: measured 2026-09-08, the synced production node's
@@ -262,7 +273,117 @@ export class NodeMonitor extends EventEmitter {
     setTimeout(() => this.runTier('pool').finally(() => this.scheduleTier('pool')), 1200);
     setTimeout(() => this.runTier('slow').finally(() => this.scheduleTier('slow')), 1600);
     setTimeout(() => firstMid.then(() => { if (!this.stopped) this.runTier('rare').finally(() => this.scheduleTier('rare')); }), 2600);
+    this.startPoolPush().catch((err) => this.log({ level: 'warn', msg: `[${this.id}] mempool push not started: ${err.message}` }));
     return this;
+  }
+
+  // ---------------------------------------------------------------- the pool, pushed (poolmirror.js)
+
+  pushMs() { const ms = Number(this.poll.poolPushMs ?? 5000); return ms > 0 ? Math.max(1000, ms) : 0; }
+
+  /** Which way this node's changes can reach us: its ZMQ `sequence` topic on loopback, or null. */
+  async sequenceAddress() {
+    let list;
+    try { list = await this.rpc.call('getzmqnotifications', [], { key: `${this.id}:zmq`, priority: 6 }); } catch { return null; }
+    // loopback only: the address is the node's own claim, and this process connects to it
+    const hit = (Array.isArray(list) ? list : []).find((n) => n?.type === 'pubsequence' && /^tcp:\/\/(127\.\d+\.\d+\.\d+|localhost):\d+$/.test(String(n.address)));
+    return hit ? String(hit.address).replace('localhost', '127.0.0.1') : null;
+  }
+
+  async startPoolPush() {
+    if (this.poolPushWant === 'off' || !this.pushMs() || this.stopped) return;
+    let mode = this.poolPushWant === 'poll' ? 'poll' : null;
+    let address = null;
+    if (!mode) {
+      address = await this.sequenceAddress();
+      if (address) mode = 'zmq';
+      else {
+        if (this.poolPushWant === 'zmq') this.log({ level: 'warn', msg: `[${this.id}] mempoolPush 'zmq': the node publishes no sequence topic on loopback (zmqpubsequence); polling for changes instead` });
+        mode = 'poll';
+      }
+    }
+    if (this.stopped) return;
+    const mirror = new PoolMirror({ rpc: this.rpc, id: this.id, mode });
+    this.poolMirror = mirror;
+    if (mode === 'zmq') {
+      this.poolZmq = { address, up: false, sub: null };
+      this.poolZmq.sub = zmqSubscribe(address, ['sequence'], {
+        onMessage: (topic, body, seq) => { if (topic === 'sequence') mirror.onSequence(parseSequence(body), seq); },
+        onState: ({ up, error }) => {
+          const was = this.poolZmq.up;
+          this.poolZmq.up = up;
+          if (up) {
+            mirror.mode = 'zmq';
+            // what happened while we were not listening is unknown: read it whole (a first connect before the
+            // first load needs nothing -- the load has not happened yet, and buffers from here)
+            if (mirror.stats.resyncs > 0) mirror.resync('the notification socket connected');
+            this.clearQuality('pool-push-down');
+          } else {
+            mirror.onDisconnected();
+            mirror.mode = 'poll';          // correct on its own until the socket is back
+            if (was) this.flagQuality('pool-push-down', `the node's mempool notifications (${address}) stopped (${error}); the pool pictures follow it by polling for changes until they come back`, 'info');
+          }
+        },
+      });
+    }
+    this.log({ level: 'info', msg: `[${this.id}] mempool pushed by ${mode === 'zmq' ? `ZMQ sequence at ${address}` : 'polling for changes'}, every ${this.pushMs()} ms; a full read every ${Math.round(this.resyncMs() / 1000)} s` });
+    const loop = () => {
+      if (this.stopped) return;
+      this.poolPushTimer = setTimeout(() => { this.poolPushTick().finally(loop); }, this.pushMs());
+      this.poolPushTimer.unref?.();
+    };
+    loop();
+  }
+
+  resyncMs() { return Math.max(60_000, Number(this.poll.poolResyncMs ?? 600_000)); }
+
+  async poolPushTick() {
+    const m = this.poolMirror;
+    if (!m || this.stopped) return;
+    if (m.needResync || !m.synced) {
+      if (!this.inflightTiers.has('pool') && Date.now() - (this.poolResyncAskedAt ?? 0) > 15_000) {
+        this.poolResyncAskedAt = Date.now();
+        this.runTier('pool');
+      }
+      return;
+    }
+    try {
+      const r = await m.tick();
+      if (r.changed) { this.absorbPool(m.raw); this.emit('changed', 'pool'); }
+    } catch (err) {
+      if (err?.kind !== 'stale' && err?.kind !== 'breaker') this.log({ level: 'debug', msg: `[${this.id}] mempool push tick: ${err.message}` });
+    }
+  }
+
+  /** Everything made from the verbose mempool, remade from `raw`. */
+  absorbPool(raw) {
+    const at = Date.now();
+    const dist = summarizeMempool(raw);
+    dist.at = at;
+    dist.source = this.poolMirror?.synced ? this.poolMirror.mode : 'read';
+    this.state.mempoolDist = dist;
+    this.mempoolDense = denseBlock(raw);   // Viewer Mode 2; not part of the snapshot
+    // THE TEMPLATE'S INPUT (2026-09-13). The block being built is assembled from this map rather than
+    // bought with a getblocktemplate call, so it is kept until it is replaced. Held on the monitor, never
+    // on `state`: it is tens of thousands of entries and must not ride a snapshot frame to a browser.
+    this.mempoolRaw = raw;
+    this.mempoolRawAt = at;
+    this.state.lastGoodAt = at;
+    // the history keeps its old pace whatever the push does (a point every poolMs)
+    if (at - this.poolRecordedAt >= (this.poll.poolMs ?? 20_000) - 500) {
+      this.poolRecordedAt = at;
+      this.history.record('mempool', {
+        count: dist.count,
+        bytes: this.state.mempool.bytes ?? null,
+        usage: this.state.mempool.usage ?? null,
+        maxUsage: this.state.mempool.maxmempool ?? null,
+        totalFee: this.state.mempool.total_fee ?? null,
+        minFee: this.state.mempool.mempoolminfee ?? null,
+        avgFee: dist.avgFeeSat,
+        avgVsize: dist.avgVsize,
+        ingestRate: this.state.logState.relayRate ?? null,
+      });
+    }
   }
 
   scheduleTier(name) {
@@ -289,7 +410,9 @@ export class NodeMonitor extends EventEmitter {
   effectiveTierMs(name) {
     // (a config written before the pool tier existed has no poolMs: the pool then
     // keeps the slow tier's cadence, which is where it used to live)
-    const base = this.poll[`${name}Ms`] ?? (name === 'pool' ? this.poll.slowMs : undefined);
+    let base = this.poll[`${name}Ms`] ?? (name === 'pool' ? this.poll.slowMs : undefined);
+    // the pool, pushed (poolmirror.js): kept current in between, so the full read is only a check on it
+    if (name === 'pool' && this.poolMirror?.synced) base = this.resyncMs();
     if (!base) return null;
     const avg = this.rpc.lane.stats.avgLatencyMs ?? 0;
     const lastMs = this.lastTierMs[name] ?? 0;
@@ -663,28 +786,31 @@ export class NodeMonitor extends EventEmitter {
       }
     }
     if (raw && typeof raw === 'object') {
-      this.state.mempoolDist = summarizeMempool(raw);
-      this.mempoolDense = denseBlock(raw);   // Viewer Mode 2; not part of the snapshot
-      // THE TEMPLATE'S INPUT (2026-09-13). The block being built is assembled from this reply
-      // rather than bought with a getblocktemplate call, so the verbose map is kept until the
-      // next pool tier replaces it. Held on the monitor, never on `state`: it is tens of
-      // thousands of entries and must not ride a snapshot frame to a browser.
-      this.mempoolRaw = raw;
-      this.mempoolRawAt = Date.now();
-      this.state.lastGoodAt = Date.now();
-    }
-    if (this.state.mempoolDist) {
-      this.history.record('mempool', {
-        count: this.state.mempoolDist.count,
-        bytes: this.state.mempool.bytes ?? null,
-        usage: this.state.mempool.usage ?? null,
-        maxUsage: this.state.mempool.maxmempool ?? null,
-        totalFee: this.state.mempool.total_fee ?? null,
-        minFee: this.state.mempool.mempoolminfee ?? null,
-        avgFee: this.state.mempoolDist.avgFeeSat,
-        avgVsize: this.state.mempoolDist.avgVsize,
-        ingestRate: this.state.logState.relayRate ?? null,
-      });
+      // the mirror (poolmirror.js) takes the full read as its new base: the ids and sequence the map is
+      // true at, read right after it, so the notifications from there on can be applied to it
+      const m = this.poolMirror;
+      if (m) {
+        try {
+          const reply = await this.rpc.call('getrawmempool', [false, true], { key: `${this.id}:mirror-ids`, priority: 6 });
+          const ids = idsOf(reply);
+          if (!ids.ids) throw new Error('getrawmempool false true answered with neither txids nor a list');
+          // how far the kept map had drifted from the node, measured each time it is checked
+          if (m.synced && m.raw) {
+            let extra = 0, missing = 0;
+            const truth = new Set(ids.ids);
+            for (const k of Object.keys(m.raw)) if (!truth.has(k)) extra++;
+            for (const k of truth) if (!(k in m.raw)) missing++;
+            m.stats.drift = { at: Date.now(), extra, missing, of: truth.size };
+            this.log({ level: 'info', msg: `[${this.id}] mempool check: the kept map had ${extra} the node no longer has and lacked ${missing} of ${truth.size}` });
+          }
+          m.load(raw, ids.ids, ids.sequence);
+          await m.tick().catch(() => {});      // the few that arrived between the two reads
+          raw = m.raw;
+        } catch (err) {
+          m.resync(`the sequence read after the full read failed: ${err.message}`);
+        }
+      }
+      this.absorbPool(raw);
     }
     this.tierStats = { name: 'pool', ms: Math.round(performance.now() - t0), at: Date.now() };
     return { ok: true, mempool: this.state.mempoolDist?.count ?? 0 };
@@ -2734,6 +2860,8 @@ export class NodeMonitor extends EventEmitter {
         // Aggregates only. The age/feerate point cloud is a chart dataset -- 1500
         // points does not belong in a frame pushed once a second, so it is served
         // by /api/mempool and refreshed on the mempool panel's own cadence.
+        // how the pool pictures are kept fresh (poolmirror.js): 'zmq' | 'poll' while the kept map is in step, else null
+        push: this.poolMirror ? { mode: this.poolMirror.synced ? this.poolMirror.mode : null, everyMs: this.pushMs() } : null,
         dist: s.mempoolDist ? {
           ...s.mempoolDist,
           scatter: undefined,
@@ -3068,6 +3196,8 @@ export class NodeMonitor extends EventEmitter {
   async stop() {
     this.stopped = true;
     this.network?.stop();
+    clearTimeout(this.poolPushTimer);
+    this.poolZmq?.sub?.close();
     for (const t of this.tierTimers.values()) clearTimeout(t);
     if (this.logHealthTimer) clearInterval(this.logHealthTimer);
     if (this.tail) await this.tail.stop();

@@ -119,6 +119,7 @@ export class FakeNode {
     this.startedAt = Date.now();
     this.realBlockTime = 1788826793;
     this.mempool = seedMempool(1200);
+    this.mempoolSeq = 1;
     this.bytesSent = 0;
     this.bytesRecv = 0;
     this.prevHash = '0'.repeat(64);
@@ -273,13 +274,20 @@ export class FakeNode {
           maxdatacarriersize: 100000,
         };
       },
-      getrawmempool(verbose = false) {
+      getrawmempool(verbose = false, sequence = false) {
+        // (mempool_sequence: a counter that moves whenever the pool does -- server/collect/poolmirror.js polls it)
+        if (!verbose && sequence) return { txids: self.mempool.map((t) => t.txid), mempool_sequence: self.mempoolSeq };
         if (!verbose) return self.mempool.map((t) => t.txid);
         // Exactly the field set the real node returns -- no depends, no
         // ancestorcount, no modifiedfees.
         return Object.fromEntries(self.mempool.map((t) => [t.txid, {
           vsize: t.vsize, weight: t.vsize * 4, time: t.time, fees: { base: t.feeBtc },
         }]));
+      },
+      getmempoolentry(txid) {
+        const t = self.mempool.find((x) => x.txid === txid);
+        if (!t) throw Object.assign(new Error('Transaction not in mempool'), { code: -5 });
+        return { vsize: t.vsize, weight: t.vsize * 4, time: t.time, fees: { base: t.feeBtc } };
       },
       getnetworkinfo() {
         return {
@@ -476,6 +484,7 @@ export class FakeNode {
         if (step > 0) { carryBlocks -= step; this.blocks = Math.min(this.headers, this.blocks + step); }
       }
       churnMempool(this.mempool);
+      this.mempoolSeq += 1;
       if (now - lastLog >= logEveryMs) {
         lastLog = now;
         const rate = this.blocks < this.headers ? 380_000 + Math.random() * 90_000 : 220 + Math.random() * 900;

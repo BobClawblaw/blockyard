@@ -590,6 +590,22 @@ Kept as checked rather than deleted, so nobody re-derives them.
   "just a flake". Both now await a promise the task itself resolves once it is genuinely holding
   the lane. Nothing in `server/rpc/` changed: the lane was never wrong, the test was.
 
+- [x] **Reopened and built 2026-09-30, at the operator's word** ("How do we get more granularity, like
+  mempool does over websocket, pushing changes" -- "go ahead, bmc first"). What changed since the
+  decision below: the pool grew twenty-fold (77,525 transactions, 47 MB and 0.6-0.67 s per verbose
+  read on Core, where the 0.08 s below was measured at 12,500), the Simple renderer's slide made a
+  board that settles in one second instead of twenty, and bmc now publishes `pubsequence`
+  (127.0.0.1:28334). The pool is now kept between full reads by `server/collect/poolmirror.js` --
+  from the ZMQ `sequence` topic (`server/collect/zmq.js`, ZMTP written here, no dependency) where
+  the node publishes it, else by comparing its txids every 5 s -- and the pool pictures are rebuilt
+  from it every `poll.poolPushMs` (5 s). A full read runs every `poll.poolResyncMs` (10 min) as a
+  check, and logs how far the kept map had drifted. The objection below to a poll-diff still holds
+  and is still honoured: nothing shows a per-transaction event; the pictures are snapshots of the
+  kept map, which a diff of txids makes exactly as true as a full read. `/api/mempool`'s `feed`
+  says which way this node is fed (`kind: 'zmq'` with `streamAvailable: true` only while the
+  stream is connected and in step). Core as configured here publishes no `sequence` topic (it has
+  `hashtx`/`rawtx` on 28432): it is on the txid poll until `zmqpubsequence` is added to its conf
+  and it is restarted, which is the operator's call. MEASUREMENTS 43.
 - [x] **Closed 2026-09-19 as a decision, not a fix: a visualizer does not need a per-transaction
   stream.** Operator: "Do we really need live mempool polling for a visualizer?" No. The board
   redraws from a pool snapshot every 30 s and its transition takes ~20 s to settle, so events

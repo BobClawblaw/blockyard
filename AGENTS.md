@@ -400,6 +400,30 @@ page every vsync on the card, however cheap the property. So `applyTheme` stamps
 while the renderer is 2.5D and app.css stops every infinite animation under it (one block beside the
 reduced-motion rules, which it mirrors). A NEW INFINITE ANIMATION MUST BE ADDED TO THAT BLOCK, and
 `test/renderer-25d.test.js` fails if the stylesheet gains one that the block does not name.
+**THE POOL IS PUSHED (2026-09-30; operator: "How do we get more granularity, like mempool does over websocket,
+pushing changes" -- "go ahead, bmc first").** `server/collect/poolmirror.js` keeps the verbose mempool map
+(`monitor.mempoolRaw`, from which the dist, the Detailed board and the block being built are all made) current
+between full reads; `monitor.poolPushTick` rebuilds the pictures from it (`absorbPool`) every `poll.poolPushMs`
+(5 s) when it changed; the 1 s snapshot already carries `mempool.dist` (with `at`, `source`) and now `mempool.push`,
+and app.js `adoptPushedPool` takes a newer dist from the frame -- UNDER THE SIMPLE RENDERER ONLY, Simple viewer
+mode only (the 3D renderers' 20 s flights would stack up; they keep the 30 s poll). Per node `mempoolPush`:
+'auto' asks `getzmqnotifications` for a LOOPBACK `pubsequence` (bmc: 127.0.0.1:28334) and subscribes
+(`server/collect/zmq.js`, ZMTP 3.0 written here), else polls `getrawmempool false true` and diffs the txids (Core
+here: it publishes hashtx/rawtx on 28432 but no sequence -- adding `zmqpubsequence` needs its conf and a restart,
+the operator's call). New entries come by batched `getmempoolentry`, a connected block's txids by `getblock h 1`
+(a block's removals are not published, and the mempool sequence jumps at a block by design, so gaps are judged by
+ZMQ's own per-topic counter, never by the mempool sequence). A lost notification, a dropped socket or a
+disconnected block asks for a full read (`tier_pool`, which then reads the ids+sequence and `load`s the mirror);
+while the mirror is in step `effectiveTierMs('pool')` is `poll.poolResyncMs` (10 min), and each such read logs
+the kept map's drift ("mempool check: ..."). A node that answers `getrawmempool false true` with a bare list is
+handled (`idsOf`); an unreadable answer NEVER empties the map. Measured 2026-09-30: Core verbose 47 MB 0.6-0.67 s,
+ids+seq 5 MB 0.08-0.1 s, 200 getmempoolentry batched 5.5 ms; summarizeMempool 45 ms, denseBlock 42 ms on 77k.
+THE SIMPLE BOARD KEEPS ITS LAYOUT (`blockpack.js packExactStable`, used by render3d under Simple only): the last
+scale while the solved one is within 15%, survivors in their squares, new ones first-fit, the tail tiling every
+cell left (so it is always flush); a fresh pack when under half the vbytes survived (a block) or the scale
+drifted. bmc live, per 5 s update: 0 of 599 tiles moved, against 126-348 fresh. Tests: `test/poolmirror.test.js`,
+`test/blockpack-stable.test.js`, the last test in `test/flatslide.test.js`.
+
 **SIMPLE SLIDES BETWEEN LAYOUTS (2026-09-30; operator: "a shifting tiles animation in 2D like mempool space app
 does ... that works well in simple mode" -- "build it, Simple mode first, 1s slide with the row wave").**
 `appearance.flatSlide` 'slide' (shipped) / 'off'. `public/js/flatslide.js` is pure: `planSlide(fromOps, toOps, ...)`
@@ -1043,7 +1067,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1503 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1520 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1373,7 +1397,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1503 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1520 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

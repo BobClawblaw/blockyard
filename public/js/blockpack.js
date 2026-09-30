@@ -370,16 +370,24 @@ export function packStable(prev, txs, opts = {}) {
 //
 // `plain`: [{ txid, vsize, rate }] richest first. `tail`: { vbytes, rateAt(frac) }
 // where rateAt maps a share of the tail (0 = richest) to a feerate, or null.
-export function packExact(plain, tail, { resolution = 44, cap = 3 } = {}) {
-  const RES = Math.max(1, Math.floor(Number(resolution) || 44));
+function exactItems(plain) {
+  return (plain || []).map((c, i) => ({ txid: c.txid ?? `cell-${i}`, vsize: Math.max(1, Number(c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0) }));
+}
+// the scale at which the real transactions' squares plus the tail's area fill RES x RES exactly
+function solveExact(items, tailVb, RES) {
   const total = RES * RES;
-  const items = (plain || []).map((c, i) => ({ txid: c.txid ?? `cell-${i}`, vsize: Math.max(1, Number(c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0) }));
-  const tailVb = tail ? Math.max(0, Number(tail.vbytes) || 0) : 0;
   const realArea = (vpu) => items.reduce((a, c) => { const s = sideFor(c.vsize, vpu, RES); return a + s * s; }, 0);
   // both terms fall as vpu rises, so bisect for the vpu that fills the grid exactly
   let lo = 1, hi = 1e6;
   for (let i = 0; i < 64; i++) { const m = (lo + hi) / 2; if (realArea(m) + tailVb / m > total) lo = m; else hi = m; }
-  let vpu = (lo + hi) / 2;
+  return (lo + hi) / 2;
+}
+
+export function packExact(plain, tail, { resolution = 44, cap = 3 } = {}) {
+  const RES = Math.max(1, Math.floor(Number(resolution) || 44));
+  const items = exactItems(plain);
+  const tailVb = tail ? Math.max(0, Number(tail.vbytes) || 0) : 0;
+  let vpu = solveExact(items, tailVb, RES);
 
   // the real transactions, first-fit; if first fit cannot honour the solved area (it is a
   // heuristic, not a guarantee) the scale steps up a little and they are laid again
@@ -398,7 +406,11 @@ export function packExact(plain, tail, { resolution = 44, cap = 3 } = {}) {
     vpu *= 1.04;
   }
 
-  // the remainder, tiled to the last cell: low-left first, the largest square up to `cap`
+  return fillTail(layout, tiles, tail, tailVb, RES, cap, vpu);
+}
+
+// the remainder, tiled to the last cell: low-left first, the largest square up to `cap`
+function fillTail(layout, tiles, tail, tailVb, RES, cap, vpu) {
   const pieces = [];
   let k = 0;
   // BlockLayout.fits treats rows beyond the grid as empty (the layout grows), so the top edge
@@ -425,4 +437,52 @@ export function packExact(plain, tail, { resolution = 44, cap = 3 } = {}) {
     tiles.push({ txid: p.txid, x: p.x, y: p.y, s: p.s, vsize, rate, color: feeShade(rate, p.txid) });
   }
   return { tiles, gridWidth: RES, gridHeight: RES, vbytesPerUnit: vpu, pieces: pieces.length };
+}
+
+// ---------------------------------------------------------------------------
+// THE STABLE EXACT FILL (2026-09-30; the pool pushed every few seconds, server/collect/poolmirror.js,
+// and the operator's "like mempool space app does"). packExact solves the scale afresh each time, and
+// a new scale changes every square's side -- so every refresh re-laid the whole board and every block
+// moved. With a refresh every 5 s the board would never be still. This keeps the LAST layout's scale
+// while the solved one is within STABLE_DRIFT of it, puts every transaction still in the pool back in
+// its own square, first-fits the new ones into what is free (the departed squares and the tail's
+// ground), and lets the tail tile every cell left exactly as packExact does -- so the board is as flush
+// as ever: the tail is what fills the gaps. The older packStable (above) was set aside for leaving
+// holes; this cannot, because nothing here is ever left empty.
+//
+// Null -- pack fresh -- when there is no last layout, when the scale has drifted past STABLE_DRIFT, when
+// less than STABLE_KEEP of the transactions' vbytes survived (a block was found: a new board, as
+// mempool.space does), or when a new transaction does not fit.
+export const STABLE_DRIFT = 0.15;
+export const STABLE_KEEP = 0.5;
+export function packExactStable(prev, plain, tail, { resolution = 44, cap = 3 } = {}) {
+  const RES = Math.max(1, Math.floor(Number(resolution) || 44));
+  if (!prev || !Array.isArray(prev.tiles) || !(prev.vbytesPerUnit > 0) || prev.gridWidth !== RES) return null;
+  const items = exactItems(plain);
+  const tailVb = tail ? Math.max(0, Number(tail.vbytes) || 0) : 0;
+  const solved = solveExact(items, tailVb, RES);
+  const vpu = prev.vbytesPerUnit;
+  if (Math.abs(solved - vpu) / vpu > STABLE_DRIFT) return null;
+  const was = new Map();
+  for (const t of prev.tiles) if (t && !isPiece(t.txid)) was.set(t.txid, t);   // (a tail piece is 'aggregate-n' or, once named by slot, 'aggregate@x,y')
+  const layout = new BlockLayout({ width: RES, height: RES });
+  const tiles = [];
+  const fresh = [];
+  let kept = 0, total = 0;
+  for (const c of items) {
+    total += c.vsize;
+    const s = sideFor(c.vsize, vpu, RES);
+    const w = was.get(c.txid);
+    if (w && w.s === s && w.y + s <= RES && layout.place(c.txid, w.x, w.y, s)) {
+      tiles.push({ txid: c.txid, x: w.x, y: w.y, s, vsize: c.vsize, rate: c.rate, color: feeShade(c.rate, c.txid) });
+      kept += c.vsize;
+    } else fresh.push([c, s]);
+  }
+  if (total > 0 && kept < total * STABLE_KEEP) return null;
+  for (const [c, s] of fresh) {
+    const pos = layout.insert(c.txid, s);
+    if (pos.y + pos.s > RES) return null;
+    tiles.push({ txid: c.txid, x: pos.x, y: pos.y, s: pos.s, vsize: c.vsize, rate: c.rate, color: feeShade(c.rate, c.txid) });
+  }
+  return { ...fillTail(layout, tiles, tail, tailVb, RES, cap, vpu), stable: true, moved: fresh.length };
 }

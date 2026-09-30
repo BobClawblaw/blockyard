@@ -31,6 +31,18 @@ import { feeColor } from './feepalette.js';
 // IDENTICAL on Overview and Mining, so both call this and nothing else --
 // same data, same options. A "smaller copy" that quietly diverges is exactly
 // the failure this replaces.
+// HOW THE BOARD FOLLOWS THE POOL, said under it: under the Simple renderer with the pool pushed
+// (server/collect/poolmirror.js), every few seconds, in place; otherwise the 30 s poll and the flights
+export function pushedNote(s, state) {
+  const push = s?.mempool?.push;
+  let simple = false;
+  try { simple = loadSettings().appearance.renderer === '2.5d'; } catch { /* no settings: not Simple */ }
+  if (push?.mode && simple && state?.viewerMode !== '2') {
+    return `The pool reaches this board every ${Math.round((push.everyMs ?? 5000) / 1000)} s as it changes (${push.mode === 'zmq' ? "the node's own notifications" : 'polling the node for changes'}): transactions still waiting keep their places, new ones drop into the free space, and ones that leave shrink away. A block found starts a new board.`;
+  }
+  return 'Blocks lift off, travel and land when the pool changes; the pool is polled every 30 s and a change waits for the running animation to land.';
+}
+
 export function poolViewerArgs(s, state) {
   const mp = state?.mempoolDist ?? s?.mempool ?? {};
   return { cells: mp.cells ?? [], totalVsize: mp.totalVsize ?? mp.usage ?? null };
@@ -1039,7 +1051,7 @@ export function renderBlockSpace(s, state, h) {
     const mp = state?.mempoolDist ?? s?.mempool ?? {};
     const count = mp.count ?? s?.mempool?.count ?? null;
     note.textContent = (mp.cells ?? []).length
-      ? `One block's worth (1,000,000 vB) of the ${count != null ? fmtNum(count, h) : '?'} transactions waiting, laid out richest first; hover a block for its transaction. Blocks lift off, travel and land when the pool changes; the pool is polled every 30 s and a change waits for the running animation to land.`
+      ? `One block's worth (1,000,000 vB) of the ${count != null ? fmtNum(count, h) : '?'} transactions waiting, laid out richest first; hover a block for its transaction. ${pushedNote(s, state)}`
       : 'The mempool detail has not arrived yet: it is polled every 30 s while this page is open.';
   }
   applyMiningStyles(document);

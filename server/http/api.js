@@ -1286,20 +1286,34 @@ async function txDrill(ctx, app) {
   }
 }
 
+export function poolFeed(m) {
+  const mir = m.poolMirror;
+  const every = Math.round((m.pushMs?.() ?? 0) / 1000);
+  const full = Math.round((m.resyncMs?.() ?? 600_000) / 1000);
+  if (mir?.synced && mir.mode === 'zmq') {
+    return { kind: 'zmq', cadenceSec: every, streamAvailable: true,
+      why: `the node publishes its mempool additions and removals (zmqpubsequence); the pool pictures are rebuilt from the kept map every ${every} s when it changed`,
+      source: `ZMQ sequence at ${m.poolZmq?.address ?? '?'}; new entries by getmempoolentry, a connected block's by getblock; a full read every ${full} s` };
+  }
+  if (mir?.synced) {
+    return { kind: 'poll', cadenceSec: every, streamAvailable: false,
+      why: `this node publishes no mempool sequence (zmqpubsequence), so its changes are found by comparing its txids every ${every} s -- nothing is removed from the picture until the node has removed it`,
+      source: `getrawmempool false true (txids and the mempool's sequence) every ${every} s; new entries by getmempoolentry; a full read every ${full} s` };
+  }
+  return { kind: 'poll', cadenceSec: Math.round((m.poll?.poolMs ?? 20_000) / 1000), streamAvailable: false,
+    why: 'the pool is read whole on its own tier; no stream of its changes is connected',
+    source: `getrawmempool verbose on the ${Math.round((m.poll?.poolMs ?? 20_000) / 1000)} s pool tier` };
+}
+
 function mempoolView(m) {
   const s = m.snapshot({ seriesRanges: {} });
   return {
     node: m.id,
-    // What kind of data this is, stated rather than implied by the word "live":
-    // the node refuses zmqpubsequence, so there is no per-transaction add/remove
-    // stream to show and no UI wording should imply one (docs/DEFECTS.md).
-    feed: {
-      kind: 'poll',
-      cadenceSec: 20,
-      streamAvailable: false,
-      why: 'the node refuses zmqpubsequence: it can publish adds but has no clean "removed" choke point, so a diff of successive polls would report evictions as removes only when the poll happened to straddle them',
-      source: 'getrawmempool verbose on the 20 s pool tier',
-    },
+    // What kind of data this is, stated rather than implied by the word "live" (docs/DEFECTS.md). Since
+    // 2026-09-30 the pool is kept current between full reads (collect/poolmirror.js): from the node's ZMQ
+    // `sequence` notifications where it publishes them, else by comparing its txids every few seconds. The
+    // pictures are snapshots of that kept map either way; no per-transaction event is shown.
+    feed: poolFeed(m),
     info: s.mempool,
     // The full distribution including the scatter points, which the snapshot
     // deliberately leaves out.

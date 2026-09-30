@@ -186,6 +186,14 @@ const DEFAULTS = {
     // refresh"): it measured 0.144 s for ~19k entries on this node, cheap next to
     // gettxoutsetinfo, so it no longer waits on the heavy minute.
     poolMs: 20000, // mempool verbose (feeds the block-space viewer and the mempool map)
+    // THE POOL, PUSHED (2026-09-30; collect/poolmirror.js). Between full reads the verbose map is kept
+    // current from the node's ZMQ `sequence` notifications, or by polling the txids and the mempool's
+    // sequence, and the pool pictures are rebuilt from it this often when anything changed. 0 turns it
+    // off: the full read every poolMs, as before. Per node, `mempoolPush`: auto | zmq | poll | off.
+    poolPushMs: 5000,
+    // ...and while that is live the full read (47 MB on Core with 77k transactions, measured 2026-09-30)
+    // runs this often instead of every poolMs, as a check on the kept map
+    poolResyncMs: 600000,
     slowMs: 60000, // indexes, txoutset, chaintxstats
     rareMs: 900000, // peerinfo, deployment info, rpc info
     blockBackfill: 30, // blocks of history to backfill at startup

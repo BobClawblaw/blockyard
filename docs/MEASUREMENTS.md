@@ -1747,3 +1747,51 @@ outbound leg(s)`. The census named each within minutes, which is the reason ther
 Six rules later every current log reads 100.00% again: run 27 18,548 lines, run 26 73,175,
 production 9,746. The network being disabled and a repair that cannot start go to the feed; the rest
 is state.
+
+## 43. The pool, pushed: what a full read costs now, and what a change costs (2026-09-30)
+
+Why it was measured: the operator asked for the Block space board to follow the pool the way
+mempool.space's does, pushed rather than polled every 30 s (DEFECTS, "Reopened and built
+2026-09-30"). The 2026-09-10 figure behind the 20 s full read (0.08 s, 2.2 MB, 12,555 transactions)
+was three weeks and twenty-fold out of date.
+
+**A full read** (`getrawmempool true`), loopback, three runs each:
+
+| node | transactions | bytes | seconds | JSON.parse here |
+|---|---|---|---|---|
+| Core (8335) | 77,525 | 47.3 MB | 0.59-0.67 | 142 ms |
+| bmc (8331) | 52,817 | 35.1 MB | 0.66 | -- |
+
+At 5 s that would be 13% of Core's RPC time on one call, before parsing.
+
+**What a change costs:**
+
+| call | Core | bmc |
+|---|---|---|
+| `getrawmempool false true` (txids + mempool sequence) | 5.0 MB, 0.08-0.10 s | 4.0 MB, 0.009 s |
+| 200 `getmempoolentry`, one batch | 95 KB, 5.5 ms | -- |
+| ZMQ `sequence` notifications | not published (hashtx/rawtx only, 28432) | 127.0.0.1:28334; 74 in 20 s (68 A, 6 R), no gaps |
+
+bmc's notification hashes are in RPC byte order (5 of 5 added hashes found in `getrawmempool`), and
+`getrawmempool false true`'s `mempool_sequence` is the NEXT number: the last notification seen before
+the call carried 73,850, the call answered 73,851.
+
+**Rebuilding the pictures from the kept map**, Core's 77,525 transactions, mean of five:
+`summarizeMempool` 45 ms, `denseBlock` 42 ms, `templateFromMempool` 170 ms (that one on demand, 15 s
+fresh). The server process ran 7% of a core with both nodes pushed every 5 s (one minute of
+`/proc/<pid>/stat`), against 11% for the live service on the 20 s full read -- not like for like
+(the live one serves browsers and follows bmc's log), but not more.
+
+**The kept map against the node:** counts equal to `getmempoolinfo.size` within the few seconds of
+arrivals between the two reads (Core 84,290 / 84,290; bmc 61,961 / 61,970).
+
+**The Simple board's layout, per 5 s update, bmc's live pool, 599 tiles:** a fresh `packExact`
+moved 126-348 tiles; `packExactStable` moved 0 and placed the 1-7 arrivals.
+
+**A block, on bmc's `sequence` topic** (height 969,309, 4,024 transactions, 14:45:29 UTC): one `C`
+message, and in the three seconds after it 11 `A` and 1 `R`. A block's own removals are NOT
+published as `R`, so the mirror drops them itself from `getblock <hash> 1` on the `C`.
+
+**The kept map against a full read, ten minutes on** (the check `tier_pool` logs; the bmc window
+included that block): bmc 0 held that the node no longer had, 10 lacking of 63,233; Core (the txid
+poll) 2 and 16 of 85,531 -- in both, what arrives and leaves within one 5 s tick.

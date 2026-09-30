@@ -13,7 +13,7 @@
 //     one's loop.
 //  3. Zero dependencies, no CDN.
 
-import { packBlock, packExact, vbytesPerUnit, vsizeForSide } from './blockpack.js';
+import { packBlock, packExact, packExactStable, vbytesPerUnit, vsizeForSide } from './blockpack.js';
 import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
@@ -5751,7 +5751,13 @@ export function render3d(canvas, cells, options = {}) {
     // the tail's pieces take the feerate of the stratum they fall in, richest first -- the same
     // rule toTxs applies, so the colours are unchanged; only the layout is
     const tail = { vbytes: Math.max(1, Number(agg.vbytes ?? agg.vsize) || 0), rateAt: strataRates(agg.strata, Math.max(0, Number(agg.rate) || 0)) };
-    packed = packExact(plain, tail, { resolution: opts.resolution, cap: 3 });
+    // SIMPLE KEEPS ITS LAYOUT (2026-09-30): the pool now arrives every few seconds (server/collect/poolmirror.js),
+    // and a fresh pack moves nearly every block each time. Under the Simple renderer the last layout is kept
+    // where it still holds (blockpack.js packExactStable): the ones still in the pool stay put, the new ones
+    // take the free squares, and a found block or a drifted scale packs fresh. The 3D renderers pack fresh.
+    const cfgX = { resolution: opts.resolution, cap: 3 };
+    packed = (flat && st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
+    st.exactPrev = flat ? packed : null;
     fitK = 1;                                            // nothing to shrink: the scale was solved
   } else {
     packed = laid ? { tiles: laid, vbytesPerUnit: 0, gridWidth: 1 } : pack(fitK);

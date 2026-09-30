@@ -133,13 +133,14 @@ test('two nodes are both monitored, named, and kept apart', async () => {
   });
 });
 
-test('the mempool page says it is a poll, not a transaction stream', async () => {
+test('the mempool page says how it is fed: a poll unless a stream is really connected', async () => {
   await withApp({}, async ({ client }) => {
     await client.login('admin');
     const mp = await client.get('/api/mempool');
+    // the fake node publishes no ZMQ: a poll (whole, or of its changes once the kept map is loaded), never a stream
     assert.equal(mp.body.feed.kind, 'poll');
-    assert.equal(mp.body.feed.streamAvailable, false, 'the node refuses zmqpubsequence; the UI must not imply per-tx events');
-    assert.match(mp.body.feed.why, /removed/, 'and the reason names the missing choke point');
+    assert.equal(mp.body.feed.streamAvailable, false, 'no sequence stream is connected; the UI must not imply per-tx events');
+    assert.ok(mp.body.feed.why && mp.body.feed.source);
   });
 });
 
