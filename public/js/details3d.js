@@ -5305,16 +5305,18 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
   // instead of being built again (gl2d.js retained): sameBoard compares this frame's ops with the
   // last frame's, value for value, so "the same" is measured, never assumed.
   // (it takes the context it draws on: the frame's, or Software's kept layer -- keptBoard, below)
-  const board = (ctx) => {
+  // (`list`/`underlay`: the retained layer below draws the RESTING board through this, and then only the cubes an effect
+  // touches over it, without the ground again)
+  const board = (ctx, list = frame.ops, underlay = true) => {
     ctx.emissive = true;
-    let glow = opts.grid ? drawGrid(ctx, view, opts, gridN, blockRows, gridH) : null;
-    let wall = opts.axes ? () => drawAxes(ctx, view, opts.axes, gridN) : null;
+    let glow = underlay && opts.grid ? drawGrid(ctx, view, opts, gridN, blockRows, gridH) : null;
+    let wall = underlay && opts.axes ? () => drawAxes(ctx, view, opts.axes, gridN) : null;
     // (ctx.emissive is the GL renderer's: what throws light in its bloom. The cubes do NOT -- their
     // colour is the feerate -- so it is off round them and on for the neon, the line and the effects.
     // On the 2D context it is a property nobody reads.)
     const quick = ctx.gl2d === true && typeof ctx.fillPoly === 'function';
     const neonSoft = ctx.gl2d === true && view.softGlow !== false;   // (softGlow: false is the parity check's: the 2D canvas's hard strokes)
-    for (const op of frame.ops) {
+    for (const op of list) {
       if (glow && op.face !== 'shadow') { ctx.emissive = true; glow(); glow = null; }
       if (wall && op.face !== 'shadow') { ctx.emissive = true; wall(); wall = null; }
       if (neonSoft && op.neonPart === true) continue;          // (drawn by its halo's one stroke -- below)
@@ -5380,8 +5382,16 @@ function paintFrame(ctx, geom, frame, opts, view, gridN, blockRows, gridH = grid
     if (glow) glow();   // a board with no cubes on it
     if (wall) wall();
   };
-  if (ctx.gl2d === true) ctx.retained('board', sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), () => board(ctx));
-  else keptBoard(ctx, geom, fit, sameBoard(ctx, frame.ops, opts, view, geom, gridN, gridH, blockRows), board);
+  // THE RETAINED LAYER UNDER AN EFFECT (2026-09-30; operator: "build the retained layer for unmoved tiles"). While an
+  // effect plays over a board at rest, the frame used to be the whole board drawn live -- measured on the Detailed
+  // board's 3,000 cubes at 2560x1300 on WebGL, 84-102 ms a frame -- though the effect was touching a band of it. When
+  // draw() can vouch for it (frame.overlay: see there), the board drawn is the RESTING one, which is kept on the card
+  // (retained) or in Software's layer (keptBoard) exactly as at rest, and only the touched cubes are drawn over it, in
+  // their paint order. A touched cube's faces cover its resting faces exactly: a tint or a glow is the same outline.
+  const base = frame.overlay ? frame.baseOps : frame.ops;
+  if (ctx.gl2d === true) ctx.retained('board', sameBoard(ctx, base, opts, view, geom, gridN, gridH, blockRows), () => board(ctx, base));
+  else keptBoard(ctx, geom, fit, sameBoard(ctx, base, opts, view, geom, gridN, gridH, blockRows), (c) => board(c, base));
+  if (frame.overlay) board(ctx, frame.overlay, false);
   ctx.emissive = true;                       // (a replayed board never ran the line that leaves it on)
   if (opts.axes?.line) { priceLine(ctx, view, opts.axes); if (ctx.gl2d === true) ctx.softStrokeMin = 0; }   // (whichever way priceLine left: the glow rule is the line's alone)
   // THE LABELS ARE READ, NOT LIT (operator, 2026-09-21, of the current price on the WebGL board with
@@ -6151,6 +6161,20 @@ export function render3d(canvas, cells, options = {}) {
     else {
       frame = frameAt(st.plan, t, view);
       st.restFrame = frame.settled && !view.fx && !view.hoverGlow ? { plan: st.plan, draw, frame } : null;
+      if (st.restFrame) st.restBase = st.restFrame;   // (kept through an effect: the retained layer's base)
+      // THE RETAINED LAYER'S TEST (paintFrame): a settled board under an effect that only tints or lights cubes --
+      // none lifted, hidden, shrunk or pulled (buildScene liveOnly), no ring the GRID draws under the cubes (ripple,
+      // outline, tide, the ball), no hover -- is drawn as its resting self plus the touched cubes over it
+      const gridFx = view.fx && (view.fx.kind === 'ripple' || view.fx.kind === 'outline' || view.fx.kind === 'tide' || !!view.fx.ball);
+      const rb = st.restBase;
+      if (!flat && view.fx && !gridFx && frame.settled && !frame.liveOnly && frame.touched && !view.hoverGlow
+        && rb && rb.plan === st.plan && rb.draw === draw) {
+        // ...and only OPAQUE faces: a see-through face (the x-ray) drawn over its resting copy shows that copy, not the
+        // floor (found by comparing the pixels: the x-rayed cubes came out solid)
+        const overlay = frame.ops.filter((op) => frame.touched.has(op.txid));
+        const opaque = overlay.every((op) => { const f = op.fill; if (typeof f !== 'string' || !f.startsWith('rgba(')) return true; const a = Number(f.slice(f.lastIndexOf(',') + 1, -1)); return !(a < 0.995); });
+        if (opaque) frame = { ...frame, baseOps: rb.frame.ops, overlay };
+      }
     }
     if (flat) paintFlat(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);
     else paintFrame(surface, geom, frame, opts, view, st.gridW, st.blockRows, st.gridH);

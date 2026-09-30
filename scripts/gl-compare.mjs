@@ -21,6 +21,8 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+// (GL_ROOT: serve another checkout's public/ -- to time two versions of the renderer on the same scenes)
+const ROOT_USED = process.env.GL_ROOT ? path.resolve(process.env.GL_ROOT) : ROOT;
 const arg = (name, d) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : d; };
 const OUT = arg('--out', path.join(os.tmpdir(), 'blockyard-gl-compare'));
 const ONLY = arg('--only', '');
@@ -78,10 +80,14 @@ try {
   for (let i = 0; i < 72; i++) { const o = p; p += (rnd() - 0.48) * 900; const c = p; candles.push({ t: Date.UTC(2026, 8, 18) + i * 3600e3, o, c, h: Math.max(o, c) + rnd() * 300, l: Math.min(o, c) - rnd() * 300, v: 10 + rnd() * 90 }); }
   const ser = { candles, base: { id: 'x', name: 'Test', pair: 'BTC/USD' } };
 
+  // --dense: the Detailed viewer's board -- a block's worth of small transactions, one square each (mining.js DENSE_OPTS)
+  const dense = [];
+  for (let i = 0; i < 3000; i++) dense.push({ txid: ('d' + i).padEnd(64, 'x'), vbytes: Math.round(150 + Math.pow(rnd(), 3) * 1350), rate: 60 - i * 0.018 });
   const host = document.getElementById('host');
   const stage = () => { host.innerHTML = '<div class="wrap"><canvas class="board"></canvas></div>'; return host.querySelector('canvas'); };
   const boards = {
     space: (canvas, extra) => d3.render3d(canvas, cells, { ...st.spaceOptions(S), idleFx: false, ...extra }),
+    dense: (canvas, extra) => d3.render3d(canvas, dense, { ...st.spaceOptions(S), resolution: 96, slab: 1.2, order: 'diagonal', gridStep: 8, dither: true, idleFx: false, ...extra }),
     // a game's playfield: tiles the caller laid, no sky of its own, a CLEAR background over whatever
     // is behind the canvas (Tetrust's well over its sky canvas), neon finish, no choreography
     well: (canvas, extra) => {
@@ -130,6 +136,7 @@ try {
   const scenes = [];
   for (const sky of ['galaxy', 'earth', 'none']) scenes.push({ name: 'space-rest-' + sky, board: 'space', fx: null, extra: { ...st.skyFor({ ...S, space: { ...S.space, sky } }, 'space') } });
   scenes.push({ name: 'markets-rest', board: 'markets', fx: null });
+  if (${process.argv.includes('--dense')}) { scenes.push({ name: 'dense-rest', board: 'dense', fx: null }); for (const k of ['ripple', 'tide', 'cascade', 'outline', 'scan', 'xray', 'radar', 'rain', 'stormball']) scenes.push({ name: 'dense-' + k, board: 'dense', fx: k }); }
   // the finishes: a cube under chrome is thirty-odd translucent quads, so this is where a slow board shows
   for (const style of ['chrome', 'satin']) scenes.push({ name: 'space-rest-' + style, board: 'space', fx: null, extra: { sheen: true, sheenStyle: style } });
   scenes.push({ name: 'space-rest-neon', board: 'space', fx: null, extra: { neon: true } });
@@ -229,8 +236,8 @@ const TYPES = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'te
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/') { res.writeHead(200, { 'content-type': 'text/html' }); res.end(PAGE); return; }
-  const file = path.join(ROOT, path.normalize(url.pathname));
-  if (!file.startsWith(ROOT) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
+  const file = path.join(ROOT_USED, path.normalize(url.pathname));
+  if (!file.startsWith(ROOT_USED) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-store' });
   res.end(await readFile(file));
 });

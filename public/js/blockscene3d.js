@@ -1415,7 +1415,11 @@ export function buildScene(tiles, o = {}) {
   // the caller keeps for one layout), keyed on every field of the tile and its hover glow. Not under an effect (fxAt
   // shapes a resting cube), not with cube-on-cube shadows (they depend on the flyers above), not off the oblique
   // camera (growth depends on neighbours). The ops are the same objects, so the renderer draws what it drew.
-  const memo = o.faceMemo instanceof Map && !o.fx && o.oblique && !casters.length ? o.faceMemo : null;
+  // (UNDER AN EFFECT TOO, since the same evening's retained layer: an effect touches a band of the board at a time, and
+  // the cubes it does not touch are the same cubes -- the key carries the tile's own effect values, rounded, so a cube
+  // the ripple has not reached is a hit and one it is lighting is built live)
+  const memo = o.faceMemo instanceof Map && o.oblique && !casters.length ? o.faceMemo : null;
+  const fxKey = (v) => { if (v === FX_NONE) return ''; let k = ''; for (const f in v) { const x = v[f]; k += `|${f}:${typeof x === 'number' ? Math.round(x * 1000) : Array.isArray(x) ? x.join(',') : x}`; } return k; };
   let rec = null;
   const close = () => {
     if (!rec) return;
@@ -1426,12 +1430,31 @@ export function buildScene(tiles, o = {}) {
     memo.set(rec.txid, r);
     rec = null;
   };
+  // WHICH CUBES AN EFFECT TOUCHES THIS FRAME (the retained layer, the same evening): `touched` is every cube whose
+  // effect values are not the resting ones; `liveOnly` is set when one of them is lifted, hidden, shrunk or pulled --
+  // then a resting copy under it would show, and the caller must draw the whole board live (details3d draw).
+  const touched = new Set();
+  let liveOnly = false;
+  const touch = (t, v) => {
+    if (!v || v === FX_NONE) return;
+    let any = false;
+    for (const f in v) {
+      const x = v[f];
+      if (typeof x !== 'number') continue;
+      const d = f === 'scale' ? Math.abs(x - 1) : Math.abs(x);
+      if (d > 1e-3) { any = true; if (f === 'lift' || f === 'hide' || f === 'scale' || f === 'pull' || f === 'pullAt' || f === 'pullPeak' || f === 'orbitR' || f === 'lean') liveOnly = true; }
+    }
+    if (any) touched.add(t.txid);
+  };
   const keyOf = (t) => { let k = `h${o.hoverGlow?.get(t.txid) ?? 0}`; for (const f in t) k += `|${f}:${t[f]}`; return k; };
   for (const t of ordered) {
+    let fxv0 = null;
     if (memo) {
       close();
       if ((t.z ?? 0) <= 0.02 && !pulled.has(String(t.txid))) {
-        const key = keyOf(t);
+        fxv0 = fxAt(t, o.fx);
+        touch(t, fxv0);
+        const key = keyOf(t) + fxKey(fxv0);
         const hit = memo.get(t.txid);
         if (hit && hit.key === key) {
           for (const op of hit.ground) ground.push(op);
@@ -1443,7 +1466,8 @@ export function buildScene(tiles, o = {}) {
         rec = { txid: t.txid, key, g0: ground.length, s0: shadows.length, a0: air.length };
       }
     }
-    const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
+    const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : (fxv0 ?? fxAt(t, o.fx));
+    if (fxv0 == null) touch(t, fxv);
     // GONE FOR THE DURATION, not deleted: a hidden cube is skipped this frame and drawn again the
     // moment the effect stops asking for it to be hidden.
     if (fxv.hide > 0.5) continue;
@@ -1919,7 +1943,7 @@ export function buildScene(tiles, o = {}) {
     lifted.sort((p, q) => (pulled.get(String(p.op.txid)) - pulled.get(String(q.op.txid))) || (p.i - q.i));
     ops = [...rest.map((e) => e.op), ...lifted.map((e) => e.op)];
   }
-  return { ops, bounds: ops.length ? { minX, maxX, minY, maxY } : null, count: ordered.length };
+  return { ops, bounds: ops.length ? { minX, maxX, minY, maxY } : null, count: ordered.length, touched, liveOnly: liveOnly || pulled.size > 0 };
 }
 
 // PAINT ORDER UNDER THE OBLIQUE CAMERA (operator, 2026-09-11: "Blocks

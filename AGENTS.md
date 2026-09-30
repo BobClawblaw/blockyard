@@ -441,7 +441,19 @@ no Simple slide) AND makes a static board (then: "I don't want any animations wi
 Software and WebGL modes"): idleFx off, `skyStill` (the sky at STILL_SKY_NOW in paintFrame too), no sky loop or timer,
 `st.static` (effects refused, hover at once), and the same-data shortcut Simple has. Chromium, None: 22 frames / 10 s,
 GPU 0.3%. Markets with its effects off passes its own `{rise 0, travel 1, drop 0}`, NOT MOTION.still, and keeps its sky -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
-having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. THE DETAILED BOARD'S SMALL UPDATES ARE DRAWN, NOT FLOWN (the same evening; operator, of the Kiosk: "shit gets really
+having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. THE RETAINED LAYER UNDER AN EFFECT (the same evening; operator: "build the retained layer for unmoved tiles"). draw()
+sets `frame.overlay` (+ `baseOps` = st.restBase, the last settled no-fx frame of this plan) when an effect is on a settled
+board, buildScene says no cube is lifted/hidden/shrunk/pulled (`liveOnly`), the effect draws nothing into the GRID under
+the cubes (ripple, outline, tide, ball), no hover, and every touched op is OPAQUE (the x-ray's see-through faces came out
+solid over their resting copies -- found by diffing pixels against main, gl-compare --dense --out). paintFrame then
+retains/keeps the base board and draws only the overlay ops over it. Coverage is modest: of 29 space effects only
+twinkle, xray (no: translucent), rain, radar and plasma qualify for their whole run; most lift cubes. Most of the win
+elsewhere is the gl2d colour cache (two generations of 16,384; it was 8,192 and CLEARED when full -- a Detailed board
+has >11k shades) and buildScene's faceMemo now running under effects (key + rounded fx values). A per-op VERTEX cache in
+gl2d was tried and measured WORSE (recording each op's slice cost more than the hits saved); do not bring it back without
+a better recording path. Bench: `node scripts/gl-compare.mjs --gpu vulkan --bench --gl-only --dense --size 2560x1300`;
+`GL_ROOT=<checkout>/public` times another checkout on the same scenes. Runs on this box vary +-30% (other sessions'
+browsers): compare in pairs, twice. `test/retained-layer.test.js`. THE DETAILED BOARD'S SMALL UPDATES ARE DRAWN, NOT FLOWN (the same evening; operator, of the Kiosk: "shit gets really
 slow now when objects are crossing the screen on the market panel"): render3d `denseSmall` (a kept-layout update from
 packDenseStable) plans still; re-packs fly. Profiled: a Detailed flight frame is dominated by the PAINT (details3d
 `board`, `drawGround`/trace), not buildScene -- ~3,000 tiles' ops issued every frame. Kiosk WebGL+Detailed main
@@ -1142,7 +1154,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1542 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1546 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1472,7 +1484,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1542 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1546 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

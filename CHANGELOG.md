@@ -62,6 +62,19 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **Effects on the Detailed board cost 20-36% less.** Three changes, each checked pixel for pixel
+  against the old renderer:
+  - **The WebGL colour cache no longer thrashes.** It held 8,192 colours and was cleared when full;
+    a Detailed board has more than 11,000 distinct shades, so every frame parsed every colour again.
+    It now keeps two generations instead.
+  - **A resting cube's faces are reused** from frame to frame while an effect is not touching it.
+  - **A retained layer:** while an effect only tints or lights some cubes, the resting board is kept
+    (on the graphics card, or in Software's layer), and only the touched cubes are drawn over it.
+    Effects that lift, hide, shrink or pull cubes, draw a ring into the floor, or make cubes
+    see-through are still drawn whole, because a copy underneath would show.
+  Measured at 2560x1300 on WebGL, two runs each (`scripts/gl-compare.mjs --dense`, new): ripple
+  58 -> 44 ms a frame, outline 51-62 -> 40, scan 60 -> 42, x-ray 35-37 -> 23-26, rain 54-59 -> 43-45,
+  stormball 43-45 -> 27-29, radar 69-75 -> 63-69.
 - **The Kiosk no longer stutters beside a Detailed board.** With the pool pushed every 5 seconds and the
   Detailed layout settling after each update, that board was animating most of the time. Each
   animated frame repaints all of its ~3,000 tiles, 12-23 ms of the page's only main thread, which

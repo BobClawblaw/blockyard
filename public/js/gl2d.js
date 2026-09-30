@@ -890,7 +890,7 @@ export function gl2dSupported() {
 
 const MAX_VERTS = 1 << 19;
 const TEXT_CACHE_MAX = 256;
-const COLOUR_CACHE_MAX = 8192;
+const COLOUR_CACHE_MAX = 16384;   // per generation (colourOf keeps two)
 
 /**
  * A 2D-context look-alike drawing on `canvas` with WebGL2. Null when the context or the program
@@ -1042,12 +1042,18 @@ export function createGl2d(canvas, hooks = {}) {
   let prepared = false;
 
   const polyScratch = [];
-  const colours = new Map();
+  // TWO GENERATIONS, NOT A CLEAR (2026-09-30; profiled on the Detailed board under an effect: colourOf was the largest
+  // single function, 9% of the run). The cache held 8,192 colours and was CLEARED when full -- and a Detailed board's
+  // ~11,000 faces carry more distinct shades than that, so every frame emptied it and parsed every colour again. Now a
+  // full map becomes the old generation and a fresh one starts; a colour found in the old one moves to the new. What a
+  // board uses every frame stays; a burst of particle colours ages out after two generations, never growing it past two.
+  let colours = new Map(), coloursOld = new Map();
   const colourOf = (style) => {
     let c = colours.get(style);
     if (c === undefined) {
-      c = parseColour(style) ?? cssColour(style);
-      if (colours.size >= COLOUR_CACHE_MAX) colours.clear();   // effects mint a colour per particle per frame
+      c = coloursOld.get(style);
+      if (c === undefined) c = parseColour(style) ?? cssColour(style);
+      if (colours.size >= COLOUR_CACHE_MAX) { coloursOld = colours; colours = new Map(); }   // effects mint a colour per particle per frame
       colours.set(style, c);
     }
     return c;
