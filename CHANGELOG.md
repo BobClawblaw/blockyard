@@ -75,8 +75,8 @@ All notable changes to this project are documented here. The format follows
   The refresh button still takes one at once. The label beside it and the note under the board say
   the interval.
 - **Rapid now takes about 3 seconds** (it was 4). A found block with 2,206 blocks moving settled in
-  3,029 ms. Each "Refresh animation" choice now shows its length: Rapid · 3 s, Full flight · 20 s,
-  Quick · 10 s, None · 0 s.
+  3,029 ms. Each "Refresh animation" choice now shows how long its flight takes: Rapid (3 s flight),
+  Full flight (20 s), Quick (10 s flight), None (no flight).
 - **The Block Space effects' timers work again.** Since the pool arrives every 5 seconds, the board
   "landed" every 5 seconds. Each landing replaced the between-effects timer with the
   first-effect-after-landing one, so an effect was always about a second away and "Between effects,

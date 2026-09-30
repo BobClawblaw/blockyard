@@ -686,10 +686,12 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
       }),
       Object.freeze({
-        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Each choice says how long its whole flight takes: Rapid (the default) about three seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
+        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Each choice says how long its whole flight takes -- how long the blocks are moving, not how often the board refreshes (that is Refresh every, below): Rapid (the default) about three seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
         // (the seconds each takes, measured on a found block over the live pool: 3.0, 20.3, 9.5 -- operator: "show the
         // number of seconds that each menu item refreshes by")
-        options: Object.freeze([['rapid', 'Rapid \u00b7 3 s'], ['full', 'Full flight \u00b7 20 s'], ['quick', 'Quick \u00b7 10 s'], ['still', 'None \u00b7 0 s']]),
+        // (the FLIGHT's length, said as such: "Rapid \u00b7 3 s" read as a refresh interval beside "Refresh every" --
+        // operator, the same evening: "Just clarify the labels")
+        options: Object.freeze([['rapid', 'Rapid (3 s flight)'], ['full', 'Full flight (20 s)'], ['quick', 'Quick (10 s flight)'], ['still', 'None (no flight)']]),
       }),
       Object.freeze({
         key: 'refreshEvery', label: 'Refresh every (seconds)', kind: 'range', min: 5, max: 120, step: 5,

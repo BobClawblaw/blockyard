@@ -159,7 +159,7 @@ test('rapid takes about three seconds; each Refresh animation option says its se
   assert.ok(rapid.settleAt <= 3_300, `rapid settles in ${rapid.settleAt} ms`);
   const rows = PANEL.find((g) => g.group === 'space').rows;
   const labels = Object.fromEntries(rows.find((r) => r.key === 'motion').options);
-  assert.match(labels.rapid, /3 s/); assert.match(labels.quick, /10 s/); assert.match(labels.full, /20 s/); assert.match(labels.still, /0 s/);
+  assert.match(labels.rapid, /3 s flight/); assert.match(labels.quick, /10 s flight/); assert.match(labels.full, /20 s/); assert.match(labels.still, /no flight/);
   const every = rows.find((r) => r.key === 'refreshEvery');
   assert.deepEqual([every.kind, every.min, every.max], ['range', 5, 120]);
   assert.equal(DEFAULTS.space.refreshEvery, 5);
