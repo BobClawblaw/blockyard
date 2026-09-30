@@ -325,8 +325,12 @@ export function packStable(prev, txs, opts = {}) {
       if (k && k.y + k.s <= line) pos[i] = layout.place(i, k.x, k.y, k.s);
     }
     let waiting = 0;
-    for (let i = 0; i < items.length; i++) {
-      if (pos[i]) continue;
+    // (opts.bigFirst: the ones not kept go in biggest first -- a small square placed first takes the
+    // corner a big one needed, and the big one lands a row higher over a gap; 2026-09-30, packDenseStable)
+    const rest = [];
+    for (let i = 0; i < items.length; i++) if (!pos[i]) rest.push(i);
+    if (opts.bigFirst) rest.sort((a, b) => items[b].s - items[a].s || a - b);
+    for (const i of rest) {
       const p = layout.insert(i, items[i].s);
       if (p.y + p.s > height) { layout.remove(i); waiting += items[i].vsize; pos[i] = null; } else pos[i] = p;
     }
@@ -437,6 +441,64 @@ function fillTail(layout, tiles, tail, tailVb, RES, cap, vpu) {
     tiles.push({ txid: p.txid, x: p.x, y: p.y, s: p.s, vsize, rate, color: feeShade(rate, p.txid) });
   }
   return { tiles, gridWidth: RES, gridHeight: RES, vbytesPerUnit: vpu, pieces: pieces.length };
+}
+
+// ---------------------------------------------------------------------------
+// SETTLING (2026-09-30; operator, with a screenshot of the Detailed board under the pushed pool: "Why is it
+// leaving holes like that in detailed view?"). packStable keeps every survivor in its square and first-fits
+// the arrivals into what is free, so a departure's square stays empty until an arrival happens to fit it --
+// and between two found blocks (ten minutes and more, 120 updates) the gaps pile up into dark streaks. A
+// fresh pack is never the answer between blocks (it moves nearly every square: 1,747-2,520 of ~2,500 per
+// update), so the board SETTLES instead: every square, lowest first, drops straight down as far as the
+// squares below it allow. The moves are short and vertical -- blocks falling into the gaps under them -- and
+// what is left empty is only what no square above could fall into.
+export function settleDown(tiles, { width, height } = {}) {
+  const W = Math.max(1, Math.floor(Number(width) || 1));
+  const H = Math.max(1, Math.floor(Number(height) || W));
+  const order = tiles.map((t, i) => [t, i]).sort((a, b) => a[0].y - b[0].y || a[0].x - b[0].x);
+  const layout = new BlockLayout({ width: W, height: H });
+  const out = new Array(tiles.length);
+  let moved = 0;
+  for (const [t, i] of order) {
+    let y = t.y;
+    while (y > 0 && layout.fits(t.x, y - 1, t.s)) y--;
+    layout.place(t.txid, t.x, y, t.s);
+    out[i] = y === t.y ? t : { ...t, y };
+    if (y !== t.y) moved++;
+  }
+  return { tiles: out, moved };
+}
+
+/**
+ * Interior gaps: empty cells with a square somewhere above them in the same column -- the holes that read
+ * as streaks. The unused rows at the top of the grid are not gaps. As a share of width x height.
+ */
+export function gapShare(tiles, { width, height } = {}) {
+  const W = Math.max(1, Math.floor(Number(width) || 1)), H = Math.max(1, Math.floor(Number(height) || W));
+  const g = new Uint8Array(W * H);
+  for (const t of tiles) for (let y = Math.max(0, t.y); y < Math.min(H, t.y + t.s); y++) for (let x = Math.max(0, t.x); x < Math.min(W, t.x + t.s); x++) g[y * W + x] = 1;
+  let n = 0;
+  for (let x = 0; x < W; x++) {
+    let top = -1;
+    for (let y = H - 1; y >= 0; y--) if (g[y * W + x]) { top = y; break; }
+    for (let y = 0; y < top; y++) if (!g[y * W + x]) n++;
+  }
+  return n / (W * H);
+}
+
+// THE DETAILED BOARD'S KEPT LAYOUT: packStable with the re-placed squares biggest first, then settled, and
+// packed fresh when the interior gaps still pass DENSE_GAP_MAX (or when packStable itself gives up: a found
+// block, arrivals that do not fit). Measured on Core's live pool, 29 updates of ~2,500 transactions:
+// interior gaps median 32 cells (max 132) kept as they were, 12 (max 58) biggest-first and settled; the
+// settling moves a median 35 squares an update, each straight down.
+export const DENSE_GAP_MAX = 0.03;
+export function packDenseStable(prev, txs, opts = {}) {
+  const kept = packStable(prev, txs, { ...opts, bigFirst: true });
+  if (!kept) return null;
+  const width = Math.max(1, Math.floor(Number(opts.resolution) || 80));
+  const settled = settleDown(kept.tiles, { width, height: width });
+  if (gapShare(settled.tiles, { width, height: width }) > DENSE_GAP_MAX) return null;
+  return { ...kept, tiles: settled.tiles, settled: settled.moved };
 }
 
 // ---------------------------------------------------------------------------

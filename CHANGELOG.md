@@ -43,6 +43,14 @@ All notable changes to this project are documented here. The format follows
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
   pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
+- **The Detailed board no longer collects streaks of holes between blocks.** It keeps its layout
+  across the 5-second updates, and a departing transaction's square used to stay empty until an
+  arrival happened to fit it. Over the minutes between blocks the gaps piled up into dark streaks
+  at the top of the board. Now the new arrivals are placed biggest first, and then every square
+  drops straight down into any gap beneath it. Squares leave through the top of the board, and new
+  ones land there. If gaps still pass 3% of the board, it is re-packed fresh. On Core's live pool,
+  over 29 updates, the gaps under squares fell from a median of 32 cells (at most 132) to 12 (at
+  most 58). About 35 squares an update take the short fall.
 - **A rapid reshuffle** (Settings, Space, "Refresh animation": Rapid is the new default; Full flight,
   Quick and None stay). When the board is laid out again (a found block, or the scale drifting) every
   block still lifts, travels its lane and drops with its bounce, but the whole flight takes about 4

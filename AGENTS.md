@@ -408,7 +408,13 @@ push, `denseAsking`). Both viewers keep their layout on every renderer (render3d
 144-344 holes against 291-427, inside the grid where fresh ran 1-8 rows over). An update where NO tile keeps its id
 and changes its square (`blockscene3d.js isTrickle`) is planned with `TRICKLE` phases (rise 1000, travel 200, drop
 1200, dropStagger 1200): a plan of three arrivals settles at 3,142 ms instead of 20,260; in chromium on the live pool
-every push was a 3.3-3.8 s trickle. A found block re-packs fresh and flies the chosen reshuffle: `space.motion` 'rapid' ships since the same evening
+every push was a 3.3-3.8 s trickle. THE DETAILED BOARD SETTLES (the same evening; operator, with a screenshot: "Why is it leaving holes like that in
+detailed view?"): `packDenseStable` = packStable with `bigFirst` + `settleDown` (every square drops straight down
+as far as the squares under it allow) + a fresh pack past `DENSE_GAP_MAX` 3% interior gaps (`gapShare`: empty
+cells with a square above them in the column -- NOT all empty cells: the unused top rows are not holes, and
+counting them hid the problem in the first measurement). Core live, 29 updates: interior gaps median 32 -> 12,
+max 132 -> 58; ~35 squares settle per update, so a Detailed update on the 3D renderers is usually a short rapid
+plan with a few movers rather than a pure trickle. A found block re-packs fresh and flies the chosen reshuffle: `space.motion` 'rapid' ships since the same evening
 (settings.js MOTION.rapid: every phase and stagger short and liftMin 10 -- 2,875 blocks moving settled at 4,139 ms
 against 20,260 'full' and 9,538 'quick'; operator: "a new shuffle animation that doesn't take so long. Something much
 faster for this rapid data"). The operator's own saved settings still say 'full' until changed in the panel. TAIL PIECES ARE NAMED BY
@@ -1085,7 +1091,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1526 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1528 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1415,7 +1421,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1526 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1528 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

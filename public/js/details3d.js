@@ -13,7 +13,7 @@
 //     one's loop.
 //  3. Zero dependencies, no CDN.
 
-import { packBlock, packStable, packExact, packExactStable, vbytesPerUnit, vsizeForSide } from './blockpack.js';
+import { packBlock, packDenseStable, packExact, packExactStable, vbytesPerUnit, vsizeForSide } from './blockpack.js';
 import { planTransition, isTrickle, TRICKLE, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
@@ -5760,8 +5760,10 @@ export function render3d(canvas, cells, options = {}) {
     packed = (st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
     st.exactPrev = packed;
     fitK = 1;                                            // nothing to shrink: the scale was solved
-  } else if (!laid && opts.dither && st.densePrev && (keptDense = packStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution)),
+  } else if (!laid && opts.dither && st.densePrev && (keptDense = packDenseStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution)),
     { resolution: opts.resolution, blockLimit: opts.blockVbytes * fitK, dither: true }))) {
+    // (packDenseStable since the same evening: the kept layout SETTLES, squares dropping into the gaps under
+    // them, and packs fresh past DENSE_GAP_MAX -- operator: "Why is it leaving holes like that in detailed view?")
     // DETAILED KEEPS ITS LAYOUT TOO (the same day; blockpack.js packStable, at the scale the last layout was
     // packed at). Measured on bmc's live pool, per 5 s update of ~2,500 transactions: a fresh pack moved
     // 1,747-2,520 of them, left 291-427 holes and ran 1-8 rows past the grid; this moved 0-9, left 144-344
