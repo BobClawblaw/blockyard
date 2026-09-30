@@ -13,8 +13,8 @@
 //     one's loop.
 //  3. Zero dependencies, no CDN.
 
-import { packBlock, packExact, packExactStable, vbytesPerUnit, vsizeForSide } from './blockpack.js';
-import { planTransition, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
+import { packBlock, packStable, packExact, packExactStable, vbytesPerUnit, vsizeForSide } from './blockpack.js';
+import { planTransition, isTrickle, TRICKLE, frameAt, fitToBox, project, fxFront, TRANSITION, SLAB_H, TILE_H, surfaceNormal, cellTops, fxHash } from './blockscene3d.js';
 // THE AGENTS (agents.js): the effects that are something happening rather than a pattern.
 // This module keeps three seams and nothing else -- build here in startFx, frame in fxNow,
 // draw in paintFrame -- so fifty agents do not become fifty `if`s in the renderer.
@@ -5743,7 +5743,7 @@ export function render3d(canvas, cells, options = {}) {
   };
   const tallest = (p) => p.tiles.reduce((m, t) => Math.max(m, t.y + t.s), 0);
   let fitK = st.fitK ?? 1;
-  let packed;
+  let packed, keptDense = null;
   if (agg) {
     const plain = (cells || []).filter((c) => c !== agg).map((c, i) => ({
       txid: c.txid || `cell-${i}`, vsize: Math.max(1, Number(c.vbytes ?? c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0),
@@ -5751,14 +5751,23 @@ export function render3d(canvas, cells, options = {}) {
     // the tail's pieces take the feerate of the stratum they fall in, richest first -- the same
     // rule toTxs applies, so the colours are unchanged; only the layout is
     const tail = { vbytes: Math.max(1, Number(agg.vbytes ?? agg.vsize) || 0), rateAt: strataRates(agg.strata, Math.max(0, Number(agg.rate) || 0)) };
-    // SIMPLE KEEPS ITS LAYOUT (2026-09-30): the pool now arrives every few seconds (server/collect/poolmirror.js),
-    // and a fresh pack moves nearly every block each time. Under the Simple renderer the last layout is kept
-    // where it still holds (blockpack.js packExactStable): the ones still in the pool stay put, the new ones
-    // take the free squares, and a found block or a drifted scale packs fresh. The 3D renderers pack fresh.
+    // THE BOARD KEEPS ITS LAYOUT (2026-09-30): the pool now arrives every few seconds (server/collect/poolmirror.js),
+    // and a fresh pack moves nearly every block each time. The last layout is kept where it still holds
+    // (blockpack.js packExactStable): the ones still in the pool stay put, the new ones take the free squares,
+    // and a found block or a drifted scale packs fresh. On every renderer: on the 3D ones an update with nothing
+    // moving is a trickle of arrivals and departures (blockscene3d.js TRICKLE), not a 20 s reshuffle.
     const cfgX = { resolution: opts.resolution, cap: 3 };
-    packed = (flat && st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
-    st.exactPrev = flat ? packed : null;
+    packed = (st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
+    st.exactPrev = packed;
     fitK = 1;                                            // nothing to shrink: the scale was solved
+  } else if (!laid && opts.dither && st.densePrev && (keptDense = packStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution)),
+    { resolution: opts.resolution, blockLimit: opts.blockVbytes * fitK, dither: true }))) {
+    // DETAILED KEEPS ITS LAYOUT TOO (the same day; blockpack.js packStable, at the scale the last layout was
+    // packed at). Measured on bmc's live pool, per 5 s update of ~2,500 transactions: a fresh pack moved
+    // 1,747-2,520 of them, left 291-427 holes and ran 1-8 rows past the grid; this moved 0-9, left 144-344
+    // (arrivals fill what departures leave) and stayed inside it. Null -- the fresh pack below -- when too
+    // little survived (a found block) or the new ones would not fit.
+    packed = { tiles: keptDense.tiles, vbytesPerUnit: vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution), gridWidth: opts.resolution };
   } else {
     packed = laid ? { tiles: laid, vbytesPerUnit: 0, gridWidth: 1 } : pack(fitK);
     while (!laid && tallest(packed) > opts.resolution && fitK < 2) { fitK *= 1.05; packed = pack(fitK); }
@@ -5769,6 +5778,7 @@ export function render3d(canvas, cells, options = {}) {
     }
   }
   st.fitK = fitK;
+  st.densePrev = !laid && opts.dither ? packed.tiles : null;
   const tiles0 = laid ?? packed.tiles.filter((t) => t.y + t.s <= opts.resolution);
   // SLABS (Viewer Mode 2): with every transaction on the board, a cube as tall as it is wide
   // hides its neighbours, so each stands no taller than opts.slab
@@ -5784,7 +5794,10 @@ export function render3d(canvas, cells, options = {}) {
   // forecast for the larger green blocks, don't animate them"). Numbering
   // them by the SLOT they land in makes a piece in an unchanged cell the same
   // piece, so it holds still and only genuine churn moves.
-  for (const t2 of tiles) if (String(t2.txid).startsWith('aggregate-')) t2.txid = `aggregate@${t2.x},${t2.y}`;
+  // ...AND ITS SIZE (2026-09-30): a piece that keeps its slot but not its side is a different piece -- it
+  // leaves and another arrives -- so that the kept layout's update stays a trickle of arrivals and
+  // departures (blockscene3d.js isTrickle) and never reads as one block moving
+  for (const t2 of tiles) if (String(t2.txid).startsWith('aggregate-')) t2.txid = `aggregate@${t2.x},${t2.y},${t2.s}`;
   // THE GRID IS A CONSTANT, AND THAT IS WHAT MAKES THE VIEW HOLD STILL.
   //
   // It used to be the EXACT packed extent -- gridH = packed.gridHeight. The
@@ -5933,7 +5946,7 @@ export function render3d(canvas, cells, options = {}) {
     // from it, and a first paint on a different camera than every later
     // frame is exactly the load-time artefact this guards.
     ? planTransition(tiles, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) })
-    : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) });
+    : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}), ...(isTrickle(st.prev, tiles) ? TRICKLE : {}) });
 
   // SIMPLE'S SLIDE (flatslide.js; operator, 2026-09-30: "1s slide with the row wave"). Not a plan: the frame
   // on screen and the settled frame to come, paired by transaction and eased in the plane for SLIDE_MS, then

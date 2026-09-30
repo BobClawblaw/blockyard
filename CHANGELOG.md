@@ -43,6 +43,22 @@ All notable changes to this project are documented here. The format follows
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
   pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
+- **A rapid reshuffle** (Settings, Space, "Refresh animation": Rapid is the new default; Full flight,
+  Quick and None stay). When the board is laid out again (a found block, or the scale drifting) every
+  block still lifts, travels its lane and drops with its bounce, but the whole flight takes about 4
+  seconds instead of 20, inside one 5-second update. Measured on a found block over bmc's live
+  pool, with 2,875 blocks moving: 4.1 s, against 20.3 s for Full flight and 9.5 s for Quick. A saved
+  choice is kept: a board set to Full flight stays on it until Rapid is picked.
+- **Every board on the pushed pool.** The Software and WebGL renderers and the Detailed viewer now
+  follow the 5-second updates too. Both viewers keep their layout on every renderer, so an update is
+  a handful of arrivals and departures. On the 3D renderers it plays as a short choreography
+  instead of the 20-second reshuffle: departures fly off, arrivals fall and bounce into their
+  squares, and the board rests again after about 3.5 seconds (measured in Chromium on the live pool,
+  every update 3.3-3.8 s). A found block still re-packs the board and every block flies. The Detailed
+  viewer fetches its list whenever the pool changes. On bmc's live pool, per update of about 2,500
+  transactions, it moved 0-9 tiles where a fresh pack moved 1,747-2,520, and left fewer holes. The
+  two mempool routes are gzip-compressed when the browser asks. They are the only routes that are,
+  because they carry no secrets. Idle effects still hold an update back until they finish.
 - **The pool, pushed.** The Block space, Overview, Mining and Kiosk boards follow the mempool every
   5 seconds under the Simple renderer, where they used to follow a 30-second poll. The server keeps
   the node's mempool in memory between full reads and applies its changes: from the node's own ZMQ

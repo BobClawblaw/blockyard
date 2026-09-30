@@ -464,7 +464,7 @@ export function packExactStable(prev, plain, tail, { resolution = 44, cap = 3 } 
   const vpu = prev.vbytesPerUnit;
   if (Math.abs(solved - vpu) / vpu > STABLE_DRIFT) return null;
   const was = new Map();
-  for (const t of prev.tiles) if (t && !isPiece(t.txid)) was.set(t.txid, t);   // (a tail piece is 'aggregate-n' or, once named by slot, 'aggregate@x,y')
+  for (const t of prev.tiles) if (t && !isPiece(t.txid)) was.set(t.txid, t);   // (a tail piece is 'aggregate-n' or, once named by slot and side, 'aggregate@x,y,s')
   const layout = new BlockLayout({ width: RES, height: RES });
   const tiles = [];
   const fresh = [];

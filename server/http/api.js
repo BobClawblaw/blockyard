@@ -442,10 +442,11 @@ export const routes = [
       return { node: s.id, sync: s.sync, tip: s.tip, chain: s.chain, ibd: s.ibd, health: { rpc: { online: s.health.rpc.online, lastError: s.health.lastError } } };
     },
   },
-  { method: 'GET', path: '/api/mempool', auth: 'any', handler: (ctx, app) => mempoolView(pickNode(ctx, app)) },
+  // (compress: public pool data, no secret and nothing the client chose beyond the node id -- server.js compressed)
+  { method: 'GET', path: '/api/mempool', auth: 'any', compress: true, handler: (ctx, app) => mempoolView(pickNode(ctx, app)) },
   // Viewer Mode 2: every transaction in the next block's worth of the pool (monitor.js denseBlock)
   {
-    method: 'GET', path: '/api/mempool/dense', auth: 'any',
+    method: 'GET', path: '/api/mempool/dense', auth: 'any', compress: true,
     handler: (ctx, app) => { const m = pickNode(ctx, app); return { node: m.id, ...(m.mempoolDense ?? { at: null, n: 0, v: [], r: [], id: [] }) }; },
   },
   { method: 'GET', path: '/api/peers', auth: 'any', handler: (ctx, app) => peersView(pickNode(ctx, app)) },

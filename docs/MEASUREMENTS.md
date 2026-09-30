@@ -1795,3 +1795,13 @@ published as `R`, so the mirror drops them itself from `getblock <hash> 1` on th
 **The kept map against a full read, ten minutes on** (the check `tier_pool` logs; the bmc window
 included that block): bmc 0 held that the node no longer had, 10 lacking of 63,233; Core (the txid
 poll) 2 and 16 of 85,531 -- in both, what arrives and leaves within one 5 s tick.
+
+**The Detailed board on the push** (the same evening; bmc's live dense list, about 2,500 transactions,
+per 5 s update, 96-unit grid): a fresh `packBlock` moved 1,747-2,520 tiles, left 291-427 empty cells
+below its top row and reached rows 97-104; `packStable` at the last scale moved 0-9, left 144-344
+and stayed at 95-96. The list is 143-148 KB of JSON uncompressed.
+
+**The 3D renderers on the push:** a plan of three arrivals and a departure settles at 20,260 ms on
+the reshuffle's phases and 3,142 ms on `TRICKLE`'s. In headless chromium on the live monitor
+(Software, idle effects off), the board was busy 3,281-3,757 ms after each push and idle until the
+next; with idle effects on, some updates waited for an effect (8.6 s and 14.4 s busy stretches).

@@ -171,7 +171,10 @@ export const DEFAULTS = Object.freeze({
     light: 'overhead',    // where the lamp is (operator, 2026-09-12: "directly above the board centered")
     lightHeight: 'middle', // and how high it hangs when it is not overhead: 'low' | 'middle' | 'high'
     detail: 'simple',     // 'full' | 'simple' | 'flat' -- facet and crown thresholds below; simple by default
-    motion: 'full',       // 'full' | 'quick' | 'still' -- the refresh choreography
+    // 'rapid' | 'full' | 'quick' | 'still' -- the refresh choreography. RAPID ships since 2026-09-30 (operator:
+    // "we should add a new shuffle animation that doesn't take so long. Something much faster for this rapid
+    // data"): the pool arrives every 5 s now, and the full flight takes 20 s
+    motion: 'rapid',
     // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
     // arcing towards/away from the sides instead of just traveling straight up ... make it a toggle
     // for Linear vs Arcing", then "give me 3 choices to see and toggle between", then, having seen
@@ -442,8 +445,13 @@ const DETAIL = {
   flat: { facetPx: Infinity, crownPx: Infinity },   // facets and crown only: the seam is the operator's call
 };
 
-const MOTION = {
-  full: null,                                              // the shipped 20 s choreography
+export const MOTION = {
+  // THE RAPID RESHUFFLE (2026-09-30): the same choreography -- lanes, L-paths, gravity, bounces -- on every clock
+  // at once: short phases, short staggers, a lower lift so the falls are short. Measured on a found block over
+  // bmc's live pool (2,875 blocks moving): settled at 4,139 ms, against 20,260 for full and 9,538 for quick
+  // (which shortens the phases but keeps the full flight's staggers). Inside one 5 s push.
+  rapid: { rise: 500, travel: 1100, drop: 700, riseStagger: 350, dropStagger: 700, entryMs: 600, lockMs: 160, liftMin: 10 },
+  full: null,                                              // the 20 s choreography (shipped until 2026-09-30)
   quick: { rise: 900, travel: 3200, drop: 1800 },
   still: { rise: 0, travel: 1, drop: 0 },                  // lands immediately; no flight
 };
@@ -635,8 +643,8 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
       }),
       Object.freeze({
-        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board refreshes',
-        options: Object.freeze([['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
+        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Rapid (the default) is the whole flight in about four seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- always take about three. None lands everything at once',
+        options: Object.freeze([['rapid', 'Rapid'], ['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
       }),
       Object.freeze({
         key: 'departures', label: 'Departures and arrivals', kind: 'choice',

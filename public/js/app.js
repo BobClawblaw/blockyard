@@ -8,7 +8,7 @@
 import { lineChart, histogram, scatter, meter, stackedBars, sparkline, paint, resetCanvas, COL } from './charts.js';
 import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
-import { viewerIdle, rendererOf } from './details3d.js';
+import { viewerIdle } from './details3d.js';
 import {
   loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush, settingsPushPending, normalise as normaliseSettings,
   SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue, SKY_BOARDS, SKY_CHOICES,
@@ -632,14 +632,28 @@ let mempoolFetchedAt = 0;
 const MEMPOOL_DETAIL_MS = 30_000;
 // THE POOL, PUSHED (2026-09-30; server/collect/poolmirror.js). The server keeps the pool current from the
 // node's own notifications and rebuilds the pool pictures every few seconds (poll.poolPushMs, 5 s); the
-// snapshot frame it sends every second already carries the viewer's cells (mempool.dist). So under the
-// Simple renderer, whose slide lasts a second, the board takes a newer dist from the frame as soon as it
-// arrives. The other renderers keep the 30 s poll: their flight between layouts takes 20 s, and a layout
-// every 5 s would keep every block in the air.
-function poolPushed(s) { return !!(s?.mempool?.push?.mode && s.mempool.dist?.at) && rendererOf({}) === '2.5d'; }
+// snapshot frame it sends every second already carries the viewer's cells (mempool.dist), so a board takes
+// a newer dist from the frame as soon as it arrives. On every renderer since the boards keep their layout
+// (blockpack.js packExactStable / packStable): an update is a few arrivals and departures -- the Simple
+// renderer's one-second slide, the 3D renderers' three-second trickle (blockscene3d.js TRICKLE). The
+// Detailed board's list (every transaction in the next block's worth) is not in the frame: it is fetched
+// when the frame says the pool changed, at most once per push.
+function poolPushed(s) { return !!(s?.mempool?.push?.mode && s.mempool.dist?.at); }
+let denseAsking = false;
 function adoptPushedPool(s) {
-  if (!poolPushed(s) || !POOL_VIEWER_PAGES.has(state.page) || state.viewerMode === '2') return;
+  if (!poolPushed(s) || !POOL_VIEWER_PAGES.has(state.page) || document.hidden) return;
   const d = s.mempool.dist;
+  if (state.viewerMode === '2') {
+    if (denseAsking || (state.denseAskedFor ?? 0) >= d.at) return;
+    denseAsking = true;
+    state.denseAskedFor = d.at;
+    const id = state.node;
+    api(`/api/mempool/dense?node=${encodeURIComponent(id ?? '')}`)
+      .then((x) => { if (x?.v && id === state.node) { state.denseBlock = { ...x, fetchedAt: Date.now() }; state.poolFetchedAt = Date.now(); render(); } })
+      .catch(() => { /* the last picture stays up */ })
+      .finally(() => { denseAsking = false; });
+    return;
+  }
   if (state.mempoolDist?.at && d.at <= state.mempoolDist.at) return;
   // the frame leaves the scatter out (rule 5): keep the one the last /api/mempool read brought
   state.mempoolDist = { ...d, scatter: state.mempoolDist?.scatter, count: s.mempool.count ?? d.count, fetchedAt: Date.now(), stale: false };
@@ -1531,7 +1545,7 @@ async function boot() {
   // a second. Text and a CSS variable only -- nothing is re-rendered.
   setInterval(() => {
     if (document.hidden) return;
-    const pushed = poolPushed(state.snap) && state.viewerMode !== '2';
+    const pushed = poolPushed(state.snap);
     const { text, frac } = pushed
       ? { text: state.paused ? 'refresh paused' : `live, every ${Math.round(state.snap.mempool.push.everyMs / 1000)} s`, frac: 1 }
       : refreshLabel(state.poolFetchedAt ? state.poolFetchedAt + MEMPOOL_DETAIL_MS : NaN, Date.now(), { paused: state.paused, period: MEMPOOL_DETAIL_MS });

@@ -4,6 +4,7 @@
 // the first needs a session; every request is rate limited per user. The audit
 // trail records credentials use without ever recording a credential.
 import http from 'node:http';
+import zlib from 'node:zlib';
 import https from 'node:https';
 import { URL } from 'node:url';
 import { StaticFiles, SECURITY_HEADERS, securityHeaders } from './static.js';
@@ -310,7 +311,7 @@ export function createAppServer(app) {
       if (res.writableEnded || res.headersSent) return undefined;
       if (setCookies.length) res.setHeader('Set-Cookie', setCookies);
       const status = result?.__status ?? (req.method === 'POST' && !result?.ok ? 200 : 200);
-      sendJson(req, res, status, result ?? { ok: true });
+      sendJson(req, res, status, result ?? { ok: true }, null, { compress: route.compress === true });
       app.access({ req, res, path, status, ms: Date.now() - started, ip, user: user?.username ?? null });
     } catch (err) {
       if (err instanceof HttpError) {
@@ -434,18 +435,32 @@ function readBody(req, res) {
   });
 }
 
-function sendJson(req, res, status, obj, setCookies) {
+// COMPRESSION, BY ROUTE AND ONLY FOR PUBLIC DATA (2026-09-30: the Detailed board's list, ~148 KB of
+// mostly txids, fetched every 5 s once the pool is pushed). A route opts in with `compress: true`, and
+// only a route whose reply carries no secret and nothing a client chose may: compressing a reply that
+// holds a token beside attacker-influenced text over HTTPS is the BREACH shape. Small bodies go as they
+// are; gzip level 4 on a 148 KB list is a few milliseconds.
+export const COMPRESS_MIN = 8192;
+export function compressed(req, body, want) {
+  if (!want || Buffer.byteLength(body) < COMPRESS_MIN) return null;
+  if (!/\bgzip\b/.test(String(req.headers?.['accept-encoding'] ?? ''))) return null;
+  try { return zlib.gzipSync(body, { level: 4 }); } catch { return null; }
+}
+
+function sendJson(req, res, status, obj, setCookies, { compress = false } = {}) {
   if (res.writableEnded) return;
   const body = JSON.stringify(obj ?? null);
+  const gz = compressed(req, body, compress && !setCookies?.length);
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
+    'Content-Length': gz ? gz.length : Buffer.byteLength(body),
     'Cache-Control': 'no-store',
+    ...(gz ? { 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' } : {}),
     ...SECURITY_HEADERS,
   };
   if (setCookies?.length) headers['Set-Cookie'] = setCookies;
   res.writeHead(status, headers);
-  res.end(req.method === 'HEAD' ? undefined : body);
+  res.end(req.method === 'HEAD' ? undefined : (gz ?? body));
 }
 
 export function clientIp(req, cfg) {

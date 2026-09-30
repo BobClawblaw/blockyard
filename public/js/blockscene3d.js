@@ -2448,6 +2448,26 @@ export const TRANSITION = {
   maxGrowth: 0.15,  // how much the nearest lane may swell; the fit reserves it
 };
 
+// THE TRICKLE (2026-09-30; operator: "take advantage of this new information flow ... adjusting the 3D views to
+// work with the new datastream"). The pool now reaches the boards every 5 s (server/collect/poolmirror.js) and
+// the boards keep their layout (blockpack.js packExactStable, packStable), so an update is a handful of arrivals
+// and departures around blocks that stay where they are. The choreography above is built for a reshuffle -- 20 s,
+// every block lifting and travelling -- and its phases run their full length even when nothing moves (a plan with
+// three arrivals settled at 20,260 ms), so a layout every 5 s would queue behind it for ever. An update with no
+// mover takes these phases instead: departures fly off in the first second, arrivals fall and bounce into their
+// slots in a staggered second after, settled in about 3 s (3,142 ms for the same three). A found block re-packs
+// the board and every block moves: that is still the full flight.
+export const TRICKLE = Object.freeze({ rise: 1000, travel: 200, drop: 1200, dropStagger: 1200, riseStagger: 0, entryMs: 900 });
+/** True when no tile keeps its id and changes its square: only arrivals, departures and holds (the trickle). */
+export function isTrickle(prev, next) {
+  const was = new Map((prev || []).map((t) => [t.txid, t]));
+  for (const t of next || []) {
+    const p = was.get(t.txid);
+    if (p && (p.x !== t.x || p.y !== t.y || p.s !== t.s)) return false;
+  }
+  return true;
+}
+
 export function planTransition(prev, next, opts = {}) {
   const cfg = { ...TRANSITION, ...opts };
   const now = opts.now ?? 0;
