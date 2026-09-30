@@ -1933,6 +1933,27 @@ const RULES = [
     re: /\[rpc\]\s*encrypted wallet adopted (?:\((locked) -- use walletpassphrase\)|and (unlocked) from the configured passphrase source)$/,
     apply: (m) => ({ kind: 'node_fact', subsystem: 'wallet', facts: { encrypted: true, locked: m[1] === 'locked' } }),
   },
+  // THE EXECUTION LOCK, NAMED (bmc since deploy-20260930a, 2026-09-30). Four times in three
+  // days (2026-09-27 03:20:52, 15:40:39; 09-28 12:43:11; 09-29 22:54:21, each within two
+  // seconds of a new block) bmc's whole RPC surface answered nothing for over 90 s: this
+  // monitor's three tiers hit their 90 s timeout and the mempool.space backend stalled at
+  // the same instants, and bmc's log could not say which handler held its one execution
+  // lock. bmc times every take and release now and writes one line for a wait or a hold
+  // past BMC_RPC_EXEC_LOG_MS (2000). The label is a JSON-RPC method, or the facade / REST
+  // route and the method it dispatched ("esplora GET /internal/block/<hash>/txs ->
+  // getrawtransaction"). These two lines are news: the holder is the thing to fix.
+  //   [rpc] exec lock: test hold (excl) held 701 ms (waited 0 ms); 1 waiting behind it
+  //   [rpc] exec lock: getblockhash (excl) waited 550 ms; the last exclusive holder was test hold (held 701 ms); 0 still waiting
+  {
+    name: 'rpcExecHeld',
+    re: /\[rpc\]\s*exec lock:\s*(.+?) \((excl|shared)\) held (\d+) ms \(waited (\d+) ms\); (\d+) waiting behind it$/,
+    apply: (m) => ({ kind: 'rpc_lock_held', holder: m[1], mode: m[2], heldMs: +m[3], waitedMs: +m[4], waiting: +m[5], severity: 'warn' }),
+  },
+  {
+    name: 'rpcExecWaited',
+    re: /\[rpc\]\s*exec lock:\s*(.+?) \((excl|shared)\) waited (\d+) ms; the last exclusive holder was (.+?) \(held (\d+) ms\); (\d+) still waiting$/,
+    apply: (m) => ({ kind: 'rpc_lock_waited', waiter: m[1], mode: m[2], waitedMs: +m[3], lastHolder: m[4], lastHeldMs: +m[5], waiting: +m[6], severity: 'warn' }),
+  },
   // [wallet] seed, mnemonic and passphrase locked into RAM (mlock) and excluded from core dumps
   // [wallet] encrypted store present -- locked (walletpassphrase to unlock)
   {

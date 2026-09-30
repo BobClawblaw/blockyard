@@ -341,6 +341,22 @@ What will bite:
   `addrindex` node those three read as `·` info lines -- the log line naming the configured
   `logFile` the monitor follows (a `warn` if the file is not there) -- while Core is judged exactly
   as before (an old Core is still ✗). Exit 0 on this box; `test/setup.test.js` holds both sides.
+- **bmc's RPC stalls after about one block in a hundred, and since 2026-09-30 the stall names its
+  holder.** Four times between 09-27 and 09-29 (03:20:52, 15:40:39, 12:43:11, 22:54:21 -- each within
+  two seconds of a `[block] stored` line) bmc's whole RPC surface answered nothing for over 90 s:
+  every tier here hit `rpc timeout after 90000ms`, the breaker opened, and the mempool.space backend on
+  this box (`journalctl -u mempool-backend`) logged its own timeout or "$updateBlocks stalled" at the
+  same instants. Core, on the same disk and blocks, had none. It is bmc's one execution lock
+  (`g_exec_lock` in its `rpc_server.c`: everything but a few FAST methods, the Esplora facade
+  exclusively per dispatch, writer-preferring), and bmc PR #348 (`deploy-20260930a`) made it log
+  `[rpc] exec lock: <holder> (excl) held N ms ...` for any wait or hold past 2 s. This monitor reads
+  those lines (`rpcExecHeld` / `rpcExecWaited` in logparse.js): the feed carries them, `logState.rpcLock`
+  keeps the last of each, and a line under ten minutes old raises `rpc-lock-held` naming the holder --
+  which stands 15 minutes and then clears once `getblockchaininfo` answers. Read it beside the
+  `rpc-timeouts` flag of the same minute. **Do not fix this here**: raising `rpc.timeoutMs` or adding a
+  poll hides the node's problem; the lane already backs off and skips the heavy tiers. What is NOT
+  bmc's fault: the connection-refused bursts of 40-90 s that follow every `deploy-2026MMDDx` restart
+  (fifteen in those three days), which is the deploy cadence.
 - **The monitor answers HTTPS only on 21000** (the self-signed certificate the server makes;
   `curl -sk https://127.0.0.1:21000/api/health`). A plain `http://` request gets nothing, which
   looked like "the server is down" for one minute on 2026-09-23. The notes above that say the port
@@ -1012,7 +1028,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1490 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1491 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1342,7 +1358,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1490 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1491 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

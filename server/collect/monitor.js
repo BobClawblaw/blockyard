@@ -400,6 +400,10 @@ export class NodeMonitor extends EventEmitter {
       // A node answering getblockchaininfo is, by definition, not mid-restart. This
       // closes node-restarting without waiting for a log line that may never come.
       this.clearQuality('node-restarting');
+      // A named lock stall is news for a while, not a standing condition: the flag
+      // stands 15 minutes after the last line, then goes; the feed keeps the line.
+      const held = this.quality.find((q) => q.key === 'rpc-lock-held');
+      if (held && Date.now() - held.at > 900_000) this.clearQuality('rpc-lock-held');
     }
     const mi = ok('getmempoolinfo');
     const cc = ok('getconnectioncount');
@@ -2123,6 +2127,27 @@ export class NodeMonitor extends EventEmitter {
         // The banner: which build is running, the only place the log says so.
         ls.nodeBuild = { ...(ls.nodeBuild ?? {}), ...Object.fromEntries(Object.entries(ev).filter(([k]) => ['program', 'loggedAtUtc', 'pid', 'version', 'built', 'mode'].includes(k))), at: ev.ts };
         return [];
+      case 'rpc_lock_held':
+      case 'rpc_lock_waited': {
+        // bmc's execution lock, held or waited for past its own threshold (2026-09-30;
+        // logparse.js, "THE EXECUTION LOCK, NAMED"). This is the stall that shows up here
+        // as `rpc-timeouts` on every tier at once, and the line names what held the lock.
+        // State (the last of each, and a count), the feed (it is news), and a flag --
+        // age-gated like `node-restarting`, because the tail replays hours of history at
+        // start and a stall from this morning is not a stall now. Any line the node chose
+        // to write is worth the flag: it set the threshold.
+        const rl = (ls.rpcLock ??= { holds: 0, waits: 0 });
+        if (ev.kind === 'rpc_lock_held') { rl.holds += 1; rl.lastHold = { holder: ev.holder, mode: ev.mode, heldMs: ev.heldMs, waitedMs: ev.waitedMs, waiting: ev.waiting, at: ev.ts }; }
+        else { rl.waits += 1; rl.lastWait = { waiter: ev.waiter, mode: ev.mode, waitedMs: ev.waitedMs, lastHolder: ev.lastHolder, lastHeldMs: ev.lastHeldMs, waiting: ev.waiting, at: ev.ts }; }
+        if (now - ev.ts < 600_000) {
+          const when = new Date(ev.ts).toISOString().slice(11, 19) + ' UTC';
+          const text = ev.kind === 'rpc_lock_held'
+            ? `the node's RPC execution lock was held ${(ev.heldMs / 1000).toFixed(1)} s by ${ev.holder} (${ev.mode}) at ${when}, with ${ev.waiting} caller(s) waiting behind it -- every RPC waits on that lock, so this is what an rpc-timeouts flag at the same moment was waiting for; the holder is the thing to fix`
+            : `${ev.waiter} (${ev.mode}) waited ${(ev.waitedMs / 1000).toFixed(1)} s for the node's RPC execution lock at ${when}; the last exclusive holder was ${ev.lastHolder}, which held it ${(ev.lastHeldMs / 1000).toFixed(1)} s`;
+          this.flagQuality('rpc-lock-held', text, 'warn');
+        }
+        return [ev];
+      }
       case 'node_fatal':
       case 'boot_aborted':
         return [ev];

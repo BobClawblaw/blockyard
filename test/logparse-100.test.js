@@ -164,6 +164,52 @@ test('set aside: exactly the continuation and separator lines, each by name', ()
   for (const ev of noted) assert.ok(ev.why, 'a set-aside line carries the reason it was set aside');
 });
 
+test('the execution lock, named: the two lines parse, reach the feed, and raise a flag only while fresh', async () => {
+  // bmc since deploy-20260930a (2026-09-30): four 90 s stalls of its whole RPC surface in
+  // three days, each right after a block, and nothing said who held the lock. Now it does.
+  const held = parseLine(lineFor(/\[rpc\] exec lock: .* held \d+ ms \(waited/));
+  assert.equal(held.rule, 'rpcExecHeld');
+  assert.deepEqual([held.kind, held.holder, held.mode, held.heldMs, held.waitedMs, held.waiting, held.severity],
+    ['rpc_lock_held', 'test hold', 'excl', 701, 0, 1, 'warn']);
+  const waited = parseLine(lineFor(/\[rpc\] exec lock: .* waited \d+ ms; the last exclusive holder/));
+  assert.equal(waited.rule, 'rpcExecWaited');
+  assert.deepEqual([waited.kind, waited.waiter, waited.mode, waited.waitedMs, waited.lastHolder, waited.lastHeldMs, waited.waiting],
+    ['rpc_lock_waited', 'getblockhash', 'excl', 550, 'test hold', 701, 0]);
+  // A facade label carries a route with slashes, a hash and an arrow; the greedy-enough
+  // capture must take all of it and still find the mode.
+  const facade = parseLine('2026-09-30 01:00:00.000 [rpc] exec lock: esplora GET /internal/block/0000000000000000000032e65b863d0c0e3f707b5a9022be8be51232b949cf16/txs -> getrawtransaction (excl) held 90101 ms (waited 0 ms); 3 waiting behind it');
+  assert.equal(facade.kind, 'rpc_lock_held');
+  assert.equal(facade.holder, 'esplora GET /internal/block/0000000000000000000032e65b863d0c0e3f707b5a9022be8be51232b949cf16/txs -> getrawtransaction');
+  assert.equal(facade.heldMs, 90101);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-execlock-'));
+  const store = { ringCapacity: 500, maxEventLog: 400, retentionHours: 1, snapshotEveryMs: 1e9 };
+  const logger = () => {}; logger.child = () => logger;
+  const m = new NodeMonitor(
+    { id: 't', label: 't', rpcUrl: 'http://127.0.0.1:1', datadir: dir, chainHint: 'main', logFile: null },
+    { rpc: { maxInFlight: 1, minIntervalMs: 250, timeoutMs: 1000, slowLatencyMs: 5000 },
+      poll: { fastMs: 4000, midMs: 15000, slowMs: 60000, rareMs: 900000 },
+      store, log: logger, history: new History(dir, store, { log: logger }), logCfg: {} });
+  const fed = [];
+  m.on('events', (rows) => fed.push(...rows));
+  // Replayed history (the fixture's own 2026-09-29 timestamps): state and feed, no flag.
+  m.onLogEvents([held, waited]);
+  assert.equal(fed.filter((r) => r.kind === 'rpc_lock_held').length, 1, 'the hold reaches the feed');
+  assert.equal(fed.filter((r) => r.kind === 'rpc_lock_waited').length, 1, 'the wait reaches the feed');
+  assert.equal(m.state.logState.rpcLock.holds, 1);
+  assert.equal(m.state.logState.rpcLock.lastHold.holder, 'test hold');
+  assert.equal(m.state.logState.rpcLock.lastWait.lastHolder, 'test hold');
+  assert.ok(!m.quality.some((q) => q.key === 'rpc-lock-held'), 'an old line raises no flag: the stall is not happening now');
+  // The same line, fresh: the flag, naming the holder and the seconds.
+  m.onLogEvents([{ ...facade, ts: Date.now() }]);
+  const q = m.quality.find((k) => k.key === 'rpc-lock-held');
+  assert.ok(q, 'a fresh line raises rpc-lock-held');
+  assert.equal(q.severity, 'warn');
+  assert.match(q.text, /held 90\.1 s by esplora GET \/internal\/block\/\S+ -> getrawtransaction \(excl\)/);
+  assert.match(q.text, /3 caller\(s\) waiting behind it/);
+  assert.equal(m.state.logState.rpcLock.holds, 2);
+});
+
 test('the monitor: state by default, the feed only for news', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blockyard-log100-'));
   const store = { ringCapacity: 500, maxEventLog: 400, retentionHours: 1, snapshotEveryMs: 1e9 };
@@ -190,6 +236,9 @@ test('the monitor: state by default, the feed only for news', async () => {
     'archive_integrity', 'config_rejected', 'node_fatal', 'boot_aborted', 'reorg', 'index_disabled', 'index_rolled_back',
     // the node dropped every peer on purpose (setnetworkactive false; the 2026-09-19 build logs it)
     'network_active',
+    // bmc's execution lock held or waited for past its threshold (deploy-20260930a): the
+    // line that names a 90 s stall's holder is the most important news the log carries
+    'rpc_lock_held', 'rpc_lock_waited',
   ]);
   const kinds = new Set(fed.map((r) => r.kind));
   assert.deepEqual([...kinds].filter((k) => !NEWS.has(k)), [], 'these kinds reached the feed without being news');
