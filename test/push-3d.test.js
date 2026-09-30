@@ -113,3 +113,23 @@ test('the rapid reshuffle: the default, and a whole re-pack settles inside one p
   assert.ok(MOTION.rapid.riseStagger < MOTION.rapid.rise, 'every block is airborne before any descends (the no-collision proof)');
 });
 
+
+test('"None" draws each new board as it is: no flight, no trickle, no slide, on any renderer', async () => {
+  const { MOTION } = await import('../public/js/settings.js');
+  assert.equal(MOTION.still.none, true);
+  const base = mk(200, 'k').concat([{ vbytes: 500000, rate: 0.8, aggregate: 30000 }]);
+  const small = base.filter((c, i) => i % 50 !== 3).concat(mk(3, 'z', 50));       // a trickle's worth
+  const repack = mk(150, 'q', 70).concat([{ vbytes: 500000, rate: 0.8, aggregate: 30000 }]);   // everything moves
+  for (const renderer of ['software', '2.5d']) {
+    const o = { ...SOFT, renderer, flatSlide: 'slide', transition: MOTION.still };
+    const h = harness();
+    render3d(h.canvas, base, o);
+    h.pump();
+    for (const next of [small, repack]) {
+      harness.t += 5000;
+      const r = render3d(h.canvas, next, o);
+      assert.equal(r.settled, true, `${renderer}: settled at once`);
+      assert.equal(h.pending(), false, `${renderer}: no frame asked for -- nothing moves`);
+    }
+  }
+});

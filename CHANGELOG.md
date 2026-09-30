@@ -62,6 +62,9 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **"None" in Refresh animation now means none.** Each new board is drawn as it is, on every
+  renderer. Before, arrivals still fell in under gravity, departures still flew off, small updates
+  played the 3-second trickle, and the Simple renderer's slide ignored the setting.
 - **The Detailed board stays in feerate order.** Kept squares stay put and new transactions take
   whatever space is free, so the layout drifted from richest-at-the-bottom. High-fee arrivals parked
   in the top rows, and on Core's live pool only 87% of tile pairs were in fee order after ten updates.

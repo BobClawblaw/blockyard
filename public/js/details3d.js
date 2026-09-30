@@ -5854,7 +5854,9 @@ export function render3d(canvas, cells, options = {}) {
   // AS LAID, every frame, with nothing planned: a piece moves as one shape because nothing moves
   // it, the frame simply changes.
   // ...and 2.5D lands every layout where it is: a transition is seconds of repainting
-  const still = reducedMotion() || opts.still === true || flat;
+  // ...and "None" in the Refresh animation (settings.js MOTION.still, `transition.none`): each new layout drawn as it is
+  const noMotion = opts.transition?.none === true;
+  const still = reducedMotion() || opts.still === true || flat || noMotion;
 
   // THE BUG THIS GUARDS (2026-09-10, operator: "redrawn instead of ...
   // smoothly moving"): mining.js calls this on every fast-tier paint, about
@@ -5971,7 +5973,7 @@ export function render3d(canvas, cells, options = {}) {
   // on screen and the settled frame to come, paired by transaction and eased in the plane for SLIDE_MS, then
   // the board parks as before. Only the pool boards (not a board the caller laid out, whose axes and price line
   // would snap while its candles moved; not a game's still board), never on a first paint or a look change.
-  const slideFrom = flat && opts.still !== true && !laid && !reducedMotion() && !firstPaint && !lookOnly
+  const slideFrom = flat && opts.still !== true && !noMotion && !laid && !reducedMotion() && !firstPaint && !lookOnly
     && sig !== st.sig && flatSlideOf(opts) === 'slide' && st.lastOps?.length ? st.lastOps : null;
   const slideRows = slideFrom ? new Map([...st.prev.map((t) => [String(t.txid), t.y]), ...tiles.map((t) => [String(t.txid), t.y])]) : null;
   st.slide = slideFrom ? { from: slideFrom, rows: slideRows, t0: now, plan: null } : null;

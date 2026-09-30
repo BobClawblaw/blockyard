@@ -470,7 +470,11 @@ export const MOTION = {
   rapid: { rise: 500, travel: 1100, drop: 700, riseStagger: 350, dropStagger: 700, entryMs: 600, lockMs: 160, liftMin: 10 },
   full: null,                                              // the 20 s choreography (shipped until 2026-09-30)
   quick: { rise: 900, travel: 3200, drop: 1800 },
-  still: { rise: 0, travel: 1, drop: 0 },                  // lands immediately; no flight
+  // NONE MEANS NONE (2026-09-30; operator: "if I select refresh animation: none, it should just redraw the new board
+  // instead of having pieces flying"). The phases alone were never enough: arrivals still fell under gravity after the
+  // drop stagger, departures still flew off, the trickle replaced the phases for small updates, and the Simple
+  // renderer's slide did not read this at all. `none` is what render3d reads: the new layout is drawn as it is.
+  still: { rise: 0, travel: 1, drop: 0, none: true },
 };
 
 // What the panel draws. Kept beside the values so a new setting cannot be added without a
@@ -675,7 +679,7 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
       }),
       Object.freeze({
-        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Rapid (the default) is the whole flight in about four seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- always take about three. None lands everything at once',
+        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Rapid (the default) is the whole flight in about four seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is: nothing flies, falls or slides, on any renderer',
         options: Object.freeze([['rapid', 'Rapid'], ['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
       }),
       Object.freeze({
