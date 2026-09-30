@@ -997,16 +997,35 @@ export function chooseIdleFx(kinds, st, now, rnd = Math.random, noRepeat = 12) {
 // rather than later"): the first effect after a transition lands -- or on a board already
 // still when first drawn -- comes within opts.idleFirst (about a second), and replaces any
 // longer timer left over from before; the ones after it keep opts.idleEvery.
+//
+// THE REST BETWEEN EFFECTS IS A FLOOR (2026-09-30; operator: "Space timers are not properly working for Between
+// effects at least, and at most seconds. It's triggering way to often"). Since the pool arrives every 5 s, the board
+// "lands" every 5 s -- a trickle of arrivals -- and each landing threw away the between-effects timer and armed the
+// first-after-landing one (about a second), so an effect was always a second away and the two sliders never ruled.
+// Now: `soon` is only for a board landing from a real reshuffle or its first paint (the caller's test), it replaces a
+// pending timer only when it would come SOONER, and no effect is ever armed to start earlier than idleEvery's floor
+// after the last one ended (st.fxEndedAt).
 function scheduleFx(canvas, st, opts, soon = false) {
-  if (soon && st.fxTimer) { clearTimeout(st.fxTimer); st.fxTimer = null; }
-  if (!opts.idleFx || st.fxTimer || !globalThis.document || typeof setTimeout !== 'function' || reducedMotion()) return;
+  if (!opts.idleFx || !globalThis.document || typeof setTimeout !== 'function' || reducedMotion()) return;
   const [a, b] = soon ? (opts.idleFirst ?? [800, 1600]) : opts.idleEvery;
-  st.fxTimer = setTimeout(() => {
+  const at = (globalThis.performance && performance.now()) || 0;
+  let delay = a + Math.random() * (b - a);
+  const floor = st.fxEndedAt != null ? st.fxEndedAt + (opts.idleEvery?.[0] ?? 0) - at : 0;
+  if (delay < floor) delay = floor + Math.random() * Math.max(0, (opts.idleEvery?.[1] ?? 0) - (opts.idleEvery?.[0] ?? 0));
+  if (st.fxTimer) {
+    if (!soon || at + delay >= (st.fxDueAt ?? Infinity)) return;   // the one already armed comes sooner: keep it
+    clearTimeout(st.fxTimer); st.fxTimer = null;
+  }
+  st.fxDueAt = at + delay;
+  const fire = () => {
     st.fxTimer = null;
     if (canvas.isConnected === false) return;
     const now = (globalThis.performance && performance.now()) || 0;
     const busy = (st.plan && now < st.plan.settleAt) || st.dirty || !!st.pending;
-    if (busy || !canvas.clientWidth) { scheduleFx(canvas, st, opts, soon); return; }
+    // DUE, BUT THE BOARD IS MOVING: try again in half a second, not after a whole new rest -- with a trickle landing
+    // every 5 s the board is moving most of the time, and a fresh 20-30 s wait on every miss starved the effects
+    // (one in three minutes, simulated)
+    if (busy || !canvas.clientWidth) { st.fxDueAt = now + 500; st.fxTimer = setTimeout(fire, 500); st.fxTimer?.unref?.(); return; }
     // a board with a price line gets the effects that follow it; every other board gets the grid
     const onALine = (opts.axes?.line?.length ?? 0) > 1;
     // every effect is switchable (settings.js `effects`): opts.fxKinds is the operator's list, and
@@ -1018,9 +1037,13 @@ function scheduleFx(canvas, st, opts, soon = false) {
     if (!kind) { scheduleFx(canvas, st, opts); return; }   // only the pulse is on, and it is still waiting
     startFx(st, kind, now);
     st.wake?.();
-  }, a + Math.random() * (b - a));
+  };
+  st.fxTimer = setTimeout(fire, delay);
   st.fxTimer?.unref?.();
 }
+
+/** Test hook: the kind of the idle effect playing on this canvas, or null. */
+export function fxPlaying(canvas) { const st = STATE.get(canvas); return st?.fx?.kind ?? null; }
 
 // Play one idle effect now -- for the demo page and the tests, which cannot
 // wait on a timer. Returns false for a canvas the renderer has not seen.
@@ -5975,6 +5998,7 @@ export function render3d(canvas, cells, options = {}) {
     // frame is exactly the load-time artefact this guards.
     ? planTransition(tiles, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) })
     : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}), ...(isTrickle(st.prev, tiles) ? TRICKLE : {}) });
+  if (!still && !firstPaint && !lookOnly && isTrickle(st.prev, tiles)) plan.trickle = true;   // (scheduleFx: not a landing)
 
   // SIMPLE'S SLIDE (flatslide.js; operator, 2026-09-30: "1s slide with the row wave"). Not a plan: the frame
   // on screen and the settled frame to come, paired by transaction and eased in the plane for SLIDE_MS, then
@@ -6217,7 +6241,7 @@ export function render3d(canvas, cells, options = {}) {
         if (afterEffect) st.fxEndedAt = t;   // the rest before a held refresh runs from here
         st.fx = null;
         st.atRest = true;
-        scheduleFx(canvas, st, opts, !afterEffect);
+        scheduleFx(canvas, st, opts, !afterEffect && !st.plan?.trickle);   // (a trickle is not a landing: see scheduleFx)
       }
       if (!liveSky && !glowAnimating(st, t)) {
         st.raf = null;

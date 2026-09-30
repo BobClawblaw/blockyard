@@ -223,7 +223,7 @@ both modes move to their new places rather than disappearing and reappearing.
 While the board is at rest, one effect plays every seven to thirteen seconds — the first
 about a second after the board lands — and never one that has played within the last twelve
 (**No repeats within**, 0 up to the length of that board's list). There are **34**, and each has its own switch. **Each board
-has its own list**: the Block space board's switches are the **Space effects** tab, the
+has its own list**: the Block space board's switches are the **Block Space effects** tab, the
 Markets board's are the **Market effects** tab, and each tab has its own no-repeat window, so
 trimming one board's effects leaves the other's alone.
 
@@ -1331,7 +1331,7 @@ same whatever you choose here.
 ![Display settings](images/settings.jpg)
 
 The panel is **tabbed**, in three labelled rows: **Boards** (Appearance, Block space, Sky,
-Markets & Price), **Effects** (Space effects, Market effects) and **Diversions** (Tetrust,
+Markets & Price), **Effects** (Block Space effects, Market effects) and **Diversions** (Tetrust,
 Blockout, Blockanoid, Scorched Yard). The two **effects** tabs are lists of switches, so they also get **all
 on** and **all off**; twenty-nine of them is a lot of clicking otherwise.
 
@@ -1411,7 +1411,7 @@ these are the settings that buy it back, roughly most expensive first:
 | **Shadows** | Cubes casting shadows on the board and on each other. **Off by default**: it is the costliest single effect on a full board — one shadow per resting stone, more in flight — and the board is the first thing most people open. |
 | **Level of detail** | **Simple cubes by default.** *Full* draws every facet and crown. *Simple cubes* drops the crown at every size and draws far fewer facets. *Flat tiles* drops both entirely. The seam around each stone stays under **Stone edges**, in every mode. |
 | **Refresh animation** | *Full flight* is the 20-second choreography of blocks lifting, travelling and landing. *Quick* is about six seconds. *None* lands the new layout at once. |
-| **Idle effects** | The master switch for the effects that play while the board rests. Which of them may play is the **Space effects** tab. |
+| **Idle effects** | The master switch for the effects that play while the board rests. Which of them may play is the **Block Space effects** tab. |
 | **Stone edges** | The dark seam drawn around each stone. |
 | **Neon grid** | The glowing grid on the board. |
 | **Grid colour** | The grid's colour. One choice drives the whole grid: its lit core, the halo and glow around it, and the brighter line along the board's edge, so they stay a family rather than drifting apart. |
@@ -1528,9 +1528,9 @@ behind the hills rather than under them.
 A board under the Earth plays no idle effects: a supernova over a blue afternoon is wrong, on the
 block board and on the candles alike. Their switches are kept, and the Galaxy gets them back.
 
-### Space effects and Market effects
+### Block Space effects and Market effects
 
-One tab per board. **Space effects** is a switch for each of the **29** idle effects the Block
+One tab per board. **Block Space effects** is a switch for each of the **29** idle effects the Block
 space board can play, listed under [Idle effects](#idle-effects) above; **Market effects** is a
 switch for each of the **16** the Markets board can play (named under Idle effects). Each tab has **all on** and **all off**, and its own
 **No repeats within**: how many other effects must play before one can play again (12 by
@@ -1538,8 +1538,8 @@ default; 0 allows a repeat straight away).
 
 Each tab also sets **its board's cadence**: **Between effects, at least** and **Between
 effects, at most** (seconds; the board rests a random span between the two after each effect
-— 5 to 9 by default, up to ten minutes each on Space effects and five on Market effects; set the floor above the ceiling and they swap).
-The Space effects tab has one more, **First effect after landing** (seconds, give or take a
+— 5 to 9 by default, up to ten minutes each on Block Space effects and five on Market effects; set the floor above the ceiling and they swap).
+The Block Space effects tab has one more, **First effect after landing** (seconds, give or take a
 third, before the first effect once the blocks land — 1.2 by default, up to two minutes; the
 board re-lays on every refresh, so this is also how soon one follows each refresh). The candle
 board has no landing, so the Markets tab has no such slider: its first effect after a refresh

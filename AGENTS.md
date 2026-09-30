@@ -441,7 +441,12 @@ no Simple slide) AND makes a static board (then: "I don't want any animations wi
 Software and WebGL modes"): idleFx off, `skyStill` (the sky at STILL_SKY_NOW in paintFrame too), no sky loop or timer,
 `st.static` (effects refused, hover at once), and the same-data shortcut Simple has. Chromium, None: 22 frames / 10 s,
 GPU 0.3%. Markets with its effects off passes its own `{rise 0, travel 1, drop 0}`, NOT MOTION.still, and keeps its sky -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
-having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. A found block re-packs fresh and flies the chosen reshuffle: `space.motion` 'rapid' ships since the same evening
+having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. EFFECT CADENCE ON THE PUSHED POOL (the same evening; operator: "Space timers are not properly working for Between
+effects at least, and at most seconds. It's triggering way to often"): scheduleFx's `soon` (idleFirst) is armed only
+for a landing that is not a trickle (`plan.trickle`) or a first paint, replaces a pending timer only when sooner, and
+never falls before `st.fxEndedAt + idleEvery[0]`; a due effect on a moving board retries in 500 ms (a fresh rest per
+miss starved them: one in three minutes, simulated). `test/fx-cadence.test.js`; hook `fxPlaying(canvas)`. The tab is
+"Block Space effects" (settings.js GROUPS title). A found block re-packs fresh and flies the chosen reshuffle: `space.motion` 'rapid' ships since the same evening
 (settings.js MOTION.rapid: every phase and stagger short and liftMin 10 -- 2,875 blocks moving settled at 4,139 ms
 against 20,260 'full' and 9,538 'quick'; operator: "a new shuffle animation that doesn't take so long. Something much
 faster for this rapid data"). The operator's own saved settings still say 'full' until changed in the panel. TAIL PIECES ARE NAMED BY
@@ -1118,7 +1123,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1538 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1539 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1448,7 +1453,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1538 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1539 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

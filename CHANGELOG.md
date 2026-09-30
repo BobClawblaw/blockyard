@@ -62,6 +62,14 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **The Block Space effects' timers work again.** Since the pool arrives every 5 seconds, the board
+  "landed" every 5 seconds. Each landing replaced the between-effects timer with the
+  first-effect-after-landing one, so an effect was always about a second away and "Between effects,
+  at least / at most" never applied. Now only a real reshuffle or a first paint counts as landing.
+  An effect never starts sooner than the minimum after the last one ended. An effect that comes due
+  while the board is moving tries again half a second later, instead of waiting out a whole new rest.
+- **The "Space effects" tab is now "Block Space effects"**, so it is not confused with the space
+  skies.
 - **"None" in Refresh animation now means a still board, on every renderer.** Each new board is
   drawn as it is, and nothing moves in between: no flights, falls, trickles or slides, no idle
   effects, the sky held at one instant, and hover lit at once. Before, arrivals still fell in under

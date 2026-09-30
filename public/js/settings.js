@@ -656,7 +656,7 @@ const PANEL_GROUPS = Object.freeze([
     note: 'The 3D board on Overview, Block space, Mempool and Kiosk. Turn things off here if the board is heavy on this machine.',
     rows: Object.freeze([
       Object.freeze({ key: 'shadows', label: 'Shadows', kind: 'toggle', hint: 'Cubes casting shadows on the board and on each other' }),
-      Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'The effects while the board rests: which of them is the Space effects tab' }),
+      Object.freeze({ key: 'idleFx', label: 'Idle effects', kind: 'toggle', hint: 'The effects while the board rests: which of them is the Block Space effects tab' }),
       Object.freeze({ key: 'edges', label: 'Stone edges', kind: 'toggle', hint: 'The dark seam around each stone' }),
       Object.freeze({ key: 'grid', label: 'Neon grid', kind: 'toggle', hint: 'The glowing grid on the board' }),
       Object.freeze({ key: 'gridColour', label: 'Grid colour', kind: 'colour', hint: 'The grid’s colour: its lit core, and the halo and glow around it, all take it together' }),
@@ -885,7 +885,7 @@ const PANEL_GROUPS = Object.freeze([
   // test/effects.test.js holds them to details3d's SPACE_FX and MARKET_FX.
   Object.freeze({
     group: 'effects',
-    title: 'Space effects',
+    title: 'Block Space effects',   // (not "Space effects": the skies are space too -- operator, 2026-09-30)
     note: 'What the Block space board may play while it rests. One is chosen at random every seven to thirteen seconds, never one played within the no-repeat window \u2014 so the more you leave on, the less often you see any one of them. The Markets board has a list of its own, on the next tab.',
     bulk: true,
     rows: fxRows([

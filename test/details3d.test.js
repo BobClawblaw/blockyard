@@ -515,8 +515,10 @@ test('the first effect after the board comes to rest comes within about a second
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.deepEqual(DEFAULTS.idleFirst, [800, 1600]);
   assert.ok(DEFAULTS.idleEvery[1] <= 9000, 'and the ones after it no more than 9 s apart');
-  assert.match(src, /scheduleFx\(canvas, st, opts, !afterEffect\)/, 'a board that has just landed schedules the quick one');
-  assert.match(src, /if \(soon && st\.fxTimer\) \{ clearTimeout\(st\.fxTimer\)/, 'replacing any longer timer left over');
+  // (since 2026-09-30 a trickle of arrivals is not a landing, and the quick one replaces a pending timer only when
+  // it comes sooner -- test/fx-cadence.test.js holds the cadence with the pool pushed every 5 s)
+  assert.match(src, /scheduleFx\(canvas, st, opts, !afterEffect && !st\.plan\?\.trickle\)/, 'a board that has just landed schedules the quick one');
+  assert.match(src, /if \(!soon \|\| at \+ delay >= \(st\.fxDueAt \?\? Infinity\)\) return;/, 'replacing a longer timer left over, never a sooner one');
   const h = harness();
   render3d(h.canvas, cells, {});
   h.pump(2400);

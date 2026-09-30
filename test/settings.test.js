@@ -222,7 +222,7 @@ test('idle effects are armed when the board rests, star field or not', () => {
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   const rest = src.indexOf('if (frame.settled && !st.dirty && !fxNow(st, t)) {');
   assert.ok(rest > 0, 'the rest branch no longer requires the loop to park');
-  const armed = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect)');
+  const armed = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect && !st.plan?.trickle)');
   // the park test reads the SKY now, not the board style: `space` also carries the deck texture
   // and the floor, so it could not go on standing in for "the stars need another frame"
   const park = src.indexOf('if (!liveSky && !glowAnimating(st, t)) {', rest);   // (liveSky: a sky that needs the loop -- not 2.5D's slow sky, which a timer paces)
@@ -232,7 +232,7 @@ test('idle effects are armed when the board rests, star field or not', () => {
   assert.match(src, /else st\.atRest = false;/, 'and re-armed once something moves again');
   // the trap this guards: scheduleFx with `soon` clears any pending timer, so calling it on
   // every settled frame (which a star field makes certain) resets the countdown for ever
-  const armedAt = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect)');
+  const armedAt = src.indexOf('scheduleFx(canvas, st, opts, !afterEffect && !st.plan?.trickle)');
   const edgeAt = src.indexOf('if (!st.atRest) {');
   assert.ok(edgeAt > 0 && armedAt > edgeAt && armedAt - edgeAt < 300, 'the arming sits inside the edge test');
 });

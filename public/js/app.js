@@ -1371,7 +1371,7 @@ async function boot() {
       open = false;
       return `${close}<div class="cfgrow${idle}"><b><label for="${id}">${r.label}</label></b><span>${ctl}</span><i>${r.hint}${note}</i></div>`;
       }).join('') + (open ? '</div>' : '');
-      // the Space effects tab says so while the Living sky has them off (settings.js spaceOptions)
+      // the Block Space effects tab says so while the Living sky has them off (settings.js spaceOptions)
       const held = g.group === 'effects' && s.sky.type === 'living' ? '<p class="cfgheld">Off while the sky is the Living sky (Sky tab): these play over space. Your switches are kept.</p>' : '';
       return `<div class="cfggroup"><h3>${g.title}</h3><p>${g.note}</p>${held}${bulk}${rowsHtml}</div>`;
     }).join('');
