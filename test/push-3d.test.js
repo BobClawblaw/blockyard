@@ -136,21 +136,21 @@ test('"None" draws each new board as it is: no flight, no trickle, no slide, on 
   }
 });
 
-test('"None" on Software is a still board: a sky and idle effects on, and yet at rest not one frame', async () => {
+test('"None" on Software: the blocks redraw and play no effect, and the SKY STILL MOVES', async () => {
+  // (operator, 2026-09-30, late: "When I set flight time to 'None', the background doesn't move at all" -- None is about
+  // the board; an hour earlier it had frozen the sky too)
   const { MOTION } = await import('../public/js/settings.js');
   const { triggerIdle } = await import('../public/js/details3d.js');
   const o = { renderer: 'software', stars: true, galaxy: true, idleFx: true, transition: MOTION.still };
   const base = mk(200, 'k').concat([{ vbytes: 500000, rate: 0.8, aggregate: 30000 }]);
   const h = harness();
   render3d(h.canvas, base, o);
-  assert.equal(h.pending(), false, 'the sky does not keep a loop going');
+  assert.equal(h.pending(), true, 'the sky keeps a loop going');
   assert.equal(triggerIdle(h.canvas, 'ripple'), false, 'no idle effect can start');
-  for (let i = 0; i < 3; i++) { harness.t += 1000; render3d(h.canvas, base, o); }
-  assert.equal(h.pending(), false, 'the same data again: nothing to draw');
   harness.t += 5000;
-  const r = render3d(h.canvas, base.slice(0, 150).concat(mk(5, 'n', 40)), o);
-  assert.equal(r.settled, true, 'new data: one paint, at once');
-  assert.equal(h.pending(), false);
+  render3d(h.canvas, base.slice(0, 150).concat(mk(5, 'n', 40)), o);
+  const { viewerIdle } = await import('../public/js/details3d.js');
+  assert.equal(viewerIdle(h.canvas), true, 'new data: the blocks are where they land at once (the sky loop runs on)');
 });
 
 test('rapid takes about three seconds; each Refresh animation option says its seconds; Refresh every is 5-120 s', async () => {

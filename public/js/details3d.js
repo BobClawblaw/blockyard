@@ -5752,15 +5752,17 @@ export function render3d(canvas, cells, options = {}) {
   // one paint; at rest the board paints nothing.
   const noMotion = options.transition?.none === true;
   const base = flat ? flatOptions({ ...DEFAULTS, ...options }) : { ...DEFAULTS, ...options };
-  const opts = noMotion ? { ...base, idleFx: false, skyStill: true } : base;
+  // (THE SKY STILL MOVES, since the same night: "When I set flight time to 'None', the background doesn't move at all" --
+  // None is about the BOARD. The sky keeps its own settings; the blocks redraw where they land and play no effect.)
+  const opts = noMotion ? { ...base, idleFx: false } : base;
   // ...AND A BOARD THAT ASKED FOR SOFTWARE BY NAME WHILE THE SETTING IS 2.5D (Scorched Yard's sky, whose
   // pixels are read back) draws as Software but paces its sky like 2.5D: the operator chose 2.5D to leave
   // the card alone, and a Living sky at thirty frames a second behind a game is the same card
   const flatSetting = rendererOf({}) === '2.5d';
   // the SKY LOOP: a sky keeps the animation loop alive for its twinkle (about thirty frames a second) --
   // unless the renderer is 2.5D, where a sky is either off or repainted from a timer (skyMs, armSky)
-  const liveSky = starsOn(opts) && !flat && !flatSetting && !noMotion;
-  const skyMs = starsOn(opts) && (flat || flatSetting) && !noMotion && flatSkyOf(opts) === 'slow' ? FLAT_SKY_MS : 0;
+  const liveSky = starsOn(opts) && !flat && !flatSetting;
+  const skyMs = starsOn(opts) && (flat || flatSetting) && flatSkyOf(opts) === 'slow' ? FLAT_SKY_MS : 0;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
@@ -5950,7 +5952,7 @@ export function render3d(canvas, cells, options = {}) {
   // this a frame at a time and draws its own events through `overlay` at the frame's own instant -- a blast,
   // a fire -- so the same tiles twice are NOT the same picture, and the game's boards paint on every call
   // as they do on Software (Tetrust, 2026-09-12: "a still board is drawn AS LAID, every frame").
-  if (unchanged && st.plan && (flat || noMotion) && opts.still !== true) {   // (and "None": nothing to draw either)
+  if (unchanged && st.plan && (flat || (noMotion && !liveSky)) && opts.still !== true) {   // (and "None" with no live sky: nothing to draw either)
     if (st.dirty && st.raf == null) st.wake?.();
     st.armSky?.();                          // (a slow sky whose timer stopped while the page was hidden starts again)
     return { tiles, settled: true, replanned: false };
