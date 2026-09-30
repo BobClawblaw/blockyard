@@ -99,7 +99,7 @@ test('the rapid reshuffle: the default, and a whole re-pack settles inside one p
   const { MOTION, DEFAULTS, PANEL, normalise, spaceOptions } = await import('../public/js/settings.js');
   assert.equal(DEFAULTS.space.motion, 'rapid');
   const row = PANEL.find((g) => g.group === 'space').rows.find((r) => r.key === 'motion');
-  assert.deepEqual(row.options.map((o) => o[0]), ['rapid', 'full', 'quick', 'still']);
+  assert.deepEqual(row.options.map((o) => o[0]), ['blink', 'swift', 'rapid', 'quick', 'full', 'still']);
   assert.equal(normalise({ space: { motion: 'full' } }).space.motion, 'full', 'a saved choice is kept');
   assert.deepEqual(spaceOptions(normalise(null)).transition, MOTION.rapid);
   // every block moving: a shifted grid of 600 cubes
@@ -171,4 +171,31 @@ test('rapid takes about three seconds; each Refresh animation option says its se
   assert.match(app, /if \(Date\.now\(\) - \(state\.poolAdoptedAt \?\? 0\) < refreshEveryMs\(s\) - 250\) return;/);
   assert.match(app, /loadSettings\(\)\.space\.refreshEvery/);
   assert.match(app, /const pushed = !force && poolPushed\(state\.snap\);/);
+});
+
+test('Swift and Blink: two seconds and one, with gravity raised to match -- a reshuffle and a small update alike', async () => {
+  const { MOTION } = await import('../public/js/settings.js');
+  const prev = [], next = [];
+  for (let i = 0; i < 600; i++) { prev.push(tile(`t${i}`, i % 40, Math.floor(i / 40))); next.push(tile(`t${i}`, (i + 7) % 40, Math.floor(i / 40) + 1)); }
+  const swift = planTransition(prev, next, { now: 0, gridN: 44, maxGrowth: 4, ...MOTION.swift });
+  const blink = planTransition(prev, next, { now: 0, gridN: 44, maxGrowth: 4, ...MOTION.blink });
+  assert.ok(swift.settleAt <= 2_150, `swift settles in ${swift.settleAt} ms`);
+  assert.ok(blink.settleAt <= 1_150, `blink settles in ${blink.settleAt} ms`);
+  assert.ok(MOTION.blink.gravity > MOTION.swift.gravity && MOTION.swift.gravity > 1, 'gravity rises as the clock shortens');
+  // the same fall under stronger gravity is shorter by sqrt(g): landings keep their shape
+  const one = planTransition([], [tile('a', 1, 1, 2)], { now: 0, gridN: 44, maxGrowth: 4, ...MOTION.rapid });
+  const heavy = planTransition([], [tile('a', 1, 1, 2)], { now: 0, gridN: 44, maxGrowth: 4, ...MOTION.rapid, gravity: 4 });
+  const land = (p) => { const tw = p.tweens.find((t) => t.kind === 'enter'); return tw; };
+  assert.ok(land(one) && land(heavy));
+  // a small update under Blink is quicker than the trickle's three seconds: the faster of the two is used
+  const base = mk(200, 'k').concat([{ vbytes: 500000, rate: 0.8, aggregate: 30000 }]);
+  const small = base.filter((c, i) => i % 50 !== 3).concat(mk(3, 'z', 50));
+  const h = harness();
+  const o = { ...SOFT, transition: MOTION.blink };
+  render3d(h.canvas, base, o);
+  h.pump();
+  harness.t += 5000;
+  render3d(h.canvas, small, o);
+  const frames = h.pump();
+  assert.ok(frames * 16 <= 1_400, `a small update under Blink settled in ${frames * 16} ms`);
 });

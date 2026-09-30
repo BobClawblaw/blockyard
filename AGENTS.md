@@ -441,7 +441,11 @@ no Simple slide) AND makes a static board (then: "I don't want any animations wi
 Software and WebGL modes"): idleFx off, `skyStill` (the sky at STILL_SKY_NOW in paintFrame too), no sky loop or timer,
 `st.static` (effects refused, hover at once), and the same-data shortcut Simple has. Chromium, None: 22 frames / 10 s,
 GPU 0.3%. Markets with its effects off passes its own `{rise 0, travel 1, drop 0}`, NOT MOTION.still, and keeps its sky -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
-having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. SHUTDOWN STOPS LISTENING FIRST (the same evening; main.js installShutdown): the listeners' close() is called before
+having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. FLIGHTS OF 1 AND 2 SECONDS (the same evening; operator: "Add a 1 and 2 second flight time" -- "Increase gravity to scale
+with time change"): `MOTION.swift` / `MOTION.blink` carry `gravity` 3.3 / 12.8, which landingOf applies as landingMs /
+sqrt(g) -- the physics was the floor under Rapid's 3 s. Live found block, 2,464 moving: blink 989, swift 1,924, rapid
+3,029 ms. `trickleFaster` in details3d.js: a small update takes TRICKLE's phases only when they are quicker than the
+chosen flight's (rapid, swift and blink are all quicker). SHUTDOWN STOPS LISTENING FIRST (the same evening; main.js installShutdown): the listeners' close() is called before
 the monitors stop and the history saves, `closeAllConnections()` after, and `bye` arms an 8 s exit before it starts.
 The old order let a page's reconnect land mid-shutdown and hold server.close() open until systemd's 45 s kill (5 of 7
 restarts on 2026-09-30; reproduced: alive 15 s after SIGTERM with a reconnecting stream). `test/shutdown.test.js`.
@@ -1132,7 +1136,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1541 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1542 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1462,7 +1466,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1541 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1542 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

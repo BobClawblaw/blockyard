@@ -5721,6 +5721,14 @@ function bindHover(canvas, st) {
   canvas.addEventListener('pointercancel', hide);
 }
 
+// A small update takes the TRICKLE's phases only where they are the faster: under Blink, Swift or Rapid the chosen
+// flight is already quicker, and a trickle of 3 s would make a few arrivals slower than a whole reshuffle.
+function trickleFaster(tr) {
+  if (!tr) return true;                                   // the full flight
+  const sum = (c) => (c.rise ?? 0) + (c.travel ?? 0) + (c.drop ?? 0) + (c.dropStagger ?? TRANSITION.dropStagger);
+  return sum(TRICKLE) < sum(tr);
+}
+
 export function render3d(canvas, cells, options = {}) {
   if (!canvas || !canvas.getContext) return null;
   // 2.5D (flatOptions): the sky, the effects, the shadows and the finishes are off before any of the
@@ -5997,7 +6005,7 @@ export function render3d(canvas, cells, options = {}) {
     // from it, and a first paint on a different camera than every later
     // frame is exactly the load-time artefact this guards.
     ? planTransition(tiles, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) })
-    : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}), ...(isTrickle(st.prev, tiles) ? TRICKLE : {}) });
+    : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}), ...(isTrickle(st.prev, tiles) && trickleFaster(opts.transition) ? TRICKLE : {}) });
   if (!still && !firstPaint && !lookOnly && isTrickle(st.prev, tiles)) plan.trickle = true;   // (scheduleFx: not a landing)
 
   // SIMPLE'S SLIDE (flatslide.js; operator, 2026-09-30: "1s slide with the row wave"). Not a plan: the frame

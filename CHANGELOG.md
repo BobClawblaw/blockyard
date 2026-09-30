@@ -62,6 +62,12 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **Two faster flights: Blink (1 s) and Swift (2 s)** (Settings, Block space, "Refresh animation").
+  The phases are shorter again, and gravity is raised to match (3.3 times for Swift, 12.8 for Blink),
+  so blocks still fall and bounce, just harder. A fall under stronger gravity takes 1/√g as long. On
+  a found block over the live pool, with 2,464 blocks moving: Blink 0.99 s, Swift 1.9 s, Rapid 3.0 s.
+  Small updates use the chosen flight when it is faster than the 3-second trickle, so under Blink,
+  Swift or Rapid a few arrivals never take longer than a whole reshuffle.
 - **A restart no longer leaves pages without data for 45 seconds.** The server used to keep taking
   connections until the very end of its shutdown. A page reconnecting in that window held the
   shutdown open until systemd killed it at its 45-second limit, which happened on five of seven

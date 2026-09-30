@@ -2344,7 +2344,11 @@ export function landingOf(tw, plan) {
   // which the eye reads as the same drop -- the heights themselves are kept,
   // because the no-collision proof lives in them.
   const t0 = plan.phases.travel + j * (plan.cfg.dropStagger || 0);
-  return { bounce, nBounce, rest, from, t0, t1: t0 + landingMs(Math.min(from, 24), bounce, nBounce, rest) };
+  // GRAVITY SCALES WITH THE CLOCK (2026-09-30; operator: "Add a 1 and 2 second flight time" -- "Increase gravity to
+  // scale with time change"). The flights of a second or two could not get under the physics by their phases alone: a
+  // block falls from its lane and bounces. cfg.gravity multiplies g, and a fall of the same height under g' takes
+  // sqrt(g / g') of the time -- the same arc and the same bounces, heavier, not a film played fast.
+  return { bounce, nBounce, rest, from, t0, t1: t0 + landingMs(Math.min(from, 24), bounce, nBounce, rest) / Math.sqrt(Math.max(1e-6, plan.cfg.gravity ?? 1)) };
 }
 
 // COMING TO REST THE WAY A DROPPED THING DOES (operator, 2026-09-11: "The
