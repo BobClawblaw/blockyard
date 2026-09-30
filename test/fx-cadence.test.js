@@ -33,7 +33,7 @@ function world() {
   return { canvas, step, clock: () => now, restore: () => { globalThis.setTimeout = real.set; globalThis.clearTimeout = real.clear; } };
 }
 
-test('with a small update every 5 s, effects keep the between-effects rest (20-30 s here)', () => {
+test('with a small update every 5 s, effects keep the between-effects rest (20-30 s here)', async () => {
   const w = world();
   try {
     const mk = (n, tag) => Array.from({ length: n }, (_, i) => ({ txid: `${tag}${i}`.padEnd(64, 'x'), vbytes: 3000 + i * 50, rate: 60 - i }));
@@ -41,7 +41,9 @@ test('with a small update every 5 s, effects keep the between-effects rest (20-3
     // the fresh-pack path, and every push is then a full reshuffle, not a trickle)
     const tail = { vbytes: 400_000, rate: 0.9, aggregate: 20_000 };
     let cells = mk(40, 'a').concat([tail]);
-    const o = { renderer: 'software', stars: false, idleFx: true, fxKinds: ['ripple'], idleEvery: [20_000, 30_000], idleFirst: [800, 1600] };
+    // (the shipped flight, Rapid: a 20 s flight every 5 s never lets the board rest, and an effect waits for rest)
+    const { MOTION } = await import('../public/js/settings.js');
+    const o = { renderer: 'software', stars: false, idleFx: true, fxKinds: ['ripple'], idleEvery: [20_000, 30_000], idleFirst: [800, 1600], transition: MOTION.rapid };
     render3d(w.canvas, cells, o);
     const starts = [], ends = [];
     let playing = false;

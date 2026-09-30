@@ -213,9 +213,9 @@ test('render3d: the pool board keeps its squares when the pool changes a little 
   const where = (r) => new Map(r.tiles.filter((t) => !String(t.txid).startsWith('aggregate')).map((t) => [t.txid, `${t.x},${t.y},${t.s}`]));
   const moved = (a, b) => [...b].filter(([id, p]) => a.has(id) && a.get(id) !== p).length;
   let h = harness();
-  const a = where(render3d(h.canvas, base, SIMPLE));
+  const a = where(render3d(h.canvas, base, { ...SIMPLE, boardOrder: 'stable' }));
   harness.t += 5000;
-  const b = where(render3d(h.canvas, next, SIMPLE));
+  const b = where(render3d(h.canvas, next, { ...SIMPLE, boardOrder: 'stable' }));
   assert.equal(moved(a, b), 0, 'Simple: not one survivor moved');
   // (and on the 3D renderers too since the same day: test/push-3d.test.js)
 });

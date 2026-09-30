@@ -46,7 +46,7 @@ function harness() {
   ctx.canvas = canvas;
   return { canvas, pump: (n = 5000) => { let g = 0; while (rafPending && g++ < n) { const fn = rafPending; rafPending = null; harness.t += 16; fn(harness.t); } return g; }, pending: () => !!rafPending };
 }
-const SOFT = { renderer: 'software', stars: false, idleFx: false, shadows: false };
+const SOFT = { renderer: 'software', stars: false, idleFx: false, shadows: false, boardOrder: 'stable' };   // (the kept-layout tests; Board order: Exact is tested on its own)
 const mk = (n, tag, r0 = 90, spread = 20000) => Array.from({ length: n }, (_, i) => ({ txid: `${tag}-${i}-`.padEnd(64, 'x'), vbytes: 300 + ((i * 7919) % spread), rate: r0 - i * 0.2 }));
 const where = (r) => new Map(r.tiles.filter((t) => !String(t.txid).startsWith('aggregate')).map((t) => [t.txid, `${t.x},${t.y},${t.s}`]));
 const moved = (a, b) => [...b].filter(([id, p]) => a.has(id) && a.get(id) !== p).length;
@@ -200,4 +200,23 @@ test('Swift and Blink: two seconds and one, with gravity raised to match -- a re
   render3d(h.canvas, small, o);
   const frames = h.pump();
   assert.ok(frames * 16 <= 1_400, `a small update under Blink settled in ${frames * 16} ms`);
+});
+
+test('Board order: Exact (the default) lays the board out afresh, richest lowest, on every update', async () => {
+  const { DEFAULTS } = await import('../public/js/settings.js');
+  assert.equal(DEFAULTS.space.boardOrder, 'exact');
+  const DENSE = { ...SOFT, boardOrder: 'exact', resolution: 96, slab: 1.2, order: 'diagonal', dither: true };
+  const base = mk(900, 'd', 60, 1000);
+  // a rich newcomer: under Stable it takes the free space at the top; under Exact it is laid where its fee puts it
+  const next = base.slice(0, -10).concat(mk(10, 'r', 99, 1000)).sort((a, b) => b.rate - a.rate);   // (richest first, as the server sends it)
+  const h = harness();
+  render3d(h.canvas, base, DENSE);
+  h.pump();
+  harness.t += 5000;
+  const r = render3d(h.canvas, next, DENSE);
+  // exactly the layout a board drawn from scratch gets -- the packer's fee order, nothing kept from before
+  const fresh = render3d(harness().canvas, next, DENSE);
+  const at = (t) => `${t.txid}@${t.x},${t.y},${t.s}`;
+  assert.deepEqual(r.tiles.map(at).sort(), fresh.tiles.map(at).sort());
+  // (Stable's kept layout and its re-sort are held by the tests above and test/blockpack-stable.test.js)
 });

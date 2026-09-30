@@ -62,6 +62,12 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **Board order** (Settings, Block space): **Exact**, the default, lays the board out afresh on
+  every update, richest at the bottom, so the order is always the fee order and most blocks move
+  each time. **Stable** keeps every block still waiting in its place and puts new ones in the free
+  space: far fewer moves, but a rich newcomer can sit above cheaper blocks until the board is
+  re-sorted. That was the behaviour earlier the same day; the operator saw the board out of order
+  ("not accurately redraw in order of most expensive to least expensive").
 - **Effects on the Detailed board cost 20-36% less.** Three changes, each checked pixel for pixel
   against the old renderer:
   - **The WebGL colour cache no longer thrashes.** It held 8,192 colours and was cleared when full;

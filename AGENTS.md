@@ -441,7 +441,14 @@ no Simple slide) AND makes a static board (then: "I don't want any animations wi
 Software and WebGL modes"): idleFx off, `skyStill` (the sky at STILL_SKY_NOW in paintFrame too), no sky loop or timer,
 `st.static` (effects refused, hover at once), and the same-data shortcut Simple has. Chromium, None: 22 frames / 10 s,
 GPU 0.3%. Markets with its effects off passes its own `{rise 0, travel 1, drop 0}`, NOT MOTION.still, and keeps its sky -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
-having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. THE RETAINED LAYER UNDER AN EFFECT (the same evening; operator: "build the retained layer for unmoved tiles"). draw()
+having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. BOARD ORDER (the same evening; operator: "the board is not accurately redraw in order of most expensive to least
+expensive" -- "add setting for both"): `space.boardOrder` 'exact' (default) packs afresh every update; only 'stable'
+uses packExactStable / packDenseStable (render3d `stableOrder`). Everything above about kept layouts, settling, the order
+re-sort and the Detailed flight over a kept board of holds applies under Stable; under Exact the holds are whatever the
+fresh pack left in place (top-end churn leaves most of a first-fit layout where it was). A plan counts as a LANDING
+for the effect timers only on a first paint or when at least half its tweens move (in practice a found block); any
+other update is `plan.trickle` -- under Exact every update is a fresh pack, and "landings" every 5 s had brought back
+the effects-too-often bug (test/fx-cadence.test.js, now on the shipped Rapid flight). THE RETAINED LAYER UNDER AN EFFECT (the same evening; operator: "build the retained layer for unmoved tiles"). draw()
 sets `frame.overlay` (+ `baseOps` = st.restBase, the last settled no-fx frame of this plan) when an effect is on a settled
 board, buildScene says no cube is lifted/hidden/shrunk/pulled (`liveOnly`), the effect draws nothing into the GRID under
 the cubes (ripple, outline, tide, ball), no hover, and every touched op is OPAQUE (the x-ray's see-through faces came out
@@ -1158,7 +1165,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1547 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1548 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1488,7 +1495,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1547 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1548 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

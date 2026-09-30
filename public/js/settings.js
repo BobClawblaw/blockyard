@@ -196,6 +196,12 @@ export const DEFAULTS = Object.freeze({
     // make 5 seconds the default. 120 seconds the maximum"). The server pushes the pool every 5 s (poll.poolPushMs);
     // the page takes one at most this often (app.js adoptPushedPool), in seconds.
     refreshEvery: 5,
+    // BOARD ORDER (the same evening; operator: "the board is not accurately redraw in order of most expensive to least
+    // expensive" -- then "add setting for both"). 'exact' (the default): the board is laid out afresh, richest first, on
+    // every update, so the order is always the fee order and most blocks move. 'stable': the blocks still in the pool
+    // keep their squares and new ones take the free space (blockpack.js packExactStable / packDenseStable) -- few moves,
+    // and the order drifts until the Detailed board's re-sort.
+    boardOrder: 'exact',
     // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
     // arcing towards/away from the sides instead of just traveling straight up ... make it a toggle
     // for Linear vs Arcing", then "give me 3 choices to see and toggle between", then, having seen
@@ -698,6 +704,11 @@ const PANEL_GROUPS = Object.freeze([
         // (the FLIGHT's length, said as such: "Rapid \u00b7 3 s" read as a refresh interval beside "Refresh every" --
         // operator, the same evening: "Just clarify the labels")
         options: Object.freeze([['blink', 'Blink (1 s flight)'], ['swift', 'Swift (2 s flight)'], ['rapid', 'Rapid (3 s flight)'], ['quick', 'Quick (10 s flight)'], ['full', 'Full flight (20 s)'], ['still', 'None (no flight)']]),
+      }),
+      Object.freeze({
+        key: 'boardOrder', label: 'Board order', kind: 'segment',
+        hint: 'Exact (the default) lays the board out afresh on every update, richest at the bottom, so the order is always the fee order -- and most blocks move each time. Stable keeps every block still waiting in its place and puts new ones in the free space: far fewer moves, but a rich newcomer can sit above cheaper blocks until the board is re-sorted',
+        options: Object.freeze([['exact', 'Exact'], ['stable', 'Stable']]),
       }),
       Object.freeze({
         key: 'refreshEvery', label: 'Refresh every (seconds)', kind: 'range', min: 5, max: 120, step: 5,
@@ -1447,6 +1458,7 @@ export function spaceOptions(s) {
   const motion = MOTION[sp.motion];
   if (motion) out.transition = motion;
   out.departures = sp.departures;
+  out.boardOrder = sp.boardOrder;
   out.light = sp.light;
   out.lightHeight = sp.lightHeight;
   // merged into the camera by details3d (it owns the oblique constants); 0 leaves it exactly as it

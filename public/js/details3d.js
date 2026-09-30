@@ -5809,6 +5809,7 @@ export function render3d(canvas, cells, options = {}) {
   const tallest = (p) => p.tiles.reduce((m, t) => Math.max(m, t.y + t.s), 0);
   let fitK = st.fitK ?? 1;
   let packed, keptDense = null;
+  const stableOrder = opts.boardOrder === 'stable';
   if (agg) {
     const plain = (cells || []).filter((c) => c !== agg).map((c, i) => ({
       txid: c.txid || `cell-${i}`, vsize: Math.max(1, Number(c.vbytes ?? c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0),
@@ -5822,10 +5823,11 @@ export function render3d(canvas, cells, options = {}) {
     // and a found block or a drifted scale packs fresh. On every renderer: on the 3D ones an update with nothing
     // moving is a trickle of arrivals and departures (blockscene3d.js TRICKLE), not a 20 s reshuffle.
     const cfgX = { resolution: opts.resolution, cap: 3 };
-    packed = (st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
+    // (only under Board order: Stable -- settings.js space.boardOrder; Exact, the default, packs afresh every update)
+    packed = (stableOrder && st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
     st.exactPrev = packed;
     fitK = 1;                                            // nothing to shrink: the scale was solved
-  } else if (!laid && opts.dither && st.densePrev && (keptDense = packDenseStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution)),
+  } else if (!laid && opts.dither && stableOrder && st.densePrev && (keptDense = packDenseStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution)),
     { resolution: opts.resolution, blockLimit: opts.blockVbytes * fitK, dither: true }))) {
     // (packDenseStable since the same evening: the kept layout SETTLES, squares dropping into the gaps under
     // them, and packs fresh past DENSE_GAP_MAX -- operator: "Why is it leaving holes like that in detailed view?")
@@ -5931,6 +5933,7 @@ export function render3d(canvas, cells, options = {}) {
     flatSkyOf(opts),                      // ...or the Simple sky is (off, still, slow)
     flatSlideOf(opts),                    // ...or Simple's slide is switched
     softwareScaleOf(opts),                // ...or Software's resolution is (render3d sizes the canvas by it)
+    opts.boardOrder === 'stable',         // ...or the board order (a switch to Exact lays the board out afresh at once)
     webglScaleOf(opts), frameGapOf(opts), // ...or WebGL's resolution, or the frame cap
     fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
@@ -6023,7 +6026,10 @@ export function render3d(canvas, cells, options = {}) {
     // frame is exactly the load-time artefact this guards.
     ? planTransition(tiles, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) })
     : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}), ...(isTrickle(st.prev, tiles) && trickleFaster(opts.transition) ? TRICKLE : {}) });
-  if (denseSmall || (!still && !firstPaint && !lookOnly && isTrickle(st.prev, tiles))) plan.trickle = true;   // (scheduleFx: not a landing)
+  // (scheduleFx: not a landing -- a small update, and under Board order: Exact any update that did not move most of the
+  // board: with the pool pushed every 5 s a "landing" every 5 s armed the quick first effect every 5 s)
+  const moverShare = plan.tweens.length ? plan.tweens.filter((tw) => tw.kind === 'move').length / plan.tweens.length : 0;
+  if (denseSmall || (!still && !firstPaint && !lookOnly && (isTrickle(st.prev, tiles) || moverShare < 0.5))) plan.trickle = true;
 
   // SIMPLE'S SLIDE (flatslide.js; operator, 2026-09-30: "1s slide with the row wave"). Not a plan: the frame
   // on screen and the settled frame to come, paired by transaction and eased in the plane for SLIDE_MS, then
