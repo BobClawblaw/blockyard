@@ -25,6 +25,7 @@ import { formGlAttach, formGlSupported } from './formgl.js';
 import { sunGlAttach, sunGlSupported, drawSunSky } from './sunsky.js';
 import { drawGalaxyFlight } from './galflight.js';
 import { createGl2d, gl2dSupported } from './gl2d.js';
+import { planSlide, sampleSlide, SLIDE_MS } from './flatslide.js';
 import { loadSettings } from './settings.js';
 
 const STATE = new WeakMap();
@@ -113,6 +114,12 @@ export function flatSkyOf(opts) {
   let want = opts?.flatSky;
   if (want !== 'off' && want !== 'slow' && want !== 'still') { try { want = loadSettings().appearance.flatSky; } catch { want = 'off'; } }
   return want === 'slow' ? 'slow' : want === 'still' ? 'still' : 'off';
+}
+/** Simple's slide between layouts (settings.js appearance.flatSlide): 'slide' (flatslide.js, SLIDE_MS) or 'off' (a new layout lands at once). */
+export function flatSlideOf(opts) {
+  let want = opts?.flatSlide;
+  if (want !== 'off' && want !== 'slide') { try { want = loadSettings().appearance.flatSlide; } catch { want = 'slide'; } }
+  return want === 'off' ? 'off' : 'slide';
 }
 export const FLAT_SKY_MS = 500;            // the slow sky: two frames a second (operator, 2026-09-28: "build the slow sky at 2 fps")
 // THE STILL SKY'S INSTANT (operator, 2026-09-29: "just add a simple space background that does not rotate at all.
@@ -5835,6 +5842,7 @@ export function render3d(canvas, cells, options = {}) {
     opts.skyType, opts.skyClock, opts.skyHour, opts.skyWeather, opts.skyCover, opts.skyLat, opts.skyRays !== false, opts.skyRainbow === true, opts.skyShooting !== false, opts.skyHorizon, opts.skyMoon, opts.sunAt, opts.sunActivity !== false, opts.sunEruptions !== false, opts.sunProminences !== false, opts.sunCycle, opts.sunChannel, opts.sunDetail, opts.sunSize, opts.sunBrightness, opts.sunSpin, opts.formSpeed, opts.formAt, opts.formBrightness, opts.formFlow, opts.formPalette,
     rendererOf(opts),                     // a parked board repaints when the renderer is switched
     flatSkyOf(opts),                      // ...or the Simple sky is (off, still, slow)
+    flatSlideOf(opts),                    // ...or Simple's slide is switched
     softwareScaleOf(opts),                // ...or Software's resolution is (render3d sizes the canvas by it)
     fpsWanted(opts),                      // ...and when the frame-rate figure is switched on or off
     opts.neon === true, opts.sheen === true, opts.sheenStyle, opts.overheadLight === true, opts.light,
@@ -5921,6 +5929,14 @@ export function render3d(canvas, cells, options = {}) {
     ? planTransition(tiles, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) })
     : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) });
 
+  // SIMPLE'S SLIDE (flatslide.js; operator, 2026-09-30: "1s slide with the row wave"). Not a plan: the frame
+  // on screen and the settled frame to come, paired by transaction and eased in the plane for SLIDE_MS, then
+  // the board parks as before. Only the pool boards (not a board the caller laid out, whose axes and price line
+  // would snap while its candles moved; not a game's still board), never on a first paint or a look change.
+  const slideFrom = flat && opts.still !== true && !laid && !reducedMotion() && !firstPaint && !lookOnly
+    && sig !== st.sig && flatSlideOf(opts) === 'slide' && st.lastOps?.length ? st.lastOps : null;
+  const slideRows = slideFrom ? new Map([...st.prev.map((t) => [String(t.txid), t.y]), ...tiles.map((t) => [String(t.txid), t.y])]) : null;
+  st.slide = slideFrom ? { from: slideFrom, rows: slideRows, t0: now, plan: null } : null;
   st.prev = tiles;
   st.sig = sig;
   st.plan = plan;
@@ -6021,7 +6037,23 @@ export function render3d(canvas, cells, options = {}) {
     // the very same ops array. An effect, a hover or a new plan builds again, and the cache starts over.
     const kept = st.restFrame;
     let frame;
-    if (kept && kept.plan === st.plan && kept.draw === draw && !view.fx && !view.hoverGlow) frame = kept.frame;
+    // SIMPLE'S SLIDE: the settled frame is built once (it is also the frame the board rests on), the slide
+    // planned against it once, and every frame after only moves points (flatslide.js)
+    if (flat && st.slide) {
+      const sl = st.slide;
+      if (!sl.plan) {
+        const settled = frameAt(st.plan, t, { ...view, hoverGlow: null });
+        if (!view.fx) st.restFrame = { plan: st.plan, draw, frame: settled };
+        const o0 = project(0, 0, 0, view), o1 = project(0, 1, 0, view);
+        sl.settled = settled;
+        sl.plan = planSlide(sl.from, settled.ops, { rows: sl.rows, gridH: st.gridH, up: { x: o1.x - o0.x, y: o1.y - o0.y }, now: sl.t0, ms: SLIDE_MS }) || 'none';
+      }
+      const s = sl.plan === 'none' ? { done: true } : sampleSlide(sl.plan, t);
+      if (s.done) st.slide = null;
+      else frame = { ...sl.settled, ops: s.ops, settled: false };
+    }
+    if (frame) { /* the slide's frame */ }
+    else if (kept && kept.plan === st.plan && kept.draw === draw && !view.fx && !view.hoverGlow) frame = kept.frame;
     else {
       frame = frameAt(st.plan, t, view);
       st.restFrame = frame.settled && !view.fx && !view.hoverGlow ? { plan: st.plan, draw, frame } : null;
@@ -6115,7 +6147,7 @@ export function render3d(canvas, cells, options = {}) {
   if (first.settled) { st.atRest = true; scheduleFx(canvas, st, opts, true); }   // at rest already, stars or not
   // Park when nothing is moving: a settled board, or one that asked for no choreography at all.
   // Stars are motion in their own right, so a sky keeps the loop whatever the tiles are doing.
-  if (!globalThis.requestAnimationFrame || (!liveSky && (still || first.settled))) {
+  if (!globalThis.requestAnimationFrame || (!liveSky && ((still && !st.slide) || first.settled))) {
     return { tiles, settled: true };
   }
   st.raf = requestAnimationFrame(step);

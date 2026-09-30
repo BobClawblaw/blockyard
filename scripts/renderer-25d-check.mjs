@@ -7,6 +7,7 @@
 // Markets board and a game well with renderer '2.5d', under the SHIPPED settings (sky on, effects
 // on) -- then lets thirty virtual seconds pass and counts the animation frames each board painted.
 // The claim under test is the renderer's whole reason to exist: a resting 2.5D board paints NOTHING.
+// A refresh on Block space is the exception by design since 2026-09-30: Simple's slide, one second of frames.
 // The same boards on Software are counted beside it for the comparison, and each board's one paint
 // is timed. PNGs of every board go to --out for looking at.
 import http from 'node:http';
@@ -34,6 +35,7 @@ window.addEventListener('error', (e) => out.errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => out.errors.push(String(e.reason)));
 try {
   let VT = 1000; const q = []; let painted = 0;
+  const wall = performance.now.bind(performance);             // the real clock, for timing a slide's frames
   performance.now = () => VT;
   let rafId = 0;
   window.requestAnimationFrame = (fn) => { fn.id = ++rafId; q.push(fn); return fn.id; };
@@ -94,9 +96,21 @@ try {
       const hover = painted;
       // a refresh with new data: the flight (or, on 2.5D, the one frame)
       painted = 0;
-      if (board === 'space') { boards[board](canvas, cells2, { renderer }); pump(30000, 16); }
+      // (on 2.5D that is Simple's slide, flatslide.js: a second of frames, each one timed, then parked)
+      let slideMs = null, mid = null;
+      if (board === 'space') {
+        boards[board](canvas, cells2, { renderer });
+        if (renderer === '2.5d') {
+          pump(480, 16); mid = grab(canvas);
+          const f0 = painted, w0 = wall();
+          pump(560, 16);
+          canvas.getContext('2d').getImageData(0, 0, 1, 1);
+          slideMs = painted > f0 ? (wall() - w0) / (painted - f0) : null;
+        }
+        pump(30000, 16);
+      }
       const refresh = painted;
-      out.boards.push({ board, renderer, used: d3.rendererIn(canvas), paintMs, rest, hover, refresh, png: grab(canvas) });
+      out.boards.push({ board, renderer, used: d3.rendererIn(canvas), paintMs, rest, hover, refresh, slideMs, mid, png: grab(canvas) });
       await new Promise((res) => realTimeout(res, 0));
     }
   }
@@ -145,13 +159,16 @@ try {
   const errors = JSON.parse(await evl('JSON.stringify(window.__out.errors)') ?? '[]');
   await mkdir(OUT, { recursive: true });
   console.log(`panel ${SIZE}; frames painted in 30 s at rest, in 2 s after a hover, in 30 s after a refresh with new data; ms for the first paint`);
-  console.log('board     renderer  used      rest  hover  refresh   paint ms');
+  console.log('board     renderer  used      rest  hover  refresh   paint ms   slide ms/frame');
   for (let i = 0; i < n; i++) {
     const b = JSON.parse(await evl(`JSON.stringify(window.__out.boards[${i}])`));
     await writeFile(path.join(OUT, `${b.board}-${b.renderer}.png`), Buffer.from(b.png.split(',')[1], 'base64'));
-    const bad = b.renderer === '2.5d' && (b.used !== '2.5d' || b.rest !== 0 || b.hover > 1 || b.refresh > 1);
+    if (b.mid) await writeFile(path.join(OUT, `${b.board}-${b.renderer}-mid-slide.png`), Buffer.from(b.mid.split(',')[1], 'base64'));
+    // a refresh on Block space is Simple's slide: one second of frames (SLIDE_MS / 16 ms), and then none
+    const refreshCap = b.board === 'space' ? Math.ceil(1000 / 16) + 2 : 1;
+    const bad = b.renderer === '2.5d' && (b.used !== '2.5d' || b.rest !== 0 || b.hover > 1 || b.refresh > refreshCap);
     if (bad) code = 1;
-    console.log(`${b.board.padEnd(9)} ${b.renderer.padEnd(9)} ${b.used.padEnd(9)} ${String(b.rest).padStart(4)}  ${String(b.hover).padStart(5)}  ${String(b.refresh).padStart(7)}   ${String(b.paintMs).padStart(6)}${bad ? '   <-- 2.5D painted on its own' : ''}`);
+    console.log(`${b.board.padEnd(9)} ${b.renderer.padEnd(9)} ${b.used.padEnd(9)} ${String(b.rest).padStart(4)}  ${String(b.hover).padStart(5)}  ${String(b.refresh).padStart(7)}   ${String(b.paintMs).padStart(6)}   ${b.slideMs == null ? '' : b.slideMs.toFixed(2).padStart(6)}${bad ? '   <-- 2.5D painted on its own' : ''}`);
   }
   if (!done) { console.log('TIMED OUT'); code = 1; }
   if (errors.length) { code = 1; console.log('\nERRORS'); for (const e of errors) console.log('  ' + e); }

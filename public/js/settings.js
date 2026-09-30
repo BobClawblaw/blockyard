@@ -102,6 +102,10 @@ export const DEFAULTS = Object.freeze({
     // all. Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good"): a star
     // field drawn once, no galaxy, no timer -- the same picture on every paint (details3d.js STILL_SKY_NOW).
     flatSky: 'still',
+    // Simple'S SLIDE (operator, 2026-09-30: "a shifting tiles animation in 2D like mempool space app does" --
+    // "1s slide with the row wave"). 'slide': a new layout eases into place in the plane over one second, the
+    // bottom row first (details3d.js flatSlideOf, flatslide.js), and the board parks again. 'off': it lands at once.
+    flatSlide: 'slide',
     // THE FRAME RATE, top right of every 3D board (operator, 2026-09-21): frames actually painted in
     // the last second, the processor's milliseconds a frame, and which renderer drew it.
     showFps: false,
@@ -579,6 +583,11 @@ const PANEL_GROUPS = Object.freeze([
         key: 'flatSky', label: 'Simple sky', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== '2.5d',
         hint: 'Only the Simple renderer has this. Still (the default) is a star field drawn once and left alone: no galaxy, nothing turns, nothing repaints, whichever sky the board chose. Slow keeps the board\u2019s sky -- the star field and galaxy, or the Earth sky -- and repaints it twice a second: the stars drift and the day passes, at about a fiftieth of what the full sky costs the graphics card. Off is a plain dark panel. The Formation and the Sun are drawn on the graphics card and stand in as the star field here; effects and the flights between layouts stay off either way',
         options: Object.freeze([['off', 'Off'], ['still', 'Still'], ['slow', 'Slow']]),
+      }),
+      Object.freeze({
+        key: 'flatSlide', label: 'Simple slide', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== '2.5d',
+        hint: 'Only the Simple renderer has this. Slide (the default): when the pool refreshes, every block eases from where it was to where it goes, in the plane, over one second -- the bottom row first, the rest following up the board -- arrivals drop in from above their place and departures shrink away. Then the board is still again: one second of frames per refresh, none in between. Off: the new layout appears at once',
+        options: Object.freeze([['slide', 'Slide'], ['off', 'Off']]),
       }),
       Object.freeze({
         key: 'softwareScale', label: 'Software resolution', kind: 'segment', dimWhen: (s) => s.appearance.renderer === 'webgl',

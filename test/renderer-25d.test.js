@@ -106,12 +106,13 @@ test('the same data again paints nothing at all', () => {
   assert.equal(h.pending(), false);
 });
 
-test('new data lands at once: one frame, no flight, no deferral', () => {
+test('with the slide off, new data lands at once: one frame, no flight, no deferral', () => {
   const h = harness();
-  render3d(h.canvas, cells, SPACE);
+  const OFF = { ...SPACE, flatSlide: 'off' };
+  render3d(h.canvas, cells, OFF);
   const n = h.ops.length;
   harness.t += 1000;
-  const r = render3d(h.canvas, cells2, SPACE);
+  const r = render3d(h.canvas, cells2, OFF);
   assert.equal(r.settled, true, 'no transition to wait for');
   assert.equal(r.deferred, undefined, 'nothing was parked behind an effect');
   assert.ok(h.ops.length > n, 'it painted');
@@ -303,7 +304,7 @@ test('a 2.5D board with the slow sky: one paint, a timer, one frame per tick, ne
 
 test('a 2.5D board with the still sky: the star field painted, no timer, no loop, the same picture on every paint', () => {
   const h = harness();
-  const STILL = { ...SPACE, flatSky: 'still' };
+  const STILL = { ...SPACE, flatSky: 'still', flatSlide: 'off' };   // (one paint per call: the slide is tested on its own)
   render3d(h.canvas, cells, STILL);
   assert.equal(h.pending(), false, 'no animation frame');
   assert.equal(skyArmed(h.canvas), false, 'no sky timer either: nothing to repaint');

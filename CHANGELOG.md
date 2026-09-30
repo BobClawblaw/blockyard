@@ -43,6 +43,16 @@ All notable changes to this project are documented here. The format follows
   Measured in headless Chromium at 2560x1300 under the shipped sky and effects, frames painted in
   thirty seconds at rest: 0, against 1,875 on Software (`scripts/renderer-25d-check.mjs`); whole
   pages of the live monitor, composited frames in ten seconds: Overview 600 -> 6.
+- **Simple's slide** (Settings, Appearance, "Simple slide"; on by default). When the pool
+  refreshes, the Simple renderer's pool boards (Overview, Block space, Mining, Kiosk) no longer jump
+  to the new layout: every block eases from where it was to where it goes, in the plane, over one
+  second. The bottom row moves first and the rows above follow in a wave. New transactions drop in
+  from above their place, and the ones that left shrink away. Then the board is still again, so a
+  refresh costs one second of frames (the pool refreshes every 30 s) and a resting board still
+  paints none. No scene is rebuilt per frame: the frame on screen and the settled frame are paired
+  by transaction once, and each frame only moves points. Measured in headless Chromium at
+  2560x1300: 63 frames per refresh, 1.2-1.5 ms of processor time each
+  (`scripts/renderer-25d-check.mjs`). Markets and the games keep landing at once. Off restores that.
 - **The Software renderer keeps a resting board.** Once a board has stopped moving it is drawn once
   into an offscreen layer, and each frame the sky asks for is that layer blitted over the sky. The
   WebGL renderer already kept a resting board on the graphics card. Measured in headless Chromium

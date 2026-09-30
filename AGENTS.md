@@ -400,6 +400,21 @@ page every vsync on the card, however cheap the property. So `applyTheme` stamps
 while the renderer is 2.5D and app.css stops every infinite animation under it (one block beside the
 reduced-motion rules, which it mirrors). A NEW INFINITE ANIMATION MUST BE ADDED TO THAT BLOCK, and
 `test/renderer-25d.test.js` fails if the stylesheet gains one that the block does not name.
+**SIMPLE SLIDES BETWEEN LAYOUTS (2026-09-30; operator: "a shifting tiles animation in 2D like mempool space app
+does ... that works well in simple mode" -- "build it, Simple mode first, 1s slide with the row wave").**
+`appearance.flatSlide` 'slide' (shipped) / 'off'. `public/js/flatslide.js` is pure: `planSlide(fromOps, toOps, ...)`
+pairs the frame on screen with the settled frame BY TXID once, `sampleSlide(plan, now)` only moves points
+(same faces: point by point; otherwise the settled cube carried and scaled; arrivals `ENTER_ROWS` above their slot
+grown from nothing; departures shrunk where they stood), each tile delayed by its row (`WAVE_MS`, bottom first),
+the whole thing `SLIDE_MS` = 1 s. **Never rebuild the scene per frame here**: `buildScene` is 8.6 ms for a
+491-tile board and 111 ms for 3,000 (node, 2026-09-30); a slide frame is 1.2-1.5 ms at 2560x1300 in chromium.
+Paint order is each tile's place blended between the two frames' own orders, exact at both ends. In render3d:
+`st.slide` is set where a new plan is made (not on a first paint, a look change, a laid board -- Markets' axes would
+snap while its candles slid -- a `still` board, or reduced motion), and `draw` builds the settled frame once, which
+is also kept as `st.restFrame`. A new layout mid-slide starts the next slide from the live points (they are copied).
+A fresh re-pack moves most tiles, so the middle of a slide shows gaps where tiles cross: that is motion, not a hole.
+Tail pieces are named by slot, so they hold or grow/shrink in place rather than slide. The tests are `test/flatslide.test.js`;
+`scripts/renderer-25d-check.mjs` allows Block space one slide of frames on a refresh.
 **THE STILL SKY IS SHIPPED (2026-09-29; operator: "just add a simple space background that does not rotate at all.
 Just a nice simple star field for simple mode. the 2fps anims rotating don't look so good").** `appearance.flatSky`
 'still': `flatOptions` keeps the star field alone (`skyType` 'galaxy', `galaxy: false`, `skyStill: true`) whatever sky
@@ -1028,7 +1043,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1491 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1503 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1358,7 +1373,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1491 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1503 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
