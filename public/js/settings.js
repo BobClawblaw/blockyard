@@ -192,6 +192,10 @@ export const DEFAULTS = Object.freeze({
     // "we should add a new shuffle animation that doesn't take so long. Something much faster for this rapid
     // data"): the pool arrives every 5 s now, and the full flight takes 20 s
     motion: 'rapid',
+    // HOW OFTEN THE BOARD TAKES A NEW POOL (the same evening; operator: "we should probably add a 'Refresh Every...' and
+    // make 5 seconds the default. 120 seconds the maximum"). The server pushes the pool every 5 s (poll.poolPushMs);
+    // the page takes one at most this often (app.js adoptPushedPool), in seconds.
+    refreshEvery: 5,
     // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
     // arcing towards/away from the sides instead of just traveling straight up ... make it a toggle
     // for Linear vs Arcing", then "give me 3 choices to see and toggle between", then, having seen
@@ -467,7 +471,10 @@ export const MOTION = {
   // at once: short phases, short staggers, a lower lift so the falls are short. Measured on a found block over
   // bmc's live pool (2,875 blocks moving): settled at 4,139 ms, against 20,260 for full and 9,538 for quick
   // (which shortens the phases but keeps the full flight's staggers). Inside one 5 s push.
-  rapid: { rise: 500, travel: 1100, drop: 700, riseStagger: 350, dropStagger: 700, entryMs: 600, lockMs: 160, liftMin: 10 },
+  // THREE SECONDS since the same evening (operator: "Make rapid take 3 seconds instead of 4 seconds"): shorter again
+  // everywhere and a lower lift, because what is left after the phases is the landings -- a block falls from its lane
+  // and bounces by physics, whatever the phases say. The same found block (2,206 moving): 3,029 ms.
+  rapid: { rise: 300, travel: 600, drop: 400, riseStagger: 200, dropStagger: 350, entryMs: 350, lockMs: 100, liftMin: 6 },
   full: null,                                              // the 20 s choreography (shipped until 2026-09-30)
   quick: { rise: 900, travel: 3200, drop: 1800 },
   // NONE MEANS NONE (2026-09-30; operator: "if I select refresh animation: none, it should just redraw the new board
@@ -679,8 +686,14 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['full', 'Full'], ['simple', 'Simple cubes'], ['flat', 'Flat tiles']]),
       }),
       Object.freeze({
-        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Rapid (the default) is the whole flight in about four seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
-        options: Object.freeze([['rapid', 'Rapid'], ['full', 'Full flight'], ['quick', 'Quick'], ['still', 'None']]),
+        key: 'motion', label: 'Refresh animation', kind: 'choice', hint: 'How blocks travel when the board is laid out again -- when a block is found, and every block moves. Each choice says how long its whole flight takes: Rapid (the default) about three seconds, inside one of the pool\u2019s five-second updates; Quick about ten; Full flight twenty, the original. The small updates in between -- a few arrivals and departures -- take about three. None draws each new board as it is, on any renderer: nothing flies, falls or slides, and nothing moves in between -- no idle effects, the sky held still, a hover lit at once. At rest the board draws nothing at all',
+        // (the seconds each takes, measured on a found block over the live pool: 3.0, 20.3, 9.5 -- operator: "show the
+        // number of seconds that each menu item refreshes by")
+        options: Object.freeze([['rapid', 'Rapid \u00b7 3 s'], ['full', 'Full flight \u00b7 20 s'], ['quick', 'Quick \u00b7 10 s'], ['still', 'None \u00b7 0 s']]),
+      }),
+      Object.freeze({
+        key: 'refreshEvery', label: 'Refresh every (seconds)', kind: 'range', min: 5, max: 120, step: 5,
+        hint: 'How often the pool boards take a new picture of the mempool, in seconds: 5 (the default) is every update the node sends, 120 once every two minutes. The refresh button beside the board takes one at once, whatever this says',
       }),
       Object.freeze({
         key: 'departures', label: 'Departures and arrivals', kind: 'choice',

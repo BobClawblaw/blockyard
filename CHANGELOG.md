@@ -62,6 +62,13 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **Refresh every** (Settings, Block space, "Refresh every (seconds)"): how often the pool boards take
+  a new picture of the mempool, from 5 seconds (the default, every update the server pushes) to 120.
+  The refresh button still takes one at once. The label beside it and the note under the board say
+  the interval.
+- **Rapid now takes about 3 seconds** (it was 4). A found block with 2,206 blocks moving settled in
+  3,029 ms. Each "Refresh animation" choice now shows its length: Rapid · 3 s, Full flight · 20 s,
+  Quick · 10 s, None · 0 s.
 - **The Block Space effects' timers work again.** Since the pool arrives every 5 seconds, the board
   "landed" every 5 seconds. Each landing replaced the between-effects timer with the
   first-effect-after-landing one, so an effect was always about a second away and "Between effects,

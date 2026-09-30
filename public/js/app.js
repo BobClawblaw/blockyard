@@ -640,13 +640,22 @@ const MEMPOOL_DETAIL_MS = 30_000;
 // when the frame says the pool changed, at most once per push.
 function poolPushed(s) { return !!(s?.mempool?.push?.mode && s.mempool.dist?.at); }
 let denseAsking = false;
+// REFRESH EVERY (settings.js space.refreshEvery, 5-120 s; operator, 2026-09-30): the server pushes every 5 s, the
+// board takes a new pool at most this often. The refresh button takes one at once (mempoolDetail(true)).
+function refreshEveryMs(s) {
+  let every = 5;
+  try { every = Number(loadSettings().space.refreshEvery) || 5; } catch { /* the default */ }
+  return Math.max(every * 1000, Number(s?.mempool?.push?.everyMs) || 0);
+}
 function adoptPushedPool(s) {
   if (!poolPushed(s) || !POOL_VIEWER_PAGES.has(state.page) || document.hidden) return;
+  if (Date.now() - (state.poolAdoptedAt ?? 0) < refreshEveryMs(s) - 250) return;
   const d = s.mempool.dist;
   if (state.viewerMode === '2') {
     if (denseAsking || (state.denseAskedFor ?? 0) >= d.at) return;
     denseAsking = true;
     state.denseAskedFor = d.at;
+    state.poolAdoptedAt = Date.now();
     const id = state.node;
     api(`/api/mempool/dense?node=${encodeURIComponent(id ?? '')}`)
       .then((x) => { if (x?.v && id === state.node) { state.denseBlock = { ...x, fetchedAt: Date.now() }; state.poolFetchedAt = Date.now(); render(); } })
@@ -658,6 +667,7 @@ function adoptPushedPool(s) {
   // the frame leaves the scatter out (rule 5): keep the one the last /api/mempool read brought
   state.mempoolDist = { ...d, scatter: state.mempoolDist?.scatter, count: s.mempool.count ?? d.count, fetchedAt: Date.now(), stale: false };
   state.poolFetchedAt = Date.now();
+  state.poolAdoptedAt = Date.now();
 }
 const POOL_VIEWER_PAGES = new Set(['mining', 'overview', 'space', 'kiosk']);
 async function mempoolDetail(force = false) {
@@ -667,14 +677,19 @@ async function mempoolDetail(force = false) {
   state.poolFetchedAt = mempoolFetchedAt;   // the panels count down from here
   const id = state.node;
   try {
-    if (state.viewerMode === '2') {
+    // (with the pool pushed, the board's pictures come by adoptPushedPool at the operator's interval; this poll only
+    // keeps the scatter the frame leaves out -- unless the refresh button forced it)
+    const pushed = !force && poolPushed(state.snap);
+    if (state.viewerMode === '2' && !pushed) {
       api(`/api/mempool/dense?node=${encodeURIComponent(id ?? '')}`)
         .then((x) => { if (x?.v && id === state.node) { state.denseBlock = { ...x, fetchedAt: Date.now() }; render(); } })
         .catch(() => { /* the mode 1 picture stays up */ });
     }
     const d = await api(`/api/mempool?node=${encodeURIComponent(id ?? '')}`);
     if (id !== state.node) return state.mempoolDist;   // answered for the node we just left
-    if (d?.dist) {
+    if (d?.dist && pushed && state.mempoolDist) {
+      state.mempoolDist = { ...state.mempoolDist, scatter: d.dist.scatter };
+    } else if (d?.dist) {
       state.mempoolDist = { ...d.dist, count: d.info?.count ?? d.dist.count, fetchedAt: Date.now(), stale: false };
       render();
     }
@@ -1546,7 +1561,7 @@ async function boot() {
     b.disabled = true;
     mempoolFetchedAt = 0;   // due now
     try { if (state.page === 'mempool') await refreshMempoolDetail(true); else await mempoolDetail(true); }
-    finally { poolRefreshing = false; }
+    finally { poolRefreshing = false; state.poolAdoptedAt = Date.now(); }   // (the next pushed pool waits a whole interval)
   });
   // The pool viewers' countdown to their next refresh (see refreshLabel), once
   // a second. Text and a CSS variable only -- nothing is re-rendered.
@@ -1554,7 +1569,7 @@ async function boot() {
     if (document.hidden) return;
     const pushed = poolPushed(state.snap);
     const { text, frac } = pushed
-      ? { text: state.paused ? 'refresh paused' : `live, every ${Math.round(state.snap.mempool.push.everyMs / 1000)} s`, frac: 1 }
+      ? { text: state.paused ? 'refresh paused' : `live, every ${Math.round(refreshEveryMs(state.snap) / 1000)} s`, frac: 1 }
       : refreshLabel(state.poolFetchedAt ? state.poolFetchedAt + MEMPOOL_DETAIL_MS : NaN, Date.now(), { paused: state.paused, period: MEMPOOL_DETAIL_MS });
     for (const el of document.querySelectorAll('[data-refresh]')) {
       if (el.textContent !== text) el.textContent = text;

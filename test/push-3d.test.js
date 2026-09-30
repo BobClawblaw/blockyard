@@ -150,3 +150,25 @@ test('"None" on Software is a still board: a sky and idle effects on, and yet at
   assert.equal(r.settled, true, 'new data: one paint, at once');
   assert.equal(h.pending(), false);
 });
+
+test('rapid takes about three seconds; each Refresh animation option says its seconds; Refresh every is 5-120 s', async () => {
+  const { MOTION, DEFAULTS, PANEL, normalise } = await import('../public/js/settings.js');
+  const prev = [], next = [];
+  for (let i = 0; i < 600; i++) { prev.push(tile(`t${i}`, i % 40, Math.floor(i / 40))); next.push(tile(`t${i}`, (i + 7) % 40, Math.floor(i / 40) + 1)); }
+  const rapid = planTransition(prev, next, { now: 0, gridN: 44, maxGrowth: 4, ...MOTION.rapid });
+  assert.ok(rapid.settleAt <= 3_300, `rapid settles in ${rapid.settleAt} ms`);
+  const rows = PANEL.find((g) => g.group === 'space').rows;
+  const labels = Object.fromEntries(rows.find((r) => r.key === 'motion').options);
+  assert.match(labels.rapid, /3 s/); assert.match(labels.quick, /10 s/); assert.match(labels.full, /20 s/); assert.match(labels.still, /0 s/);
+  const every = rows.find((r) => r.key === 'refreshEvery');
+  assert.deepEqual([every.kind, every.min, every.max], ['range', 5, 120]);
+  assert.equal(DEFAULTS.space.refreshEvery, 5);
+  assert.equal(normalise({ space: { refreshEvery: 500 } }).space.refreshEvery, 120);
+  assert.equal(normalise({ space: { refreshEvery: 1 } }).space.refreshEvery, 5);
+  // the page takes a pushed pool at most that often, and its 30 s poll no longer replaces the board's picture
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+  assert.match(app, /if \(Date\.now\(\) - \(state\.poolAdoptedAt \?\? 0\) < refreshEveryMs\(s\) - 250\) return;/);
+  assert.match(app, /loadSettings\(\)\.space\.refreshEvery/);
+  assert.match(app, /const pushed = !force && poolPushed\(state\.snap\);/);
+});
