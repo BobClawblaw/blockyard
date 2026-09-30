@@ -62,6 +62,11 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **The Detailed board stays in feerate order.** Kept squares stay put and new transactions take
+  whatever space is free, so the layout drifted from richest-at-the-bottom. High-fee arrivals parked
+  in the top rows, and on Core's live pool only 87% of tile pairs were in fee order after ten updates.
+  When that share falls under 95%, the board is re-packed fresh in one reshuffle. On the live pool
+  that is about every 25 seconds, and the order stays between 95% and 100%.
 - **The Detailed board no longer collects streaks of holes between blocks.** It keeps its layout
   across the 5-second updates, and a departing transaction's square used to stay empty until an
   arrival happened to fit it. Over the minutes between blocks the gaps piled up into dark streaks

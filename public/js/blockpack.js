@@ -492,12 +492,33 @@ export function gapShare(tiles, { width, height } = {}) {
 // interior gaps median 32 cells (max 132) kept as they were, 12 (max 58) biggest-first and settled; the
 // settling moves a median 35 squares an update, each straight down.
 export const DENSE_GAP_MAX = 0.03;
+// ...AND IT STAYS A PICTURE OF THE FEERATE ORDER (operator, with a screenshot, the same evening: "what is this
+// garbage?"). Kept squares stay put and arrivals take what is free, so a rich arrival lands wherever there is room --
+// usually the top, where the cheapest leave -- and re-placed squares go in biggest first. Measured on Core's live
+// pool: the share of tile pairs in feerate order (the lower square the richer) fell 1.00 -> 0.87 over ten updates,
+// the high-fee arrivals parked in the top rows. Under DENSE_ORDER_MIN the board is packed fresh: richest at the
+// bottom again, in one reshuffle.
+export const DENSE_ORDER_MIN = 0.95;
+/** The share of tile pairs, sampled, where the lower square pays the higher feerate (1 = a fresh pack's order). */
+export function feerateOrder(tiles, samples = 4000) {
+  const n = tiles?.length ?? 0;
+  if (n < 2) return 1;
+  let ok = 0, seen = 0;
+  for (let i = 0; i < samples; i++) {
+    const a = tiles[(i * 7919) % n], b = tiles[(i * 104729 + 13) % n];
+    if (a.y === b.y || !(a.rate >= 0) || !(b.rate >= 0) || a.rate === b.rate) continue;
+    seen++;
+    if ((a.y < b.y) === (a.rate > b.rate)) ok++;
+  }
+  return seen ? ok / seen : 1;
+}
 export function packDenseStable(prev, txs, opts = {}) {
   const kept = packStable(prev, txs, { ...opts, bigFirst: true });
   if (!kept) return null;
   const width = Math.max(1, Math.floor(Number(opts.resolution) || 80));
   const settled = settleDown(kept.tiles, { width, height: width });
   if (gapShare(settled.tiles, { width, height: width }) > DENSE_GAP_MAX) return null;
+  if (feerateOrder(settled.tiles) < DENSE_ORDER_MIN) return null;
   return { ...kept, tiles: settled.tiles, settled: settled.moved };
 }
 

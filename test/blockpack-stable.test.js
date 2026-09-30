@@ -80,7 +80,8 @@ test('packDenseStable: the same pool twice moves nothing; under churn the gaps s
   const cfg = { resolution: 96, blockLimit: 1e6, dither: true };
   const vpu = vbytesPerUnit(cfg.blockLimit, cfg.resolution);
   // (about a block's worth, as the Detailed list is: 1,900 x ~495 vB)
-  let pool = Array.from({ length: 1900 }, (_, i) => ({ ...mkTx('p', i), fee: (60 - i * 0.02) * 400 }));
+  const at = (t, rate) => ({ ...t, fee: rate * t.vsize });   // (a fee is a feerate times the size)
+  let pool = Array.from({ length: 1900 }, (_, i) => at(mkTx('p', i), 60 - i * 0.02));
   let tiles = packBlock(pool, cfg).tiles;
   const again = packDenseStable(tiles, pool, cfg);
   const pos = new Map(tiles.map((t) => [t.txid, `${t.x},${t.y}`]));
@@ -92,7 +93,7 @@ test('packDenseStable: the same pool twice moves nothing; under churn the gaps s
   let worst = 0, fresh = 0;
   for (let k = 0; k < 40; k++) {
     // the cheapest leave out of the top, richer ones arrive
-    pool = pool.slice(0, pool.length - 25).concat(Array.from({ length: 25 }, (_, i) => ({ ...mkTx(`n${k}`, i), fee: (40 + rnd() * 20) * 400 })));
+    pool = pool.slice(0, pool.length - 25).concat(Array.from({ length: 25 }, (_, i) => at(mkTx(`n${k}`, i), 40 + rnd() * 20))).sort((a, b) => b.fee / b.vsize - a.fee / a.vsize);
     const next = packDenseStable(tiles, pool, cfg);
     if (!next) { fresh++; tiles = packBlock(pool, cfg).tiles; continue; }
     tiles = next.tiles;
@@ -100,4 +101,35 @@ test('packDenseStable: the same pool twice moves nothing; under churn the gaps s
   }
   assert.ok(worst <= DENSE_GAP_MAX, `worst interior gaps ${(worst * 100).toFixed(2)}%`);
   assert.ok(fresh < 40, 'and it is not simply packing fresh every time');
+});
+
+// ---- ...and it stays a picture of the feerate order (the same evening: "what is this garbage?")
+import { feerateOrder, DENSE_ORDER_MIN } from '../public/js/blockpack.js';
+
+test('feerateOrder: 1 for a fresh pack (richest lowest), low for a board turned upside down', () => {
+  const tiles = Array.from({ length: 200 }, (_, i) => ({ txid: `t${i}`, x: i % 20, y: Math.floor(i / 20), s: 1, rate: 100 - Math.floor(i / 20) }));
+  assert.equal(feerateOrder(tiles), 1);
+  const flipped = tiles.map((t) => ({ ...t, y: 9 - t.y }));
+  assert.equal(feerateOrder(flipped), 0);
+  assert.equal(feerateOrder([]), 1);
+});
+
+test('packDenseStable packs fresh once rich arrivals would sit above cheaper ones past DENSE_ORDER_MIN', () => {
+  let r = 41;
+  const rnd = () => ((r = (r * 1103515245 + 12345) >>> 0) / 2 ** 32);
+  const cfg = { resolution: 96, blockLimit: 1e6, dither: true };
+  const tx = (id, rate) => { const vsize = Math.round(120 + rnd() ** 3 * 1500); return { txid: id.padEnd(64, 'x'), vsize, fee: rate * vsize }; };
+  let pool = Array.from({ length: 1900 }, (_, i) => tx(`p-${i}`, 60 - i * 0.03));
+  let tiles = packBlock(pool, cfg).tiles;
+  let fresh = 0;
+  for (let k = 0; k < 30; k++) {
+    // the cheapest leave out of the top; RICHER than anything on the board arrive
+    // (the pool arrives richest first, as the server sends it)
+    pool = pool.slice(0, pool.length - 20).concat(Array.from({ length: 20 }, (_, i) => tx(`n${k}-${i}`, 80 + rnd() * 20))).sort((a, b) => b.fee / b.vsize - a.fee / a.vsize);
+    const next = packDenseStable(tiles, pool, cfg);
+    tiles = next ? next.tiles : packBlock(pool, cfg).tiles;
+    if (!next) fresh++;
+    assert.ok(feerateOrder(tiles) >= DENSE_ORDER_MIN, `update ${k}: order ${feerateOrder(tiles).toFixed(2)}`);
+  }
+  assert.ok(fresh > 0 && fresh < 30, `re-packed ${fresh} of 30 times: kept in between, sorted when it drifts`);
 });
