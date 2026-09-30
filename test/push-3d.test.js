@@ -76,8 +76,10 @@ test('Software, Detailed viewer: the dense board keeps its squares too (packStab
   harness.t += 5000;
   const b = where(render3d(h.canvas, next, DENSE));
   assert.ok(moved(a, b) <= 2, `${moved(a, b)} survivors moved`);
+  // (and drawn at once, not flown, since 2026-09-30: a flight frame repaints every tile, and with the pool pushed every
+  // 5 s the Detailed board was in flight most of the time -- the Kiosk's other board starved)
   const frames = h.pump();
-  assert.ok(frames * 16 <= 4_000, `settled in ${frames * 16} ms of frames`);
+  assert.ok(frames <= 1, `a kept-layout update on Detailed is one paint (${frames} frames)`);
 });
 
 test('the pool routes are gzipped when asked (they carry public data only); others never are', async () => {

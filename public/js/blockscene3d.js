@@ -1407,7 +1407,42 @@ export function buildScene(tiles, o = {}) {
   // the lamp's hardness and how bright the tops sit under it (see the side loop below)
   const gain = Number.isFinite(o.lightGain) ? Math.max(0.2, Math.min(3, o.lightGain)) : 1;
   const topLit = Number.isFinite(o.topLight) ? Math.max(0.1, Math.min(1.4, o.topLight)) : 0.8;
+  // A RESTING CUBE IS BUILT ONCE PER LAYOUT (2026-09-30; operator, of the Kiosk: "shit gets really slow now when objects
+  // are crossing the screen on the market panel"). Every frame of a flight built every cube's faces again -- 23 ms a
+  // frame on the Detailed board's 3,200 tiles, measured in node -- though only the few dozen in flight had changed;
+  // with the pool pushed every 5 s that board is in flight most of the time, and the Kiosk's other board starves. So a
+  // cube on the floor keeps the ops it made last frame while nothing it is drawn from has changed: `o.faceMemo` (a Map
+  // the caller keeps for one layout), keyed on every field of the tile and its hover glow. Not under an effect (fxAt
+  // shapes a resting cube), not with cube-on-cube shadows (they depend on the flyers above), not off the oblique
+  // camera (growth depends on neighbours). The ops are the same objects, so the renderer draws what it drew.
+  const memo = o.faceMemo instanceof Map && !o.fx && o.oblique && !casters.length ? o.faceMemo : null;
+  let rec = null;
+  const close = () => {
+    if (!rec) return;
+    const r = { key: rec.key, ground: ground.slice(rec.g0), shadows: shadows.slice(rec.s0), air: air.slice(rec.a0) };
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const list of [r.ground, r.shadows, r.air]) for (const op of list) for (const p of op.points ?? []) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+    r.b = [x0, x1, y0, y1];
+    memo.set(rec.txid, r);
+    rec = null;
+  };
+  const keyOf = (t) => { let k = `h${o.hoverGlow?.get(t.txid) ?? 0}`; for (const f in t) k += `|${f}:${t[f]}`; return k; };
   for (const t of ordered) {
+    if (memo) {
+      close();
+      if ((t.z ?? 0) <= 0.02 && !pulled.has(String(t.txid))) {
+        const key = keyOf(t);
+        const hit = memo.get(t.txid);
+        if (hit && hit.key === key) {
+          for (const op of hit.ground) ground.push(op);
+          for (const op of hit.shadows) shadows.push(op);
+          for (const op of hit.air) air.push(op);
+          if (hit.b[0] <= hit.b[1]) { note({ x: hit.b[0], y: hit.b[2] }); note({ x: hit.b[1], y: hit.b[3] }); }
+          continue;
+        }
+        rec = { txid: t.txid, key, g0: ground.length, s0: shadows.length, a0: air.length };
+      }
+    }
     const fxv = (t.z ?? 0) > 0.02 ? FX_NONE : fxAt(t, o.fx);
     // GONE FOR THE DURATION, not deleted: a hidden cube is skipped this frame and drawn again the
     // moment the effect stops asking for it to be hidden.
@@ -1876,6 +1911,7 @@ export function buildScene(tiles, o = {}) {
       if (o.oblique && !viewerLit && zt < 1.5) shadows.push(...restingShadowOps(t, o, 1 - zt / 1.5));
     }
   }
+  if (memo) close();
   let ops = o.oblique ? [...shadows, ...ground] : [...ground, ...shadows, ...air];
   if (pulled.size) {
     const rest = [], lifted = [];

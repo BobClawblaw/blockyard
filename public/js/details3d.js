@@ -6000,13 +6000,20 @@ export function render3d(canvas, cells, options = {}) {
   const firstPaint = !st.prev.length;
   // a look change on the same tiles is not a transition: land it where it already is
   const lookOnly = lookChanged && sig === st.sig;
-  const plan = (still || firstPaint || lookOnly)
+  // THE DETAILED BOARD'S SMALL UPDATES ARE DRAWN, NOT FLOWN (2026-09-30; operator, of the Kiosk: "shit gets really slow now
+  // when objects are crossing the screen on the market panel... did we regress somewhere?"). Yes: with the pool pushed every
+  // 5 s and the kept layout settling (packDenseStable), nearly every update moved a few dozen of its ~3,000 one-unit tiles,
+  // so the board flew most of the time -- and a flight frame repaints every tile, 12-23 ms of the page's one thread
+  // (profiled: the paint, not the scene), which the Kiosk's Markets panel shares. A kept-layout update is drawn at once;
+  // a re-pack (a found block, the order re-sort) still flies. The Simple renderer's slide is not affected (it is cheap).
+  const denseSmall = !!keptDense && !firstPaint && !lookOnly;
+  const plan = (still || firstPaint || lookOnly || denseSmall)
     // gridN matters even for a no-op plan: the camera constant is derived
     // from it, and a first paint on a different camera than every later
     // frame is exactly the load-time artefact this guards.
     ? planTransition(tiles, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}) })
     : planTransition(st.prev, tiles, { now, gridN: st.gridN, maxGrowth: opts.edgeMargin, ...(opts.transition || {}), ...(isTrickle(st.prev, tiles) && trickleFaster(opts.transition) ? TRICKLE : {}) });
-  if (!still && !firstPaint && !lookOnly && isTrickle(st.prev, tiles)) plan.trickle = true;   // (scheduleFx: not a landing)
+  if (denseSmall || (!still && !firstPaint && !lookOnly && isTrickle(st.prev, tiles))) plan.trickle = true;   // (scheduleFx: not a landing)
 
   // SIMPLE'S SLIDE (flatslide.js; operator, 2026-09-30: "1s slide with the row wave"). Not a plan: the frame
   // on screen and the settled frame to come, paired by transaction and eased in the plane for SLIDE_MS, then
@@ -6019,6 +6026,7 @@ export function render3d(canvas, cells, options = {}) {
   st.prev = tiles;
   st.sig = sig;
   st.plan = plan;
+  st.faceMemo = new Map();                 // resting cubes' faces, kept for this layout (blockscene3d buildScene)
   st.fx = null;              // a transition takes the stage; idle effects wait for rest
 
   if (st.raf != null && st.raf !== SKY_WAIT && globalThis.cancelAnimationFrame) cancelAnimationFrame(st.raf);
@@ -6075,6 +6083,7 @@ export function render3d(canvas, cells, options = {}) {
       // relative order it had last frame, so nothing flickers in and out of one
       softGlow: opts.softGlow,                  // (priceLine: the line's halo as a soft glow on WebGL)
       orderMemo: (st.orderMemo ??= new Map()),
+      faceMemo: st.faceMemo,
     };
     // the panel's extent in grid units, from the same constant fit paintFrame
     // uses: the textured sphere is laid over all of it (drawGrid), and an

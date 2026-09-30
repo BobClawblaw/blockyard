@@ -62,6 +62,14 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **The Kiosk no longer stutters beside a Detailed board.** With the pool pushed every 5 seconds and the
+  Detailed layout settling after each update, that board was animating most of the time. Each
+  animated frame repaints all of its ~3,000 tiles, 12-23 ms of the page's only main thread, which
+  starved the Markets panel beside it. Small updates on the Detailed board are now drawn at once; a
+  found block and the periodic re-sort still fly. A resting cube's faces are also reused between
+  frames of a flight instead of being rebuilt. Measured on the Kiosk with WebGL and Detailed: the
+  page's main thread went from 70% busy to 50%, with heavy frames down from 324 to 145 in 15
+  seconds.
 - **Two faster flights: Blink (1 s) and Swift (2 s)** (Settings, Block space, "Refresh animation").
   The phases are shorter again, and gravity is raised to match (3.3 times for Swift, 12.8 for Blink),
   so blocks still fall and bounce, just harder. A fall under stronger gravity takes 1/√g as long. On

@@ -441,7 +441,13 @@ no Simple slide) AND makes a static board (then: "I don't want any animations wi
 Software and WebGL modes"): idleFx off, `skyStill` (the sky at STILL_SKY_NOW in paintFrame too), no sky loop or timer,
 `st.static` (effects refused, hover at once), and the same-data shortcut Simple has. Chromium, None: 22 frames / 10 s,
 GPU 0.3%. Markets with its effects off passes its own `{rise 0, travel 1, drop 0}`, NOT MOTION.still, and keeps its sky -- operator: "if I select refresh animation: none, it should just redraw the new board instead of
-having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. FLIGHTS OF 1 AND 2 SECONDS (the same evening; operator: "Add a 1 and 2 second flight time" -- "Increase gravity to scale
+having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. THE DETAILED BOARD'S SMALL UPDATES ARE DRAWN, NOT FLOWN (the same evening; operator, of the Kiosk: "shit gets really
+slow now when objects are crossing the screen on the market panel"): render3d `denseSmall` (a kept-layout update from
+packDenseStable) plans still; re-packs fly. Profiled: a Detailed flight frame is dominated by the PAINT (details3d
+`board`, `drawGround`/trace), not buildScene -- ~3,000 tiles' ops issued every frame. Kiosk WebGL+Detailed main
+thread 70% -> 50%. buildScene also keeps a resting cube's ops for the layout (`o.faceMemo`, st.faceMemo per plan;
+key = every tile field + hover; off under fx, cube-on-cube shadows, non-oblique). STILL OPEN: an effect or re-sort
+on Detailed repaints every tile (~23 ms a frame); a retained layer for the unmoved tiles is the next lever. FLIGHTS OF 1 AND 2 SECONDS (the same evening; operator: "Add a 1 and 2 second flight time" -- "Increase gravity to scale
 with time change"): `MOTION.swift` / `MOTION.blink` carry `gravity` 3.3 / 12.8, which landingOf applies as landingMs /
 sqrt(g) -- the physics was the floor under Rapid's 3 s. Live found block, 2,464 moving: blink 989, swift 1,924, rapid
 3,029 ms. `trickleFaster` in details3d.js: a small update takes TRICKLE's phases only when they are quicker than the
