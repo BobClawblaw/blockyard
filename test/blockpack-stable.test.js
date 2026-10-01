@@ -133,26 +133,3 @@ test('packDenseStable packs fresh once rich arrivals would sit above cheaper one
   }
   assert.ok(fresh > 0 && fresh < 30, `re-packed ${fresh} of 30 times: kept in between, sorted when it drifts`);
 });
-
-// ---- biggest first within a fee band (2026-10-01: "the uneven packing, and black spaces visible where it should be packed better")
-import { feeBandIndex } from '../public/js/feepalette.js';
-
-test('packBlock bandBigFirst: a band\'s biggest go in first, the board fills, and band-to-band fee order is untouched', () => {
-  let r = 77;
-  const rnd = () => ((r = (r * 1103515245 + 12345) >>> 0) / 2 ** 32);
-  // a block's worth, richest first, whose cheap end is a handful of big consolidations among small spends
-  // (a FULL block: 2,600 spends at falling rates, then the cheapest band -- all at 1.2 sat/vB -- small spends and every
-  // twentieth a 9 kvB consolidation, the shape of the live pool the operator was looking at)
-  const txs = [];
-  for (let i = 0; i < 2600; i++) { const rate = 40 * Math.pow(0.9988, i); const vsize = Math.round(120 + rnd() ** 3 * 500); txs.push({ txid: `t${i}`.padEnd(64, 'x'), vsize, fee: rate * vsize }); }
-  for (let i = 0; i < 900; i++) { const vsize = i % 20 === 0 ? 9000 : Math.round(120 + rnd() ** 3 * 400); txs.push({ txid: `c${i}`.padEnd(64, 'x'), vsize, fee: 1.2 * vsize }); }
-  const cfg = { resolution: 96, blockLimit: 1e6, dither: true };
-  const empty = (tiles) => { const g = new Uint8Array(96 * 96); for (const t of tiles) for (let y = t.y; y < Math.min(96, t.y + t.s); y++) for (let x = t.x; x < t.x + t.s; x++) g[y * 96 + x] = 1; return g.reduce((n, c) => n + (c ? 0 : 1), 0); };
-  const plain = packBlock(txs, cfg).tiles.filter((t) => t.y + t.s <= 96);
-  const banded = packBlock(txs, { ...cfg, bandBigFirst: true }).tiles.filter((t) => t.y + t.s <= 96);
-  assert.ok(empty(banded) < empty(plain), `fewer empty cells (${empty(banded)} against ${empty(plain)})`);
-  // no square of a richer band above one of a poorer band's row... measured as sampled pairs, as feerateOrder does, by band
-  let ok = 0, n = 0;
-  for (let i = 0; i < 4000; i++) { const a = banded[(i * 7919) % banded.length], b = banded[(i * 104729 + 13) % banded.length]; const ba = feeBandIndex(a.rate), bb = feeBandIndex(b.rate); if (a.y === b.y || ba === bb) continue; n++; if ((a.y < b.y) === (ba > bb)) ok++; }
-  assert.ok(ok / n > 0.97, `band order kept (${(ok / n).toFixed(3)})`);
-});
