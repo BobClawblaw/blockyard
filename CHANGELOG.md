@@ -62,6 +62,12 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **The Detailed board packs tighter.** Transactions were placed strictly in fee order, so the big,
+  cheap consolidations went in last, at the top of the board, with nothing smaller after them to fill
+  the space beside them, and black gaps were left between them. Within each of the 128 fee bands (all
+  squares in a band are the same colour), the biggest now go in first and the small ones fill around
+  them. The order from one band to the next is unchanged. On the live pool, empty cells fell from 578
+  to 105 of 9,216.
 - **`scripts/manage-users.js` reads a piped password.** It treated every chunk on stdin as one
   keystroke, so a password piped in (`echo "$PW" | node scripts/manage-users.js create alice`)
   arrived as one chunk. The newline went into the password, the prompt never finished, and the

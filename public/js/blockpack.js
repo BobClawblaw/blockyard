@@ -19,7 +19,7 @@
 // THE STABLE RE-PACK (packStable) lays a refresh out so that transactions
 // already on the board keep their squares, and only what changed moves.
 
-import { feeShade } from './feepalette.js';
+import { feeShade, feeBandIndex } from './feepalette.js';
 
 // A full block needs this share of resolution^2 raw units.
 const BLOCK_SHARE = 0.98;
@@ -245,11 +245,24 @@ function prepare(txs, vpu, width, dither = false) {
 
 const tileOf = (it, pos) => ({ txid: it.txid, x: pos.x, y: pos.y, s: pos.s, vsize: it.vsize, rate: it.rate, color: feeShade(it.rate, it.txid) });
 
-export function packBlock(txs, { resolution = 80, blockLimit = 1000000, dither = false } = {}) {
+// BIGGEST FIRST WITHIN A FEE BAND (2026-10-01; operator, of the Detailed board under a pool heavy with consolidations:
+// "It's the uneven packing, and black spaces visible where it should be packed better"). First fit in strict fee order
+// lays the big, cheap consolidations LAST -- at the top, with nothing smaller after them to fill beside them -- so the top
+// of the board was a row of giant squares with black between. Within one of the 128 fee bands every square is the same
+// colour, so the order inside a band is not something the picture shows: placing a band's biggest first lets its small
+// ones fill round them. The board's fee order, band to band, is unchanged. (`bandBigFirst`: the Detailed board's.)
+function bandOrder(items) {
+  return items.map((it, i) => ({ it, i, band: feeBandIndex(it.rate) }))
+    .sort((a, b) => (b.band - a.band) || (b.it.s - a.it.s) || (a.i - b.i))
+    .map((e) => e.it);
+}
+
+export function packBlock(txs, { resolution = 80, blockLimit = 1000000, dither = false, bandBigFirst = false } = {}) {
   const width = Math.max(1, Math.floor(Number(resolution) || 80));
   const vpu = vbytesPerUnit(blockLimit, width);
   const layout = new BlockLayout({ width, height: width });
-  const items = prepare(txs, vpu, width, dither);
+  const items0 = prepare(txs, vpu, width, dither);
+  const items = bandBigFirst ? bandOrder(items0) : items0;
   const tiles = new Array(items.length);
   let gridHeight = 0;
   for (let i = 0; i < items.length; i++) {

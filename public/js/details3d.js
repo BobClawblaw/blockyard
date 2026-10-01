@@ -5801,7 +5801,8 @@ export function render3d(canvas, cells, options = {}) {
   const agg = laid || opts.dither ? null : ((cells || []).find((c) => (Number(c?.aggregate) || 0) > 1) ?? null);
   const pack = (k) => {
     const txs = toTxs(cells, vbytesPerUnit(opts.blockVbytes * k, opts.resolution));
-    const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k, dither: !!opts.dither };   // dither: Detailed, area-true sides
+    // dither: Detailed, area-true sides; bandBigFirst: a band's biggest first, so its small ones fill round them (blockpack.js)
+    const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k, dither: !!opts.dither, bandBigFirst: !!opts.dither };
     // Fresh every time. The stable packer (blockpack.js packStable) moved far
     // fewer blocks but left the resting board ragged -- columns half a cell
     // out of step, holes (operator: "I mean what even is this?"). Kept for
