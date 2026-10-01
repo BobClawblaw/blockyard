@@ -271,12 +271,16 @@ silently ate another test's result line — rule 22.
    `log-unparsed` fire as flags -- `log-silent` quoting the chain delta it observed
    during the silence, so it diagnoses instead of accusing. Rule 15.
 
-10. **A test that mutates `process.env` races every other test in its file.** Node
-   runs a file's top-level tests **concurrently** (verified: a sibling sees an env var
-   set mid-await). `test/helpers/http.js` therefore touches no environment at all —
-   config goes in a file, the bootstrap admin password comes back on `app.bootstrap` —
-   and env-var assertions live in `test/config-env.test.js`, which boots nothing.
-   Rule 24.
+10. **Tests share a process, so they must not share `process.env` or module state.**
+   Re-measured 2026-10-01 on Node v22.23.2: a file's top-level `test()` calls run ONE
+   AFTER ANOTHER (rule 24's own probe: the sibling now sees `unset`), but async
+   `describe(..., async () => { await ... })` bodies run CONCURRENTLY with each other,
+   during collection and before any `test()` -- the regtest admin files do real work in
+   such bodies. When this rule was written (2026-09-11) a sibling `test()` did see an env
+   var set mid-await; whichever the runner does on a given Node, the discipline holds and
+   costs nothing: `test/helpers/http.js` touches no environment at all -- config goes in
+   a file, the bootstrap admin password comes back on `app.bootstrap` -- and env-var
+   assertions live in `test/config-env.test.js`, which boots nothing. Rule 24.
 
 11. **Open mode is a posture, so it needs a ceiling and a loud line** (it was the default
    until 2026-09-15; now it is chosen). Anyone reaching the port reads as `viewer` — hardcoded, not configurable, not raisable.

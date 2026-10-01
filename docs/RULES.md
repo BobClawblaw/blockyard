@@ -533,7 +533,23 @@ tests are mostly *not* about what open mode allows. They assert the ceiling —
 `confirm` matching. A test that only checks "the dashboard loads without a login"
 would have passed against the vulnerable version above.
 
-## 24. Node runs a file's tests concurrently; do not let them share `process.env`
+## 24. Tests share a process; do not let them share `process.env`
+
+**Re-measured 2026-10-01 on Node v22.23.2** (the probe below, unchanged, now prints that `b`
+sees `unset`): a file's top-level `test()` calls run one after another. What still runs
+concurrently is the bodies of `describe(..., async () => { ... })` blocks -- they are run
+while the file is collected, before any `test()`, and two of them interleave:
+
+```
+describe('D1', async () => { log('D1-start'); await sleep(200); log('D1-end'); });
+describe('D2', async () => { log('D2-start'); await sleep(100); log('D2-end'); });
+// D1-start | D2-start | D2-end | D1-end -- then the test() calls, one at a time
+```
+
+The regtest admin files (`admin-daemon`, `admin-send-regtest`, `admin-money-regtest`,
+`admin-txtools-regtest`) do their work in such bodies. The account below is kept as it
+was written on 2026-09-11, when a sibling `test()` did see the variable; whatever a given
+Node does, the discipline it led to is right and costs nothing.
 
 Two test files "proved" the server was broken and neither bug existed.
 
