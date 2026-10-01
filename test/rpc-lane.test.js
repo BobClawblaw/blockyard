@@ -185,8 +185,14 @@ test('with slots scarce, the free slot still goes to the highest priority', asyn
 
 test('concurrency does not raise the call rate: starts stay spaced by the rate ceiling', async () => {
   const lane = new Lane({ ...cfg, maxInFlight: 4, minIntervalMs: 0, maxRatePerSec: 20, staleDropMs: 5000 });   // 50 ms apart
-  const starts = [];
-  await Promise.all(Array.from({ length: 4 }, () => lane.submit(async () => { starts.push(Date.now()); await sleep(200); })));
-  for (let i = 1; i < starts.length; i++) assert.ok(starts[i] - starts[i - 1] >= 45, `start ${i} came ${starts[i] - starts[i - 1]} ms after the one before`);
-  assert.ok(starts.at(-1) - starts[0] < 200, 'yet all four were running before the first finished');
+  // WHAT THE CEILING PROMISES, measured so load cannot fake a failure (2026-09-30: this failed 3 in 16 runs with every core
+  // busy). The lane schedules start i at i x 50 ms after the first (lastStartAt is the PLANNED start) and a timer fires at
+  // its time or later, never before. So a start is never EARLY against the submission -- that is the ceiling -- while the
+  // gap between two ACTUAL starts can shrink when one timer is late and the next is not (it read 42 ms). And "all four at
+  // once" is asked of the calls themselves: the last had started before the first had finished.
+  const starts = [], ends = [];
+  const t0 = Date.now();
+  await Promise.all(Array.from({ length: 4 }, () => lane.submit(async () => { starts.push(Date.now()); await sleep(400); ends.push(Date.now()); })));
+  for (let i = 0; i < starts.length; i++) assert.ok(starts[i] - t0 >= i * 50 - 2, `start ${i} came ${starts[i] - t0} ms after submission, before its ${i * 50} ms slot`);
+  assert.ok(starts.at(-1) < ends[0], `yet all four were running before the first finished (last start ${starts.at(-1) - t0} ms, first end ${ends[0] - t0} ms)`);
 });

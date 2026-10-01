@@ -261,6 +261,18 @@ function indexView(dir) {
   return { bytes, answers, keys: keys.size };
 }
 
+// A CRASH'S SNAPSHOT OF A LIVE DIRECTORY (2026-09-30: this test failed about 1 run in 16 with every core busy -- "ENOENT,
+// No such file or directory ... stop-4-crash", thrown from the hook's copy, not from the build). The copy is taken while
+// the build's OTHER worker is still renaming its files, and a file that vanishes under cpSync ends the copy with an
+// error the test then mistook for the build's. A crash can happen at any instant, so any complete copy is a fair crash:
+// on ENOENT the copy starts again from nothing.
+function snapshot(from, to) {
+  for (let attempt = 0; ; attempt++) {
+    try { rmSync(to, { recursive: true, force: true }); cpSync(from, to, { recursive: true }); return; }
+    catch (err) { if (err?.code !== 'ENOENT' || attempt >= 20) throw err; }
+  }
+}
+
 test('A BUILD STOPPED ANYWHERE RESUMES to the index an uninterrupted build writes, byte for byte, and no manifest appears before the end', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'blockyard-resume-'));
   try {
@@ -292,9 +304,9 @@ test('A BUILD STOPPED ANYWHERE RESUMES to the index an uninterrupted build write
       const hook = (p, i) => {
         if (p === 'pool') { pool = i.pool; return; }
         assert.ok(!readdirSync(out).includes('manifest.json'), `no manifest during the build (${c.name}, ${p})`);
-        if (c.at?.(p, i)) { cpSync(out, crash, { recursive: true }); copied = true; throw STOP; }
+        if (c.at?.(p, i)) { snapshot(out, crash); copied = true; throw STOP; }
       };
-      const pace = c.kill ? async () => { if (++paced === c.kill) { cpSync(out, crash, { recursive: true }); copied = true; await pool.workers[1].terminate(); } } : null;
+      const pace = c.kill ? async () => { if (++paced === c.kill) { snapshot(out, crash); copied = true; await pool.workers[1].terminate(); } } : null;
       await assert.rejects(buildIndex({ rpc: resumeRpc(), blocksDir, out, workers: 2, hook, pace, checkpointMs: c.checkpointMs }), (err) => err === STOP || /exited with code/.test(err.message), c.name);
       assert.ok(copied, `the stop was reached (${c.name})`);
       for (const dir of [out, crash]) {

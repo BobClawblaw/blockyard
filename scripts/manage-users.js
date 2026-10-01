@@ -69,29 +69,39 @@ function ask(question, { hidden = false } = {}) {
     // Turn off echo rather than logging the prompt into a tty that keeps it.
     const tty = process.stdin;
     if (tty.isTTY) tty.setRawMode(true);
-    let buf = '';
+    let buf = '', done = false;
     tty.resume();
     tty.setEncoding('utf8');
-    const onData = (ch) => {
-      // Enter arrives as LF or CR depending on the terminal; both are handled.
-      // (This line used to carry a third comparison whose operand was a raw CR
-      // inside the quotes -- a pasted keystroke. Legal in CJS, a syntax error as
-      // ESM, and nothing ever imported this file to find out.)
-      if (ch === '\n' || ch === '\r') {
-        tty.removeListener('data', onData);
-        if (tty.isTTY) tty.setRawMode(false);
-        tty.pause();
-        process.stdout.write('\n');
-        resolve(buf);
-      } else if (ch === '\u007f') { // DEL: what backspace sends on a tty
-        buf = buf.slice(0, -1);
-      } else if (ch === '\u0003') { // Ctrl-C
-        process.stdout.write('\n');
-        process.exit(130);
+    const finish = () => {
+      if (done) return;
+      done = true;
+      tty.removeListener('data', onData);
+      tty.removeListener('end', finish);
+      if (tty.isTTY) tty.setRawMode(false);
+      tty.pause();
+      process.stdout.write('\n');
+      resolve(buf);
+    };
+    // A CHUNK IS NOT A KEYSTROKE (2026-09-30). A terminal in raw mode hands over one key at a time, but a PIPE hands over
+    // whatever has arrived -- "second-password-456\n" in one chunk -- and this compared the whole chunk with '\n', so the
+    // newline went into the password, the prompt never finished and the script exited having done nothing. Seen as a
+    // test that failed only under load (its keystrokes coalesced); `echo "$PW" | manage-users.js create alice` failed
+    // the same way every time. Each character is looked at now, and the end of the input ends the password too.
+    const onData = (chunk) => {
+      for (const ch of String(chunk)) {
+        if (done) return;
+        // Enter arrives as LF or CR depending on the terminal; both are handled.
+        // (This line used to carry a third comparison whose operand was a raw CR
+        // inside the quotes -- a pasted keystroke. Legal in CJS, a syntax error as
+        // ESM, and nothing ever imported this file to find out.)
+        if (ch === '\n' || ch === '\r') finish();
+        else if (ch === '\u007f') buf = buf.slice(0, -1); // DEL: what backspace sends on a tty
+        else if (ch === '\u0003') { process.stdout.write('\n'); process.exit(130); } // Ctrl-C
+        else buf += ch;
       }
-      else buf += ch;
     };
     tty.on('data', onData);
+    tty.on('end', finish);
   });
 }
 

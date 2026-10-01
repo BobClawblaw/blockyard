@@ -62,6 +62,18 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **`scripts/manage-users.js` reads a piped password.** It treated every chunk on stdin as one
+  keystroke, so a password piped in (`echo "$PW" | node scripts/manage-users.js create alice`)
+  arrived as one chunk. The newline went into the password, the prompt never finished, and the
+  script exited having done nothing. It now reads character by character, and the end of the input
+  also ends the password. Found as a test that failed only under load.
+- **Three tests no longer fail under load.** Each was reproduced with every core busy and then
+  fixed at the cause:
+  - the user-management test was the piped-password bug above (6 of 12 failed, then 0 of 12);
+  - the RPC lane test now asserts the rate ceiling against submission time, not the gap between
+    two actual starts, which one late timer can shrink (3 of 16 failed, then 0 of 16);
+  - the index-resume test's crash snapshot now retries when a file vanishes under the copy while
+    the build's other worker renames it (1 of 16 failed, then 0 of 32).
 - **Steady (5 s flight)**, a Refresh animation between Rapid (3 s) and Quick (10 s). On a found block
   over the live pool, with 2,243 blocks moving, it settled in 4.9 s.
 - **Board order** (Settings, Block space): **Exact**, the default, lays the board out afresh on
