@@ -5847,6 +5847,19 @@ export function render3d(canvas, cells, options = {}) {
       if (tallest(smaller) > opts.resolution) break;
       fitK /= 1.05; packed = smaller;
     }
+    // THE FIT, CLOSED IN ON (2026-10-01; operator: "an ordered, core compatible block properly packed"). In strict
+    // fee order the only room a block leaves is along its top edge, and the 5% steps above could give away up to
+    // 5% of the board there (578 empty cells of 9,216 on the pool the operator photographed). Between the last
+    // scale that overflowed and the first that fits, five halvings find the smallest that fits to within 0.2%.
+    // A pack is 3-12 ms on ~3,600 transactions (node, 2026-10-01).
+    if (!laid && fitK > 1.0001 && fitK < 2 && tallest(packed) <= opts.resolution) {
+      let lo = Math.max(1, fitK / 1.05);
+      if (lo === 1 && tallest(pack(1)) <= opts.resolution) { fitK = 1; packed = pack(1); lo = fitK; }
+      for (let i = 0; i < 5 && fitK - lo > 0.001; i++) {
+        const mid = (lo + fitK) / 2, trial = pack(mid);
+        if (tallest(trial) <= opts.resolution) { fitK = mid; packed = trial; } else lo = mid;
+      }
+    }
   }
   st.fitK = fitK;
   st.densePrev = !laid && opts.dither ? packed.tiles : null;

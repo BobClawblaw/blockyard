@@ -133,7 +133,8 @@ export function templateFromMempool(raw, {
   const pool = new Map();
   for (const [txid, e] of Object.entries(entries)) {
     if (!e || typeof e !== 'object') continue;
-    const weight = Number(e.weight);
+    // weight, or vsize x 4 for a node that publishes only vsize (the experimental node's early builds did)
+    const weight = Number.isFinite(Number(e.weight)) && Number(e.weight) > 0 ? Number(e.weight) : Number(e.vsize) * VBYTES;
     if (!Number.isFinite(weight) || weight <= 0) continue;
     pool.set(txid, {
       txid,
@@ -148,12 +149,15 @@ export function templateFromMempool(raw, {
   }
 
   const budget = Math.max(0, weightLimit - reserveWeight);
-  const order = [...pool.values()].sort((a, b) => b.rate - a.rate || a.txid.localeCompare(b.txid));
+  // (ties by txid with < and >, not localeCompare: on 90k entries the collator was most of the sort)
+  const order = [...pool.values()].sort((a, b) => b.rate - a.rate || (a.txid < b.txid ? -1 : a.txid > b.txid ? 1 : 0));
   const cache = new Map();
   const chosen = [];                 // txids, parents always before children
   const picked = new Set();
   let used = 0;
   let truncated = false;
+  let failed = 0;                    // packages in a row that did not fit
+  const takenAt = new Map();         // txid -> the rate its package was taken at (the board orders by it)
 
   for (const tx of order) {
     if (picked.has(tx.txid)) continue;
@@ -169,8 +173,13 @@ export function templateFromMempool(raw, {
     }
     pkg.push(tx.txid);
     w += tx.weight;
-    if (used + w > budget) continue;                 // keep going: a smaller package may still fit
-    for (const id of pkg) { picked.add(id); chosen.push(id); }
+    // Keep going: a smaller package may still fit -- but stop as Core's BlockAssembler does, after 1,000 misses in a
+    // row once the block is within 4,000 weight units of full (MAX_CONSECUTIVE_FAILURES, BLOCK_FULL_ENOUGH_WEIGHT_DELTA).
+    // Measured 2026-10-01, Core, 89,584 entries: the same 3,777 transactions either way, 260-400 ms -> ~60 ms with the
+    // sort fix above; against the node's own getblocktemplate on the same pool, 4 + 1 transactions apart, fees 0.06%.
+    if (used + w > budget) { if (++failed > 1000 && used > budget - 4000) break; continue; }
+    failed = 0;
+    for (const id of pkg) { picked.add(id); chosen.push(id); takenAt.set(id, tx.rate); }
     used += w;
   }
 
@@ -188,6 +197,9 @@ export function templateFromMempool(raw, {
       weight: e.weight,
       vsize: e.vsize,
       depends: e.depends.map((d) => pos.get(d)).filter((i) => Number.isInteger(i)),
+      // sat/vB: the rate of the package that brought it in -- for a parent paid for by its child, the child's
+      // (not a getblocktemplate field; what the Detailed board is ordered and coloured by)
+      takenAt: takenAt.get(id),
     };
   });
 

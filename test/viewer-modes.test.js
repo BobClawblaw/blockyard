@@ -171,3 +171,23 @@ test('Detailed draws the block at its true area: a full block fills the board in
   const src = readFileSync(new URL('../public/js/details3d.js', import.meta.url), 'utf8');
   assert.match(src, /blockLimit: opts\.blockVbytes \* k, dither: !!opts\.dither/, 'the renderer passes it to the packer');
 });
+
+// CORE'S BLOCK (2026-10-01; operator: "I want to see an ordered, core compatible block properly packed").
+test('the dense block is the block Core would mine: a parent paid for by its child is on it, at the package\'s rate', () => {
+  const raw = {};
+  const id = (n) => `${String(n).padStart(6, '0')}${'b'.repeat(58)}`;
+  // a full block's worth at 10 sat/vB and below, plus a 1 sat/vB parent whose child pays 60 sat/vB for both
+  for (let i = 0; i < 9000; i++) raw[id(i)] = { vsize: 200, weight: 800, fees: { base: (10 - (i % 9)) * 200e-8 } };
+  const parent = id(900001), child = id(900002);
+  raw[parent] = { vsize: 200, weight: 800, fees: { base: 200e-8, ancestor: 200e-8 }, ancestorsize: 200, depends: [] };
+  raw[child] = { vsize: 200, weight: 800, fees: { base: 12000e-8, ancestor: 12200e-8 }, ancestorsize: 400, depends: [parent] };
+  const d = denseBlock(raw);
+  const at = (t) => d.id.indexOf(t);
+  assert.ok(at(parent) >= 0 && at(child) === at(parent) + 1, `the parent rides in with its child (${at(parent)}, ${at(child)})`);
+  assert.equal(d.r[at(parent)], d.r[at(child)], 'both at the package rate');
+  assert.ok(d.r[at(child)] > 10 && at(child) < 5, 'and that rate puts them at the front');
+  for (let i = 1; i < d.r.length; i++) assert.ok(d.r[i] <= d.r[i - 1], `strictly ordered (${i}: ${d.r[i - 1]} then ${d.r[i]})`);
+  assert.equal(d.order, 'core');
+  // the old own-rate cut would have left the parent off a full block
+  assert.ok(Object.keys(raw).length * 200 > 1_000_000);
+});

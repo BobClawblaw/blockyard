@@ -62,6 +62,21 @@ All notable changes to this project are documented here. The format follows
     than asking for animation frames it will not paint, because every frame asked for is a frame
     composited. On a simulated 120 Hz display, a resting sky asked for 60 frames a second to paint
     30; now it asks for 30.
+- **The Detailed board is Core's block, strictly ordered.** It used to be the mempool sorted by each
+  transaction's own fee rate and cut at 1,000,000 vB. That put a child paying for its parent (CPFP)
+  where its own rate said, and left the parent out. On Core's pool on 2026-10-01, 316 of about 3,600
+  transactions on the board would not be in Core's block, and 317 of Core's were missing. The board
+  is now the block the "being built" card shows: Core's chunk fee rate, each package whole, and
+  Core's own fill at the end of the block. On the same pool it was within 5 transactions and 0.06% in
+  fees of the node's own `getblocktemplate`. Each square is ordered and coloured by the rate its
+  package was taken at, and no square sits below one that pays more.
+- **The block is assembled once per pool update, in about 60 ms instead of 260–400 ms.** It stops as
+  Core's block assembler does (after 1,000 misses in a row once the block is within 4,000 weight
+  units of full), and its sort no longer uses `localeCompare`. The board and the "being built" card
+  share the result.
+- **The Detailed board's scale is fitted to within 0.2%.** In strict order the only empty space is
+  along the block's top edge. The 5% scale steps could give away up to 5% of the board there; a
+  finer search now closes in on the smallest scale that fits.
 - **`scripts/manage-users.js` reads a piped password.** It treated every chunk on stdin as one
   keystroke, so a password piped in (`echo "$PW" | node scripts/manage-users.js create alice`)
   arrived as one chunk. The newline went into the password, the prompt never finished, and the

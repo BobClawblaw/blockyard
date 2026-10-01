@@ -23,7 +23,7 @@ import { SHAPES, RULE_TO_SHAPE } from './logparse.js';
 import { decodeCoinbaseSafe, minerRow, ledgerApply, ledgerRows, aliasFor, matchPool } from './mining.js';
 import { NetworkStats } from './network.js';
 import { summarizeTemplate, packagesFromTemplate, blockEconomy, templateCells } from './nextblock.js';
-import { templateFromMempool, LOCAL_TEMPLATE_NOTE } from './gbt.js';
+import { templateFromMempool, orderingRate, LOCAL_TEMPLATE_NOTE } from './gbt.js';
 import { PoolMirror, idsOf } from './poolmirror.js';
 import { subscribe as zmqSubscribe, parseSequence } from './zmq.js';
 import fs from 'node:fs';
@@ -355,6 +355,17 @@ export class NodeMonitor extends EventEmitter {
     }
   }
 
+  /** The block being built, from `raw`, for the next height. */
+  assembleTemplate(raw, at = Date.now()) {
+    const chain = this.state.chainInfo ?? {};
+    const tipHeight = Number.isFinite(chain.blocks) ? chain.blocks : this.state.tip?.height ?? null;
+    return templateFromMempool(raw, {
+      height: tipHeight == null ? null : tipHeight + 1,
+      previousblockhash: chain.bestblockhash ?? this.state.tip?.hash ?? null,
+      at,
+    });
+  }
+
   /** Everything made from the verbose mempool, remade from `raw`. */
   absorbPool(raw) {
     const at = Date.now();
@@ -362,7 +373,11 @@ export class NodeMonitor extends EventEmitter {
     dist.at = at;
     dist.source = this.poolMirror?.synced ? this.poolMirror.mode : 'read';
     this.state.mempoolDist = dist;
-    this.mempoolDense = denseBlock(raw);   // Viewer Mode 2; not part of the snapshot
+    // ONE ASSEMBLY PER POOL (2026-10-01): the Detailed board is Core's block now, and so is the "being built" card --
+    // assembled once here and shared, keyed on the read it was made from (`poolTemplateAt`).
+    this.poolTemplate = this.assembleTemplate(raw, at);
+    this.poolTemplateAt = at;
+    this.mempoolDense = denseBlock(raw, { template: this.poolTemplate });   // Viewer Mode 2; not part of the snapshot
     // THE TEMPLATE'S INPUT (2026-09-13). The block being built is assembled from this map rather than
     // bought with a getblocktemplate call, so it is kept until it is replaced. Held on the monitor, never
     // on `state`: it is tens of thousands of entries and must not ride a snapshot frame to a browser.
@@ -1145,12 +1160,8 @@ export class NodeMonitor extends EventEmitter {
     const t0 = Date.now();
     try {
       const chain = this.state.chainInfo ?? {};
-      const tipHeight = Number.isFinite(chain.blocks) ? chain.blocks : this.state.tip?.height ?? null;
-      const template = templateFromMempool(this.mempoolRaw, {
-        height: tipHeight == null ? null : tipHeight + 1,
-        previousblockhash: chain.bestblockhash ?? this.state.tip?.hash ?? null,
-        at: Date.now(),
-      });
+      // the board's assembly when it was made from this very read; otherwise (a test, a first call) made here
+      const template = this.poolTemplate && this.poolTemplateAt === this.mempoolRawAt ? this.poolTemplate : this.assembleTemplate(this.mempoolRaw);
       const txs = template.transactions;
       const summary = summarizeTemplate(template, {
         at: Date.now(), previous: chain.bestblockhash ?? this.state.tip?.hash ?? null,
@@ -3229,29 +3240,33 @@ function chunkBy(arr, n) {
 // rather than inferred.
 // THE DENSE BLOCK (Viewer Mode 2; operator, 2026-09-11, with mempool.space's Goggles beside ours:
 // "The official mempool goggles seem to have so much more detail ... improve information density").
-// Mode 1 is fed the richest 400 transactions and one aggregate for the rest, which it cuts into
-// ~100 equal squares -- the uniform field across the top of our board. This is the next block's
-// worth of the pool, richest first, EVERY transaction: sizes, feerates and the full txid (for the hover, and a click into the explorer)
-// (for the hover), about 3-5k entries and ~100 KB, served on its own endpoint and kept off the
-// 1 Hz snapshot. Transactions with no fee reported cannot be ranked and are left out, counted.
-export function denseBlock(raw, { blockVsize = 1_000_000 } = {}) {
-  const list = [];
-  let unranked = 0;
-  for (const [txid, e] of Object.entries(raw ?? {})) {
-    const vsize = typeof e?.vsize === 'number' ? e.vsize : (typeof e?.weight === 'number' ? Math.ceil(e.weight / 4) : 0);
-    const fee = e?.fees && typeof e.fees.base === 'number' ? e.fees.base * 1e8 : null;
-    if (!(vsize > 0) || fee == null) { unranked++; continue; }
-    list.push([vsize, fee / vsize, txid]);
-  }
-  list.sort((a, b) => b[1] - a[1]);
+// Every transaction of the next block, sizes, feerates and the full txid (for the hover, and a click into
+// the explorer), about 3-5k entries and ~100 KB, served on its own endpoint and kept off the 1 Hz snapshot.
+//
+// IT IS CORE'S BLOCK (2026-10-01; operator: "I want to see an ordered, core compatible block properly packed").
+// It used to be the pool sorted by each transaction's OWN feerate and cut at 1,000,000 vB -- which puts a child
+// that pays for its parent where its own rate says and leaves the parent out: measured on Core's pool that day,
+// 316 of ~3,600 board transactions were not in the block Core would mine, and 317 of Core's were missing. Now it
+// is gbt.js's assembly (Core's chunk feerate, each package whole, Core's own fill at the end of the block), in
+// that order, and `r` is the rate the transaction is MINED at (its chunk's), so the board is ordered by what
+// decides a place in the block. Transactions with no fee reported cannot be ranked and are left out, counted.
+export function denseBlock(raw, { blockVsize = 1_000_000, template = null } = {}) {
+  const entries = raw ?? {};
+  let unranked = 0, poolCount = 0;
+  for (const id in entries) { poolCount++; const e = entries[id]; if (!(e?.fees && typeof e.fees.base === 'number')) unranked++; }
+  const t = template ?? templateFromMempool(entries, { weightLimit: blockVsize * 4 });
   const v = [], r = [], id = [];
   let used = 0;
-  for (const [vsize, rate, txid] of list) {
-    if (used + vsize > blockVsize && used > 0) break;
-    v.push(Math.round(vsize)); r.push(Math.round(rate * 100) / 100); id.push(String(txid));
-    used += vsize;
+  for (const tx of t.transactions) {
+    const e = entries[tx.txid];
+    if (!(e?.fees && typeof e.fees.base === 'number') || !(tx.vsize > 0)) continue;
+    // the rate its package was TAKEN at: Core's chunk rate where the node publishes it, else the package leader's
+    // ancestor rate -- never a parent's own rate beside the child that paid for it (it read as an inversion)
+    const rate = Number.isFinite(tx.takenAt) ? tx.takenAt : orderingRate(e);
+    v.push(Math.round(tx.vsize)); r.push(Math.round(rate * 100) / 100); id.push(String(tx.txid));
+    used += tx.vsize;
   }
-  return { at: Date.now(), blockVsize, n: v.length, vsize: used, poolCount: list.length + unranked, unranked, v, r, id };
+  return { at: Date.now(), blockVsize, n: v.length, vsize: used, poolCount, unranked, v, r, id, order: 'core' };
 }
 
 export function summarizeMempool(raw) {

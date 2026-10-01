@@ -198,3 +198,21 @@ test('assembling a full mempool is fast enough to do inline', () => {
   const ms = performance.now() - t0;
   assert.ok(ms < 500, `${ms.toFixed(0)} ms for ${Object.keys(POOL).length} entries`);
 });
+
+test('the assembly stops as Core does once the block is full: within 4,000 WU of full, and a prefix of a full scan', async () => {
+  const { templateFromMempool } = await import('../server/collect/gbt.js');
+  const raw = {};
+  // 30,000 entries: big ones that stop fitting early, then a long tail of small ones that keep filling
+  for (let i = 0; i < 30000; i++) { const vsize = i % 7 === 0 ? 4000 : 150 + (i % 13); raw[`${String(i).padStart(8, '0')}${'c'.repeat(56)}`] = { vsize, weight: vsize * 4, fees: { base: (30000 - i) * vsize * 1e-11 } }; }
+  const t = templateFromMempool(raw);
+  assert.ok(t.weightUsed > 4_000_000 - 4_000 - 1000, `full (${t.weightUsed})`);
+  // a scan with no early stop: everything that fits, in the same order
+  const all = Object.entries(raw).map(([txid, e]) => ({ txid, w: e.weight, rate: Math.round(e.fees.base * 1e8) / e.vsize })).sort((a, b) => b.rate - a.rate || (a.txid < b.txid ? -1 : 1));
+  let used = 0; const want = [];
+  for (const e of all) { if (used + e.w > 4_000_000 - 4_000) continue; used += e.w; want.push(e.txid); }
+  // Core stops after 1,000 misses in a row once within 4,000 WU of full, so a later small one may go untaken: what it
+  // took is exactly the full scan's choice up to where it stopped (on Core's live pool, 2026-10-01, the two were equal)
+  const got = t.transactions.map((x) => x.txid);
+  assert.deepEqual(got, want.slice(0, got.length));
+  assert.ok(got.length > want.length * 0.99, `all but the margin (${got.length} of ${want.length})`);
+});

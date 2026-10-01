@@ -12,7 +12,7 @@ function monitorWith(callImpl) {
     rpc: { call: callImpl }, history: { record() {} },
     flagQuality: NodeMonitor.prototype.flagQuality, clearQuality: NodeMonitor.prototype.clearQuality,
     // (what a successful read feeds, since 2026-09-30 one method shared with the pushed pool)
-    absorbPool: NodeMonitor.prototype.absorbPool, poll: { poolMs: 20_000 },
+    absorbPool: NodeMonitor.prototype.absorbPool, assembleTemplate: NodeMonitor.prototype.assembleTemplate, poll: { poolMs: 20_000 },
   };
   m.addEvent = (e) => m.events.push(e);
   return m;
