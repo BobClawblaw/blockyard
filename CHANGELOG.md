@@ -6,13 +6,6 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
-
-- **npm is retired; GitHub is the only release channel.** The `blockyard` package on npm stops at
-  0.1.3 and is deprecated there. `package.json` is now `private`, so `npm publish` refuses it. An npm
-  install moves to a checkout without copying anything: `node bin/blockyard.js start` from the
-  checkout reads the same `~/.blockyard` (docs/INSTALL.md §2).
-
 ## [0.1.5] — 2026-10-08
 
 **BlockYard now ships on Simple mode.** A fresh install draws its 3D boards with the new Simple
@@ -26,6 +19,10 @@ lightning. WebGL is the one to try on a good graphics card.
 
 ### Changed
 
+- **npm is retired; GitHub is the only release channel.** The `blockyard` package on npm stops at
+  0.1.3 and is deprecated there. `package.json` is now `private`, so `npm publish` refuses it. An npm
+  install moves to a checkout without copying anything: `node bin/blockyard.js start` from the
+  checkout reads the same `~/.blockyard` (docs/INSTALL.md §2).
 - **The Simple renderer ships as the default** (Settings -> Appearance -> 3D renderer), with its slide between
   layouts off: a resting board paints no frames at all, on any graphics card. Software and WebGL are one click away.
   A saved settings file keeps whatever it chose, so an upgrade changes nothing for anyone who has saved settings.
