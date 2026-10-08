@@ -171,16 +171,15 @@ test('telemetry carries the breaker state that made a 2026-09-08 flap unanswerab
   });
 });
 
-test('a Bitcoin Machine Code node is listed only once it is 100% synced', async () => {
-  // Operator, 2026-09-19: "only show 100% synced BMC nodes in the drop-down" -- a bmc node in
-  // initial sync is a benchmark run. Known as bmc by its own user agent.
+test('a Bitcoin Machine Code node is listed throughout its sync (rule flipped 2026-09-24)', async () => {
+  // Operator, 2026-09-24: "Flip it permanently. I want us to be able to monitor bmc syncs in
+  // realtime via blockyard" -- this reverses the 2026-09-19 hide-until-synced rule. The
+  // bmcStillSyncing predicate is kept (it still names a mid-sync bmc by its user agent); only
+  // the /api/nodes list path stopped filtering on it.
   const { bmcStillSyncing } = await import('../server/http/api.js');
   const stub = (subversion, state) => ({ state: { networkInfo: subversion ? { subversion } : null }, snapshot: () => ({ sync: { state } }) });
-  assert.equal(bmcStillSyncing(stub('/BitcoinMachineCode:0.0.1/', 'ibd')), true, 'bmc mid-sync: hidden');
-  assert.equal(bmcStillSyncing(stub('/BitcoinMachineCode:0.0.1/', 'catching_up')), true);
-  assert.equal(bmcStillSyncing(stub('/BitcoinMachineCode:0.0.1/', 'synced')), false, 'bmc synced: shown');
-  assert.equal(bmcStillSyncing(stub('/Satoshi:31.1.0/', 'ibd')), false, 'Core mid-sync is still shown');
-  assert.equal(bmcStillSyncing(stub(null, 'ibd')), false, 'a node whose user agent is not known yet is shown');
+  assert.equal(bmcStillSyncing(stub('/BitcoinMachineCode:0.0.1/', 'ibd')), true, 'the predicate still recognizes a mid-sync bmc');
+  assert.equal(bmcStillSyncing(stub('/Satoshi:31.1.0/', 'ibd')), false, 'Core is never a bmc');
 
   await withApp({ nodes: 2 }, async ({ client, app }) => {
     await client.login('admin');
@@ -188,8 +187,10 @@ test('a Bitcoin Machine Code node is listed only once it is 100% synced', async 
     assert.ok(syncing, 'the fixture has a node in initial sync');
     syncing.state.networkInfo = { ...(syncing.state.networkInfo ?? {}), subversion: '/BitcoinMachineCode:0.0.1/' };
     const res = await client.get('/api/nodes');
-    assert.ok(!res.body.nodes.some((n) => n.id === syncing.id), 'the syncing bmc node is not in the list');
-    assert.ok(!res.body.attention.includes(syncing.id), 'nor in the attention list');
-    assert.equal(res.body.nodes.length, 1, 'the other node still is');
+    assert.ok(res.body.nodes.some((n) => n.id === syncing.id), 'the syncing bmc node IS in the list now');
+    assert.equal(res.body.nodes.length, 2, 'both nodes show');
+    // Mid-sync means it needs attention: the attention list carries it so a landing page
+    // goes to the work, which under the old rule it could not.
+    assert.ok(res.body.attention.includes(syncing.id), 'and in the attention list');
   });
 });

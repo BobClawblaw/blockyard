@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **A Bitcoin Machine Code node is listed throughout its initial sync.** The 0.1.3 rule that kept a
+  mid-sync bmc node out of the node picker, the "also syncing" buttons and the attention list until
+  it reached 100% is reversed: watching a bmc sync live is now the job, and the log follower's
+  download window, index builders and the node's own ETA are only visible for a node that is listed.
+
 ## [0.1.5] — 2026-10-08
 
 **BlockYard now ships on Simple mode.** A fresh install draws its 3D boards with the new Simple
