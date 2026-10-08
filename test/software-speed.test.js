@@ -4,6 +4,7 @@
 //      (details3d.js keptBoard), and a moving board is never kept;
 //   2. Software draws its SKY at its own resolution (settings.js appearance.softwareScale) and the board at
 //      every device pixel, and WebGL scales nothing.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, render3d, hitTest, softwareScaleOf } from '../public/js/details3d.js';

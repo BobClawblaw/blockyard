@@ -12,6 +12,7 @@
 //
 // What they cannot hold is whether it LOOKS right; that needs the browser
 // harness (RULES.md 5, 25) and is not claimed here.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

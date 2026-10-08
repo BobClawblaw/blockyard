@@ -4,6 +4,7 @@
 // it plays through the frame loop on a panel a quarter the size of its own page without
 // throwing; its size is bounded by the board's width, so a small panel is never covered; and the
 // soft fills it is built from add up to the opacity they claim, so nothing goes solid white.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, triggerIdle, FX_KINDS, SPACE_FX, MARKET_FX, softStops, boundedRadius } from '../public/js/details3d.js';

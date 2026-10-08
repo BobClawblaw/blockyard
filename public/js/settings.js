@@ -82,7 +82,10 @@ export const DEFAULTS = Object.freeze({
     // resting board paints no frames at all (details3d.js RENDERERS).
     // ('2.5d' is SHOWN AS "Simple" since 2026-09-29 -- operator: "Rename 2.5D to 'Simple' rendering". The stored
     // value stayed, so every saved settings file and the code's names still read '2.5d'.)
-    renderer: 'software',
+    // SHIPPED since 2026-10-08 (operator: "update the shipping defaults to be the simple renderer setup that I'm
+    // currently using"): it was 'software'. Software and WebGL are one click away; Simple is what a fresh install
+    // can afford on any graphics card.
+    renderer: '2.5d',
     // WEBGL'S OWN FINISH (operator, 2026-09-21: "The WebGL should look much better than the software
     // renderer"): bloom -- what is bright throws light -- and a dither that takes the bands out of the
     // wide faint glows. 0 is off and the frame is the Software picture, pixel for pixel near enough.
@@ -121,8 +124,9 @@ export const DEFAULTS = Object.freeze({
     frameCap: '60',
     // Simple'S SLIDE (operator, 2026-09-30: "a shifting tiles animation in 2D like mempool space app does" --
     // "1s slide with the row wave"). 'slide': a new layout eases into place in the plane over one second, the
-    // bottom row first (details3d.js flatSlideOf, flatslide.js), and the board parks again. 'off': it lands at once.
-    flatSlide: 'slide',
+    // bottom row first (details3d.js flatSlideOf, flatslide.js), and the board parks again. 'off': it lands at once --
+    // shipped since 2026-10-08, with Simple itself (the operator's own setup).
+    flatSlide: 'off',
     // THE FRAME RATE, top right of every 3D board (operator, 2026-09-21): frames actually painted in
     // the last second, the processor's milliseconds a frame, and which renderer drew it.
     showFps: false,
@@ -623,7 +627,7 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['blockyard', 'BlockYard'], ['mono', 'Mono'], ['nous', 'Nous'], ['github', 'GitHub'], ['catppuccin', 'Catppuccin'], ['custom', 'Custom']]),
       }),
       Object.freeze({
-        key: 'renderer', label: '3D renderer', kind: 'segment', hint: 'What draws the 3D boards, their skies and every effect. Software is the 2D canvas, on the processor: it works everywhere. WebGL draws the same picture on the graphics card -- smoother gradients, and far less work for the processor when a heavy effect plays -- and goes back to Software by itself where the browser has no WebGL2. Simple is the low-fidelity board for a machine whose graphics are not to be worked: the same cubes under the same camera, flat, with no sky, no effects, no flights and no finishes -- it paints one frame when the data or the pointer changes and nothing at all in between',
+        key: 'renderer', label: '3D renderer', kind: 'segment', hint: 'What draws the 3D boards, their skies and every effect. Software is the 2D canvas, on the processor: it works everywhere. WebGL draws the same picture on the graphics card -- smoother gradients, and far less work for the processor when a heavy effect plays -- and goes back to Software by itself where the browser has no WebGL2. Simple is the low-fidelity board for a machine whose graphics are not to be worked: the same cubes under the same camera, flat, with no sky, no effects, no flights and no finishes -- it paints one frame when the data or the pointer changes and nothing at all in between. Simple is the default',
         options: Object.freeze([['software', 'Software'], ['webgl', 'WebGL'], ['2.5d', 'Simple']]),
       }),
       Object.freeze({
@@ -637,7 +641,7 @@ const PANEL_GROUPS = Object.freeze([
       }),
       Object.freeze({
         key: 'flatSlide', label: 'Simple slide', kind: 'segment', dimWhen: (s) => s.appearance.renderer !== '2.5d',
-        hint: 'Only the Simple renderer has this. Slide (the default): when the pool refreshes, every block eases from where it was to where it goes, in the plane, over one second -- the bottom row first, the rest following up the board -- arrivals drop in from above their place and departures shrink away. Then the board is still again: one second of frames per refresh, none in between. Off: the new layout appears at once',
+        hint: 'Only the Simple renderer has this. Slide: when the pool refreshes, every block eases from where it was to where it goes, in the plane, over one second -- the bottom row first, the rest following up the board -- arrivals drop in from above their place and departures shrink away. Then the board is still again: one second of frames per refresh, none in between. Off (the default): the new layout appears at once',
         options: Object.freeze([['slide', 'Slide'], ['off', 'Off']]),
       }),
       Object.freeze({

@@ -9,6 +9,7 @@
 // something else happened to call board3d.
 //
 // The rule this pins: `still` governs the TILES. Stars are motion in their own right.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d } from '../public/js/details3d.js';

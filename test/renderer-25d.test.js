@@ -60,13 +60,13 @@ const FORBIDDEN = ['clip', 'createRadialGradient', 'createLinearGradient', 'crea
 
 test('the choice: a third renderer, offered by the panel, accepted by normalise, chosen per canvas', () => {
   assert.deepEqual([...RENDERERS], ['software', 'webgl', '2.5d']);
-  assert.equal(DEFAULTS.appearance.renderer, 'software', 'the shipped renderer is unchanged');
+  assert.equal(DEFAULTS.appearance.renderer, '2.5d', 'Simple ships since 2026-10-08');
   const row = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'renderer');
   assert.deepEqual(row.options.map((o) => o[0]), [...RENDERERS]);
   assert.equal(row.options.find((o) => o[0] === '2.5d')[1], 'Simple', 'shown as Simple (2026-09-29), stored as 2.5d');
   assert.equal(normalise({ appearance: { renderer: '2.5d' } }).appearance.renderer, '2.5d');
   assert.equal(rendererOf({ renderer: '2.5d' }), '2.5d');
-  assert.equal(rendererOf({ renderer: 'flat' }), 'software', 'an unknown override falls to the setting');
+  assert.equal(rendererOf({ renderer: 'flat' }), '2.5d', 'an unknown override falls to the setting (here the shipped Simple)');
   // the resolution setting scales the SKY, which Software and 2.5D's slow sky both draw: dimmed on WebGL alone
   const res = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'softwareScale');
   assert.equal(res.dimWhen({ appearance: { renderer: '2.5d' } }), false);
@@ -214,7 +214,7 @@ test('2.5D stamps the page still, and the stylesheet stops every infinite animat
   r = root(); applyTheme(normalise({ appearance: { renderer: 'software' } }), { root: r, win });
   assert.equal(r.attrs.get('data-motion'), 'tick');
   r = root(); applyTheme(normalise(null), { root: r, win });
-  assert.equal(r.attrs.get('data-motion'), 'tick', 'the shipped page ticks');
+  assert.equal(r.attrs.get('data-motion'), 'still', 'the shipped page is still: Simple ships (2026-10-08)');
   r = root(); applyTheme(normalise({ appearance: { renderer: 'webgl', pagePulse: 'smooth' } }), { root: r, win });
   assert.equal(r.attrs.get('data-motion'), 'live', 'smooth is the continuous animation');
   r = root(); applyTheme(normalise({ appearance: { renderer: 'webgl', pagePulse: 'still' } }), { root: r, win });

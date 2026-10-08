@@ -3,6 +3,7 @@
 // layout (packExactStable for Simple, packStable for Detailed); an update with nothing moving is a trickle --
 // departures fly off, arrivals fall in, settled in ~3 s (blockscene3d.js TRICKLE) -- and a found block is
 // still the full flight. Also the compressed pool routes the Detailed board fetches every push.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { planTransition, isTrickle, TRICKLE } from '../public/js/blockscene3d.js';

@@ -11,6 +11,7 @@
 //
 // So this drives the REAL path: build a board, trigger each registered agent by name, and pump
 // frames through the actual renderer.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, triggerIdle, FX_KINDS } from '../public/js/details3d.js';

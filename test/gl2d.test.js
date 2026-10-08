@@ -4,6 +4,7 @@
 // The context is tested against a RECORDING STUB of WebGL2: what it asks the GPU for, in what
 // order, and -- the part that matters for speed -- how rarely. What the pixels look like is
 // scripts/gl-compare.mjs's job, in a real browser, against the software renderer.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -488,16 +489,16 @@ test('a lost context stops drawing and tells its owner once', () => {
   assert.equal(gl.calls.length, n, 'not one more GL call');
 });
 
-test('the choice: a setting, an override, Software by default and wherever WebGL cannot be had', () => {
+test('the choice: a setting, an override, Simple by default, Software wherever WebGL cannot be had', () => {
   assert.deepEqual([...RENDERERS], ['software', 'webgl', '2.5d']);   // (the third is test/renderer-25d.test.js's)
-  assert.equal(DEFAULTS.appearance.renderer, 'software', 'the shipped renderer is the one every browser has');
+  assert.equal(DEFAULTS.appearance.renderer, '2.5d', 'Simple ships (2026-10-08)');
   const row = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'renderer');
   assert.deepEqual(row.options.map((o) => o[0]), [...RENDERERS], 'the panel offers exactly what the viewer knows');
   assert.equal(normalise({ appearance: { renderer: 'webgl' } }).appearance.renderer, 'webgl');
-  assert.equal(normalise({ appearance: { renderer: 'vulkan' } }).appearance.renderer, 'software');
+  assert.equal(normalise({ appearance: { renderer: 'vulkan' } }).appearance.renderer, '2.5d', 'unknown: the default');
   assert.equal(rendererOf({ renderer: 'webgl' }), 'webgl');
   assert.equal(rendererOf({ renderer: 'software' }), 'software');
-  assert.equal(rendererOf({}), 'software', 'no override: the setting, which here is the default');
+  assert.equal(rendererOf({}), 'software', 'no override: the setting, which this file pins to Software');
   // asked for WebGL where there is none (node: no document), a board still draws, on the 2D context
   let fills = 0;
   const c2 = new Proxy({}, { get: (_t, k) => (k === 'canvas' ? canvas : k === 'fill' ? () => { fills++; } : k === 'measureText' ? () => ({ width: 10 }) : typeof k === 'string' && /^(create|get)/.test(k) ? () => null : () => {}), set: () => true });

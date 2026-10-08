@@ -2,6 +2,7 @@
 // can we add as galactic effects? We should have toggles for all these sub-options in
 // preferences"). A switch that does not change what is drawn is a lie told in a checkbox, so each
 // one is read through a recording canvas: on, the layer's operations are there; off, they are not.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

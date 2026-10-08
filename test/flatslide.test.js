@@ -84,14 +84,14 @@ test('paint order is the old frame\'s at the start and the new frame\'s at the e
   assert.deepEqual(sampleSlide(plan, SLIDE_MS - 1).ops.map((o) => o.txid), ['b', 'a']);
 });
 
-test('the setting: Slide ships, Off is offered, only the Simple renderer honours it', () => {
-  assert.equal(DEFAULTS.appearance.flatSlide, 'slide');
+test('the setting: Off ships, Slide is offered, only the Simple renderer honours it', () => {
+  assert.equal(DEFAULTS.appearance.flatSlide, 'off', 'shipped since 2026-10-08');
   const row = PANEL.find((g) => g.group === 'appearance').rows.find((r) => r.key === 'flatSlide');
   assert.deepEqual(row.options.map((o) => o[0]), ['slide', 'off']);
   assert.equal(row.dimWhen({ appearance: { renderer: 'software' } }), true);
   assert.equal(row.dimWhen({ appearance: { renderer: '2.5d' } }), false);
   assert.equal(normalise({ appearance: { flatSlide: 'off' } }).appearance.flatSlide, 'off');
-  assert.equal(normalise({ appearance: { flatSlide: 'wobble' } }).appearance.flatSlide, 'slide');
+  assert.equal(normalise({ appearance: { flatSlide: 'wobble' } }).appearance.flatSlide, 'off');
   assert.equal(flatSlideOf({ flatSlide: 'off' }), 'off');
   assert.equal(flatSlideOf({ flatSlide: 'slide' }), 'slide');
 });

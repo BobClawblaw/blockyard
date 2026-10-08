@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The Simple renderer ships as the default** (Settings -> Appearance -> 3D renderer), with its slide between
+  layouts off: a resting board paints no frames at all, on any graphics card. Software and WebGL are one click away.
+  A saved settings file keeps whatever it chose.
+
 ### Fixed
 
 - **Quality flags no longer outlive their cause.** Seen 2026-09-24 on a healthy mainnet bmc at

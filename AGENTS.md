@@ -372,6 +372,12 @@ What will bite:
 
 ## Current state (2026-09-21): two renderers, Software and WebGL
 
+**SIMPLE IS THE SHIPPED RENDERER SINCE 2026-10-08** (operator: "update the shipping defaults to blockyard to be the
+simple renderer setup that I'm currently using"): `appearance.renderer` '2.5d' and `appearance.flatSlide` 'off', as on
+this box's shared settings. A board drawn without a `renderer` option follows the setting, so the test files about the
+full picture import `test/helpers/software-renderer.js` FIRST (an in-memory localStorage seeded with Software); a new
+file that draws skies, effects or flights through render3d without naming a renderer needs it too.
+
 **Since 2026-09-28 there is a THIRD renderer, 2.5D -- SHOWN AS "Simple" since 2026-09-29** (operator, 09-29: "Rename 2.5D to
 'Simple' rendering"; the stored value, the code's names and everything below stayed `2.5d`, so a saved settings file still
 loads and the Block space's own "Simple" VIEWER MODE is a different thing on a different row) (operator, 09-28: "add a '2d' only mode for our '3d' work.

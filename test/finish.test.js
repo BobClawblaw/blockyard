@@ -2,6 +2,7 @@
 // neon-izing each of teh blocks, and adding an optional specular metallic sheen to the blocks.
 // Have it toggle. I want to be able to apply the sheen onto simple cube mode if I want. think
 // maximum configuration options").
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

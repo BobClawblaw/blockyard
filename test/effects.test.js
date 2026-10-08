@@ -5,6 +5,7 @@
 // effect that never comes: an effect with no switch (unreachable from the panel) and a switch with
 // no effect (a control that does nothing). So the lists are asserted against each other, and every
 // kind is then played through fxAt to prove it actually lights something.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

@@ -5,6 +5,7 @@
 // Read through a recording canvas, because the first live capture showed the line plain yellow
 // with the effect running: whether the effect state reaches the stroke is exactly the kind of
 // thing a screenshot cannot explain and this can.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, triggerIdle } from '../public/js/details3d.js';

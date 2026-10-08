@@ -7,6 +7,7 @@
 //   an animation frame it will not paint (a frame asked for is a frame the browser composites).
 // Driven here on a simulated 120 Hz display: a fake clock, animation frames at every 8.33 ms, real ordering
 // of timers against frames.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { render3d, frameGapOf, webglScaleOf, SKY_GAP_MS } from '../public/js/details3d.js';

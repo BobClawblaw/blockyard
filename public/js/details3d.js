@@ -118,7 +118,7 @@ export function flatSkyOf(opts) {
 /** Simple's slide between layouts (settings.js appearance.flatSlide): 'slide' (flatslide.js, SLIDE_MS) or 'off' (a new layout lands at once). */
 export function flatSlideOf(opts) {
   let want = opts?.flatSlide;
-  if (want !== 'off' && want !== 'slide') { try { want = loadSettings().appearance.flatSlide; } catch { want = 'slide'; } }
+  if (want !== 'off' && want !== 'slide') { try { want = loadSettings().appearance.flatSlide; } catch { want = 'off'; } }
   return want === 'off' ? 'off' : 'slide';
 }
 export const FLAT_SKY_MS = 500;

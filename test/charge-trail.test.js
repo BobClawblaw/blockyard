@@ -4,6 +4,7 @@
 // So: the lightning ball carries it, the light cycles must not, and a board at rest carries
 // nothing. Read through a recording canvas, because whether the charge reaches the stroke is
 // exactly what a screenshot cannot explain and this can.
+import './helpers/software-renderer.js';   // first: these draw the full picture, which Simple (shipped) switches off
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { board3d, triggerIdle } from '../public/js/details3d.js';
