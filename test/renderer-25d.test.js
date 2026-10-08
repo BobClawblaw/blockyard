@@ -198,7 +198,7 @@ test('the docs and the changelog name the renderer', () => {
   const guide = readFileSync(new URL('../docs/USER-GUIDE.md', import.meta.url), 'utf8');
   assert.ok(/\*\*Simple\*\*/.test(guide), 'the user guide describes Simple beside Software and WebGL');
   const log = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
-  assert.ok(/renderer, Simple/.test(log.split('## [0.1')[0]), 'the Unreleased section carries it');
+  assert.ok(/renderer, Simple/.test(log.split('## [0.1.4]')[0]), 'the release that introduced it (0.1.5) carries it');
 });
 
 // THE PAGE HOLDS STILL WITH IT (operator, with 2.5D live: "still eating 50% of gpu on mac"). Measured on the

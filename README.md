@@ -111,13 +111,17 @@ default-deny allowlist, and a tabbed **Display settings** panel (the gear) that 
 board without a reload and picks the layout's colours — light or dark, the shipped look, Mono,
 Nous, GitHub, Catppuccin, or nine colours of your own.
 
-The 3D boards, their skies and every effect draw on either of **two renderers**, picked in the
-same panel: **Software** (the 2D canvas, on the processor; the default, and it works everywhere)
-or **WebGL** (the same picture on the graphics card, many times faster on a big display, with a
-glow of its own). A browser without WebGL2 stays on Software by itself. Both are hand-written
-here, like everything else: no library.
+The 3D boards draw on one of **three renderers**, picked in the same panel. BlockYard ships on
+**Simple**: the same cubes under the same camera, flat and still, painting a frame only when the
+data or the pointer changes, so a monitor left open all day costs your graphics card nothing.
+**But there is a lot of visual fun to discover** if you switch to **Software** (the 2D canvas, on
+the processor; it works everywhere) or **WebGL** (the same picture on the graphics card, with a
+glow of its own): the skies below, thirty-odd idle effects, blocks that fly, fall and bounce into
+place when the board is laid out again, neon, chrome and satin finishes, and the price board's
+black hole, supernova and ball lightning. A browser without WebGL2 stays on Software by itself.
+All three are hand-written here, like everything else: no library.
 
-Behind every board stands a **sky**: the **Galaxy** (a turning spiral of stars with gas along its
+On Software and WebGL, behind every board stands a **sky**: the **Galaxy** (a turning spiral of stars with gas along its
 arms), the **Formation** (a galaxy assembling itself, after the TNG50 film), the **Sun** (our sun
 as the Solar Dynamics Observatory sees it at 171 Å — differential rotation, sunspots, true 3D
 coronal loops, flares, filament eruptions, prominences, coronal rain, an activity-cycle slider —
@@ -263,9 +267,9 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.1.4** (2026-09-22) — a fifth AI security audit, every finding fixed the same day
-(the RPC transport itself now refuses a wallet method with no explicit authorization, and the
-audit trail is hash-chained), plus two effect-timing fixes. Pre-release software: the
+Version **0.1.5** (2026-10-08) — ships on the new **Simple** renderer, light on any graphics card,
+with Software and WebGL one click away for everything the 3D engine can do; the mempool pushed to
+the browser as it changes; quality flags that clear when their cause does. Pre-release software: the
 word is meant literally. Releases are published on [npm](https://www.npmjs.com/package/blockyard)
 as `blockyard`, as [GitHub releases](https://github.com/BobClawblaw/blockyard/releases),
 and announced on

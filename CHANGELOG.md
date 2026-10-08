@@ -6,11 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-10-08
+
+**BlockYard now ships on Simple mode.** A fresh install draws its 3D boards with the new Simple
+renderer: the same cubes under the same camera, flat and still, painting a frame only when the data
+or the pointer changes, so a monitor left open on a laptop or a wall costs the graphics card nothing.
+**There is a lot of visual fun to discover if you want to explore**: Settings (the gear) ->
+Appearance -> 3D renderer -> **Software** or **WebGL** brings back everything the 3D engine does --
+the Galaxy, Formation, Sun and Earth skies, thirty-odd idle effects, blocks that fly and bounce into
+place, neon, chrome and satin finishes, and the price board's black hole, supernova and ball
+lightning. WebGL is the one to try on a good graphics card.
+
 ### Changed
 
 - **The Simple renderer ships as the default** (Settings -> Appearance -> 3D renderer), with its slide between
   layouts off: a resting board paints no frames at all, on any graphics card. Software and WebGL are one click away.
-  A saved settings file keeps whatever it chose.
+  A saved settings file keeps whatever it chose, so an upgrade changes nothing for anyone who has saved settings.
 
 ### Fixed
 

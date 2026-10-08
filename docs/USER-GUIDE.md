@@ -1364,9 +1364,12 @@ of this monitor; the sign-in page draws in the theme this browser last saw.
 
 Below the colours, the renderer:
 
-- **3D renderer** — **Software** (the 2D canvas, drawn on the processor; the default, and it works
-  everywhere) or **WebGL** (the same picture drawn on the graphics card). Every 3D board, sky and
-  effect draws on either, and the switch is live. A browser without WebGL2, a shader that will not
+- **3D renderer** — **Simple** (the default since 0.1.5, below), **Software** (the 2D canvas, drawn
+  on the processor; it works everywhere) or **WebGL** (the same picture drawn on the graphics card).
+  Simple is what ships because it is light on any machine, but the skies, the idle effects, the
+  flights and the finishes this guide describes are all Software's and WebGL's: switch to one of
+  them to see what the 3D engine can do. Every 3D board, sky and effect draws on either, and the
+  switch is live. A browser without WebGL2, a shader that will not
   compile or a lost graphics context goes back to Software by itself; a board is never blank.
   On a large or high-density display WebGL is many times faster (a resting Block space board at
   2560×1300 measured 32 ms a frame on Software and 1 ms on WebGL).
@@ -1380,6 +1383,9 @@ Below the colours, the renderer:
   The page's own pulses stop with it: the live dot, the block rail and meter, the overdue-block
   warning and the arriving-block slide hold still (every figure stays), because any running
   animation makes the browser composite the whole page every frame on the graphics card.
+- **Simple slide** — only for Simple. **Off** (the default): a new layout appears at once. **Slide**:
+  every block eases from where it was to where it goes over one second, bottom row first, then the
+  board is still again.
 - **Simple sky** — only for Simple. **Still** (the default) is a star field drawn once and left
   alone, whichever sky the board chose: no galaxy, nothing turns, nothing repaints. **Slow** keeps
   the board's sky, the star field and galaxy or the Earth sky, and repaints it twice a second from a
