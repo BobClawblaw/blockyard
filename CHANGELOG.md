@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **npm is retired; GitHub is the only release channel.** The `blockyard` package on npm stops at
+  0.1.3 and is deprecated there. `package.json` is now `private`, so `npm publish` refuses it. An npm
+  install moves to a checkout without copying anything: `node bin/blockyard.js start` from the
+  checkout reads the same `~/.blockyard` (docs/INSTALL.md §2).
+
 ## [0.1.5] — 2026-10-08
 
 **BlockYard now ships on Simple mode.** A fresh install draws its 3D boards with the new Simple
@@ -216,7 +223,7 @@ lightning. WebGL is the one to try on a good graphics card.
   it off), `poll.poolResyncMs` (600000), and per node `mempoolPush`: `auto`, `zmq`, `poll` or
   `off`. The Software and WebGL renderers keep the 30-second poll, since their flights between
   layouts take 20 seconds. `/api/mempool`'s `feed` says which way each node is fed.
-- **Simple's slide** (Settings, Appearance, "Simple slide"; on by default). When the pool
+- **Simple's slide** (Settings, Appearance, "Simple slide"; off by default since the 0.1.5 release). When the pool
   refreshes, the Simple renderer's pool boards (Overview, Block space, Mining, Kiosk) no longer jump
   to the new layout: every block eases from where it was to where it goes, in the plane, over one
   second. The bottom row moves first and the rows above follow in a wave. New transactions drop in

@@ -1,0 +1,102 @@
+[size=14pt][b][ANN] BlockYard 0.1.5 — ships in Simple mode, the mempool pushed live, and GitHub is now the only home[/b][/size]
+
+[b]Repository:[/b] [url]https://github.com/BobClawblaw/blockyard[/url]
+[b]Release:[/b] [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.5[/url]
+[b]Install:[/b] [tt]git clone https://github.com/BobClawblaw/blockyard.git[/tt] — npm is retired (see below)
+[b]Licence:[/b] Apache-2.0
+
+[img width=800]IMAGE-URL-FOR:overview.jpg[/img]
+
+BlockYard 0.1.5 is out, two weeks after 0.1.3 and carrying 0.1.4's security work with it. The headline is a change of default: [b]BlockYard now ships in Simple mode.[/b] A fresh install draws its 3D boards with a new renderer that keeps the cubes, the camera and the hover, and drops everything that repaints on its own. A board at rest paints no frames at all, so a monitor left open all day on a laptop, a tablet on the wall or a thin client costs the graphics card nothing.
+
+[b]But there is a lot of visual fun to discover if you want to go exploring.[/b] Open Settings (the gear), Appearance, "3D renderer", and pick [b]WebGL[/b] (or [b]Software[/b] on a machine without a good graphics card). Everything from the last releases comes back: the Galaxy, the Formation, the Sun and the Earth as skies; thirty-odd idle effects; blocks that lift, fly their lanes and bounce into place when a block is found; neon, chrome and satin finishes; and the price board's black hole, supernova and ball lightning. The switch is live and needs no reload. Go and have a look.
+
+If you are new here: BlockYard is a self-hosted web app you point at [b]your own Bitcoin node[/b] (Bitcoin Core, or Bitcoin Machine Code). You get a live dashboard of the node and the network, a 3D view of the block space being built in the mempool, a block, transaction and address explorer with its own address index, a mining dashboard, opt-in exchange prices, a kiosk view, and some DOS games. It is plain JavaScript on Node.js with [b]zero dependencies[/b] and [b]zero telemetry[/b], it only reads from your node, and it ships hardened: bound to this machine, sign-in on, and HTTPS with a certificate it makes itself.
+
+[size=12pt][b]Simple mode, and why it is the default[/b][/size]
+
+The skies and effects were built on a big desktop graphics card, and on a Mac laptop the monitor kept the GPU working at half its capacity even with every board parked. Measuring it in Chromium turned up two separate costs. One was the boards. The other was the page itself: the live dot, the block meter's edge and the overdue warning were endless CSS animations, and any endless animation makes the browser redraw the whole page at every refresh of the screen.
+
+Simple fixes both. It draws the same cubes under the same oblique camera, flat: no sky animation, no effects, no shadows or finishes, and no flight between layouts. It paints when the data or the pointer changes and not otherwise, and the page's pulses hold still while it is chosen. Measured on the live monitor, composited frames in ten seconds: Overview went from 600 to 6. Behind the board is a still star field, drawn once.
+
+[img width=800]IMAGE-URL-FOR:block-space-mode1.jpg[/img]
+
+Software and WebGL got lighter too, for anyone who switches. The page's pulses now [i]tick[/i] (one attribute flipped every 1.3 seconds) instead of animating, which took Software from 1,206 composited frames in ten seconds to 426. WebGL draws at one pixel per CSS pixel by default, which cut the GPU process's busy time by a third on a high-density screen. There is also a frame-rate cap, 60 by default.
+
+[size=12pt][b]What the full renderers look like[/b][/size]
+
+All of this is one setting away. These pictures are from 0.1.3, on WebGL:
+
+[img width=800]https://talkimg.com/images/2026/09/22/U02Krw.jpg[/img]
+
+[img width=800]https://talkimg.com/images/2026/09/22/U02bO9.jpg[/img]
+
+[img width=800]https://talkimg.com/images/2026/09/22/U024iG.jpg[/img]
+
+[img width=800]https://talkimg.com/images/2026/09/22/U029Nf.jpg[/img]
+
+[size=12pt][b]The mempool, pushed[/b][/size]
+
+The pool boards (Overview, Block space, Mining, Kiosk) used to follow a 30-second poll. Now the server keeps the node's mempool in memory between full reads and applies its changes as they happen. Where the node publishes ZMQ [tt]sequence[/tt] notifications (bmc does), BlockYard subscribes; the ZMQ protocol (ZMTP) is written here, so there is still no dependency. Otherwise it compares the node's transaction ids every 5 seconds. Every 5 seconds, if anything changed, the board's picture is rebuilt and sent over the page's existing live stream. The full read (47 MB and 0.6 s on Core, with 77,525 transactions) now runs every ten minutes as a check, and logs how far the kept copy had drifted.
+
+The boards keep their layout between updates, so an update is a handful of arrivals and departures rather than a whole new board. On WebGL and Software these play as a short choreography: departures fly off, arrivals fall and bounce into their squares, and the board is still again in about three and a half seconds. A found block still re-packs the board, and there are now flights of 1, 2, 3, 5, 10 and 20 seconds to pick from, or None. "Refresh every" sets how often a board takes a new picture, from 5 seconds to 2 minutes.
+
+[size=12pt][b]The Detailed board is Core's block[/b][/size]
+
+The Detailed view used to show the mempool sorted by each transaction's own fee rate and cut at 1,000,000 vB. That put a child paying for its parent (CPFP) where its own rate said, and left the parent out: on Core's pool on 1 October, 316 of about 3,600 transactions on the board would not have been in Core's block, and 317 of Core's were missing. Now the board is the block the "being built" card shows: Core's chunk fee rates, each package kept whole, filled the way Core fills the end of a block. On the same pool it came within 5 transactions and 0.06% in fees of the node's own [tt]getblocktemplate[/tt]. It is assembled in about 60 ms instead of 260–400, and its scale is fitted to within 0.2%.
+
+[img width=800]IMAGE-URL-FOR:block-space-mode2.jpg[/img]
+
+[size=12pt][b]Security: a fifth AI audit (0.1.4)[/b][/size]
+
+0.1.4 never got its own post here, so: a fifth AI security audit, brutally honest by request, with the DOS Diversions' x86 interpreter read hardest of all. It came back as the best-defended part of the codebase. The audit found 15 items (1 high, 4 medium, 10 low or informational), and each was fixed the same day against a regression test that failed first. The headline fix: the RPC transport itself now refuses a wallet method that has no explicit authorization, not only the console route in front of it, so no future code path can reach a wallet method by skipping a check. The audit trail is now hash-chained ([tt]npm run verify-audit[/tt] checks it), and login has the same cross-site protection as every other route that changes state. The full report is [tt]docs/SECURITY-AUDIT-2026-09-22.md[/tt].
+
+[size=12pt][b]Smaller things[/b][/size]
+
+[list]
+[*][b]Quality flags clear when their cause does.[/b] A healthy node's page was showing five warnings, none of them current: RPC timeouts counted since start-up rather than in the last ten minutes, a stale-tip warning that never cleared, a handshake warning raised on the first failure and kept for ever. Each one now goes away when its cause does.
+[*][b]A restart takes about 2 seconds, not 45.[/b] The server used to keep accepting connections until the very end of its shutdown, so a page reconnecting at that moment held it open until systemd killed it.
+[*][b]The Kiosk no longer stutters[/b] beside a Detailed board, and effects on the Detailed board cost 20–36% less on WebGL.
+[*][b]Bitcoin Machine Code:[/b] a Dial handoff card on the node page, and the node's RPC lock is named when it stalls.
+[*][tt]scripts/manage-users.js[/tt] reads a piped password.
+[/list]
+
+[size=12pt][b]npm is retired: GitHub is the one place to get BlockYard[/b][/size]
+
+Keeping a second release channel in step was more trouble than it was worth. npm will not let a version be republished, so a docs fix after release left the two disagreeing, and publishing needed a 2FA dance from another machine. So from 0.1.5 on, [b]GitHub is the only authoritative source[/b] for BlockYard. The npm package stops at 0.1.3 and is marked deprecated, and the repository is set so it cannot be published there by accident. A checkout is also the better install: [tt]git pull[/tt] updates it.
+
+[b]Installed from npm?[/b] Your config, accounts and address index in [tt]~/.blockyard[/tt] carry over as they are. The same command is in the checkout and reads the same place:
+
+[code]
+git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
+node bin/blockyard.js start
+npm uninstall -g blockyard
+[/code]
+
+Under systemd, point [tt]ExecStart[/tt] at [tt]node <checkout>/bin/blockyard.js start[/tt]. [tt]docs/INSTALL.md[/tt] §2 has the details.
+
+[size=12pt][b]Upgrading[/b][/size]
+
+[tt]git pull[/tt], then restart.
+
+[list]
+[*][b]Your settings are kept.[/b] Simple is the default only for settings nobody has saved. If you had already saved Display settings, your renderer stays as it was; and if you want Simple, it is in Settings, Appearance.
+[*][b]Nothing to migrate.[/b] No setting was renamed and no file moved.
+[/list]
+
+[size=12pt][b]How it was made[/b][/size]
+
+As before, [b]every line was written by an AI, directed by a human[/b], including the fixes, the tests and this post. The operator decided what mattered, what was wrong and what looked bad, and typed none of it. It is still [b]experimental pre-release software[/b]. Expect bugs, and tell us what broke.
+
+[size=12pt][b]Links[/b][/size]
+
+[list]
+[*]Source: [url]https://github.com/BobClawblaw/blockyard[/url]
+[*]Release 0.1.5: [url]https://github.com/BobClawblaw/blockyard/releases/tag/v0.1.5[/url]
+[*]Changelog: [url]https://github.com/BobClawblaw/blockyard/blob/main/CHANGELOG.md[/url]
+[*]Getting started: [url]https://github.com/BobClawblaw/blockyard/blob/main/docs/GETTING-STARTED.md[/url]
+[*]Bitcoin Machine Code: [url]https://github.com/BobClawblaw/bitcoinmachinecode[/url]
+[/list]
+
+Apache-2.0. Run your own node.

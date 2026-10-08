@@ -134,11 +134,13 @@ test('the tarball advertises no wallet, and explains its absence', () => {
   assert.match(read('server/admin-gate.js'), /does not carry the administrative suite|NOT IN THIS BUILD/);
 });
 
-test('the shipped package is not marked private, so releases still work', () => {
-  // The other half of the previous test: this must not be the change that quietly stops
-  // the real product from publishing.
+test('the repository package is marked private: npm is retired, GitHub is the release channel', () => {
+  // Until 0.1.5 this held the opposite, so the product could publish. Since 2026-10-08 (operator:
+  // "deprecate npm entirely, and only serve the project via Github as authoritative") nothing is
+  // published to npm, and `private` makes `npm publish` refuse rather than trusting nobody types it.
+  // `npm pack` still builds the release tarball attached to a GitHub release.
   const pkg = JSON.parse(read('package.json'));
-  assert.notEqual(pkg.private, true, 'the repository package must stay publishable');
+  assert.equal(pkg.private, true, 'npm publish must refuse the repository package');
   assert.equal(pkg.name, 'blockyard');
   assert.equal(pkg.blockyardEdition, undefined, 'a checkout is a source tree, not an edition');
 });

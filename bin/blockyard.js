@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// THE COMMAND, for an install from npm (`npm install -g blockyard`):
+// THE COMMAND (`node bin/blockyard.js <command>` from a checkout; it was the npm package's bin until npm was retired at 0.1.5):
 //
 //   blockyard setup          ask where the node is, check it, write the config, build the index
 //   blockyard start          run the monitor

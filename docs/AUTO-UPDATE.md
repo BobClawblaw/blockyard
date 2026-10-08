@@ -245,12 +245,9 @@ an unsigned tag must fail closed.
 3. ~~**Create the first tag.**~~ **Done 2026-09-14:** `v0.0.9`, the initial release, is
    tagged, so the release channel in §3 exists.
 4. **Decide the open-mode question** in §6 knowingly.
-5. **Decide the npm path.** Since 2026-09-14 BlockYard is also an npm package with a `blockyard`
-   command (`bin/blockyard.js`), keeping its config and data under `~/.blockyard`. A global npm
-   install has no git checkout to fetch into, so nothing in §4 applies to it; for that install
-   the update is `npm install -g blockyard@<version>`, and the dirty-tree, fast-forward and
-   rollback guarantees would have to be restated in npm's terms or the feature limited to
-   checkouts. This design covers the checkout only until that is decided.
+5. ~~**Decide the npm path.**~~ **Decided 2026-10-08: there is none.** The npm package is retired
+   at 0.1.3 (operator: "deprecate npm entirely, and only serve the project via Github as
+   authoritative"), so every install is a checkout and this design needs no npm terms.
 
 ## 11. Tests
 

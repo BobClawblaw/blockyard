@@ -167,70 +167,24 @@ runtime is good:
 npm test
 ```
 
-**Or, from the published package, no checkout at all:**
+**There is no npm install any more.** BlockYard was also published on npm from 0.0.9 to 0.1.3; that
+package is retired as of 0.1.5 (deprecated on the registry, no further versions), and this
+repository is the one authoritative source. A checkout is also what updates cleanly (`git pull`).
+
+**Moving an npm install to a checkout.** The npm command kept its config and data under
+`~/.blockyard` (`local.json`, `data/`, the address index at `data/index`). The same command ships in
+the checkout as `bin/blockyard.js` and reads the same place, so nothing has to be copied or rebuilt:
 
 ```bash
-npm install -g blockyard
-blockyard          # with no command, prints the command list, the version, and where it keeps state
+git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
+node bin/blockyard.js start      # the same command, from the checkout: it still reads ~/.blockyard
+npm uninstall -g blockyard       # once the checkout is running
 ```
 
-This installs the read-only edition (the same one `npm pack` produces from this checkout; the
-administrative suite never ships — see the top of [AGENTS.md](../AGENTS.md) if you're reading the
-source). A global install has no `config/` or `data/` directory of its own to live in, so it keeps
-both under `~/.blockyard` (`local.json` for the config, `data/` for state and the address index)
-unless `BLOCKYARD_HOME`, `BLOCKYARD_CONFIG` or `BLOCKYARD_DATA` say otherwise. Every command below
-that reads `npm run <x>` in a checkout is `blockyard <x>` here instead:
-
-| checkout | npm install -g |
-|---|---|
-| `npm run setup` | `blockyard setup` |
-| `npm start` | `blockyard start` |
-| `npm run check` | `blockyard check` |
-| `node scripts/index-build.js …` | `blockyard index-build …` |
-| `node scripts/manage-users.js …` | `blockyard users …` |
-| — | `blockyard tls` (remake the self-signed certificate; `--san` to add names) |
-
-There is no `blockyard dev` (the fake-node demo) or `blockyard smoke` — both are checkout-only,
-for working on the code itself. The rest of this document is written for a checkout; substitute
-the table above and `~/.blockyard` for `config/`/`data/` as you go.
-
-**`blockyard: command not found` right after `npm install -g`?** The install worked; npm's global
-`bin/` directory isn't on your `PATH`. Find where npm actually put it and compare against your
-shell's `PATH`:
-
-```bash
-npm config get prefix        # global installs go under <prefix>/bin
-echo $PATH
-```
-
-If `<prefix>/bin` isn't in that list, either add it (`echo 'export
-PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc`) or, better, find out
-*why* npm's prefix isn't one of the normal ones already on your `PATH` (Homebrew's, nvm's,
-`/usr/local`, or a deliberate no-`sudo` choice like `~/.local` with `~/.local/bin` already on
-`PATH`) — `npm config list -l | grep prefix`, and check for a stray `prefix=` in `~/.npmrc` or an
-`NPM_CONFIG_PREFIX` in a shell rc file. A non-default prefix is not itself a problem — only one
-that lands outside every `PATH` your shells actually load is. A correctly configured npm needs
-none of this: a plain `npm install -g blockyard` followed by `blockyard setup` is the whole
-install.
-
-**Without `-g`** (`npm install blockyard`): the package lands in `node_modules/` in whatever
-directory you run it from, not on your `PATH` — a local install never touches `PATH`, on any OS.
-Running the plain `blockyard` command in your shell afterwards fails with "command not found";
-`npx` is what knows to look in `./node_modules/.bin` first, so use it in front of every command:
-
-```bash
-mkdir blockyard && cd blockyard
-npm install blockyard
-npx blockyard setup      # not "blockyard setup" -- npm never put it on PATH
-npx blockyard start
-```
-
-(`./node_modules/.bin/blockyard setup` works too, without `npx`, if you'd rather spell it out.)
-It still keeps its config and data under `~/.blockyard` by the same rule above — a local install
-changes nothing about *where the package runs from*, only how you invoke it.
-
-See [Uninstalling](#12-uninstalling) for removing a global install, and
-[Updating](#11-updating) for `npm update -g blockyard` in place of `git pull`.
+Under systemd, point `ExecStart` at `node <checkout>/bin/blockyard.js start`. To move the state into
+the checkout instead, copy `~/.blockyard/local.json` to `config/local.json` and `~/.blockyard/data`
+to `data/`, and check that `addressIndex` in the config still names where the index is.
 
 ## 3. Try it without a node
 
@@ -568,8 +522,8 @@ sudo -u blockyard git pull
 sudo systemctl restart blockyard
 ```
 
-**Installed from npm:** `npm update -g blockyard` (or `npm install -g blockyard@latest`), then
-restart it (`blockyard start`, or your service's restart command). `~/.blockyard` is untouched.
+**Installed from npm:** the package is retired and stops at 0.1.3. Move to a checkout
+([§2](#2-get-the-code)); it keeps using `~/.blockyard`, and `git pull` updates it from then on.
 
 Your `config/local.json` and `data/` directory are untouched by updates. Read
 [CHANGELOG.md](../CHANGELOG.md) for anything that needs your attention. The browser picks

@@ -55,11 +55,8 @@ cd blockyard
 npm test              # optional: the unit tests; there is no npm install -- no dependencies
 ```
 
-Or, without a checkout: `npm install -g blockyard`, then run `blockyard setup` and
-`blockyard start` in place of `npm run setup` / `npm start` below (config and the index live
-under `~/.blockyard` instead of `config/`/`data/`). Without `-g` — `npm install blockyard` into
-some directory — the command isn't on your `PATH`; run `npx blockyard setup` and
-`npx blockyard start` from that directory instead. Details:
+GitHub is the only place BlockYard is published; the npm package is retired (it stops at 0.1.3).
+An install from npm moves to a checkout with its config and index where they are:
 [docs/INSTALL.md §2](INSTALL.md#2-get-the-code).
 
 ## 4. `npm run setup` — the installer
@@ -207,7 +204,7 @@ git pull
 npm test
 ```
 
-(installed from npm: `npm update -g blockyard` instead) then restart it. There is nothing to
+then restart it. There is nothing to
 install and no build step. If a release says the index
 format changed, delete the index directory (or rebuild it with the same `index-build.js` command
 into the same directory — the build empties the directory first) and BlockYard builds it again

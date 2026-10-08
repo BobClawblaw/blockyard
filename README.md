@@ -152,27 +152,20 @@ npm start           # builds the address index in the background (a few hours); 
                     # and sign in as admin with the password the first start prints once
 ```
 
-**Or from npm**, without a checkout:
+**GitHub is the only place BlockYard is published.** The npm package is retired as of 0.1.5: it
+stops at 0.1.3 and gets no further releases. Installed it from npm? Your config and index in
+`~/.blockyard` carry over to a checkout untouched:
 
 ```bash
-npm install -g blockyard
-blockyard setup     # same installer; config and the index live under ~/.blockyard, not the package
-blockyard start
-```
-
-Without `-g` (`npm install blockyard`), the `blockyard` command isn't on your `PATH` — a local
-install never is. Use `npx` in front of it:
-
-```bash
-mkdir blockyard && cd blockyard
-npm install blockyard
-npx blockyard setup     # not "blockyard setup" -- npm never put it on PATH
-npx blockyard start
+git clone https://github.com/BobClawblaw/blockyard.git
+cd blockyard
+node bin/blockyard.js start      # the same command, from the checkout: it still reads ~/.blockyard
+npm uninstall -g blockyard       # once the checkout is running
 ```
 
 Details: [docs/INSTALL.md §2](docs/INSTALL.md#2-get-the-code).
 
-`npm run setup` (or `blockyard setup`) asks for the node's data directory, reads its `bitcoin.conf` for the rest,
+`npm run setup` asks for the node's data directory, reads its `bitcoin.conf` for the rest,
 proves the credentials, the chain, `txindex`, the block files and how fast the node answers,
 writes `config/local.json`, and offers to start BlockYard there and then. The address index is
 built **by BlockYard itself, in the background**, the first time it starts, and **it takes a few
@@ -270,9 +263,8 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 Version **0.1.5** (2026-10-08) — ships on the new **Simple** renderer, light on any graphics card,
 with Software and WebGL one click away for everything the 3D engine can do; the mempool pushed to
 the browser as it changes; quality flags that clear when their cause does. Pre-release software: the
-word is meant literally. Releases are published on [npm](https://www.npmjs.com/package/blockyard)
-as `blockyard`, as [GitHub releases](https://github.com/BobClawblaw/blockyard/releases),
-and announced on
+word is meant literally. Releases are published on GitHub only — the repository and its
+[releases](https://github.com/BobClawblaw/blockyard/releases); the npm package is retired — and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug
 reports and reviews are welcome there and in [issues](https://github.com/BobClawblaw/blockyard/issues).
 It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certificate it makes itself,

@@ -13,7 +13,9 @@ serves charts plus a live event feed to several users at once. This box watches 
 The administrative suite (`server/admin/`, `docs/PLAN-ADMIN-SUITE.md`) **does not ship**.
 It can spend money and has not had a security review, so every release artifact excludes it
 and `test/release-guard.test.js` fails if one stops doing so. Release the monitor as normal:
-`npm pack` produces the read-only edition, the container image excludes the suite through
+`npm pack` produces the read-only edition (the tarball a GitHub release carries -- **npm itself is retired
+since 2026-10-08**: GitHub is the only release channel, `package.json` is `private` so `npm publish` refuses,
+and the registry package stops at 0.1.3, deprecated), the container image excludes the suite through
 `.dockerignore`, and `scripts/build-edition.js --edition admin` refuses to build without
 `--unreleased` (and marks what it builds `private`, so it cannot be published). A released
 build that is asked for the suite explains that it is not in this build rather than
