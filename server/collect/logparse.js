@@ -192,13 +192,15 @@ const RULES = [
     },
   },
   // [dl] heartbeat: tip=965993 peers=12/16 txouts=165335351 uptime=00:14:15:21 sync_failing=10
+  // [dl] heartbeat: tip=970377 stored=970377 peers=10/10 txouts=165185012 uptime=00:00:42:15
+  // `stored=` is the newer spelling (54 lines of the logs on 2026-10-08, every one raw until then).
   {
     name: 'heartbeat',
-    re: /\[dl\]\s*heartbeat:\s*tip=(\d+)\s+peers=(\d+)\/(\d+)\s+txouts=(\d+)(?:\s+uptime=(\S+))?(?:\s+sync_failing=(\d+))?/,
+    re: /\[dl\]\s*heartbeat:\s*tip=(\d+)(?:\s+stored=(\d+))?\s+peers=(\d+)\/(\d+)\s+txouts=(\d+)(?:\s+uptime=(\S+))?(?:\s+sync_failing=(\d+))?/,
     apply(m) {
       return {
-        kind: 'heartbeat', tip: +m[1], peersInUse: +m[2], peersWanted: +m[3],
-        txouts: +m[4], uptime: parseUptime(m[5]), syncFailing: m[6] == null ? null : +m[6],
+        kind: 'heartbeat', tip: +m[1], stored: m[2] == null ? null : +m[2], peersInUse: +m[3], peersWanted: +m[4],
+        txouts: +m[5], uptime: parseUptime(m[6]), syncFailing: m[7] == null ? null : +m[7],
       };
     },
   },
@@ -290,7 +292,8 @@ const RULES = [
   // [dial] 172.233.47.67:8333 lacks NODE_WITNESS (services=0xc05) -- dropping...
   { name: 'dialReject', re: /\[dial\]\s*(\S+?)\s+lacks NODE_WITNESS \(services=(\S+?)\)/, apply: (m) => ({ kind: 'peer_reject', addr: m[1], host: addrParts(m[1])?.host, reason: 'lacks NODE_WITNESS', services: m[2] }) },
   // [dial] 154.5.180.120:8333: dialing as block-relay-only (1 of 2)
-  { name: 'dialBlockRelay', re: /\[dial\]\s*(\S+?):\s*dialing as block-relay-only\s*\((\d+) of (\d+)\)/, apply: (m) => ({ kind: 'peer_dial', addr: m[1], host: addrParts(m[1])?.host, reason: 'block-relay-only' }) },
+  // [dial] 75.111.0.10:8333: dialing as block-relay-only (2 of 2, 1 live)  (the newer spelling)
+  { name: 'dialBlockRelay', re: /\[dial\]\s*(\S+?):\s*dialing as block-relay-only\s*\((\d+) of (\d+)(?:, \d+ live)?\)/, apply: (m) => ({ kind: 'peer_dial', addr: m[1], host: addrParts(m[1])?.host, reason: 'block-relay-only' }) },
   // [mux:7] leg replaced: connected next pool peer 208.161.116.211:8333 (fd 266) addrv2=1
   { name: 'legReplaced', re: /\[mux:(\d+)\]\s*leg replaced:\s*connected next pool peer\s*(\S+)\s*\(fd\s*(\d+)\)\s*addrv2=(\d)/, apply: (m) => ({ kind: 'peer_connect', leg: +m[1], addr: m[2], host: addrParts(m[2])?.host, fd: +m[3], addrv2: m[4] === '1', reason: 'leg replaced' }) },
   // [mux:9] next peer 86.147.78.44:8333 unreachable: connect: Operation now in progress (leg stays down)
@@ -1460,9 +1463,10 @@ const RULES = [
   },
   {
     name: 'dlcCoreShape',
-    re: /\[dlc\]\s*Core's shape: (\d+) of (\d+) live peer\(s\) download at once \(cap (\d+)(?:, span (\d+))?\), window (\d+) blocks above the connected tip, stall timeout (\d+) s/,
+    // The newer spelling names the request size: `..., span 1), 16-block requests, window ...`.
+    re: /\[dlc\]\s*Core's shape: (\d+) of (\d+) live peer\(s\) download at once \(cap (\d+)(?:, span (\d+))?\),(?: (\d+)-block requests,)? window (\d+) blocks above the connected tip, stall timeout (\d+) s/,
     // Severity stated: the words `stall timeout` would make every plan a warning.
-    apply: (m) => ({ kind: 'dl_plan', parallel: +m[1], live: +m[2], cap: +m[3], span: m[4] == null ? null : +m[4], window: +m[5], stallTimeoutSec: +m[6], severity: 'info' }),
+    apply: (m) => ({ kind: 'dl_plan', parallel: +m[1], live: +m[2], cap: +m[3], span: m[4] == null ? null : +m[4], requestBlocks: m[5] == null ? null : +m[5], window: +m[6], stallTimeoutSec: +m[7], severity: 'info' }),
   },
   // [dlc] connected 321801 block(s) during the download; connected tip 321800 (the rotation drains the rest)
   // [dlc] catch-up done: 322400 new blocks written
@@ -2055,8 +2059,21 @@ const RULES = [
   },
   {
     name: 'reorgProbeRejected',
-    re: /\[reorg\]\s*probe of (\S+) rejected a candidate chain \(no action taken\)$/,
-    apply(m) { const a = addrParts(m[1]); return { kind: 'reorg_probe', addr: a.addr, host: a.host, result: 'rejected' }; },
+    re: /\[reorg\]\s*probe of (\S+) rejected a candidate chain \(no action taken\)(?:; not probed again for (\d+) min)?$/,
+    apply(m) { const a = addrParts(m[1]); return { kind: 'reorg_probe', addr: a.addr, host: a.host, result: 'rejected', ...(m[2] ? { quietMin: +m[2] } : {}) }; },
+  },
+  // [reorg] probe of 198.154.93.110:8333 deferred: no leg has received anything for 20s -- the host's network, not a peer
+  {
+    name: 'reorgProbeDeferred',
+    re: /\[reorg\]\s*probe of (\S+) deferred: no leg has received anything for (\d+)s -- the host's network, not a peer$/,
+    apply(m) { const a = addrParts(m[1]); return { kind: 'reorg_probe', addr: a.addr, host: a.host, result: 'deferred', quietSec: +m[2] }; },
+  },
+  // [reorg] reconnecting height 966500 hash=0000000000000000..
+  // A step of a reorg's reconnect; the reorg's own detected/complete lines carry the news.
+  {
+    name: 'reorgReconnecting',
+    re: /\[reorg\]\s*reconnecting height (\d+) hash=([0-9a-f]+)\.*$/,
+    apply: (m) => ({ kind: 'reorg', state: 'reconnecting', height: +m[1], hashPrefix: m[2] }),
   },
   {
     name: 'reorgProbeBudget',
@@ -2553,6 +2570,142 @@ const RULES = [
     name: 'bannerRule',
     re: /^={20,}$/,
     apply: () => ({ kind: 'noted', why: 'the start banner\'s separator line' }),
+  },
+  // ---------------------------------------------------------------- the 2026-10-08 census
+  // bmc's own session reported "[mux] has lines no rule claims": the live log parsed at
+  // 60-78%. Measured 2026-10-08 over all 52 of the node's logs (866,281 lines): 96.26%
+  // claimed, 32,369 raw in 26 shapes -- 30,979 of them the one `no dial candidate` line,
+  // and the rest new lines or newer spellings of old ones (those were widened in place).
+
+  // [mux:8] no dial candidate is free (backoff / already held / anonymity net) -- the leg stays down
+  // The per-leg form of `legNoDialHelper` when the shortage is candidates, not helpers:
+  // every address the leg could take is backing off, held by another leg or on a network
+  // this node does not reach. 1,942 lines in the live log's first hours. Counted, never fed.
+  {
+    name: 'legNoDialCandidate',
+    re: /\[mux:(\d+)\]\s*no dial candidate is free \(([^)]*)\) -- the leg stays down$/,
+    apply: (m) => ({ kind: 'leg_no_candidate', leg: +m[1] }),
+  },
+  // [mux:0] 52.52.8.0:8333: the pass failed (where=3 in 24.1s) while no leg received anything -- the host's network, not this peer: not a strike (1 of 3)
+  // A failed sync pass the node blamed on its own network rather than the peer. Counted.
+  {
+    name: 'legPassHostNetwork',
+    re: /\[mux:(\d+)\]\s*(\S+?): the pass failed \(where=(\d+) in (\d+(?:\.\d+)?)s\) while no leg received anything -- the host's network, not this peer: not a strike \((\d+) of (\d+)\)$/,
+    apply(m) { const a = addrParts(m[2]); return { kind: 'pass_host_network', leg: +m[1], addr: a.addr, host: a.host, where: +m[3], secs: +m[4], strike: +m[5], of: +m[6] }; },
+  },
+  // [dial] 180.129.37.31:8333: background dial gave up after 120s
+  {
+    name: 'dialGaveUp',
+    re: /\[dial\]\s*(\S+?): background dial gave up after (\d+)s$/,
+    apply(m) { const a = addrParts(m[1]); return { kind: 'dial_gave_up', addr: a.addr, host: a.host, afterSec: +m[2] }; },
+  },
+  // [mempool] expired 2 tx older than 336h incl. descendants (60715 remain)
+  // The pool's age limit at work. State (a running total and the last), not the feed.
+  {
+    name: 'mempoolExpired',
+    re: /\[mempool\]\s*expired (\d+) tx older than (\d+)h incl\. descendants \((\d+) remain\)$/,
+    apply: (m) => ({ kind: 'mempool_expired', txs: +m[1], olderThanHours: +m[2], remain: +m[3] }),
+  },
+  // [mempool] pool lock: getrawmempool (pid 3084273) held 1690 ms (waited 0 ms); 3 waiting behind it
+  // [mempool] pool lock: getrawtransaction (pid 3084273) waited 1690 ms; the holder was getrawmempool (pid 3084273, held 1690 ms); 2 still waiting
+  // The mempool's own lock, timed the way the RPC execution lock is (`rpcExecHeld`). The
+  // label can carry spaces and an arrow (an Esplora route and the method it dispatched).
+  {
+    name: 'poolLockHeld',
+    re: /\[mempool\]\s*pool lock: (.+?) \(pid (\d+)\) held (\d+) ms \(waited (\d+) ms\); (\d+) waiting behind it$/,
+    apply: (m) => ({ kind: 'pool_lock_held', holder: m[1], pid: +m[2], heldMs: +m[3], waitedMs: +m[4], waiting: +m[5], severity: 'warn' }),
+  },
+  {
+    name: 'poolLockWaited',
+    re: /\[mempool\]\s*pool lock: (.+?) \(pid (\d+)\) waited (\d+) ms; the holder was (.+?) \(pid (\d+), held (\d+) ms\); (\d+) still waiting$/,
+    apply: (m) => ({ kind: 'pool_lock_waited', waiter: m[1], pid: +m[2], waitedMs: +m[3], holder: m[4], holderPid: +m[5], heldMs: +m[6], waiting: +m[7], severity: 'warn' }),
+  },
+  // [mempool] could not save mempool.dat
+  {
+    name: 'mempoolSaveFailed',
+    re: /\[mempool\]\s*could not save mempool\.dat$/,
+    apply: () => ({ kind: 'mempool_persist', state: 'save failed', txs: null, severity: 'warn' }),
+  },
+  // [dl] leaving initial block download (latching to false, as Core does)
+  // [dl] tx announcements are taken again: the tip is within maxtipage (the flag had stood at 'in IBD' since boot or the last stale tip)
+  // The node's own IBD flag turning: news, once a start.
+  {
+    name: 'dlLeavingIbd',
+    re: /\[dl\]\s*leaving initial block download \(latching to false, as Core does\)$/,
+    apply: () => ({ kind: 'ibd_state', inIbd: false }),
+  },
+  {
+    name: 'dlTxAnnounceResumed',
+    re: /\[dl\]\s*tx announcements are taken again: the tip is within maxtipage/,
+    apply: () => ({ kind: 'ibd_state', txAnnouncements: true }),
+  },
+  // [dl] 207.49.105.40:8333 announced 974693 and the download found nothing above 969157: its announces are not believed for 6 h
+  // A peer claiming a tip that is not there. Its address is the news.
+  {
+    name: 'dlAnnounceDistrusted',
+    re: /\[dl\]\s*(\S+) announced (\d+) and the download found nothing above (\d+): its announces are not believed for (\d+) h$/,
+    apply(m) { const a = addrParts(m[1]); return { kind: 'announce_distrusted', addr: a.addr, host: a.host, announced: +m[2], foundTo: +m[3], hours: +m[4], severity: 'warn' }; },
+  },
+  // [boot] script verification: 16 thread(s) including the caller (par=0; Core's cap is 15 workers + the caller)
+  {
+    name: 'bootScriptThreads',
+    re: /\[boot\]\s*script verification: (\d+) thread\(s\) including the caller \(par=(-?\d+); Core's cap is (\d+) workers \+ the caller\)$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'boot', facts: { scriptThreads: +m[1], par: +m[2], coreWorkerCap: +m[3] } }),
+  },
+  // [ready] all indexes at height 970378 (utxo, txindex, bfilter, coinstats history) -- 519.9s
+  {
+    name: 'readyAllIndexes',
+    re: /\[ready\]\s*all indexes at height (\d+) \(([^)]*)\) -- (\d+(?:\.\d+)?)s$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'ready', facts: { height: +m[1], indexes: m[2].split(/,\s*/), secs: +m[3] } }),
+  },
+  // [utxo_live] store shape: 7 run file(s), 15.6 GB (compaction threshold 12, run budget 46.3 GB) -- a lookup probes up to 7 runs
+  // [utxo_live] flush: async (a forked writer per generation; the applier pays the copy) -- unretired WAL from byte 154334029
+  {
+    name: 'utxoStoreShape',
+    re: /\[utxo_live\]\s*store shape: (\d+) run file\(s\), (\d+(?:\.\d+)?) GB \(compaction threshold (\d+), run budget (\d+(?:\.\d+)?) GB\) -- a lookup probes up to (\d+) runs$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'utxo_live', facts: { runFiles: +m[1], storeGB: +m[2], compactionThreshold: +m[3], runBudgetGB: +m[4], probeRuns: +m[5] } }),
+  },
+  {
+    name: 'utxoFlushMode',
+    re: /\[utxo_live\]\s*flush: (\w+) \([^)]*\)(?: -- unretired WAL from byte (\d+))?$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'utxo_live', facts: { flush: m[1], walFrom: m[2] == null ? null : +m[2] } }),
+  },
+  // [utxo_live] WARNING: hole/short block at height 968556 (len=-1) -- stopping catch-up short (said once per height)
+  {
+    name: 'utxoHole',
+    re: /\[utxo_live\]\s*WARNING: hole\/short block at height (\d+) \(len=(-?\d+)\) -- stopping catch-up short/,
+    // The applier's own failure kind: it stops short, and `utxo-failing` says so for ten minutes.
+    apply: (m) => ({ kind: 'utxo_failure', state: 'stopped short at a hole or short block', height: +m[1], len: +m[2], severity: 'warn' }),
+  },
+  // [axt] h=966097: undo has 0 records but the block spends 6870 -- refusing to index a height with missing spends
+  {
+    name: 'axtUndoShort',
+    re: /\[axt\]\s*h=(\d+): undo has (\d+) records but the block spends (\d+) -- refusing to index/,
+    apply: (m) => ({ kind: 'index_refused', index: 'axt', height: +m[1], undoRecords: +m[2], spends: +m[3], severity: 'warn' }),
+  },
+  // [serve] 192.0.2.242: mempool request with bloom filters disabled -- disconnecting
+  {
+    name: 'serveBloomDisabled',
+    re: /\[serve\]\s*(\S+): mempool request with bloom filters disabled -- disconnecting$/,
+    apply(m) { const a = addrParts(m[1]); return { kind: 'peer_drop', addr: a.addr, host: a.host, by: 'us', reason: 'mempool request with bloom filters disabled' }; },
+  },
+  // [reorg] hash index rebuilt: 966500 heights
+  {
+    name: 'reorgHashIndex',
+    re: /\[reorg\]\s*hash index rebuilt: (\d+) heights$/,
+    apply: (m) => ({ kind: 'hash_index', heights: +m[1], added: null, through: null }),
+  },
+  // [cmpct] bmc.cmpctrecv=0 -- outbound legs request full blocks, not compact ones
+  {
+    name: 'cmpctRecvOff',
+    re: /\[cmpct\]\s*bmc\.cmpctrecv=(\d) -- outbound legs request full blocks, not compact ones$/,
+    apply: (m) => ({ kind: 'node_fact', subsystem: 'cmpct', facts: { receive: m[1] === '1' } }),
+  },
+  // [rpc] accept: out of file descriptors (Too many open files) -- backing off; the RPC listener is degraded
+  {
+    name: 'rpcAcceptFds',
+    re: /\[rpc\]\s*accept: out of file descriptors \(([^)]*)\) -- backing off; the RPC listener is degraded$/,
+    apply: (m) => ({ kind: 'rpc_degraded', why: m[1], severity: 'error' }),
   },
 ];
 

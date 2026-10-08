@@ -279,3 +279,29 @@ INFO node start (serve mode / download worker)\0
 2026-09-25 11:22:55.263 [dial-handoff] 178.142.90.51:8333: worker received fd 23 1011ms after the dial began pend=1138 first=g..{.>J3.| w eof=0 hup=0 err=0 so_error=0 tcp=ESTABLISHED
 2026-09-29 23:24:49.801 [rpc] exec lock: test hold (excl) held 701 ms (waited 0 ms); 1 waiting behind it
 2026-09-29 23:24:49.801 [rpc] exec lock: getblockhash (excl) waited 550 ms; the last exclusive holder was test hold (held 701 ms); 0 still waiting
+2026-10-01 09:05:47.759 [mux:5] no dial candidate is free (backoff / already held / anonymity net) -- the leg stays down
+2026-10-01 16:07:49.632 [mux:0] 52.52.8.0:8333: the pass failed (where=3 in 24.1s) while no leg received anything -- the host's network, not this peer: not a strike (1 of 3)
+2026-09-26 13:05:16.850 [dial] 180.129.37.31:8333: background dial gave up after 120s
+2026-09-30 14:57:44.546 [mempool] expired 2 tx older than 336h incl. descendants (60715 remain)
+2026-10-01 20:14:48.730 [mempool] pool lock: tx_accept_validate_p2p (pid 1791093) held 8675 ms (waited 0 ms); 2 waiting behind it
+2026-09-30 23:01:35.470 [mempool] pool lock: esplora POST /internal/mempool/txs -> getrawtransaction (pid 3519284) waited 1197 ms; the holder was tx_accept_validate_reason (pid 3526180, held 3 ms); 1 still waiting
+2026-10-07 18:42:54.981 [mempool] could not save mempool.dat
+2026-10-02 04:00:57.226 [dl] leaving initial block download (latching to false, as Core does)
+2026-10-01 16:07:54.701 [dl] tx announcements are taken again: the tip is within maxtipage (the flag had stood at 'in IBD' since boot or the last stale tip)
+2026-09-29 13:19:03.340 [dl] 207.49.105.40:8333 announced 974693 and the download found nothing above 969157: its announces are not believed for 6 h
+2026-09-30 00:16:54.155 [boot] script verification: 16 thread(s) including the caller (par=0; Core's cap is 15 workers + the caller)
+2026-10-07 18:51:36.519 [ready] all indexes at height 970378 (utxo, txindex, bfilter, coinstats history) -- 519.9s
+2026-09-30 00:16:56.858 [utxo_live] store shape: 7 run file(s), 15.6 GB (compaction threshold 12, run budget 46.3 GB) -- a lookup probes up to 7 runs
+2026-10-07 18:44:03.806 [utxo_live] flush: async (a forked writer per generation; the applier pays the copy) -- unretired WAL from byte 154334029
+2026-09-25 14:25:53.652 [utxo_live] WARNING: hole/short block at height 968556 (len=-1) -- stopping catch-up short (said once per height)
+2026-09-08 17:16:46.581 [axt] h=966097: undo has 0 records but the block spends 6870 -- refusing to index a height with missing spends
+2026-09-09 15:38:25.461 [serve] 192.0.2.242: mempool request with bloom filters disabled -- disconnecting
+2026-09-11 11:50:24.825 [reorg] hash index rebuilt: 966500 heights
+2026-09-09 18:40:05.354 [cmpct] bmc.cmpctrecv=0 -- outbound legs request full blocks, not compact ones
+2026-10-07 16:26:22.846 [rpc] accept: out of file descriptors (Too many open files) -- backing off; the RPC listener is degraded
+2026-09-25 14:26:31.746 [dl] heartbeat: tip=968555 stored=968556 peers=10/10 txouts=165255193 uptime=00:00:15:07
+2026-10-02 04:00:06.215 [dial] 84.227.44.179:8333: dialing as block-relay-only (1 of 2, 0 live)
+2026-10-06 00:36:24.307 [dlc] Core's shape: 1 of 97 live peer(s) download at once (cap 10, span 1), 16-block requests, window 1024 blocks above the connected tip, stall timeout 2 s, cursor help at 21 staged
+2026-10-01 18:55:23.650 [reorg] probe of 111.97.97.98:8333 rejected a candidate chain (no action taken); not probed again for 60 min
+2026-09-27 12:43:45.575 [reorg] probe of 198.154.93.110:8333 deferred: no leg has received anything for 20s -- the host's network, not a peer
+2026-09-11 11:50:24.882 [reorg] reconnecting height 966500 hash=0000000000000000..

@@ -1748,6 +1748,22 @@ Six rules later every current log reads 100.00% again: run 27 18,548 lines, run 
 production 9,746. The network being disabled and a repair that cannot start go to the feed; the rest
 is state.
 
+**Addendum, 2026-10-08.** bmc's own session reported "[mux] has lines no rule claims": the live log
+read at 60-78%. Re-measured over all 52 of the node's logs (the live one, `.1` and fifty rotated
+archives; 866,281 lines): 96.26% claimed, 32,369 lines in 26 shapes unread. 30,979 of them were one
+line, `[mux:N] no dial candidate is free (backoff / already held / anonymity net) -- the leg stays
+down`, written for each idle leg on each redial pass; in the live log alone it was 1,942 of 5,530
+lines (64.82% claimed). The other 25: four newer spellings of existing rules (the heartbeat's
+`stored=`, block-relay-only's `N live`, Core's shape's `N-block requests`, a probe's `not probed again
+for N min`), the mempool's own lock timed like the RPC execution lock (`pool lock: ... held` /
+`waited`), the pool's age expiry, and a tail of start-up, reorg and failure lines. Rules for all of
+them: the live log reads 100.00% (5,581 of 5,581), and the 52 logs 99.995% -- 41 lines in 21
+one-off shapes are left, every one written once (a reorg's steps, file migrations), each named by
+the census if it comes back. The dial line, a failed pass blamed on the host's network and a
+background dial that gave up are counted (`dialCounters`); expiry is a running total; the pool lock,
+a mempool.dat that could not be saved, leaving IBD, a distrusted announcer, an index refusing a
+height and the RPC listener out of descriptors go to the feed.
+
 ## 43. The pool, pushed: what a full read costs now, and what a change costs (2026-09-30)
 
 Why it was measured: the operator asked for the Block space board to follow the pool the way

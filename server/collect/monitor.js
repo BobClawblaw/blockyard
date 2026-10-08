@@ -2338,6 +2338,9 @@ export class NodeMonitor extends EventEmitter {
         return [];
       }
       case 'leg_no_helper':
+      case 'leg_no_candidate':
+      case 'pass_host_network':
+      case 'dial_gave_up':
       case 'leg_budget':
       case 'dial_unused':
       case 'dial_v2_fallback':
@@ -2503,7 +2506,23 @@ export class NodeMonitor extends EventEmitter {
       }
       case 'mempool_persist':
         ls.mempoolPersist = { at: ev.ts, state: ev.state, txs: ev.txs, refused: ev.refused ?? null, refusedBy: ev.refusedBy ?? null };
+        return ev.severity === 'warn' ? [ev] : [];
+      case 'mempool_expired': {
+        // The pool's age limit: a running total and the last, not the feed (2026-10-08).
+        const x = (ls.mempoolExpiry ??= { lines: 0, txs: 0 });
+        x.lines += 1; x.txs += ev.txs; x.last = { at: ev.ts, txs: ev.txs, olderThanHours: ev.olderThanHours, remain: ev.remain };
         return [];
+      }
+      case 'pool_lock_held':
+      case 'pool_lock_waited': {
+        // The mempool's own lock past the node's threshold (2026-10-08), the sibling of the
+        // RPC execution lock below: the last of each and a count, and the feed. No flag --
+        // these come in bursts of milliseconds-to-seconds, not the 90 s stalls that one names.
+        const pl = (ls.poolLock ??= { held: 0, waited: 0 });
+        if (ev.kind === 'pool_lock_held') { pl.held += 1; pl.lastHeld = { at: ev.ts, holder: ev.holder, heldMs: ev.heldMs, waiting: ev.waiting }; }
+        else { pl.waited += 1; pl.lastWaited = { at: ev.ts, waiter: ev.waiter, waitedMs: ev.waitedMs, holder: ev.holder, heldMs: ev.heldMs }; }
+        return [ev];
+      }
       case 'mempool_lock_recovered':
         if (now - ev.ts < 600_000) this.flagQuality('mempool-lock-recovered', 'a process died holding the mempool lock; the node recovered it and keeps running, but the pool may hold a partially-applied entry until the next reorg reconcile or a restart (the node\'s own words)', 'warn');
         return [ev];
@@ -3037,6 +3056,8 @@ export class NodeMonitor extends EventEmitter {
           txRejects: s.logState.txRejects ?? null,
           packages: s.logState.packages ?? null,
           mempoolPersist: s.logState.mempoolPersist ?? null,
+          mempoolExpiry: s.logState.mempoolExpiry ?? null,
+          poolLock: s.logState.poolLock ?? null,
           coinstats: s.logState.coinstats ?? null,
           legClosures: s.logState.legClosures ?? null,
           dialCounters: s.logState.dialCounters ?? null,

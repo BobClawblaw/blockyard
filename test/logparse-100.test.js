@@ -239,10 +239,14 @@ test('the monitor: state by default, the feed only for news', async () => {
     // bmc's execution lock held or waited for past its threshold (deploy-20260930a): the
     // line that names a 90 s stall's holder is the most important news the log carries
     'rpc_lock_held', 'rpc_lock_waited',
+    // the 2026-10-08 census: the mempool's own lock, a mempool.dat that could not be saved, the
+    // node leaving IBD, a peer whose tips are not believed, an index refusing a height, the
+    // RPC listener out of descriptors, and a peer we disconnected
+    'pool_lock_held', 'pool_lock_waited', 'mempool_persist', 'ibd_state', 'announce_distrusted', 'index_refused', 'rpc_degraded', 'peer_drop',
   ]);
   const kinds = new Set(fed.map((r) => r.kind));
   assert.deepEqual([...kinds].filter((k) => !NEWS.has(k)), [], 'these kinds reached the feed without being news');
-  for (const quiet of ['leg_closed', 'tip_on_connect', 'leg_sync', 'pool_tip_claim', 'zmq_overrun', 'tx_reject', 'node_fact', 'config_section', 'worker_step', 'utxo_sizing', 'noted', 'self_address', 'worker_drop']) {
+  for (const quiet of ['leg_no_candidate', 'pass_host_network', 'dial_gave_up', 'mempool_expired', 'leg_closed', 'tip_on_connect', 'leg_sync', 'pool_tip_claim', 'zmq_overrun', 'tx_reject', 'node_fact', 'config_section', 'worker_step', 'utxo_sizing', 'noted', 'self_address', 'worker_drop']) {
     assert.ok(evs.some((ev) => ev.kind === quiet), `the fixture exercises ${quiet}`);
     assert.ok(!kinds.has(quiet), `${quiet} is state, not feed`);
   }
@@ -265,4 +269,28 @@ test('the monitor: state by default, the feed only for news', async () => {
   assert.equal(snap.build.version, '0.0.1');
   assert.ok(!JSON.stringify(snap).includes('203.0.113.7'), 'the node\'s own public address is not sent to viewers');
   await m.stop();
+});
+
+test('the 2026-10-08 census: the lines the live log carried unread', () => {
+  // bmc's session: "[mux] has lines no rule claims" -- the live log parsed at 60-78%, almost
+  // all of the rest this one line, written for every leg on every redial pass.
+  const cand = parseLine(lineFor(/no dial candidate is free/));
+  assert.equal(cand.rule, 'legNoDialCandidate');
+  assert.equal(cand.kind, 'leg_no_candidate');
+  assert.equal(cand.leg, 5);
+  const held = parseLine(lineFor(/pool lock: \S+ \(pid \d+\) held/));
+  assert.deepEqual([held.kind, held.holder, held.heldMs, held.waiting], ['pool_lock_held', 'tx_accept_validate_p2p', 8675, 2]);
+  const waited = parseLine(lineFor(/pool lock: esplora/));
+  assert.equal(waited.kind, 'pool_lock_waited');
+  assert.equal(waited.waiter, 'esplora POST /internal/mempool/txs -> getrawtransaction', 'a label with spaces and an arrow is kept whole');
+  const exp = parseLine(lineFor(/expired \d+ tx older/));
+  assert.deepEqual([exp.txs, exp.olderThanHours, exp.remain], [2, 336, 60715]);
+  // Newer spellings of old rules, each raw until today.
+  const hb = parseLine(lineFor(/heartbeat: tip=\d+ stored=/));
+  assert.deepEqual([hb.kind, hb.tip, hb.stored, hb.peersInUse, hb.txouts], ['heartbeat', 968555, 968556, 10, 165255193]);
+  assert.equal(parseLine(lineFor(/block-relay-only \(1 of 2, 0 live\)/)).rule, 'dialBlockRelay');
+  const shape = parseLine(lineFor(/16-block requests/));
+  assert.deepEqual([shape.rule, shape.requestBlocks, shape.window, shape.stallTimeoutSec], ['dlcCoreShape', 16, 1024, 2]);
+  assert.equal(parseLine(lineFor(/not probed again for/)).quietMin, 60);
+  assert.equal(parseLine(lineFor(/probe of \S+ deferred/)).result, 'deferred');
 });
