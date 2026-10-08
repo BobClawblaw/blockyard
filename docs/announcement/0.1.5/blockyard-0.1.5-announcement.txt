@@ -5,7 +5,7 @@
 **Install:** `git clone https://github.com/BobClawblaw/blockyard.git` — npm is retired (see below)
 **Licence:** Apache-2.0
 
-![Overview in Simple mode](IMAGE-URL-FOR:overview.jpg)
+![Overview in Simple mode](https://talkimg.com/images/2026/10/08/Ul5QS9.jpg)
 
 BlockYard 0.1.5 is out, two weeks after 0.1.3 and carrying 0.1.4's security work with it. The headline is a change of default: **BlockYard now ships in Simple mode.** A fresh install draws its 3D boards with a new renderer that keeps the cubes, the camera and the hover, and drops everything that repaints on its own. A board at rest paints no frames at all, so a monitor left open all day on a laptop, a tablet on the wall or a thin client costs the graphics card nothing.
 
@@ -19,7 +19,7 @@ The skies and effects were built on a big desktop graphics card, and on a Mac la
 
 Simple fixes both. It draws the same cubes under the same oblique camera, flat: no sky animation, no effects, no shadows or finishes, and no flight between layouts. It paints when the data or the pointer changes and not otherwise, and the page's pulses hold still while it is chosen. Measured on the live monitor, composited frames in ten seconds: Overview went from 600 to 6. Behind the board is a still star field, drawn once.
 
-![Block space in Simple mode](IMAGE-URL-FOR:block-space-mode1.jpg)
+![Block space in Simple mode](https://talkimg.com/images/2026/10/08/Ul5G3N.jpg)
 
 Software and WebGL got lighter too, for anyone who switches. The page's pulses now *tick* (one attribute flipped every 1.3 seconds) instead of animating, which took Software from 1,206 composited frames in ten seconds to 426. WebGL draws at one pixel per CSS pixel by default, which cut the GPU process's busy time by a third on a high-density screen. There is also a frame-rate cap, 60 by default.
 
@@ -45,7 +45,7 @@ The boards keep their layout between updates, so an update is a handful of arriv
 
 The Detailed view used to show the mempool sorted by each transaction's own fee rate and cut at 1,000,000 vB. That put a child paying for its parent (CPFP) where its own rate said, and left the parent out: on Core's pool on 1 October, 316 of about 3,600 transactions on the board would not have been in Core's block, and 317 of Core's were missing. Now the board is the block the "being built" card shows: Core's chunk fee rates, each package kept whole, filled the way Core fills the end of a block. On the same pool it came within 5 transactions and 0.06% in fees of the node's own `getblocktemplate`. It is assembled in about 60 ms instead of 260–400, and its scale is fitted to within 0.2%.
 
-![The Detailed board](IMAGE-URL-FOR:block-space-mode2.jpg)
+![The Detailed board](https://talkimg.com/images/2026/10/08/Ul5npw.jpg)
 
 ## Security: a fifth AI audit (0.1.4)
 

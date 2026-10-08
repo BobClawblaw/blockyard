@@ -4,8 +4,8 @@ For the bitcointalk thread (https://bitcointalk.org/index.php?topic=5594141): th
 0.1.5 (2026-10-08). It covers 0.1.4 too, which never had a post of its own.
 
 `blockyard-0.1.5-announcement.txt` is the post in Markdown; `blockyard-0.1.5-announcement.bbcode` is
-the same post in BBCode for the forum, generated from it. Three pictures are marked
-`IMAGE-URL-FOR:<file>` until they are uploaded to talkimg.com: `overview.jpg` at the top,
+the same post in BBCode for the forum, generated from it. Three new pictures, uploaded to
+talkimg.com on 2026-10-08 and linked in both files (Ul5QS9, Ul5G3N, Ul5npw in that order): `overview.jpg` at the top,
 `block-space-mode1.jpg` in the Simple section, `block-space-mode2.jpg` (the Detailed board) beside
 the section on Core's block. Those three are copied into `talkimg/` to drag on in one go. The four
 pictures of the full renderers reuse 0.1.3's talkimg links (the Sun, the Formation, chrome, ball
