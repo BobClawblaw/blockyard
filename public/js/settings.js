@@ -351,6 +351,9 @@ export const DEFAULTS = Object.freeze({
     units: 'auto',        // 'auto' (Fahrenheit where the place's country uses it) | 'metric' | 'imperial'
     forecast: '7',        // 'current' (conditions and the next 24 hours) | '7' | '10' days
     hourly: true,         // the next 24 hours as a curve beside the conditions
+    // THE RIBBON'S HEIGHT (operator, 2026-10-13: "weather strip still needs to reduced in half yet again"): 'slim' is one
+    // line of conditions, a short curve and day tiles without their range bars, about 56 px; 'full' the 118 px first cut
+    ribbon: 'slim',
     tab: true,            // a Weather page in the nav while weather is on (operator: "an optional 'Weather' Tab if enabled")
     // THE REFRESH (operator: "update weather every 30 minutes for API quota stuff. Configurable starting at 10 minute
     // refreshes ... Default should be 10 minute refresh for 6 per hours max"): minutes between forecasts for a place.
@@ -945,6 +948,10 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({
         key: 'forecast', label: 'Forecast', kind: 'segment', hint: 'How far ahead the ribbon looks: the conditions now and the next 24 hours alone, or a row of days after them',
         options: Object.freeze([['current', 'Now'], ['7', '7 days'], ['10', '10 days']]),
+      }),
+      Object.freeze({
+        key: 'ribbon', label: 'Ribbon', kind: 'segment', hint: 'Slim is about half the height: the conditions on one line, a short curve, the days as small tiles. Full has the feels-like and high/low line, the place, the wider curve and each day\u2019s range bar',
+        options: Object.freeze([['slim', 'Slim'], ['full', 'Full']]),
       }),
       Object.freeze({ key: 'hourly', label: 'Next 24 hours', kind: 'toggle', hint: 'The temperature through the next day as a curve, over bars for the chance of rain, the night hours shaded' }),
       Object.freeze({

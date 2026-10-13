@@ -320,19 +320,25 @@ export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false 
   const stale = d.error ? ` <b class="wx-stale" title="${esc(d.error)}">last answer</b>` : '';
   // the next turn of the light: tonight's sunset by day; by night the next sunrise, today's if it is still to come
   const nextSun = c.day ? today.sunset : (c.time && today.sunrise && c.time < today.sunrise ? today.sunrise : d.days?.[1]?.sunrise);
+  const slimFacts = w?.ribbon === 'slim';
   const facts = [
     c.wind != null ? `<span>${windArrow(c.windDir)}<b>${Math.round(c.wind)}</b> ${wind} ${compass(c.windDir)}${c.gusts != null && c.gusts > c.wind * 1.25 ? `<i>gusts ${Math.round(c.gusts)}</i>` : ''}</span>` : '',
     c.humidity != null ? `<span><i>humidity</i><b>${Math.round(c.humidity)}%</b></span>` : '',
-    c.uv != null && c.day ? `<span><i>UV</i><b>${r1(c.uv)}</b></span>` : '',
-    c.pressure != null && !compact ? `<span><i>pressure</i><b>${units === 'imperial' ? (c.pressure * 0.02953).toFixed(2) : Math.round(c.pressure)}</b> ${units === 'imperial' ? 'inHg' : 'hPa'}</span>` : '',
-    nextSun ? `<span><i>${c.day ? 'sunset' : 'sunrise'}</i><b>${clock(nextSun)}</b></span>` : '',
+    c.uv != null && c.day && !slimFacts ? `<span><i>UV</i><b>${r1(c.uv)}</b></span>` : '',
+    c.pressure != null && !compact && !slimFacts ? `<span><i>pressure</i><b>${units === 'imperial' ? (c.pressure * 0.02953).toFixed(2) : Math.round(c.pressure)}</b> ${units === 'imperial' ? 'inHg' : 'hPa'}</span>` : '',
+    nextSun && !slimFacts ? `<span><i>${c.day ? 'sunset' : 'sunrise'}</i><b>${clock(nextSun)}</b></span>` : '',
   ].filter(Boolean).join('');
-  const now$ = `<div class="wx-now">${iconSvg(cw, compact ? 54 : 64)}
+  const slim = w?.ribbon === 'slim';
+  const now$ = slim
+    ? `<div class="wx-now">${iconSvg(cw, 40)}<div class="wx-temp"><b>${deg(c.temp)}</b><small>${units === 'imperial' ? 'F' : 'C'}</small></div>
+    <div class="wx-say"><b>${esc(cw.label)}</b><span><em class="wx-hi">${deg(today.hi)}</em> / <em class="wx-lo">${deg(today.lo)}</em> · feels ${deg(c.feels)}</span>
+      <span class="wx-where" title="${esc(`${d.place?.lat}, ${d.place?.lon} · ${d.timezone ?? ''} · Open-Meteo`)}">${esc(w?.place || `${d.place?.lat}, ${d.place?.lon}`)}${stale}</span></div></div>`
+    : `<div class="wx-now">${iconSvg(cw, compact ? 54 : 64)}
     <div class="wx-temp"><b>${deg(c.temp)}</b><small>${units === 'imperial' ? 'F' : 'C'}</small></div>
     <div class="wx-say"><b>${esc(cw.label)}</b><span>feels ${deg(c.feels)} · <em class="wx-hi">H ${deg(today.hi)}</em> <em class="wx-lo">L ${deg(today.lo)}</em></span>
       <span class="wx-where" title="${esc(`${d.place?.lat}, ${d.place?.lon} · ${d.timezone ?? ''} · Open-Meteo`)}">${esc(w?.place || `${d.place?.lat}, ${d.place?.lon}`)} · ${ageMin < 1 ? 'just now' : `${ageMin} min ago`}${stale}</span></div>
   </div>`;
-  const hoursHtml = w?.hourly !== false ? `<div class="wx-24">${hoursSvg(d.hours ?? [], units, { id: `${id}h`, w: compact ? 200 : 236 })}</div>` : '';
+  const hoursHtml = w?.hourly !== false ? `<div class="wx-24">${hoursSvg(d.hours ?? [], units, { id: `${id}h`, w: slim ? 190 : compact ? 200 : 236, h: slim ? 40 : 66 })}</div>` : '';
   let daysHtml = '';
   if (days.length) {
     const lo = Math.min(...days.map((x) => x.lo).filter((v) => v != null)), hi = Math.max(...days.map((x) => x.hi).filter((v) => v != null));
@@ -340,12 +346,15 @@ export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false 
     daysHtml = `${weekGradient(gid, lo, hi, units)}<div class="wx-days wx-n${days.length}">${days.map((x, i) => {
       const xw = wmo(x.code, true);
       const pop = x.pop != null && x.pop >= 10 ? `<span class="wx-pop${x.pop >= 60 ? ' wet' : ''}">${Math.round(x.pop)}%</span>` : '<span class="wx-pop"></span>';
-      return `<div class="wx-day${i === 0 ? ' today' : ''}" title="${esc(`${x.date}: ${xw.label}${x.precip ? `, ${x.precip} ${units === 'imperial' ? 'in' : 'mm'}` : ''}${x.wind != null ? `, wind to ${Math.round(x.wind)} ${wind}` : ''}`)}">`
+      const title = esc(`${x.date}: ${xw.label}${x.pop != null ? `, ${Math.round(x.pop)}% chance of rain` : ''}${x.precip ? `, ${x.precip} ${units === 'imperial' ? 'in' : 'mm'}` : ''}${x.wind != null ? `, wind to ${Math.round(x.wind)} ${wind}` : ''}`);
+      // slim: the name, the icon and the two figures in one tile, the chance of rain only when it is worth a number
+      if (slim) return `<div class="wx-day${i === 0 ? ' today' : ''}${x.pop >= 60 ? ' wet' : ''}" title="${title}"><span class="wx-dn">${dayName(x.date, i === 0 ? -1 : i)}</span>${iconSvg(xw, 24)}<span class="wx-hl"><b>${deg(x.hi)}</b><i>${deg(x.lo)}</i></span></div>`;
+      return `<div class="wx-day${i === 0 ? ' today' : ''}" title="${title}">`
         + `<span class="wx-dn">${dayName(x.date, i)}</span>${iconSvg(xw, compact ? 32 : 38)}${pop}`
         + `<span class="wx-hl"><b>${deg(x.hi)}</b><i>${deg(x.lo)}</i></span>${dayBar(x, lo, hi, units, gid, i === 0 ? c.temp : null)}</div>`;
     }).join('')}</div>`;
   }
-  return `<div class="wx wx-sky-${skyOf(cw)}${compact ? ' wx-compact' : ''}${n === 0 ? ' wx-nowonly' : ''}"><div class="wx-glow"></div>${now$}<div class="wx-facts">${facts}</div>${hoursHtml}${daysHtml}</div>`;
+  return `<div class="wx wx-sky-${skyOf(cw)}${compact ? ' wx-compact' : ''}${slim ? ' wx-slim' : ''}${n === 0 ? ' wx-nowonly' : ''}"><div class="wx-glow"></div>${now$}<div class="wx-facts">${facts}</div>${hoursHtml}${daysHtml}</div>`;
 }
 
 // ------------------------------------------------------------------ fetching (the one impure part)
@@ -465,6 +474,7 @@ export function pageHtml(d, w, { now = Date.now(), width = 1200 } = {}) {
   const ageMin = Math.max(0, Math.round((now - (d.at ?? now)) / 60_000));
   const nextSun = c.day ? today.sunset : (c.time && today.sunrise && c.time < today.sunrise ? today.sunrise : d.days?.[1]?.sunrise);
   const fact = (k, v, u = '') => (v == null || v === '' ? '' : `<div class="wxp-fact"><i>${k}</i><b>${v}</b>${u ? `<small>${u}</small>` : ''}</div>`);
+  const slimFacts = w?.ribbon === 'slim';
   const facts = [
     c.wind != null ? `<div class="wxp-fact"><i>wind</i><b>${windArrow(c.windDir)} ${Math.round(c.wind)}</b><small>${wind} ${compass(c.windDir)}</small></div>` : '',
     fact('gusts', c.gusts != null ? Math.round(c.gusts) : null, wind),

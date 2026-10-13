@@ -162,7 +162,10 @@ test('the ribbon: now alone, seven days or ten; no style attributes (the CSP ref
   assert.ok(html.includes('Berlin &lt;b&gt;') && !html.includes('Berlin <b>'), 'the place name is escaped');
   assert.ok(!/NaN|undefined/.test(html), 'no holes');
   assert.match(html, /wx-sky-overcastnight/, 'the sky is the weather now');
-  assert.match(html, />Today</);
+  assert.match(html, /class="wx-day today/, 'the first tile is marked as today');
+  assert.match(ribbonHtml(d, { ...w('10'), ribbon: 'full' }), />Today</, 'the full ribbon names it');
+  assert.ok(!/>Today</.test(html) && /wx-slim/.test(html), 'the slim ribbon (the default) shows the weekday instead: the highlight says which is today');
+  assert.ok(DEFAULTS.weather.ribbon === 'slim', 'slim ships (2026-10-13: "reduced in half yet again")');
   assert.match(ribbonHtml(null, w('7')), /asking for the weather/);
   assert.match(ribbonHtml({ ok: true, enabled: false, note: 'the switch is off' }, w('7')), /the switch is off/);
   assert.match(ribbonHtml({ ok: false, error: 'HTTP 502' }, w('7')), /HTTP 502/, 'a failure says so, never a blank strip');
