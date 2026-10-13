@@ -2311,3 +2311,16 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wxp-more i { font-style: normal; }
 .wxp-foot { margin: 0 4px; }
 @media (max-width: 1100px) { .wxp-day { grid-template-columns: 70px 40px 40px 40px minmax(100px, 1fr) 40px; } .wxp-cond, .wxp-more { display: none; } }
+/* ---- the weather globe (weatherglobe.js) ---- */
+.wxg { display: flex; flex-direction: column; gap: 8px; }
+.wxg-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wxg-ctl { display: flex; align-items: center; gap: 6px; }
+.wxg-range { width: 220px; }
+.wxg-time { font-family: var(--mono); font-size: 12.5px; min-width: 9ch; }
+.wxg-bar .btn.on { color: var(--accent); border-color: var(--accent); }
+.wxg-box { position: relative; height: min(62vh, 760px); min-height: 320px; border-radius: 12px; overflow: hidden; background: radial-gradient(120% 100% at 50% 110%, #0d1b3a, #04070f 70%); touch-action: none; }
+.wxg-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.wxg-box canvas.wxg-ui { cursor: grab; }
+.wxg-box canvas.wxg-ui:active { cursor: grabbing; }
+.wxg-box canvas[hidden] { display: none; }
+.wxg-note { margin: 0; }

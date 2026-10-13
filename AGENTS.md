@@ -312,6 +312,33 @@ and `kWxTop/Above/Below/Bottom` (inside `#kiosk`, so full screen keeps them). Wh
 - Bars in a stretched SVG (`preserveAspectRatio="none"`) are LINES with `vector-effect: non-scaling-stroke`; rounded
   rects and circles there came out as long points and ovals.
 
+**THE WEATHER GLOBE (the same day; operator: "a zoomable view of the area centered around the users location ...
+weather radar animations ... rotating to see global weather" -- "see if we can do it for simple mode too" -- "yes to all
+three, build it ... Default should be 10 minute refresh for 6 per hours max").** `docs/PLAN-WEATHER-GLOBE.md`.
+`public/js/weathermap.js` (pure: tile maths, the land rasteriser, mercator->equirect, the orthographic inverse, the flat
+mercator view, grid sampling) and `public/js/weatherglobe.js` (canvases, pointer, tiles, the loop). The skin is ONE
+1536x768 equirect RGBA buffer; the globe is its orthographic inverse per pixel (Software/Simple, ~11 ms at 600 px,
+bilinear) or a fragment shader on an own GL canvas under the 2D one (WebGL). Past `FLAT_FROM` the view is flat mercator
+on the 2D canvas whatever the renderer: land as vector paths, tiles as they are (zoom <= 7). Radar is RainViewer
+(`/api/weather/radar` lists frames; `/weather/tile/<frame>/<z>/<x>/<y>.png` is a RAW route in server.js, shaped like
+the game files: session when accounts are on, `app.weatherLimiter`, only frames the list named, zoom <= 7, a 48 MB
+byte-capped cache). The forecast grid is `/api/weather/grid`: Open-Meteo's multi-point request, 11x11 points, 48 hours,
+hour-major arrays, NOT gzipped (the two mempool routes stay the only ones that are), a 2 MB body cap and 25 s timeout (121 points took 0.6 s one minute and >8 s the
+next). What will bite:
+- **Simple plays the loop only while the play button is HELD** (pointerdown/up); Software and WebGL toggle. A looping
+  animation is the repaint Simple exists to avoid.
+- **The refresh floor and cap live in the feed** (`REFRESH_FLOOR_MS` 10 min, `REFRESH_PER_HOUR_MAX` 6, per place,
+  counting failures; `GRID_MIN_MS` 30 min) and a copy is dated from when it was ASKED FOR (`sent`), not when the
+  callback ran -- a background refresh behind a served copy landed late and stretched every interval.
+- **The globe element is moved, not rebuilt**: weather.js keeps `globeEl` and `replaceWith`s it into a slot after each
+  innerHTML of the page; canvases and the GL context survive a DOM move.
+- **The WebGL canvas is premultiplied**: a fragment's colour must be multiplied by its alpha, or a faint halo draws as
+  a solid band (the first atmosphere).
+- The coastline file is 1:110m: fine on the globe and at flat zoom 3-5, coarse at 6-7 and the caption says so.
+  `scripts/coastline-build.mjs` rebuilds `public/geo/land-110m.json` from Natural Earth's GeoJSON.
+- A screenshot harness for this: write `renderer` and `weather.mapLayer` into the instance's SHARED settings file, not
+  localStorage -- the 15 s settings poll pulls the shared store over a local edit.
+
 ## Current state (2026-09-23): the bake -- one bmc, one Core, nothing else
 
 **Operator, 2026-09-23: "I only want one current bmc production server running, and one core
@@ -1200,7 +1227,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1564 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1575 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1530,7 +1557,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1564 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1575 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

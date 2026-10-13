@@ -143,6 +143,8 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
   // while still bounding repeated/automated requests for the same large file the way every other
   // size-heavy route here already is (SSE's per-key stream cap, the login throttle).
   app.gamesLimiter = new RateLimiter({ capacity: 40, perSec: 1 });
+  // the weather globe's radar tiles: a pan or a zoom asks for a burst of up to ~60, and a frame loop plays from the browser's own copies
+  app.weatherLimiter = new RateLimiter({ capacity: 240, perSec: 20 });
   app.hub = new StreamHub({ log: app.log });
 
   // First run has to produce a credential somehow. Env-provided wins; otherwise

@@ -352,6 +352,13 @@ export const DEFAULTS = Object.freeze({
     forecast: '7',        // 'current' (conditions and the next 24 hours) | '7' | '10' days
     hourly: true,         // the next 24 hours as a curve beside the conditions
     tab: true,            // a Weather page in the nav while weather is on (operator: "an optional 'Weather' Tab if enabled")
+    // THE REFRESH (operator: "update weather every 30 minutes for API quota stuff. Configurable starting at 10 minute
+    // refreshes ... Default should be 10 minute refresh for 6 per hours max"): minutes between forecasts for a place.
+    // The server floors it at ten and allows six an hour per place whatever a browser asks (collect/weather.js).
+    refresh: '10',
+    // THE GLOBE (docs/PLAN-WEATHER-GLOBE.md): on the Weather tab, with the observed radar or the forecast grid over it
+    map: true,
+    mapLayer: 'radar',    // 'radar' (RainViewer, the last two hours) | 'forecast' (Open-Meteo's grid, the next 48 h)
     overview: true,       // the ribbon on Overview ...
     overviewAt: 'above',  // ... above or below the price line
     kiosk: true,          // the ribbon on the Kiosk ...
@@ -934,7 +941,18 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['current', 'Now'], ['7', '7 days'], ['10', '10 days']]),
       }),
       Object.freeze({ key: 'hourly', label: 'Next 24 hours', kind: 'toggle', hint: 'The temperature through the next day as a curve, over bars for the chance of rain, the night hours shaded' }),
+      Object.freeze({
+        key: 'refresh', label: 'Refresh every', kind: 'choice',
+        hint: 'How often a forecast on screen is asked for again. Ten minutes is the least, and six an hour the most for one place, whatever this says -- the server holds both. The globe\u2019s forecast grid is 121 points a request, so it waits at least thirty minutes regardless',
+        options: Object.freeze([['10', '10 minutes'], ['15', '15 minutes'], ['20', '20 minutes'], ['30', '30 minutes'], ['60', 'an hour']]),
+      }),
       Object.freeze({ key: 'tab', label: 'Weather tab', kind: 'toggle', hint: 'A Weather page in the bar of tabs, after Markets, while weather is on: the conditions at full size, the next 24 hours hour by hour, and ten days ahead' }),
+      Object.freeze({ key: 'map', label: 'Globe', kind: 'toggle', dimWhen: (s) => !s.weather.tab, hint: 'A globe on the Weather tab, centred on the place: drag to turn it, scroll to zoom, and past a point it flattens into a map. The radar layer asks RainViewer (api.rainviewer.com, tilecache.rainviewer.com) for its frames through this server; the forecast layer asks Open-Meteo for a grid of 121 points round the place' }),
+      Object.freeze({
+        key: 'mapLayer', label: 'Globe layer', kind: 'segment', dimWhen: (s) => !s.weather.tab || !s.weather.map,
+        hint: 'Radar is the last two hours of observed rain and snow, where radar stations exist (oceans and much of the world have none, and the map says so). Forecast is the next 48 hours, about five degrees round the place',
+        options: Object.freeze([['radar', 'Radar (past 2 h)'], ['forecast', 'Forecast (next 48 h)']]),
+      }),
       Object.freeze({ key: 'overview', label: 'On Overview', kind: 'toggle', hint: 'The ribbon at the top of Overview' }),
       Object.freeze({
         key: 'overviewAt', label: 'Overview: where', kind: 'segment', dimWhen: (s) => !s.weather.overview,

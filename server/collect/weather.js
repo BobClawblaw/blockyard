@@ -26,8 +26,31 @@
 import { readJsonCapped } from './markets.js';
 
 export const WEATHER_HOSTS = Object.freeze(['api.open-meteo.com', 'geocoding-api.open-meteo.com']);
+// THE GLOBE'S RADAR (docs/PLAN-WEATHER-GLOBE.md; operator: "yes to all three, build it"): RainViewer's public
+// composite -- the frame list from api.rainviewer.com, 256-px PNG tiles from tilecache.rainviewer.com. Free, keyless;
+// the tiles are cached here so a pan of the map never fans out into a burst of requests to them.
+export const RADAR_HOSTS = Object.freeze(['api.rainviewer.com', 'tilecache.rainviewer.com']);
+const RADAR_LIST_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+const RADAR_LIST_MS = 5 * 60_000;         // RainViewer publishes a frame every 10 minutes
+export const TILE_ZOOM_MAX = 7;           // 128 x 128 tiles across the world at most; the flat map stops zooming here
+const TILE_BYTES_MAX = 256 * 1024;        // a 256-px radar tile is 1-30 KB
+const TILE_CACHE_BYTES = 48 * 1024 * 1024;
+const TILE_FRESH_MS = 60 * 60_000;        // a frame's tile never changes; an hour is just housekeeping
+const FRAME_PATH = /^\/v2\/(radar|satellite)\/[a-z0-9]{6,32}$/;
+// THE REFRESH (operator: "Configurable starting at 10 minute refreshes ... Default should be 10 minute refresh for
+// 6 per hours max"): a forecast is re-asked no more often than this, whatever a browser asks for, and no more than
+// six times in any hour for one place. The grid is 121 points a request against a 10,000-a-day quota, so it keeps a
+// floor of its own.
+export const REFRESH_FLOOR_MS = 10 * 60_000;
+export const REFRESH_PER_HOUR_MAX = 6;
+export const GRID_MIN_MS = 30 * 60_000;
+export const GRID_N = 11;                 // 11 x 11 points, half a degree apart: about 5 degrees round the place
+const GRID_STEP = 0.5;
+const GRID_HOURS = 48;
 const UA = 'BlockYard (self-hosted Bitcoin node monitor)';
 const MAX_BODY = 256 * 1024;          // the 10-day reply is ~5 KB; a geocoding page ~3 KB
+const GRID_BODY = 2 * 1024 * 1024;    // 121 points' replies, each with its own units block: ~330 KB measured 2026-10-13
+const GRID_TIMEOUT_MS = 25_000;       // 121 points took 0.6 s one minute and over 8 s the next (2026-10-13); the page waits
 const DAYS = 10;                      // the most the ribbon draws; 7 is a slice of it
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -105,6 +128,62 @@ export function parseForecast(j, units) {
   };
 }
 
+/** The forecast grid's points, row by row (south to north, west to east), and the URL that asks for all of them at once. */
+export function gridPoints({ lat, lon }, n = GRID_N, step = GRID_STEP) {
+  const half = (n - 1) / 2;
+  // the same distance east-west as north-south, so the grid is square on the ground, not squeezed near the poles
+  const dLon = Math.round((step / Math.max(0.2, Math.cos((lat * Math.PI) / 180))) * 1000) / 1000;
+  const lat0 = Math.round((lat - half * step) * 1000) / 1000, lon0 = Math.round((lon - half * dLon) * 1000) / 1000;
+  const lats = [], lons = [];
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    lats.push(Math.round((lat0 + r * step) * 1000) / 1000);
+    let x = lon0 + c * dLon;
+    if (x > 180) x -= 360; else if (x < -180) x += 360;
+    lons.push(Math.round(x * 1000) / 1000);
+  }
+  return { n, lat0, lon0, dLat: step, dLon, lats, lons };
+}
+export function gridUrl(g, units) {
+  const q = new URLSearchParams({
+    latitude: g.lats.join(','), longitude: g.lons.join(','), timezone: 'UTC', forecast_hours: String(GRID_HOURS),
+    hourly: 'precipitation,temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,weather_code',
+  });
+  if (units === 'imperial') { q.set('temperature_unit', 'fahrenheit'); q.set('wind_speed_unit', 'mph'); q.set('precipitation_unit', 'inch'); }
+  return `https://api.open-meteo.com/v1/forecast?${q}`;
+}
+const GRID_VARS = Object.freeze({ precip: 'precipitation', temp: 'temperature_2m', wind: 'wind_speed_10m', windDir: 'wind_direction_10m', cloud: 'cloud_cover', code: 'weather_code' });
+/** Open-Meteo's multi-point reply as flat per-variable arrays, hour-major (index = hour * n*n + point). */
+export function parseGrid(j, g, units) {
+  if (j?.error) throw new Error(String(j.reason ?? 'the forecast service refused the request'));
+  const list = Array.isArray(j) ? j : j && typeof j === 'object' && j.hourly ? [j] : null;
+  const np = g.n * g.n;
+  if (!list || list.length !== np) throw new Error(`expected ${np} points in the reply, got ${list?.length ?? 'none'}`);
+  const times = col(list[0].hourly, 'time').slice(0, GRID_HOURS).map((t) => str(t, 16));
+  const nh = times.length;
+  if (!nh) throw new Error('no hours in the reply');
+  const out = { units, n: g.n, lat0: g.lat0, lon0: g.lon0, dLat: g.dLat, dLon: g.dLon, times, fields: {} };
+  for (const [k, name] of Object.entries(GRID_VARS)) {
+    const a = new Array(nh * np).fill(null);
+    for (let p = 0; p < np; p++) {
+      const v = col(list[p].hourly, name);
+      for (let h = 0; h < nh; h++) { const x = num(v[h]); a[h * np + p] = x == null ? null : Math.round(x * 10) / 10; }
+    }
+    out.fields[k] = a;
+  }
+  return out;
+}
+
+/** RainViewer's frame list, reduced: the tile host and the frames, oldest first, nowcast marked. */
+export function parseRadarList(j) {
+  const host = typeof j?.host === 'string' && /^https:\/\/tilecache\.rainviewer\.com$/.test(j.host) ? j.host : 'https://tilecache.rainviewer.com';
+  const frames = [];
+  const take = (list, nowcast) => { for (const f of Array.isArray(list) ? list : []) if (num(f?.time) != null && typeof f?.path === 'string' && FRAME_PATH.test(f.path)) frames.push({ time: f.time, id: f.path.split('/').pop(), kind: f.path.split('/')[2], nowcast }); };
+  take(j?.radar?.past, false);
+  take(j?.radar?.nowcast, true);
+  if (!frames.length) throw new Error('no radar frames in the reply');
+  return { host, frames };
+}
+
 export function parseGeocode(j) {
   if (j?.error) throw new Error(String(j.reason ?? 'the place search refused the request'));
   return (Array.isArray(j?.results) ? j.results : []).map((r) => {
@@ -120,47 +199,133 @@ export class WeatherFeed {
     this.log = log;
     this.fetch = fetchImpl;
     this.now = now;
-    this.places = new Map();     // "lat,lon,units" -> { data, at, error, errorAt, pending }
+    this.places = new Map();     // "lat,lon,units" -> { data, at, error, errorAt, pending, asked: [when each request went out] }
     this.searches = new Map();   // lower-cased query -> { results, at }
+    this.grids = new Map();      // the same, for the globe's forecast grid
+    this.radar = { list: null, at: 0, error: null, errorAt: 0, pending: null, known: new Map() };   // known: frame id -> the frame, for the tile proxy
+    this.tiles = new Map();      // "id/z/x/y" -> { buf, at }, a byte-capped LRU
+    this.tileBytes = 0;
+    this.tilePending = new Map();
   }
 
-  async get(url) {
-    // redirect 'error': both URLs are Open-Meteo's own hosts; a 3xx pointing anywhere else is not followed
-    const r = await this.fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(this.cfg.timeoutMs) });
+  /** The refresh a browser asked for, floored (REFRESH_FLOOR_MS) and defaulted to the feed's own. */
+  refreshOf(ms) { const n = Number(ms); return Math.max(REFRESH_FLOOR_MS, Number.isFinite(n) && n > 0 ? n : this.cfg.freshMs); }
+
+  // A row is due when its copy is older than the refresh, its last failure a minute old, and fewer than
+  // REFRESH_PER_HOUR_MAX requests went out for it in the last hour.
+  due(row, freshMs) {
+    const t = this.now();
+    row.asked = (row.asked ?? []).filter((w) => t - w < 3600_000);
+    return t - row.at >= freshMs && t - row.errorAt >= 60_000 && row.asked.length < REFRESH_PER_HOUR_MAX;
+  }
+  rowOf(map, key, max) {
+    let row = map.get(key);
+    if (!row) {
+      row = { data: null, at: 0, error: null, errorAt: 0, pending: null, asked: [] };
+      map.set(key, row);
+      while (map.size > max) map.delete(map.keys().next().value);
+    }
+    return row;
+  }
+  // one request in flight per row; the first answer waits for it, a later one is served from the copy while it refreshes
+  async refill(row, freshMs, url, parse, what, limit = MAX_BODY, timeoutMs = this.cfg.timeoutMs) {
+    if (this.due(row, freshMs) && !row.pending) {
+      // the copy is dated from when it was ASKED FOR, not when the reply's callback ran: a refresh behind a served
+      // copy lands later, and dating it then would stretch every interval past the setting
+      const sent = this.now();
+      row.asked.push(sent);
+      row.pending = this.get(url, limit, timeoutMs)
+        .then((j) => { row.data = parse(j); row.at = sent; row.error = null; })
+        .catch((e) => { row.error = String(e?.message ?? e); row.errorAt = this.now(); this.log({ level: 'warn', msg: `weather: ${what} failed: ${row.error}` }); })
+        .finally(() => { row.pending = null; });
+    }
+    if (row.pending && !row.data) await row.pending;
+    return row.data && this.now() - row.at <= this.cfg.keepMs;
+  }
+
+  async get(url, limit = MAX_BODY, timeoutMs = this.cfg.timeoutMs) {
+    // redirect 'error': every URL is Open-Meteo's or RainViewer's own host; a 3xx pointing anywhere else is not followed
+    const r = await this.fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
     if (!r.ok) {
       let reason = '';
       try { reason = (await readJsonCapped(r, 16_384))?.reason ?? ''; } catch { /* the status says enough */ }
       throw new Error(`HTTP ${r.status}${reason ? `: ${String(reason).slice(0, 160)}` : ''}`);
     }
-    return readJsonCapped(r, MAX_BODY);
+    return readJsonCapped(r, limit);
   }
 
   /** The forecast for a place: the copy here while it is fresh, else a new one -- one request in flight per place. */
-  async forecast(lat, lon, units) {
+  async forecast(lat, lon, units, { refreshMs = null } = {}) {
     const p = placeOf(lat, lon);
     if (!p) return { ok: false, error: 'no place chosen, or not a place on Earth' };
     const u = unitsOf(units);
     const key = `${p.lat},${p.lon},${u}`;
-    let row = this.places.get(key);
-    if (!row) {
-      row = { data: null, at: 0, error: null, errorAt: 0, pending: null };
-      this.places.set(key, row);
-      while (this.places.size > this.cfg.maxPlaces) this.places.delete(this.places.keys().next().value);
+    const row = this.rowOf(this.places, key, this.cfg.maxPlaces);
+    const fresh = this.refreshOf(refreshMs);
+    if (!(await this.refill(row, fresh, forecastUrl(p, u), (j) => parseForecast(j, u), `forecast for ${key}`))) {
+      return { ok: false, error: row.error ?? 'the forecast has not arrived yet', place: p };
     }
-    const t = this.now();
-    // a failure is not retried for a minute: the page asks every few minutes per screen, and a down service must
-    // not be asked once per screen per ask
-    const due = t - row.at > this.cfg.freshMs && t - row.errorAt > 60_000;
-    if (due && !row.pending) {
-      row.pending = this.get(forecastUrl(p, u))
-        .then((j) => { row.data = parseForecast(j, u); row.at = this.now(); row.error = null; })
-        .catch((e) => { row.error = String(e?.message ?? e); row.errorAt = this.now(); this.log({ level: 'warn', msg: `weather: forecast for ${key} failed: ${row.error}` }); })
-        .finally(() => { row.pending = null; });
+    return { ok: true, place: p, at: row.at, age: Math.max(0, Math.round((this.now() - row.at) / 1000)), refreshMs: fresh, source: 'open-meteo.com', error: row.error, ...row.data };
+  }
+
+  /** The 11 x 11 forecast grid round a place: 121 points, 48 hours, re-asked no more than every GRID_MIN_MS. */
+  async grid(lat, lon, units, { refreshMs = null } = {}) {
+    const p = placeOf(lat, lon);
+    if (!p) return { ok: false, error: 'no place chosen, or not a place on Earth' };
+    const u = unitsOf(units);
+    const key = `${p.lat},${p.lon},${u}`;
+    const row = this.rowOf(this.grids, key, 4);
+    const g = gridPoints(p);
+    const fresh = Math.max(GRID_MIN_MS, this.refreshOf(refreshMs));
+    if (!(await this.refill(row, fresh, gridUrl(g, u), (j) => parseGrid(j, g, u), `grid for ${key}`, GRID_BODY, GRID_TIMEOUT_MS))) {
+      return { ok: false, error: row.error ?? 'the forecast grid has not arrived yet', place: p };
     }
-    // the first answer for a place waits for the request; a later one is served from here while it refreshes
-    if (row.pending && !row.data) await row.pending;
-    if (!row.data || t - row.at > this.cfg.keepMs) return { ok: false, error: row.error ?? 'the forecast has not arrived yet', place: p };
-    return { ok: true, place: p, at: row.at, age: Math.max(0, Math.round((this.now() - row.at) / 1000)), source: 'open-meteo.com', error: row.error, ...row.data };
+    return { ok: true, place: p, at: row.at, refreshMs: fresh, source: 'open-meteo.com', error: row.error, ...row.data };
+  }
+
+  /** RainViewer's frame list, five minutes fresh; the frames it names are the only ones the tile proxy serves. */
+  async radarFrames() {
+    const row = this.radar;
+    const ok = await this.refill(row, RADAR_LIST_MS, RADAR_LIST_URL, (j) => {
+      const r = parseRadarList(j);
+      for (const f of r.frames) row.known.set(f.id, f);
+      while (row.known.size > 64) row.known.delete(row.known.keys().next().value);
+      return r;
+    }, 'radar frame list');
+    if (!ok) return { ok: false, error: row.error ?? 'the radar frame list has not arrived yet' };
+    return { ok: true, at: row.at, source: 'rainviewer.com', error: row.error, frames: row.data.frames, zoomMax: TILE_ZOOM_MAX };
+  }
+
+  /** One radar tile (PNG bytes) of a listed frame, from the cache or from RainViewer. Null for a tile this proxy will not ask for. */
+  async radarTile(id, z, x, y) {
+    const f = this.radar.known.get(String(id));
+    const zi = Number(z), xi = Number(x), yi = Number(y);
+    if (!f || !Number.isInteger(zi) || zi < 0 || zi > TILE_ZOOM_MAX || !Number.isInteger(xi) || !Number.isInteger(yi) || xi < 0 || yi < 0 || xi >= 2 ** zi || yi >= 2 ** zi) return null;
+    const key = `${f.id}/${zi}/${xi}/${yi}`;
+    const hit = this.tiles.get(key);
+    if (hit && this.now() - hit.at < TILE_FRESH_MS) { this.tiles.delete(key); this.tiles.set(key, hit); return hit.buf; }
+    if (!this.tilePending.has(key)) {
+      // colour scheme 2 (the universal blue), smoothed, snow marked: RainViewer's documented tile path
+      const url = `${this.radar.data?.host ?? 'https://tilecache.rainviewer.com'}/v2/${f.kind}/${f.id}/256/${zi}/${xi}/${yi}/2/1_1.png`;
+      this.tilePending.set(key, this.getBytes(url, TILE_BYTES_MAX).then((buf) => {
+        if (hit) this.tileBytes -= hit.buf.length;
+        this.tiles.set(key, { buf, at: this.now() });
+        this.tileBytes += buf.length;
+        while (this.tileBytes > TILE_CACHE_BYTES && this.tiles.size) { const [k, v] = this.tiles.entries().next().value; this.tiles.delete(k); this.tileBytes -= v.buf.length; }
+        return buf;
+      }).finally(() => this.tilePending.delete(key)));
+    }
+    return this.tilePending.get(key);
+  }
+
+  async getBytes(url, limit) {
+    const r = await this.fetch(url, { headers: { 'user-agent': UA, accept: 'image/png' }, redirect: 'error', signal: AbortSignal.timeout(this.cfg.timeoutMs) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const declared = Number(r.headers?.get?.('content-length'));
+    if (Number.isFinite(declared) && declared > limit) throw new Error(`tile of ${declared} bytes is over the ${limit}-byte limit`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > limit) throw new Error(`tile over the ${limit}-byte limit`);
+    return buf;
   }
 
   async search(q) {

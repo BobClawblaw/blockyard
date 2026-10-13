@@ -21,6 +21,7 @@
 
 import { esc } from './fmt.js';
 import { loadSettings } from './settings.js';
+import { globeHtml, renderGlobe } from './weatherglobe.js';
 
 // ------------------------------------------------------------------ what the codes mean
 
@@ -483,7 +484,10 @@ export function pageHtml(d, w, { now = Date.now(), width = 1200 } = {}) {
   }
   const daysCard = `<div class="card wxp-card"><h3>${days.length}-day forecast <span class="sp"></span><span class="src">each day's low to high, on one scale for the whole span</span></h3>${list}</div>`;
   const foot = `<p class="wxp-foot tiny faint">Forecast by <b>Open-Meteo</b> (open-meteo.com), asked for by this monitor's server · ${esc(d.timezone ?? '')} ${esc(d.tzAbbr ?? '')} · ${d.place?.lat}, ${d.place?.lon} · ${ageMin < 1 ? 'updated just now' : `updated ${ageMin} min ago`}${d.error ? ` · the last refresh failed: ${esc(d.error)}` : ''}</p>`;
-  return `<div class="wxp">${hero}${day24}${daysCard}${foot}</div>`;
+  // the globe's place in the page: weatherglobe.js owns the element, which renderWeatherPage moves into this slot
+  // after every redraw (its canvases and their contexts survive a DOM move; an innerHTML would destroy them)
+  const globe = w?.map && w?.tab ? '<div class="card wxp-card wxp-globecard"><h3>The globe <span class="sp"></span><span class="src">drag to turn, scroll to zoom; past a point it flattens into a map</span></h3><div data-wx-globe-slot></div></div>' : '';
+  return `<div class="wxp">${hero}${globe}${day24}${daysCard}${foot}</div>`;
 }
 
 /** The Weather page: drawn when its reply or its size changes. */
@@ -500,4 +504,11 @@ export function renderWeatherPage(h) {
   if (el.__wxSig === sig) return;
   el.__wxSig = sig;
   el.innerHTML = pageHtml(d, w, { width });
+  const slot = el.querySelector('[data-wx-globe-slot]');
+  if (slot) {
+    if (!globeEl) { globeEl = document.createElement('div'); globeEl.className = 'wxg'; globeEl.innerHTML = globeHtml(); }
+    slot.replaceWith(globeEl);
+  }
+  if (globeEl?.isConnected && d?.ok) renderGlobe(globeEl.querySelector('.wxg-box'), w, h);
 }
+let globeEl = null;

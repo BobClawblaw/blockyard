@@ -53,6 +53,11 @@ const WEATHER_UNTICKED = 'the weather ribbon is off for this monitor -- the defa
 export async function weatherOn(app) {
   return (await sharedSettings(app))?.weather?.enabled === true;
 }
+/** The shared file's weather.refresh, in ms (minutes in the setting); the feed floors it at ten minutes. */
+export async function weatherRefreshMs(app) {
+  const m = Number((await sharedSettings(app))?.weather?.refresh);
+  return Number.isFinite(m) && m > 0 ? m * 60_000 : null;
+}
 const pollingOff = (app) => { app.markets?.stop?.(); return { ok: true, enabled: false, polling: false, note: POLLING_OFF }; };
 
 async function withUsd(app, r) {
@@ -559,7 +564,26 @@ export const routes = [
     handler: async (ctx, app) => {
       if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
       if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
-      return { enabled: true, ...(await app.weather.forecast(ctx.query.lat, ctx.query.lon, ctx.query.units)) };
+      return { enabled: true, ...(await app.weather.forecast(ctx.query.lat, ctx.query.lon, ctx.query.units, { refreshMs: await weatherRefreshMs(app) })) };
+    },
+  },
+  // THE GLOBE (docs/PLAN-WEATHER-GLOBE.md): RainViewer's frame list (the tiles themselves come raw from
+  // /weather/tile/..., http/weathertiles.js), and the 48-hour forecast grid round a place. The grid is ~120 KB of
+  // numbers at most every thirty minutes: not compressed, so the two mempool routes stay the only ones that gzip.
+  {
+    method: 'GET', path: '/api/weather/radar', auth: 'any',
+    handler: async (ctx, app) => {
+      if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
+      if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
+      return { enabled: true, ...(await app.weather.radarFrames()) };
+    },
+  },
+  {
+    method: 'GET', path: '/api/weather/grid', auth: 'any',
+    handler: async (ctx, app) => {
+      if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
+      if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
+      return { enabled: true, ...(await app.weather.grid(ctx.query.lat, ctx.query.lon, ctx.query.units, { refreshMs: await weatherRefreshMs(app) })) };
     },
   },
   {

@@ -196,6 +196,8 @@ Everything in the monitor talks only to your node, **except**:
 | with polling on, when someone opens an **explorer** page or the **Mining** tab and no fresh market price is at hand | two of the exchanges above, at most once a minute | a public ticker request |
 | only with **Enable weather** ticked in Display settings (**off by default**, the Shared settings), while the weather ribbon is on screen on **Overview** or **Kiosk**, at most once every ten minutes for a place | `api.open-meteo.com` (HTTPS) | the chosen place's latitude and longitude, rounded to two decimals (about a kilometre), the units, and a `User-Agent` naming the software — nothing about your node |
 | with weather on, while someone searches for a place under **Display settings → Weather → Location** | `geocoding-api.open-meteo.com` (HTTPS) | the words typed into the search |
+| with weather on and the **globe** open on the Weather tab, its **Radar** layer | `api.rainviewer.com` (the frame list, every 5 minutes) and `tilecache.rainviewer.com` (256-px map tiles, cached here for an hour) (HTTPS) | which frame and tile: a 10-minute time step and a map square -- at the whole-globe zoom the same sixteen squares for everyone; zoomed in, the squares round the place |
+| with weather on and the globe's **Forecast** layer | `api.open-meteo.com` | 121 points of the grid round the place, at most every 30 minutes |
 
 **Out of the box none of this happens**: polling is off until someone ticks **Display settings → Markets & Price → Enable market polling**, and until then the
 Markets and Kiosk tabs say so and the explorer shows no dollar figures. The switch is a Display
@@ -204,7 +206,9 @@ on; `BLOCKYARD_MARKETS=0` (or `"markets": { "enabled": false }`) removes the fee
 server so that no checkbox can. The weather ribbon works the same way: off until someone ticks **Display settings → Weather →
 Enable weather** in the Shared settings, and `BLOCKYARD_WEATHER=0` (or `"weather": { "enabled": false }`)
 removes it so that no checkbox can. Its forecasts are Open-Meteo's (open-meteo.com: free for
-non-commercial use, no account and no key). With polling on, nothing is fetched when nobody is looking. Your machine's public address is visible to those exchanges
+non-commercial use, no account and no key). The globe's radar is RainViewer's public composite (rainviewer.com, free, no key); the
+`weather.refresh` setting says how often a forecast is re-asked, ten minutes being the least and six an
+hour the most the server will do for one place whatever a browser asks. With polling on, nothing is fetched when nobody is looking. Your machine's public address is visible to those exchanges
 when a request is made, as with any web request.
 
 The monitor sends no telemetry, checks for no updates, and phones home to no one.

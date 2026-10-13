@@ -17,6 +17,14 @@ All notable changes to this project are documented here. The format follows
   server from `api.open-meteo.com` -- and `geocoding-api.open-meteo.com` while someone searches for a
   place -- at most once every ten minutes per place, and only while a ribbon or the tab is on screen.
   `BLOCKYARD_WEATHER=0` removes it so that no checkbox can turn it on.
+- **The weather globe.** On the Weather tab: a globe centred on the place -- drag to turn it, scroll to
+  zoom, past a point a flat map -- with the coastlines shipped (Natural Earth 1:110m, public domain) and
+  two animated layers: observed radar, the last two hours from RainViewer (free, no key), and the next
+  48 hours of rain, temperature, wind and cloud from an Open-Meteo grid of 121 points round the place.
+  Drawn on all three renderers: the WebGL one ray-casts the sphere on the card, Software draws it per
+  pixel, Simple draws it once per change and plays the loop only while the play button is held.
+  **Refresh every** (Weather settings): ten minutes at the least and six an hour at the most per place,
+  held by the server; the grid at most every thirty minutes. `docs/PLAN-WEATHER-GLOBE.md`.
 
 ### Changed
 

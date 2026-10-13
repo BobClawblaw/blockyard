@@ -9,6 +9,7 @@ import https from 'node:https';
 import { URL } from 'node:url';
 import { StaticFiles, SECURITY_HEADERS, securityHeaders } from './static.js';
 import { serveGame } from './games.js';
+import { serveWeatherTile } from './weathertiles.js';
 import { routes, HttpError } from './api.js';
 import { parseCookies, serializeCookie, csrfOk } from '../auth/sessions.js';
 import { ipDecision } from '../netinfo.js';
@@ -164,6 +165,15 @@ export function createAppServer(app) {
         const grl = app.gamesLimiter.check(openAccess ? `ip:${ip}` : `user:${gameSession.user.id}`, 1);
         if (!grl.ok) return sendJson(req, res, 429, { error: { message: `too many game-asset requests; retry in ${Math.ceil(grl.retryAfterMs / 1000)}s`, kind: 'ratelimited' } });
         const done = await serveGame(req, res, path, app.gamesDir, { tls: app.tls, hstsMs });
+        if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
+      }
+      // The weather globe's radar tiles (http/weathertiles.js): the same shape as the game files above.
+      if (path.startsWith('/weather/tile/')) {
+        const wxSession = openAccess ? null : resolveSession(req, app);
+        if (!openAccess && !wxSession) return sendJson(req, res, 401, { error: { message: 'authentication required', kind: 'auth' }, login: '/login' });
+        const wrl = app.weatherLimiter.check(openAccess ? `ip:${ip}` : `user:${wxSession.user.id}`, 1);
+        if (!wrl.ok) return sendJson(req, res, 429, { error: { message: `too many radar tile requests; retry in ${Math.ceil(wrl.retryAfterMs / 1000)}s`, kind: 'ratelimited' } });
+        const done = await serveWeatherTile(req, res, path, app, { tls: app.tls, hstsMs });
         if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
       }
       // The suite's own client code is not served when its gate is shut. The files sit in
