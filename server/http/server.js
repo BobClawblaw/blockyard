@@ -10,6 +10,7 @@ import { URL } from 'node:url';
 import { StaticFiles, SECURITY_HEADERS, securityHeaders } from './static.js';
 import { serveGame } from './games.js';
 import { serveWeatherTile } from './weathertiles.js';
+import { serveVectorTile } from './vtiles.js';
 import { routes, HttpError } from './api.js';
 import { parseCookies, serializeCookie, csrfOk } from '../auth/sessions.js';
 import { ipDecision } from '../netinfo.js';
@@ -165,6 +166,15 @@ export function createAppServer(app) {
         const grl = app.gamesLimiter.check(openAccess ? `ip:${ip}` : `user:${gameSession.user.id}`, 1);
         if (!grl.ok) return sendJson(req, res, 429, { error: { message: `too many game-asset requests; retry in ${Math.ceil(grl.retryAfterMs / 1000)}s`, kind: 'ratelimited' } });
         const done = await serveGame(req, res, path, app.gamesDir, { tls: app.tls, hstsMs });
+        if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
+      }
+      // The street map's vector tiles, from the operator's own extract (http/vtiles.js): the same shape.
+      if (path.startsWith('/weather/vtile/')) {
+        const vSession = openAccess ? null : resolveSession(req, app);
+        if (!openAccess && !vSession) return sendJson(req, res, 401, { error: { message: 'authentication required', kind: 'auth' }, login: '/login' });
+        const vrl = app.weatherLimiter.check(openAccess ? `ip:${ip}` : `user:${vSession.user.id}`, 1);
+        if (!vrl.ok) return sendJson(req, res, 429, { error: { message: `too many map tile requests; retry in ${Math.ceil(vrl.retryAfterMs / 1000)}s`, kind: 'ratelimited' } });
+        const done = await serveVectorTile(req, res, path, app, { tls: app.tls, hstsMs });
         if (done) { app.access({ req, res, path, status: done.status, ms: Date.now() - started, ip, user: null }); return undefined; }
       }
       // The weather globe's radar tiles (http/weathertiles.js): the same shape as the game files above.

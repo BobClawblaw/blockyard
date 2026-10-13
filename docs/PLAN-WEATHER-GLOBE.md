@@ -63,3 +63,17 @@ and the 1:50m land, lakes and borders as vectors up to zoom 10, with the place n
 2. Radar: the RainViewer proxy (`/api/weather/radar`, `/weather/tile/...`), frames cached, the loop.
 3. Forecast grid: `/api/weather/grid`, the 48-hour loop, a layer switch.
 4. The refresh setting with its floor and cap; docs (SECURITY.md's outbound table, README).
+
+## Part B: streets (built 2026-10-13, the same night)
+
+Operator: "can we add street level detail?" -- offered a tile provider with a key (A) or a self-hosted
+OpenStreetMap extract with nothing contacted at run time (B), "continue with your plan" chose B.
+
+- `scripts/map-extract.mjs --lat --lon [--radius-km 60] [--maxzoom 15]`: reads Protomaps' planet
+  archive by HTTP range requests (PMTiles v3: header, gzip directories, Hilbert tile ids), fetches the
+  tiles within the radius in coalesced 8 MB runs, writes `data/map/<lat>_<lon>.pmtiles` with one root
+  directory. Berlin, 60 km, zoom 15: 35,480 tiles, 193 MB, about a minute.
+- `server/http/vtiles.js`: the archive opened once, `/weather/vtile/z/x/y.mvt` from disk; `/api/weather/map`.
+- `public/js/mvt.js`: the vector-tile decoder (and an encoder for tests); `public/js/weatherstreets.js`:
+  the dark style, drawn under the radar from zoom 9 wherever the extract covers the view.
+- Data © OpenStreetMap contributors (ODbL); the caption says so. The monitor contacts nothing for it.

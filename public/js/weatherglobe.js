@@ -25,6 +25,7 @@ import {
   homeView, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels, expandFeatures, featureLevels,
 } from './weathermap.js';
 import { tempColour } from './weather.js';
+import { drawStreets } from './weatherstreets.js';
 
 const PW = 1536, PH = 768;            // the skin: 0.23 degrees a pixel, about what zoom-2 radar tiles resolve
 const RADAR_Z = 2;                    // 4 x 4 tiles of 256 for the whole world on the globe
@@ -98,8 +99,9 @@ function stateOf(root) {
     radar: null, radarAt: 0, radarAsking: false, grid: null, gridKey: null, gridAsking: false,
     tiles: new Map(), tilePending: 0, frame: 0, playing: false, playTimer: null, raf: 0, dirty: true,
     pointer: null, pinch: null, lastDraw: '', settings: null, w: null, api: null, say: '',
-    merc: null,
+    merc: null, mapInfo: undefined,
   };
+  st.schedule = () => schedule(st);
   states.set(root, st);
   return st;
 }
@@ -345,12 +347,21 @@ function drawFlat(st, pw, ph, dpr) {
   st.glcv.hidden = true;
   const ctx = st.cv.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const fv = flatView(st.view, pw, ph, 12);   // the MAP goes to 12; the tiles stop where the server says (the radar branch below)
+  const fv = flatView(st.view, pw, ph, 16);   // the MAP goes to 16 with a street extract (12 without); the radar tiles stop where the server says
   const close = fv.z > LAND_UNTIL_Z;
-  ctx.fillStyle = close ? '#121c2c' : '#0c1830'; ctx.fillRect(0, 0, pw, ph);
+  // STREETS (part B): the operator's own OpenStreetMap extract covers the view -- its tiles replace the Natural Earth
+  // drawing from zoom 9, where its 1:10m roads would be the coarser picture
+  const M = st.mapInfo;
+  const streets = !!(M && fv.z >= 9 && st.view.lon >= M.bounds.w && st.view.lon <= M.bounds.e && st.view.lat >= M.bounds.s && st.view.lat <= M.bounds.n);
+  ctx.fillStyle = streets ? '#1b2535' : close ? '#121c2c' : '#0c1830'; ctx.fillRect(0, 0, pw, ph);
+  if (streets) {
+    const tz = Math.min(fv.z, M.maxZoom), fv2 = { ...fv, z: tz, scale: fv.scale / 2 ** (fv.z - tz) };
+    const missing = drawStreets(ctx, st, fv, tz, flatTiles(fv2, pw, ph), fv2.scale, pw, ph);
+    if (missing) st.say = st.say || 'loading the street map…';
+  }
   // the land as vectors (the 110m file: fine at zoom 3-5, coarse by 8; closer than that it is not drawn at all --
   // a 110m coastline across a town is a straight edge in the wrong place -- and the ground is distance rings)
-  if (st.landData && !close) {
+  if (st.landData && !close && !streets) {
     const k = st.landData.scale;
     const n = 2 ** fv.z;
     // only what is in view goes through the path: at zoom 8 the whole file is 110k points a frame otherwise
@@ -404,9 +415,9 @@ function drawFlat(st, pw, ph, dpr) {
     }
   }
   // the 1:10m features draw at every zoom they earn, close in too: they are what makes the local view a place
-  drawFeatures(ctx, st, fv, pw, ph);
-  if (close) drawRings(ctx, st, fv, pw, ph);
-  drawNames(ctx, st, (lat, lon) => { const q = flatProject(lat, lon, fv); return q; }, pw, ph, rankCeiling(fv.z));
+  if (!streets) drawFeatures(ctx, st, fv, pw, ph);
+  if (close && !streets) drawRings(ctx, st, fv, pw, ph);
+  if (!streets) drawNames(ctx, st, (lat, lon) => { const q = flatProject(lat, lon, fv); return q; }, pw, ph, rankCeiling(fv.z));
   drawScale(ctx, st, fv, pw, ph);
   drawPlace(ctx, st, flatProject(st.home.lat, st.home.lon, fv));
 }
@@ -563,7 +574,10 @@ function caption(st) {
     if (st.say) parts.push(st.say);
     else if (st.w.mapLayer === 'forecast') parts.push(`forecast ${st.field === 'temp' ? 'temperature' : st.field === 'cloud' ? 'cloud cover' : 'rain and snow'}, Open-Meteo, 11 x 11 points about ${(st.grid?.dLat ?? 0.5) * 10}° across; wind arrows point where it blows`);
     else parts.push('observed radar, RainViewer, the last two hours; blank where no radar station reaches (oceans, much of the world)');
-    if (flat) { const z = flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z; parts.push(z > LAND_UNTIL_Z ? `zoom ${z}: rings are distance from the place; roads are Natural Earth 1:10m -- motorways and main roads, not streets (this monitor contacts no map-tile server)` : `flat map, zoom ${z}; coasts, borders, roads and rivers are Natural Earth${z >= 8 ? ', coarse this close' : ''}`); }
+    const M = st.mapInfo;
+    const onStreets = flat && M && flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400, 16).z >= 9 && st.view.lon >= M.bounds.w && st.view.lon <= M.bounds.e && st.view.lat >= M.bounds.s && st.view.lat <= M.bounds.n;
+    if (onStreets) parts.push(`streets © OpenStreetMap contributors (ODbL), from this server's own extract${M.osmTime ? ` of ${M.osmTime.slice(0, 10)}` : ''} -- nothing is fetched`);
+    else if (flat) { const z = flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z; parts.push(z > LAND_UNTIL_Z ? `zoom ${z}: rings are distance from the place; roads are Natural Earth 1:10m -- motorways and main roads, not streets (this monitor contacts no map-tile server)` : `flat map, zoom ${z}; coasts, borders, roads and rivers are Natural Earth${z >= 8 ? ', coarse this close' : ''}`); }
     note.textContent = parts.join(' · ');
   }
 }
@@ -593,7 +607,7 @@ function bind(st) {
     if (Math.abs(dx) + Math.abs(dy) > 0) st.pointer.moved = true;
     if (isFlat(st.view, pw(), ph())) {
       // a pan: the place under the panel's middle moves by the drag, in mercator
-      const fv = flatView(st.view, pw(), ph(), 12);
+      const fv = flatView(st.view, pw(), ph(), 16);
       const c = flatUnproject(pw() / 2 - dx, ph() / 2 - dy, fv);
       st.view = viewOf(c.lat, c.lon, st.view.zoom);
     } else st.view = dragView(st.view, dx, dy, pw(), ph());
@@ -662,6 +676,8 @@ export function renderGlobe(box, w, h, { autoplay = false } = {}) {
   if (layerChanged) { play(st, false); st.pics.clear(); st.dirty = true; }
   loadLand(st);
   if (w.mapLayer === 'forecast') pullGrid(st); else pullRadar(st);
+  // the street map: whether this server has an extract (http/vtiles.js), asked once per mount
+  if (st.mapInfo === undefined) { st.mapInfo = null; h.api('/api/weather/map').then((d) => { st.mapInfo = d?.map ?? null; st.dirty = true; schedule(st); }).catch(() => {}); }
   // the Kiosk's map plays its loop by itself on Software and WebGL (a wall display wants motion); Simple shows the
   // latest frame and plays nothing -- the same rule as the play button
   if (st.autoplay && !st.playing && rendererNow() !== '2.5d' && frameCount(st) > 1 && !document.hidden) play(st, true);

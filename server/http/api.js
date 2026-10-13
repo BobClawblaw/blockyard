@@ -9,6 +9,7 @@ import { SERIES } from '../store/history.js';
 import { randomPassword } from '../auth/users.js';
 import { formatEta, formatBytes } from '../util/fmt.js';
 import { xSearch, xTx, xBlock, xAddress } from './explorer.js';
+import { mapArchive } from './vtiles.js';
 
 // Dollar figures for the explorer: a spot price if one is at hand within 1.5 s -- never a slower
 // page for want of one (server/collect/markets.js spot()).
@@ -585,6 +586,18 @@ export const routes = [
       if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
       // ?span=local (0.1 degrees between points, the default) | regional (0.5)
       return { enabled: true, ...(await app.weather.grid(ctx.query.lat, ctx.query.lon, ctx.query.units, { refreshMs: await weatherRefreshMs(app), span: ctx.query.span })) };
+    },
+  },
+  // THE STREET MAP (http/vtiles.js): whether this server has an extract, its bounds and zoom, and the attribution the
+  // map must show. Nothing is contacted; the file is the operator's own.
+  {
+    method: 'GET', path: '/api/weather/map', auth: 'any',
+    handler: async (ctx, app) => {
+      if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
+      if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
+      const arc = await mapArchive(app);
+      if (!arc) return { ok: true, enabled: true, map: null, note: 'no street map on this server: make one with `node scripts/map-extract.mjs --lat <lat> --lon <lon>` and leave it in data/map/' };
+      return { ok: true, enabled: true, map: arc.view() };
     },
   },
   {

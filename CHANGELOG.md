@@ -26,6 +26,14 @@ All notable changes to this project are documented here. The format follows
   temperature, wind and cloud from an Open-Meteo grid of 121 points round the place, 11 km apart
   (Local, the default) or 55 km (Regional). The flat map also draws Natural Earth's 1:10m motorways and
   main roads, railways, rivers and the built-up footprint of towns (2.9 MB, shipped) -- not streets.
+- **Streets, from a file of your own.** `node scripts/map-extract.mjs --lat <lat> --lon <lon>` cuts the
+  OpenStreetMap tiles within a radius (60 km by default, zoom 15) out of Protomaps' planet archive --
+  no account, no key, HTTP range requests, about a minute and 200 MB for a capital -- into
+  `data/map/`. The Weather tab's map then draws streets with their names, buildings, parks, water,
+  rail and districts from that file, in the monitor's dark style under the radar, from zoom 9 in;
+  the server serves the tiles from disk and contacts nothing (`/weather/vtile/`, `/api/weather/map`).
+  The format is read and written here (PMTiles v3, Mapbox vector tiles): zero dependencies. Data
+  © OpenStreetMap contributors (ODbL), and the map says so.
   Drawn on all three renderers: the WebGL one ray-casts the sphere on the card, Software draws it per
   pixel, Simple draws it once per change and plays the loop only while the play button is held.
   **Refresh every** (Weather settings): ten minutes at the least and six an hour at the most per place,
