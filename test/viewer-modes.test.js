@@ -84,7 +84,7 @@ test('both modes name a transaction the same way, so a switch moves tiles instea
 test('the kiosk: the 3D Markets board and the Block space board side by side, full screen on a click', () => {
   const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
   const html = read('../public/index.html');
-  assert.match(html, /<button data-page="kiosk">Kiosk<\/button>/);
+  assert.match(html, /<button data-page="kiosk" class="menu-title direct"[^>]*>Kiosk<kbd>9<\/kbd><\/button>/, "a direct item of the menu bar, shortcut 9 (2026-10-13)");
   const k = html.slice(html.indexOf('data-page="kiosk"'), html.indexOf('MARKETS -->'));
   assert.match(k, /id="kMarkets"/);
   assert.match(k, /id="kSpace"/);

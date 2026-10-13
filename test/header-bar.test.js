@@ -31,16 +31,23 @@ test('the bar cannot wrap, and the right-hand side cannot be squeezed', () => {
   assert.match(rule('.brand'), /flex:\s*0 0 auto/, 'the brand holds its width');
 });
 
-test('the nav is the one part that gives way, by scrolling', () => {
+test('the nav is five menu titles, not a row of tabs, so it never needs to give way (2026-10-13)', () => {
+  // operator: "a complete rework. Perhaps based on MacOS Finder menus ... what we have is just eating too much
+  // valuable information space". The bar is one 28 px line at every width.
   const nav = rule('nav.pages');
-  assert.match(nav, /flex:\s*0 1 auto/, 'it may shrink');
-  assert.match(nav, /min-width:\s*0/, 'below its content width');
-  assert.match(nav, /overflow-x:\s*auto/, 'and scrolls instead of wrapping or overlapping');
+  assert.match(nav, /flex:\s*0 0 auto/, 'it holds its width: five words');
+  assert.match(nav, /height:\s*28px/);
+  assert.match(rule('header.top'), /height:\s*28px/, 'the bar is 28 px');
+  assert.match(rule('.menu'), /position:\s*relative/, 'each menu anchors its list');
+  assert.match(rule('.menu-pop'), /position:\s*absolute/);
+  assert.match(rule('.menu-pop'), /top:\s*100%/, 'the list hangs under its title');
+  assert.doesNotMatch(css, /header\.top \{[^}]*flex-wrap:\s*wrap/, 'and nothing ever wraps the bar');
 });
 
 test('readouts that change reserve their widest value', () => {
-  // "connecting" -> "live" and "41ms" -> "1041ms" must not shove the neighbours
-  assert.match(rule('#sseState'), /min-width:\s*10ch/);
+  // "41ms" -> "1041ms" must not shove the neighbours; the stream's state is a dot of fixed size (2026-10-13)
+  assert.match(rule('#sseState'), /min-width:\s*8px/);
+  assert.match(rule('#sseState'), /border-radius:\s*50%/);
   for (const sel of ['#rpcLat', '#appUp']) {
     assert.match(rule(sel), /min-width:\s*\d+ch/, `${sel} has a fixed footprint`);
     assert.match(rule(sel), /tabular-nums/, `${sel} uses tabular digits`);
@@ -51,10 +58,10 @@ test('readouts that change reserve their widest value', () => {
 test('narrow windows drop whole items at fixed breakpoints, in a stated order', () => {
   const bps = [...css.matchAll(/@media \(max-width:\s*(\d+)px\)\s*\{([^@]*?)\}\s*\}/g)]
     .map((m) => ({ px: Number(m[1]), body: m[2] }))
-    .filter((b) => /#whoami|Monitor uptime|Node RPC round trip/.test(b.body));
+    .filter((b) => /#whoami|\.brand small|\.pagename/.test(b.body));
   const at = (what) => bps.find((b) => b.body.includes(what))?.px;
-  assert.ok(at('#whoami') > at('Monitor uptime'), 'the access note goes first');
-  assert.ok(at('Monitor uptime') > at('Node RPC round trip'), 'then uptime, then rpc latency');
+  assert.ok(at('#whoami') > at('.brand small'), 'the access note goes first');
+  assert.ok(at('.brand small') > at('.pagename'), 'then the version and the badge narrows, and the page name only on a phone');
 });
 
 test('the page is never wider than the window, whatever the bar needs', () => {
@@ -63,5 +70,5 @@ test('the page is never wider than the window, whatever the bar needs', () => {
   // bar's min-content (~1164 px) and pushed every page off the right edge below it.
   assert.match(rule('.app'), /grid-template-columns:\s*minmax\(0,\s*1fr\)/, 'the column is held to the window');
   assert.match(rule('header.top'), /min-width:\s*0/, 'the bar may be narrower than its content');
-  assert.match(rule('header.top'), /overflow:\s*hidden/, 'and clips rather than widening the page');
+  assert.match(rule('header.top'), /overflow:\s*clip visible/, 'and clips sideways rather than widening the page -- visible below, so the menus can hang out of it');
 });

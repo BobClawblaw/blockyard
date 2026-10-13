@@ -59,27 +59,24 @@ a:hover { text-decoration: underline; }
    column to the window; the bar's nav then gives way by scrolling, as designed. */
 .app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); height: 100vh; }
 
-/* THE BAR IS ONE LINE AND DOES NOT MOVE (operator, 2026-09-11: "Look at how
-   text in upper right is being jammed up on resizing. We need to lock shit down
-   better on that line"). Every item is nowrap with a fixed footprint; readouts
-   that change (stream state, rpc latency, uptime) reserve their widest width in
-   tabular digits, so a new value cannot shove its neighbours. When the window
-   narrows, whole low-priority items drop out at fixed breakpoints (below)
-   instead of anything wrapping, and the nav is the one part allowed to give
-   way -- it scrolls sideways rather than squeezing the right-hand side. */
+/* THE MENU BAR (operator, 2026-10-13: "a complete rework. Perhaps based on MacOS Finder menus ... what we have is
+   just eating too much valuable information space"). One 28 px line that NEVER wraps: menu titles open lists
+   (absolute, under the title, inside the bar -- the bar clips on x only), the page's name beside them, the badge and
+   three icon buttons at the right. It was a 46 px row of thirteen tabs that wrapped to 69 px below 1440.
+   Every item is nowrap with a fixed footprint, as before (2026-09-11: "lock shit down better on that line"). */
 header.top {
-  display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; white-space: nowrap;
-  min-width: 0; overflow: hidden;   /* last resort: the bar clips, it never widens the page */
-  padding: 0 14px; height: 46px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; white-space: nowrap;
+  min-width: 0; overflow: clip visible;   /* clips sideways, never widens the page; the menus hang below */
+  padding: 0 10px; height: 28px; position: relative; z-index: 20;
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
   border-bottom: 1px solid var(--line, #262c35);
-  z-index: 20;
+  font-size: 12.5px;
 }
-.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; letter-spacing: .2px; flex: 0 0 auto; }
+.brand { display: flex; align-items: center; gap: 7px; font-weight: 650; letter-spacing: .2px; flex: 0 0 auto; font-size: 12.5px; }
 /* THE MONOGRAM. The tile, its gradient and the three courses of blocks along the bottom all
    live in the SVG itself, so the mark is one object and the favicon is the same drawing --
    no CSS needed to make it look right, which is what a favicon cannot have anyway. */
-.brand .mark { width: 22px; height: 22px; display: block; flex: 0 0 auto; border-radius: 6px; box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 27%, transparent); }
+.brand .mark { width: 18px; height: 18px; display: block; flex: 0 0 auto; border-radius: 6px; box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 27%, transparent); }
 .wordmark { font-weight: 600; letter-spacing: .2px; }
 .wordmark b { font-weight: 750; color: var(--accent); }
 /* The brand is a <button> now (it routes to About), so the browser's button chrome has to go:
@@ -143,61 +140,58 @@ button.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 3
 #loginCard h1 b, .login h1 b { color: var(--accent); }
 .brand small { color: var(--fg-faint); font-weight: 500; }
 
-nav.pages { display: flex; gap: 2px; margin-left: 6px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-nav.pages::-webkit-scrollbar { display: none; }
-nav.pages button {
-  background: none; border: 0; color: var(--fg-dim); font: inherit; font-weight: 550;
-  padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;
+nav.pages { display: flex; align-items: stretch; gap: 0; margin-left: 4px; flex: 0 0 auto; min-width: 0; height: 28px; }
+.menu { position: relative; display: flex; align-items: stretch; }
+nav.pages .menu-title {
+  background: none; border: 0; color: var(--fg-dim); font: inherit; font-weight: 500; font-size: 12.5px;
+  padding: 0 9px; border-radius: 5px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; margin: 2px 0;
 }
-nav.pages button:hover { background: var(--bg-3, #12161c); color: var(--fg); }
-nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); box-shadow: inset 0 -2px 0 -1px var(--accent); }
+nav.pages .menu-title:hover { background: var(--bg-3, #12161c); color: var(--fg); }
+nav.pages .menu-title.open { background: var(--accent); color: #140d02; }
+nav.pages .menu-title.on { color: var(--accent); }
+nav.pages .menu-title.open.on { color: #140d02; }
+nav.pages .menu-title kbd { display: none; }
+.menu-pop { position: absolute; left: 0; top: 100%; z-index: 200; display: flex; flex-direction: column; align-items: stretch;
+  min-width: 196px; padding: 5px; gap: 1px; background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: 0 0 8px 8px; box-shadow: 0 14px 32px #000b; }
+.menu-pop.hidden { display: none; }
+.menu-pop button {
+  background: none; border: 0; color: var(--fg); font: inherit; font-size: 12.5px; text-align: left; width: 100%;
+  padding: 5px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 18px;
+}
+.menu-pop button:hover, .menu-pop button:focus-visible { background: var(--accent); color: #140d02; outline: 0; }
+.menu-pop button.on { color: var(--accent); }
+.menu-pop button.on:hover { color: #140d02; }
+.menu-pop button kbd { margin-left: auto; font-family: var(--mono); font-size: 10.5px; opacity: .55; }
+.menu-pop button:hover kbd { opacity: .8; }
+.pagename { color: var(--fg); font-weight: 600; font-size: 12.5px; flex: 0 0 auto; padding-left: 6px; border-left: 1px solid var(--line-soft); margin-left: 2px; }
 
 .spacer { flex: 1 1 0; min-width: 8px; }
-.top .meta { display: flex; align-items: center; gap: 12px; color: var(--fg-faint); font-family: var(--mono); font-size: 11px;
+.top .meta { display: flex; align-items: center; gap: 8px; color: var(--fg-faint); font-family: var(--mono); font-size: 11px;
   flex: 0 0 auto; white-space: nowrap; }
 .top .meta > span { flex: 0 0 auto; white-space: nowrap; }
 .top .meta b { color: var(--fg-dim); font-weight: 600; }
-/* widest value each readout can take, reserved, in tabular digits */
-#sseState { display: inline-block; min-width: 10ch; }
+/* the stream's state is a DOT (its words are the tooltip): ok green, warn amber, bad red; rpc and uptime are hidden
+   readouts the badge's tooltip quotes */
+#sseState { display: inline-block; width: 8px; height: 8px; min-width: 8px; border-radius: 50%; font-size: 0; background: currentColor; }
+#sseState.ok { color: var(--ok); } #sseState.warn { color: var(--warn); } #sseState.bad { color: var(--bad); }   /* by id: .top .meta b outranks the bare state classes */
 #rpcLat { display: inline-block; min-width: 6ch; font-variant-numeric: tabular-nums; }
 #appUp { display: inline-block; min-width: 6ch; font-variant-numeric: tabular-nums; }
-#nodePick > span { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+#rpcLat[hidden], #appUp[hidden] { display: none; }
+#nodePick > span { display: inline-block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; cursor: pointer; }
 
-.userchip { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; white-space: nowrap; }
-/* Whole items leave, in this order, rather than anything wrapping. */
-@media (max-width: 1760px) { #whoami { display: none; } nav.pages button { padding: 6px 8px; } }
-@media (max-width: 1500px) { .brand small { display: none; } .top .meta > span[title="Monitor uptime"] { display: none; } }
-/* 16ch cut a real node name in half (measured at 1280: a 106px box holding 159px of text, so
-   a long node label read as "Bitcoin Core (mainn..."), and 22ch still fell 13px short of it.
-   26ch clears the longest built-in label with room to spare, and there is room to give: the RPC
-   readout is already hidden at this width and the chip still ends ~255px clear of the window edge.
-   The ellipsis and the tooltip (which names the node AND its endpoint) remain the backstop for
-   names longer than this. */
-@media (max-width: 1499px) { .top .meta > span[title="Node RPC round trip"] { display: none; } }   /* the last 60 px the ten tabs need at 1440 (2026-10-13) */
+.userchip { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; white-space: nowrap; }
+.btn.icon { width: 24px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+#btnPause .ic-play { display: none; }
+#btnPause.paused .ic-pause { display: none; }
+#btnPause.paused .ic-play { display: block; }
+#btnPause.paused { color: var(--accent); border-color: var(--accent); }
+/* Whole items leave, in this order, rather than anything wrapping: the access note, the version, then the badge
+   narrows. Nothing else needs to: the menus are five words. */
+@media (max-width: 1500px) { #whoami { display: none; } }
+@media (max-width: 1200px) { .brand small { display: none; } #nodePick > span { max-width: 18ch; } }
+@media (max-width: 760px) { .pagename { display: none; } .wordmark { display: none; } }
 
-/* THE TABS GET THEIR OWN ROW WHEN THE WINDOW IS NARROW (operator, 2026-09-11: "we need scrolling to
-   see menu/tabs that are being cut off and not displayed"). The bar is one unwrappable line, so at
-   1150 px the nav held 868 px of tabs in a 650 px box -- 218 px of them unreachable: it does scroll
-   sideways, but with the scrollbar hidden nothing said so, and a wheel scrolls the page, not the bar.
-   Under 1400 px the bar wraps and the nav takes a full row of its own (every tab fits at 1150), and
-   where it still overflows -- a phone -- its scrollbar is visible and it can be dragged.
-
-   2026-09-12: 1400 was far too low, and adding the Diversions menu made it show. Measured across
-   the inline range -- the nav wants 979 px of tabs (1031 above 1760 px, where the buttons regain
-   their padding and the user chip comes back), and the inline bar gives it 828 px at 1500, 747 at
-   1600, 841 at 1800 and 961 at 1920. So between 1400 and 2000 the last two or three tabs were past
-   the fold at EVERY width, behind a hidden scrollbar. It first genuinely fits at 2000 (1031 in
-   1031), so that is where the bar stops wrapping. */
-/* RE-MEASURED 2026-10-13 with the Node menu (ten tabs, 665 px; operator: "It's getting tight up there"): the other items
-   are brand 94-207, the two menus 137, meta 310-460, chip 89-196, gaps 112. With the badge capped at 18ch and the uptime
-   hidden below 1800 (next rule) one row holds at 1440 (1427 used) and above; below that the nav takes its own row. */
-@media (max-width: 1799px) { #nodePick > span { max-width: 18ch; } .top .meta > span[title="Monitor uptime"] { display: none; } }
-@media (max-width: 1439px) {
-  header.top { flex-wrap: wrap; height: auto; padding-bottom: 6px; row-gap: 2px; }
-  nav.pages { order: 10; flex: 1 0 100%; margin-left: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
-  nav.pages::-webkit-scrollbar { display: block; height: 6px; }
-  nav.pages::-webkit-scrollbar-thumb { background: var(--bg-3, #12161c); border-radius: 6px; }
-}
 .userchip select, .btn {
   background: var(--bg-3, #12161c); color: var(--fg); border: 1px solid var(--line, #262c35);
   border-radius: var(--radius-sm); padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer;
@@ -1915,34 +1909,8 @@ body { font-variant-numeric: tabular-nums; }
 .cfgrows2 .cfgrow.compact input[type="color"] { width: 36px; height: 20px; }
 .cfgrow.idle { opacity: .55; }
 .cfgrow.idle:hover { opacity: 1; }
-/* DIVERSIONS: a pop-down at the end of the nav. The buttons inside are `nav.pages button` like
-   every other tab, so they inherit the tab look and only the layout is new. */
-/* PINNED, because the nav SCROLLS. `nav.pages` is overflow-x:auto with its scrollbar hidden, so
-   at a wide window the last tabs simply leave the box -- measured at 1600px: the nav ended at
-   "Eve(nts)" and this menu was nowhere on screen. Sticky to the right edge keeps it in place while
-   the tabs scroll underneath, and the short fade stops them appearing to slide out of a hard edge
-   (the header's own gradient ends at --bg-1). */
-/* NOT STICKY, and not inside the scrolling nav (operator, Safari on macOS: "still doesn't work on
-   safari. not clickable"). This was `position: sticky; right: 0` inside `nav.pages`, an
-   overflow-x:auto container. WebKit paints a sticky element where it sticks but hit-tests it where
-   layout first put it, so the button showed at the right edge and ignored every click -- in that
-   engine alone. It is a plain header flex item now, which needs no sticky at all. */
-.navmenu { z-index: 5; display: inline-flex; align-items: center; flex: 0 0 auto; margin-left: 6px; }
-.navcaret { font-size: 9px; opacity: .8; }
-/* ...and the panel is FIXED, not absolute: `nav.pages` clips it on the block axis (a box with
-   overflow-x:auto clips the other axis too) and `header.top` is overflow:hidden besides, so an
-   absolutely positioned panel inside either of them is invisible. app.js sets --x/--y from the
-   button's own rect through the CSSOM; there are no style attributes anywhere in this project. */
-/* NO TRANSFORM. This was `left: <button's right edge>` plus `translateX(-100%)` to pull the panel
-   back by its own width. Two things I cannot test from here were riding on that, so both are gone:
-   app.js now measures the panel and sets its real left edge. See index.html for why the panel is a
-   child of <body> rather than of the header. */
-.navmenu-pop { position: fixed; left: var(--x, 0); top: var(--y, 0);
-  z-index: 200; display: flex; flex-direction: column; align-items: stretch;
-  min-width: 160px; padding: 5px; gap: 2px; background: var(--bg-2); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: 0 12px 30px #000a; }
-.navmenu-pop.hidden { display: none; }
-.navmenu-pop button { text-align: left; width: 100%; }
+/* (the Diversions and Node menus are .menu / .menu-pop in the menu bar since 2026-10-13; the fixed, out-of-header
+   panel they used while the nav scrolled is gone with the scrolling nav) */
 .btn.gear { display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; }
 .btn.gear svg { display: block; }
 .btn.gear.on { color: var(--accent); border-color: var(--accent); }

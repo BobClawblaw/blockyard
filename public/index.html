@@ -13,11 +13,20 @@
 </head>
 <body>
 <div class="app">
+  <!-- THE MENU BAR (operator, 2026-10-13: "we need to find a way of drastically improving the top menu. I suggest a
+       complete rework. Perhaps based on MacOS Finder menus ... what we have is just eating too much valuable
+       information space"). One 28 px line, Finder-shaped: menu TITLES that open lists, never a row of tabs, so it fits
+       any width in one row; the current page's name beside them; the node badge and three icon buttons at the right.
+       Every page lives in exactly one menu (Kiosk is a direct item: one click for a wall) and carries a digit
+       shortcut, shown Finder-style at the item's right. Behaviour is app.js menuBar(): click opens, hovering another
+       title while one is open switches to it, Esc and a click elsewhere close, arrows move, 1-9 jump to pages.
+       The lists are absolutely positioned under their titles INSIDE the header, which clips on x only (overflow: clip
+       visible) -- the old bar was overflow:hidden with its panels parked outside it, a Safari lesson that no longer
+       applies without a scrolling nav. -->
   <header class="top">
-    <!-- The monogram IS the About link (operator: "Make clicking the BlockYard icon the About
-         page then"). A <button data-page> rather than a bare click handler, so it satisfies the
-         same page contract every nav tab does: test/web-contract.test.js holds every
-         `<button data-page>` to a matching <section> and a render case. -->
+    <!-- The monogram IS the About link (operator: "Make clicking the BlockYard icon the About page then"). A <button
+         data-page> rather than a bare click handler, so it satisfies the same page contract every page item does:
+         test/web-contract.test.js holds every `<button data-page>` to a matching <section> and a render case. -->
     <button type="button" data-page="about" class="brand" id="brandAbout" title="About BlockYard" aria-label="About BlockYard"><svg class="mark" viewBox="0 0 32 32" role="img" aria-label="BlockYard">
   <defs><linearGradient id="byTile" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#ffb85c"/><stop offset=".55" stop-color="#f7931a"/><stop offset="1" stop-color="#a8640d"/>
@@ -26,49 +35,64 @@
   <g fill="#16110a" opacity=".14"><rect x="4" y="24.6" width="8" height="3.6" rx="1"/><rect x="13" y="24.6" width="6" height="3.6" rx="1"/><rect x="20" y="24.6" width="8" height="3.6" rx="1"/></g>
   <path fill="#1a1206" fill-rule="evenodd" d="M5 8h6.6a4.2 4.2 0 0 1 2.35 7.66A4.4 4.4 0 0 1 12 24H5Zm3.3 2.9v3.5h3.1a1.75 1.75 0 0 0 0-3.5Zm0 6.4v3.8h3.4a1.9 1.9 0 0 0 0-3.8Z"/>
   <path fill="#1a1206" d="M16.8 8h3.3l2.75 5.3L25.6 8h3.3l-4.85 8.8V24h-3.3v-7.2Z"/>
-</svg>
-    <span class="wordmark">Block<b>Yard</b></span> <small id="ver"></small></button>
-    <nav class="pages" id="nav">
-      <button data-page="overview" class="on">Overview</button>
-      <button data-page="space">Block space</button>
-      <button data-page="chain">Chain &amp; Sync</button>
-      <button data-page="mempool">Mempool</button>
-      <button data-page="explorer">Explorer</button>
-      <button data-page="markets">Markets</button>
-      <button data-page="weather" id="navWeather" hidden>Weather</button>
-      <button data-page="kiosk">Kiosk</button>
-      <button data-page="mining">Mining</button>
-      <button data-page="admin" id="navAdmin" hidden>Admin</button>
+</svg><span class="wordmark">Block<b>Yard</b></span> <small id="ver"></small></button>
+    <nav class="pages" id="nav" aria-label="Pages">
+      <div class="menu" id="menuMonitor">
+        <button type="button" class="menu-title" aria-haspopup="true" aria-expanded="false">Monitor</button>
+        <div class="menu-pop hidden" role="menu">
+          <button data-page="overview" role="menuitem">Overview<kbd>1</kbd></button>
+          <button data-page="space" role="menuitem">Block space<kbd>2</kbd></button>
+          <button data-page="chain" role="menuitem">Chain &amp; Sync<kbd>3</kbd></button>
+          <button data-page="mempool" role="menuitem">Mempool<kbd>4</kbd></button>
+          <button data-page="mining" role="menuitem">Mining<kbd>5</kbd></button>
+        </div>
+      </div>
+      <div class="menu" id="menuExplore">
+        <button type="button" class="menu-title" aria-haspopup="true" aria-expanded="false">Explore</button>
+        <div class="menu-pop hidden" role="menu">
+          <button data-page="explorer" role="menuitem">Explorer<kbd>6</kbd></button>
+          <button data-page="markets" role="menuitem">Markets<kbd>7</kbd></button>
+          <button data-page="weather" id="navWeather" role="menuitem" hidden>Weather<kbd>8</kbd></button>
+        </div>
+      </div>
+      <!-- THE NODE MENU (2026-10-13): Peers, Network, Events, Node & RPC, and Admin while the account is one -->
+      <div class="menu" id="navNode">
+        <button type="button" class="menu-title" id="navNodeBtn" aria-haspopup="true" aria-expanded="false">Node</button>
+        <div class="menu-pop hidden" id="navNodePop" role="menu">
+          <button data-page="peers" role="menuitem">Peers</button>
+          <button data-page="network" role="menuitem">Network</button>
+          <button data-page="logs" role="menuitem">Events</button>
+          <button data-page="node" role="menuitem">Node &amp; RPC</button>
+          <button data-page="admin" id="navAdmin" role="menuitem" hidden>Admin</button>
+        </div>
+      </div>
+      <button data-page="kiosk" class="menu-title direct" title="The wall display">Kiosk<kbd>9</kbd></button>
+      <!-- DIVERSIONS (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu options under a
+           pop-down menu called 'Diversions'"). The toggle carries no data-page: a button with one must have a page
+           section behind it. -->
+      <div class="menu" id="navDiv">
+        <button type="button" class="menu-title" id="navDivBtn" aria-haspopup="true" aria-expanded="false">Diversions</button>
+        <div class="menu-pop hidden" id="navDivPop" role="menu">
+          <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
+          <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
+          <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
+          <button data-page="scorched" role="menuitem" title="Scorched Yard: artillery on a deformable block landscape">Scorched Yard</button>
+          <button data-page="wolf3d" role="menuitem" title="Wolfenstein 3D: the shareware WOLF3D.EXE on an emulated PC">Wolfenstein 3D</button>
+          <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
+          <button data-page="quake" role="menuitem" title="Quake: the shareware QUAKE.EXE on an emulated PC">Quake</button>
+        </div>
+      </div>
     </nav>
-    <!-- THE NODE MENU (operator, 2026-10-13: "shrinking up the top menus to make more space. It's getting tight up
-         there"): Peers, Network, Events and Node & RPC under one pop-down, the same shape as Diversions below -- the
-         bar is ten tabs instead of thirteen and fits one row down to about 1150 px. -->
-    <div class="navmenu" id="navNode">
-      <button type="button" class="navmenu-btn" id="navNodeBtn" aria-haspopup="true" aria-expanded="false">Node <span class="navcaret">&#9662;</span></button>
-    </div>
-    <!-- DIVERSIONS (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
-         options under a pop-down menu called 'Diversions'"). The toggle deliberately carries no
-         data-page, because a nav button with one is required to have a page section behind it.
-         OUTSIDE <nav>, and that is the whole point (operator, Safari on macOS: "still doesn't work
-         on safari. not clickable"). It used to sit inside `nav.pages`, which is a horizontal
-         scroll container, held at the right edge with `position: sticky; right: 0`. WebKit paints
-         a sticky element in its stuck position but hit-tests it where layout originally put it, so
-         the button was plainly visible and completely dead to the pointer -- in that engine only,
-         which is why every check here passed. Out here it is an ordinary flex item in the header
-         row: no sticky, no scroll container, nothing to go wrong. Being outside <nav> also means
-         the nav's delegated click handler no longer reaches the items, so app.js routes them from
-         the panel's own handler. -->
-    <div class="navmenu" id="navDiv">
-      <button type="button" class="navmenu-btn" id="navDivBtn" aria-haspopup="true" aria-expanded="false">Diversions <span class="navcaret">&#9662;</span></button>
-    </div>
+    <!-- the page you are on, where a window's title would be: the tabs used to say this with a row of words -->
+    <span class="pagename" id="pageName" aria-live="polite"></span>
     <span class="spacer"></span>
     <div class="meta">
-      <!-- the node BADGE: which daemon every page shows, state-coloured; a click opens Chain & Sync, where the picker
-           lives since 2026-10-13 (operator: "move chain selection to 'Chain and Sync' panel") -->
+      <!-- the stream's state as a dot beside the node BADGE (which daemon every page shows, state-coloured; a click
+           opens Chain & Sync, where the picker lives). The rpc round trip and the uptime are in the badge's tooltip --
+           their elements stay for app.js render(), hidden. -->
+      <b id="sseState" class="warn" title="the live stream: connecting">connecting</b>
       <span id="nodePick" title="Which node this monitor is showing; click for Chain & Sync, where you can switch"></span>
-      <span title="Server-sent events link">stream <b id="sseState" class="warn">connecting</b></span>
-      <span title="Node RPC round trip">rpc <b id="rpcLat">–</b></span>
-      <span title="Monitor uptime">up <b id="appUp">–</b></span>
+      <b id="rpcLat" hidden>–</b><b id="appUp" hidden>–</b>
       <!-- Shown only when the server reports accounts=false. The posture has to be
            visible in the page, not inferred from a sign-out button that is missing. -->
       <span id="accessPill" class="hidden"><b class="badge muted">open access</b></span>
@@ -81,40 +105,11 @@
       <button class="btn gear" id="btnSettings" title="Display settings" aria-label="Display settings" aria-expanded="false">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"><path d="M 13.94 2 c 0.50 0 0.92 0.37 0.99 0.87 l 0.26 1.85 c 0.50 0.18 0.97 0.41 1.40 0.69 l 1.73 -0.72 c 0.45 -0.19 0.98 -0.02 1.25 0.43 l 1.44 2.50 c 0.26 0.45 0.16 1.02 -0.24 1.28 l -1.47 1.16 c 0.04 0.28 0.06 0.56 0.06 0.84 c 0 0.28 -0.02 0.56 -0.06 0.84 l 1.47 1.16 c 0.40 0.26 0.50 0.83 0.24 1.28 l -1.44 2.50 c -0.27 0.45 -0.80 0.62 -1.25 0.43 l -1.73 -0.72 c -0.43 0.28 -0.90 0.51 -1.40 0.69 l -0.26 1.85 c -0.07 0.50 -0.49 0.87 -0.99 0.87 h -2.88 c -0.50 0 -0.92 -0.37 -0.99 -0.87 l -0.26 -1.85 c -0.50 -0.18 -0.97 -0.41 -1.40 -0.69 l -1.73 0.72 c -0.45 0.19 -0.98 0.02 -1.25 -0.43 l -1.44 -2.50 c -0.26 -0.45 -0.16 -1.02 0.24 -1.28 l 1.47 -1.16 c -0.04 -0.28 -0.06 -0.56 -0.06 -0.84 c 0 -0.28 0.02 -0.56 0.06 -0.84 l -1.47 -1.16 c -0.40 -0.26 -0.50 -0.83 -0.24 -1.28 l 1.44 -2.50 c 0.27 -0.45 0.80 -0.62 1.25 -0.43 l 1.73 0.72 c 0.43 -0.28 0.90 -0.51 1.40 -0.69 l 0.26 -1.85 c 0.07 -0.50 0.49 -0.87 0.99 -0.87 z M 12 8.40 a 3.60 3.60 0 1 0 0 7.20 a 3.60 3.60 0 0 0 0 -7.20 z"/></svg>
       </button>
-      <button class="btn" id="btnPause" title="Freeze live updates (hold Shift to also stop the event feed)">pause</button>
-      <button class="btn" id="btnLogout">sign out</button>
+      <button class="btn icon" id="btnPause" title="Freeze live updates (hold Shift to also stop the event feed)" aria-label="Pause live updates"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><g class="ic-pause" fill="currentColor"><rect x="3" y="2.5" width="3.5" height="11" rx="1"/><rect x="9.5" y="2.5" width="3.5" height="11" rx="1"/></g><path class="ic-play" fill="currentColor" d="M4 2.5v11l9-5.5z"/></svg></button>
+      <button class="btn icon" id="btnLogout" title="Sign out" aria-label="Sign out"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3M10 11.5 13.5 8 10 4.5M13.5 8H6"/></svg></button>
     </div>
   </header>
 
-  <!-- THE DIVERSIONS PANEL, a direct child of <body> (operator, Safari on macOS: "rendering on
-       safari is still broken. It's only showing half the drop-down contents").
-       It used to sit inside `header.top`, which is `overflow: hidden` and `height: 46px`. The panel
-       opens ~32px down and stands ~88px tall, so everything past the header's 46px was cut -- about
-       half of it, in WebKit. `position: fixed` is supposed to escape an ancestor's overflow, and in
-       Chrome and Firefox it did, which is why this looked fine everywhere it was tested.
-       The settings dialog (.cfgwrap) is the proof of the right shape: also fixed, also an overlay,
-       and it renders correctly in Safari. It sits out here at the top level of .app rather than
-       inside the header, and so does this panel now -- .app is a plain grid with no overflow, no
-       transform and no filter, so nothing between this element and the viewport can clip it or
-       become its containing block. (It is NOT a child of <body>: the page is wrapped in .app. The
-       invariant that matters is "not inside the clipped header", which is what the test pins.)
-       Its button stays in the header; only the panel moved, so app.js positions it from that
-       button's rect and routes the games from here. -->
-  <div class="navmenu-pop hidden" id="navNodePop" role="menu">
-    <button data-page="peers" role="menuitem">Peers</button>
-    <button data-page="network" role="menuitem">Network</button>
-    <button data-page="logs" role="menuitem">Events</button>
-    <button data-page="node" role="menuitem">Node &amp; RPC</button>
-  </div>
-  <div class="navmenu-pop hidden" id="navDivPop" role="menu">
-    <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
-    <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
-    <button data-page="blockanoid" role="menuitem" title="Blockanoid: Vaus, capsules and the minions">Blockanoid</button>
-    <button data-page="scorched" role="menuitem" title="Scorched Yard: artillery on a deformable block landscape">Scorched Yard</button>
-    <button data-page="wolf3d" role="menuitem" title="Wolfenstein 3D: the shareware WOLF3D.EXE on an emulated PC">Wolfenstein 3D</button>
-    <button data-page="doom" role="menuitem" title="DOOM: the shareware DOOM.EXE on an emulated 486">DOOM</button>
-    <button data-page="quake" role="menuitem" title="Quake: the shareware QUAKE.EXE on an emulated PC">Quake</button>
-  </div>
 
   <!-- Display settings (settings.js). Hidden until the gear is pressed; the contents are
        rendered from settings.js PANEL, so a value and its control cannot drift apart. -->

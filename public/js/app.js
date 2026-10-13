@@ -510,6 +510,11 @@ export function render() {
   // and rendered "0m" -- a made-up figure rather than a missing one. The reading is the number.
   if (s?.app?.uptimeSec != null) lastUptime = F.uptime(s.app.uptimeSec * 1000);
   document.getElementById('appUp').textContent = lastUptime ?? '–';
+  // the menu bar's badge: the rpc round trip and the uptime live in its tooltip (and on Node & RPC) since 2026-10-13
+  const sseDot = document.getElementById('sseState');
+  if (sseDot) sseDot.title = `the live stream: ${sseDot.textContent}`;
+  const badge = document.getElementById('nodePick');
+  if (badge) badge.title = `${badge.dataset.node ?? 'the node'} — rpc ${document.getElementById('rpcLat').textContent} · monitor up ${lastUptime ?? '–'} — click for Chain & Sync${badge.dataset.many ? ', where you can switch' : ''}`;
   document.getElementById('offline').classList.toggle('hidden', !!s?.online);
   if (s && !s.online) {
     document.getElementById('offline').innerHTML = `<b>${F.esc(s.label)} is not answering RPC.</b> `
@@ -1053,9 +1058,12 @@ function setPage(route) {
   state.xroute = page === 'explorer' ? rest.join('/') : '';
   state.page = page;
   document.querySelectorAll('.page').forEach((el) => el.classList.toggle('on', el.dataset.page === page));
-  document.querySelectorAll('nav.pages button').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
-  document.getElementById('navDivBtn')?.classList.toggle('on', DIVERSION_PAGES.includes(page));
-  document.getElementById('navNodeBtn')?.classList.toggle('on', NODE_PAGES.includes(page));
+  // the menu bar: the item of this page is `on`, so is the title of the menu that holds it, and the bar names the page
+  document.querySelectorAll('nav.pages button[data-page]').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
+  document.querySelectorAll('nav.pages .menu').forEach((m) => m.querySelector('.menu-title')?.classList.toggle('on', !!m.querySelector(`.menu-pop button[data-page="${page}"]`)));
+  const named = document.querySelector(`nav.pages button[data-page="${page}"]`);
+  const pageName = document.getElementById('pageName');
+  if (pageName) pageName.textContent = named ? named.childNodes[0]?.textContent?.trim() ?? '' : page === 'about' ? 'About' : page;
   const want = `#${page}${state.xroute ? `/${state.xroute}` : ''}`;
   if (location.hash !== want) history.replaceState(null, '', want);
   if (page === 'mempool') refreshMempoolDetail(true);
@@ -1219,7 +1227,9 @@ async function boot() {
   const renderPicker = (list) => {
     if (!list.length) return;
     const cur = list.find((n) => n.id === state.node) ?? list[0];
-    pick.innerHTML = `<span class="${STATE_DOT[cur.syncState] ?? 'faint'}${list.length > 1 ? ' nodebadge' : ''}" title="${F.esc(describe(cur) + ' — ' + cur.rpcUrl + (list.length > 1 ? ' — click for Chain & Sync to switch' : ''))}">${F.esc(cur.label)}</span>`;
+    pick.innerHTML = `<span class="${STATE_DOT[cur.syncState] ?? 'faint'}${list.length > 1 ? ' nodebadge' : ''}">${F.esc(cur.label)}</span>`;
+    pick.dataset.node = `${describe(cur)} — ${cur.rpcUrl}`;
+    if (list.length > 1) pick.dataset.many = '1'; else delete pick.dataset.many;
     if (!chPick) return;
     chPick.hidden = list.length < 2;
     if (list.length < 2) { chPick.innerHTML = ''; return; }
@@ -1254,68 +1264,64 @@ async function boot() {
     const jump = e.target.closest('[data-jump-node]');
     if (jump) await switchNode(jump.dataset.jumpNode);
   });
-  document.getElementById('nav').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-page]');
-    if (b) setPage(b.dataset.page);
+  // THE MENU BAR (2026-10-13, Finder-shaped; see index.html). One handler for every menu: a title click opens its
+  // list (and closes the others); while one is open, hovering another title switches to it; an item click routes and
+  // closes; Esc and a click elsewhere close; arrows move between titles and items; 1-9 jump to the pages whose items
+  // show that digit, when nothing that takes typing has the focus.
+  const bar = document.getElementById('nav');
+  const menusOf = () => [...bar.querySelectorAll('.menu')];
+  const openMenu = (m, on) => {
+    if (!m) return;
+    const title = m.querySelector('.menu-title'), pop = m.querySelector('.menu-pop');
+    if (!title || !pop) return;
+    if (on) for (const o of menusOf()) if (o !== m) openMenu(o, false);
+    pop.classList.toggle('hidden', !on);
+    title.setAttribute('aria-expanded', on ? 'true' : 'false');
+    title.classList.toggle('open', on);
+  };
+  const openOne = () => menusOf().find((m) => !m.querySelector('.menu-pop')?.classList.contains('hidden')) ?? null;
+  const closeAll = () => { for (const m of menusOf()) openMenu(m, false); };
+  bar.addEventListener('click', (e) => {
+    const item = e.target.closest('button[data-page]');
+    if (item) { setPage(item.dataset.page); closeAll(); return; }
+    const title = e.target.closest('.menu-title');
+    if (title) { e.stopPropagation(); const m = title.closest('.menu'); openMenu(m, m.querySelector('.menu-pop').classList.contains('hidden')); }
+  });
+  // hovering across the bar with a menu open moves the open one, as a menu bar does
+  bar.addEventListener('pointerover', (e) => {
+    const title = e.target.closest('.menu-title');
+    if (!title) return;
+    const m = title.closest('.menu');
+    if (openOne() && m && m !== openOne()) openMenu(m, true);
+  });
+  document.addEventListener('click', (e) => { if (!bar.contains(e.target)) closeAll(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeAll(); return; }
+    const open = openOne();
+    const typing = e.target.closest?.('input, select, textarea, [contenteditable]');
+    if (open) {
+      const items = [...open.querySelectorAll('.menu-pop button:not([hidden])')];
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); (items[i + 1] ?? items[0])?.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); (items[i - 1] ?? items.at(-1))?.focus(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const all = menusOf(), k = all.indexOf(open);
+        const next = all[(k + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+        openMenu(next, true); next.querySelector('.menu-pop button:not([hidden])')?.focus();
+      }
+      return;
+    }
+    if (typing || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (/^[1-9]$/.test(e.key)) {
+      const kbd = [...bar.querySelectorAll('button[data-page]:not([hidden]) kbd')].find((k) => k.textContent === e.key);
+      const b = kbd?.closest('button[data-page]');
+      if (b) { e.preventDefault(); setPage(b.dataset.page); }
+    }
   });
   // The monogram routes like a tab, but it lives OUTSIDE <nav> (it is the brand), and the handler
   // above is bound to the nav element -- so it needs its own listener rather than inheriting one.
   document.getElementById('brandAbout')?.addEventListener('click', () => setPage('about'));
-  // THE POP-DOWN MENUS: Diversions (2026-09-12) and Node (2026-10-13), one piece of code. Each opens on its button,
-  // closes on a choice, on a click anywhere else, and on Escape; opening one closes the other.
-  const menus = [];
-  const navMenu = (wrapId, btnId, popId) => {
-    const wrap = document.getElementById(wrapId), btn = document.getElementById(btnId), pop = document.getElementById(popId);
-    if (!btn || !pop) return null;
-    // The panel is position:fixed (see app.css), so it is placed from the button's own rect each
-    // time it opens -- the nav scrolls and the header clips, and a panel positioned inside either of
-    // them cannot be seen at all. Custom properties through the CSSOM, never a style attribute.
-    const place = () => {
-      const r = btn.getBoundingClientRect();
-      // MEASURED, not transformed. The panel used to be pulled left by translateX(-100%); now its
-      // real left edge is computed so nothing depends on transform behaviour I cannot test here.
-      // It must be measurable to be measured, so it is un-hidden first if it is not already open.
-      const wasHidden = pop.classList.contains('hidden');
-      if (wasHidden) pop.classList.remove('hidden');
-      const w = pop.offsetWidth || 160;
-      if (wasHidden) pop.classList.add('hidden');
-      // right-aligned to the button, then held inside the viewport on both sides
-      const left = Math.max(6, Math.min(r.right - w, window.innerWidth - w - 6));
-      pop.style.setProperty('--x', `${Math.round(left)}px`);
-      pop.style.setProperty('--y', `${Math.round(r.bottom + 6)}px`);
-    };
-    const open = (on) => {
-      if (on) { for (const m of menus) if (m.pop !== pop) m.open(false); place(); }
-      pop.classList.toggle('hidden', !on);
-      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
-    };
-    btn.addEventListener('click', (e) => { e.stopPropagation(); open(pop.classList.contains('hidden')); });
-    // The panel lives OUTSIDE <nav> (see index.html: WebKit would not let the button be clicked
-    // inside the scrolling nav), so the delegated handler bound to #nav never sees these items.
-    // They route from here instead -- without this the pages become unreachable, which is a
-    // worse fault than the one the move fixes.
-    pop.addEventListener('click', (e) => {
-      const b = e.target.closest?.('button[data-page]');
-      if (b) setPage(b.dataset.page);
-      open(false);
-    });
-    const m = { wrap, btn, pop, open, place };
-    menus.push(m);
-    return m;
-  };
-  navMenu('navNode', 'navNodeBtn', 'navNodePop');
-  navMenu('navDiv', 'navDivBtn', 'navDivPop');
-  // The panels are not inside their wrappers (they are children of .app, so the header cannot clip them), so a click
-  // INSIDE a panel is outside its wrapper. Without naming the panel too, opening a menu and clicking an item would close
-  // it before the item's own handler ran.
-  document.addEventListener('click', (e) => {
-    for (const m of menus) {
-      const inside = (m.wrap && m.wrap.contains(e.target)) || m.pop.contains(e.target);
-      if (!inside) m.open(false);
-    }
-  });
-  window.addEventListener('resize', () => { for (const m of menus) if (!m.pop.classList.contains('hidden')) m.place(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const m of menus) m.open(false); });
   // DISPLAY SETTINGS (settings.js). The panel is built from PANEL, so a control and its value
   // cannot drift apart, and every change is saved and applied without a reload: the boards read
   // loadSettings() on their next paint, and a repaint is asked for immediately.
@@ -1591,7 +1597,10 @@ async function boot() {
   document.getElementById('btnPause').addEventListener('click', (e) => {
     state.paused = !state.paused;
     state.pausedHard = e.shiftKey ? true : state.paused ? state.pausedHard : false;
-    e.target.textContent = state.paused ? 'resume' : 'pause';
+    const b = e.currentTarget;
+    b.classList.toggle('paused', state.paused);
+    b.title = state.paused ? 'Resume live updates' : 'Freeze live updates (hold Shift to also stop the event feed)';
+    b.setAttribute('aria-label', state.paused ? 'Resume live updates' : 'Pause live updates');
     e.target.classList.toggle('primary', state.paused);
     toast(state.paused ? `updates frozen${state.pausedHard ? ' including the event feed' : ''}` : 'updates resumed');
   });

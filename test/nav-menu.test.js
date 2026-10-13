@@ -1,119 +1,67 @@
-// THE DIVERSIONS MENU (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
-// options under a pop-down menu called 'Diversions'").
-//
-// Measured before this was pinned: at a 1600px window the nav ended at "Eve(nts)" and neither the
-// menu nor its open panel was on screen at all. Two separate traps, both invisible to a green
-// suite and both worth a guard:
-//
-//   1. `nav.pages` is a scroll container (overflow-x:auto, scrollbar hidden), so the LAST thing in
-//      the nav is the first to scroll out of reach. The menu is sticky to the right edge.
-//   2. A box with overflow-x:auto clips the other axis too, and `header.top` is overflow:hidden
-//      besides -- so a panel positioned inside either is simply not drawn. The panel is fixed.
+// THE MENU BAR (operator, 2026-10-13: "we need to find a way of drastically improving the top menu. I suggest a
+// complete rework. Perhaps based on MacOS Finder menus"). Every page in exactly one menu, each with a shortcut; the
+// Diversions (2026-09-12, "under a pop-down menu called 'Diversions'") and Node (2026-10-13) menus among them, and
+// Kiosk a direct item. The stub cannot open a menu, so this holds the markup and the code's shape.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const read = (f) => readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8');
 const html = read('index.html'), css = read('css/app.css'), app = read('js/app.js');
-const rule = (sel) => css.match(new RegExp(`\\${sel} \\{([^}]*)\\}`))?.[1] ?? '';
+const header = html.match(/<header class="top">[\s\S]*?<\/header>/)[0];
+const nav = header.match(/<nav class="pages" id="nav"[\s\S]*?<\/nav>/)[0];
+const menu = (id) => nav.match(new RegExp(`<div class="menu" id="${id}">[\\s\\S]*?<\\/div>\\s*<\\/div>`))?.[0] ?? '';
+const pagesIn = (block) => [...block.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]);
 
-test('the games live in the menu, at the end of the nav, and nowhere else', () => {
-  const pop = html.match(/<div class="navmenu-pop hidden" id="navDivPop"[\s\S]*?<\/div>/)?.[0] ?? '';   // its own panel: the Node menu has one too (2026-10-13)
-  assert.ok(pop, 'the panel exists');
-  const inPop = [...pop.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(inPop, ['tetrust', 'blockout', 'blockanoid', 'scorched', 'wolf3d', 'doom', 'quake'], 'every game is in it');
-  // exactly once in the whole page: they were moved, not copied
-  for (const page of inPop) {
-    assert.equal(html.match(new RegExp(`<button data-page="${page}"`, 'g')).length, 1, `${page} has one nav button`);
-  }
-  // the nav's own buttons no longer include them, and the menu sits after the last of them
-  const navRow = html.slice(html.indexOf('<nav'), html.indexOf('navmenu'));
-  assert.ok(!navRow.includes('data-page="tetrust"'), 'not among the working tabs any more');
-  assert.ok(html.indexOf('id="navAdmin"') < html.indexOf('id="navDivBtn"'), 'the menu comes last');
-});
-
-test('the toggle carries no data-page: a nav button with one must have a section behind it', () => {
-  // web-contract.test.js holds every `<button data-page>` in the nav to a matching page section.
-  const toggle = html.match(/<button type="button" class="navmenu-btn"[^>]*>/)?.[0] ?? '';
-  assert.ok(toggle, 'the toggle exists');
-  assert.ok(!toggle.includes('data-page'), 'and names no page');
-  assert.match(toggle, /aria-haspopup="true"/);
-  assert.match(toggle, /aria-expanded=/);
-});
-
-test('the menu is outside the scrolling nav, and its panel escapes the clipping', () => {
-  const menu = rule('.navmenu'), pop = rule('.navmenu-pop');
-  // NOT STICKY, AND NOT IN THE SCROLL CONTAINER. It was both, and on Safari for macOS the button
-  // was visible and unclickable: WebKit paints a sticky element in its stuck position but
-  // hit-tests it at its original layout position. Every check here passed while the menu was
-  // dead in that browser, so the guard is now structural -- the menu must sit outside <nav>.
-  assert.ok(!/position: sticky/.test(menu), 'sticky is what broke it in WebKit');
-  const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
-  assert.ok(!nav.includes('id="navDiv"'), 'the menu must not live inside the scrolling nav');
-  assert.match(app, /pop\.addEventListener\('click'[\s\S]{0,200}?setPage\(b\.dataset\.page\)/,
-    'outside <nav> the delegated handler cannot route the games: the panel must route them itself');
-  assert.match(pop, /position: fixed/, 'the nav and the header both clip; an absolute panel is invisible');
-  assert.match(pop, /left: var\(--x/); assert.match(pop, /top: var\(--y/);
-  // ...and the page positions it from the button's rect, through the CSSOM
-  assert.match(app, /pop\.style\.setProperty\('--x'/);
-  assert.match(app, /getBoundingClientRect\(\)/);
-  // FIXED IS NOT ENOUGH IN WEBKIT. `header.top` is overflow:hidden and 46px tall; the panel opens
-  // below that and stands ~88px, and Safari clipped it to the header -- "only showing half the
-  // drop-down contents" -- while Chrome and Firefox let the fixed panel escape. So the panel must
-  // be a child of <body>, like .cfgwrap, which is the fixed overlay that always rendered correctly.
-  const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
-  assert.ok(!header.includes('id="navDivPop"'), 'the panel must not live inside the clipped header');
-  // ...and the element it DOES sit in must not clip or contain it either. `.app` is a plain grid;
-  // if it ever grows an overflow, a transform or a filter, this panel gets clipped again in WebKit
-  // and nothing else here would notice.
-  const appRule = css.match(/^\.app \{([^}]*)\}/m)?.[1] ?? '';
-  assert.ok(appRule, '.app must exist: it is what holds the panel');
-  for (const bad of ['overflow', 'transform', 'filter', 'perspective', 'contain']) {
-    assert.ok(!new RegExp(`(^|;)\\s*${bad}\\s*:`).test(appRule),
-      `.app must not set ${bad}: it would clip or contain the fixed panel, which is the Safari bug`);
-  }
-  assert.ok(!/\.navmenu-pop \{[^}]*transform:/.test(css),
-    'no transform either: the left edge is measured and set, not pulled back by translateX');
-  assert.ok(!/navmenu-pop[^>]*style="/.test(html), 'no style attribute: the CSP forbids them');
-});
-
-test('every game stops when you leave its page: the guard BlockMan was missing', () => {
-  // WHY THIS TEST EXISTS. BlockMan's loop had no page check, so its attract mode went on playing --
-  // sound and all -- while you were reading the Mempool page (operator, 2026-09-17: "blockman keeps
-  // playing attract mode in the background. WTF is that"). Every other game already paused itself;
-  // the game that did not was the one written last. So the rule is asserted rather than remembered.
-  const games = {
-    'public/js/tetrust.js': 'tetrust',
-    'public/js/blockout.js': 'blockout',
-    'public/js/blockanoid.js': 'blockanoid',
-    'public/js/scorchedyard.js': 'scorched',
-    'public/js/dosgame.js': 'spec.page',          // the three DOS games share one runner
-  };
-  for (const [file, page] of Object.entries(games)) {
-    const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
-    assert.match(src, /document\.hidden/, `${file} notices a hidden tab`);
-    const guard = new RegExp(`G\\.state\\?\\.page !== ${page.startsWith('spec') ? 'spec\\.page' : `'${page}'`}`);
-    assert.match(src, guard, `${file} stops its loop when its page is not the one on screen`);
-    assert.match(src, /visibilitychange/, `${file} pauses when the tab goes away`);
+test('five menus, every page in exactly one of them, Kiosk a direct item, the games last', () => {
+  assert.deepEqual(pagesIn(menu('menuMonitor')), ['overview', 'space', 'chain', 'mempool', 'mining']);
+  assert.deepEqual(pagesIn(menu('menuExplore')), ['explorer', 'markets', 'weather']);
+  assert.deepEqual(pagesIn(menu('navNode')), ['peers', 'network', 'logs', 'node', 'admin']);
+  assert.deepEqual(pagesIn(menu('navDiv')), ['tetrust', 'blockout', 'blockanoid', 'scorched', 'wolf3d', 'doom', 'quake'], 'every game is in Diversions');
+  assert.match(nav, /<button data-page="kiosk" class="menu-title direct"/, 'Kiosk is one click, for a wall');
+  const all = pagesIn(nav);
+  assert.equal(new Set(all).size, all.length, 'no page is in two menus');
+  const titles = [...nav.matchAll(/<div class="menu" id="([A-Za-z]+)">/g)].map((m) => m[1]);
+  assert.deepEqual(titles, ['menuMonitor', 'menuExplore', 'navNode', 'navDiv'], 'in this order, Diversions last');
+  assert.ok(nav.indexOf('data-page="kiosk"') < nav.indexOf('id="navDiv"'), 'Kiosk before Diversions');
+  for (const t of [...nav.matchAll(/<button type="button" class="menu-title"[^>]*>/g)].map((m) => m[0])) {
+    assert.ok(!t.includes('data-page'), 'a menu title names no page: a button with one must have a section behind it');
+    assert.match(t, /aria-haspopup="true"/); assert.match(t, /aria-expanded=/);
   }
 });
 
-// THE NODE MENU (operator, 2026-10-13: "shrinking up the top menus to make more space ... move chain selection to
-// 'Chain and Sync' panel"): Peers, Network, Events and Node & RPC behind one tab, the picker on Chain & Sync.
-test('the four node pages live in the Node menu, the picker on Chain & Sync, a badge in the header', () => {
-  const pop = html.match(/<div class="navmenu-pop hidden" id="navNodePop"[\s\S]*?<\/div>/)?.[0];
-  assert.ok(pop, 'the Node panel exists');
-  assert.deepEqual([...pop.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]), ['peers', 'network', 'logs', 'node']);
-  const navRow = html.match(/<nav class="pages" id="nav">[\s\S]*?<\/nav>/)[0];
-  for (const p of ['peers', 'network', 'logs', 'node']) assert.ok(!navRow.includes(`data-page="${p}"`), `${p} is not a plain tab any more`);
-  assert.equal([...navRow.matchAll(/<button data-page=/g)].length, 10, 'ten tabs in the bar (Admin among them, hidden unless admin)');
-  assert.ok(html.indexOf('id="navNode"') < html.indexOf('id="navDiv"'), 'Node before Diversions');
-  assert.ok(!navRow.includes('id="navNode"'), 'outside the scrolling nav, like Diversions (WebKit)');
-  assert.match(app, /NODE_PAGES = \['peers', 'network', 'logs', 'node'\]/);
-  assert.match(app, /navMenu\('navNode', 'navNodeBtn', 'navNodePop'\)/);
-  assert.match(app, /navMenu\('navDiv', 'navDivBtn', 'navDivPop'\)/, 'the same code runs both menus');
-  assert.ok(html.includes('id="chNodePick"'), 'the picker\u2019s place on Chain & Sync');
-  assert.ok(html.indexOf('id="chNodePick"') > html.indexOf('data-page="chain">'), 'inside the Chain & Sync section');
-  assert.match(app, /chPick\.hidden = list\.length < 2/, 'shown only with more than one node');
-  assert.match(app, /pick\.addEventListener\('click', \(\) => setPage\('chain'\)\)/, 'the header badge opens Chain & Sync');
+test('the shortcuts: 1-9 on the nine working pages, shown Finder-style on the items, each once', () => {
+  const keys = [...nav.matchAll(/data-page="([a-z0-9]+)"[^>]*>[^<]*<kbd>(\d)<\/kbd>/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(keys, [['overview', '1'], ['space', '2'], ['chain', '3'], ['mempool', '4'], ['mining', '5'], ['explorer', '6'], ['markets', '7'], ['weather', '8'], ['kiosk', '9']]);
+  assert.match(app, /\/\^\[1-9\]\$\/\.test\(e\.key\)/, 'the digits route');
+  assert.match(app, /e\.target\.closest\?\.\('input, select, textarea, \[contenteditable\]'\)/, 'never while typing');
+  assert.match(css, /\.menu-pop button kbd \{ margin-left: auto;/, 'at the item\u2019s right');
+});
+
+test('the bar behaves like a menu bar: hover switches an open menu, Esc and a click elsewhere close, arrows move', () => {
+  assert.match(app, /bar\.addEventListener\('pointerover'/, 'hovering a title with a menu open');
+  assert.match(app, /if \(openOne\(\) && m && m !== openOne\(\)\) openMenu\(m, true\)/, 'moves the open menu');
+  assert.match(app, /if \(e\.key === 'Escape'\) \{ closeAll\(\); return; \}/);
+  assert.match(app, /document\.addEventListener\('click', \(e\) => \{ if \(!bar\.contains\(e\.target\)\) closeAll\(\); \}\)/);
+  assert.match(app, /e\.key === 'ArrowDown'/); assert.match(app, /e\.key === 'ArrowRight' \|\| e\.key === 'ArrowLeft'/);
+  assert.match(app, /setPage\(item\.dataset\.page\); closeAll\(\)/, 'an item routes and closes');
+  assert.match(app, /pageName\.textContent = /, 'the bar names the page');
+  assert.ok(header.includes('id="pageName"'));
+  // the lists live INSIDE the bar now (no scrolling nav to clip them), under their titles
+  assert.ok(nav.includes('id="navDivPop"') && nav.includes('id="navNodePop"'), 'the panels are in the nav');
+  assert.ok(!/position: fixed/.test(css.match(/\.menu-pop \{[^}]*\}/)[0]), 'absolute under the title, not fixed');
+  assert.ok(!html.includes('navmenu-pop'), 'the old out-of-header panels are gone');
+  assert.ok(!/style="/.test(header), 'no style attributes (CSP)');
+});
+
+test('the right of the bar: the stream dot, the node badge, three icon buttons', () => {
+  const meta = header.match(/<div class="meta">[\s\S]*?<\/div>/)[0];
+  assert.ok(meta.indexOf('id="sseState"') < meta.indexOf('id="nodePick"'), 'the dot beside the badge');
+  assert.match(meta, /<b id="rpcLat" hidden>/); assert.match(meta, /<b id="appUp" hidden>/, 'rpc and uptime kept for render(), hidden: they are the badge\u2019s tooltip');
+  assert.match(app, /badge\.title = `\$\{badge\.dataset\.node/, 'and the tooltip is written every frame');
+  for (const id of ['btnSettings', 'btnPause', 'btnLogout']) assert.ok(header.includes(`id="${id}"`), id);
+  assert.match(header, /id="btnPause"[^>]*aria-label="Pause live updates"/);
+  assert.match(app, /b\.classList\.toggle\('paused', state\.paused\)/, 'pause flips its icon, not its text');
+  assert.match(app, /pick\.addEventListener\('click', \(\) => setPage\('chain'\)\)/, 'the badge opens Chain & Sync');
+  assert.match(app, /chPick\.hidden = list\.length < 2/, 'the picker there shows only with more than one node');
 });

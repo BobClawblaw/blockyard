@@ -8,20 +8,13 @@ import { readFileSync } from 'node:fs';
 
 const css = readFileSync(new URL('../public/css/app.css', import.meta.url), 'utf8');
 
-test('below 1440 px the tabs take a row of their own, and can still be scrolled', () => {
-  // 2026-09-12: the threshold was 1400, and measurement showed that far too low -- the nav wanted
-  // 979 px of tabs (1031 above 1760) and the inline bar gave it 747 px at 1600 and 961 at 1920, so
-  // two or three tabs sat past the fold at every width between 1400 and 2000, behind a scrollbar
-  // that is not drawn. It first fit inline at 2000 (1031 in 1031).
-  // 2026-10-13: four tabs moved under the Node menu (operator: "It's getting tight up there"): ten tabs
-  // are 665 px, and with the node badge capped at 18ch and the uptime and rpc pills hidden below
-  // 1800 / 1500, one row holds from 1440 (measured: header 46 px at 1440, 1600, 1920; 69 at 1280).
-  assert.match(css, /@media \(max-width: 1799px\) \{ #nodePick > span \{ max-width: 18ch; \}/, 'the badge is capped first');
-  const at = css.slice(css.indexOf('@media (max-width: 1439px) {'));
-  assert.match(at, /header\.top \{ flex-wrap: wrap; height: auto;/, 'the bar may wrap');
-  assert.match(at, /nav\.pages \{ order: 10; flex: 1 0 100%;/, 'the nav takes the full row');
-  assert.match(at, /nav\.pages::-webkit-scrollbar \{ display: block;/, 'and shows its scrollbar where it still overflows');
-  assert.match(css, /nav\.pages \{[^}]*overflow-x: auto/, 'the nav scrolls sideways at every width');
+test('the bar never wraps: one 28 px line of menu titles at every width (2026-10-13)', () => {
+  // 2026-09-12 to 2026-10-13 the tabs took a row of their own below a measured width (2000, then 1440 with the Node
+  // menu). The Finder-style bar has five titles and no tabs, so there is nothing left to wrap.
+  assert.match(css, /header\.top \{[^}]*height: 28px/);
+  assert.doesNotMatch(css, /header\.top \{ flex-wrap: wrap/, 'no wrapping rule at any width');
+  assert.doesNotMatch(css, /nav\.pages \{ order: 10; flex: 1 0 100%/, 'and the nav never takes a row');
+  assert.match(css, /nav\.pages \{[^}]*flex: 0 0 auto/, 'the nav holds its width: five words');
 });
 
 test('the kiosk keeps two columns until 900 px, and fills main rather than assuming a bar height', () => {

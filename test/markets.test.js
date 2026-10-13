@@ -137,7 +137,7 @@ test('markets are wired, on by default, and switch off with BLOCKYARD_MARKETS=0'
   const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
   assert.match(read('../server/http/api.js'), /path: '\/api\/markets'/);
   const html = read('../public/index.html');
-  assert.match(html, /<button data-page="markets">/);
+  assert.match(html, /<button data-page="markets" role="menuitem">Markets<kbd>7<\/kbd>/, "an item of the Explore menu, shortcut 7 (the menu bar, 2026-10-13)");
   assert.match(html, /id="mkBoard"/);
   assert.match(read('../public/js/app.js'), /case 'markets'/);
   // the feed is built by default (the POLLING switch, off out of the box, is a Display setting:

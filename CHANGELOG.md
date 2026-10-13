@@ -32,6 +32,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **The top bar is a menu bar.** One 28 px line in the shape of a Finder menu bar: Monitor, Explore,
+  Node and Diversions open lists, Kiosk is one click, the page's name sits beside them, and the
+  right end is the node badge (its tooltip carries the rpc round trip and the uptime) with the
+  stream's state as a dot and three icon buttons. Hovering across titles with a menu open switches
+  it, Esc and a click elsewhere close, arrows move, and **1–9 jump to the nine working pages** (the
+  digit shows on each item). It never wraps at any width; the old bar of thirteen tabs was 46 px and
+  69 below 1440. The node picker lives on Chain & Sync, shown only with more than one node.
+
 - **A Bitcoin Machine Code node is listed throughout its initial sync.** The 0.1.3 rule that kept a
   mid-sync bmc node out of the node picker, the "also syncing" buttons and the attention list until
   it reached 100% is reversed: watching a bmc sync live is now the job, and the log follower's

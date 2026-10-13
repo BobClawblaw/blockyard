@@ -409,7 +409,7 @@ test('the explorer is wired: routes, a nav tab, a page section and a render case
   const api = readFileSync(new URL('../server/http/api.js', import.meta.url), 'utf8');
   for (const p of ['search', 'tx', 'block', 'address']) assert.match(api, new RegExp(`path: '/api/x/${p}'`));
   const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
-  assert.match(html, /<button data-page="explorer">/);
+  assert.match(html, /<button data-page="explorer" role="menuitem">Explorer<kbd>6<\/kbd>/, "an item of the Explore menu, shortcut 6 (the menu bar, 2026-10-13)");
   assert.match(html, /id="xSearch"/);
   const app = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
   assert.match(app, /case 'explorer'/);

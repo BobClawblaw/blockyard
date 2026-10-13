@@ -290,6 +290,23 @@ silently ate another test's result line — rule 22.
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
 
+## Current state (2026-10-13, evening): the menu bar
+
+**The top bar is a Finder-style menu bar** (operator: "we need to find a way of drastically improving the top menu. I
+suggest a complete rework. Perhaps based on MacOS Finder menus ... what we have is just eating too much valuable
+information space"; earlier the same day "move chain selection to 'Chain and Sync' panel"). `header.top` is ONE 28 px
+line at every width: `nav.pages` holds five `.menu` titles -- Monitor (Overview, Block space, Chain & Sync, Mempool,
+Mining), Explore (Explorer, Markets, Weather), Node (Peers, Network, Events, Node & RPC, Admin), Kiosk as a direct
+`button[data-page]`, Diversions -- each `.menu-pop` ABSOLUTE under its title, inside the bar (`overflow: clip visible`:
+clipped sideways, the lists hang out below). `#pageName` names the page. app.js `menuBar` code: click opens, pointerover
+on another title while one is open switches, Esc / outside click close, arrows move, digits 1-9 route to the item
+carrying that `<kbd>` unless an input has focus. The right end: `#sseState` is a DOT (colour by id-specific rules --
+`.top .meta b` outranks `.ok`), `#nodePick` the badge (its `title` is rewritten every render with rpc and uptime, whose
+elements stay hidden for render()), `btnSettings` / `btnPause` (an icon that flips to play, `.paused`) / `btnLogout`.
+The node picker is `#chNodePick` on Chain & Sync, shown with more than one node. Tests: `test/nav-menu.test.js`,
+`test/header-bar.test.js`, `test/responsive.test.js` (no wrap rule may exist). What will bite: a new page goes in exactly
+ONE menu (nav-menu.test counts); a menu title must carry no `data-page`; the old `.navmenu-pop` fixed panels are gone.
+
 ## Current state (2026-10-13): local weather
 
 **A weather ribbon and an optional Weather tab** (operator: "add a local weather report feature ... Something users
