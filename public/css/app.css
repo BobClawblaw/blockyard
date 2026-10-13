@@ -2221,13 +2221,18 @@ table.sykeys td { padding: 2px 0; }
 .wx-hl { display: flex; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .wx-hl b { font-weight: 650; }
 .wx-hl i { font-style: normal; opacity: .62; }
+/* HIGH AND LOW, BOTH, ALWAYS (operator, 2026-10-13: "weather forecast needs to show highs and lows for the day"): the
+   high warm, the low cool, a slash between -- and never hidden for want of room: the icon shrinks instead */
+.wx-day .wx-hl b { color: #ffe0a8; }
+.wx-day .wx-hl i { color: #bcd8ff; opacity: .95; }
+.wx-day .wx-hl i::before { content: '/'; color: rgba(255, 255, 255, .45); margin-right: 3px; font-weight: 400; }
 .wx-bar { display: block; width: 100%; height: 6px; margin-top: 3px; overflow: visible; color: rgba(255, 255, 255, .12); }
 .wx-bar .wx-track { stroke-width: 4px; } .wx-bar .wx-span { stroke-width: 4px; } .wx-bar .wx-now-tick { stroke-width: 6px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .6)); }
 .wx-nowonly .wx-24 { flex: 1 1 auto; justify-content: flex-start; }
 /* narrower slots: the facts go first, then the 24 hours, then the words under the temperature */
 @container (max-width: 1320px) { .wx:not(.wx-nowonly) .wx-facts { display: none; } }
 @container (max-width: 1040px) { .wx:not(.wx-nowonly) .wx-24 { display: none; } }
-@container (max-width: 760px) { .wx-say span:not(.wx-where) { display: none; } .wx-temp b { font-size: 36px; } .wx-days { grid-auto-columns: minmax(42px, 1fr); gap: 3px; } .wx-hl i { display: none; } }
+@container (max-width: 760px) { .wx-say span:not(.wx-where) { display: none; } .wx-temp b { font-size: 36px; } .wx-days { grid-auto-columns: minmax(42px, 1fr); gap: 3px; } .wx-day .wx-ico { width: 24px; height: 24px; } }
 @container (max-width: 520px) { .wx-say { display: none; } .wx-24 { display: none; } }
 /* the Kiosk: the top and bottom ribbons span both columns; one in a column is a strip of that column */
 .kiosk { grid-template-rows: auto minmax(0, 1fr) auto; row-gap: 0; }
@@ -2363,7 +2368,7 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wx-slim .wx-dn b { font-weight: 650; }
 .wx-slim .wx-day .wx-ico { margin: 0; }
 .wx-slim .wx-hl { font-size: 11.5px; gap: 3px; }
-@container (max-width: 1320px) { .wx-slim:not(.wx-nowonly) .wx-facts { display: none; } .wx-slim .wx-hl i { display: none; } }   /* the low goes; the date line stays */
+@container (max-width: 1320px) { .wx-slim:not(.wx-nowonly) .wx-facts { display: none; } .wx-slim .wx-day .wx-ico { width: 20px; height: 20px; } .wx-slim .wx-hl { font-size: 10.5px; gap: 2px; } }   /* the facts go and the icon shrinks; the high, the low and the date stay */
 @container (max-width: 1000px) { .wx-slim .wx-dn b { display: none; } }
 @container (max-width: 1000px) { .wx-slim:not(.wx-nowonly) .wx-24 { display: none; } }
 
