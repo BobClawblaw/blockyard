@@ -88,6 +88,10 @@ test('no tracked file contains this machine username, hostname or addresses', ()
     let text;
     try { text = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
     for (const id of identity) {
+      // THE PLACE NAMES OF THE WORLD are not this machine's identity (2026-10-13): public/geo/places-10m.json is
+      // Natural Earth's 7,342 towns, and one of them will coincide with somebody's account name (Xi'an did here).
+      // The username check alone is set aside for the geo data files; hostnames and addresses are still checked.
+      if (id.kind === 'username' && /^public\/geo\/[a-z0-9-]+\.json$/.test(f)) continue;
       if (id.re.test(text)) hits.push(`${f} contains ${id.kind} "${id.shown}"`);
     }
   }

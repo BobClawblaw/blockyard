@@ -212,11 +212,16 @@ export function iconSvg(w, size = 48) {
 // ------------------------------------------------------------------ the pieces of the ribbon
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayName = (iso, i) => {
   if (i === 0) return 'Today';
   const [y, m, d] = String(iso).split('-').map(Number);
   return Number.isFinite(y) ? DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()] : '–';
 };
+// THE DATE ON EVERY TILE (operator, 2026-10-13: "Ribbon needs to show dates at the very least"): the day of the
+// month beside the weekday on a slim tile, the month and day under it on a full one
+const dayNum = (iso) => { const d = Number(String(iso).slice(8, 10)); return Number.isFinite(d) ? String(d) : ''; };
+const monthDay = (iso) => { const m = Number(String(iso).slice(5, 7)), d = dayNum(iso); return m >= 1 && d ? `${MON[m - 1]} ${d}` : ''; };
 const clock = (iso) => {
   const m = /T(\d\d):(\d\d)/.exec(String(iso ?? ''));
   if (!m) return '–';
@@ -348,9 +353,9 @@ export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false 
       const pop = x.pop != null && x.pop >= 10 ? `<span class="wx-pop${x.pop >= 60 ? ' wet' : ''}">${Math.round(x.pop)}%</span>` : '<span class="wx-pop"></span>';
       const title = esc(`${x.date}: ${xw.label}${x.pop != null ? `, ${Math.round(x.pop)}% chance of rain` : ''}${x.precip ? `, ${x.precip} ${units === 'imperial' ? 'in' : 'mm'}` : ''}${x.wind != null ? `, wind to ${Math.round(x.wind)} ${wind}` : ''}`);
       // slim: the name, the icon and the two figures in one tile, the chance of rain only when it is worth a number
-      if (slim) return `<div class="wx-day${i === 0 ? ' today' : ''}${x.pop >= 60 ? ' wet' : ''}" title="${title}"><span class="wx-dn">${dayName(x.date, i === 0 ? -1 : i)}</span>${iconSvg(xw, 24)}<span class="wx-hl"><b>${deg(x.hi)}</b><i>${deg(x.lo)}</i></span></div>`;
+      if (slim) return `<div class="wx-day${i === 0 ? ' today' : ''}${x.pop >= 60 ? ' wet' : ''}" title="${title}"><span class="wx-dn"><b>${dayName(x.date, i === 0 ? -1 : i)}</b> ${dayNum(x.date)}</span>${iconSvg(xw, 24)}<span class="wx-hl"><b>${deg(x.hi)}</b><i>${deg(x.lo)}</i></span></div>`;
       return `<div class="wx-day${i === 0 ? ' today' : ''}" title="${title}">`
-        + `<span class="wx-dn">${dayName(x.date, i)}</span>${iconSvg(xw, compact ? 32 : 38)}${pop}`
+        + `<span class="wx-dn">${dayName(x.date, i)}<small>${monthDay(x.date)}</small></span>${iconSvg(xw, compact ? 32 : 38)}${pop}`
         + `<span class="wx-hl"><b>${deg(x.hi)}</b><i>${deg(x.lo)}</i></span>${dayBar(x, lo, hi, units, gid, i === 0 ? c.temp : null)}</div>`;
     }).join('')}</div>`;
   }

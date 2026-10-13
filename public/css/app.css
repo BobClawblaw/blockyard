@@ -173,7 +173,7 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
    readout is already hidden at this width and the chip still ends ~255px clear of the window edge.
    The ellipsis and the tooltip (which names the node AND its endpoint) remain the backstop for
    names longer than this. */
-@media (max-width: 1280px) { .top .meta > span[title="Node RPC round trip"] { display: none; } #nodePick > span { max-width: 26ch; } }
+@media (max-width: 1499px) { .top .meta > span[title="Node RPC round trip"] { display: none; } }   /* the last 60 px the ten tabs need at 1440 (2026-10-13) */
 
 /* THE TABS GET THEIR OWN ROW WHEN THE WINDOW IS NARROW (operator, 2026-09-11: "we need scrolling to
    see menu/tabs that are being cut off and not displayed"). The bar is one unwrappable line, so at
@@ -188,7 +188,11 @@ nav.pages button.on { background: var(--bg-3, #12161c); color: var(--accent); bo
    1600, 841 at 1800 and 961 at 1920. So between 1400 and 2000 the last two or three tabs were past
    the fold at EVERY width, behind a hidden scrollbar. It first genuinely fits at 2000 (1031 in
    1031), so that is where the bar stops wrapping. */
-@media (max-width: 1999px) {
+/* RE-MEASURED 2026-10-13 with the Node menu (ten tabs, 665 px; operator: "It's getting tight up there"): the other items
+   are brand 94-207, the two menus 137, meta 310-460, chip 89-196, gaps 112. With the badge capped at 18ch and the uptime
+   hidden below 1800 (next rule) one row holds at 1440 (1427 used) and above; below that the nav takes its own row. */
+@media (max-width: 1799px) { #nodePick > span { max-width: 18ch; } .top .meta > span[title="Monitor uptime"] { display: none; } }
+@media (max-width: 1439px) {
   header.top { flex-wrap: wrap; height: auto; padding-bottom: 6px; row-gap: 2px; }
   nav.pages { order: 10; flex: 1 0 100%; margin-left: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
   nav.pages::-webkit-scrollbar { display: block; height: 6px; }
@@ -2210,7 +2214,8 @@ table.sykeys td { padding: 2px 0; }
   border: 1px solid rgba(255, 255, 255, .07); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
 }
 .wx-day.today { background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .07)); border-color: rgba(255, 255, 255, .22); }
-.wx-dn { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; opacity: .9; }
+.wx-dn { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; opacity: .9; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.wx-dn small { font-size: 8.5px; font-weight: 500; letter-spacing: .04em; opacity: .75; text-transform: none; }
 .wx-pop { font-size: 9.5px; font-weight: 650; color: #a8d8ff; min-height: 12px; line-height: 12px; }
 .wx-pop.wet { color: #6cc0ff; }
 .wx-hl { display: flex; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.2; }
@@ -2352,12 +2357,20 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wx-slim .wx-24 { padding: 0 10px; }
 .wx-slim .wx-hours { height: 40px; }
 .wx-slim .wx-days { gap: 4px; padding-left: 10px; grid-auto-columns: minmax(0, 1fr); }
-.wx-slim .wx-day { flex-direction: row; align-items: center; justify-content: center; gap: 5px; padding: 3px 4px; border-radius: 7px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.wx-slim .wx-day { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 4px; padding: 2px 4px; border-radius: 7px; min-width: 0; overflow: hidden; white-space: nowrap; }   /* two lines: the date, then the icon and figures */
 .wx-slim .wx-day.wet { background: linear-gradient(180deg, rgba(90, 160, 255, .22), rgba(90, 160, 255, .08)); }
-.wx-slim .wx-dn { font-size: 9.5px; width: auto; line-height: 1; }
+.wx-slim .wx-dn { font-size: 9px; width: 100%; line-height: 1.1; flex-direction: row; justify-content: center; gap: 3px; letter-spacing: .04em; }
+.wx-slim .wx-dn b { font-weight: 650; }
 .wx-slim .wx-day .wx-ico { margin: 0; }
 .wx-slim .wx-hl { font-size: 11.5px; gap: 3px; }
-@container (max-width: 1320px) { .wx-slim:not(.wx-nowonly) .wx-facts { display: none; } .wx-slim .wx-hl i { display: none; } }
+@container (max-width: 1320px) { .wx-slim:not(.wx-nowonly) .wx-facts { display: none; } .wx-slim .wx-hl i { display: none; } }   /* the low goes; the date line stays */
+@container (max-width: 1000px) { .wx-slim .wx-dn b { display: none; } }
 @container (max-width: 1000px) { .wx-slim:not(.wx-nowonly) .wx-24 { display: none; } }
-@container (max-width: 1150px) { .wx-slim .wx-dn { display: none; } }
+
 @container (max-width: 760px) { .wx-slim .wx-say span { display: none; } }
+/* the node badge (header) and the picker on Chain & Sync (2026-10-13) */
+#nodePick > span.nodebadge { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.chnodes { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--bg-1); border: 1px solid var(--line-soft); border-radius: 6px; font-size: 12.5px; }
+.chnodes[hidden] { display: none; }
+.chnodes label { display: flex; gap: 8px; align-items: baseline; }
+.chnodes select { max-width: 60ch; }

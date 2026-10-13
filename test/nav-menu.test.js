@@ -18,7 +18,7 @@ const html = read('index.html'), css = read('css/app.css'), app = read('js/app.j
 const rule = (sel) => css.match(new RegExp(`\\${sel} \\{([^}]*)\\}`))?.[1] ?? '';
 
 test('the games live in the menu, at the end of the nav, and nowhere else', () => {
-  const pop = html.match(/<div class="navmenu-pop[\s\S]*?<\/div>/)?.[0] ?? '';
+  const pop = html.match(/<div class="navmenu-pop hidden" id="navDivPop"[\s\S]*?<\/div>/)?.[0] ?? '';   // its own panel: the Node menu has one too (2026-10-13)
   assert.ok(pop, 'the panel exists');
   const inPop = [...pop.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]);
   assert.deepEqual(inPop, ['tetrust', 'blockout', 'blockanoid', 'scorched', 'wolf3d', 'doom', 'quake'], 'every game is in it');
@@ -50,12 +50,12 @@ test('the menu is outside the scrolling nav, and its panel escapes the clipping'
   assert.ok(!/position: sticky/.test(menu), 'sticky is what broke it in WebKit');
   const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
   assert.ok(!nav.includes('id="navDiv"'), 'the menu must not live inside the scrolling nav');
-  assert.match(app, /divPop\?\.addEventListener\('click'[\s\S]{0,200}?setPage\(b\.dataset\.page\)/,
+  assert.match(app, /pop\.addEventListener\('click'[\s\S]{0,200}?setPage\(b\.dataset\.page\)/,
     'outside <nav> the delegated handler cannot route the games: the panel must route them itself');
   assert.match(pop, /position: fixed/, 'the nav and the header both clip; an absolute panel is invisible');
   assert.match(pop, /left: var\(--x/); assert.match(pop, /top: var\(--y/);
   // ...and the page positions it from the button's rect, through the CSSOM
-  assert.match(app, /divPop\.style\.setProperty\('--x'/);
+  assert.match(app, /pop\.style\.setProperty\('--x'/);
   assert.match(app, /getBoundingClientRect\(\)/);
   // FIXED IS NOT ENOUGH IN WEBKIT. `header.top` is overflow:hidden and 46px tall; the panel opens
   // below that and stands ~88px, and Safari clipped it to the header -- "only showing half the
@@ -96,4 +96,24 @@ test('every game stops when you leave its page: the guard BlockMan was missing',
     assert.match(src, guard, `${file} stops its loop when its page is not the one on screen`);
     assert.match(src, /visibilitychange/, `${file} pauses when the tab goes away`);
   }
+});
+
+// THE NODE MENU (operator, 2026-10-13: "shrinking up the top menus to make more space ... move chain selection to
+// 'Chain and Sync' panel"): Peers, Network, Events and Node & RPC behind one tab, the picker on Chain & Sync.
+test('the four node pages live in the Node menu, the picker on Chain & Sync, a badge in the header', () => {
+  const pop = html.match(/<div class="navmenu-pop hidden" id="navNodePop"[\s\S]*?<\/div>/)?.[0];
+  assert.ok(pop, 'the Node panel exists');
+  assert.deepEqual([...pop.matchAll(/data-page="([a-z0-9]+)"/g)].map((m) => m[1]), ['peers', 'network', 'logs', 'node']);
+  const navRow = html.match(/<nav class="pages" id="nav">[\s\S]*?<\/nav>/)[0];
+  for (const p of ['peers', 'network', 'logs', 'node']) assert.ok(!navRow.includes(`data-page="${p}"`), `${p} is not a plain tab any more`);
+  assert.equal([...navRow.matchAll(/<button data-page=/g)].length, 10, 'ten tabs in the bar (Admin among them, hidden unless admin)');
+  assert.ok(html.indexOf('id="navNode"') < html.indexOf('id="navDiv"'), 'Node before Diversions');
+  assert.ok(!navRow.includes('id="navNode"'), 'outside the scrolling nav, like Diversions (WebKit)');
+  assert.match(app, /NODE_PAGES = \['peers', 'network', 'logs', 'node'\]/);
+  assert.match(app, /navMenu\('navNode', 'navNodeBtn', 'navNodePop'\)/);
+  assert.match(app, /navMenu\('navDiv', 'navDivBtn', 'navDivPop'\)/, 'the same code runs both menus');
+  assert.ok(html.includes('id="chNodePick"'), 'the picker\u2019s place on Chain & Sync');
+  assert.ok(html.indexOf('id="chNodePick"') > html.indexOf('data-page="chain">'), 'inside the Chain & Sync section');
+  assert.match(app, /chPick\.hidden = list\.length < 2/, 'shown only with more than one node');
+  assert.match(app, /pick\.addEventListener\('click', \(\) => setPage\('chain'\)\)/, 'the header badge opens Chain & Sync');
 });

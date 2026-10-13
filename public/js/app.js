@@ -1045,6 +1045,8 @@ function shortBuild(build) {
 // The games live behind the Diversions pop-down at the end of the nav; the menu shows as the
 // active tab while one of them is open, since its own button is out of sight inside the popup.
 const DIVERSION_PAGES = ['tetrust', 'blockout', 'blockanoid', 'scorched', 'wolf3d', 'doom', 'quake'];
+// the Node menu's pages (2026-10-13): Peers, Network, Events, Node & RPC, behind one tab like the games
+const NODE_PAGES = ['peers', 'network', 'logs', 'node'];
 
 function setPage(route) {
   const [page, ...rest] = String(route).split('/');
@@ -1053,6 +1055,7 @@ function setPage(route) {
   document.querySelectorAll('.page').forEach((el) => el.classList.toggle('on', el.dataset.page === page));
   document.querySelectorAll('nav.pages button').forEach((b) => b.classList.toggle('on', b.dataset.page === page));
   document.getElementById('navDivBtn')?.classList.toggle('on', DIVERSION_PAGES.includes(page));
+  document.getElementById('navNodeBtn')?.classList.toggle('on', NODE_PAGES.includes(page));
   const want = `#${page}${state.xroute ? `/${state.xroute}` : ''}`;
   if (location.hash !== want) history.replaceState(null, '', want);
   if (page === 'mempool') refreshMempoolDetail(true);
@@ -1208,17 +1211,24 @@ async function boot() {
   const pick = document.getElementById('nodePick');
   const STATE_DOT = { synced: 'ok', ibd: 'accent', catching_up: 'accent', stalled: 'bad', reorg: 'warn', unknown: 'faint' };
   const describe = (n) => `${n.label} — ${n.pct == null ? (n.online ? 'no data yet' : 'offline') : `${n.pct.toFixed(1)}%`}${n.syncing ? ' syncing' : ''}`;
+  // THE BADGE AND THE PICKER (2026-10-13; operator: "move chain selection to 'Chain and Sync' panel"). The header keeps
+  // a badge -- the current node's label, state-coloured -- on EVERY page, because a page's pixels belong to one daemon
+  // (rule 8) and the reader must always see which; a click on it opens Chain & Sync, where the picker now lives, shown
+  // only when there is more than one node to pick from.
+  const chPick = document.getElementById('chNodePick');
   const renderPicker = (list) => {
     if (!list.length) return;
-    if (list.length === 1) {
-      pick.innerHTML = `<span class="${STATE_DOT[list[0].syncState] ?? 'faint'}" title="${F.esc(list[0].label + ' — ' + list[0].rpcUrl)}">${F.esc(list[0].label)}</span>`;
-      return;
-    }
+    const cur = list.find((n) => n.id === state.node) ?? list[0];
+    pick.innerHTML = `<span class="${STATE_DOT[cur.syncState] ?? 'faint'}${list.length > 1 ? ' nodebadge' : ''}" title="${F.esc(describe(cur) + ' — ' + cur.rpcUrl + (list.length > 1 ? ' — click for Chain & Sync to switch' : ''))}">${F.esc(cur.label)}</span>`;
+    if (!chPick) return;
+    chPick.hidden = list.length < 2;
+    if (list.length < 2) { chPick.innerHTML = ''; return; }
     // Every node visible with its own state, because picking a node blind is how
     // you end up watching the one that needs nothing.
-    pick.innerHTML = `<select class="f" id="nodeSel">${list.map((n) => `<option value="${F.esc(n.id)}"${n.id === state.node ? ' selected' : ''}>${F.esc(describe(n))}</option>`).join('')}</select>`;
-    pick.querySelector('select').addEventListener('change', (e) => switchNode(e.target.value));
+    chPick.innerHTML = `<label for="nodeSel"><b>Node</b> <span class="faint">which daemon every page of this monitor shows</span></label><select class="f" id="nodeSel">${list.map((n) => `<option value="${F.esc(n.id)}"${n.id === state.node ? ' selected' : ''}>${F.esc(describe(n))}</option>`).join('')}</select>`;
+    chPick.querySelector('select').addEventListener('change', (e) => switchNode(e.target.value));
   };
+  pick.addEventListener('click', () => setPage('chain'));
   renderPicker(nodes.nodes);
   // Keep the picker's percentages honest without a reload: refresh it whenever a
   // snapshot arrives, but only if anything changed.
@@ -1251,53 +1261,61 @@ async function boot() {
   // The monogram routes like a tab, but it lives OUTSIDE <nav> (it is the brand), and the handler
   // above is bound to the nav element -- so it needs its own listener rather than inheriting one.
   document.getElementById('brandAbout')?.addEventListener('click', () => setPage('about'));
-  // the Diversions pop-down: opens on its button, closes on a choice, on a click anywhere else,
-  // and on Escape
-  const divWrap = document.getElementById('navDiv');
-  const divBtn = document.getElementById('navDivBtn');
-  const divPop = document.getElementById('navDivPop');
-  // The panel is position:fixed (see app.css), so it is placed from the button's own rect each
-  // time it opens -- the nav scrolls and the header clips, and a panel positioned inside either of
-  // them cannot be seen at all. Custom properties through the CSSOM, never a style attribute.
-  const placeDiversions = () => {
-    if (!divBtn || !divPop) return;
-    const r = divBtn.getBoundingClientRect();
-    // MEASURED, not transformed. The panel used to be pulled left by translateX(-100%); now its
-    // real left edge is computed so nothing depends on transform behaviour I cannot test here.
-    // It must be measurable to be measured, so it is un-hidden first if it is not already open.
-    const wasHidden = divPop.classList.contains('hidden');
-    if (wasHidden) divPop.classList.remove('hidden');
-    const w = divPop.offsetWidth || 160;
-    if (wasHidden) divPop.classList.add('hidden');
-    // right-aligned to the button, then held inside the viewport on both sides
-    const left = Math.max(6, Math.min(r.right - w, window.innerWidth - w - 6));
-    divPop.style.setProperty('--x', `${Math.round(left)}px`);
-    divPop.style.setProperty('--y', `${Math.round(r.bottom + 6)}px`);
+  // THE POP-DOWN MENUS: Diversions (2026-09-12) and Node (2026-10-13), one piece of code. Each opens on its button,
+  // closes on a choice, on a click anywhere else, and on Escape; opening one closes the other.
+  const menus = [];
+  const navMenu = (wrapId, btnId, popId) => {
+    const wrap = document.getElementById(wrapId), btn = document.getElementById(btnId), pop = document.getElementById(popId);
+    if (!btn || !pop) return null;
+    // The panel is position:fixed (see app.css), so it is placed from the button's own rect each
+    // time it opens -- the nav scrolls and the header clips, and a panel positioned inside either of
+    // them cannot be seen at all. Custom properties through the CSSOM, never a style attribute.
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      // MEASURED, not transformed. The panel used to be pulled left by translateX(-100%); now its
+      // real left edge is computed so nothing depends on transform behaviour I cannot test here.
+      // It must be measurable to be measured, so it is un-hidden first if it is not already open.
+      const wasHidden = pop.classList.contains('hidden');
+      if (wasHidden) pop.classList.remove('hidden');
+      const w = pop.offsetWidth || 160;
+      if (wasHidden) pop.classList.add('hidden');
+      // right-aligned to the button, then held inside the viewport on both sides
+      const left = Math.max(6, Math.min(r.right - w, window.innerWidth - w - 6));
+      pop.style.setProperty('--x', `${Math.round(left)}px`);
+      pop.style.setProperty('--y', `${Math.round(r.bottom + 6)}px`);
+    };
+    const open = (on) => {
+      if (on) { for (const m of menus) if (m.pop !== pop) m.open(false); place(); }
+      pop.classList.toggle('hidden', !on);
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    };
+    btn.addEventListener('click', (e) => { e.stopPropagation(); open(pop.classList.contains('hidden')); });
+    // The panel lives OUTSIDE <nav> (see index.html: WebKit would not let the button be clicked
+    // inside the scrolling nav), so the delegated handler bound to #nav never sees these items.
+    // They route from here instead -- without this the pages become unreachable, which is a
+    // worse fault than the one the move fixes.
+    pop.addEventListener('click', (e) => {
+      const b = e.target.closest?.('button[data-page]');
+      if (b) setPage(b.dataset.page);
+      open(false);
+    });
+    const m = { wrap, btn, pop, open, place };
+    menus.push(m);
+    return m;
   };
-  const openDiversions = (open) => {
-    if (open) placeDiversions();
-    divPop?.classList.toggle('hidden', !open);
-    divBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-  divBtn?.addEventListener('click', (e) => { e.stopPropagation(); openDiversions(divPop?.classList.contains('hidden')); });
-  // The panel lives OUTSIDE <nav> now (see index.html: WebKit would not let the button be clicked
-  // inside the scrolling nav), so the delegated handler bound to #nav no longer sees these items.
-  // They route from here instead -- without this the three games become unreachable, which is a
-  // worse fault than the one the move fixes.
-  divPop?.addEventListener('click', (e) => {
-    const b = e.target.closest?.('button[data-page]');
-    if (b) setPage(b.dataset.page);
-    openDiversions(false);
-  });
-  // The panel is no longer inside divWrap (it is a child of <body> now, so the header cannot clip
-  // it), so a click INSIDE the panel is outside the wrapper. Without naming the panel too, opening
-  // the menu and clicking an item would close it before the item's own handler ran.
+  navMenu('navNode', 'navNodeBtn', 'navNodePop');
+  navMenu('navDiv', 'navDivBtn', 'navDivPop');
+  // The panels are not inside their wrappers (they are children of .app, so the header cannot clip them), so a click
+  // INSIDE a panel is outside its wrapper. Without naming the panel too, opening a menu and clicking an item would close
+  // it before the item's own handler ran.
   document.addEventListener('click', (e) => {
-    const inside = (divWrap && divWrap.contains(e.target)) || (divPop && divPop.contains(e.target));
-    if (!inside) openDiversions(false);
+    for (const m of menus) {
+      const inside = (m.wrap && m.wrap.contains(e.target)) || m.pop.contains(e.target);
+      if (!inside) m.open(false);
+    }
   });
-  window.addEventListener('resize', () => { if (divPop && !divPop.classList.contains('hidden')) placeDiversions(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openDiversions(false); });
+  window.addEventListener('resize', () => { for (const m of menus) if (!m.pop.classList.contains('hidden')) m.place(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const m of menus) m.open(false); });
   // DISPLAY SETTINGS (settings.js). The panel is built from PANEL, so a control and its value
   // cannot drift apart, and every change is saved and applied without a reload: the boards read
   // loadSettings() on their next paint, and a repaint is asked for immediately.

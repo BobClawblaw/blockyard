@@ -163,7 +163,8 @@ test('the ribbon: now alone, seven days or ten; no style attributes (the CSP ref
   assert.ok(!/NaN|undefined/.test(html), 'no holes');
   assert.match(html, /wx-sky-overcastnight/, 'the sky is the weather now');
   assert.match(html, /class="wx-day today/, 'the first tile is marked as today');
-  assert.match(ribbonHtml(d, { ...w('10'), ribbon: 'full' }), />Today</, 'the full ribbon names it');
+  assert.match(ribbonHtml(d, { ...w('10'), ribbon: 'full' }), />Today<small>Oct 1[34]<\/small></, 'the full ribbon names it, with the date');
+  assert.match(html, /<span class="wx-dn"><b>[A-Z][a-z]{2}<\/b> 1[0-9]<\/span>/, 'a slim tile carries the weekday and the day of the month');
   assert.ok(!/>Today</.test(html) && /wx-slim/.test(html), 'the slim ribbon (the default) shows the weekday instead: the highlight says which is today');
   assert.ok(DEFAULTS.weather.ribbon === 'slim', 'slim ships (2026-10-13: "reduced in half yet again")');
   assert.match(ribbonHtml(null, w('7')), /asking for the weather/);

@@ -37,13 +37,15 @@
       <button data-page="markets">Markets</button>
       <button data-page="weather" id="navWeather" hidden>Weather</button>
       <button data-page="kiosk">Kiosk</button>
-      <button data-page="peers">Peers</button>
-      <button data-page="network">Network</button>
       <button data-page="mining">Mining</button>
-      <button data-page="logs">Events</button>
-      <button data-page="node">Node &amp; RPC</button>
       <button data-page="admin" id="navAdmin" hidden>Admin</button>
     </nav>
+    <!-- THE NODE MENU (operator, 2026-10-13: "shrinking up the top menus to make more space. It's getting tight up
+         there"): Peers, Network, Events and Node & RPC under one pop-down, the same shape as Diversions below -- the
+         bar is ten tabs instead of thirteen and fits one row down to about 1150 px. -->
+    <div class="navmenu" id="navNode">
+      <button type="button" class="navmenu-btn" id="navNodeBtn" aria-haspopup="true" aria-expanded="false">Node <span class="navcaret">&#9662;</span></button>
+    </div>
     <!-- DIVERSIONS (operator, 2026-09-12: "Move Tetrust and Blockout to the very end of the menu
          options under a pop-down menu called 'Diversions'"). The toggle deliberately carries no
          data-page, because a nav button with one is required to have a page section behind it.
@@ -61,7 +63,9 @@
     </div>
     <span class="spacer"></span>
     <div class="meta">
-      <span id="nodePick"></span>
+      <!-- the node BADGE: which daemon every page shows, state-coloured; a click opens Chain & Sync, where the picker
+           lives since 2026-10-13 (operator: "move chain selection to 'Chain and Sync' panel") -->
+      <span id="nodePick" title="Which node this monitor is showing; click for Chain & Sync, where you can switch"></span>
       <span title="Server-sent events link">stream <b id="sseState" class="warn">connecting</b></span>
       <span title="Node RPC round trip">rpc <b id="rpcLat">–</b></span>
       <span title="Monitor uptime">up <b id="appUp">–</b></span>
@@ -96,6 +100,12 @@
        invariant that matters is "not inside the clipped header", which is what the test pins.)
        Its button stays in the header; only the panel moved, so app.js positions it from that
        button's rect and routes the games from here. -->
+  <div class="navmenu-pop hidden" id="navNodePop" role="menu">
+    <button data-page="peers" role="menuitem">Peers</button>
+    <button data-page="network" role="menuitem">Network</button>
+    <button data-page="logs" role="menuitem">Events</button>
+    <button data-page="node" role="menuitem">Node &amp; RPC</button>
+  </div>
   <div class="navmenu-pop hidden" id="navDivPop" role="menu">
     <button data-page="tetrust" role="menuitem" title="Tetrust: trust, but verify">Tetrust</button>
     <button data-page="blockout" role="menuitem" title="Blockout: break the wall">Blockout</button>
@@ -242,6 +252,8 @@
     <!-- ==================================================== CHAIN & SYNC -->
     <section class="page" data-page="chain">
       <div class="grid chgrid">
+        <!-- THE NODE PICKER (from the header, 2026-10-13): shown only when more than one node is configured -->
+        <div class="chnodes" id="chNodePick" hidden></div>
         <div data-sync-hero="chain"></div>
         <!-- THREE ACROSS, SHORT (operator, 2026-09-11: "surely we can fit more info on here").
              Two columns of tall charts made the page 1,518 px at 1483 x 1000 and 1,762 at
