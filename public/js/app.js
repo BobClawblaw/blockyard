@@ -1402,14 +1402,16 @@ async function boot() {
       // (GET /api/weather/places). A pick sets the name, the coordinates and the country together (the row `owns` them).
       if (r.kind === 'place') {
         const w = s[g.group];
-        const cur = w.place
-          ? `<b>${F.esc(w.place)}</b> <small class="faint">${w.lat.toFixed(2)}, ${w.lon.toFixed(2)}${w.country ? ` · ${F.esc(w.country)}` : ''}</small>`
+        const sfx = r.key.replace('place', '');          // '' for the first place, '2' and '3' for the others (settings.js owns)
+        const name = w[r.key], lat = w[`lat${sfx}`], lon = w[`lon${sfx}`], cc = w[`country${sfx}`];
+        const cur = name
+          ? `<b>${F.esc(name)}</b> <small class="faint">${lat.toFixed(2)}, ${lon.toFixed(2)}${cc ? ` · ${F.esc(cc)}` : ''}</small> <button type="button" class="btn" data-wxclear="${sfx}" title="Remove this place">×</button>`
           : '<span class="faint">none chosen yet</span>';
         const close = open ? '</div>' : '';
         open = false;
-        return `${close}<div class="cfgrow cfgplace"><b><label for="${id}">${r.label}</label></b><span><span>${cur}</span>`
-          + `<span class="wxsearch"><input type="search" id="${id}" data-wxq="${g.group}" placeholder="city, town, postcode, or lat, lon" maxlength="80" autocomplete="off"><button type="button" class="btn" data-wxfind>find</button></span>`
-          + `<span class="wxresults" data-wxresults></span></span><i>${r.hint}</i></div>`;
+        return `${close}<div class="cfgrow cfgplace" data-wxrow="${sfx}"><b><label for="${id}">${r.label}</label></b><span><span>${cur}</span>`
+          + `<span class="wxsearch"><input type="search" id="${id}" data-wxq="${sfx}" placeholder="city, town, postcode, or lat, lon" maxlength="80" autocomplete="off"><button type="button" class="btn" data-wxfind="${sfx}">find</button></span>`
+          + `<span class="wxresults" data-wxresults="${sfx}"></span></span><i>${r.hint}</i></div>`;
       }
       // THE STREET MAP ROW (2026-10-13): the radius to fetch, what this server has, a Build / Rebuild / Cancel button and
       // the build's progress -- filled by refreshMapRow() from /api/weather/map, polled every 2 s while a build runs
@@ -1537,12 +1539,20 @@ async function boot() {
       drawSettings(); repaintSoon();
       return;
     }
-    if (e.target.closest?.('[data-wxfind]')) { findPlace(); return; }
+    const find = e.target.closest?.('[data-wxfind]');
+    if (find) { findPlace(find.dataset.wxfind ?? ''); return; }
+    const clear = e.target.closest?.('[data-wxclear]');
+    if (clear) {
+      const cur = loadSettings(), sfx = clear.dataset.wxclear ?? '';
+      saveSettings({ ...cur, weather: { ...cur.weather, [`place${sfx}`]: '', [`lat${sfx}`]: 0, [`lon${sfx}`]: 0, [`country${sfx}`]: '' } });
+      drawSettings(); repaintSoon();
+      return;
+    }
     const pickPlace = e.target.closest?.('[data-wxpick]');
     if (pickPlace) {
       const cur = loadSettings();
-      const d = pickPlace.dataset;
-      saveSettings({ ...cur, weather: { ...cur.weather, place: d.name, lat: Number(d.lat), lon: Number(d.lon), country: d.cc ?? '' } });
+      const d = pickPlace.dataset, sfx = pickPlace.closest('[data-wxrow]')?.dataset.wxrow ?? '';
+      saveSettings({ ...cur, weather: { ...cur.weather, [`place${sfx}`]: d.name, [`lat${sfx}`]: Number(d.lat), [`lon${sfx}`]: Number(d.lon), [`country${sfx}`]: d.cc ?? '' } });
       drawSettings(); repaintSoon();
       return;
     }
@@ -1602,8 +1612,8 @@ async function boot() {
   });
   // THE PLACE SEARCH (the Weather tab's Location row). "lat, lon" is taken as it stands and asks nobody; anything
   // else goes to the server's place search, which answers only while weather is switched on there.
-  const findPlace = async () => {
-    const box = cfgBody.querySelector('[data-wxq]'), out = cfgBody.querySelector('[data-wxresults]');
+  const findPlace = async (sfx = '') => {
+    const box = cfgBody.querySelector(`[data-wxq="${sfx}"]`), out = cfgBody.querySelector(`[data-wxresults="${sfx}"]`);
     if (!box || !out) return;
     const q = box.value.trim();
     const pick = (name, lat, lon, cc, extra = '') => `<button type="button" class="btn" data-wxpick data-name="${F.esc(name)}" data-lat="${lat}" data-lon="${lon}" data-cc="${F.esc(cc)}">${F.esc(name)}${extra ? `<small>${F.esc(extra)}</small>` : ''}</button>`;
@@ -1622,7 +1632,8 @@ async function boot() {
     out.innerHTML = r.results.map((p) => pick([p.name, p.region, p.country].filter(Boolean).join(', '), p.lat, p.lon, p.cc, `${p.lat}, ${p.lon}`)).join('');
   };
   cfgBody.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.target.closest?.('[data-wxq]')) { e.preventDefault(); findPlace(); }
+    const q = e.target.closest?.('[data-wxq]');
+    if (e.key === 'Enter' && q) { e.preventDefault(); findPlace(q.dataset.wxq ?? ''); }
   });
   // ONE REPAINT PER FRAME, not one per input event (operator, 2026-09-12: "the grid intensity
   // slider jitters when I move it"). `render()` is not cheap -- it rewrites the header, toggles the

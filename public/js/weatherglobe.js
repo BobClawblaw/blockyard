@@ -370,6 +370,8 @@ function drawNames(ctx, st, project, pw, ph, rank) {
     if (items.length > 400) break;     // the file is sorted by rank then population: the first few hundred in view are the ones that matter
   }
   for (const it of placeLabels(items, pw, ph, 3)) {
+    // remembered for a double-click (operator: "double click on a city name on the globe to head to a local view")
+    st.labelHits.push({ x: it.x - 4, y: it.y - 2, w: it.w + 8, h: it.h + 4, lat: it.p[1] / 100, lon: it.p[2] / 100, name: it.p[0] });
     const big = it.p[4] <= 2;
     const a = Math.min(1, 0.45 + 0.55 * it.depth);
     ctx.fillStyle = `rgba(255,255,255,${(0.9 * a).toFixed(2)})`;
@@ -463,12 +465,13 @@ function drawFlat(st, pw, ph, dpr) {
 /** Close in: rings round the place at round distances, labelled, and a faint graticule -- the ground in place of a map. */
 function drawRings(ctx, st, fv, pw, ph) {
   const units = unitsOf(st.w);
-  const c = flatProject(st.home.lat, st.home.lon, fv);
+  const at = st.ringAt ?? st.home;
+  const c = flatProject(at.lat, at.lon, fv);
   ctx.save();
   ctx.setLineDash([4, 6]);
   ctx.strokeStyle = 'rgba(160, 190, 230, .28)'; ctx.lineWidth = 1;
   ctx.fillStyle = 'rgba(200, 220, 255, .55)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
-  for (const r of ringRadii(fv, st.home.lat, pw, ph, units)) {
+  for (const r of ringRadii(fv, at.lat, pw, ph, units)) {
     ctx.beginPath(); ctx.arc(c.x, c.y, r.px, 0, Math.PI * 2); ctx.stroke();
     ctx.fillText(r.label, c.x, c.y - r.px - 4);
   }
@@ -551,6 +554,7 @@ function draw(st) {
   st.raf = 0;
   if (!st.view) return;
   const { pw, ph, dpr } = size(st);
+  st.labelHits = [];   // every name drawn this frame, with its box, for the double-click
   st.say = st.say && /loading/.test(st.say) ? '' : st.say;
   if (isFlat(st.view, pw, ph)) drawFlat(st, pw, ph, dpr); else drawGlobe(st, pw, ph, dpr);
   st.dirty = false;
@@ -654,6 +658,20 @@ function bind(st) {
   });
   const up = (e) => { if (st.pinch && (e.pointerId === st.pinch.a || e.pointerId === st.pinch.b)) { st.pinch = null; st.pointer = null; } if (st.pointer && e.pointerId === st.pointer.id) st.pointer = null; };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  // DOUBLE-CLICK A NAME (operator, 2026-10-13: "allow me to double click on a city name on the globe to head to a
+  // local view"): any name drawn -- Natural Earth's on the globe and the region, OpenStreetMap's on the street map --
+  // takes the view to that place at the local zoom
+  cv.addEventListener('dblclick', (e) => {
+    const r = cv.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const hit = (st.labelHits ?? []).find((h) => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h);
+    if (!hit) return;
+    e.preventDefault();
+    st.view = homeView(hit.lat, hit.lon, pw(), ph());
+    st.ringAt = { lat: hit.lat, lon: hit.lon, name: hit.name };   // the rings follow the city jumped to, until `local` comes home
+    st.say = `${hit.name}`;
+    st.dirty = true; schedule(st); caption(st); armRest(st);
+  });
   cv.addEventListener('wheel', (e) => {
     e.preventDefault();
     st.view = zoomView(st.view, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016)));
@@ -666,7 +684,7 @@ function bind(st) {
     const k = b.dataset.wxg;
     if (k === 'in') st.view = zoomView(st.view, 2);
     else if (k === 'out') st.view = zoomView(st.view, 0.5);
-    else if (k === 'home') st.view = homeView(st.home.lat, st.home.lon, pw(), ph());
+    else if (k === 'home') { st.view = homeView(st.home.lat, st.home.lon, pw(), ph()); st.ringAt = null; st.say = ''; }
     else if (k === 'region') st.view = viewOf(st.home.lat, st.home.lon, 1.6 * 3);
     else if (k === 'world') st.view = viewOf(Math.max(-60, Math.min(60, st.home.lat)), st.home.lon, 1);
     else if (k === 'field') { st.field = { precip: 'temp', temp: 'cloud', cloud: 'precip' }[st.field ?? 'precip']; b.textContent = { precip: 'rain', temp: 'temperature', cloud: 'cloud' }[st.field]; }

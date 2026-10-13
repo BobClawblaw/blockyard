@@ -10,7 +10,7 @@ import path from 'node:path';
 import { DEFAULTS, PANEL, TAB_ROWS, normalise } from '../public/js/settings.js';
 import { routes, weatherOn } from '../server/http/api.js';
 import { WeatherFeed, parseForecast, parseGeocode, placeOf, forecastUrl, geocodeUrl, WEATHER_HOSTS } from '../server/collect/weather.js';
-import { wmo, skyOf, unitsFor, tempColour, iconSvg, ribbonHtml, hoursSvg, slotFor, SLOTS, weatherQuery, compass } from '../public/js/weather.js';
+import { wmo, skyOf, unitsFor, tempColour, iconSvg, ribbonHtml, hoursSvg, slotFor, SLOTS, weatherQuery, compass, placesOf, pullWeather } from '../public/js/weather.js';
 
 const root = new URL('..', import.meta.url);
 const read = (p) => fs.readFileSync(new URL(p, root), 'utf8');
@@ -207,4 +207,28 @@ test('the documented outbound promise names the weather hosts', () => {
   const sec = read('docs/SECURITY.md');
   for (const h of WEATHER_HOSTS) assert.ok(sec.includes(h), `docs/SECURITY.md names ${h}`);
   assert.match(sec, /BLOCKYARD_WEATHER=0/);
+});
+
+// THREE PLACES (operator, 2026-10-13: "add support for up to 3 different weather locations and bars on kiosk")
+test('up to three places: the first always, the others where set, each its own query and cache; the rows own their coordinates', async () => {
+  const w = { ...DEFAULTS.weather, enabled: true, place: 'Boulder', lat: 40.01, lon: -105.27, country: 'US', place3: 'Berlin', lat3: 52.52, lon3: 13.41, country3: 'DE' };
+  const ps = placesOf(w);
+  assert.deepEqual(ps.map((p) => [p.i, p.place]), [[1, 'Boulder'], [3, 'Berlin']], 'the second is unset and skipped, the third kept with its number');
+  assert.equal(weatherQuery(w, ps[0]), '/api/weather?lat=40.01&lon=-105.27&units=imperial');
+  assert.equal(weatherQuery(w, ps[1]), '/api/weather?lat=52.52&lon=13.41&units=metric', 'auto units follow each place\u2019s own country');
+  assert.equal(placesOf(DEFAULTS.weather).length, 1, 'a fresh setting has the first place alone, unset');
+  const asked = [];
+  const api = async (q) => { asked.push(q); return { ok: true, q }; };
+  pullWeather(w, api, null, ps[0]); pullWeather(w, api, null, ps[1]); pullWeather(w, api, null, ps[0]);
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(asked, ['/api/weather?lat=40.01&lon=-105.27&units=imperial', '/api/weather?lat=52.52&lon=13.41&units=metric'], 'one request per place, not per paint');
+  assert.equal(pullWeather(w, api, null, ps[1]).q, asked[1], 'each place answers from its own cache');
+  const g = PANEL.find((x) => x.group === 'weather');
+  for (const k of ['place2', 'place3']) { const r = g.rows.find((x) => x.key === k); assert.equal(r.kind, 'place'); assert.deepEqual(Object.keys(r.owns), [`lat${k.slice(-1)}`, `lon${k.slice(-1)}`, `country${k.slice(-1)}`]); }
+  const n = normalise({ weather: { place2: 'X', lat2: 200, lon2: -500, country2: 'xyz' } }).weather;
+  assert.equal(n.lat2, 90); assert.equal(n.lon2, -180); assert.equal(n.country2, 'xy', 'owned keys clamp like any setting');
+  // the ribbon names the place it was asked for, not the first
+  const d = { ok: true, enabled: true, at: Date.now(), place: { lat: 52.52, lon: 13.41 }, units: 'metric', current: { temp: 1, code: 0, day: true }, hours: [], days: [] };
+  assert.match(ribbonHtml(d, w, { placeName: 'Berlin' }), />Berlin</);
+  assert.ok(!/Boulder/.test(ribbonHtml(d, w, { placeName: 'Berlin' })));
 });

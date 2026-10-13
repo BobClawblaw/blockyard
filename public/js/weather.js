@@ -80,9 +80,15 @@ export function skyOf(w) {
 // but report in Celsius day to day, and are left metric here)
 const FAHRENHEIT = new Set(['US', 'PR', 'GU', 'VI', 'AS', 'MP', 'UM', 'BS', 'KY', 'BZ', 'PW', 'FM', 'MH']);
 /** 'metric' | 'imperial' from the setting, with 'auto' following the chosen place's country. */
-export function unitsFor(w) {
+export function unitsFor(w, country = w?.country) {
   if (w?.units === 'metric' || w?.units === 'imperial') return w.units;
-  return FAHRENHEIT.has(String(w?.country ?? '').toUpperCase()) ? 'imperial' : 'metric';
+  return FAHRENHEIT.has(String(country ?? '').toUpperCase()) ? 'imperial' : 'metric';
+}
+/** The places a weather setting names, in order: the first always (even unset), then 2 and 3 where set. */
+export function placesOf(w) {
+  const out = [{ i: 1, place: w?.place ?? '', lat: w?.lat ?? 0, lon: w?.lon ?? 0, country: w?.country ?? '' }];
+  for (const i of [2, 3]) if (w?.[`place${i}`]) out.push({ i, place: w[`place${i}`], lat: w[`lat${i}`], lon: w[`lon${i}`], country: w[`country${i}`] ?? '' });
+  return out;
 }
 
 const toC = (t, units) => (units === 'imperial' ? (t - 32) * 5 / 9 : t);
@@ -303,16 +309,16 @@ const FORECASTS = { current: 0, 7: 7, 10: 10 };
  * The whole ribbon as HTML. `d` is /api/weather's reply; `w` the weather settings; `opts.id` keeps a page's two
  * ribbons' gradient ids apart; `opts.now` the clock (for the age line).
  */
-function notReady(d, w) {
+function notReady(d, w, placeName = w?.place) {
   if (!d) return 'asking for the weather…';
   if (d.needPlace) return 'Weather is on -- choose a place under Display settings → Weather → Location';
   if (d.enabled === false) return d.note ?? 'weather is off';
-  if (!d.ok) return `no forecast for ${w?.place || 'this place'}: ${d.error ?? 'the service did not answer'}`;
+  if (!d.ok) return `no forecast for ${placeName || 'this place'}: ${d.error ?? 'the service did not answer'}`;
   return null;
 }
 
-export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false } = {}) {
-  const why = notReady(d, w);
+export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false, placeName = w?.place } = {}) {
+  const why = notReady(d, w, placeName);
   if (why) return `<div class="wx wx-sky-night wx-empty"><span class="wx-msg">${esc(why)}</span></div>`;
   const units = d.units === 'imperial' ? 'imperial' : 'metric';
   const c = d.current ?? {};
@@ -337,11 +343,11 @@ export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false 
   const now$ = slim
     ? `<div class="wx-now">${iconSvg(cw, 40)}<div class="wx-temp"><b>${deg(c.temp)}</b><small>${units === 'imperial' ? 'F' : 'C'}</small></div>
     <div class="wx-say"><b>${esc(cw.label)}</b><span><em class="wx-hi">${deg(today.hi)}</em> / <em class="wx-lo">${deg(today.lo)}</em> · feels ${deg(c.feels)}</span>
-      <span class="wx-where" title="${esc(`${d.place?.lat}, ${d.place?.lon} · ${d.timezone ?? ''} · Open-Meteo`)}">${esc(w?.place || `${d.place?.lat}, ${d.place?.lon}`)}${stale}</span></div></div>`
+      <span class="wx-where" title="${esc(`${d.place?.lat}, ${d.place?.lon} · ${d.timezone ?? ''} · Open-Meteo`)}">${esc(placeName || `${d.place?.lat}, ${d.place?.lon}`)}${stale}</span></div></div>`
     : `<div class="wx-now">${iconSvg(cw, compact ? 54 : 64)}
     <div class="wx-temp"><b>${deg(c.temp)}</b><small>${units === 'imperial' ? 'F' : 'C'}</small></div>
     <div class="wx-say"><b>${esc(cw.label)}</b><span>feels ${deg(c.feels)} · <em class="wx-hi">H ${deg(today.hi)}</em> <em class="wx-lo">L ${deg(today.lo)}</em></span>
-      <span class="wx-where" title="${esc(`${d.place?.lat}, ${d.place?.lon} · ${d.timezone ?? ''} · Open-Meteo`)}">${esc(w?.place || `${d.place?.lat}, ${d.place?.lon}`)} · ${ageMin < 1 ? 'just now' : `${ageMin} min ago`}${stale}</span></div>
+      <span class="wx-where" title="${esc(`${d.place?.lat}, ${d.place?.lon} · ${d.timezone ?? ''} · Open-Meteo`)}">${esc(placeName || `${d.place?.lat}, ${d.place?.lon}`)} · ${ageMin < 1 ? 'just now' : `${ageMin} min ago`}${stale}</span></div>
   </div>`;
   const hoursHtml = w?.hourly !== false ? `<div class="wx-24">${hoursSvg(d.hours ?? [], units, { id: `${id}h`, w: slim ? 190 : compact ? 200 : 236, h: slim ? 40 : 66 })}</div>` : '';
   let daysHtml = '';
@@ -364,35 +370,33 @@ export function ribbonHtml(d, w, { id = 'wx', now = Date.now(), compact = false 
 
 // ------------------------------------------------------------------ fetching (the one impure part)
 
-const cache = { key: null, data: null, at: 0, busy: false };
+// one cache per place (up to three), keyed by the query
+const caches = new Map();
 export const WEATHER_REFRESH_MS = 5 * 60_000;
-/** The query a ribbon with these settings asks for, or null while there is no place to ask about. */
-export function weatherQuery(w) {
-  if (!w?.enabled || !w.place) return null;
-  return `/api/weather?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}&units=${unitsFor(w)}`;
+/** The query a ribbon asks for a place (the first by default), or null while there is no place to ask about. */
+export function weatherQuery(w, p = placesOf(w)[0]) {
+  if (!w?.enabled || !p?.place) return null;
+  return `/api/weather?lat=${encodeURIComponent(p.lat)}&lon=${encodeURIComponent(p.lon)}&units=${unitsFor(w, p.country)}`;
 }
-/** The last reply for these settings, fetching a fresh one when it is due; `done` is called when one lands. */
-export function pullWeather(w, api, done) {
-  const q = weatherQuery(w);
+/** The last reply for a place, fetching a fresh one when it is due; `done` is called when one lands. */
+export function pullWeather(w, api, done, p = placesOf(w)[0]) {
+  const q = weatherQuery(w, p);
   if (!q) return null;
-  const due = cache.key !== q || Date.now() - cache.at > WEATHER_REFRESH_MS;
-  if (due && !cache.busy && !(typeof document !== 'undefined' && document.hidden)) {
-    cache.busy = true;
-    if (cache.key !== q) cache.data = null;
-    const key = q;
-    cache.key = q; cache.at = Date.now();
-    api(q).then((d) => { if (cache.key === key) cache.data = d; }).catch((e) => {
-      if (cache.key === key) cache.data = { ok: false, error: String(e?.message ?? e) };
-    }).finally(() => { cache.busy = false; done?.(); });
+  let c = caches.get(q);
+  if (!c) { c = { data: null, at: 0, busy: false }; caches.set(q, c); while (caches.size > 6) caches.delete(caches.keys().next().value); }
+  const due = Date.now() - c.at > WEATHER_REFRESH_MS;
+  if (due && !c.busy && !(typeof document !== 'undefined' && document.hidden)) {
+    c.busy = true; c.at = Date.now();
+    api(q).then((d) => { c.data = d; }).catch((e) => { c.data = { ok: false, error: String(e?.message ?? e) }; }).finally(() => { c.busy = false; done?.(); });
   }
-  return cache.key === q ? cache.data : null;
+  return c.data;
 }
 
 /** Paint a ribbon into `el` only when what it shows has changed (render() runs once a second). */
 export function paintRibbon(el, d, w, opts = {}) {
   if (!el) return;
   const minute = Math.floor(Date.now() / 60_000);
-  const sig = JSON.stringify([d?.at ?? null, d?.ok, d?.note, d?.error, w, opts.compact, minute]);
+  const sig = JSON.stringify([d?.at ?? null, d?.ok, d?.note, d?.error, w, opts.compact, opts.placeName ?? null, minute]);
   if (el.__wxSig === sig) return;
   const fresh = el.__wxAt !== (d?.at ?? null);
   el.__wxSig = sig; el.__wxAt = d?.at ?? null;
@@ -429,12 +433,23 @@ export function renderWeather(page, h) {
   const active = slotFor(page, w);
   const d = !active ? null : w.place ? pullWeather(w, h.api, () => h.render?.()) : { needPlace: true };
   if (active) ensureDefs();
+  // THE KIOSK'S BARS, ONE PER PLACE (operator, 2026-10-13: "up to 3 different weather locations and bars on kiosk"):
+  // the first place's ribbon, then the second and third where set, stacked; Overview shows the first alone
+  const places = page === 'kiosk' ? placesOf(w) : placesOf(w).slice(0, 1);
+  const paintStack = (box, compact) => {
+    if (!box) return;
+    if ((box.__wxN ?? 0) !== places.length) { box.__wxN = places.length; box.innerHTML = places.map((p) => `<div class="wx-rib" data-place="${p.i}"></div>`).join(''); }
+    places.forEach((p, k) => {
+      const dd = k === 0 ? d : (p.place ? pullWeather(w, h.api, () => h.render?.(), p) : null);
+      paintRibbon(box.children[k], dd, w, { id: `${page}wx${p.i}`, compact, placeName: p.place });
+    });
+  };
   for (const id of p.ids) {
     const el = document.getElementById(id);
     if (!el) continue;
     const on = id === active;
     el.hidden = !on;
-    if (!on) { if (el.__wxSig || el.__wxPanel) { el.innerHTML = ''; el.__wxSig = null; el.__wxAt = undefined; el.__wxPanel = false; el.classList.remove('kpanel', 'kwx-big'); } continue; }
+    if (!on) { if (el.__wxSig || el.__wxPanel || el.__wxN) { el.innerHTML = ''; el.__wxSig = null; el.__wxAt = undefined; el.__wxPanel = false; el.__wxN = 0; el.classList.remove('kpanel', 'kwx-big'); } continue; }
     // THE KIOSK'S COLUMN PANEL (operator, 2026-10-13: "make the weather take up half the vertical size on kiosk"): half
     // the Markets column, the ribbon over the local map -- the same globe element kind the Weather tab has, bare (no
     // bar: nobody at a wall clicks), the radar loop playing by itself on Software and WebGL, the latest frame on Simple
@@ -442,18 +457,18 @@ export function renderWeather(page, h) {
       if (!el.__wxPanel) {
         el.__wxPanel = true;
         el.classList.add('kpanel', 'kwx-big');
-        el.innerHTML = '<div class="khead"><b>Weather</b><span class="faint" data-wx-khead></span></div><div class="wx-rib"></div>';
+        el.innerHTML = '<div class="khead"><b>Weather</b><span class="faint" data-wx-khead></span></div><div class="wx-ribs"></div>';
         if (!kioskGlobeEl) { kioskGlobeEl = document.createElement('div'); kioskGlobeEl.className = 'wxg wxg-bare'; kioskGlobeEl.innerHTML = globeHtml({ bare: true }); }
         el.appendChild(kioskGlobeEl);
       }
       const head = el.querySelector('[data-wx-khead]');
-      const headText = `${w.place || 'no place chosen'} · Open-Meteo${w.mapLayer === 'forecast' ? '' : ' · RainViewer radar'}`;
+      const headText = `${placesOf(w).map((p) => p.place).filter(Boolean).join(' · ') || 'no place chosen'} · Open-Meteo${w.mapLayer === 'forecast' ? '' : ' · RainViewer radar'}`;
       if (head && head.textContent !== headText) head.textContent = headText;
-      paintRibbon(el.querySelector('.wx-rib'), d, w, { id: `${page}wx`, compact: true });
+      paintStack(el.querySelector('.wx-ribs'), true);
       if (d?.ok && kioskGlobeEl?.isConnected) renderGlobe(kioskGlobeEl.querySelector('.wxg-box'), w, h, { autoplay: true });
       continue;
     }
-    paintRibbon(el, d, w, { id: `${page}wx`, compact: false });
+    paintStack(el, false);
   }
 }
 let kioskGlobeEl = null;

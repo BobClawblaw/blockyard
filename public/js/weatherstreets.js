@@ -7,7 +7,7 @@
 // No clip: a tile's features run a little past its edge (the spec's buffer) and are simply drawn; neighbours' fills
 // match and a road's end overlaps its own continuation by a few pixels. No globalAlpha, no composite modes.
 import { decodeTile, GEOM } from './mvt.js';
-import { placeLabels } from './weathermap.js';
+import { placeLabels, flatUnproject } from './weathermap.js';
 
 const PENDING_MAX = 12;
 const CACHE_MAX = 400;
@@ -68,6 +68,7 @@ const widthAt = (spec, z) => spec.w[z <= 10 ? 0 : z <= 12 ? 1 : z <= 14 ? 2 : 3]
  * Returns how many tiles are still loading.
  */
 export function drawStreets(ctx, st, fv, tz, tiles, scale, pw, ph) {
+  st.streetFv = fv;
   let loading = 0;
   const z = fv.z;
   const decoded = [];
@@ -165,7 +166,7 @@ function drawStreetLabels(ctx, st, z, decoded, scale, pw, ph) {
       const x = t.px + f.geom[0][0][0] * k, y = t.py + f.geom[0][0][1] * k;
       ctx.font = font(f.props);
       const w = ctx.measureText(f.props.name).width;
-      items.push({ x: x - w / 2 - 3, y: y - 8, w: w + 6, h: 16, text: f.props.name, cx: x, cy: y, font: ctx.font, rank: f.props.kind === 'locality' ? 1 : f.props.kind === 'neighbourhood' ? 2 : 0, dot: f.props.kind === 'locality' });
+      items.push({ x: x - w / 2 - 3, y: y - 8, w: w + 6, h: 16, text: f.props.name, cx: x, cy: y, font: ctx.font, rank: f.props.kind === 'locality' ? 1 : f.props.kind === 'neighbourhood' ? 2 : 0, dot: f.props.kind === 'locality', place: true });
     }
     const P = tile.layers.pois;
     if (P && z >= 15) for (const f of P.features) {
@@ -206,6 +207,8 @@ function drawStreetLabels(ctx, st, z, decoded, scale, pw, ph) {
   }
   items.sort((a, b) => a.rank - b.rank);
   for (const it of placeLabels(items, pw, ph, 4)) {
+    // a place name is a double-click target (weatherglobe.js): its coordinates from the panel pixel through the view
+    if (it.place && st.labelHits && st.streetFv) { const ll = flatUnproject(it.cx, it.cy, st.streetFv); st.labelHits.push({ x: it.x, y: it.y, w: it.w, h: it.h, lat: ll.lat, lon: ll.lon, name: it.text }); }
     ctx.font = it.font;
     ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(8,12,22,.85)';
     if (it.road) {

@@ -382,6 +382,11 @@ next). What will bite:
   only when `h.canBuild()` -- open mode or admin); `armRest` fires it 5 s after the last drag/zoom when `weather.mapAuto`
   is on (OFF out of the box: on, the map contacts Protomaps whenever it rests on an uncovered area); the bar's
   "fetch streets" button does it once. A view asked for during another build is asked again when that ends.
+  **THREE PLACES AND THE DOUBLE-CLICK** (the same night): `weather.place2/lat2/lon2/country2` and `...3`, each a 'place'
+  row that `owns` its coordinates (app.js's search and clear handlers are keyed by the suffix); `placesOf(w)` lists the
+  set ones, `pullWeather(w, api, done, p)` keeps one cache per query, and renderWeather('kiosk') stacks a `.wx-rib` per
+  place (Overview and the globe follow the first). Every name drawn pushes its box on `st.labelHits` (drawNames and
+  weatherstreets' place labels), and a `dblclick` on one is `homeView` there.
   `scripts/map-extract.mjs` cuts a PMTiles archive out of Protomaps' daily OpenStreetMap planet (index
   `build-metadata.protomaps.dev/builds.json`, archive `build.protomaps.com/<key>`, ~139 GB, range requests; measured
   2026-10-13: Berlin 60 km to zoom 15 = 35,480 tiles, 193 MB, about a minute) and writes ONE root directory (no leaf
@@ -1283,7 +1288,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1587 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1588 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1613,7 +1618,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1587 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1588 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

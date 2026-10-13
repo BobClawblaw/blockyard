@@ -348,6 +348,11 @@ export const DEFAULTS = Object.freeze({
     lat: 0,
     lon: 0,
     country: '',          // the place's ISO country code: 'auto' units follow it
+    // TWO MORE PLACES (operator, 2026-10-13: "add support for up to 3 different weather locations and bars on kiosk"):
+    // each its own ribbon on the Kiosk, stacked under the first; the globe, the Overview ribbon and the Weather tab
+    // follow the first. Empty means not set.
+    place2: '', lat2: 0, lon2: 0, country2: '',
+    place3: '', lat3: 0, lon3: 0, country3: '',
     units: 'auto',        // 'auto' (Fahrenheit where the place's country uses it) | 'metric' | 'imperial'
     forecast: '7',        // 'current' (conditions and the next 24 hours) | '7' | '10' days
     hourly: true,         // the next 24 hours as a curve beside the conditions
@@ -947,6 +952,16 @@ const PANEL_GROUPS = Object.freeze([
           lon: Object.freeze({ kind: 'number', min: -180, max: 180 }),
           country: Object.freeze({ kind: 'text', max: 2 }),
         }),
+      }),
+      Object.freeze({
+        key: 'place2', label: 'Location 2', kind: 'place', max: 120,
+        hint: 'A second place: its own ribbon on the Kiosk, under the first. Clear the box and find nothing to remove it',
+        owns: Object.freeze({ lat2: Object.freeze({ kind: 'number', min: -90, max: 90 }), lon2: Object.freeze({ kind: 'number', min: -180, max: 180 }), country2: Object.freeze({ kind: 'text', max: 2 }) }),
+      }),
+      Object.freeze({
+        key: 'place3', label: 'Location 3', kind: 'place', max: 120,
+        hint: 'A third place, the same way',
+        owns: Object.freeze({ lat3: Object.freeze({ kind: 'number', min: -90, max: 90 }), lon3: Object.freeze({ kind: 'number', min: -180, max: 180 }), country3: Object.freeze({ kind: 'text', max: 2 }) }),
       }),
       Object.freeze({
         key: 'units', label: 'Units', kind: 'segment', hint: 'Auto is Fahrenheit and miles an hour where the place\u2019s country uses them, Celsius and kilometres an hour everywhere else',

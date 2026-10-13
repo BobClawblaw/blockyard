@@ -2352,3 +2352,9 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wxmapctl { display: flex; gap: 6px; align-items: center; }
 .wxmapstatus { font-size: 11.5px; color: var(--fg-dim); max-width: 62ch; line-height: 1.4; }
 .wxmapstatus b.ok { color: var(--ok); } .wxmapstatus b.warn { color: var(--warn); } .wxmapstatus b.bad { color: var(--bad); }
+/* THREE PLACES ON THE KIOSK (2026-10-13: "up to 3 different weather locations and bars on kiosk"): one ribbon per place,
+   stacked; in the column panel they sit above the map, in a strip they are the strip */
+.wx-ribs, .kwx-top, .kwx-bottom { display: flex; flex-direction: column; gap: 4px; }
+.wx-ribs { flex: 0 0 auto; }
+.wx-ribs .wx-rib + .wx-rib .wx { border-top: 1px solid #16222c; }
+.cfgplace [data-wxclear] { padding: 0 6px; margin-left: 4px; }
