@@ -596,8 +596,34 @@ export const routes = [
       if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
       if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
       const arc = await mapArchive(app);
-      if (!arc) return { ok: true, enabled: true, map: null, note: 'no street map on this server: make one with `node scripts/map-extract.mjs --lat <lat> --lon <lon>` and leave it in data/map/' };
-      return { ok: true, enabled: true, map: arc.view() };
+      const build = app.mapBuilder?.view() ?? null;
+      const extract = arc?.meta?.['blockyard:extract'] ?? null;
+      if (!arc) return { ok: true, enabled: true, map: null, build, note: 'no street map on this server: press Build street map under Display settings → Weather, or run `node scripts/map-extract.mjs --lat <lat> --lon <lon>`' };
+      return { ok: true, enabled: true, map: { ...arc.view(), extract }, build };
+    },
+  },
+  // BUILD IT FROM THE MONITOR (operator, 2026-10-13: "build this feature into BlockYard. Not just one-off shit"): the
+  // settings-write gate (admin once accounts are on; open mode may), CSRF, one build at a time. This is the one call
+  // that contacts Protomaps, and the only way the monitor ever does.
+  {
+    method: 'POST', path: '/api/weather/map/build', auth: 'any', csrf: true, body: true,
+    handler: async (ctx, app) => {
+      configWriteAllowed(app, ctx);
+      if (!app.weather || !app.mapBuilder) throw new HttpError(404, WEATHER_OFF);
+      if (!(await weatherOn(app))) throw new HttpError(403, WEATHER_UNTICKED);
+      const b = ctx.body && typeof ctx.body === 'object' ? ctx.body : {};
+      const radiusKm = Math.min(300, Math.max(5, Number(b.radiusKm) || 60));
+      const maxzoom = Math.min(15, Math.max(8, Number(b.maxzoom) || 15));
+      try { return { ok: true, build: app.mapBuilder.start({ lat: b.lat, lon: b.lon, radiusKm, maxzoom, name: typeof b.name === 'string' ? b.name.slice(0, 120) : null }) }; }
+      catch (e) { throw new HttpError(409, String(e?.message ?? e)); }
+    },
+  },
+  {
+    method: 'POST', path: '/api/weather/map/build/cancel', auth: 'any', csrf: true,
+    handler: async (ctx, app) => {
+      configWriteAllowed(app, ctx);
+      if (!app.mapBuilder) throw new HttpError(404, WEATHER_OFF);
+      return { ok: true, cancelled: app.mapBuilder.cancel(), build: app.mapBuilder.view() };
     },
   },
   {

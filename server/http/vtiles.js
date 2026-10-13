@@ -14,41 +14,14 @@ import { weatherOn } from './api.js';
 
 export const VTILE_PATH = /^\/weather\/vtile\/(\d{1,2})\/(\d{1,5})\/(\d{1,5})\.mvt$/;
 
-const ZOOM_BASE = [0n];
-for (let z = 1; z <= 32; z++) ZOOM_BASE[z] = ZOOM_BASE[z - 1] + (1n << BigInt(2 * (z - 1)));
-/** The PMTiles id of a tile: the count of tiles in every lower zoom, plus its place on this zoom's Hilbert curve. */
-export function tileId(z, x, y) {
-  const n = 1 << z;
-  let d = 0n, tx = x, ty = y;
-  for (let s = n >> 1; s > 0; s >>= 1) {
-    const rx = (tx & s) > 0 ? 1 : 0, ry = (ty & s) > 0 ? 1 : 0;
-    d += BigInt(s) * BigInt(s) * BigInt((3 * rx) ^ ry);
-    if (ry === 0) { if (rx === 1) { tx = s - 1 - tx; ty = s - 1 - ty; } const t = tx; tx = ty; ty = t; }
-  }
-  return ZOOM_BASE[z] + d;
-}
-const u64 = (b, o) => Number(b.readBigUInt64LE(o));
+import { tileId, parseHeader as baseHeader, readDirectory } from '../collect/pmextract.js';
+export { tileId };
+export const parseDirectory = readDirectory;
+/** The engine's header plus what the server shows: the bounds, the centre, and `tiles` (the spec's "tile contents"). */
 export function parseHeader(b) {
-  if (b.length < 127 || b.toString('latin1', 0, 7) !== 'PMTiles' || b[7] !== 3) throw new Error('not a PMTiles v3 archive');
+  const h = baseHeader(b);
   const i32 = (o) => b.readInt32LE(o) / 1e7;
-  return {
-    rootOff: u64(b, 8), rootLen: u64(b, 16), metaOff: u64(b, 24), metaLen: u64(b, 32), leafOff: u64(b, 40), leafLen: u64(b, 48),
-    dataOff: u64(b, 56), dataLen: u64(b, 64), entries: u64(b, 80), tiles: u64(b, 88),
-    internalCompression: b[97], tileCompression: b[98], tileType: b[99], minZoom: b[100], maxZoom: b[101],
-    bounds: { w: i32(102), s: i32(106), e: i32(110), n: i32(114) }, centerZoom: b[118], center: { lon: i32(119), lat: i32(123) },
-  };
-}
-export function parseDirectory(b) {
-  let pos = 0;
-  const next = () => { let r = 0n, s = 0n; for (;;) { const c = b[pos++]; r |= BigInt(c & 0x7f) << s; if (c < 0x80) return r; s += 7n; } };
-  const n = Number(next());
-  const ids = new Array(n), runs = new Array(n), lens = new Array(n), offs = new Array(n);
-  let t = 0n;
-  for (let i = 0; i < n; i++) { t += next(); ids[i] = t; }
-  for (let i = 0; i < n; i++) runs[i] = Number(next());
-  for (let i = 0; i < n; i++) lens[i] = Number(next());
-  for (let i = 0; i < n; i++) { const v = next(); offs[i] = v === 0n && i > 0 ? offs[i - 1] + lens[i - 1] : Number(v) - 1; }
-  return { n, ids, runs, lens, offs };
+  return { ...h, tiles: h.contents, bounds: { w: i32(102), s: i32(106), e: i32(110), n: i32(114) }, centerZoom: b[118], center: { lon: i32(119), lat: i32(123) } };
 }
 const inflate = (b, kind) => (kind === 2 ? gunzipSync(b) : kind === 1 || kind === 0 ? b : (() => { throw new Error(`compression ${kind} is not gzip`); })());
 

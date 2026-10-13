@@ -1408,6 +1408,15 @@ async function boot() {
           + `<span class="wxsearch"><input type="search" id="${id}" data-wxq="${g.group}" placeholder="city, town, postcode, or lat, lon" maxlength="80" autocomplete="off"><button type="button" class="btn" data-wxfind>find</button></span>`
           + `<span class="wxresults" data-wxresults></span></span><i>${r.hint}</i></div>`;
       }
+      // THE STREET MAP ROW (2026-10-13): the radius to fetch, what this server has, a Build / Rebuild / Cancel button and
+      // the build's progress -- filled by refreshMapRow() from /api/weather/map, polled every 2 s while a build runs
+      if (r.kind === 'mapbuild') {
+        const sel = `<select id="${id}" data-cfg="${g.group}.${r.key}">${r.options.map(([val, label]) => `<option value="${val}"${val === v ? ' selected' : ''}>${label}</option>`).join('')}</select>`;
+        const close = open ? '</div>' : '';
+        open = false;
+        setTimeout(refreshMapRow, 0);
+        return `${close}<div class="cfgrow cfgmap${(typeof r.dimWhen === 'function' && r.dimWhen(s)) ? ' idle' : ''}"><b><label for="${id}">${r.label}</label></b><span><span class="wxmapctl">${sel}<button type="button" class="btn" data-wxbuild>build street map</button></span><span class="wxmapstatus" data-wxmapstatus>…</span></span><i>${r.hint}</i></div>`;
+      }
       const ctl = r.kind === 'toggle'
         ? `<input type="checkbox" id="${id}" data-cfg="${g.group}.${r.key}"${v ? ' checked' : ''}>`
         : r.kind === 'choice'
@@ -1543,6 +1552,49 @@ async function boot() {
     }
     drawSettings();
     render();
+  });
+  // THE STREET MAP ROW'S STATUS (settings.js kind 'mapbuild'): what the server has, the build's progress, the button's
+  // word. Polled every 2 s while a build runs and the row is on screen.
+  let mapRowTimer = null;
+  const refreshMapRow = async () => {
+    clearTimeout(mapRowTimer); mapRowTimer = null;
+    const out = cfgBody.querySelector('[data-wxmapstatus]'), btn = cfgBody.querySelector('[data-wxbuild]');
+    if (!out || !btn) return;
+    const w = loadSettings().weather;
+    const d = await api('/api/weather/map').catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
+    if (d?.enabled === false) { out.innerHTML = `<span class="faint">${F.esc(d.note ?? 'weather is off')}</span>`; btn.disabled = true; return; }
+    const b = d?.build, m = d?.map;
+    const here = w.place && m?.extract && Math.abs(m.extract.lat - w.lat) < 0.011 && Math.abs(m.extract.lon - w.lon) < 0.011;
+    let text;
+    if (b?.running) {
+      const pct = b.total ? Math.round((100 * b.done) / b.total) : 0;
+      text = b.phase === 'tiles' ? `building: ${b.done.toLocaleString()} of ${b.total.toLocaleString()} tiles (${pct}%), ${(b.bytes / 1e6).toFixed(0)} MB${b.etaSec != null ? `, about ${b.etaSec} s to go` : ''}` : `building: ${b.phase}${b.key ? ` from ${b.key}` : ''}…`;
+      btn.textContent = 'cancel'; btn.dataset.mode = 'cancel'; btn.disabled = false;
+      mapRowTimer = setTimeout(refreshMapRow, 2000);
+    } else {
+      const last = b?.phase === 'failed' ? ` <b class="bad">last build failed: ${F.esc(b.error ?? '')}</b>` : b?.phase === 'cancelled' ? ' <span class="faint">(last build cancelled)</span>' : '';
+      if (!w.place) { text = `no place chosen yet (Location, above)${last}`; btn.disabled = true; }
+      else if (!m) { text = `no street map on this server yet${last}`; btn.textContent = `build street map for ${F.esc(w.place)}`; btn.dataset.mode = 'build'; btn.disabled = false; }
+      else {
+        const what = `${F.esc(m.file)}: ${(m.bytes / 1e6).toFixed(0)} MB, ${m.tiles.toLocaleString()} tiles to zoom ${m.maxZoom}${m.extract ? `, ${m.extract.radiusKm} km round ${m.extract.lat}, ${m.extract.lon}` : ''}${m.osmTime ? `, OpenStreetMap as of ${F.esc(m.osmTime.slice(0, 10))}` : ''}`;
+        text = here ? `<b class="ok">built for this place</b> · ${what}${last}` : `<b class="warn">built for another place</b> · ${what}${last}`;
+        btn.textContent = here ? 'rebuild (newer data)' : `build for ${F.esc(w.place)}`; btn.dataset.mode = 'build'; btn.disabled = false;
+      }
+    }
+    out.innerHTML = text;
+  };
+  cfgBody.addEventListener('click', async (e) => {
+    const btn = e.target.closest?.('[data-wxbuild]');
+    if (!btn) return;
+    const w = loadSettings().weather;
+    if (btn.dataset.mode === 'cancel') { await api('/api/weather/map/build/cancel', { method: 'POST' }).catch(() => {}); refreshMapRow(); return; }
+    if (!w.place) return;
+    const km = Number(w.mapRadius) || 60;
+    if (!window.confirm(`Build a street map for ${w.place}?\n\nThis server will fetch the OpenStreetMap tiles within ${km} km from Protomaps (build.protomaps.com) -- roughly ${Math.round(150 * (km / 60) ** 2)} MB for a city, a minute or two -- and keep them in data/map/. It is the only time the monitor contacts them.`)) return;
+    btn.disabled = true;
+    const r = await api('/api/weather/map/build', { method: 'POST', body: { lat: w.lat, lon: w.lon, radiusKm: km, maxzoom: 15, name: w.place } }).catch((err) => ({ ok: false, error: String(err?.message ?? err) }));
+    if (!r?.ok) toast(`the build did not start: ${r?.error ?? 'no answer'}`, 'bad');
+    refreshMapRow();
   });
   // THE PLACE SEARCH (the Weather tab's Location row). "lat, lon" is taken as it stands and asks nobody; anything
   // else goes to the server's place search, which answers only while weather is switched on there.

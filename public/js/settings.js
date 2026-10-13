@@ -362,6 +362,9 @@ export const DEFAULTS = Object.freeze({
     // THE GLOBE (docs/PLAN-WEATHER-GLOBE.md): on the Weather tab, with the observed radar or the forecast grid over it
     map: true,
     mapLayer: 'radar',    // 'radar' (RainViewer, the last two hours) | 'forecast' (Open-Meteo's grid, the next 48 h)
+    // THE STREET MAP'S RADIUS (operator, 2026-10-13: "build this feature into BlockYard"): how far round the place the
+    // Build street map button fetches, in km. Zoom 15 everywhere; 60 km round a capital is ~150-200 MB
+    mapRadius: '60',
     // THE GRID'S SPAN (operator: "it needs to zoom in at least to the surrounding zip codes ... It's a local weather
     // station to start"): 'local' is 121 points a tenth of a degree apart, about 110 km across; 'regional' half a degree
     gridSpan: 'local',
@@ -965,6 +968,11 @@ const PANEL_GROUPS = Object.freeze([
         key: 'mapLayer', label: 'Globe layer', kind: 'segment', dimWhen: (s) => !s.weather.tab || !s.weather.map,
         hint: 'Radar is the last two hours of observed rain and snow, where radar stations exist (oceans and much of the world have none, and the map says so). Forecast is the next 48 hours, about five degrees round the place',
         options: Object.freeze([['radar', 'Radar (past 2 h)'], ['forecast', 'Forecast (next 48 h)']]),
+      }),
+      Object.freeze({
+        key: 'mapRadius', label: 'Street map', kind: 'mapbuild', dimWhen: (s) => !s.weather.tab || !s.weather.map,
+        hint: 'Streets, buildings and names for the map, from OpenStreetMap, fetched ONCE by this server from Protomaps (build.protomaps.com) when you press Build -- the only time the monitor contacts them -- and kept in data/map/. About 150-200 MB for 60 km round a city at zoom 15, a minute or two. Pick the radius first. Building needs the same right as changing shared settings',
+        options: Object.freeze([['30', '30 km'], ['60', '60 km'], ['100', '100 km'], ['150', '150 km']]),
       }),
       Object.freeze({
         key: 'gridSpan', label: 'Forecast grid', kind: 'segment', dimWhen: (s) => !s.weather.tab || !s.weather.map || s.weather.mapLayer !== 'forecast',

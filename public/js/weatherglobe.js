@@ -572,7 +572,7 @@ function caption(st) {
     const flat = st.view ? isFlat(st.view, ...[st.root.clientWidth || 600, st.root.clientHeight || 400]) : false;
     const parts = [];
     if (st.say) parts.push(st.say);
-    else if (st.w.mapLayer === 'forecast') parts.push(`forecast ${st.field === 'temp' ? 'temperature' : st.field === 'cloud' ? 'cloud cover' : 'rain and snow'}, Open-Meteo, 11 x 11 points about ${(st.grid?.dLat ?? 0.5) * 10}° across; wind arrows point where it blows`);
+    else if (st.w.mapLayer === 'forecast') parts.push(`forecast ${st.field === 'temp' ? 'temperature' : st.field === 'cloud' ? 'cloud cover' : 'rain and snow'}, Open-Meteo, 11 x 11 points ${Math.round((st.grid?.dLat ?? 0.1) * 111)} km apart; wind arrows point where it blows`);
     else parts.push('observed radar, RainViewer, the last two hours; blank where no radar station reaches (oceans, much of the world)');
     const M = st.mapInfo;
     const onStreets = flat && M && flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400, 16).z >= 9 && st.view.lon >= M.bounds.w && st.view.lon <= M.bounds.e && st.view.lat >= M.bounds.s && st.view.lat <= M.bounds.n;
@@ -677,7 +677,15 @@ export function renderGlobe(box, w, h, { autoplay = false } = {}) {
   loadLand(st);
   if (w.mapLayer === 'forecast') pullGrid(st); else pullRadar(st);
   // the street map: whether this server has an extract (http/vtiles.js), asked once per mount
-  if (st.mapInfo === undefined) { st.mapInfo = null; h.api('/api/weather/map').then((d) => { st.mapInfo = d?.map ?? null; st.dirty = true; schedule(st); }).catch(() => {}); }
+  if (st.mapInfo === undefined || Date.now() - (st.mapAskedAt ?? 0) > 30_000) {
+    if (st.mapInfo === undefined) st.mapInfo = null;
+    st.mapAskedAt = Date.now();
+    h.api('/api/weather/map').then((d) => {
+      const m = d?.map ?? null;
+      // a new file (a build just finished, or another place's): the tiles on hand are the old map's
+      if ((m?.file ?? null) !== (st.mapInfo?.file ?? null) || (m?.bytes ?? 0) !== (st.mapInfo?.bytes ?? 0)) { st.vtiles?.clear(); st.mapInfo = m; st.dirty = true; schedule(st); }
+    }).catch(() => {});
+  }
   // the Kiosk's map plays its loop by itself on Software and WebGL (a wall display wants motion); Simple shows the
   // latest frame and plays nothing -- the same rule as the play button
   if (st.autoplay && !st.playing && rendererNow() !== '2.5d' && frameCount(st) > 1 && !document.hidden) play(st, true);

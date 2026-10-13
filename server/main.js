@@ -288,6 +288,11 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     const { WeatherFeed } = await import('./collect/weather.js');
     app.weather = new WeatherFeed(cfg.weather, { log: app.log });
   } else app.weather = null;
+  // the street map's builder (server/collect/mapbuild.js): runs only when someone presses Build in Display settings
+  if (app.weather) {
+    const { MapBuilder } = await import('./collect/mapbuild.js');
+    app.mapBuilder = new MapBuilder({ dir: path.join(cfg.store.dir, 'map'), log: app.log });
+  } else app.mapBuilder = null;
 
   app.auditLog = new AuditLog(path.join(cfg.store.dir, 'audit.jsonl'), {
     maxBytes: cfg.store.auditMaxBytes,

@@ -365,6 +365,13 @@ next). What will bite:
 - A screenshot harness for this: write `renderer` and `weather.mapLayer` into the instance's SHARED settings file, not
   localStorage -- the 15 s settings poll pulls the shared store over a local edit.
 - **STREETS ARE PART B, DONE THE SAME NIGHT** (operator: "can we add street level detail?" -- "continue with your plan").
+  **IT IS A BUTTON, NOT A SCRIPT** (operator, the same night: "we need to build this feature into BlockYard. Not just
+  one-off shit"): `server/collect/pmextract.js` is the engine, `server/collect/mapbuild.js` (`app.mapBuilder`) runs one
+  build at a time with progress and cancel, `POST /api/weather/map/build` (settings-write gate, CSRF) starts it from the
+  Weather tab's "Street map" row (settings.js kind `mapbuild`, key `mapRadius`; app.js `refreshMapRow` polls
+  `/api/weather/map` every 2 s while it runs), and `scripts/map-extract.mjs` is the same engine from the shell. The globe
+  re-asks `/api/weather/map` every 30 s and drops its tile cache when the file changes, so a finished build shows without
+  a reload. `test/mapbuild.test.js` runs the whole extract against a fake planet served from memory with Range.
   `scripts/map-extract.mjs` cuts a PMTiles archive out of Protomaps' daily OpenStreetMap planet (index
   `build-metadata.protomaps.dev/builds.json`, archive `build.protomaps.com/<key>`, ~139 GB, range requests; measured
   2026-10-13: Berlin 60 km to zoom 15 = 35,480 tiles, 193 MB, about a minute) and writes ONE root directory (no leaf
@@ -1266,7 +1273,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1582 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1587 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1596,7 +1603,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1582 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1587 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
