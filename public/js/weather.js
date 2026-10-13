@@ -420,10 +420,29 @@ export function renderWeather(page, h) {
     if (!el) continue;
     const on = id === active;
     el.hidden = !on;
-    if (on) paintRibbon(el, d, w, { id: `${page}wx`, compact: page === 'kiosk' && (w.kioskAt === 'above' || w.kioskAt === 'below') });
-    else if (el.__wxSig) { el.innerHTML = ''; el.__wxSig = null; el.__wxAt = undefined; }
+    if (!on) { if (el.__wxSig || el.__wxPanel) { el.innerHTML = ''; el.__wxSig = null; el.__wxAt = undefined; el.__wxPanel = false; el.classList.remove('kpanel', 'kwx-big'); } continue; }
+    // THE KIOSK'S COLUMN PANEL (operator, 2026-10-13: "make the weather take up half the vertical size on kiosk"): half
+    // the Markets column, the ribbon over the local map -- the same globe element kind the Weather tab has, bare (no
+    // bar: nobody at a wall clicks), the radar loop playing by itself on Software and WebGL, the latest frame on Simple
+    if (page === 'kiosk' && (w.kioskAt === 'above' || w.kioskAt === 'below')) {
+      if (!el.__wxPanel) {
+        el.__wxPanel = true;
+        el.classList.add('kpanel', 'kwx-big');
+        el.innerHTML = '<div class="khead"><b>Weather</b><span class="faint" data-wx-khead></span></div><div class="wx-rib"></div>';
+        if (!kioskGlobeEl) { kioskGlobeEl = document.createElement('div'); kioskGlobeEl.className = 'wxg wxg-bare'; kioskGlobeEl.innerHTML = globeHtml({ bare: true }); }
+        el.appendChild(kioskGlobeEl);
+      }
+      const head = el.querySelector('[data-wx-khead]');
+      const headText = `${w.place || 'no place chosen'} · Open-Meteo${w.mapLayer === 'forecast' ? '' : ' · RainViewer radar'}`;
+      if (head && head.textContent !== headText) head.textContent = headText;
+      paintRibbon(el.querySelector('.wx-rib'), d, w, { id: `${page}wx`, compact: true });
+      if (d?.ok && kioskGlobeEl?.isConnected) renderGlobe(kioskGlobeEl.querySelector('.wxg-box'), w, h, { autoplay: true });
+      continue;
+    }
+    paintRibbon(el, d, w, { id: `${page}wx`, compact: false });
   }
 }
+let kioskGlobeEl = null;
 
 // ------------------------------------------------------------------ the Weather tab
 

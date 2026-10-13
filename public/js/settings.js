@@ -359,10 +359,16 @@ export const DEFAULTS = Object.freeze({
     // THE GLOBE (docs/PLAN-WEATHER-GLOBE.md): on the Weather tab, with the observed radar or the forecast grid over it
     map: true,
     mapLayer: 'radar',    // 'radar' (RainViewer, the last two hours) | 'forecast' (Open-Meteo's grid, the next 48 h)
+    // THE GRID'S SPAN (operator: "it needs to zoom in at least to the surrounding zip codes ... It's a local weather
+    // station to start"): 'local' is 121 points a tenth of a degree apart, about 110 km across; 'regional' half a degree
+    gridSpan: 'local',
     overview: true,       // the ribbon on Overview ...
     overviewAt: 'above',  // ... above or below the price line
-    kiosk: true,          // the ribbon on the Kiosk ...
-    kioskAt: 'top',       // ... across its top, above or below the price panel, or across its bottom
+    kiosk: true,          // the weather on the Kiosk ...
+    // ... as a half-height panel at the top of the Markets column, with the ribbon and the local radar map (operator,
+    // 2026-10-13: "make the weather take up half the vertical size on kiosk ... block space is too small with weather
+    // up"), or at that column's bottom; 'top' / 'bottom' are the ribbon alone as a strip across the whole wall
+    kioskAt: 'above',
   }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
   // toggleable"), AND EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have
@@ -947,11 +953,16 @@ const PANEL_GROUPS = Object.freeze([
         options: Object.freeze([['10', '10 minutes'], ['15', '15 minutes'], ['20', '20 minutes'], ['30', '30 minutes'], ['60', 'an hour']]),
       }),
       Object.freeze({ key: 'tab', label: 'Weather tab', kind: 'toggle', hint: 'A Weather page in the bar of tabs, after Markets, while weather is on: the conditions at full size, the next 24 hours hour by hour, and ten days ahead' }),
-      Object.freeze({ key: 'map', label: 'Globe', kind: 'toggle', dimWhen: (s) => !s.weather.tab, hint: 'A globe on the Weather tab, centred on the place: drag to turn it, scroll to zoom, and past a point it flattens into a map. The radar layer asks RainViewer (api.rainviewer.com, tilecache.rainviewer.com) for its frames through this server; the forecast layer asks Open-Meteo for a grid of 121 points round the place' }),
+      Object.freeze({ key: 'map', label: 'Globe', kind: 'toggle', dimWhen: (s) => !s.weather.tab, hint: 'A map on the Weather tab, opening on the place at the scale of the surrounding towns: drag to pan, scroll to zoom, and zoomed far enough out it is a globe you can turn. The radar layer asks RainViewer (api.rainviewer.com, tilecache.rainviewer.com) for its frames through this server; the forecast layer asks Open-Meteo for a grid of 121 points round the place. There is no street map: this monitor contacts no map-tile server, so close in you see distance rings round the place, the radar, and the forecast field' }),
       Object.freeze({
         key: 'mapLayer', label: 'Globe layer', kind: 'segment', dimWhen: (s) => !s.weather.tab || !s.weather.map,
         hint: 'Radar is the last two hours of observed rain and snow, where radar stations exist (oceans and much of the world have none, and the map says so). Forecast is the next 48 hours, about five degrees round the place',
         options: Object.freeze([['radar', 'Radar (past 2 h)'], ['forecast', 'Forecast (next 48 h)']]),
+      }),
+      Object.freeze({
+        key: 'gridSpan', label: 'Forecast grid', kind: 'segment', dimWhen: (s) => !s.weather.tab || !s.weather.map || s.weather.mapLayer !== 'forecast',
+        hint: 'How far the forecast layer reaches: Local is 121 points about 11 km apart, 110 km across -- the surrounding towns; Regional the same points 55 km apart, about 550 km across. Either is one request of 121 points',
+        options: Object.freeze([['local', 'Local (110 km)'], ['regional', 'Regional (550 km)']]),
       }),
       Object.freeze({ key: 'overview', label: 'On Overview', kind: 'toggle', hint: 'The ribbon at the top of Overview' }),
       Object.freeze({
@@ -962,8 +973,8 @@ const PANEL_GROUPS = Object.freeze([
       Object.freeze({ key: 'kiosk', label: 'On Kiosk', kind: 'toggle', hint: 'The ribbon on the Kiosk wall' }),
       Object.freeze({
         key: 'kioskAt', label: 'Kiosk: where', kind: 'segment', dimWhen: (s) => !s.weather.kiosk,
-        hint: 'Across the whole top or the whole bottom of the wall, or in the Markets column, just above or just below the Price & order book panel',
-        options: Object.freeze([['top', 'Top'], ['above', 'Above the price'], ['below', 'Below the price'], ['bottom', 'Bottom']]),
+        hint: 'In the Markets column -- the top half of it (the default) or its bottom half -- as a panel with the ribbon and the local radar map, with Markets and the price panel sharing the other half; or the ribbon alone as a strip across the whole top or bottom of the wall',
+        options: Object.freeze([['above', 'Markets column, top half'], ['below', 'Markets column, bottom half'], ['top', 'Strip across the top'], ['bottom', 'Strip across the bottom']]),
       }),
     ]),
   }),

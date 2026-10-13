@@ -8,8 +8,9 @@ import path from 'node:path';
 import {
   tileX, tileY, tileLon, tileLat, mercatorToEquirect, rasterLand, paintBase, composite, viewOf, sphereRadius, isFlat, dragView, zoomView,
   orthoRender, orthoProject, flatView, flatTiles, flatProject, flatUnproject, gridSampler, paintGrid, rainColour, windPoints, wrapLon, FLAT_FROM,
+  homeView, zoomForTileZ, HOME_TILE_Z, metresPerPixel, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels,
 } from '../public/js/weathermap.js';
-import { WeatherFeed, gridPoints, gridUrl, parseGrid, parseRadarList, RADAR_HOSTS, REFRESH_FLOOR_MS, REFRESH_PER_HOUR_MAX, GRID_MIN_MS, GRID_N, TILE_ZOOM_MAX } from '../server/collect/weather.js';
+import { WeatherFeed, gridPoints, gridUrl, parseGrid, parseRadarList, RADAR_HOSTS, REFRESH_FLOOR_MS, REFRESH_PER_HOUR_MAX, GRID_MIN_MS, GRID_N, GRID_STEPS, gridSpanOf, TILE_ZOOM_MAX } from '../server/collect/weather.js';
 import { serveWeatherTile, TILE_PATH } from '../server/http/weathertiles.js';
 import { routes, weatherRefreshMs } from '../server/http/api.js';
 import { DEFAULTS, PANEL, normalise } from '../public/js/settings.js';
@@ -41,15 +42,16 @@ test('a mercator raster resampled to equirect keeps columns and moves rows', () 
   assert.equal(dst[(0 * W + 5) * 4 + 3], 0, 'rows above 85 degrees are left as they were (transparent)');
 });
 
-test('the shipped coastline file rasterises: Berlin is land, the Atlantic sea, the Caspian a hole, Madagascar an island', () => {
-  const data = JSON.parse(read('public/geo/land-110m.json'));
+test('the shipped geography: 1:50m land and lakes rasterise (Berlin land, the Atlantic sea, the Caspian and Superior water), borders and names load', () => {
+  const data = JSON.parse(read('public/geo/land-50m.json'));
   assert.equal(data.scale, 100);
-  assert.ok(data.polygons.length >= 120 && data.polygons.length <= 140, `${data.polygons.length} polygons`);
-  assert.ok(fs.statSync(new URL('public/geo/land-110m.json', root)).size < 80_000, 'small enough to ship');
-  const W = 1024, H = 512, mask = rasterLand(data, W, H);
+  assert.ok(data.polygons.length >= 1000 && data.polygons.length <= 2000, `${data.polygons.length} land polygons`);
+  assert.ok(data.water.length >= 300, `${data.water.length} lakes`);
+  const W = 1024, H = 512, mask = cutWater(rasterLand(data, W, H), data, W, H);
   const at = (lat, lon) => mask[Math.floor(((90 - lat) / 180) * H) * W + Math.floor(((lon + 180) / 360) * W)];
   assert.equal(at(52.5, 13.4), 1, 'Berlin'); assert.equal(at(30, -40), 0, 'the Atlantic'); assert.equal(at(42, 50), 0, 'the Caspian (a hole)');
   assert.equal(at(-19, 47), 1, 'Madagascar'); assert.equal(at(-80, 0), 1, 'Antarctica'); assert.equal(at(0, -160), 0, 'the Pacific');
+  assert.equal(at(47.5, -87.5), 0, 'Lake Superior is water (cut from the land)');
   const share = mask.reduce((a, b) => a + b, 0) / mask.length;
   assert.ok(share > 0.28 && share < 0.4, `about a third of the equirect picture is land (${share.toFixed(3)})`);
   const pic = paintBase(mask, W, H, new Uint8ClampedArray(W * H * 4));
@@ -57,6 +59,29 @@ test('the shipped coastline file rasterises: Berlin is land, the Atlantic sea, t
   const out = composite(pic, over, new Uint8ClampedArray(W * H * 4), 0.5);
   assert.equal(out[3], 255); assert.ok(out[0] > pic[0], 'the overlay shows through at half strength');
   assert.equal(out[4], pic[4], 'a transparent overlay pixel is the base');
+  // the lines: the US-Canada border runs along the 49th parallel; drawn into the picture it lights those pixels
+  const lines = JSON.parse(read('public/geo/lines-50m.json'));
+  assert.ok(lines.borders.length >= 300 && lines.states.length >= 500, `${lines.borders.length} borders, ${lines.states.length} state lines`);
+  const before = pic.slice();
+  rasterLines(lines.borders, lines.scale, W, H, pic, [255, 255, 255, 255]);
+  const col = Math.floor(((-110 + 180) / 360) * W), row = Math.round(((90 - 49) / 180) * H);
+  const lit = [row - 1, row, row + 1].some((y) => pic[(y * W + col) * 4] === 255 && before[(y * W + col) * 4] < 255);
+  assert.ok(lit, 'the 49th parallel at 110 W is a border pixel');
+  const nowhere = (Math.floor(((90 - 30) / 180) * H) * W + Math.floor(((-40 + 180) / 360) * W)) * 4;
+  assert.equal(pic[nowhere], before[nowhere], 'mid-Atlantic untouched');
+  // the names: sorted by rank then population, Berlin and small towns both present
+  const places = JSON.parse(read('public/geo/places-10m.json')).places;
+  assert.ok(places.length >= 7000, `${places.length} places`);
+  assert.ok(places.every((p) => typeof p[0] === 'string' && Number.isInteger(p[1]) && Number.isInteger(p[2]) && p[4] >= 0 && p[4] <= 10));
+  const berlin = places.find((p) => p[0] === 'Berlin' && Math.abs(p[1] - 5252) < 20);
+  assert.ok(berlin && berlin[3] > 3_000_000, 'Berlin, with its population');
+  assert.ok(places.filter((p) => p[4] >= 7).length > 3000, 'and thousands of small towns (rank 7 and up) for the local view');
+  for (let i = 1; i < places.length; i++) assert.ok(places[i][4] >= places[i - 1][4], 'rank ascending');
+  assert.ok(fs.statSync(new URL('public/geo/land-50m.json', root)).size + fs.statSync(new URL('public/geo/lines-50m.json', root)).size + fs.statSync(new URL('public/geo/places-10m.json', root)).size < 1_600_000, 'under 1.6 MB together');
+  // which names at which zoom, and a greedy layout without overlaps
+  assert.equal(rankCeiling(1), 1); assert.equal(rankCeiling(5), 5); assert.equal(rankCeiling(11), 10);
+  const kept = placeLabels([{ x: 10, y: 10, w: 40, h: 12 }, { x: 20, y: 12, w: 40, h: 12 }, { x: 100, y: 10, w: 40, h: 12 }, { x: -200, y: 0, w: 40, h: 12 }], 300, 200);
+  assert.equal(kept.length, 2, 'the overlapping second and the off-panel fourth are dropped');
 });
 
 test('the globe: a view turns and zooms within bounds, the place projects to the middle, the far side is hidden', () => {
@@ -67,7 +92,7 @@ test('the globe: a view turns and zooms within bounds, the place projects to the
   assert.equal(orthoProject(-52.5, -166.6, pw, ph, v), null, 'the antipode is behind the globe');
   const turned = dragView(v, 40, 0, pw, ph);
   assert.ok(turned.lon < v.lon, 'dragging right turns the globe so the surface follows the pointer');
-  assert.equal(viewOf(95, 0).lat, 89); assert.equal(viewOf(0, 0, 1000).zoom, 256); assert.equal(viewOf(0, 0, 0.1).zoom, 0.6);
+  assert.equal(viewOf(95, 0).lat, 89); assert.equal(viewOf(0, 0, 1e6).zoom, 4096); assert.equal(viewOf(0, 0, 0.1).zoom, 0.6);
   assert.equal(zoomView(v, 2).zoom, 3.2);
   assert.equal(isFlat(viewOf(0, 0, 1), pw, ph), false);
   assert.equal(isFlat(viewOf(0, 0, 8), pw, ph), true);
@@ -101,8 +126,30 @@ test('the flat map: zoom follows the globe’s scale, capped; the tiles in view 
   assert.ok(edge.some((t) => t.x === 0) && edge.some((t) => t.x === 31), 'both sides of the antimeridian');
 });
 
+test('THE MAP OPENS LOCAL: the home view is the place at tile zoom 11, with rings and a scale bar in metres that fit', () => {
+  // operator: "it needs to zoom in at least to the surrounding zip codes. Not up so high. It's a local weather station to start"
+  assert.equal(HOME_TILE_Z, 11);
+  const v = homeView(52.52, 13.41, 1600, 700);
+  assert.equal(isFlat(v, 1600, 700), true, 'flat, not a globe');
+  const fv = flatView(v, 1600, 700);
+  assert.equal(fv.z, 11);
+  for (const z of [3, 5, 8, 11]) assert.equal(flatView(viewOf(10, 10, zoomForTileZ(z, 800, 600)), 800, 600).z, z, `zoomForTileZ(${z}) round-trips`);
+  const across = metresPerPixel(fv, 52.52) * 1600 / 1000;
+  assert.ok(across > 50 && across < 110, `a wide panel spans the surrounding towns, about ${across.toFixed(0)} km`);
+  const bar = scaleBar(fv, 52.52, 160, 'metric');
+  assert.ok(bar.px <= 160 && bar.px > 60 && /km$/.test(bar.label), `${bar.label} in ${bar.px.toFixed(0)} px`);
+  assert.match(scaleBar(fv, 52.52, 160, 'imperial').label, /mi$/);
+  const rings = ringRadii(fv, 52.52, 1600, 700, 'metric');
+  assert.ok(rings.length >= 2 && rings.length <= 4 && rings.every((r) => r.px <= 350 * 0.95 && r.px >= 24), `rings fit the panel: ${rings.map((r) => r.label).join(', ')}`);
+  assert.deepEqual(ringRadii(fv, 52.52, 1600, 700, 'imperial').map((r) => r.label.slice(-2)), ringRadii(fv, 52.52, 1600, 700, 'imperial').map(() => 'mi'));
+  assert.equal(viewOf(0, 0, 1e9).zoom, 4096, 'zoom is bounded');
+});
+
 test('the forecast grid: 121 points round the place in one URL, square on the ground, parsed hour-major', () => {
-  const g = gridPoints({ lat: 52.52, lon: 13.41 });
+  assert.deepEqual(GRID_STEPS, { local: 0.1, regional: 0.5 }); assert.equal(gridSpanOf('x'), 'local', 'local is the default span');
+  const local = gridPoints({ lat: 52.52, lon: 13.41 });
+  assert.equal(local.dLat, 0.1, 'a tenth of a degree apart by default: about 11 km, 110 km across');
+  const g = gridPoints({ lat: 52.52, lon: 13.41 }, GRID_N, GRID_STEPS.regional);
   assert.equal(g.n, GRID_N); assert.equal(g.lats.length, 121);
   assert.equal(g.dLat, 0.5); assert.ok(g.dLon > 0.8 && g.dLon < 0.85, `wider east-west at 52 degrees (${g.dLon})`);
   assert.equal(g.lats[60], 52.52); assert.equal(g.lons[60], 13.41, 'the place is the middle point');
@@ -149,7 +196,7 @@ test('RainViewer’s list is reduced to frames with safe paths; the feed serves 
   const n = urls.length;
   await feed.radarTile('cac22feaf4dd', 3, 1, 1); await feed.radarTile('cac22feaf4dd', '3', '1', '1');
   assert.equal(urls.length, n, 'served from the cache');
-  assert.equal(await feed.radarTile('cac22feaf4dd', 8, 0, 0), null, 'zoom 8 is refused');
+  assert.equal(await feed.radarTile('cac22feaf4dd', 8, 0, 0), null, 'zoom 8 is refused (a placeholder picture, not radar)');
   assert.equal(await feed.radarTile('cac22feaf4dd', 3, 8, 0), null, 'x past the row is refused');
   assert.equal(await feed.radarTile('deadbeefdead', 3, 0, 0), null, 'an unlisted frame is refused');
   assert.equal(await feed.radarTile('cac22feaf4dd', 1.5, 0, 0), null);
@@ -184,15 +231,17 @@ test('the refresh: floored at ten minutes, at most six requests an hour for a pl
   const gridReply = g.lats.map(() => ({ hourly: { time: ['2026-10-14T00:00'], precipitation: [0], temperature_2m: [1], wind_speed_10m: [1], wind_direction_10m: [1], cloud_cover: [1], weather_code: [0] } }));
   const gf = new WeatherFeed({}, { now: () => t, fetchImpl: async () => { gcalls++; return okReply(gridReply); } });
   const g1 = await gf.grid(52.52, 13.41, 'metric', { refreshMs: 60_000 });
-  assert.equal(g1.ok, true); assert.equal(g1.refreshMs, GRID_MIN_MS); assert.equal(g1.n, 11);
+  assert.equal(g1.ok, true); assert.equal(g1.refreshMs, GRID_MIN_MS); assert.equal(g1.n, 11); assert.equal(g1.span, 'local'); assert.equal(g1.dLat, 0.1);
+  const g2 = await gf.grid(52.52, 13.41, 'metric', { refreshMs: 60_000, span: 'regional' });
+  assert.equal(g2.dLat, 0.5); assert.equal(gcalls, 2, 'the regional grid is another request');
   t += 20 * 60_000; await gf.grid(52.52, 13.41, 'metric', { refreshMs: 60_000 });
-  assert.equal(gcalls, 1, 'twenty minutes on: not yet');
+  assert.equal(gcalls, 2, 'twenty minutes on: not yet');
   t += 11 * 60_000; await gf.grid(52.52, 13.41, 'metric', { refreshMs: 60_000 });
-  assert.equal(gcalls, 2);
+  assert.equal(gcalls, 3);
 });
 
 test('the settings: refresh, the globe and its layer; the shared file’s refresh reaches the server', async () => {
-  assert.equal(DEFAULTS.weather.refresh, '10'); assert.equal(DEFAULTS.weather.map, true); assert.equal(DEFAULTS.weather.mapLayer, 'radar');
+  assert.equal(DEFAULTS.weather.refresh, '10'); assert.equal(DEFAULTS.weather.map, true); assert.equal(DEFAULTS.weather.mapLayer, 'radar'); assert.equal(DEFAULTS.weather.gridSpan, 'local');
   const rows = PANEL.find((g) => g.group === 'weather').rows;
   assert.deepEqual(rows.find((r) => r.key === 'refresh').options.map(([v]) => v), ['10', '15', '20', '30', '60'], 'ten minutes is the least offered');
   assert.equal(normalise({ weather: { refresh: '5' } }).weather.refresh, '10', 'an unknown value is the default');
@@ -225,20 +274,24 @@ test('the routes and the raw tile: off until ticked, then the frames, the grid a
   const got = await serveWeatherTile({ method: 'GET', headers: {} }, r, '/weather/tile/abcdef123456/3/1/1.png', app);
   assert.equal(got.status, 200); assert.equal(r.head[1]['Content-Type'], 'image/png'); assert.deepEqual([...r.body], [...png]);
   r = res();
-  assert.equal((await serveWeatherTile({ method: 'GET', headers: {} }, r, '/weather/tile/abcdef123456/9/1/1.png', app)).status, 404);
+  assert.equal((await serveWeatherTile({ method: 'GET', headers: {} }, r, '/weather/tile/abcdef123456/8/1/1.png', app)).status, 404);
   assert.equal(await serveWeatherTile({ method: 'GET', headers: {} }, res(), '/weather/tile/../x.png', app), null, 'not a tile path at all');
   assert.ok(TILE_PATH.test('/weather/tile/abcdef123456/7/127/127.png') && !TILE_PATH.test('/weather/tile/abcdef123456/7/127/127.jpg'));
+  assert.ok(TILE_PATH.test('/weather/tile/abcdef123456/11/1100/671.png'), 'four-digit tile indexes (zoom 10-12): three digits lost every local-view tile to the static 404');
   assert.equal((await serveWeatherTile({ method: 'GET', headers: {} }, res(), '/weather/tile/abcdef123456/3/1/1.png', { settingsFile: app.settingsFile, weather: null })).status, 404, 'BLOCKYARD_WEATHER=0');
 });
 
 test('the page: the globe’s slot and markup; the docs name RainViewer; the rate limiter and the server branch exist', async () => {
   const { globeHtml } = await import('../public/js/weatherglobe.js');
   const html = globeHtml();
-  for (const sel of ['data-wxg-play', 'data-wxg-range', 'data-wxg="home"', 'data-wxg="world"', 'class="wxg-gl"', 'class="wxg-ui"']) assert.ok(html.includes(sel), sel);
+  for (const sel of ['data-wxg-play', 'data-wxg-range', 'data-wxg="home"', 'data-wxg="region"', 'data-wxg="world"', 'class="wxg-gl"', 'class="wxg-ui"']) assert.ok(html.includes(sel), sel);
+  assert.match(html, />local</, 'the home button says where it goes');
   assert.ok(!/\sstyle=/.test(html));
   const sec = read('docs/SECURITY.md');
   for (const h of RADAR_HOSTS) assert.ok(sec.includes(h), `docs/SECURITY.md names ${h}`);
   assert.match(read('server/http/server.js'), /path\.startsWith\('\/weather\/tile\/'\)/);
   assert.match(read('server/main.js'), /app\.weatherLimiter = new RateLimiter/);
   assert.match(read('public/js/weather.js'), /data-wx-globe-slot/);
+  assert.match(read('public/js/weatherglobe.js'), /land-50m\.json/);
+  assert.ok(!fs.existsSync(new URL('public/geo/land-110m.json', root)), 'the 1:110m file is gone with its straight-edge coastlines');
 });

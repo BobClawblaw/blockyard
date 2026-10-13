@@ -41,7 +41,8 @@ test('weather ships OFF, in its own tab beside Markets & Price, and says which h
   for (const h of WEATHER_HOSTS) assert.ok(g.rows[0].hint.includes(h), `the switch names ${h}`);
   assert.deepEqual(g.rows.find((r) => r.key === 'forecast').options.map(([v]) => v), ['current', '7', '10'], 'now, 7 days and 10 days');
   assert.deepEqual(g.rows.find((r) => r.key === 'overviewAt').options.map(([v]) => v), ['above', 'below']);
-  assert.deepEqual(g.rows.find((r) => r.key === 'kioskAt').options.map(([v]) => v), ['top', 'above', 'below', 'bottom']);
+  assert.deepEqual(g.rows.find((r) => r.key === 'kioskAt').options.map(([v]) => v), ['above', 'below', 'top', 'bottom'], 'the Markets-column panel first: it is the default (2026-10-13, "half the vertical size")');
+  assert.equal(DEFAULTS.weather.kioskAt, 'above');
 });
 
 test('the Location row sets a name, coordinates and a country, each clamped like any other setting', () => {

@@ -22,6 +22,7 @@ import { loadSettings } from './settings.js';
 import {
   wrapLon, tileX, tileY, mercatorToEquirect, rasterLand, paintBase, composite, viewOf, sphereRadius, isFlat, dragView, zoomView,
   orthoRender, orthoProject, flatView, flatTiles, flatProject, flatUnproject, gridSampler, paintGrid, rainColour, windPoints,
+  homeView, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels,
 } from './weathermap.js';
 import { tempColour } from './weather.js';
 
@@ -29,6 +30,7 @@ const PW = 1536, PH = 768;            // the skin: 0.23 degrees a pixel, about w
 const RADAR_Z = 2;                    // 4 x 4 tiles of 256 for the whole world on the globe
 const FRAME_MS = 280;                 // the loop's pace: thirteen frames in under four seconds
 const PIC_CACHE = 8;                  // composited skins kept (one per frame or hour), ~4.7 MB each
+const LAND_UNTIL_Z = 10;              // the 1:50m coastline, lakes and borders are drawn on the flat map up to this tile zoom; closer they are too coarse to trust
 const states = new WeakMap();
 
 // ------------------------------------------------------------------ WebGL
@@ -106,15 +108,21 @@ async function loadLand(st) {
   if (st.land || st.landAsking) return;
   st.landAsking = true;
   try {
-    const r = await fetch('/geo/land-110m.json', { credentials: 'same-origin' });
-    const data = await r.json();
-    st.land = rasterLand(data, PW, PH);
+    const get = async (f) => { const r = await fetch(`/geo/${f}`, { credentials: 'same-origin' }); if (!r.ok) throw new Error(`${f}: HTTP ${r.status}`); return r.json(); };
+    // the land first (the picture needs it), the lines and names after (they draw over it when they land)
+    const data = await get('land-50m.json');
     st.landData = data;
+    st.land = cutWater(rasterLand(data, PW, PH), data, PW, PH);
     st.base = paintBase(st.land, PW, PH, new Uint8ClampedArray(PW * PH * 4));
-    st.pics.clear();
-    st.dirty = true;
-    schedule(st);
-  } catch (e) { st.say = `the coastlines did not load: ${e?.message ?? e}`; }
+    st.pics.clear(); st.dirty = true; schedule(st);
+    const [lines, places] = await Promise.all([get('lines-50m.json'), get('places-10m.json')]);
+    st.lines = lines;
+    st.places = places.places;
+    // borders and state lines go into the skin: the states faint, the countries firmer
+    rasterLines(lines.states, lines.scale, PW, PH, st.base, [150, 170, 200, 70]);
+    rasterLines(lines.borders, lines.scale, PW, PH, st.base, [205, 220, 245, 150]);
+    st.pics.clear(); st.dirty = true; schedule(st);
+  } catch (e) { st.say = `the map data did not load: ${e?.message ?? e}`; }
   st.landAsking = false;
 }
 
@@ -132,10 +140,11 @@ function pullRadar(st) {
 }
 function pullGrid(st) {
   const w = st.w;
-  const key = `${w.lat},${w.lon},${unitsOf(w)}`;
+  const span = w.gridSpan === 'regional' ? 'regional' : 'local';
+  const key = `${w.lat},${w.lon},${unitsOf(w)},${span}`;
   if (st.gridAsking || (st.gridKey === key && Date.now() - (st.gridAt ?? 0) < 10 * 60_000)) return;
   st.gridAsking = true; st.gridKey = key; st.gridAt = Date.now();
-  st.api(`/api/weather/grid?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}&units=${unitsOf(w)}`).then((d) => {
+  st.api(`/api/weather/grid?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}&units=${unitsOf(w)}&span=${span}`).then((d) => {
     if (d?.ok) { st.grid = d; st.pics.clear(); st.say = ''; if (!st.hourChosen) st.hour = 0; }
     else st.say = d?.enabled === false ? d.note : `no forecast grid: ${d?.error ?? 'no answer'}`;
     st.dirty = true; schedule(st);
@@ -269,31 +278,75 @@ function drawGlobe(st, pw, ph, dpr) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   // the forecast's wind, the place, the graticule's equator -- the 2D layer over either globe
   if (st.w.mapLayer === 'forecast' && st.grid) drawWind(ctx, st, (lat, lon) => orthoProject(lat, lon, pw, ph, st.view), sphereRadius(st.view, pw, ph) / 90);
+  // names: on the globe only the big ones, by the sphere's size on screen
+  const R = sphereRadius(st.view, pw, ph);
+  drawNames(ctx, st, (lat, lon) => orthoProject(lat, lon, pw, ph, st.view), pw, ph, R < 500 ? 1 : R < 1200 ? 2 : R < 3000 ? 3 : 4);
   drawPlace(ctx, st, orthoProject(st.home.lat, st.home.lon, pw, ph, st.view));
   if (skin.loading) st.say = st.say || 'loading the radar frame…';
+}
+
+/** Place names, biggest first, no overlaps (weathermap placeLabels); `rank` is the places file's ceiling. */
+function drawNames(ctx, st, project, pw, ph, rank) {
+  if (!st.places) return;
+  ctx.save();
+  ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  const items = [];
+  for (const p of st.places) {
+    if (p[4] > rank) continue;
+    const q = project(p[1] / 100, p[2] / 100);
+    if (!q || (q.depth != null && q.depth < 0.12)) continue;
+    if (q.x < -40 || q.x > pw + 40 || q.y < -10 || q.y > ph + 10) continue;
+    const w = ctx.measureText(p[0]).width + 10;
+    items.push({ x: q.x + 4, y: q.y - 7, w, h: 14, p, q, depth: q.depth ?? 1 });
+    if (items.length > 400) break;     // the file is sorted by rank then population: the first few hundred in view are the ones that matter
+  }
+  for (const it of placeLabels(items, pw, ph, 3)) {
+    const big = it.p[4] <= 2;
+    const a = Math.min(1, 0.45 + 0.55 * it.depth);
+    ctx.fillStyle = `rgba(255,255,255,${(0.9 * a).toFixed(2)})`;
+    ctx.beginPath(); ctx.arc(it.q.x, it.q.y, big ? 2.4 : 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.font = `${big ? '650 12px' : '500 11px'} system-ui, sans-serif`;
+    ctx.lineWidth = 3; ctx.strokeStyle = `rgba(4,8,16,${(0.75 * a).toFixed(2)})`; ctx.lineJoin = 'round';
+    ctx.strokeText(it.p[0], it.q.x + 5, it.q.y); ctx.fillText(it.p[0], it.q.x + 5, it.q.y);
+  }
+  ctx.restore();
 }
 
 function drawFlat(st, pw, ph, dpr) {
   st.glcv.hidden = true;
   const ctx = st.cv.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const fv = flatView(st.view, pw, ph, st.radar?.zoomMax ?? 7);
-  ctx.fillStyle = '#0c1830'; ctx.fillRect(0, 0, pw, ph);
-  // the land as vectors (the 110m file: fine at zoom 3-5, coarse by 7 -- it says so under the map)
-  if (st.landData) {
-    ctx.fillStyle = '#2c3a4c'; ctx.strokeStyle = '#4c6a90'; ctx.lineWidth = 1;
+  const fv = flatView(st.view, pw, ph, 12);   // the MAP goes to 12; the tiles stop where the server says (the radar branch below)
+  const close = fv.z > LAND_UNTIL_Z;
+  ctx.fillStyle = close ? '#121c2c' : '#0c1830'; ctx.fillRect(0, 0, pw, ph);
+  // the land as vectors (the 110m file: fine at zoom 3-5, coarse by 8; closer than that it is not drawn at all --
+  // a 110m coastline across a town is a straight edge in the wrong place -- and the ground is distance rings)
+  if (st.landData && !close) {
     const k = st.landData.scale;
     const n = 2 ** fv.z;
+    // only what is in view goes through the path: at zoom 8 the whole file is 110k points a frame otherwise
+    const lonW = Math.max(1, (pw / fv.scale) * (360 / n)), latH = Math.max(1, (ph / fv.scale) * (180 / n));
+    const inView = (r) => { let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity; for (let i = 0; i < r.length; i += 2) { const x = r[i] / k, y = r[i + 1] / k; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; } return maxX >= st.view.lon - lonW && minX <= st.view.lon + lonW && maxY >= st.view.lat - latH && minY <= st.view.lat + latH; };
+    const trace = (r, dx) => { for (let i = 0; i < r.length; i += 2) { const x = tileX(r[i] / k, fv.z) * fv.scale - fv.left + dx, y = tileY(r[i + 1] / k, fv.z) * fv.scale - fv.top; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } };
     for (const dx of [0, -fv.worldPx, fv.worldPx]) {   // the world as it is first; its neighbours only when a copy is narrower than the panel
       ctx.beginPath();
-      for (const rings of st.landData.polygons) for (const r of rings) {
-        for (let i = 0; i < r.length; i += 2) {
-          const x = tileX(r[i] / k, fv.z) * fv.scale - fv.left + dx, y = tileY(r[i + 1] / k, fv.z) * fv.scale - fv.top;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      for (const rings of st.landData.polygons) if (fv.z < 4 || inView(rings[0])) for (const r of rings) { trace(r, dx); ctx.closePath(); }
+      ctx.fillStyle = '#2c3a4c'; ctx.fill('evenodd');
+      ctx.strokeStyle = '#4c6a90'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.beginPath();
+      for (const r of st.landData.water ?? []) if (fv.z < 4 || inView(r)) { trace(r, dx); ctx.closePath(); }
+      ctx.fillStyle = '#0c1830'; ctx.fill(); ctx.strokeStyle = '#3a5478'; ctx.lineWidth = 0.8; ctx.stroke();
+      if (st.lines) {
+        const lk = st.lines.scale;
+        const traceL = (r) => { for (let i = 0; i < r.length; i += 2) { const x = tileX(r[i] / lk, fv.z) * fv.scale - fv.left + dx, y = tileY(r[i + 1] / lk, fv.z) * fv.scale - fv.top; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } };
+        const vis = (r) => { let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity; for (let i = 0; i < r.length; i += 2) { const x = r[i] / lk, y = r[i + 1] / lk; if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; } return maxX >= st.view.lon - lonW && minX <= st.view.lon + lonW && maxY >= st.view.lat - latH && minY <= st.view.lat + latH; };
+        if (fv.z >= 4) {
+          ctx.beginPath(); for (const r of st.lines.states) if (vis(r)) traceL(r);
+          ctx.strokeStyle = 'rgba(160,180,210,.35)'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]);
         }
-        ctx.closePath();
+        ctx.beginPath(); for (const r of st.lines.borders) if (fv.z < 4 || vis(r)) traceL(r);
+        ctx.strokeStyle = 'rgba(215,228,250,.7)'; ctx.lineWidth = fv.z >= 6 ? 1.4 : 1; ctx.stroke();
       }
-      ctx.fill('evenodd'); ctx.stroke();
       if (n * fv.scale > 3 * pw) break;   // one copy of the world is wider than three panels: no wrap needed (the first pass was dx 0)
     }
   }
@@ -306,16 +359,52 @@ function drawFlat(st, pw, ph, dpr) {
     const f = st.radar?.frames?.[st.frame];
     if (f) {
       ctx.globalAlpha = 0.85;
+      ctx.imageSmoothingEnabled = true;
       let missing = 0;
+      // RainViewer's tiles stop at zoom 7 (the server says which, `zoomMax`): closer than that, the part of the
+      // zoom-7 tile under this tile is drawn scaled up -- about a kilometre a pixel, the radar's own grain
+      const tz = Math.min(fv.z, st.radar?.zoomMax ?? 7), d = fv.z - tz, sub = 256 / 2 ** d;
       for (const t of flatTiles(fv, pw, ph)) {
-        const im = tile(st, f.id, t.z, t.x, t.y);
-        if (im) ctx.drawImage(im, t.px, t.py, fv.scale + 0.5, fv.scale + 0.5); else missing++;
+        const im = tile(st, f.id, tz, t.x >> d, t.y >> d);
+        if (!im) { missing++; continue; }
+        if (d === 0) ctx.drawImage(im, t.px, t.py, fv.scale + 0.5, fv.scale + 0.5);
+        else ctx.drawImage(im, (t.x & (2 ** d - 1)) * sub, (t.y & (2 ** d - 1)) * sub, sub, sub, t.px, t.py, fv.scale + 0.5, fv.scale + 0.5);
       }
       ctx.globalAlpha = 1;
       if (missing) st.say = st.say || 'loading radar tiles…';
     }
   }
+  if (close) drawRings(ctx, st, fv, pw, ph);
+  drawNames(ctx, st, (lat, lon) => { const q = flatProject(lat, lon, fv); return q; }, pw, ph, rankCeiling(fv.z));
+  drawScale(ctx, st, fv, pw, ph);
   drawPlace(ctx, st, flatProject(st.home.lat, st.home.lon, fv));
+}
+
+/** Close in: rings round the place at round distances, labelled, and a faint graticule -- the ground in place of a map. */
+function drawRings(ctx, st, fv, pw, ph) {
+  const units = unitsOf(st.w);
+  const c = flatProject(st.home.lat, st.home.lon, fv);
+  ctx.save();
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = 'rgba(160, 190, 230, .28)'; ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(200, 220, 255, .55)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+  for (const r of ringRadii(fv, st.home.lat, pw, ph, units)) {
+    ctx.beginPath(); ctx.arc(c.x, c.y, r.px, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillText(r.label, c.x, c.y - r.px - 4);
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+/** A scale bar, bottom left. */
+function drawScale(ctx, st, fv, pw, ph) {
+  const bar = scaleBar(fv, st.view.lat, Math.min(160, pw / 4), unitsOf(st.w));
+  const x = 14, y = ph - 16;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(235, 245, 255, .85)'; ctx.lineWidth = 2; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + bar.px, y); ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 1); ctx.moveTo(x + bar.px, y - 5); ctx.lineTo(x + bar.px, y + 1); ctx.stroke();
+  ctx.fillStyle = 'rgba(235, 245, 255, .85)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(bar.label, x + 4, y - 7);
+  ctx.restore();
 }
 
 /** The forecast layer on the flat map: the panel sampled every other pixel through the grid, scaled up. */
@@ -443,7 +532,7 @@ function caption(st) {
     if (st.say) parts.push(st.say);
     else if (st.w.mapLayer === 'forecast') parts.push(`forecast ${st.field === 'temp' ? 'temperature' : st.field === 'cloud' ? 'cloud cover' : 'rain and snow'}, Open-Meteo, 11 x 11 points about ${(st.grid?.dLat ?? 0.5) * 10}° across; wind arrows point where it blows`);
     else parts.push('observed radar, RainViewer, the last two hours; blank where no radar station reaches (oceans, much of the world)');
-    if (flat) parts.push(`flat map, zoom ${flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z}; coastlines are the 1:110m file, coarse this close`);
+    if (flat) { const z = flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z; parts.push(z > LAND_UNTIL_Z ? `zoom ${z}: rings are distance from the place; no street map (this monitor contacts no map-tile server)` : `flat map, zoom ${z}; coasts, lakes and borders are Natural Earth 1:50m${z >= 8 ? ', coarse this close' : ''}`); }
     note.textContent = parts.join(' · ');
   }
 }
@@ -473,7 +562,7 @@ function bind(st) {
     if (Math.abs(dx) + Math.abs(dy) > 0) st.pointer.moved = true;
     if (isFlat(st.view, pw(), ph())) {
       // a pan: the place under the panel's middle moves by the drag, in mercator
-      const fv = flatView(st.view, pw(), ph(), st.radar?.zoomMax ?? 7);
+      const fv = flatView(st.view, pw(), ph(), 12);
       const c = flatUnproject(pw() / 2 - dx, ph() / 2 - dy, fv);
       st.view = viewOf(c.lat, c.lon, st.view.zoom);
     } else st.view = dragView(st.view, dx, dy, pw(), ph());
@@ -491,9 +580,10 @@ function bind(st) {
     const b = e.target.closest?.('[data-wxg]');
     if (!b) return;
     const k = b.dataset.wxg;
-    if (k === 'in') st.view = zoomView(st.view, 1.5);
-    else if (k === 'out') st.view = zoomView(st.view, 1 / 1.5);
-    else if (k === 'home') st.view = viewOf(st.home.lat, st.home.lon, 1.6);
+    if (k === 'in') st.view = zoomView(st.view, 2);
+    else if (k === 'out') st.view = zoomView(st.view, 0.5);
+    else if (k === 'home') st.view = homeView(st.home.lat, st.home.lon, pw(), ph());
+    else if (k === 'region') st.view = viewOf(st.home.lat, st.home.lon, 1.6 * 3);
     else if (k === 'world') st.view = viewOf(Math.max(-60, Math.min(60, st.home.lat)), st.home.lon, 1);
     else if (k === 'field') { st.field = { precip: 'temp', temp: 'cloud', cloud: 'precip' }[st.field ?? 'precip']; b.textContent = { precip: 'rain', temp: 'temperature', cloud: 'cloud' }[st.field]; }
     st.dirty = true; schedule(st); caption(st);
@@ -512,11 +602,13 @@ function bind(st) {
 }
 
 /** The markup the Weather page puts the globe in (once; weather.js keeps the element across its own redraws). */
-export function globeHtml() {
+export function globeHtml({ bare = false } = {}) {
+  // bare: the Kiosk's panel -- the map alone, no bar and no note (a wall has nobody to click; the ribbon above it says the time)
+  if (bare) return '<div class="wxg-box"><canvas class="wxg-gl" hidden></canvas><canvas class="wxg-ui"></canvas></div>';
   return `<div class="wxg-bar">
     <span class="wxg-ctl"><button type="button" class="btn" data-wxg-play>play</button><input type="range" class="wxg-range" min="0" max="0" value="0" data-wxg-range aria-label="frame"><b class="wxg-time" data-wxg-time>–</b></span>
     <span class="sp"></span>
-    <span class="wxg-ctl"><button type="button" class="btn" data-wxg="field" title="Which forecast field: rain, temperature or cloud (forecast layer only)">rain</button><button type="button" class="btn" data-wxg="home" title="Back to the place">home</button><button type="button" class="btn" data-wxg="world" title="The whole globe">world</button><button type="button" class="btn" data-wxg="out" aria-label="zoom out">−</button><button type="button" class="btn" data-wxg="in" aria-label="zoom in">+</button></span>
+    <span class="wxg-ctl"><button type="button" class="btn" data-wxg="field" title="Which forecast field: rain, temperature or cloud (forecast layer only)">rain</button><button type="button" class="btn" data-wxg="home" title="The place and its surrounding towns (about 75 km across)">local</button><button type="button" class="btn" data-wxg="region" title="The region, about 1,500 km across">region</button><button type="button" class="btn" data-wxg="world" title="The whole globe">world</button><button type="button" class="btn" data-wxg="out" aria-label="zoom out">−</button><button type="button" class="btn" data-wxg="in" aria-label="zoom in">+</button></span>
   </div>
   <div class="wxg-box"><canvas class="wxg-gl" hidden></canvas><canvas class="wxg-ui"></canvas></div>
   <p class="wxg-note tiny faint" data-wxg-note>loading the coastlines…</p>`;
@@ -526,17 +618,22 @@ export function globeHtml() {
  * Mount or update the globe in `box` (the .wxg-box inside the markup above) for these weather settings.
  * Called on every render of the Weather page; it asks for data at most as its own timers allow.
  */
-export function renderGlobe(box, w, h) {
+export function renderGlobe(box, w, h, { autoplay = false } = {}) {
   const st = stateOf(box);
   st.api = h.api;
-  const changed = !st.w || st.w.lat !== w.lat || st.w.lon !== w.lon || st.w.mapLayer !== w.mapLayer || unitsOf(st.w) !== unitsOf(w);
-  const layerChanged = st.w && st.w.mapLayer !== w.mapLayer;
+  st.autoplay = autoplay;
+  const changed = !st.w || st.w.lat !== w.lat || st.w.lon !== w.lon || st.w.mapLayer !== w.mapLayer || unitsOf(st.w) !== unitsOf(w) || st.w.gridSpan !== w.gridSpan;
+  const layerChanged = st.w && (st.w.mapLayer !== w.mapLayer || st.w.gridSpan !== w.gridSpan);
   st.w = w;
   if (!st.bound) { st.bound = true; bind(st); }
-  if (!st.view || !st.home || st.home.lat !== w.lat || st.home.lon !== w.lon) { st.home = { lat: w.lat, lon: w.lon }; st.view = viewOf(w.lat, w.lon, 1.6); st.dirty = true; }
-  if (layerChanged) { play(st, false); st.dirty = true; }
+  // THE FIRST VIEW IS LOCAL (operator: "It's a local weather station to start"): the place at tile zoom 11, flat
+  if (!st.view || !st.home || st.home.lat !== w.lat || st.home.lon !== w.lon) { st.home = { lat: w.lat, lon: w.lon }; st.view = homeView(w.lat, w.lon, box.clientWidth || 600, box.clientHeight || 400); st.dirty = true; }
+  if (layerChanged) { play(st, false); st.pics.clear(); st.dirty = true; }
   loadLand(st);
   if (w.mapLayer === 'forecast') pullGrid(st); else pullRadar(st);
+  // the Kiosk's map plays its loop by itself on Software and WebGL (a wall display wants motion); Simple shows the
+  // latest frame and plays nothing -- the same rule as the play button
+  if (st.autoplay && !st.playing && rendererNow() !== '2.5d' && frameCount(st) > 1 && !document.hidden) play(st, true);
   const r = box.parentElement?.querySelector('[data-wxg="field"]');
   if (r) r.hidden = w.mapLayer !== 'forecast';
   if (changed) st.dirty = true;

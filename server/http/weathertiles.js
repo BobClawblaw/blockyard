@@ -5,7 +5,7 @@
 import { securityHeaders } from './static.js';
 import { weatherOn } from './api.js';
 
-export const TILE_PATH = /^\/weather\/tile\/([a-z0-9]{6,32})\/(\d{1,2})\/(\d{1,3})\/(\d{1,3})\.png$/;
+export const TILE_PATH = /^\/weather\/tile\/([a-z0-9]{6,32})\/(\d{1,2})\/(\d{1,4})\/(\d{1,4})\.png$/;   // x and y reach 4095 at zoom 12: four digits (three let every zoom-11 tile fall through to the static 404, 2026-10-13)
 
 export async function serveWeatherTile(req, res, urlPath, app, { tls = false, hstsMs = 0 } = {}) {
   const m = TILE_PATH.exec(urlPath);

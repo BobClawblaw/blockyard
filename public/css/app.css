@@ -2324,3 +2324,16 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wxg-box canvas.wxg-ui:active { cursor: grabbing; }
 .wxg-box canvas[hidden] { display: none; }
 .wxg-note { margin: 0; }
+/* THE KIOSK'S WEATHER PANEL (operator, 2026-10-13: "make the weather take up half the vertical size. on kiosk. The
+   markets view is too small. Price and order book should be shrunk if needed. block space is too small with weather
+   up"): half the Markets column, the ribbon over the local map; Markets takes what is left above a shorter price
+   panel; the right column is untouched, so Block space keeps its height. */
+.kcol > .kwx-big { flex: 0 0 50%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.kwx-big .wx-rib { flex: 0 0 auto; }
+.kwx-big .wx { border-radius: 0; border: 0; border-bottom: 1px solid #16222c; box-shadow: none; min-height: 0; padding: 6px 12px; }
+.kwx-big .wxg { flex: 1 1 auto; min-height: 0; }
+.kwx-big .wxg-box { flex: 1 1 auto; height: auto; min-height: 0; border-radius: 0; }
+.kcol:has(> .kwx-big) > .kmk { flex: 1 1 auto; }
+.kcol:has(> .kwx-big) > .kpp { height: 190px; }   /* shrunk (270 otherwise): the book keeps its band, the table its first rows */
+.kcol:has(> .kwx-big) > .kpp .kdepthwrap { min-height: 70px; }
+@media (max-width: 900px) { .kcol > .kwx-big { flex: 0 0 auto; height: 60vh; } }

@@ -489,6 +489,8 @@
              just above or just below the price panel, or across the bottom. Inside #kiosk, so full screen keeps it. -->
         <div class="wxslot kwx kwx-top" id="kWxTop" hidden></div>
         <div class="kcol">
+        <!-- the weather as a half-height panel at the top of this column (weather.kioskAt 'above'): the ribbon and the local map -->
+        <div class="wxslot kwx kwx-in" id="kWxAbove" hidden></div>
         <div class="kpanel kmk">
           <div class="khead"><b>Markets</b><span class="faint" id="kMkLabel"></span></div>
           <div class="treemapwrap kboard"><canvas class="treemap" id="kMarkets"></canvas><div class="goggles-tip hidden"></div></div>
@@ -498,7 +500,6 @@
         <!-- PRICE AND THE BOOK, in one panel of its own (operator, 2026-09-12: "Make it a new
              panel with price, obviously"). The chart needs real height, which it cannot get as a
              strip under the markets board, so the panel is sized like the Block flow one. -->
-        <div class="wxslot kwx kwx-in" id="kWxAbove" hidden></div>
         <div class="kpanel kpp">
           <div class="khead"><b>Price &amp; order book depth</b><span class="faint">five exchanges' tickers, and their books</span></div>
           <div class="kprice" id="kPrice"></div>

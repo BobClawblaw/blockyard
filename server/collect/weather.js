@@ -32,7 +32,8 @@ export const WEATHER_HOSTS = Object.freeze(['api.open-meteo.com', 'geocoding-api
 export const RADAR_HOSTS = Object.freeze(['api.rainviewer.com', 'tilecache.rainviewer.com']);
 const RADAR_LIST_URL = 'https://api.rainviewer.com/public/weather-maps.json';
 const RADAR_LIST_MS = 5 * 60_000;         // RainViewer publishes a frame every 10 minutes
-export const TILE_ZOOM_MAX = 7;           // 128 x 128 tiles across the world at most; the flat map stops zooming here
+export const TILE_ZOOM_MAX = 7;           // RainViewer's tiles stop here: past 7 it answers 200 with a "Zoom Level Not Supported" picture (seen on the map 2026-10-13; a probe that
+                                          // checked the status alone had said 8-13 were fine). Closer views upscale the zoom-7 tile: ~1 km a pixel, about the radar's own resolution
 const TILE_BYTES_MAX = 256 * 1024;        // a 256-px radar tile is 1-30 KB
 const TILE_CACHE_BYTES = 48 * 1024 * 1024;
 const TILE_FRESH_MS = 60 * 60_000;        // a frame's tile never changes; an hour is just housekeeping
@@ -44,8 +45,11 @@ const FRAME_PATH = /^\/v2\/(radar|satellite)\/[a-z0-9]{6,32}$/;
 export const REFRESH_FLOOR_MS = 10 * 60_000;
 export const REFRESH_PER_HOUR_MAX = 6;
 export const GRID_MIN_MS = 30 * 60_000;
-export const GRID_N = 11;                 // 11 x 11 points, half a degree apart: about 5 degrees round the place
-const GRID_STEP = 0.5;
+export const GRID_N = 11;                 // 11 x 11 points: at the LOCAL step a tenth of a degree apart (~11 km, about 110 km across -- the
+                                          // surrounding zip codes; operator: "It's a local weather station to start"), at the REGIONAL half a degree
+export const GRID_STEPS = Object.freeze({ local: 0.1, regional: 0.5 });
+const GRID_STEP = GRID_STEPS.local;
+export const gridSpanOf = (v) => (Object.hasOwn(GRID_STEPS, String(v)) ? String(v) : 'local');
 const GRID_HOURS = 48;
 const UA = 'BlockYard (self-hosted Bitcoin node monitor)';
 const MAX_BODY = 256 * 1024;          // the 10-day reply is ~5 KB; a geocoding page ~3 KB
@@ -269,18 +273,19 @@ export class WeatherFeed {
   }
 
   /** The 11 x 11 forecast grid round a place: 121 points, 48 hours, re-asked no more than every GRID_MIN_MS. */
-  async grid(lat, lon, units, { refreshMs = null } = {}) {
+  async grid(lat, lon, units, { refreshMs = null, span = 'local' } = {}) {
     const p = placeOf(lat, lon);
     if (!p) return { ok: false, error: 'no place chosen, or not a place on Earth' };
     const u = unitsOf(units);
-    const key = `${p.lat},${p.lon},${u}`;
+    const sp = gridSpanOf(span);
+    const key = `${p.lat},${p.lon},${u},${sp}`;
     const row = this.rowOf(this.grids, key, 4);
-    const g = gridPoints(p);
+    const g = gridPoints(p, GRID_N, GRID_STEPS[sp]);
     const fresh = Math.max(GRID_MIN_MS, this.refreshOf(refreshMs));
     if (!(await this.refill(row, fresh, gridUrl(g, u), (j) => parseGrid(j, g, u), `grid for ${key}`, GRID_BODY, GRID_TIMEOUT_MS))) {
       return { ok: false, error: row.error ?? 'the forecast grid has not arrived yet', place: p };
     }
-    return { ok: true, place: p, at: row.at, refreshMs: fresh, source: 'open-meteo.com', error: row.error, ...row.data };
+    return { ok: true, place: p, at: row.at, refreshMs: fresh, span: sp, source: 'open-meteo.com', error: row.error, ...row.data };
   }
 
   /** RainViewer's frame list, five minutes fresh; the frames it names are the only ones the tile proxy serves. */

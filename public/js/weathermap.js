@@ -88,6 +88,62 @@ export function rasterLand(data, W, H) {
   return mask;
 }
 
+/** Cut the lakes out of a land mask (the land file's `water` rings), the same scanline fill. */
+export function cutWater(mask, data, W, H) {
+  if (!data.water?.length) return mask;
+  const inv = rasterLand({ scale: data.scale, polygons: data.water.map((r) => [r]) }, W, H);
+  for (let i = 0; i < mask.length; i++) if (inv[i]) mask[i] = 0;
+  return mask;
+}
+
+/**
+ * Draw polylines (flat [lon, lat, ...] in hundredths of a degree) into an RGBA equirect picture, one pixel wide
+ * (Bresenham), blending `rgba` over what is there. A line that jumps more than half the world is the antimeridian
+ * seam and is not drawn across.
+ */
+export function rasterLines(lines, k, W, H, dst, rgba) {
+  const [r, g, b, a] = rgba, al = a / 255;
+  const plot = (x, y) => {
+    if (y < 0 || y >= H) return;
+    const o = ((y * W) + ((x % W) + W) % W) * 4;
+    dst[o] += (r - dst[o]) * al; dst[o + 1] += (g - dst[o + 1]) * al; dst[o + 2] += (b - dst[o + 2]) * al; dst[o + 3] = 255;
+  };
+  for (const l of lines) {
+    for (let i = 2; i < l.length; i += 2) {
+      let x0 = Math.round(((l[i - 2] / k + 180) / 360) * W), y0 = Math.round(((90 - l[i - 1] / k) / 180) * H);
+      let x1 = Math.round(((l[i] / k + 180) / 360) * W), y1 = Math.round(((90 - l[i + 1] / k) / 180) * H);
+      if (Math.abs(x1 - x0) > W / 2) continue;
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      let err = dx + dy;
+      for (;;) {
+        plot(x0, y0);
+        if (x0 === x1 && y0 === y1) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+      }
+    }
+  }
+  return dst;
+}
+
+/** The places worth a name at a tile zoom: a rank ceiling that opens up as the map comes closer (places-10m.json rows). */
+export function rankCeiling(z) { return z <= 2 ? 1 : z <= 4 ? 3 : z <= 6 ? 5 : z <= 8 ? 8 : 10; }
+/**
+ * Lay out labels without overlaps, biggest first: `items` are { x, y, w, h, ... } in panel pixels (the label's box),
+ * already sorted by importance. Returns those that fit, greedily.
+ */
+export function placeLabels(items, pw, ph, pad = 2) {
+  const kept = [];
+  for (const it of items) {
+    if (it.x + it.w < 0 || it.x > pw || it.y + it.h < 0 || it.y > ph) continue;
+    let clash = false;
+    for (const k of kept) if (it.x < k.x + k.w + pad && it.x + it.w + pad > k.x && it.y < k.y + k.h + pad && it.y + it.h + pad > k.y) { clash = true; break; }
+    if (!clash) kept.push(it);
+  }
+  return kept;
+}
+
 /** Paint the base picture: sea and land (and the sea slightly lighter where the mask's neighbour is land: a shore). */
 export function paintBase(mask, W, H, dst, { sea = [12, 24, 48], land = [44, 58, 76], shore = [38, 66, 104] } = {}) {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -118,7 +174,8 @@ export function composite(base, over, dst, strength = 1) {
 // ------------------------------------------------------------------ the view
 
 /** The view's state: the place under the middle of the panel, and the zoom (1 = the whole globe fits). */
-export const viewOf = (lat, lon, zoom = 1) => ({ lat: clamp(lat, -89, 89), lon: wrapLon(lon), zoom: clamp(zoom, 0.6, 256) });
+export const ZOOM_MAX = 4096;   // zoom 12 tiles on a small panel need ~600; room past that is harmless (the tiles stop at TILE_ZOOM_MAX)
+export const viewOf = (lat, lon, zoom = 1) => ({ lat: clamp(lat, -89, 89), lon: wrapLon(lon), zoom: clamp(zoom, 0.6, ZOOM_MAX) });
 /** The sphere's radius in panel pixels at this view. */
 export const sphereRadius = (view, pw, ph) => (Math.min(pw, ph) / 2 - 8) * view.zoom;
 /** Past this the sphere is wider than three panels and the view is a flat map (`flatView`). */
@@ -197,7 +254,34 @@ export function orthoProject(lat, lon, pw, ph, view) {
  * The flat (web mercator) view: the tile zoom to draw at, the scale in panel pixels per tile, and the world
  * pixel at the panel's top-left. Zoom 1 of the globe is a sphere of radius R; the flat map continues its scale.
  */
-export function flatView(view, pw, ph, zoomMax = 7) {
+/** The view zoom that draws the flat map at tile zoom `z` (the inverse of flatView's z). */
+export function zoomForTileZ(z, pw, ph) {
+  const R1 = Math.min(pw, ph) / 2 - 8;            // the sphere's radius at zoom 1
+  return (256 * 2 ** z) / (2 * Math.PI * R1);
+}
+/** The HOME view: the place at the scale of its surrounding towns (tile zoom 11: about 75 km across a wide panel). */
+export const HOME_TILE_Z = 11;
+export const homeView = (lat, lon, pw, ph) => viewOf(lat, lon, zoomForTileZ(HOME_TILE_Z, pw, ph));
+/** Metres per panel pixel of a flat view at a latitude (web mercator's scale varies with cos(lat)). */
+export const metresPerPixel = (fv, lat) => (40_075_016.686 * Math.cos(lat * D2R)) / fv.worldPx;
+/** A scale bar's length: the nicest round distance under `maxPx` pixels, in metres, with its label. */
+export function scaleBar(fv, lat, maxPx = 160, units = 'metric') {
+  const mpp = metresPerPixel(fv, lat);
+  const steps = units === 'imperial' ? [100, 200, 500, 1000, 1609.344, 3218.688, 8046.72, 16093.44, 32186.88, 80467.2, 160934.4, 321868.8, 804672, 1609344] : [100, 200, 500, 1000, 2000, 5000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000, 2_000_000];
+  let m = steps[0];
+  for (const v of steps) if (v / mpp <= maxPx) m = v;
+  const label = units === 'imperial' ? (m < 1609 ? `${Math.round(m * 3.28084)} ft` : `${Math.round(m / 1609.344)} mi`) : (m < 1000 ? `${m} m` : `${m / 1000} km`);
+  return { metres: m, px: m / mpp, label };
+}
+/** The distance rings to draw round the place at this scale: radii in metres that fit the panel, up to four. */
+export function ringRadii(fv, lat, pw, ph, units = 'metric') {
+  const mpp = metresPerPixel(fv, lat);
+  const half = Math.min(pw, ph) / 2;
+  const base = units === 'imperial' ? [1609.344, 3218.688, 8046.72, 16093.44, 32186.88, 80467.2, 160934.4, 321868.8, 804672] : [1000, 2000, 5000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000];
+  const fit = base.filter((m) => m / mpp >= 24 && m / mpp <= half * 0.95);
+  return fit.slice(-4).map((m) => ({ metres: m, px: m / mpp, label: units === 'imperial' ? `${Math.round(m / 1609.344)} mi` : `${m / 1000} km` }));
+}
+export function flatView(view, pw, ph, zoomMax = 12) {
   const R = sphereRadius(view, pw, ph);
   // the globe's scale at the equator in px/degree, as a mercator "world width": 2 pi R
   const worldPx = 2 * Math.PI * R;

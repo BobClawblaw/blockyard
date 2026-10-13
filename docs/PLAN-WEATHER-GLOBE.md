@@ -9,13 +9,16 @@ time ... Default should be 10 minute refresh for 6 per hours max".
 
 ## What it is
 
-A globe on the Weather tab, centred on the chosen place: drag to turn it, wheel or pinch to zoom, and
-past a zoom it flattens into a map of the area. Two animated layers over the coastlines:
+A map on the Weather tab that OPENS LOCAL (operator, after the first cut opened on the globe: "it needs to
+zoom in at least to the surrounding zip codes. Not up so high. It's a local weather station to start"):
+the place at tile zoom 11, about 75 km across a wide panel, distance rings round it and a scale bar in
+place of a street map (this monitor contacts no map-tile server). Zoom out and it is the region, then
+the globe, which turns under the pointer; `local` / `region` / `world` buttons jump between them. Two animated layers over the coastlines:
 
 | layer | what | from | frames |
 |---|---|---|---|
 | **Radar** | observed precipitation, the last two hours, plus a short nowcast | RainViewer's public composite (`api.rainviewer.com` for the frame list, `tilecache.rainviewer.com` for 256-px tiles) | 13 at 10-minute steps (+ up to 3 nowcast) |
-| **Forecast** | precipitation, temperature, wind and cloud for the next 48 hours, round the place | Open-Meteo, an 11 x 11 grid of points in ONE request (probed 2026-10-13: four points in 9.6 KB, 0.59 s) | 48, hourly |
+| **Forecast** | precipitation, temperature, wind and cloud for the next 48 hours, round the place | Open-Meteo, an 11 x 11 grid of points in ONE request (probed 2026-10-13: four points in 9.6 KB, 0.59 s); **local** 0.1 degrees apart (~110 km across, the default) or **regional** 0.5 (~550 km) | 48, hourly |
 
 Radar is global where radar stations are; oceans and much of the global south are blank BY NATURE, and
 the map says "no radar coverage" rather than painting them. The forecast grid covers about 5 degrees
@@ -49,12 +52,14 @@ inverse of each panel pixel into that picture. One code path, no horizon clippin
   renderer exists to avoid.
 
 Past the zoom where the sphere is three panels wide the view flattens into mercator, where the tiles
-are drawn as they are (zoom 3-7, at most ~20 a view) and the polygons as vectors.
+are drawn as they are up to zoom 7 and the zoom-7 tile scaled up past it (RainViewer's tiles stop at 7:
+beyond, a "Zoom Level Not Supported" picture with a 200; ~1 km a pixel is about the radar's own grain)
+and the 1:50m land, lakes and borders as vectors up to zoom 10, with the place names from 1:10m.
 
 ## Milestones
 
-1. Coastlines shipped (`public/geo/land-110m.json`, `scripts/coastline-build.mjs`) and the globe
-   turning and zooming, land only, all three renderers.
+1. Geography shipped (`public/geo/land-50m.json`, `lines-50m.json`, `places-10m.json`; `scripts/geo-build.mjs`):
+   land, lakes, country borders, state lines and ~7,300 place names; the globe turning and zooming on all three renderers.
 2. Radar: the RainViewer proxy (`/api/weather/radar`, `/weather/tile/...`), frames cached, the loop.
 3. Forecast grid: `/api/weather/grid`, the 48-hour loop, a layer switch.
 4. The refresh setting with its floor and cap; docs (SECURITY.md's outbound table, README).

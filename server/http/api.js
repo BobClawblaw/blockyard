@@ -583,7 +583,8 @@ export const routes = [
     handler: async (ctx, app) => {
       if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
       if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
-      return { enabled: true, ...(await app.weather.grid(ctx.query.lat, ctx.query.lon, ctx.query.units, { refreshMs: await weatherRefreshMs(app) })) };
+      // ?span=local (0.1 degrees between points, the default) | regional (0.5)
+      return { enabled: true, ...(await app.weather.grid(ctx.query.lat, ctx.query.lon, ctx.query.units, { refreshMs: await weatherRefreshMs(app), span: ctx.query.span })) };
     },
   },
   {
