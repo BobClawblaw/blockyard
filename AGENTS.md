@@ -357,7 +357,9 @@ next). What will bite:
   a solid band (the first atmosphere).
 - The geography is Natural Earth 1:50m land, lakes, country borders and state lines plus 1:10m populated places
   (`public/geo/land-50m.json`, `lines-50m.json`, `places-10m.json`, 1.46 MB, 590 KB gzipped; `scripts/geo-build.mjs`
-  rebuilds them from the GeoJSON) -- operator, of the first globe: "no country, state, borders or names ... No globe
+  rebuilds them from the GeoJSON) -- and since the same evening `features-10m.json` (2.9 MB; operator: "no roads or other
+  data available for maps?"): 1:10m motorways and main roads (NOT streets), rails, rivers, urban footprints, Douglas-Peucker
+  at ~900 m and DELTA-encoded (`undelta`), drawn on the flat map from the zoom each earns (`featureLevels`) -- operator, of the first globe: "no country, state, borders or names ... No globe
   detail at all". Lines are rasterised into the skin (`rasterLines`) and drawn as vectors on the flat map up to zoom 10;
   names by `rankCeiling(z)` with a greedy no-overlap layout (`placeLabels`), biggest first.
 - A screenshot harness for this: write `renderer` and `weather.mapLayer` into the instance's SHARED settings file, not

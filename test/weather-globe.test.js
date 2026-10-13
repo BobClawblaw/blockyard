@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   tileX, tileY, tileLon, tileLat, mercatorToEquirect, rasterLand, paintBase, composite, viewOf, sphereRadius, isFlat, dragView, zoomView,
   orthoRender, orthoProject, flatView, flatTiles, flatProject, flatUnproject, gridSampler, paintGrid, rainColour, windPoints, wrapLon, FLAT_FROM,
-  homeView, zoomForTileZ, HOME_TILE_Z, metresPerPixel, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels,
+  homeView, zoomForTileZ, HOME_TILE_Z, metresPerPixel, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels, undelta, expandFeatures, featureLevels,
 } from '../public/js/weathermap.js';
 import { WeatherFeed, gridPoints, gridUrl, parseGrid, parseRadarList, RADAR_HOSTS, REFRESH_FLOOR_MS, REFRESH_PER_HOUR_MAX, GRID_MIN_MS, GRID_N, GRID_STEPS, gridSpanOf, TILE_ZOOM_MAX } from '../server/collect/weather.js';
 import { serveWeatherTile, TILE_PATH } from '../server/http/weathertiles.js';
@@ -77,11 +77,36 @@ test('the shipped geography: 1:50m land and lakes rasterise (Berlin land, the At
   assert.ok(berlin && berlin[3] > 3_000_000, 'Berlin, with its population');
   assert.ok(places.filter((p) => p[4] >= 7).length > 3000, 'and thousands of small towns (rank 7 and up) for the local view');
   for (let i = 1; i < places.length; i++) assert.ok(places[i][4] >= places[i - 1][4], 'rank ascending');
-  assert.ok(fs.statSync(new URL('public/geo/land-50m.json', root)).size + fs.statSync(new URL('public/geo/lines-50m.json', root)).size + fs.statSync(new URL('public/geo/places-10m.json', root)).size < 1_600_000, 'under 1.6 MB together');
+  assert.ok(fs.statSync(new URL('public/geo/land-50m.json', root)).size + fs.statSync(new URL('public/geo/lines-50m.json', root)).size + fs.statSync(new URL('public/geo/places-10m.json', root)).size < 1_600_000, 'under 1.6 MB together (the features file is its own 2.9 MB, loaded last)');
   // which names at which zoom, and a greedy layout without overlaps
   assert.equal(rankCeiling(1), 1); assert.equal(rankCeiling(5), 5); assert.equal(rankCeiling(11), 10);
   const kept = placeLabels([{ x: 10, y: 10, w: 40, h: 12 }, { x: 20, y: 12, w: 40, h: 12 }, { x: 100, y: 10, w: 40, h: 12 }, { x: -200, y: 0, w: 40, h: 12 }], 300, 200);
   assert.equal(kept.length, 2, 'the overlapping second and the off-panel fourth are dropped');
+});
+
+test('the features file: roads, rails, rivers and urban areas, delta-encoded and simplified, under 3 MB', () => {
+  // operator, 2026-10-13: "no roads or other data available for maps?" -- Natural Earth's 1:10m roads are motorways
+  // and main roads (never streets); 1.46 M raw points became 572 k by Douglas-Peucker at ~900 m, 14.5 MB became 2.9
+  const f = JSON.parse(read('public/geo/features-10m.json'));
+  assert.equal(f.scale, 100);
+  assert.ok(f.roads.major.length > 8000 && f.roads.secondary.length > 8000 && f.roads.minor.length > 15000, 'the road classes');
+  assert.ok(f.rails.length > 3000 && f.rivers.length > 2000 && f.urban.length > 10000);
+  assert.ok(fs.statSync(new URL('public/geo/features-10m.json', root)).size < 3_000_000, 'under 3 MB');
+  const l = undelta(f.roads.major[0]);
+  assert.ok(l.pts.length >= 4 && l.minX <= l.maxX && Math.abs(l.pts[0]) <= 18000 && Math.abs(l.pts[1]) <= 9000, 'absolute coordinates again, on Earth');
+  const steps = f.roads.major.slice(0, 200).flatMap((x) => x.slice(3)).map(Math.abs);
+  assert.ok(steps.sort((a, b) => a - b)[Math.floor(steps.length / 2)] < 40, 'a step is a few hundredths of a degree: the deltas are small');
+  assert.deepEqual(undelta([3, 100, 200, 5, -5, 5, 0]), { rank: 3, pts: [100, 200, 105, 195, 110, 195], minX: 100, minY: 195, maxX: 110, maxY: 200 });
+  assert.deepEqual(undelta([10, 10, 1, 1], false).pts, [10, 10, 11, 11], 'an urban ring has no rank');
+  const X = expandFeatures({ scale: 100, roads: { major: [[1, 0, 0, 1, 1]], secondary: [], minor: [] }, rails: [], rivers: [[2, 5, 5, 1, 0]], urban: [[0, 0, 1, 0, 1, 1]] });
+  assert.equal(X.roads.major[0].rank, 1); assert.equal(X.urban[0].pts.length, 6);
+  // a motorway through Berlin is in the file: a major line passing within a hundredth of a degree of 52.5, 13.4
+  const near = f.roads.major.map((x) => undelta(x)).some((r) => r.minX <= 1400 && r.maxX >= 1300 && r.minY <= 5300 && r.maxY >= 5200);
+  assert.ok(near, 'a major road crosses the Berlin box');
+  const lv = featureLevels(11);
+  assert.ok(lv.urban && lv.major === 12 && lv.minor === 12 && lv.rails === 12, 'everything close in');
+  assert.ok(!featureLevels(3).urban && featureLevels(3).major === -1, 'nothing at globe scale');
+  assert.equal(featureLevels(8).minor, 6, 'minor roads open up by rank');
 });
 
 test('the globe: a view turns and zooms within bounds, the place projects to the middle, the far side is hidden', () => {

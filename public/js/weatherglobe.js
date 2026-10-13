@@ -22,7 +22,7 @@ import { loadSettings } from './settings.js';
 import {
   wrapLon, tileX, tileY, mercatorToEquirect, rasterLand, paintBase, composite, viewOf, sphereRadius, isFlat, dragView, zoomView,
   orthoRender, orthoProject, flatView, flatTiles, flatProject, flatUnproject, gridSampler, paintGrid, rainColour, windPoints,
-  homeView, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels,
+  homeView, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels, expandFeatures, featureLevels,
 } from './weathermap.js';
 import { tempColour } from './weather.js';
 
@@ -122,8 +122,37 @@ async function loadLand(st) {
     rasterLines(lines.states, lines.scale, PW, PH, st.base, [150, 170, 200, 70]);
     rasterLines(lines.borders, lines.scale, PW, PH, st.base, [205, 220, 245, 150]);
     st.pics.clear(); st.dirty = true; schedule(st);
+    // the roads, rails, rivers and urban areas last: 2.9 MB, wanted only on the flat map (operator: "no roads or other
+    // data available for maps?") -- expanded once from their delta form
+    st.features = expandFeatures(await get('features-10m.json'));
+    st.dirty = true; schedule(st);
   } catch (e) { st.say = `the map data did not load: ${e?.message ?? e}`; }
   st.landAsking = false;
+}
+
+/** The feature layers on the flat map, each from the zoom it earns: urban footprint, rivers, roads by class, rails. */
+function drawFeatures(ctx, st, fv, pw, ph) {
+  const F = st.features;
+  if (!F) return;
+  const lv = featureLevels(fv.z);
+  const k = F.scale, n = 2 ** fv.z;
+  const lonW = Math.max(0.5, (pw / fv.scale) * (360 / n)) * 100, latH = Math.max(0.5, (ph / fv.scale) * (180 / n)) * 100;
+  const cx = st.view.lon * 100, cy = st.view.lat * 100;
+  const vis = (l) => l.maxX >= cx - lonW && l.minX <= cx + lonW && l.maxY >= cy - latH && l.minY <= cy + latH;
+  const trace = (pts, dx) => { for (let i = 0; i < pts.length; i += 2) { const x = tileX(pts[i] / k, fv.z) * fv.scale - fv.left + dx, y = tileY(pts[i + 1] / k, fv.z) * fv.scale - fv.top; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } };
+  const lines = (list, maxRank, dx) => { let n = 0; ctx.beginPath(); for (const l of list) if (l.rank <= maxRank && vis(l)) { trace(l.pts, dx); n++; } return n; };
+  for (const dx of [0, -fv.worldPx, fv.worldPx]) {
+    if (lv.urban) {
+      ctx.beginPath(); for (const r of F.urban) if (vis(r)) { trace(r.pts, dx); ctx.closePath(); }
+      ctx.fillStyle = fv.z >= 10 ? 'rgba(255, 220, 170, .13)' : 'rgba(255, 220, 170, .09)'; ctx.fill();
+    }
+    if (lv.rivers >= 0 && lines(F.rivers, lv.rivers, dx)) { ctx.strokeStyle = 'rgba(90, 160, 230, .55)'; ctx.lineWidth = fv.z >= 8 ? 1.4 : 1; ctx.stroke(); }
+    if (lv.minor >= 0 && lines(F.roads.minor, lv.minor, dx)) { ctx.strokeStyle = 'rgba(200, 200, 210, .22)'; ctx.lineWidth = 1; ctx.stroke(); }
+    if (lv.rails >= 0 && lines(F.rails, lv.rails, dx)) { ctx.strokeStyle = 'rgba(190, 190, 200, .35)'; ctx.lineWidth = 1; ctx.setLineDash([5, 3]); ctx.stroke(); ctx.setLineDash([]); }
+    if (lv.secondary >= 0 && lines(F.roads.secondary, lv.secondary, dx)) { ctx.strokeStyle = 'rgba(215, 190, 130, .5)'; ctx.lineWidth = fv.z >= 9 ? 1.8 : 1.2; ctx.stroke(); }
+    if (lv.major >= 0 && lines(F.roads.major, lv.major, dx)) { ctx.strokeStyle = 'rgba(240, 190, 90, .75)'; ctx.lineWidth = fv.z >= 9 ? 2.6 : fv.z >= 7 ? 1.8 : 1.2; ctx.stroke(); }
+    if (n * fv.scale > 3 * pw) break;
+  }
 }
 
 // ------------------------------------------------------------------ data
@@ -374,6 +403,8 @@ function drawFlat(st, pw, ph, dpr) {
       if (missing) st.say = st.say || 'loading radar tiles…';
     }
   }
+  // the 1:10m features draw at every zoom they earn, close in too: they are what makes the local view a place
+  drawFeatures(ctx, st, fv, pw, ph);
   if (close) drawRings(ctx, st, fv, pw, ph);
   drawNames(ctx, st, (lat, lon) => { const q = flatProject(lat, lon, fv); return q; }, pw, ph, rankCeiling(fv.z));
   drawScale(ctx, st, fv, pw, ph);
@@ -532,7 +563,7 @@ function caption(st) {
     if (st.say) parts.push(st.say);
     else if (st.w.mapLayer === 'forecast') parts.push(`forecast ${st.field === 'temp' ? 'temperature' : st.field === 'cloud' ? 'cloud cover' : 'rain and snow'}, Open-Meteo, 11 x 11 points about ${(st.grid?.dLat ?? 0.5) * 10}° across; wind arrows point where it blows`);
     else parts.push('observed radar, RainViewer, the last two hours; blank where no radar station reaches (oceans, much of the world)');
-    if (flat) { const z = flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z; parts.push(z > LAND_UNTIL_Z ? `zoom ${z}: rings are distance from the place; no street map (this monitor contacts no map-tile server)` : `flat map, zoom ${z}; coasts, lakes and borders are Natural Earth 1:50m${z >= 8 ? ', coarse this close' : ''}`); }
+    if (flat) { const z = flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z; parts.push(z > LAND_UNTIL_Z ? `zoom ${z}: rings are distance from the place; roads are Natural Earth 1:10m -- motorways and main roads, not streets (this monitor contacts no map-tile server)` : `flat map, zoom ${z}; coasts, borders, roads and rivers are Natural Earth${z >= 8 ? ', coarse this close' : ''}`); }
     note.textContent = parts.join(' · ');
   }
 }

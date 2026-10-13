@@ -127,6 +127,38 @@ export function rasterLines(lines, k, W, H, dst, rgba) {
   return dst;
 }
 
+/**
+ * Expand a delta-encoded line from features-10m.json ([rank, x0, y0, dx, dy, ...], hundredths of a degree) into
+ * absolute coordinates with its bounding box: { rank, pts (flat [lon, lat, ...] in hundredths), minX, minY, maxX, maxY }.
+ */
+export function undelta(line, ranked = true) {
+  const pts = [];
+  let x = 0, y = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (let i = ranked ? 1 : 0; i + 1 < line.length; i += 2) {
+    x += line[i]; y += line[i + 1];
+    pts.push(x, y);
+    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  return { rank: ranked ? line[0] : 0, pts, minX, minY, maxX, maxY };
+}
+/** The whole features file expanded once: roads by class, rails, rivers, urban rings. */
+export function expandFeatures(f) {
+  return {
+    scale: f.scale ?? 100,
+    roads: { major: f.roads.major.map((l) => undelta(l)), secondary: f.roads.secondary.map((l) => undelta(l)), minor: f.roads.minor.map((l) => undelta(l)) },
+    rails: f.rails.map((l) => undelta(l)),
+    rivers: f.rivers.map((l) => undelta(l)),
+    urban: f.urban.map((l) => undelta(l, false)),
+  };
+}
+/** Which feature layers draw at a tile zoom, and the rank each admits (Natural Earth scalerank: lower is bigger). */
+export function featureLevels(z) {
+  return {
+    urban: z >= 6, rivers: z >= 4 ? (z >= 7 ? 12 : z >= 6 ? 8 : 4) : -1,
+    major: z >= 5 ? 12 : -1, secondary: z >= 7 ? 12 : -1, minor: z >= 8 ? (z >= 10 ? 12 : 6) : -1, rails: z >= 8 ? 12 : -1,
+  };
+}
+
 /** The places worth a name at a tile zoom: a rank ceiling that opens up as the map comes closer (places-10m.json rows). */
 export function rankCeiling(z) { return z <= 2 ? 1 : z <= 4 ? 3 : z <= 6 ? 5 : z <= 8 ? 8 : 10; }
 /**

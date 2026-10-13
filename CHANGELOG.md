@@ -24,7 +24,8 @@ All notable changes to this project are documented here. The format follows
   lines, and 7,300 place names at 1:10m). Two animated layers: observed radar,
   the last two hours from RainViewer (free, no key; its tiles stop at zoom 7 and are scaled up closer in), and the next 48 hours of rain,
   temperature, wind and cloud from an Open-Meteo grid of 121 points round the place, 11 km apart
-  (Local, the default) or 55 km (Regional).
+  (Local, the default) or 55 km (Regional). The flat map also draws Natural Earth's 1:10m motorways and
+  main roads, railways, rivers and the built-up footprint of towns (2.9 MB, shipped) -- not streets.
   Drawn on all three renderers: the WebGL one ray-casts the sphere on the card, Software draws it per
   pixel, Simple draws it once per change and plays the loop only while the play button is held.
   **Refresh every** (Weather settings): ten minutes at the least and six an hour at the most per place,
