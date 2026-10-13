@@ -373,6 +373,14 @@ const DEFAULTS = {
     idleAfterMs: 600000,
     timeoutMs: 8000,
   },
+  // Local weather (server/collect/weather.js): Open-Meteo over HTTPS, the second outbound connection that is not
+  // the node. Asked only while a page shows the ribbon, and only once the shared Display setting weather.enabled
+  // is ticked (off out of the box). BLOCKYARD_WEATHER=0 removes it altogether.
+  weather: {
+    enabled: true,
+    freshMs: 600000,
+    timeoutMs: 8000,
+  },
 };
 
 function isPlainObject(v) {
@@ -495,6 +503,7 @@ export function loadConfig({ configFile = defaultConfigFile(), ifaces = null, no
     // bytes work on builds that publish them and do not on the deployed one.
     'BLOCKYARD_LOG_SOURCE': ['log.enabled', Boolean],
     'BLOCKYARD_MARKETS': ['markets.enabled', Boolean],
+    'BLOCKYARD_WEATHER': ['weather.enabled', Boolean],
     'BLOCKYARD_SECURE_COOKIE': ['auth.secureCookie', Boolean],
     'BLOCKYARD_TLS': ['server.tls.enabled', Boolean],
     'BLOCKYARD_TLS_CERT': ['server.tls.cert', String],

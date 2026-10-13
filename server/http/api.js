@@ -25,18 +25,33 @@ import { xSearch, xTx, xBlock, xAddress } from './explorer.js';
 // feed, so unticking stops the exchange traffic at once rather than ten minutes later.
 const MARKETS_OFF = 'market data is off on this server (BLOCKYARD_MARKETS=0 or markets.enabled=false); the switch in Display settings cannot turn it on';
 const POLLING_OFF = 'market polling is off -- the default, so that out of the box this monitor makes no outbound connection but to your node. Turn it on under Display settings → Markets & Price → Enable market polling';
-const pollingCache = new WeakMap();
-export async function marketsPollingOn(app) {
+// The shared settings file, parsed once per change of its mtime and size. Two switches read it per request: market
+// polling (above) and the weather ribbon (below) -- both outbound connections, both off until ticked.
+const sharedCache = new WeakMap();
+async function sharedSettings(app) {
   const file = app.settingsFile;
-  if (!file) return false;
+  if (!file) return null;
   let st;
-  try { st = await fsp.stat(file); } catch { return false; }
-  const hit = pollingCache.get(app);
+  try { st = await fsp.stat(file); } catch { return null; }
+  const hit = sharedCache.get(app);
   if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.value;
-  let value = false;
-  try { value = JSON.parse(await fsp.readFile(file, 'utf8'))?.markets?.polling === true; } catch { value = false; }
-  pollingCache.set(app, { mtimeMs: st.mtimeMs, size: st.size, value });
+  let value = null;
+  try { value = JSON.parse(await fsp.readFile(file, 'utf8')); } catch { value = null; }
+  sharedCache.set(app, { mtimeMs: st.mtimeMs, size: st.size, value });
   return value;
+}
+export async function marketsPollingOn(app) {
+  return (await sharedSettings(app))?.markets?.polling === true;
+}
+// THE WEATHER SWITCH (operator, 2026-10-13: "Something users would have to opt into"), on the market switch's two
+// layers: BLOCKYARD_WEATHER=0 (weather.enabled=false) removes the feed from the server; otherwise it asks
+// Open-Meteo only while the shared Display setting weather.enabled is on -- and that ships OFF. Per-browser and
+// per-account settings choose the place, the units and the look; whether this server reaches out at all is the
+// shared file's to say, as for the exchanges.
+const WEATHER_OFF = 'weather is off on this server (BLOCKYARD_WEATHER=0 or weather.enabled=false); the switch in Display settings cannot turn it on';
+const WEATHER_UNTICKED = 'the weather ribbon is off for this monitor -- the default, so that out of the box it makes no outbound connection but to your node. Turn it on under Display settings → Weather → Enable weather (the Shared settings)';
+export async function weatherOn(app) {
+  return (await sharedSettings(app))?.weather?.enabled === true;
 }
 const pollingOff = (app) => { app.markets?.stop?.(); return { ok: true, enabled: false, polling: false, note: POLLING_OFF }; };
 
@@ -535,6 +550,24 @@ export const routes = [
       if (!(await marketsPollingOn(app))) return { ok: true, usd: null, polling: false, note: POLLING_OFF };
       const p = await Promise.race([app.markets.spot().catch(() => null), new Promise((res) => { setTimeout(res, 1500, null).unref?.(); })]);
       return { ok: true, usd: p?.usd ?? null, at: p?.at ?? null, source: p?.source ?? null };
+    },
+  },
+  // LOCAL WEATHER (server/collect/weather.js): a forecast for ?lat=&lon=&units=, and the place search behind the
+  // settings panel's Location box (?q=). Both say why when they will not reach out.
+  {
+    method: 'GET', path: '/api/weather', auth: 'any',
+    handler: async (ctx, app) => {
+      if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
+      if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
+      return { enabled: true, ...(await app.weather.forecast(ctx.query.lat, ctx.query.lon, ctx.query.units)) };
+    },
+  },
+  {
+    method: 'GET', path: '/api/weather/places', auth: 'any',
+    handler: async (ctx, app) => {
+      if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF, results: [] };
+      if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED, results: [] };
+      return { enabled: true, ...(await app.weather.search(ctx.query.q)) };
     },
   },
   // The depth chart: the books as cumulative depth, and the snapshot `ago` seconds earlier.

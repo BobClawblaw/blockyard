@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Local weather, opt-in.** A ribbon of local weather on Overview (above or below the price line) and
+  on the Kiosk (across the top or bottom, or just above or below the price panel): the conditions now
+  under a sky that matches them, the next 24 hours as a temperature curve over chance-of-rain bars, and
+  seven or ten days as glass tiles with each day's range on one colour scale. An optional **Weather**
+  tab shows the same forecast at full size. Off until **Display settings → Weather → Enable weather**
+  is ticked in the Shared settings; forecasts are Open-Meteo's (no account, no key), fetched by the
+  server from `api.open-meteo.com` -- and `geocoding-api.open-meteo.com` while someone searches for a
+  place -- at most once every ten minutes per place, and only while a ribbon or the tab is on screen.
+  `BLOCKYARD_WEATHER=0` removes it so that no checkbox can turn it on.
+
 ### Changed
 
 - **A Bitcoin Machine Code node is listed throughout its initial sync.** The 0.1.3 rule that kept a

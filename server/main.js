@@ -281,6 +281,11 @@ export async function boot({ configFile, log: logOverride = null } = {}) {
     const { MarketFeed } = await import('./collect/markets.js');
     app.markets = new MarketFeed(cfg.markets, { log: app.log });
   } else app.markets = null;
+  // Local weather for the ribbon: Open-Meteo, asked only while a page shows it (server/collect/weather.js).
+  if (cfg.weather?.enabled) {
+    const { WeatherFeed } = await import('./collect/weather.js');
+    app.weather = new WeatherFeed(cfg.weather, { log: app.log });
+  } else app.weather = null;
 
   app.auditLog = new AuditLog(path.join(cfg.store.dir, 'audit.jsonl'), {
     maxBytes: cfg.store.auditMaxBytes,

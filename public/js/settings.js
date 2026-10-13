@@ -333,6 +333,30 @@ export const DEFAULTS = Object.freeze({
     // wants the old behaviour.
     overviewSummary: true,
   }),
+  // LOCAL WEATHER (operator, 2026-10-13: "add a local weather report feature to blockyard. Something users would
+  // have to opt into ... current, 7 day, and 10 day forecasts ... a ribbon ... on the top of the screen ... Allow us to
+  // move it above or below the price bar on main page and kiosk mode"). public/js/weather.js draws it; the server
+  // asks Open-Meteo for it (server/collect/weather.js).
+  weather: Object.freeze({
+    // OFF out of the box, like market polling: on, the SERVER contacts api.open-meteo.com (and, while a place is
+    // being searched for, geocoding-api.open-meteo.com). As with polling, the shared settings file is what the
+    // server obeys (http/api.js weatherOn); a browser's own copy chooses only the place and the look.
+    enabled: false,
+    // where: a name for the ribbon, and the coordinates it is asked about. Set together by the Location row's
+    // search (app.js); '' is "not chosen yet", and the ribbon says so rather than showing somewhere at 0, 0.
+    place: '',
+    lat: 0,
+    lon: 0,
+    country: '',          // the place's ISO country code: 'auto' units follow it
+    units: 'auto',        // 'auto' (Fahrenheit where the place's country uses it) | 'metric' | 'imperial'
+    forecast: '7',        // 'current' (conditions and the next 24 hours) | '7' | '10' days
+    hourly: true,         // the next 24 hours as a curve beside the conditions
+    tab: true,            // a Weather page in the nav while weather is on (operator: "an optional 'Weather' Tab if enabled")
+    overview: true,       // the ribbon on Overview ...
+    overviewAt: 'above',  // ... above or below the price line
+    kiosk: true,          // the ribbon on the Kiosk ...
+    kioskAt: 'top',       // ... across its top, above or below the price panel, or across its bottom
+  }),
   // EVERY EFFECT ITS OWN SWITCH (operator, 2026-09-12: "at least 25 total different effects, all
   // toggleable"), AND EACH BOARD ITS OWN LIST (operator, 2026-09-14: "I want the markets tab to have
   // a separate effects list ... the Block Space effects specific to that panel, and settings specific
@@ -588,7 +612,7 @@ export function fxCadence(g) {
 // sheet shows them in this order, each row of the strip labelled: the boards, their effects, the
 // games last.
 export const TAB_ROWS = Object.freeze([
-  Object.freeze({ label: 'Boards', groups: Object.freeze(['appearance', 'space', 'sky', 'markets']) }),
+  Object.freeze({ label: 'Boards', groups: Object.freeze(['appearance', 'space', 'sky', 'markets', 'weather']) }),
   Object.freeze({ label: 'Effects', groups: Object.freeze(['effects', 'marketEffects']) }),
   Object.freeze({ label: 'Diversions', groups: Object.freeze(['tetrust', 'blockout', 'blockanoid', 'scorched']) }),
 ]);
@@ -880,6 +904,52 @@ const PANEL_GROUPS = Object.freeze([
     ]),
   }),
   Object.freeze({
+    group: 'weather',
+    title: 'Weather',
+    note: 'A ribbon of local weather on Overview and Kiosk: the conditions now, the next 24 hours, and seven or ten days ahead. Forecasts from Open-Meteo (open-meteo.com), free and keyless; asked for by this monitor\u2019s server, never by your browser.',
+    rows: Object.freeze([
+      Object.freeze({
+        key: 'enabled', label: 'Enable weather', kind: 'toggle',
+        hint: 'Let the server ask Open-Meteo (api.open-meteo.com) for the forecast at the place below, and geocoding-api.open-meteo.com when you search for a place. '
+          + 'Off out of the box, like market polling: until it is on, this monitor talks to nothing but your node and the exchanges you allowed. '
+          + 'On, the server asks only while a ribbon is on screen, at most once every ten minutes for a place, and sends the place\u2019s coordinates (to about a kilometre) and nothing about your node. '
+          + 'It is the Shared settings\u2019 switch that the server obeys',
+      }),
+      Object.freeze({
+        key: 'place', label: 'Location', kind: 'place', max: 120,
+        hint: 'Type a city, town or postcode and pick it from the list, or type coordinates as \u201clatitude, longitude\u201d. The search goes through this server to Open-Meteo\u2019s geocoder, so it needs the switch above',
+        // the coordinates and the country are set with the name, by the same pick: they are this row\u2019s, not rows of their own
+        owns: Object.freeze({
+          lat: Object.freeze({ kind: 'number', min: -90, max: 90 }),
+          lon: Object.freeze({ kind: 'number', min: -180, max: 180 }),
+          country: Object.freeze({ kind: 'text', max: 2 }),
+        }),
+      }),
+      Object.freeze({
+        key: 'units', label: 'Units', kind: 'segment', hint: 'Auto is Fahrenheit and miles an hour where the place\u2019s country uses them, Celsius and kilometres an hour everywhere else',
+        options: Object.freeze([['auto', 'Auto'], ['metric', '\u00b0C, km/h'], ['imperial', '\u00b0F, mph']]),
+      }),
+      Object.freeze({
+        key: 'forecast', label: 'Forecast', kind: 'segment', hint: 'How far ahead the ribbon looks: the conditions now and the next 24 hours alone, or a row of days after them',
+        options: Object.freeze([['current', 'Now'], ['7', '7 days'], ['10', '10 days']]),
+      }),
+      Object.freeze({ key: 'hourly', label: 'Next 24 hours', kind: 'toggle', hint: 'The temperature through the next day as a curve, over bars for the chance of rain, the night hours shaded' }),
+      Object.freeze({ key: 'tab', label: 'Weather tab', kind: 'toggle', hint: 'A Weather page in the bar of tabs, after Markets, while weather is on: the conditions at full size, the next 24 hours hour by hour, and ten days ahead' }),
+      Object.freeze({ key: 'overview', label: 'On Overview', kind: 'toggle', hint: 'The ribbon at the top of Overview' }),
+      Object.freeze({
+        key: 'overviewAt', label: 'Overview: where', kind: 'segment', dimWhen: (s) => !s.weather.overview,
+        hint: 'Above the price line or below it (the price line is Markets & Price \u2192 Price line on Overview; with it off, the ribbon simply leads the page)',
+        options: Object.freeze([['above', 'Above the price line'], ['below', 'Below the price line']]),
+      }),
+      Object.freeze({ key: 'kiosk', label: 'On Kiosk', kind: 'toggle', hint: 'The ribbon on the Kiosk wall' }),
+      Object.freeze({
+        key: 'kioskAt', label: 'Kiosk: where', kind: 'segment', dimWhen: (s) => !s.weather.kiosk,
+        hint: 'Across the whole top or the whole bottom of the wall, or in the Markets column, just above or just below the Price & order book panel',
+        options: Object.freeze([['top', 'Top'], ['above', 'Above the price'], ['below', 'Below the price'], ['bottom', 'Bottom']]),
+      }),
+    ]),
+  }),
+  Object.freeze({
     group: 'blockout',
     title: 'Blockout',
     note: 'The Breakout court. These switches are also on the game\u2019s own panel; the sky takes its density, brightness and layers from Sky above.',
@@ -1019,7 +1089,13 @@ export const PANEL = Object.freeze([
 
 // "group.key" -> the row that defines it. The bounds live in exactly one place now.
 const ROWS = new Map();
-for (const g of PANEL) for (const r of g.rows) ROWS.set(`${g.group}.${r.key}`, r);
+for (const g of PANEL) {
+  for (const r of g.rows) {
+    ROWS.set(`${g.group}.${r.key}`, r);
+    // a row that sets several values at once (the weather's Location: a name, its coordinates and its country)
+    for (const [k, spec] of Object.entries(r.owns ?? {})) ROWS.set(`${g.group}.${k}`, spec);
+  }
+}
 
 const clamp = (v, lo, hi, fallback) => {
   const n = Number(v);
@@ -1034,6 +1110,8 @@ function clampRow(row, v, fallback) {
 /** Accept a choice only if its own control offers it. */
 const HEX = /^#[0-9a-f]{6}$/i;
 function pickRow(row, v, fallback) {
+  // free text (a place's name, a country code): a string, with no control characters, no longer than its row allows
+  if (row?.kind === 'place' || row?.kind === 'text') return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, row.max ?? 120) : fallback;
   if (row?.kind === 'colour') return typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : fallback;
   const allowed = (row?.options ?? []).map(([val]) => val);
   return allowed.includes(v) ? v : fallback;

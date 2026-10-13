@@ -10,7 +10,7 @@ import * as F from './fmt.js';
 import { renderMiningOverview, renderMining, renderBlockSpace, refreshLabel } from './mining.js';
 import { viewerIdle } from './details3d.js';
 import {
-  loadSettings, setSetting, resetSettings, seedSettings, setSettingsPush, settingsPushPending, normalise as normaliseSettings,
+  loadSettings, setSetting, saveSettings, resetSettings, seedSettings, setSettingsPush, settingsPushPending, normalise as normaliseSettings,
   SETTINGS_KEY, PANEL as SETTINGS_PANEL, formatRangeValue, SKY_BOARDS, SKY_CHOICES,
   settingsMode, setSettingsMode, SETTINGS_MODES } from './settings.js';
 // APPEARANCE (2026-09-16): the theme goes on <html> before the first paint, from the browser's copy
@@ -21,6 +21,7 @@ import { followTheme, presetFace, resolveScheme, resolveTheme, PRESETS, BASE_KEY
 import { renderExplorer } from './explorer.js';
 import { renderMarkets, summaryHtml as marketsSummaryHtml, REFRESH_MS as MARKETS_REFRESH_MS } from './markets.js';
 import { renderKiosk } from './kiosk.js';
+import { renderWeather, renderWeatherPage, tabShown as weatherTabShown } from './weather.js';
 // THE GAMES LOAD WHEN THEY ARE OPENED (the outside review of 2026-09-16: "Move the DOOM/Wolfenstein/
 // Quake emulator and 3D games into an optional, separately loadable module ... This reduces the
 // attack and bug surface of the core monitor"). They were static imports, so the Overview of a node
@@ -345,6 +346,10 @@ function renderOverview(s) {
     if (stripOn && have) strip.innerHTML = marketsSummaryHtml(overviewMarkets, F);
   }
 
+  // THE WEATHER RIBBON, above or below that strip (weather.js). Like the strip, nothing is fetched per frame: the
+  // module asks the server at most every five minutes, and only while weather is on and a place is chosen.
+  renderWeather('overview', helpers);
+
   const mp = s.mempool ?? {};
   setText('ovMpCount', mp.count == null ? '–' : F.num(mp.count));
   setText('ovMpBytes', mp.bytes != null
@@ -522,6 +527,10 @@ export function render() {
       + 'Either the node is not answering, or it is no longer configured in this monitor.';
   }
 
+  // the Weather tab is in the bar only while weather is on and the tab is wanted (settings.js weather.tab)
+  const navWx = document.getElementById('navWeather');
+  if (navWx) navWx.hidden = !weatherTabShown(loadSettings().weather);
+
   if (!state.pickerBusy) {
     state.pickerBusy = true;
     // Throttled: this fires on every frame, and the picker only needs to move
@@ -550,6 +559,7 @@ export function render() {
     case 'explorer': renderExplorer(s, state, helpers); break;
     case 'markets': renderMarkets(s, state, helpers); break;
     case 'kiosk': renderKiosk(s, state, helpers); break;
+    case 'weather': renderWeatherPage(helpers); break;
     case 'tetrust': case 'blockout': case 'blockanoid': case 'scorched': case 'wolf3d': case 'doom': case 'quake':
       renderGame(state.page, s);
       break;
@@ -1361,6 +1371,19 @@ async function boot() {
         const from = v === 'custom' ? '' : `<button type="button" class="btn cfgcustomise" data-cfgcustomise="1" title="Copy this theme's colours into the nine pickers below and switch to Custom">customise ${PRESETS[v]?.label ?? 'this'} →</button>`;
         return `<div class="cfgrow cfgcards"><b><label>${r.label}</label></b><span>${from}</span><span class="thcards" role="radiogroup" aria-label="${r.label}">${cards}</span><i>${r.hint}</i></div>`;
       }
+      // THE WEATHER'S LOCATION: what is chosen, and a search that goes through this server to Open-Meteo's geocoder
+      // (GET /api/weather/places). A pick sets the name, the coordinates and the country together (the row `owns` them).
+      if (r.kind === 'place') {
+        const w = s[g.group];
+        const cur = w.place
+          ? `<b>${F.esc(w.place)}</b> <small class="faint">${w.lat.toFixed(2)}, ${w.lon.toFixed(2)}${w.country ? ` · ${F.esc(w.country)}` : ''}</small>`
+          : '<span class="faint">none chosen yet</span>';
+        const close = open ? '</div>' : '';
+        open = false;
+        return `${close}<div class="cfgrow cfgplace"><b><label for="${id}">${r.label}</label></b><span><span>${cur}</span>`
+          + `<span class="wxsearch"><input type="search" id="${id}" data-wxq="${g.group}" placeholder="city, town, postcode, or lat, lon" maxlength="80" autocomplete="off"><button type="button" class="btn" data-wxfind>find</button></span>`
+          + `<span class="wxresults" data-wxresults></span></span><i>${r.hint}</i></div>`;
+      }
       const ctl = r.kind === 'toggle'
         ? `<input type="checkbox" id="${id}" data-cfg="${g.group}.${r.key}"${v ? ' checked' : ''}>`
         : r.kind === 'choice'
@@ -1478,6 +1501,15 @@ async function boot() {
       drawSettings(); repaintSoon();
       return;
     }
+    if (e.target.closest?.('[data-wxfind]')) { findPlace(); return; }
+    const pickPlace = e.target.closest?.('[data-wxpick]');
+    if (pickPlace) {
+      const cur = loadSettings();
+      const d = pickPlace.dataset;
+      saveSettings({ ...cur, weather: { ...cur.weather, place: d.name, lat: Number(d.lat), lon: Number(d.lon), country: d.cc ?? '' } });
+      drawSettings(); repaintSoon();
+      return;
+    }
     const bulk = e.target.closest?.('[data-cfgall], [data-cfgnone]');
     if (!bulk) return;
     const on = bulk.hasAttribute('data-cfgall');
@@ -1487,6 +1519,30 @@ async function boot() {
     }
     drawSettings();
     render();
+  });
+  // THE PLACE SEARCH (the Weather tab's Location row). "lat, lon" is taken as it stands and asks nobody; anything
+  // else goes to the server's place search, which answers only while weather is switched on there.
+  const findPlace = async () => {
+    const box = cfgBody.querySelector('[data-wxq]'), out = cfgBody.querySelector('[data-wxresults]');
+    if (!box || !out) return;
+    const q = box.value.trim();
+    const pick = (name, lat, lon, cc, extra = '') => `<button type="button" class="btn" data-wxpick data-name="${F.esc(name)}" data-lat="${lat}" data-lon="${lon}" data-cc="${F.esc(cc)}">${F.esc(name)}${extra ? `<small>${F.esc(extra)}</small>` : ''}</button>`;
+    const ll = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(q);
+    if (ll && Math.abs(+ll[1]) <= 90 && Math.abs(+ll[2]) <= 180) {
+      const lat = Math.round(+ll[1] * 100) / 100, lon = Math.round(+ll[2] * 100) / 100;
+      out.innerHTML = pick(`${lat}, ${lon}`, lat, lon, '', 'these coordinates');
+      return;
+    }
+    if (q.length < 2) { out.innerHTML = '<span class="faint">type at least two letters</span>'; return; }
+    out.innerHTML = '<span class="faint">searching…</span>';
+    const r = await api(`/api/weather/places?q=${encodeURIComponent(q)}`).catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
+    if (r?.enabled === false) { out.innerHTML = `<span class="faint">${F.esc(r.note)}</span>`; return; }
+    if (!r?.ok) { out.innerHTML = `<span class="faint">the search failed: ${F.esc(r?.error ?? 'no answer')}</span>`; return; }
+    if (!r.results?.length) { out.innerHTML = `<span class="faint">no place called “${F.esc(q)}” found</span>`; return; }
+    out.innerHTML = r.results.map((p) => pick([p.name, p.region, p.country].filter(Boolean).join(', '), p.lat, p.lon, p.cc, `${p.lat}, ${p.lon}`)).join('');
+  };
+  cfgBody.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.closest?.('[data-wxq]')) { e.preventDefault(); findPlace(); }
   });
   // ONE REPAINT PER FRAME, not one per input event (operator, 2026-09-12: "the grid intensity
   // slider jitters when I move it"). `render()` is not cheap -- it rewrites the header, toggles the

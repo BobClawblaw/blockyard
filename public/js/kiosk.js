@@ -6,11 +6,14 @@
 import { poolViewer, blockFlow, flowArgs, applyMiningStyles } from './mining.js';
 import { renderMarketsBoard, renderPriceInfo } from './markets.js';
 import { renderDepthInto } from './depthchart.js';
+import { renderWeather } from './weather.js';
 
 let bound = false;
 
 export function renderKiosk(s, state, h) {
   h.mempoolDetail?.();
+  // the weather ribbon, where weather.kioskAt puts it (weather.js; nothing at all unless weather is switched on)
+  renderWeather('kiosk', h);
   const mk = renderMarketsBoard('kMarkets', h);
   const lab = document.getElementById('kMkLabel');
   const text = mk?.label ?? 'asking the exchanges…';

@@ -35,6 +35,7 @@
       <button data-page="mempool">Mempool</button>
       <button data-page="explorer">Explorer</button>
       <button data-page="markets">Markets</button>
+      <button data-page="weather" id="navWeather" hidden>Weather</button>
       <button data-page="kiosk">Kiosk</button>
       <button data-page="peers">Peers</button>
       <button data-page="network">Network</button>
@@ -142,7 +143,11 @@
              markets.overviewSummary is on: the figures need the exchange feed, and Overview is
              the landing page -- see the note on that setting. Same class as the Markets page's
              own line, and filled by the same summaryHtml(), so the two cannot drift. -->
+        <!-- THE WEATHER RIBBON (public/js/weather.js; operator, 2026-10-13: "Allow us to move it above or below the
+             price bar on main page and kiosk mode"). Two slots, one filled: weather.overviewAt picks which. -->
+        <div class="wxslot ovwx" id="ovWxAbove" hidden></div>
         <div class="mksum ovmksum" id="ovMkSummary" hidden></div>
+        <div class="wxslot ovwx" id="ovWxBelow" hidden></div>
 
         <!-- Two independent stacks (operator, 2026-09-11: "Still too much empty
              space here. Need to compress the mempool and fees view at the very
@@ -473,8 +478,16 @@
     <!-- ========================================================== PEERS -->
     <!-- ========================================================== KIOSK -->
     <!-- The 3D Markets board and the Block space board side by side (public/js/kiosk.js). -->
+    <!-- ======================================================== WEATHER (public/js/weather.js pageHtml; its nav
+         button shows only while weather is on and weather.tab is ticked) -->
+    <section class="page" data-page="weather">
+      <div id="wxPage"></div>
+    </section>
     <section class="page" data-page="kiosk">
       <div class="kiosk" id="kiosk">
+        <!-- the weather ribbon's four places on the wall (weather.kioskAt): across the top, in the Markets column
+             just above or just below the price panel, or across the bottom. Inside #kiosk, so full screen keeps it. -->
+        <div class="wxslot kwx kwx-top" id="kWxTop" hidden></div>
         <div class="kcol">
         <div class="kpanel kmk">
           <div class="khead"><b>Markets</b><span class="faint" id="kMkLabel"></span></div>
@@ -485,6 +498,7 @@
         <!-- PRICE AND THE BOOK, in one panel of its own (operator, 2026-09-12: "Make it a new
              panel with price, obviously"). The chart needs real height, which it cannot get as a
              strip under the markets board, so the panel is sized like the Block flow one. -->
+        <div class="wxslot kwx kwx-in" id="kWxAbove" hidden></div>
         <div class="kpanel kpp">
           <div class="khead"><b>Price &amp; order book depth</b><span class="faint">five exchanges' tickers, and their books</span></div>
           <div class="kprice" id="kPrice"></div>
@@ -492,6 +506,7 @@
                element's innerHTML on every refresh, which would destroy a canvas inside it. -->
           <div class="kdepthwrap"><canvas class="kdepth" id="kDepth"></canvas></div>
         </div>
+        <div class="wxslot kwx kwx-in" id="kWxBelow" hidden></div>
         </div>
         <div class="kcol">
         <div class="kpanel ksp">
@@ -505,6 +520,7 @@
           <div id="kTrain" class="flowwrap"></div>
         </div>
         </div>
+        <div class="wxslot kwx kwx-bottom" id="kWxBottom" hidden></div>
       </div>
     </section>
     <!-- TETRUST: a Tetris on the 3D engine (operator, 2026-09-12). The well is a board3d, so it wears

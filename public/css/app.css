@@ -2129,3 +2129,185 @@ table.sykeys td { padding: 2px 0; }
 /* BLOCKMAN (docs/PLAN-BLOCKMAN.md): the maze layer and the painted play layer, stacked like
    Scorched Yard's land and actors. The well is taller than it is wide: the maze is 28 x 28 tiles
    drawn in the board's oblique projection, so the panel keeps the board's own aspect. */
+
+/* ---- the weather ribbon (public/js/weather.js; operator, 2026-10-13: "Make the weather graphics beautiful and
+   visually stunning"). A strip of sky: its colour is the weather now (one class per look, day and night), the
+   conditions and the next 24 hours at the left, the days after them as glass tiles. Its pieces step aside as
+   the slot narrows (container queries), so one ribbon fits the full width of Overview, the Kiosk's top and a
+   Kiosk column. ---- */
+.wxslot { container-type: inline-size; min-width: 0; }
+.wxslot[hidden] { display: none; }
+.ovwx { grid-column: 1 / -1; }
+.wx-defs, .wx > .wx-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.wx {
+  position: relative; display: flex; align-items: center; gap: 0; min-height: 86px; padding: 8px 14px;
+  border-radius: 12px; overflow: hidden; isolation: isolate;
+  color: #f3f7fd; font-family: var(--sans); text-shadow: 0 1px 2px rgba(0, 10, 30, .35);
+  border: 1px solid rgba(255, 255, 255, .10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), 0 8px 24px -10px rgba(0, 0, 0, .55);
+  background: linear-gradient(100deg, #0a1430, #18306a 55%, #2b4c8f);
+}
+.wx > * { position: relative; z-index: 1; }
+.wx-glow { position: absolute !important; inset: 0; z-index: 0 !important; pointer-events: none;
+  background: radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, .16), transparent 55%),
+              linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 40%, rgba(0, 0, 0, .14)); }
+/* the skies */
+.wx-sky-clear { background: radial-gradient(260px 160px at 3% 35%, rgba(255, 214, 90, .50), transparent 70%), linear-gradient(100deg, #1462c4, #2f8ae6 45%, #6fb8f7 80%, #9fd3ff); }
+.wx-sky-partly { background: radial-gradient(220px 140px at 3% 30%, rgba(255, 214, 110, .32), transparent 70%), linear-gradient(100deg, #275f9f, #4c86c4 50%, #8cb0d6); }
+.wx-sky-overcast { background: linear-gradient(100deg, #404b5e, #5d6a80 50%, #7d889c); }
+.wx-sky-overcastnight { background: linear-gradient(100deg, #121826, #222b3c 55%, #313b4f); }
+.wx-sky-rain { background: radial-gradient(400px 120px at 60% -20%, rgba(150, 190, 255, .18), transparent 70%), linear-gradient(100deg, #1f2f48, #33496a 50%, #4d6687); }
+.wx-sky-rainnight { background: linear-gradient(100deg, #070d1a, #13213a 55%, #1f3150); }
+.wx-sky-storm { background: radial-gradient(300px 140px at 8% 90%, rgba(255, 220, 90, .16), transparent 70%), radial-gradient(500px 160px at 70% 0%, rgba(160, 110, 255, .30), transparent 70%), linear-gradient(100deg, #140f26, #2c2150 50%, #432f6b); }
+.wx-sky-snow { background: radial-gradient(400px 140px at 20% 0%, rgba(255, 255, 255, .25), transparent 70%), linear-gradient(100deg, #48638a, #7092b8 55%, #9db7d4); }
+.wx-sky-snownight { background: linear-gradient(100deg, #111a30, #223252 55%, #34486c); }
+.wx-sky-fog { background: linear-gradient(100deg, #4e5866, #758090 50%, #949eac); }
+.wx-sky-fognight { background: linear-gradient(100deg, #171b22, #2a303b 55%, #3a414d); }
+.wx-sky-night {
+  background:
+    radial-gradient(1px 1px at 18% 30%, #fff, transparent), radial-gradient(1px 1px at 27% 72%, #dfe8ff, transparent),
+    radial-gradient(1.5px 1.5px at 41% 22%, #fff, transparent), radial-gradient(1px 1px at 55% 64%, #cfdcff, transparent),
+    radial-gradient(1px 1px at 63% 18%, #fff, transparent), radial-gradient(1.5px 1.5px at 74% 52%, #e8eeff, transparent),
+    radial-gradient(1px 1px at 86% 26%, #fff, transparent), radial-gradient(1px 1px at 93% 76%, #dfe8ff, transparent),
+    radial-gradient(260px 160px at 3% 35%, rgba(150, 170, 255, .22), transparent 70%),
+    linear-gradient(100deg, #050a1c, #0d1840 55%, #1a2a5e);
+}
+.wx-empty { min-height: 40px; justify-content: center; }
+.wx-msg { font-size: 12.5px; opacity: .85; padding: 4px 0; }
+/* now */
+.wx-now { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding-right: 16px; }
+.wx-ico { flex: 0 0 auto; overflow: visible; filter: drop-shadow(0 2px 3px rgba(0, 10, 35, .45)) drop-shadow(0 0 10px rgba(0, 10, 35, .18)); }
+.wx-day .wx-ico { margin: -2px 0 -3px; }
+.wx-temp { display: flex; align-items: flex-start; line-height: 1; }
+.wx-temp b { font-size: 46px; font-weight: 250; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+.wx-temp small { font-size: 14px; font-weight: 500; opacity: .75; margin: 5px 0 0 2px; }
+.wx-say { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12px; }
+.wx-say b { font-size: 15px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.wx-say span { opacity: .86; white-space: nowrap; }
+.wx-say em { font-style: normal; }
+.wx-hi { color: #ffe0a8; }
+.wx-lo { color: #bcd8ff; }
+.wx-where { font-size: 11px; opacity: .7 !important; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.wx-stale { font-weight: 600; color: #ffd58a; font-size: 10.5px; }
+/* the facts */
+.wx-facts { display: grid; grid-template-columns: auto auto; gap: 2px 14px; flex: 0 0 auto; padding: 0 16px; font-size: 11.5px; border-left: 1px solid rgba(255, 255, 255, .14); align-self: stretch; align-content: center; }
+.wx-facts:empty { display: none; }
+.wx-facts span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.wx-facts i { font-style: normal; font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; opacity: .65; }
+.wx-facts b { font-weight: 650; font-variant-numeric: tabular-nums; }
+.wx-facts span > i:last-child { text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+.wx-wind { flex: 0 0 auto; opacity: .9; }
+/* the next 24 hours */
+.wx-24 { flex: 0 0 auto; padding: 0 14px; border-left: 1px solid rgba(255, 255, 255, .14); align-self: stretch; display: flex; align-items: center; }
+.wx-hours { display: block; overflow: visible; }
+.wx-hv { font: 600 10px var(--sans); fill: #ffffff; paint-order: stroke; stroke: rgba(5, 12, 30, .55); stroke-width: 2.4px; }
+.wx-ht { font: 500 9px var(--sans); fill: rgba(240, 246, 255, .66); }
+/* the days */
+.wx-days { flex: 1 1 auto; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(52px, 1fr); gap: 5px; padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, .14); align-self: stretch; align-items: center; }
+.wx-day {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 4px 6px; min-width: 0;
+  border-radius: 10px; background: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .03));
+  border: 1px solid rgba(255, 255, 255, .07); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.wx-day.today { background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .07)); border-color: rgba(255, 255, 255, .22); }
+.wx-dn { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; opacity: .9; }
+.wx-pop { font-size: 9.5px; font-weight: 650; color: #a8d8ff; min-height: 12px; line-height: 12px; }
+.wx-pop.wet { color: #6cc0ff; }
+.wx-hl { display: flex; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.wx-hl b { font-weight: 650; }
+.wx-hl i { font-style: normal; opacity: .62; }
+.wx-bar { display: block; width: 100%; height: 6px; margin-top: 3px; overflow: visible; color: rgba(255, 255, 255, .12); }
+.wx-bar .wx-track { stroke-width: 4px; } .wx-bar .wx-span { stroke-width: 4px; } .wx-bar .wx-now-tick { stroke-width: 6px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, .6)); }
+.wx-nowonly .wx-24 { flex: 1 1 auto; justify-content: flex-start; }
+/* narrower slots: the facts go first, then the 24 hours, then the words under the temperature */
+@container (max-width: 1320px) { .wx:not(.wx-nowonly) .wx-facts { display: none; } }
+@container (max-width: 1040px) { .wx:not(.wx-nowonly) .wx-24 { display: none; } }
+@container (max-width: 760px) { .wx-say span:not(.wx-where) { display: none; } .wx-temp b { font-size: 36px; } .wx-days { grid-auto-columns: minmax(42px, 1fr); gap: 3px; } .wx-hl i { display: none; } }
+@container (max-width: 520px) { .wx-say { display: none; } .wx-24 { display: none; } }
+/* the Kiosk: the top and bottom ribbons span both columns; one in a column is a strip of that column */
+.kiosk { grid-template-rows: auto minmax(0, 1fr) auto; row-gap: 0; }
+.kiosk > .kcol { grid-row: 2; }
+.kiosk > .kwx-top { grid-column: 1 / -1; grid-row: 1; margin-bottom: 8px; }
+.kiosk > .kwx-bottom { grid-column: 1 / -1; grid-row: 3; margin-top: 8px; }
+.kcol > .kwx { flex: 0 0 auto; }
+.kwx .wx { border-color: #16222c; }
+@media (max-width: 900px) { .kiosk > .kcol, .kiosk > .kwx-top, .kiosk > .kwx-bottom { grid-row: auto; } .kiosk { row-gap: 8px; } .kiosk > .kwx-top, .kiosk > .kwx-bottom { margin: 0; } }
+/* a new forecast arrives: the tiles rise in from the left, once (none on a still page) */
+@keyframes wxin { from { opacity: 0; transform: translateY(6px); } }
+.wx-arrive .wx-now, .wx-arrive .wx-day { animation: wxin .55s cubic-bezier(.2, .7, .2, 1) both; }
+.wx-arrive .wx-day:nth-child(2) { animation-delay: 40ms; } .wx-arrive .wx-day:nth-child(3) { animation-delay: 80ms; }
+.wx-arrive .wx-day:nth-child(4) { animation-delay: 120ms; } .wx-arrive .wx-day:nth-child(5) { animation-delay: 160ms; }
+.wx-arrive .wx-day:nth-child(6) { animation-delay: 200ms; } .wx-arrive .wx-day:nth-child(7) { animation-delay: 240ms; }
+.wx-arrive .wx-day:nth-child(8) { animation-delay: 280ms; } .wx-arrive .wx-day:nth-child(9) { animation-delay: 320ms; }
+.wx-arrive .wx-day:nth-child(10) { animation-delay: 360ms; }
+html[data-motion="still"] .wx-arrive .wx-now, html[data-motion="still"] .wx-arrive .wx-day { animation: none; }
+/* LIVE WEATHER, ON A LIVE PAGE ONLY (appearance.pagePulse 'smooth'): clouds drift, rain and snow fall, the sun turns,
+   the bolt flickers, stars twinkle. An endless animation composites the page every refresh, so under the shipped
+   Simple renderer and the default tick none of this runs (AGENTS.md, the GPU budget) -- the selectors are scoped
+   to html[data-motion="live"] rather than listed in the still and tick blocks for that reason. */
+@keyframes wxdrift { from { transform: translateX(-1.6px); } to { transform: translateX(1.6px); } }
+@keyframes wxspin { to { transform: rotate(45deg); } }
+@keyframes wxfall { from { transform: translateY(-3px); opacity: .25; } 35% { opacity: 1; } to { transform: translateY(4px); opacity: 0; } }
+@keyframes wxflash { 0%, 88%, 100% { opacity: 1; } 90% { opacity: .35; } 93% { opacity: 1; } 95% { opacity: .5; } }
+@keyframes wxtwinkle { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+html[data-motion="live"] .wx-cl { animation: wxdrift 6s ease-in-out infinite alternate; }
+html[data-motion="live"] .wx-back { animation-duration: 9s; animation-direction: alternate-reverse; }
+html[data-motion="live"] .wx-rays { transform-box: fill-box; transform-origin: center; animation: wxspin 24s linear infinite; }
+html[data-motion="live"] .wx-fall { animation: wxfall 1.3s linear infinite; }
+html[data-motion="live"] .wx-snow { animation-duration: 3.2s; }
+html[data-motion="live"] .wx-bolt { animation: wxflash 4.5s linear infinite; }
+html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .wx *, .wx-arrive * { animation: none !important; } }
+:root[data-theme="light"] .wx { box-shadow: 0 6px 18px -10px rgba(20, 40, 80, .45); }
+/* the Weather tab's Location row: what is chosen, the search box, and what the search found */
+.cfgplace > span { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.wxsearch { display: flex; gap: 6px; }
+.wxsearch input { min-width: 230px; }
+.wxresults { display: flex; flex-direction: column; gap: 3px; max-height: 210px; overflow-y: auto; }
+.wxresults:empty { display: none; }
+.wxresults button { text-align: left; }
+.wxresults small { opacity: .65; margin-left: 6px; }
+/* ---- the Weather tab (weather.js pageHtml) ---- */
+.wxp { display: flex; flex-direction: column; gap: 12px; max-width: 1800px; }
+.wxp-empty { min-height: 120px; }
+.wxp-hero { min-height: 180px; padding: 18px 26px; gap: 28px; flex-wrap: wrap; border-radius: 16px; }
+.wxp-now { display: flex; align-items: center; gap: 22px; }
+.wxp-temp { display: flex; align-items: flex-start; line-height: 1; }
+.wxp-temp b { font-size: 104px; font-weight: 200; letter-spacing: -5px; font-variant-numeric: tabular-nums; }
+.wxp-temp small { font-size: 26px; font-weight: 400; opacity: .75; margin: 12px 0 0 6px; }
+.wxp-say { display: flex; flex-direction: column; gap: 3px; font-size: 15px; }
+.wxp-say b { font-size: 26px; font-weight: 600; }
+.wxp-say em { font-style: normal; }
+.wxp-where { font-size: 13px; opacity: .72; margin-top: 4px; }
+.wxp-facts { flex: 1 1 380px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-self: center; }
+.wxp-fact { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 10px; background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .04)); border: 1px solid rgba(255, 255, 255, .10); }
+.wxp-fact i { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .09em; opacity: .7; }
+.wxp-fact b { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.wxp-fact small { font-size: 11px; opacity: .75; }
+.wxp-fact .wx-wind { width: 16px; height: 16px; }
+.wxp-card { padding-bottom: 12px; }
+.wxp-curve { padding: 6px 8px 0; background: linear-gradient(180deg, #0a1430, #101d3f); border-radius: 10px; overflow: hidden; }
+.wxp-curve .wx-hv { font-size: 12px; }
+.wxp-curve .wx-ht { font-size: 11px; }
+.wxp-hours { display: grid; grid-template-columns: repeat(24, minmax(44px, 1fr)); gap: 4px; margin-top: 8px; overflow-x: auto; }
+.wxp-hour { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 9px; background: var(--bg-2, rgba(255, 255, 255, .04)); font-size: 11px; }
+.wxp-hour.now { outline: 1px solid var(--accent); }
+.wxp-hour span { opacity: .75; }
+.wxp-hour b { font-size: 13px; font-variant-numeric: tabular-nums; }
+.wxp-hour i { font-style: normal; color: #4aa8ff; font-size: 10px; min-height: 13px; }
+.wxp-days { display: flex; flex-direction: column; }
+.wxp-day { display: grid; grid-template-columns: 92px 44px minmax(120px, 210px) 44px 46px minmax(140px, 1fr) 46px minmax(150px, 230px); align-items: center; gap: 12px; padding: 7px 12px; border-top: 1px solid var(--line-soft); font-size: 13px; }
+.wxp-day:first-child { border-top: 0; }
+.wxp-day.today { background: color-mix(in srgb, var(--accent) 7%, transparent); border-radius: 8px; }
+.wxp-dn { font-weight: 650; display: flex; flex-direction: column; line-height: 1.2; }
+.wxp-dn small { font-weight: 400; opacity: .6; font-size: 11px; }
+.wxp-cond { opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxp-day .wx-pop { font-size: 12px; text-align: right; color: #4aa8ff; }
+.wxp-lo { text-align: right; opacity: .65; font-variant-numeric: tabular-nums; }
+.wxp-hi { font-weight: 650; font-variant-numeric: tabular-nums; }
+.wxp-day .wx-bar { height: 8px; margin: 0; color: color-mix(in srgb, var(--fg) 12%, transparent); }
+.wxp-day .wx-bar .wx-track, .wxp-day .wx-bar .wx-span { stroke-width: 7px; } .wxp-day .wx-bar .wx-now-tick { stroke-width: 10px; }
+.wxp-more { display: flex; gap: 10px; font-size: 11.5px; opacity: .75; white-space: nowrap; }
+.wxp-more i { font-style: normal; }
+.wxp-foot { margin: 0 4px; }
+@media (max-width: 1100px) { .wxp-day { grid-template-columns: 70px 40px 40px 40px minmax(100px, 1fr) 40px; } .wxp-cond, .wxp-more { display: none; } }

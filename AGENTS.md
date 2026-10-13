@@ -290,6 +290,28 @@ silently ate another test's result line — rule 22.
    refused twice over (config load is fatal, and the route checks again). The boot
    prints who can now read and which switch closes it. Rule 23.
 
+## Current state (2026-10-13): local weather
+
+**A weather ribbon and an optional Weather tab** (operator: "add a local weather report feature ... Something users
+would have to opt into ... current, 7 day, and 10 day forecasts ... above or below the price bar on main page and
+kiosk mode", then "an optional 'Weather' Tab if enabled and it fits on the bar"). Source: **Open-Meteo**, keyless,
+16 days available (NWS is US-only and 7 days; MET Norway 9 days; the rest need keys). `server/collect/weather.js`
+is pull-through with no timers: a forecast per place (rounded to 0.01 degrees) and units, fresh for 10 minutes, one
+request in flight, a failure not retried for a minute, the last answer kept through a failure. `/api/weather` and
+`/api/weather/places` answer only while the SHARED settings file says `weather.enabled` (http/api.js `weatherOn`,
+which shares the parsed-file cache with `marketsPollingOn`); `BLOCKYARD_WEATHER=0` is the hard off. The client
+(`public/js/weather.js`) is pure except `pullWeather`/`renderWeather`/`renderWeatherPage`; slots are `ovWxAbove/Below`
+and `kWxTop/Above/Below/Bottom` (inside `#kiosk`, so full screen keeps them). What will bite:
+- **The gradients live in ONE hidden `<svg>` in `<body>`** (`ensureDefs`, `WX_DEFS`), never inside a page section: a
+  paint server inside a `display:none` subtree is not painted by every engine, and Overview is hidden while Kiosk is open.
+- **No `style=` in the markup** (CSP); colours come from SVG attributes and classes. The Location row is a new panel
+  kind, `place`, that `owns` `lat`/`lon`/`country` (settings.js ROWS registers owned keys; the settings test counts them).
+- **The ribbon's endless animations are scoped to `html[data-motion="live"]`** (Page pulses: Smooth), so the still and
+  tick pages -- the shipped default -- composite nothing for it; a test holds every `.wx` infinite rule to that prefix.
+- Geolocation is NOT offered: the server's Permissions-Policy denies it, on purpose. Typing "lat, lon" works instead.
+- Bars in a stretched SVG (`preserveAspectRatio="none"`) are LINES with `vector-effect: non-scaling-stroke`; rounded
+  rects and circles there came out as long points and ovals.
+
 ## Current state (2026-09-23): the bake -- one bmc, one Core, nothing else
 
 **Operator, 2026-09-23: "I only want one current bmc production server running, and one core
@@ -1178,7 +1200,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1553 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1564 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1508,7 +1530,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1553 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1564 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so

@@ -86,6 +86,8 @@ test('every panel control names a real setting, and every setting has a control'
       if (['choice', 'segment', 'cards'].includes(r.kind)) assert.ok(r.options?.length >= 2, 'a choice offers choices');
       if (r.kind === 'range') assert.ok(r.min < r.max && r.step > 0, 'a range has bounds');
       listed.add(`${g.group}.${r.key}`);
+      // a row that sets several values with one pick (the weather's Location: name, coordinates, country)
+      for (const k of Object.keys(r.owns ?? {})) { assert.ok(k in DEFAULTS[g.group], `${g.group}.${k} is a real setting`); listed.add(`${g.group}.${k}`); }
     }
   }
   for (const group of Object.keys(DEFAULTS)) {
