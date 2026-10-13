@@ -31,7 +31,8 @@ export class MapBuilder {
     if (this.state.running) throw new Error('a street map is already being built');
     const la = Number(lat), lo = Number(lon);
     if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 85 || Math.abs(lo) > 180) throw new Error('not a place on Earth');
-    const out = path.join(this.dir, `${la.toFixed(2)}_${lo.toFixed(2)}.pmtiles`);
+    // one file per area and depth: a view's fetch beside the place's build, each found by the server's map set
+    const out = path.join(this.dir, `${la.toFixed(2)}_${lo.toFixed(2)}_r${Math.round(radiusKm)}_z${maxzoom}.pmtiles`);
     this.ctl = new AbortController();
     this.state = { running: true, phase: 'index', done: 0, total: 0, bytes: 0, estBytes: 0, key: null, startedAt: this.now(), place: { lat: la, lon: lo, radiusKm, maxzoom, name }, error: null, result: null, finishedAt: null, out };
     this.log({ level: 'info', msg: `street map: building ${radiusKm} km round ${la}, ${lo} to zoom ${maxzoom} -> ${out}` });

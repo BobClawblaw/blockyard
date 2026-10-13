@@ -22,7 +22,7 @@ import { loadSettings } from './settings.js';
 import {
   wrapLon, tileX, tileY, mercatorToEquirect, rasterLand, paintBase, composite, viewOf, sphereRadius, isFlat, dragView, zoomView,
   orthoRender, orthoProject, flatView, flatTiles, flatProject, flatUnproject, gridSampler, paintGrid, rainColour, windPoints,
-  homeView, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels, expandFeatures, featureLevels,
+  homeView, scaleBar, ringRadii, cutWater, rasterLines, rankCeiling, placeLabels, expandFeatures, featureLevels, streetRequestFor,
 } from './weathermap.js';
 import { tempColour } from './weather.js';
 import { drawStreets } from './weatherstreets.js';
@@ -130,6 +130,44 @@ async function loadLand(st) {
     st.dirty = true; schedule(st);
   } catch (e) { st.say = `the map data did not load: ${e?.message ?? e}`; }
   st.landAsking = false;
+}
+
+/** The server's archive that covers a point: the deepest zoom first, then the newest (they are listed newest first). */
+function mapCovering(st, lat, lon) {
+  const list = (st.maps ?? []).filter((m) => m?.bounds && lat >= m.bounds.s && lat <= m.bounds.n && lon >= m.bounds.w && lon <= m.bounds.e);
+  return list.sort((a, b) => b.maxZoom - a.maxZoom)[0] ?? null;
+}
+
+/**
+ * STREETS FOR THE VIEW (operator, 2026-10-13: "grab the road data for the current view after coming to rest for 5
+ * seconds on a new location ... a checkbox to auto refresh on pause. Otherwise, add a refresh view button"). What the
+ * view needs is weathermap.streetRequestFor; this asks the server to build it, unless an archive already covers the
+ * view at that depth, a build is running, or this browser may not start one.
+ */
+function fetchStreetsForView(st, { auto = false } = {}) {
+  const pw = st.root.clientWidth || 600, ph = st.root.clientHeight || 400;
+  if (!st.view || !isFlat(st.view, pw, ph) || !st.canBuild) return null;
+  const req = streetRequestFor(st.view, pw, ph, st.maps ?? [], 16);
+  if (req.z < 9) { if (!auto) st.say = 'zoom in to a town first: streets are fetched from zoom 9'; return null; }
+  if (req.covered) { if (!auto) st.say = 'this view is already covered by a street map on the server'; return null; }
+  if (st.mapBuild?.running) { if (!auto) st.say = 'a street map is already being fetched; this view will be asked for when it is done'; st.wantAfterBuild = true; return null; }
+  const key = `${req.lat},${req.lon},${req.radiusKm},${req.maxzoom}`;
+  if (auto && st.lastAutoKey === key) return null;      // asked already (it failed, or is on its way)
+  st.lastAutoKey = key;
+  st.say = `fetching streets for this view: ${req.radiusKm} km round ${req.lat}, ${req.lon} to zoom ${req.maxzoom}…`;
+  caption(st);
+  st.api('/api/weather/map/build', { method: 'POST', body: { lat: req.lat, lon: req.lon, radiusKm: req.radiusKm, maxzoom: req.maxzoom, name: 'the view' } })
+    .then((d) => { st.mapBuild = d?.build ?? st.mapBuild; st.mapAskedAt = 0; })
+    .catch((e) => { st.say = `the fetch did not start: ${e?.message ?? e}`; caption(st); });
+  return req;
+}
+/** The 5 s rest: armed on every change of view; fires the auto-fetch when the setting is on. */
+function armRest(st) {
+  clearTimeout(st.restTimer);
+  st.restTimer = setTimeout(() => {
+    st.restTimer = null;
+    if (st.w?.mapAuto) fetchStreetsForView(st, { auto: true });
+  }, 5000);
 }
 
 /** The feature layers on the flat map, each from the zoom it earns: urban footprint, rivers, roads by class, rails. */
@@ -351,8 +389,8 @@ function drawFlat(st, pw, ph, dpr) {
   const close = fv.z > LAND_UNTIL_Z;
   // STREETS (part B): the operator's own OpenStreetMap extract covers the view -- its tiles replace the Natural Earth
   // drawing from zoom 9, where its 1:10m roads would be the coarser picture
-  const M = st.mapInfo;
-  const streets = !!(M && fv.z >= 9 && st.view.lon >= M.bounds.w && st.view.lon <= M.bounds.e && st.view.lat >= M.bounds.s && st.view.lat <= M.bounds.n);
+  const M = mapCovering(st, st.view.lat, st.view.lon);
+  const streets = !!(M && fv.z >= 9);
   ctx.fillStyle = streets ? '#1b2535' : close ? '#121c2c' : '#0c1830'; ctx.fillRect(0, 0, pw, ph);
   if (streets) {
     const tz = Math.min(fv.z, M.maxZoom), fv2 = { ...fv, z: tz, scale: fv.scale / 2 ** (fv.z - tz) };
@@ -571,11 +609,12 @@ function caption(st) {
   if (note) {
     const flat = st.view ? isFlat(st.view, ...[st.root.clientWidth || 600, st.root.clientHeight || 400]) : false;
     const parts = [];
-    if (st.say) parts.push(st.say);
+    if (st.mapBuild?.running && st.mapBuild.place?.name === 'the view') { const b = st.mapBuild; parts.push(`fetching streets: ${b.phase === 'tiles' && b.total ? `${b.done.toLocaleString()} of ${b.total.toLocaleString()} tiles, ${(b.bytes / 1e6).toFixed(0)} MB${b.etaSec != null ? `, about ${b.etaSec} s to go` : ''}` : `${b.phase}…`}`); }
+    else if (st.say) parts.push(st.say);
     else if (st.w.mapLayer === 'forecast') parts.push(`forecast ${st.field === 'temp' ? 'temperature' : st.field === 'cloud' ? 'cloud cover' : 'rain and snow'}, Open-Meteo, 11 x 11 points ${Math.round((st.grid?.dLat ?? 0.1) * 111)} km apart; wind arrows point where it blows`);
     else parts.push('observed radar, RainViewer, the last two hours; blank where no radar station reaches (oceans, much of the world)');
-    const M = st.mapInfo;
-    const onStreets = flat && M && flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400, 16).z >= 9 && st.view.lon >= M.bounds.w && st.view.lon <= M.bounds.e && st.view.lat >= M.bounds.s && st.view.lat <= M.bounds.n;
+    const M = st.view ? mapCovering(st, st.view.lat, st.view.lon) : null;
+    const onStreets = flat && M && flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400, 16).z >= 9;
     if (onStreets) parts.push(`streets © OpenStreetMap contributors (ODbL), from this server's own extract${M.osmTime ? ` of ${M.osmTime.slice(0, 10)}` : ''} -- nothing is fetched`);
     else if (flat) { const z = flatView(st.view, st.root.clientWidth || 600, st.root.clientHeight || 400).z; parts.push(z > LAND_UNTIL_Z ? `zoom ${z}: rings are distance from the place; roads are Natural Earth 1:10m -- motorways and main roads, not streets (this monitor contacts no map-tile server)` : `flat map, zoom ${z}; coasts, borders, roads and rivers are Natural Earth${z >= 8 ? ', coarse this close' : ''}`); }
     note.textContent = parts.join(' · ');
@@ -598,7 +637,7 @@ function bind(st) {
       const d = Math.hypot(st.pinch.pa[0] - st.pinch.pb[0], st.pinch.pa[1] - st.pinch.pb[1]);
       void d0;
       st.view = viewOf(st.view.lat, st.view.lon, st.pinch.zoom * (d / st.pinch.d0));
-      st.dirty = true; schedule(st);
+      st.dirty = true; schedule(st); armRest(st);
       return;
     }
     if (!st.pointer || e.pointerId !== st.pointer.id) return;
@@ -611,14 +650,14 @@ function bind(st) {
       const c = flatUnproject(pw() / 2 - dx, ph() / 2 - dy, fv);
       st.view = viewOf(c.lat, c.lon, st.view.zoom);
     } else st.view = dragView(st.view, dx, dy, pw(), ph());
-    st.dirty = true; schedule(st);
+    st.dirty = true; schedule(st); armRest(st);
   });
   const up = (e) => { if (st.pinch && (e.pointerId === st.pinch.a || e.pointerId === st.pinch.b)) { st.pinch = null; st.pointer = null; } if (st.pointer && e.pointerId === st.pointer.id) st.pointer = null; };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
   cv.addEventListener('wheel', (e) => {
     e.preventDefault();
     st.view = zoomView(st.view, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0016)));
-    st.dirty = true; schedule(st); caption(st);
+    st.dirty = true; schedule(st); caption(st); armRest(st);
   }, { passive: false });
   const bar = root.parentElement;
   bar?.addEventListener('click', (e) => {
@@ -631,7 +670,8 @@ function bind(st) {
     else if (k === 'region') st.view = viewOf(st.home.lat, st.home.lon, 1.6 * 3);
     else if (k === 'world') st.view = viewOf(Math.max(-60, Math.min(60, st.home.lat)), st.home.lon, 1);
     else if (k === 'field') { st.field = { precip: 'temp', temp: 'cloud', cloud: 'precip' }[st.field ?? 'precip']; b.textContent = { precip: 'rain', temp: 'temperature', cloud: 'cloud' }[st.field]; }
-    st.dirty = true; schedule(st); caption(st);
+    else if (k === 'fetch') { fetchStreetsForView(st); caption(st); return; }
+    st.dirty = true; schedule(st); caption(st); armRest(st);
   });
   const playBtn = bar?.querySelector('[data-wxg-play]');
   if (playBtn) {
@@ -653,7 +693,7 @@ export function globeHtml({ bare = false } = {}) {
   return `<div class="wxg-bar">
     <span class="wxg-ctl"><button type="button" class="btn" data-wxg-play>play</button><input type="range" class="wxg-range" min="0" max="0" value="0" data-wxg-range aria-label="frame"><b class="wxg-time" data-wxg-time>–</b></span>
     <span class="sp"></span>
-    <span class="wxg-ctl"><button type="button" class="btn" data-wxg="field" title="Which forecast field: rain, temperature or cloud (forecast layer only)">rain</button><button type="button" class="btn" data-wxg="home" title="The place and its surrounding towns (about 75 km across)">local</button><button type="button" class="btn" data-wxg="region" title="The region, about 1,500 km across">region</button><button type="button" class="btn" data-wxg="world" title="The whole globe">world</button><button type="button" class="btn" data-wxg="out" aria-label="zoom out">−</button><button type="button" class="btn" data-wxg="in" aria-label="zoom in">+</button></span>
+    <span class="wxg-ctl"><button type="button" class="btn" data-wxg="field" title="Which forecast field: rain, temperature or cloud (forecast layer only)">rain</button><button type="button" class="btn" data-wxg="home" title="The place and its surrounding towns (about 75 km across)">local</button><button type="button" class="btn" data-wxg="region" title="The region, about 1,500 km across">region</button><button type="button" class="btn" data-wxg="world" title="The whole globe">world</button><button type="button" class="btn" data-wxg="out" aria-label="zoom out">−</button><button type="button" class="btn" data-wxg="in" aria-label="zoom in">+</button><button type="button" class="btn" data-wxg="fetch" title="Fetch the streets for this view from Protomaps (OpenStreetMap), once, into this server's data/map/" hidden>fetch streets</button></span>
   </div>
   <div class="wxg-box"><canvas class="wxg-gl" hidden></canvas><canvas class="wxg-ui"></canvas></div>
   <p class="wxg-note tiny faint" data-wxg-note>loading the coastlines…</p>`;
@@ -681,9 +721,14 @@ export function renderGlobe(box, w, h, { autoplay = false } = {}) {
     if (st.mapInfo === undefined) st.mapInfo = null;
     st.mapAskedAt = Date.now();
     h.api('/api/weather/map').then((d) => {
-      const m = d?.map ?? null;
-      // a new file (a build just finished, or another place's): the tiles on hand are the old map's
-      if ((m?.file ?? null) !== (st.mapInfo?.file ?? null) || (m?.bytes ?? 0) !== (st.mapInfo?.bytes ?? 0)) { st.vtiles?.clear(); st.mapInfo = m; st.dirty = true; schedule(st); }
+      const maps = d?.maps ?? (d?.map ? [d.map] : []);
+      st.mapBuild = d?.build ?? null;
+      // a new set of files (a fetch just finished): the tiles on hand may be another map's
+      const sig = maps.map((m) => `${m.file}:${m.bytes}`).join('|');
+      if (sig !== st.mapSig) { st.mapSig = sig; st.vtiles?.clear(); st.maps = maps; st.mapInfo = maps[0] ?? null; st.dirty = true; schedule(st); }
+      else st.mapInfo = maps[0] ?? null;
+      if (st.mapBuild?.running) { st.mapAskedAt = Date.now() - 27_000; caption(st); }   // ask again in ~3 s while a fetch runs
+      else if (/^fetching streets/.test(st.say ?? '')) { st.say = st.mapBuild?.phase === 'failed' ? `the fetch failed: ${st.mapBuild.error}` : ''; caption(st); }   // the line goes when the fetch does
     }).catch(() => {});
   }
   // the Kiosk's map plays its loop by itself on Software and WebGL (a wall display wants motion); Simple shows the
@@ -691,6 +736,11 @@ export function renderGlobe(box, w, h, { autoplay = false } = {}) {
   if (st.autoplay && !st.playing && rendererNow() !== '2.5d' && frameCount(st) > 1 && !document.hidden) play(st, true);
   const r = box.parentElement?.querySelector('[data-wxg="field"]');
   if (r) r.hidden = w.mapLayer !== 'forecast';
+  st.canBuild = typeof h.canBuild === 'function' ? !!h.canBuild() : true;
+  const fb = box.parentElement?.querySelector('[data-wxg="fetch"]');
+  if (fb) fb.hidden = !w.map || !st.canBuild;
+  // a view asked for while another fetch ran: ask again once it is done
+  if (st.wantAfterBuild && st.mapBuild && !st.mapBuild.running) { st.wantAfterBuild = false; fetchStreetsForView(st, { auto: true }); }
   if (changed) st.dirty = true;
   schedule(st);
   caption(st);

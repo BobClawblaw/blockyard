@@ -535,14 +535,17 @@ export function renderWeatherPage(h) {
   ensureDefs();
   const width = el.clientWidth || 1200;
   const sig = JSON.stringify([d?.at ?? null, d?.ok, d?.note, d?.error, d?.needPlace, w, Math.round(width / 40), Math.floor(Date.now() / 60_000)]);
-  if (el.__wxSig === sig) return;
-  el.__wxSig = sig;
-  el.innerHTML = pageHtml(d, w, { width });
-  const slot = el.querySelector('[data-wx-globe-slot]');
-  if (slot) {
-    if (!globeEl) { globeEl = document.createElement('div'); globeEl.className = 'wxg'; globeEl.innerHTML = globeHtml(); }
-    slot.replaceWith(globeEl);
+  if (el.__wxSig !== sig) {
+    el.__wxSig = sig;
+    el.innerHTML = pageHtml(d, w, { width });
+    const slot = el.querySelector('[data-wx-globe-slot]');
+    if (slot) {
+      if (!globeEl) { globeEl = document.createElement('div'); globeEl.className = 'wxg'; globeEl.innerHTML = globeHtml(); }
+      slot.replaceWith(globeEl);
+    }
   }
+  // the globe is rendered on EVERY call, not only when the page's text changes: its own timers (the map re-ask while a
+  // fetch runs, the retry after one, autoplay) live in renderGlobe, which only schedules a paint when something is dirty
   if (globeEl?.isConnected && d?.ok) renderGlobe(globeEl.querySelector('.wxg-box'), w, h);
 }
 let globeEl = null;

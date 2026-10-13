@@ -418,3 +418,23 @@ export function windPoints(grid, hour) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------- streets for the view (part B, the auto-fetch)
+
+/**
+ * What a street-map fetch for this flat view would be, and whether one of `maps` (the server's archives, each with
+ * bounds and maxZoom) already covers it: the centre, a radius that holds the panel's half-diagonal (5-150 km), and a
+ * zoom two past the view's (10-15) -- enough to zoom in a little without another fetch, not the whole city at 15.
+ * `covered` is true when an archive holds the whole view box at that zoom or deeper.
+ */
+export function streetRequestFor(view, pw, ph, maps = [], zoomMax = 16) {
+  const fv = flatView(view, pw, ph, zoomMax);
+  const mpp = metresPerPixel(fv, view.lat);
+  const halfDiag = (Math.hypot(pw, ph) / 2) * mpp / 1000;
+  const radiusKm = Math.round(Math.min(150, Math.max(5, halfDiag * 1.1)));
+  const maxzoom = Math.min(15, Math.max(10, fv.z + 2));
+  const a = flatUnproject(0, 0, fv), b = flatUnproject(pw, ph, fv);
+  const box = { w: Math.min(a.lon, b.lon), e: Math.max(a.lon, b.lon), s: Math.min(a.lat, b.lat), n: Math.max(a.lat, b.lat) };
+  const covered = maps.some((m) => m?.bounds && m.maxZoom >= maxzoom && box.w >= m.bounds.w && box.e <= m.bounds.e && box.s >= m.bounds.s && box.n <= m.bounds.n);
+  return { lat: Math.round(view.lat * 100) / 100, lon: Math.round(view.lon * 100) / 100, radiusKm, maxzoom, z: fv.z, box, covered };
+}

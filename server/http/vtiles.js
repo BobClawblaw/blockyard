@@ -64,35 +64,80 @@ export class MapArchive {
   }
 }
 
-/** Find the archive: cfg.weather.mapFile, else the newest *.pmtiles under <dataDir>/map. Null where there is none. */
-export async function findMapFile(cfg) {
-  const named = cfg?.weather?.mapFile;
-  if (named) return path.resolve(named);
+/** The archive files: cfg.weather.mapFile (one) plus every *.pmtiles under <dataDir>/map. */
+export async function listMapFiles(cfg) {
+  const out = [];
+  if (cfg?.weather?.mapFile) out.push(path.resolve(cfg.weather.mapFile));
   const dir = path.join(cfg?.store?.dir ?? cfg?.auth?.dataDir ?? 'data', 'map');
-  let names;
-  try { names = (await fsp.readdir(dir)).filter((n) => /^[A-Za-z0-9_.-]+\.pmtiles$/.test(n)); } catch { return null; }
-  if (!names.length) return null;
-  const stats = await Promise.all(names.map(async (n) => [n, (await fsp.stat(path.join(dir, n))).mtimeMs]));
-  return path.join(dir, stats.sort((a, b) => b[1] - a[1])[0][0]);
+  try { for (const n of await fsp.readdir(dir)) if (/^[A-Za-z0-9_.-]+\.pmtiles$/.test(n)) out.push(path.join(dir, n)); } catch { /* no directory yet */ }
+  return [...new Set(out)];
+}
+/** The newest of them, for callers that want one file (the tests, the first cut). */
+export async function findMapFile(cfg) {
+  if (cfg?.weather?.mapFile) return path.resolve(cfg.weather.mapFile);   // a named file wins outright
+  const files = await listMapFiles(cfg);
+  if (!files.length) return null;
+  const stats = await Promise.all(files.map(async (f) => { try { return [f, (await fsp.stat(f)).mtimeMs]; } catch { return [f, 0]; } }));
+  return stats.sort((a, b) => b[1] - a[1])[0][0];
 }
 
-/** The server's archive, opened lazily and re-opened when the file changes (a new extract replaces the old). */
-export async function mapArchive(app) {
-  const file = await findMapFile(app.cfg);
-  if (!file) { if (app.mapArchive) { await app.mapArchive.close(); app.mapArchive = null; } return null; }
-  let st;
-  try { st = fs.statSync(file); } catch { return null; }
-  if (app.mapArchive && app.mapArchive.file === file && app.mapArchive.mtimeMs === st.mtimeMs) return app.mapArchive;
-  if (app.mapArchive) await app.mapArchive.close();
-  try {
-    app.mapArchive = await new MapArchive(file).open();
-    app.mapArchive.mtimeMs = st.mtimeMs;
-    app.log?.({ level: 'info', msg: `street map: ${path.basename(file)} (${(st.size / 1e6).toFixed(0)} MB, ${app.mapArchive.head.tiles} tiles to zoom ${app.mapArchive.head.maxZoom})` });
-  } catch (e) {
-    app.log?.({ level: 'warn', msg: `street map: ${file} could not be opened: ${e?.message ?? e}` });
-    app.mapArchive = null;
+/**
+ * SEVERAL EXTRACTS AT ONCE (operator, 2026-10-13: "grab the road data for the current view ... a refresh view button"):
+ * every archive in data/map/ is open, and a tile comes from whichever covers it -- the one with the deepest zoom
+ * first, then the newest. The set is re-read when the directory changes (a build just finished, a file removed).
+ */
+export class MapSet {
+  constructor() { this.archives = new Map(); this.scannedAt = 0; this.sig = ''; }
+  async refresh(cfg, log) {
+    const files = await listMapFiles(cfg);
+    const stats = [];
+    for (const f of files) { try { const st = fs.statSync(f); stats.push([f, st.mtimeMs, st.size]); } catch { /* gone between listing and stat */ } }
+    const sig = stats.map((x) => x.join(':')).join('|');
+    this.scannedAt = Date.now();
+    if (sig === this.sig) return this;
+    this.sig = sig;
+    for (const [f, arc] of this.archives) if (!stats.some((x) => x[0] === f && x[1] === arc.mtimeMs)) { await arc.close(); this.archives.delete(f); }
+    for (const [f, mtimeMs, size] of stats) {
+      if (this.archives.has(f)) continue;
+      try {
+        const arc = await new MapArchive(f).open();
+        arc.mtimeMs = mtimeMs;
+        this.archives.set(f, arc);
+        log?.({ level: 'info', msg: `street map: ${path.basename(f)} (${(size / 1e6).toFixed(0)} MB, ${arc.head.tiles} tiles to zoom ${arc.head.maxZoom})` });
+      } catch (e) { log?.({ level: 'warn', msg: `street map: ${f} could not be opened: ${e?.message ?? e}` }); }
+    }
+    return this;
   }
-  return app.mapArchive;
+  get size() { return this.archives.size; }
+  /** The archives that could hold a point, deepest zoom first, then newest. */
+  covering(lat, lon, z = 0) {
+    return [...this.archives.values()].filter((a) => { const b = a.head.bounds; return lat >= b.s && lat <= b.n && lon >= b.w && lon <= b.e && a.head.maxZoom >= Math.min(z, a.head.maxZoom); })
+      .sort((a, b) => b.head.maxZoom - a.head.maxZoom || b.mtimeMs - a.mtimeMs);
+  }
+  async tile(z, x, y) {
+    // the archives whose bounds MEET the tile's box (a small extract holds the big low-zoom tiles over it too), the
+    // deepest first, then the newest
+    const n = 2 ** z;
+    const latOf = (yy) => Math.atan(Math.sinh(Math.PI * (1 - (2 * yy) / n))) * (180 / Math.PI);
+    const w = (x / n) * 360 - 180, e = ((x + 1) / n) * 360 - 180, nn = latOf(y), ss = latOf(y + 1);
+    const list = [...this.archives.values()].filter((a) => { const b = a.head.bounds; return z <= a.head.maxZoom && e >= b.w && w <= b.e && nn >= b.s && ss <= b.n; })
+      .sort((a, b) => b.head.maxZoom - a.head.maxZoom || b.mtimeMs - a.mtimeMs);
+    for (const a of list) { const t = await a.tile(z, x, y); if (t) return t; }
+    return null;
+  }
+  views() { return [...this.archives.values()].sort((a, b) => b.mtimeMs - a.mtimeMs).map((a) => ({ ...a.view(), extract: a.meta?.['blockyard:extract'] ?? null })); }
+}
+/** The server's set, re-scanned at most every 5 s (and at once when a build finished since the last scan). */
+export async function mapSet(app) {
+  if (!app.mapSet) app.mapSet = new MapSet();
+  const built = app.mapBuilder?.state?.finishedAt ?? 0;
+  if (Date.now() - app.mapSet.scannedAt > 5000 || built > app.mapSet.scannedAt) await app.mapSet.refresh(app.cfg, app.log);
+  return app.mapSet;
+}
+/** One archive: the newest, kept for callers written against a single file. */
+export async function mapArchive(app) {
+  const set = await mapSet(app);
+  return set.views().length ? set.archives.get([...set.archives.values()].sort((a, b) => b.mtimeMs - a.mtimeMs)[0].file) : null;
 }
 
 export async function serveVectorTile(req, res, urlPath, app, { tls = false, hstsMs = 0 } = {}) {
@@ -102,10 +147,10 @@ export async function serveVectorTile(req, res, urlPath, app, { tls = false, hst
   const text = (status, body) => { res.writeHead(status, { ...headers, 'Content-Type': 'text/plain; charset=utf-8' }); res.end(req.method === 'HEAD' ? undefined : body); return { status }; };
   if (!app.weather) return text(404, 'weather is off on this server');
   if (!(await weatherOn(app))) return text(403, 'the weather switch is off in Display settings');
-  const arc = await mapArchive(app);
-  if (!arc) return text(404, 'no street map on this server: make one with scripts/map-extract.mjs');
+  const set = await mapSet(app);
+  if (!set.size) return text(404, 'no street map on this server: build one under Display settings → Weather, or with scripts/map-extract.mjs');
   let buf;
-  try { buf = await arc.tile(Number(m[1]), Number(m[2]), Number(m[3])); } catch (e) { return text(500, `the tile could not be read: ${String(e?.message ?? e)}`); }
+  try { buf = await set.tile(Number(m[1]), Number(m[2]), Number(m[3])); } catch (e) { return text(500, `the tile could not be read: ${String(e?.message ?? e)}`); }
   if (!buf) { res.writeHead(204, { ...headers, 'Cache-Control': 'private, max-age=3600' }); res.end(); return { status: 204 }; }
   res.writeHead(200, { ...headers, 'Content-Type': 'application/vnd.mapbox-vector-tile', 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=86400' });
   res.end(req.method === 'HEAD' ? undefined : buf);

@@ -246,7 +246,9 @@ design rests on) and [docs/DEFECTS.md](docs/DEFECTS.md) (known limits).
   street map** has the server cut the OpenStreetMap tiles within 60 km out of Protomaps' planet
   archive into `data/map/` (about 150-200 MB for a city at zoom 15, a minute or two; the same as
   `node scripts/map-extract.mjs --lat <lat> --lon <lon>`), and the Weather tab's map draws streets,
-  buildings and names from that file ever after -- no map-tile server, no key, nothing fetched.
+  buildings and names from that file ever after -- no map-tile server, no key, nothing fetched. A
+  **fetch streets** button on the map (or, if you tick **Auto-fetch streets**, a five-second rest on
+  an uncovered area) adds the area on screen the same way.
 
 Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 [SECURITY.md](SECURITY.md).

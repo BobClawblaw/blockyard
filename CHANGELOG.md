@@ -35,6 +35,11 @@ All notable changes to this project are documented here. The format follows
   the server serves the tiles from disk and contacts nothing (`/weather/vtile/`, `/api/weather/map`).
   The build runs inside the monitor with its progress in the settings row (cancel at any time), needs
   the same right as changing shared settings, and offers a rebuild when the place moves.
+  **Streets for the view:** a **fetch streets** button on the map asks for the area on screen (its
+  centre, a radius that holds the panel, two zoom levels past the view's) when no map on the server
+  covers it yet; **Auto-fetch streets** (Weather settings, off by default) does the same by itself
+  once the map has rested five seconds on such an area. The server keeps every extract and serves a
+  tile from whichever covers it, the deepest first.
   The format is read and written here (PMTiles v3, Mapbox vector tiles): zero dependencies. Data
   © OpenStreetMap contributors (ODbL), and the map says so.
   Drawn on all three renderers: the WebGL one ray-casts the sphere on the card, Software draws it per

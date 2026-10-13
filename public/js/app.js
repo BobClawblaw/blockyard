@@ -576,7 +576,9 @@ const helpers = { api, toast, setText, canvas, renderFeed, state, fmt: F, nextBl
   // paint/resetCanvas are exposed so panels never call charts.empty() directly:
   // a missing sample must mark a chart stale, never erase it.
   charts: { lineChart, histogram, scatter, meter, stackedBars, paint, resetCanvas, COL },
-  render, refreshMempoolDetail, renderSyncHero, peersDetail };
+  render, refreshMempoolDetail, renderSyncHero, peersDetail,
+  // may this browser start a street-map fetch? the settings-write right: open mode, or an admin (api.js configWriteAllowed)
+  canBuild: () => !state.accounts || state.role === 'admin' };
 
 // getpeerinfo's raw rows are deliberately not in the 1s snapshot (they are either
 // empty on this build or large on others); the peers page pulls them itself.
@@ -1093,6 +1095,7 @@ async function boot() {
   // the posture has to be stateable in words, and "we appear to have no login" is a
   // worse sentence than "this monitor is open to everyone who can reach it".
   state.accounts = me.accounts !== false;
+  state.role = me.user?.role ?? null;
   const open = !state.accounts;
   document.getElementById('whoami').textContent = open
     ? 'no sign-in · read-only'
@@ -1561,7 +1564,7 @@ async function boot() {
     const out = cfgBody.querySelector('[data-wxmapstatus]'), btn = cfgBody.querySelector('[data-wxbuild]');
     if (!out || !btn) return;
     const w = loadSettings().weather;
-    const d = await api('/api/weather/map').catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
+    const d = await api(`/api/weather/map${w.place ? `?lat=${encodeURIComponent(w.lat)}&lon=${encodeURIComponent(w.lon)}` : ''}`).catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
     if (d?.enabled === false) { out.innerHTML = `<span class="faint">${F.esc(d.note ?? 'weather is off')}</span>`; btn.disabled = true; return; }
     const b = d?.build, m = d?.map;
     const here = w.place && m?.extract && Math.abs(m.extract.lat - w.lat) < 0.011 && Math.abs(m.extract.lon - w.lon) < 0.011;
@@ -1577,7 +1580,8 @@ async function boot() {
       else if (!m) { text = `no street map on this server yet${last}`; btn.textContent = `build street map for ${F.esc(w.place)}`; btn.dataset.mode = 'build'; btn.disabled = false; }
       else {
         const what = `${F.esc(m.file)}: ${(m.bytes / 1e6).toFixed(0)} MB, ${m.tiles.toLocaleString()} tiles to zoom ${m.maxZoom}${m.extract ? `, ${m.extract.radiusKm} km round ${m.extract.lat}, ${m.extract.lon}` : ''}${m.osmTime ? `, OpenStreetMap as of ${F.esc(m.osmTime.slice(0, 10))}` : ''}`;
-        text = here ? `<b class="ok">built for this place</b> · ${what}${last}` : `<b class="warn">built for another place</b> · ${what}${last}`;
+        const others = (d.maps?.length ?? 1) > 1 ? ` · ${d.maps.length} maps on this server, ${(d.maps.reduce((n, x) => n + x.bytes, 0) / 1e6).toFixed(0)} MB in all (the fetch streets button and auto-fetch add one per view)` : '';
+        text = here ? `<b class="ok">built for this place</b> · ${what}${others}${last}` : `<b class="warn">built for another place</b> · ${what}${others}${last}`;
         btn.textContent = here ? 'rebuild (newer data)' : `build for ${F.esc(w.place)}`; btn.dataset.mode = 'build'; btn.disabled = false;
       }
     }

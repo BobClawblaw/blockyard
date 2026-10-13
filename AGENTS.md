@@ -372,6 +372,16 @@ next). What will bite:
   `/api/weather/map` every 2 s while it runs), and `scripts/map-extract.mjs` is the same engine from the shell. The globe
   re-asks `/api/weather/map` every 30 s and drops its tile cache when the file changes, so a finished build shows without
   a reload. `test/mapbuild.test.js` runs the whole extract against a fake planet served from memory with Range.
+  **SEVERAL EXTRACTS, AND THE VIEW'S OWN FETCH** (the same night; operator: "intelligently grab the road data for the
+  current view after coming to rest for 5 seconds on a new location. Make it a checkbox ... Otherwise, add a refresh view
+  button"): vtiles.js `MapSet` opens every `data/map/*.pmtiles` (re-scanned every 5 s or when a build finished) and
+  serves a tile from whichever covers it, deepest zoom first; files are named `<lat>_<lon>_r<km>_z<zoom>.pmtiles`.
+  weathermap.js `streetRequestFor(view, pw, ph, maps)` (pure) says what a view needs -- its centre, a radius holding the
+  panel's half-diagonal (5-150 km), zoom = the view's + 2 (10-15) -- and whether an archive already covers the box at
+  that depth. weatherglobe.js `fetchStreetsForView` POSTs it (only flat, z >= 9, not covered, no build running, and
+  only when `h.canBuild()` -- open mode or admin); `armRest` fires it 5 s after the last drag/zoom when `weather.mapAuto`
+  is on (OFF out of the box: on, the map contacts Protomaps whenever it rests on an uncovered area); the bar's
+  "fetch streets" button does it once. A view asked for during another build is asked again when that ends.
   `scripts/map-extract.mjs` cuts a PMTiles archive out of Protomaps' daily OpenStreetMap planet (index
   `build-metadata.protomaps.dev/builds.json`, archive `build.protomaps.com/<key>`, ~139 GB, range requests; measured
   2026-10-13: Berlin 60 km to zoom 15 = 35,480 tiles, 193 MB, about a minute) and writes ONE root directory (no leaf

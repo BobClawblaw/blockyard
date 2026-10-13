@@ -9,7 +9,7 @@ import { SERIES } from '../store/history.js';
 import { randomPassword } from '../auth/users.js';
 import { formatEta, formatBytes } from '../util/fmt.js';
 import { xSearch, xTx, xBlock, xAddress } from './explorer.js';
-import { mapArchive } from './vtiles.js';
+import { mapSet } from './vtiles.js';
 
 // Dollar figures for the explorer: a spot price if one is at hand within 1.5 s -- never a slower
 // page for want of one (server/collect/markets.js spot()).
@@ -595,11 +595,15 @@ export const routes = [
     handler: async (ctx, app) => {
       if (!app.weather) return { ok: true, enabled: false, note: WEATHER_OFF };
       if (!(await weatherOn(app))) return { ok: true, enabled: false, note: WEATHER_UNTICKED };
-      const arc = await mapArchive(app);
+      const set = await mapSet(app);
       const build = app.mapBuilder?.view() ?? null;
-      const extract = arc?.meta?.['blockyard:extract'] ?? null;
-      if (!arc) return { ok: true, enabled: true, map: null, build, note: 'no street map on this server: press Build street map under Display settings → Weather, or run `node scripts/map-extract.mjs --lat <lat> --lon <lon>`' };
-      return { ok: true, enabled: true, map: { ...arc.view(), extract }, build };
+      const maps = set.views();
+      // `map` is the one the place's coordinates fall in (else the newest), for the settings row; `maps` every one
+      const la = Number(ctx.query.lat), lo = Number(ctx.query.lon);
+      const forPlace = Number.isFinite(la) && Number.isFinite(lo) ? set.covering(la, lo)[0] : null;
+      const map = forPlace ? { ...forPlace.view(), extract: forPlace.meta?.['blockyard:extract'] ?? null } : maps[0] ?? null;
+      if (!maps.length) return { ok: true, enabled: true, map: null, maps, build, note: 'no street map on this server: press Build street map under Display settings → Weather, or run `node scripts/map-extract.mjs --lat <lat> --lon <lon>`' };
+      return { ok: true, enabled: true, map, maps, build };
     },
   },
   // BUILD IT FROM THE MONITOR (operator, 2026-10-13: "build this feature into BlockYard. Not just one-off shit"): the

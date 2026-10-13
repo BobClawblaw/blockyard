@@ -365,6 +365,10 @@ export const DEFAULTS = Object.freeze({
     // THE STREET MAP'S RADIUS (operator, 2026-10-13: "build this feature into BlockYard"): how far round the place the
     // Build street map button fetches, in km. Zoom 15 everywhere; 60 km round a capital is ~150-200 MB
     mapRadius: '60',
+    // AUTO-FETCH FOR THE VIEW (operator, 2026-10-13: "intelligently grab the road data for the current view after coming
+    // to rest for 5 seconds on a new location. Make it a checkbox"): off out of the box, because on it contacts Protomaps
+    // whenever the map rests on an area no extract covers yet. The button on the globe bar does the same once.
+    mapAuto: false,
     // THE GRID'S SPAN (operator: "it needs to zoom in at least to the surrounding zip codes ... It's a local weather
     // station to start"): 'local' is 121 points a tenth of a degree apart, about 110 km across; 'regional' half a degree
     gridSpan: 'local',
@@ -973,6 +977,10 @@ const PANEL_GROUPS = Object.freeze([
         key: 'mapRadius', label: 'Street map', kind: 'mapbuild', dimWhen: (s) => !s.weather.tab || !s.weather.map,
         hint: 'Streets, buildings and names for the map, from OpenStreetMap, fetched ONCE by this server from Protomaps (build.protomaps.com) when you press Build -- the only time the monitor contacts them -- and kept in data/map/. About 150-200 MB for 60 km round a city at zoom 15, a minute or two. Pick the radius first. Building needs the same right as changing shared settings',
         options: Object.freeze([['30', '30 km'], ['60', '60 km'], ['100', '100 km'], ['150', '150 km']]),
+      }),
+      Object.freeze({
+        key: 'mapAuto', label: 'Auto-fetch streets', kind: 'toggle', dimWhen: (s) => !s.weather.tab || !s.weather.map,
+        hint: 'When the map rests five seconds on an area no street map covers yet, fetch one for that view by itself -- the centre, a radius that holds the panel, two zoom levels past the view\u2019s. Each fetch contacts Protomaps and keeps a file in data/map/; the fetch streets button on the map does the same once, by hand. Needs the right to change shared settings',
       }),
       Object.freeze({
         key: 'gridSpan', label: 'Forecast grid', kind: 'segment', dimWhen: (s) => !s.weather.tab || !s.weather.map || s.weather.mapLayer !== 'forecast',

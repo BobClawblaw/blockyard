@@ -99,7 +99,7 @@ test('the builder: one at a time, progress on view(), the outcome kept, cancel a
   assert.equal(b.view().running, false);
   assert.throws(() => b.start({ lat: 99, lon: 0 }), /not a place/);
   const v = b.start({ lat: 48.86, lon: 2.35, radiusKm: 60, name: 'Paris' });
-  assert.equal(v.running, true); assert.equal(v.place.name, 'Paris'); assert.equal(path.basename(v.out), '48.86_2.35.pmtiles');
+  assert.equal(v.running, true); assert.equal(v.place.name, 'Paris'); assert.equal(path.basename(v.out), '48.86_2.35_r60_z15.pmtiles', 'one file per area and depth');
   assert.throws(() => b.start({ lat: 1, lon: 1 }), /already being built/);
   t += 10_000;
   const mid = b.view();
@@ -137,4 +137,39 @@ test('the routes: build needs the weather switch and the settings-write right; t
   // with accounts on, a viewer may not start one
   const closed = { ...app, cfg: { ...app.cfg, auth: { enabled: true } } };
   await assert.rejects(route('/api/weather/map/build').handler({ query: {}, body: { lat: 1, lon: 2 }, user: { role: 'viewer' } }, closed), /admin|forbidden|role/i);
+});
+
+// SEVERAL EXTRACTS, AND THE VIEW'S OWN FETCH (operator, 2026-10-13: "grab the road data for the current view after
+// coming to rest for 5 seconds ... a checkbox to auto refresh on pause ... a refresh view button")
+test('the map set serves a tile from whichever archive covers it, deepest zoom first; the view asks for what no archive covers', async () => {
+  const { MapSet } = await import('../server/http/vtiles.js');
+  const { streetRequestFor, viewOf } = await import('../public/js/weathermap.js');
+  const dir = tmp(); fs.mkdirSync(path.join(dir, 'map'));
+  // two archives: a wide shallow one (zoom 0-3 round 10,20) and a small deep one (zoom 0-4 round the same place)
+  const mk = async (name, maxzoom, radiusKm, mark) => {
+    const { planet } = fakePlanet();
+    const { fetch } = fetcher(planet);
+    await extract({ lat: 10, lon: 20, radiusKm, maxzoom, out: path.join(dir, 'map', name), fetchImpl: fetch, build: '20261013.pmtiles' });
+    await new Promise((r) => setTimeout(r, 15));
+  };
+  await mk('wide.pmtiles', 3, 300); await mk('deep.pmtiles', 4, 50);
+  const set = await new MapSet().refresh({ store: { dir } });
+  assert.equal(set.size, 2);
+  const views = set.views();
+  assert.deepEqual(views.map((v) => v.file), ['deep.pmtiles', 'wide.pmtiles'], 'newest first');
+  assert.equal(set.covering(10, 20)[0].head.maxZoom, 4, 'the deep one covers the place and comes first');
+  assert.equal(set.covering(10, 22).length, 1, 'two degrees east only the wide one (300 km) reaches');
+  assert.ok(await set.tile(4, 8, 7), 'a zoom-4 tile from the deep archive');
+  assert.equal(await set.tile(4, 9, 7), null, 'zoom 4 outside the deep one: the wide stops at 3');
+  assert.ok(await set.tile(3, 4, 3), 'zoom 3 from the wide one');
+  // what a view needs: a city view at zoom 11 wants zoom 13 within a radius that holds the panel
+  const v = viewOf(10, 20, 300);
+  const req = streetRequestFor(v, 1600, 800, views, 16);
+  assert.ok(req.z >= 9 && req.maxzoom === Math.min(15, req.z + 2), `zoom two past the view's (${req.z} -> ${req.maxzoom})`);
+  assert.ok(req.radiusKm >= 5 && req.radiusKm <= 150);
+  assert.equal(req.covered, false, 'the fake archives stop at zoom 4');
+  const covered = streetRequestFor(v, 1600, 800, [{ bounds: { w: -180, e: 180, s: -85, n: 85 }, maxZoom: 15 }], 16);
+  assert.equal(covered.covered, true, 'a planet-wide zoom-15 archive covers anything');
+  assert.equal(streetRequestFor(viewOf(10, 20, 1), 800, 600, [], 16).z < 9, true, 'a globe view asks for nothing: z under 9');
+  await Promise.all([...set.archives.values()].map((a) => a.close()));
 });
