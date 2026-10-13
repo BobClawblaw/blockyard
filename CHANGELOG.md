@@ -52,6 +52,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Static text assets go out gzipped** to a browser that accepts it: scripts, stylesheets and JSON
+  of 8 KB and up, compressed once on first request and kept in memory (bounded). The map geography's
+  4.3 MB first load is 1.5 MB on the wire; nothing extra ships, and the API's routes are unchanged.
+
 - **The top bar is a menu bar.** One 28 px line in the shape of a Finder menu bar: Monitor, Explore,
   Node and Diversions open lists, Kiosk is one click, the page's name sits beside them, and the
   right end is the node badge (its tooltip carries the rpc round trip and the uptime) with the

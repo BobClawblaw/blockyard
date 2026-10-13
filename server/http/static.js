@@ -4,6 +4,7 @@
 // not the requested string: `/assets/../../../etc/passwd` and a symlink planted
 // inside public/ are different attacks and only the realpath test stops both.
 import fsp from 'node:fs/promises';
+import { gzip } from 'node:zlib';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
@@ -134,8 +135,14 @@ export async function computeBuildId(root, version = '0.0.0') {
   return `${version}-${h.digest('hex').slice(0, 10)}`;
 }
 
+// what is gzipped on the way out (static.js serve()): text assets of this size and up, kept compressed in memory
+export const GZIP_TYPES = new Set(['.json', '.js', '.mjs', '.css', '.svg', '.txt', '.map', '.html']);
+export const GZIP_MIN = 8 * 1024;
+export const GZIP_CACHE_BYTES = 24 * 1024 * 1024;
+
 export class StaticFiles {
   constructor(root, { version = '0.0.0', tls = false, hstsMs = 0 } = {}) {
+    this.gzCache = new Map(); this.gzBytes = 0;   // gzipped bodies by file, size and mtime (serve(), gzipped())
     this.root = path.resolve(root);
     this.version = version;
     this.tls = tls;
@@ -217,11 +224,47 @@ export class StaticFiles {
     // The caller may be serving a real 404/403 *page*; the body being a file
     // that exists does not make the request successful.
     if (!send) { res.writeHead(status, headers); res.end(); return { status, file: r.file }; }
+    // GZIP, ONCE, IN MEMORY (operator, 2026-10-13, of the 4.3 MB of map geography: "do it"): a text asset of 8 KB or more
+    // goes out gzipped to a client that accepts it, compressed on first request and kept by path, size and mtime (the
+    // cache is bounded; a file changed on disk is recompressed). Nothing extra ships, and every large script and
+    // stylesheet gains the same. Static files carry no secret, so BREACH does not apply (the API's routes stay as they
+    // are: only the two mempool routes opt in there). The gzipped variant has its own ETag, so a conditional request
+    // for either form answers 304 correctly, and Vary says the body depends on Accept-Encoding.
+    if (GZIP_TYPES.has(r.ext) && r.stat.size >= GZIP_MIN && /\bgzip\b/.test(String(req.headers['accept-encoding'] ?? ''))) {
+      const gzEtag = `${etag.slice(0, -1)}-gz"`;
+      if (req.headers['if-none-match'] === gzEtag) {
+        res.writeHead(304, { ETag: gzEtag, 'Cache-Control': headers['Cache-Control'], Vary: 'Accept-Encoding', ...securityHeaders({ tls: this.tls, hstsMs: this.hstsMs }) });
+        res.end();
+        return { status: 304, file: r.file };
+      }
+      const gz = await this.gzipped(r);
+      if (gz) {
+        res.writeHead(status, { ...headers, ETag: gzEtag, 'Content-Encoding': 'gzip', 'Content-Length': gz.length, Vary: 'Accept-Encoding' });
+        res.end(req.method === 'HEAD' ? undefined : gz);
+        return { status, file: r.file, etag: gzEtag, gzip: true };
+      }
+    }
+    if (GZIP_TYPES.has(r.ext)) headers.Vary = 'Accept-Encoding';
     res.writeHead(status, headers);
     const stream = (await import('node:fs')).createReadStream(r.file);
     stream.on('error', () => res.destroy());
     stream.pipe(res);
     return { status: 200, file: r.file, etag };
+  }
+
+  /** The gzipped body of a file, from the cache or made now; null if the file could not be read. */
+  async gzipped(r) {
+    const key = `${r.file}:${r.stat.size}:${Math.floor(r.stat.mtimeMs)}`;
+    const hit = this.gzCache.get(key);
+    if (hit) { this.gzCache.delete(key); this.gzCache.set(key, hit); return hit; }
+    const raw = await fsp.readFile(r.file).catch(() => null);
+    if (!raw) return null;
+    const gz = await new Promise((resolve, reject) => gzip(raw, { level: 6 }, (e, b) => (e ? reject(e) : resolve(b))));
+    // one entry per file: an older version of the same path goes first
+    for (const k of [...this.gzCache.keys()]) if (k.startsWith(`${r.file}:`)) { this.gzBytes -= this.gzCache.get(k).length; this.gzCache.delete(k); }
+    this.gzCache.set(key, gz); this.gzBytes += gz.length;
+    while (this.gzBytes > GZIP_CACHE_BYTES && this.gzCache.size > 1) { const [k, v] = this.gzCache.entries().next().value; this.gzCache.delete(k); this.gzBytes -= v.length; }
+    return gz;
   }
 }
 

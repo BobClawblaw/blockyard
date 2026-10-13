@@ -329,6 +329,12 @@ and `kWxTop/Above/Below/Bottom` (inside `#kiosk`, so full screen keeps them). Wh
 - Bars in a stretched SVG (`preserveAspectRatio="none"`) are LINES with `vector-effect: non-scaling-stroke`; rounded
   rects and circles there came out as long points and ovals.
 
+**STATIC TEXT IS GZIPPED ON THE WAY OUT (2026-10-13; operator, of the geography's 4.3 MB: "do it").** static.js
+`serve()`: a `.json/.js/.mjs/.css/.svg/.txt/.map/.html` file of 8 KB and up goes out `Content-Encoding: gzip` to a client
+whose Accept-Encoding says so, compressed on first request (`gzipped()`, level 6) and kept in memory by file, size and
+mtime under `GZIP_CACHE_BYTES` (24 MB). The variant has its own ETag (`...-gz"`) and `Vary: Accept-Encoding`. Static
+files carry no secret, so BREACH does not apply; the API's `compress: true` rule (the two mempool routes only) is untouched.
+
 **THE WEATHER GLOBE (the same day; operator: "a zoomable view of the area centered around the users location ...
 weather radar animations ... rotating to see global weather" -- "see if we can do it for simple mode too" -- "yes to all
 three, build it ... Default should be 10 minute refresh for 6 per hours max").** `docs/PLAN-WEATHER-GLOBE.md`.
@@ -1288,7 +1294,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1588 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1590 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1618,7 +1624,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1588 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1590 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
