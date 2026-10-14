@@ -51,8 +51,8 @@ Nothing of this reaches out until you tick it, and every host is named in `docs/
   covers it yet; **Auto-fetch streets** (Weather settings, off by default) does the same by itself
   once the map has rested five seconds on such an area. The server keeps every extract and serves a
   tile from whichever covers it, the deepest first.
-- **Three places, and a double-click.** Weather settings take a Location 2 and 3; the Kiosk shows a
-  ribbon for each, stacked. A double-click on any city name on the map -- Natural Earth's on the globe
+- **Three places, and a double-click.** Weather settings take a Location 2 and 3; the Overview and the
+  Kiosk show a ribbon for each, stacked. A double-click on any city name on the map -- Natural Earth's on the globe
   and the region, OpenStreetMap's on the street map -- goes to that city's local view.
   The format is read and written here (PMTiles v3, Mapbox vector tiles): zero dependencies. Data
   © OpenStreetMap contributors (ODbL), and the map says so.

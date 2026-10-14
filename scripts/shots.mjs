@@ -22,6 +22,15 @@
 //
 //   BLOCKYARD_BASE=http://127.0.0.1:21000 [BROWSER_CDP=http://127.0.0.1:9445] [BLOCKYARD_NODE=main] \
 //     node scripts/shots.mjs [name ...]
+//
+// SHOOT A THROWAWAY INSTANCE, NOT THE LIVE ONE (2026-10-14; operator: "set up fake cities for the screenshots Don't leak
+// my locations"): the weather ribbon names the places in the SHARED settings file, and the live monitor's are the
+// operator's own. Start a second monitor on a scratch config whose blockyard.json beside it names stand-in places
+// (Boulder, Colorado and Berlin in the shipped pictures), against the same node, and point BLOCKYARD_BASE at it:
+//   BLOCKYARD_CONFIG=<scratch>/local.json BLOCKYARD_DATA=<scratch>/data BLOCKYARD_AUTH=0 BLOCKYARD_TLS=0 \
+//     BLOCKYARD_PORT=18092 node server/main.js
+// The LOOKS at the end (the Sun sky, the Formation, the finishes) need WebGL on a real card: a second chromium with
+// --enable-gpu --ignore-gpu-blocklist --use-angle=vulkan --enable-features=Vulkan, named by BROWSER_CDP for that run.
 import { writeFileSync } from 'node:fs';
 
 const BASE = process.env.BLOCKYARD_BASE ?? 'http://127.0.0.1:21000';
@@ -82,6 +91,13 @@ async function shoot(name, { settle = 6000, height = null, cap = 2600 } = {}) {
   // inflate the answer the way scrollHeight did.
   if (height == null) {
     await metrics(cap);
+    await sleep(900);
+  } else {
+    // A FIXED-HEIGHT PAGE IS LAID OUT AT THAT HEIGHT BEFORE IT SETTLES (2026-10-14; operator, of the Kiosk picture:
+    // "block space screenshot is compressed vertically wrong"). The Kiosk's boards fit themselves to the viewport
+    // when they land; settling at the previous shot's 1,743 px and then shrinking to 1,000 px 1.4 s before the capture
+    // photographed a board fitted for a tall panel squeezed into a short one.
+    await metrics(height);
     await sleep(900);
   }
   await sleep(settle);
@@ -265,46 +281,71 @@ if (doing('scorched')) {
   } catch (e) { fail('scorched', e); }
 }
 
-// -------------------------------------------------- neon: LAST, and it is restored
-if (doing('block-space-neon')) {
-  let toggled = false;
-  try {
-    await nav('space'); await sleep(2000);
-    // BACK TO THE CUBE BOARD FIRST. The neon finish is a treatment on the stones, so in
-    // Detailed mode (which the mode2 shot leaves behind) it photographs as a flat treemap
-    // and the shot says nothing about neon at all.
-    await evl(`document.querySelector('[data-vmode="1"]')?.click()`);
-    await sleep(3000);
-    await evl(`document.getElementById('btnSettings')?.click()`);
-    await sleep(1200);
-    // THE BLOCK SPACE TAB FIRST (2026-09-16): the sheet opens on its first tab, Appearance since
-    // the themes arrived, and a tab's controls exist only while it is the open one.
-    await evl(`document.querySelector('[data-cfgtab="space"]')?.click()`);
-    await sleep(500);
-    // space.neon lives in the Block space group; find its control by data-cfg.
-    const on = await evl(`(() => {
-      const el=document.querySelector('[data-cfg="space.neon"]');
-      if(!el) return false;
-      if(!el.checked){ el.click(); return 'clicked'; }
-      return 'already';
+// ------------------------------------------------------------ the looks: LAST, each restored
+// A picture of a finish or a sky is shot under settings this tool sets THROUGH THE PANEL'S OWN CONTROLS and puts back
+// afterwards, so the instance's saved look is what it was (the old neon shot did exactly this for one switch; the
+// 2026-10-14 re-shoot under the menu bar brought the Sun, the Formation, chrome, satin and the 1 h chart under the
+// same discipline). They need a renderer that draws skies and finishes: the shipped Simple draws neither, and the
+// Formation and the Sun decline a software rasteriser, so run them in a chromium on the card (see the header).
+async function setCfg(pairs) {
+  await evl(`document.getElementById('btnSettings')?.click()`);
+  await sleep(1200);
+  const open = await evl(`(()=>{const w=document.getElementById('settingsWrap');return w? !w.classList.contains('hidden'):false})()`);
+  if (!open) throw new Error('the settings panel did not open');
+  const prev = {};
+  for (const [k, v] of Object.entries(pairs)) {
+    // A TAB'S CONTROLS EXIST ONLY WHILE IT IS THE OPEN ONE (2026-09-16): open the group's tab first.
+    await evl(`document.querySelector('[data-cfgtab="${k.split('.')[0]}"]')?.click()`);
+    await sleep(400);
+    const r = await evl(`(() => {
+      const want = ${JSON.stringify(v)};
+      const seg = document.querySelector('[data-cfgset="${k}"][data-value="' + String(want) + '"]');
+      if (seg) { const on = document.querySelector('[data-cfgset="${k}"].on'); const was = on?.dataset.value ?? null; if (!seg.classList.contains('on')) seg.click(); return { was }; }
+      const el = document.querySelector('[data-cfg="${k}"]');
+      if (!el) return null;
+      if (el.type === 'checkbox') { const was = el.checked; if (was !== !!want) el.click(); return { was }; }
+      const was = el.value; el.value = String(want); el.dispatchEvent(new Event('input', { bubbles: true })); return { was };
     })()`);
-    if (!on) throw new Error('no [data-cfg="space.neon"] control found');
-    toggled = on === 'clicked';
-    await evl(`document.getElementById('btnSettings')?.click()`);
-    await sleep(1000);
-    // A LONG settle: switching vmode and toggling neon each restart the choreography, and
-    // a shot taken during it shows an empty court with stones still in the air over a
-    // header claiming six thousand transactions.
-    done.push(await shoot('block-space-neon', { settle: 26000, height: 1009 }));
-  } catch (e) { fail('block-space-neon', e); }
+    if (!r) throw new Error(`no control for ${k}`);
+    prev[k] = r.was;
+    await sleep(300);
+  }
+  await evl(`document.getElementById('btnSettings')?.click()`);
+  await sleep(1000);                       // the debounced push to the server takes ~0.5 s
+  return prev;
+}
+const LOOKS = [
+  // name, page, settings, settle, height. A Block space look also holds the pool for two minutes: the shipped board
+  // takes a push every 5 s and the second Sun shot caught its tiles in the air. Long settles: a renderer or look change restarts the flight, and a shot taken
+  // during it shows an empty court with stones still in the air over a header claiming six thousand transactions.
+  ['markets-1h', 'markets', { 'appearance.renderer': 'webgl', 'markets.range': '1', 'markets.priceView': '2d' }, 9000, 900],
+  ['sky-formation', 'markets', { 'appearance.renderer': 'webgl', 'markets.range': '1', 'markets.priceView': '3d', 'markets.sky': 'form' }, 14000, 900],
+  // SDO's 171 angstrom gold, whatever channel the instance has chosen: the picture is of the Sun, not of a setting
+  // -- and no idle effect: the first one is due about 23 s after a landing, which is inside this settle, and the first
+  // shot had a supernova over the board where the Sun was meant to be looked at
+  ['sky-sun', 'space', { 'appearance.renderer': 'webgl', 'space.refreshEvery': 120, 'space.sky': 'sun', 'sky.sunChannel': '171', 'space.idleFx': false }, 26000, 1009],
+  ['finish-chrome', 'space', { 'appearance.renderer': 'webgl', 'space.refreshEvery': 120, 'space.sheen': true, 'space.sheenStyle': 'chrome' }, 26000, 1009],
+  ['finish-satin', 'space', { 'appearance.renderer': 'webgl', 'space.refreshEvery': 120, 'space.sheen': true, 'space.sheenStyle': 'satin' }, 26000, 1009],
+  ['finish-neon', 'space', { 'appearance.renderer': 'webgl', 'space.refreshEvery': 120, 'space.neon': true }, 26000, 1009],
+  ['block-space-neon', 'space', { 'appearance.renderer': 'webgl', 'space.refreshEvery': 120, 'space.neon': true }, 26000, 1009],
+];
+for (const [name, p, pairs, settle, height] of LOOKS) {
+  if (!doing(name)) continue;
+  let prev = null;
+  try {
+    // THE SETTINGS FIRST, THE PAGE SECOND. A board painted under the old settings arms its idle-effect timer, and a
+    // switch flipped afterwards does not disarm it: the third Sun shot had a plasma ball over a board whose effects
+    // were off. Set from wherever the browser is, then open the page, so its first paint is under the look.
+    prev = await setCfg(pairs);
+    await nav(p); await sleep(2000);
+    // BACK TO THE CUBE BOARD FIRST. A finish is a treatment on the stones, so in Detailed mode (which the mode2 shot
+    // leaves behind) it photographs as a flat treemap and the shot says nothing about it at all.
+    if (p === 'space') { await evl(`document.querySelector('[data-vmode="1"]')?.click()`); await sleep(3000); }
+    done.push(await shoot(name, { settle, height }));
+  } catch (e) { fail(name, e); }
   finally {
-    if (toggled) {
-      await evl(`document.getElementById('btnSettings')?.click()`);
-      await sleep(1000);
-      const back = await evl(`(() => { const el=document.querySelector('[data-cfg="space.neon"]'); if(!el) return false; if(el.checked){ el.click(); } return !el.checked; })()`);
-      await evl(`document.getElementById('btnSettings')?.click()`);
-      console.log(`  -- space.neon restored to off: ${back}  (debounced push takes ~0.5s)`);
-      await sleep(2500);
+    if (prev) {
+      try { await setCfg(prev); console.log(`  -- ${Object.keys(prev).join(', ')} restored`); } catch (e) { console.log(`  !! restore after ${name}: ${e.message}`); }
     }
   }
 }

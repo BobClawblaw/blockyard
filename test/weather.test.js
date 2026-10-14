@@ -231,4 +231,9 @@ test('up to three places: the first always, the others where set, each its own q
   const d = { ok: true, enabled: true, at: Date.now(), place: { lat: 52.52, lon: 13.41 }, units: 'metric', current: { temp: 1, code: 0, day: true }, hours: [], days: [] };
   assert.match(ribbonHtml(d, w, { placeName: 'Berlin' }), />Berlin</);
   assert.ok(!/Boulder/.test(ribbonHtml(d, w, { placeName: 'Berlin' })));
+  // THE OVERVIEW STACKS THEM TOO (operator, 2026-10-14: "weather not showing multiple locations on overview screen"):
+  // renderWeather paints every place on every page; the first cut sliced the list to one off the Kiosk
+  const body = read('public/js/weather.js').split('export function renderWeather(')[1].split('\nexport ')[0];
+  assert.match(body, /const places = placesOf\(w\);/, 'one list of places for every page');
+  assert.doesNotMatch(body, /slice\(0, 1\)/, 'no page is cut to the first place');
 });

@@ -567,7 +567,7 @@ server at most every ten minutes per place, six an hour; the switch's hint names
   over bars for the chance of rain, and the days ahead (7 or 10) with each day's date, icon,
   high and low. **Slim** (49 px) is the default; **Full** has the range bars. Units follow
   the place's country, or your choice. Up to three places: **Location 2** and **3** each get
-  a ribbon on the Kiosk.
+  a ribbon of their own on the Overview and the Kiosk.
 - **The Weather tab** has the same at full size, the next 24 hours hour by hour, every
   day as a row on one temperature scale -- and the **map**.
 - **The map** opens on your town (about 75 km across): drag to pan, scroll or pinch to zoom,

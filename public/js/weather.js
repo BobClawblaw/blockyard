@@ -434,8 +434,9 @@ export function renderWeather(page, h) {
   const d = !active ? null : w.place ? pullWeather(w, h.api, () => h.render?.()) : { needPlace: true };
   if (active) ensureDefs();
   // THE KIOSK'S BARS, ONE PER PLACE (operator, 2026-10-13: "up to 3 different weather locations and bars on kiosk"):
-  // the first place's ribbon, then the second and third where set, stacked; Overview shows the first alone
-  const places = page === 'kiosk' ? placesOf(w) : placesOf(w).slice(0, 1);
+  // the first place's ribbon, then the second and third where set, stacked -- on the Overview too (operator, 2026-10-14:
+  // "weather not showing multiple locations on overview screen"; the first cut gave the Overview the first alone)
+  const places = placesOf(w);
   const paintStack = (box, compact) => {
     if (!box) return;
     if ((box.__wxN ?? 0) !== places.length) { box.__wxN = places.length; box.innerHTML = places.map((p) => `<div class="wx-rib" data-place="${p.i}"></div>`).join(''); }

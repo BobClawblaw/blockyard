@@ -2357,4 +2357,6 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wx-ribs, .kwx-top, .kwx-bottom { display: flex; flex-direction: column; gap: 4px; }
 .wx-ribs { flex: 0 0 auto; }
 .wx-ribs .wx-rib + .wx-rib .wx { border-top: 1px solid #16222c; }
+/* the Overview's slots stack a ribbon per place too (2026-10-14); a margin, not flex: `hidden` must keep hiding them */
+#ovWxAbove .wx-rib + .wx-rib, #ovWxBelow .wx-rib + .wx-rib { margin-top: 4px; }
 .cfgplace [data-wxclear] { padding: 0 6px; margin-left: 4px; }

@@ -391,7 +391,8 @@ next). What will bite:
   **THREE PLACES AND THE DOUBLE-CLICK** (the same night): `weather.place2/lat2/lon2/country2` and `...3`, each a 'place'
   row that `owns` its coordinates (app.js's search and clear handlers are keyed by the suffix); `placesOf(w)` lists the
   set ones, `pullWeather(w, api, done, p)` keeps one cache per query, and renderWeather('kiosk') stacks a `.wx-rib` per
-  place (Overview and the globe follow the first). Every name drawn pushes its box on `st.labelHits` (drawNames and
+  place -- and so does renderWeather('overview') since 2026-10-14 (operator: "weather not showing multiple locations on
+  overview screen"); the globe follows the first. Every name drawn pushes its box on `st.labelHits` (drawNames and
   weatherstreets' place labels), and a `dblclick` on one is `homeView` there.
   `scripts/map-extract.mjs` cuts a PMTiles archive out of Protomaps' daily OpenStreetMap planet (index
   `build-metadata.protomaps.dev/builds.json`, archive `build.protomaps.com/<key>`, ~139 GB, range requests; measured
