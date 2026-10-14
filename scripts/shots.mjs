@@ -61,7 +61,8 @@ const CONTENT_H = `(() => {
 })()`;
 
 const metrics = (h) => send('Emulation.setDeviceMetricsOverride', { width: W, height: h, deviceScaleFactor: 1, mobile: false });
-const page = () => evl(`(document.querySelector('#nav button.on')?.dataset.page) ?? '(none)'`);
+// the menu bar (2026-10-13): the lit button WITH a data-page is the page's item (a lit title has none)
+const page = () => evl(`(document.querySelector('#nav button[data-page].on')?.dataset.page) ?? '(none)'`);
 
 async function nav(p) {
   const ok = await evl(`(() => { const b=document.querySelector('#nav button[data-page="${p}"]'); if(!b) return false; b.click(); return true; })()`);
@@ -110,7 +111,8 @@ if (NODE) {
 }
 await send('Page.navigate', { url: `${BASE}/?shots=${Date.now()}#overview` });
 await sleep(9000);
-const onNode = await evl(`document.getElementById('nodeSel')?.value ?? '(none)'`);
+// the picker lives on Chain & Sync since 2026-10-13; the browser's remembered choice is what the page watches
+const onNode = await evl(`localStorage.getItem('blockyard.node') ?? '(none)'`);
 if (NODE && onNode !== NODE) { console.log(`asked for node "${NODE}", the header shows "${onNode}"`); process.exit(1); }
 console.log(`base ${BASE}  node ${onNode}`);
 
@@ -128,6 +130,9 @@ for (const [name, p, settle, height = null] of [
   // 2600 and the panels honestly report 2600. Every other page here is content-sized and
   // measures fine; this one is told what it is.
   ['kiosk', 'kiosk', 12000, 1000],
+  // the Weather tab (0.1.6): the ribbon, the map on the place -- streets if the server has an extract -- and the days;
+  // a fixed height like the kiosk's, since the map's box is sized by the viewport
+  ['weather', 'weather', 16000, 1000],
   ['explorer-home', 'explorer', 6000],
   // the network row, the labelled pie and the year chart (2026-09-16); content-sized like the rest
   ['mining', 'mining', 12000],
