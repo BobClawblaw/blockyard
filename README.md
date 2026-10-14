@@ -269,9 +269,12 @@ RPC etiquette) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits 
 
 ## Status
 
-Version **0.1.5** (2026-10-08) — ships on the new **Simple** renderer, light on any graphics card,
-with Software and WebGL one click away for everything the 3D engine can do; the mempool pushed to
-the browser as it changes; quality flags that clear when their cause does. Pre-release software: the
+Version **0.1.6** (2026-10-14) — local weather, opt-in: a ribbon on Overview and the Kiosk, and a
+Weather tab whose map opens on your town, zooms out to a globe, carries radar and forecast over the
+world's coasts, borders and main roads, and -- once you press **Build street map** -- the streets of
+your place from an OpenStreetMap extract the monitor keeps for itself; the top bar is a Finder-style
+menu bar, 28 px. Still on the **Simple** renderer by default, with Software and WebGL one click away;
+the mempool pushed to the browser as it changes; quality flags that clear when their cause does. Pre-release software: the
 word is meant literally. Releases are published on GitHub only — the repository and its
 [releases](https://github.com/BobClawblaw/blockyard/releases); the npm package is retired — and announced on
 [bitcointalk](https://bitcointalk.org/index.php?topic=5594141.msg67144312) — questions, bug

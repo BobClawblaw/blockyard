@@ -65,15 +65,12 @@ are node actions, which are off unless an operator explicitly enables them (see
 | Item | What it tells you |
 |---|---|
 | **BlockYard v… · build** | The version and build this tab is running. |
-| **Tabs** | One button per page. The Admin tab appears only when accounts are enabled and you are signed in as an admin. The seven games live at the end, under the **Diversions** pop-down: Tetrust, Blockout, Blockanoid, Scorched Yard, Wolfenstein 3D, DOOM and Quake. |
-| **Node picker** | With one node configured, this is the node's name, with a dot coloured by its state. With several, it is a drop-down listing every node with its sync percentage, so you can see which one needs attention before you pick it. On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. A Bitcoin Machine Code node is listed throughout its initial sync, like any other node, so a bmc sync can be watched live from the moment it starts. |
-| **stream** | The live link to the server. `connecting` on load, then `live`. `reconnecting` means the link dropped and the browser is retrying. `stale` means the link is up but no fresh data has arrived for more than 90 seconds. |
-| **rpc** | The node's last RPC round-trip time. It turns red when the average climbs above five seconds. |
-| **up** | How long the monitor process has been running. |
+| **Menus** | The bar is a menu bar in the shape of Finder's, one 28 px line at any width (since 0.1.6). **Monitor** holds Overview, Block space, Chain & Sync, Mempool and Mining; **Explore** the Explorer, Markets and Weather; **Node** Peers, Network, Events, Node & RPC and -- when accounts are enabled and you are signed in as an admin -- Admin; **Kiosk** is one click; **Diversions** holds the seven games. Click a title to open it, slide across titles to switch, Esc or a click elsewhere closes; the page you are on is named beside the titles. Keys **1–9** jump to the nine working pages (the digit shows on each item) whenever nothing is taking your typing. |
+| **Node badge** | The node every page shows, with a dot coloured by its state. The dot before it is the live link: green `live`, amber `reconnecting` or `stale` (no fresh data for 90 seconds), red when it has failed -- hover for the word. Hover the badge for the node's RPC round trip and how long the monitor has been up. With several nodes configured, click it: the **node picker** lives on Chain & Sync (every node with its sync percentage, so you can see which one needs attention before you pick it). On first load the monitor opens on a node that is syncing, if there is one, and otherwise on the primary node. A Bitcoin Machine Code node is listed throughout its initial sync, like any other node. |
 | **open access** | Shown when the monitor runs without accounts. Anyone who can reach it reads it as a viewer. Hover for details. |
 | **stale build — reload** | Shown when the server has been updated since you loaded the page. Reload to run the current code. |
-| **pause / resume** | Freezes live updates so you can read a moving figure. Charts and panels stop updating and the Block space countdown shows `refresh paused`. **Shift-click** also freezes the event feed. Click again to resume. |
-| **sign out** | Only present when accounts are enabled. |
+| **⏸ pause** | Freezes live updates so you can read a moving figure; the icon turns into a play glyph. Charts and panels stop updating and the Block space countdown shows `refresh paused`. **Shift-click** also freezes the event feed. Click again to resume. |
+| **⎋ sign out** | Only present when accounts are enabled. |
 
 A red bar under the header means the node is not answering RPC, or nothing has
 arrived for the selected node. It says which, and makes clear that everything below
@@ -547,9 +544,54 @@ order book depth** panel, the **Block space** board and **Block flow**.
   **refresh now** button and mode switch.
 - **full screen** in the corner puts the kiosk into browser full screen. Press it
   again or Esc to leave.
+- **Weather**, once switched on (below): a panel at the top of the Markets column with a
+  ribbon for each of up to three places over the local map, playing the radar loop by
+  itself on the Software and WebGL renderers; or the ribbons alone as a strip across the
+  top or bottom of the wall. Display settings → Weather → *Kiosk: where* picks which.
 
 Having the Kiosk open counts as viewing Markets, so exchange data keeps flowing while
 it is on screen.
+
+---
+
+## Weather
+
+Off until you tick **Display settings → Weather → Enable weather** (in the Shared settings:
+that switch is the one the server obeys) and pick a place under **Location** -- a city, a
+postcode, or `lat, lon`. Until then the monitor talks to nothing but your node and the
+exchanges you allowed. Forecasts are Open-Meteo's (free, no account), asked for by the
+server at most every ten minutes per place, six an hour; the switch's hint names every host.
+
+- **The ribbon** -- on Overview above or below the price line, and on the Kiosk -- is the
+  conditions now under a sky that matches them, the next 24 hours as a temperature curve
+  over bars for the chance of rain, and the days ahead (7 or 10) with each day's date, icon,
+  high and low. **Slim** (49 px) is the default; **Full** has the range bars. Units follow
+  the place's country, or your choice. Up to three places: **Location 2** and **3** each get
+  a ribbon on the Kiosk.
+- **The Weather tab** has the same at full size, the next 24 hours hour by hour, every
+  day as a row on one temperature scale -- and the **map**.
+- **The map** opens on your town (about 75 km across): drag to pan, scroll or pinch to zoom,
+  **local / region / world**. Zoomed out it is a globe you can turn. Two layers, picked in
+  settings: **Radar** -- RainViewer's observed rain and snow, the last two hours as a loop
+  (**play**, or **hold to play** on the Simple renderer, which paints nothing at rest) --
+  or **Forecast**, the next 48 hours of rain, temperature or cloud (the **rain** button
+  cycles them) with wind arrows, over a grid of 121 points round the place. Under the
+  layers: Natural Earth's coasts, lakes, borders, state lines, motorways and main roads,
+  rivers, the built-up footprint of towns, and 7,000 place names, all shipped with the
+  monitor. **Double-click a city name** to go there at the local view.
+- **Streets** are yours to add: **Build street map** in the settings row has the server cut
+  the OpenStreetMap tiles within 30–150 km of the place out of Protomaps' planet archive
+  (no account, no key; about 150–200 MB for a city, a minute or two; progress in the row,
+  cancel at any time) into `data/map/`, and the map then draws streets with their names,
+  buildings, parks, water and districts from that file, in the monitor's own dark style,
+  from zoom 9 in -- nothing fetched afterwards. **fetch streets** on the map does the same
+  for the area on screen; **Auto-fetch streets** (off by default) does it by itself five
+  seconds after the map rests on an area no map covers yet. The server keeps every extract
+  and serves each tile from whichever covers it. Building needs the same right as changing
+  shared settings. Data © OpenStreetMap contributors (ODbL), and the map says so.
+- **Refresh every** (10–60 minutes) and the forecast grid's span (**Local** 110 km, **Regional**
+  550 km) are in the same tab; `BLOCKYARD_WEATHER=0` removes the feature from a server so no
+  checkbox can turn it on.
 
 ---
 

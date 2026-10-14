@@ -4,7 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.6] — 2026-10-14
+
+**Local weather, and a map of your own place.** Opt in under Display settings → Weather and a ribbon of
+the conditions, the next 24 hours and the days ahead sits on Overview and the Kiosk (up to three
+places there), with a Weather tab behind it. The tab's map opens on your town, zooms out through the
+region to a globe you can turn, and carries observed radar (RainViewer) or the next 48 hours of
+forecast (Open-Meteo) over Natural Earth's coasts, borders, main roads and 7,000 place names -- and,
+once you press **Build street map**, the streets, buildings and names of your place from an
+OpenStreetMap extract the monitor cuts and keeps for itself (no key, nothing fetched afterwards).
+Double-click a city to go there; a button or a five-second rest fetches the streets for any view.
+Nothing of this reaches out until you tick it, and every host is named in `docs/SECURITY.md`.
+**The top bar is a 28 px menu bar** in the shape of Finder's, with keys 1–9 for the pages.
 
 ### Added
 
