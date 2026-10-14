@@ -78,6 +78,20 @@ function esc(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// WORDS THE OPERATOR NAMES AS PRIVATE (2026-10-14; operator: "Don't leak my locations"). The weather feature put the
+// operator's own town in a test, a script comment and three screenshots, and the machine-derived rules above cannot know
+// a town's name. So a git-ignored file, config/private-terms.txt -- one term a line, # comments -- lists what this
+// working copy must never publish, and every tracked TEXT file is checked for each term, word-bounded, whatever its
+// case. The file is deliberately absent from the repository (listing the terms here would publish them), so CI and a
+// fresh clone check nothing extra; the guard runs where the terms are known, which is where the commits are made.
+export function privateTerms(file = path.join(ROOT, 'config', 'private-terms.txt')) {
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
+  return text.split('\n').map((l) => l.replace(/#.*/, '').trim()).filter((l) => l.length >= 3)
+    .map((t) => ({ kind: 'private term', re: new RegExp(`(?<![A-Za-z0-9])${esc(t)}(?![A-Za-z0-9])`, 'i'), shown: t }));
+}
+const TEXT_FILE = /\.(js|mjs|cjs|ts|json|md|txt|html|css|svg|yml|yaml|sh|service|conf|cfg|ini|toml|csv|xml|py|mk|gitignore|dockerignore|npmignore|editorconfig)$|^[^.]+$/i;
+
 test('no tracked file contains this machine username, hostname or addresses', () => {
   const files = trackedFiles();
   if (files === null) return; // skip outside a git checkout
@@ -96,6 +110,37 @@ test('no tracked file contains this machine username, hostname or addresses', ()
     }
   }
   assert.deepEqual(hits, [], `personal/host identifiers would be published:\n  ${hits.join('\n  ')}`);
+});
+
+test('no tracked text file contains a term config/private-terms.txt names as private', () => {
+  const files = trackedFiles();
+  if (files === null) return;
+  const terms = privateTerms();
+  if (!terms.length) return; // no list on this machine: nothing extra to check (CI, a fresh clone)
+  const hits = [];
+  for (const f of files) {
+    if (!TEXT_FILE.test(f)) continue;
+    // the geography carries every town's name (public/geo/places-10m.json is Natural Earth's list): a town being on the
+    // map of the world is not a leak; a town being named in OUR text is
+    if (/^public\/geo\/[a-z0-9-]+\.json$/.test(f)) continue;
+    let text;
+    try { text = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
+    for (const t of terms) if (t.re.test(text)) hits.push(`${f} contains ${t.kind} "${t.shown}"`);
+  }
+  assert.deepEqual(hits, [], `terms the operator marked private would be published:\n  ${hits.join('\n  ')}`);
+});
+
+test('the private-terms list is read as words, case-blind, and may be absent', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'by-priv-'));
+  const file = path.join(dir, 'terms.txt');
+  assert.deepEqual(privateTerms(file), [], 'no file, no terms');
+  fs.writeFileSync(file, '# my town\nSpringfield\n  47.61, -122.33  \nab\n\n');
+  const ts = privateTerms(file);
+  assert.deepEqual(ts.map((t) => t.shown), ['Springfield', '47.61, -122.33'], 'comments, blanks and two-letter lines dropped');
+  assert.ok(ts[0].re.test('near SPRINGFIELD today'), 'case-blind');
+  assert.ok(!ts[0].re.test('Springfields'), 'a whole word, not a prefix');
+  assert.ok(ts[1].re.test('lat: 47.61, -122.33 there'), 'a coordinate pair is matched literally');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('committed text carries no overlay-network address and no unreviewed host address', () => {

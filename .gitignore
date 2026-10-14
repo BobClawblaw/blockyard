@@ -16,6 +16,8 @@ config/*.bak-*
 # belong in the repository. Ignored for the same reason local.json is: it is a choice
 # someone made on one machine.
 config/blockyard.json
+# Words the operator marked private (towns, coordinates): read by test/privacy.test.js, never published.
+config/private-terms.txt
 
 node_modules/
 .DS_Store

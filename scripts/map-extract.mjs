@@ -8,7 +8,7 @@
 // (build.protomaps.com, ~139 GB, HTTP range requests; no account, no key) and writes them as a small PMTiles file the
 // monitor then reads from disk (server/http/vtiles.js) -- nothing contacted afterwards. Data (c) OpenStreetMap
 // contributors, ODbL. Measured 2026-10-13: Berlin, 60 km, zoom 15: 35,480 tiles, 193 MB, about a minute; a 60 km
-// suburban extract in the United States, 18,469 tiles, 149 MB.
+// suburban extract in the United States, 18,469 tiles, 149 MB; Boulder, 40 km, zoom 14: 2,633 tiles, 28 MB, ten seconds.
 import path from 'node:path';
 import { extract } from '../server/collect/pmextract.js';
 
