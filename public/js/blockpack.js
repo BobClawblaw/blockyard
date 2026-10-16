@@ -35,8 +35,9 @@ const BLOCK_SHARE = 0.98;
 // inside a 40-unit grid.
 const AREA_GAIN = 1.06;
 
-export function vbytesPerUnit(blockLimit, resolution) {
-  const units = Math.max(1, Number(resolution) || 1) ** 2 * BLOCK_SHARE;
+export function vbytesPerUnit(blockLimit, resolution, height) {
+  const rows = Math.max(1, Math.floor(Number(height) || Number(resolution) || 1));
+  const units = Math.max(1, Number(resolution) || 1) * rows * BLOCK_SHARE;
   return Math.max(1e-9, Number(blockLimit) || 0) / units;
 }
 
@@ -245,10 +246,11 @@ function prepare(txs, vpu, width, dither = false) {
 
 const tileOf = (it, pos) => ({ txid: it.txid, x: pos.x, y: pos.y, s: pos.s, vsize: it.vsize, rate: it.rate, color: feeShade(it.rate, it.txid) });
 
-export function packBlock(txs, { resolution = 80, blockLimit = 1000000, dither = false } = {}) {
+export function packBlock(txs, { resolution = 80, boardH, blockLimit = 1000000, dither = false } = {}) {
   const width = Math.max(1, Math.floor(Number(resolution) || 80));
-  const vpu = vbytesPerUnit(blockLimit, width);
-  const layout = new BlockLayout({ width, height: width });
+  const height = Math.max(1, Math.floor(Number(boardH) || width));
+  const vpu = vbytesPerUnit(blockLimit, width, height);
+  const layout = new BlockLayout({ width, height });
   const items = prepare(txs, vpu, width, dither);
   const tiles = new Array(items.length);
   let gridHeight = 0;
@@ -289,8 +291,8 @@ const isPiece = (id) => typeof id === 'string' && id.startsWith('aggregate');
 export function packStable(prev, txs, opts = {}) {
   if (!Array.isArray(prev) || !prev.length || !Array.isArray(txs) || !txs.length) return null;
   const width = Math.max(1, Math.floor(Number(opts.resolution) || 80));
-  const height = width;
-  const vpu = vbytesPerUnit(opts.blockLimit ?? 1000000, width);
+  const height = Math.max(1, Math.floor(Number(opts.boardH) || width));
+  const vpu = vbytesPerUnit(opts.blockLimit ?? 1000000, width, height);
   const items = prepare(txs, vpu, width, !!opts.dither);
 
   // where each survivor was
@@ -378,8 +380,8 @@ function exactItems(plain) {
   return (plain || []).map((c, i) => ({ txid: c.txid ?? `cell-${i}`, vsize: Math.max(1, Number(c.vsize) || 0), rate: Math.max(0, Number(c.rate) || 0) }));
 }
 // the scale at which the real transactions' squares plus the tail's area fill RES x RES exactly
-function solveExact(items, tailVb, RES) {
-  const total = RES * RES;
+function solveExact(items, tailVb, RES, ROWS) {
+  const total = Math.max(1, Math.floor(Number(ROWS) || RES)) * RES;
   const realArea = (vpu) => items.reduce((a, c) => { const s = sideFor(c.vsize, vpu, RES); return a + s * s; }, 0);
   // both terms fall as vpu rises, so bisect for the vpu that fills the grid exactly
   let lo = 1, hi = 1e6;
@@ -387,40 +389,41 @@ function solveExact(items, tailVb, RES) {
   return (lo + hi) / 2;
 }
 
-export function packExact(plain, tail, { resolution = 44, cap = 3 } = {}) {
+export function packExact(plain, tail, { resolution = 44, boardH, cap = 3 } = {}) {
   const RES = Math.max(1, Math.floor(Number(resolution) || 44));
+  const ROWS = Math.max(1, Math.floor(Number(boardH) || RES));
   const items = exactItems(plain);
   const tailVb = tail ? Math.max(0, Number(tail.vbytes) || 0) : 0;
-  let vpu = solveExact(items, tailVb, RES);
+  let vpu = solveExact(items, tailVb, RES, ROWS);
 
   // the real transactions, first-fit; if first fit cannot honour the solved area (it is a
   // heuristic, not a guarantee) the scale steps up a little and they are laid again
   let layout, tiles;
   for (let attempt = 0; attempt < 8; attempt++) {
-    layout = new BlockLayout({ width: RES, height: RES });
+    layout = new BlockLayout({ width: RES, height: ROWS });
     tiles = [];
     let overflow = false;
     for (const c of items) {
       const s = sideFor(c.vsize, vpu, RES);
       const pos = layout.insert(c.txid, s);
-      if (pos.y + pos.s > RES) { overflow = true; break; }
+      if (pos.y + pos.s > ROWS) { overflow = true; break; }
       tiles.push({ txid: c.txid, x: pos.x, y: pos.y, s: pos.s, vsize: c.vsize, rate: c.rate, color: feeShade(c.rate, c.txid) });
     }
     if (!overflow) break;
     vpu *= 1.04;
   }
 
-  return fillTail(layout, tiles, tail, tailVb, RES, cap, vpu);
+  return fillTail(layout, tiles, tail, tailVb, RES, ROWS, cap, vpu);
 }
 
 // the remainder, tiled to the last cell: low-left first, the largest square up to `cap`
-function fillTail(layout, tiles, tail, tailVb, RES, cap, vpu) {
+function fillTail(layout, tiles, tail, tailVb, RES, ROWS, cap, vpu) {
   const pieces = [];
   let k = 0;
   // BlockLayout.fits treats rows beyond the grid as empty (the layout grows), so the top edge
-  // is this loop's to guard: a piece may not reach past row RES
-  const room = (x, y, s) => y + s <= RES && layout.fits(x, y, s);
-  for (let y = 0; y < RES; y++) {
+  // is this loop's to guard: a piece may not reach past row ROWS
+  const room = (x, y, s) => y + s <= ROWS && layout.fits(x, y, s);
+  for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < RES; x++) {
       if (!room(x, y, 1)) continue;
       let s = 1;
@@ -440,7 +443,7 @@ function fillTail(layout, tiles, tail, tailVb, RES, cap, vpu) {
     const rate = tail && typeof tail.rateAt === 'function' ? Math.max(0, Number(tail.rateAt(frac)) || 0) : Math.max(0, Number(tail?.rate) || 0);
     tiles.push({ txid: p.txid, x: p.x, y: p.y, s: p.s, vsize, rate, color: feeShade(rate, p.txid) });
   }
-  return { tiles, gridWidth: RES, gridHeight: RES, vbytesPerUnit: vpu, pieces: pieces.length };
+  return { tiles, gridWidth: RES, gridHeight: ROWS, vbytesPerUnit: vpu, pieces: pieces.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -516,8 +519,9 @@ export function packDenseStable(prev, txs, opts = {}) {
   const kept = packStable(prev, txs, { ...opts, bigFirst: true });
   if (!kept) return null;
   const width = Math.max(1, Math.floor(Number(opts.resolution) || 80));
-  const settled = settleDown(kept.tiles, { width, height: width });
-  if (gapShare(settled.tiles, { width, height: width }) > DENSE_GAP_MAX) return null;
+  const height = Math.max(1, Math.floor(Number(opts.boardH) || width));
+  const settled = settleDown(kept.tiles, { width, height });
+  if (gapShare(settled.tiles, { width, height }) > DENSE_GAP_MAX) return null;
   if (feerateOrder(settled.tiles) < DENSE_ORDER_MIN) return null;
   return { ...kept, tiles: settled.tiles, settled: settled.moved };
 }
@@ -538,17 +542,18 @@ export function packDenseStable(prev, txs, opts = {}) {
 // mempool.space does), or when a new transaction does not fit.
 export const STABLE_DRIFT = 0.15;
 export const STABLE_KEEP = 0.5;
-export function packExactStable(prev, plain, tail, { resolution = 44, cap = 3 } = {}) {
+export function packExactStable(prev, plain, tail, { resolution = 44, boardH, cap = 3 } = {}) {
   const RES = Math.max(1, Math.floor(Number(resolution) || 44));
+  const ROWS = Math.max(1, Math.floor(Number(boardH) || RES));
   if (!prev || !Array.isArray(prev.tiles) || !(prev.vbytesPerUnit > 0) || prev.gridWidth !== RES) return null;
   const items = exactItems(plain);
   const tailVb = tail ? Math.max(0, Number(tail.vbytes) || 0) : 0;
-  const solved = solveExact(items, tailVb, RES);
+  const solved = solveExact(items, tailVb, RES, ROWS);
   const vpu = prev.vbytesPerUnit;
   if (Math.abs(solved - vpu) / vpu > STABLE_DRIFT) return null;
   const was = new Map();
   for (const t of prev.tiles) if (t && !isPiece(t.txid)) was.set(t.txid, t);   // (a tail piece is 'aggregate-n' or, once named by slot and side, 'aggregate@x,y,s')
-  const layout = new BlockLayout({ width: RES, height: RES });
+  const layout = new BlockLayout({ width: RES, height: ROWS });
   const tiles = [];
   const fresh = [];
   let kept = 0, total = 0;
@@ -556,7 +561,7 @@ export function packExactStable(prev, plain, tail, { resolution = 44, cap = 3 } 
     total += c.vsize;
     const s = sideFor(c.vsize, vpu, RES);
     const w = was.get(c.txid);
-    if (w && w.s === s && w.y + s <= RES && layout.place(c.txid, w.x, w.y, s)) {
+    if (w && w.s === s && w.y + s <= ROWS && layout.place(c.txid, w.x, w.y, s)) {
       tiles.push({ txid: c.txid, x: w.x, y: w.y, s, vsize: c.vsize, rate: c.rate, color: feeShade(c.rate, c.txid) });
       kept += c.vsize;
     } else fresh.push([c, s]);
@@ -564,8 +569,8 @@ export function packExactStable(prev, plain, tail, { resolution = 44, cap = 3 } 
   if (total > 0 && kept < total * STABLE_KEEP) return null;
   for (const [c, s] of fresh) {
     const pos = layout.insert(c.txid, s);
-    if (pos.y + pos.s > RES) return null;
+    if (pos.y + pos.s > ROWS) return null;
     tiles.push({ txid: c.txid, x: pos.x, y: pos.y, s: pos.s, vsize: c.vsize, rate: c.rate, color: feeShade(c.rate, c.txid) });
   }
-  return { ...fillTail(layout, tiles, tail, tailVb, RES, cap, vpu), stable: true, moved: fresh.length };
+  return { ...fillTail(layout, tiles, tail, tailVb, RES, ROWS, cap, vpu), stable: true, moved: fresh.length };
 }

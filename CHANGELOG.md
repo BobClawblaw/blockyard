@@ -2,7 +2,23 @@
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
-[semantic versioning](https://semver.org/).
+[semantic versioning](https://semver.org).
+
+## [Unreleased]
+
+### Added
+
+- **Board shape (Settings, Block space): Rectangular / Square.** The block grid was hard-square,
+  whatever the screen: on a wide panel it left dead margins down both sides. **Rectangular** (the
+  default) keeps the square grid's AREA -- the one-block template line and the fee squares' tuning
+  keep their meaning -- and solves its aspect from the panel it is drawn on, against the oblique
+  camera's headroom margins, so the grid fills the panel instead. 1920x1080 draws ~65x29 where the
+  square drew 44x44; a portrait panel leans the other way; the shape clamps to 1..2.6 so no screen
+  makes a sliver, and follows the window when it is resized (a resize repacks the board). **Square**
+  is every previous board exactly.
+- **A 15% border round the block space board.** The board now draws at 85% of the fitted size,
+  centred, so the sky shows round the yard where the grid used to run edge to edge. The Markets
+  board keeps its full-bleed fit -- its price labels own the edge.
 
 ## [0.1.6] — 2026-10-14
 

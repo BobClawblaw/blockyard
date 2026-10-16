@@ -3293,6 +3293,12 @@ export function obliqueFit(pw, ph, gridW, gridH, opts) {
   const ob = opts.oblique;
   const head = ob.headroom + (opts.dome || 0);
   const u = opts.unit;
+  // THE BORDER (operator, 2026-10-16: "leave a 15% black border so we see a bit more of the
+  // background"). The fit above fills the panel edge to edge; the block space asks for the
+  // board drawn at 85% of it, centred, so the sky shows round the yard. A share of the LINEAR
+  // scale: the board loses 15% of each axis, ~7.5% of margin a side. Zero (every board that
+  // does not ask) is exactly the old full-bleed fit.
+  const border = Math.min(0.5, Math.max(0, Number(opts.fitBorder) || 0));
   // anchor 'bottom' (the market chart, facing the board): the board along the bottom with the
   // headroom above it only, and room on the right for the price labels the axes draw there
   const low = ob.anchor === 'bottom';
@@ -3310,9 +3316,9 @@ export function obliqueFit(pw, ph, gridW, gridH, opts) {
   const tagPx = 0.088 * pw;
   const k1 = low ? Math.min((pw - tagPx) / ((gridW + 2 * head * ob.ox) * u), kv) : 0;
   const extra = low ? Math.max(9, tagPx / (k1 * u)) : 0;
-  const k = low
+  const k = (low
     ? Math.min(pw / ((gridW + extra + 2 * head * ob.ox) * u), kv)
-    : Math.min(pw / ((gridW + 2 * head * ob.ox) * u), ph / ((gridH * dS + 2 * head * ob.oy) * u));
+    : Math.min(pw / ((gridW + 2 * head * ob.ox) * u), ph / ((gridH * dS + 2 * head * ob.oy) * u))) * (1 - border);
   const tx = pw / 2 - (k * (gridW + extra) * u) / 2;
   const ty = low ? ph - foot : ph / 2 + (k * gridH * dS * u) / 2;
   return { k, tx, ty, rect: { x0: -tx / (k * u), x1: (pw - tx) / (k * u), y0: (ty - ph) / (k * u * dS), y1: ty / (k * u * dS) } };
@@ -5798,10 +5804,48 @@ export function render3d(canvas, cells, options = {}) {
   // presence of the tail, which only the Simple board carries; the dithered per-transaction
   // Detailed board has no tail to fill with and keeps its own pack below, as does a board the
   // caller laid out (Markets).
+  // THE BOARD'S SHAPE (operator, 2026-10-16: "how do we make the block space grid more
+  // rectangular to better fit the space", then "can we fit the rectangular board to fit the
+  // space even more?"). The grid was hard-square: resolution x resolution. `rect` keeps the
+  // AREA (the one-block template line and the square-side tuning keep their meaning) and
+  // shapes it so the DRAWN board fills the panel: the oblique fit scales by
+  // min(pw / drawnW, ph / drawnH), and the camera's headroom adds 2*head*ox of drawn width
+  // and 2*head*oy of drawn depth on top of the grid -- so the grid aspect that makes both
+  // terms equal is NOT the panel's, it is (pw/ph) solved against those margins:
+  //   W + 2*head*ox = (pw/ph) * (H + 2*head*oy),  W*H = resolution^2.
+  // A fixed ratio (the first cut, 3:2) left ~29% of a 16:9 panel's width unused; the solved
+  // shape is measured to fill both axes. Falls back to 3:2 before the canvas has a layout,
+  // and clamps 1..2.6 so no screen produces a sliver. `square` is every previous board exactly.
+  const rect = opts.boardShape === 'rect';
+  let shapeR = 1;
+  if (rect) {
+    const cw = canvas && canvas.clientWidth > 0 ? canvas.clientWidth : 0;
+    const ch = canvas && canvas.clientHeight > 0 ? canvas.clientHeight : 0;
+    if (cw > 0 && ch > 0) {
+      const ob = opts.oblique ?? {};
+      const head = (ob.headroom ?? 0) + (opts.dome || 0);
+      const ox = ob.ox ?? 0, oy = ob.oy ?? 0, ratio = Math.min(3, Math.max(0.5, cw / ch));
+      // W*H = A and W + ox2 = ratio*(H + oy2):  ratio*H^2 + (ratio*oy2 - ox2)*H - A = 0
+      const ox2 = 2 * head * ox, oy2 = 2 * head * oy;
+      const A = opts.resolution * opts.resolution;
+      const H = (ox2 - ratio * oy2 + Math.sqrt((ratio * oy2 - ox2) ** 2 + 4 * ratio * A)) / (2 * ratio);
+      shapeR = Math.min(2.6, Math.max(1, (ratio * (H + oy2) - ox2) / H));   // W/H from the solved pair, clamped
+    } else shapeR = 1.5;
+  }
+  const shapeKey = Math.round(shapeR * 20) / 20;
+  // a shape change -- or the panel resized past a twentieth of the ratio -- is a new board:
+  // a kept layout from the other shape must not survive
+  if (st.boardShape !== opts.boardShape || (rect && Math.abs((st.shapeKey ?? shapeKey) - shapeKey) > 0.05)) {
+    st.exactPrev = null; st.densePrev = null; st.fitK = 1;
+  }
+  st.boardShape = opts.boardShape;
+  st.shapeKey = shapeKey;
+  const boardW = Math.max(1, Math.round(opts.resolution * Math.sqrt(shapeR)));
+  const boardH = Math.max(1, Math.round(opts.resolution / Math.sqrt(shapeR)));
   const agg = laid || opts.dither ? null : ((cells || []).find((c) => (Number(c?.aggregate) || 0) > 1) ?? null);
   const pack = (k) => {
-    const txs = toTxs(cells, vbytesPerUnit(opts.blockVbytes * k, opts.resolution));
-    const cfg = { resolution: opts.resolution, blockLimit: opts.blockVbytes * k, dither: !!opts.dither };   // dither: Detailed, area-true sides
+    const txs = toTxs(cells, vbytesPerUnit(opts.blockVbytes * k, boardW, boardH));
+    const cfg = { resolution: boardW, boardH, blockLimit: opts.blockVbytes * k, dither: !!opts.dither };   // dither: Detailed, area-true sides
     // Fresh every time. The stable packer (blockpack.js packStable) moved far
     // fewer blocks but left the resting board ragged -- columns half a cell
     // out of step, holes (operator: "I mean what even is this?"). Kept for
@@ -5824,13 +5868,13 @@ export function render3d(canvas, cells, options = {}) {
     // (blockpack.js packExactStable): the ones still in the pool stay put, the new ones take the free squares,
     // and a found block or a drifted scale packs fresh. On every renderer: on the 3D ones an update with nothing
     // moving is a trickle of arrivals and departures (blockscene3d.js TRICKLE), not a 20 s reshuffle.
-    const cfgX = { resolution: opts.resolution, cap: 3 };
+    const cfgX = { resolution: boardW, boardH, cap: 3 };
     // (only under Board order: Stable -- settings.js space.boardOrder; Exact, the default, packs afresh every update)
     packed = (stableOrder && st.exactPrev ? packExactStable(st.exactPrev, plain, tail, cfgX) : null) ?? packExact(plain, tail, cfgX);
     st.exactPrev = packed;
     fitK = 1;                                            // nothing to shrink: the scale was solved
-  } else if (!laid && opts.dither && stableOrder && st.densePrev && (keptDense = packDenseStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution)),
-    { resolution: opts.resolution, blockLimit: opts.blockVbytes * fitK, dither: true }))) {
+  } else if (!laid && opts.dither && stableOrder && st.densePrev && (keptDense = packDenseStable(st.densePrev, toTxs(cells, vbytesPerUnit(opts.blockVbytes * fitK, boardW, boardH)),
+    { resolution: boardW, boardH, blockLimit: opts.blockVbytes * fitK, dither: true }))) {
     // (packDenseStable since the same evening: the kept layout SETTLES, squares dropping into the gaps under
     // them, and packs fresh past DENSE_GAP_MAX -- operator: "Why is it leaving holes like that in detailed view?")
     // DETAILED KEEPS ITS LAYOUT TOO (the same day; blockpack.js packStable, at the scale the last layout was
@@ -5838,13 +5882,13 @@ export function render3d(canvas, cells, options = {}) {
     // 1,747-2,520 of them, left 291-427 holes and ran 1-8 rows past the grid; this moved 0-9, left 144-344
     // (arrivals fill what departures leave) and stayed inside it. Null -- the fresh pack below -- when too
     // little survived (a found block) or the new ones would not fit.
-    packed = { tiles: keptDense.tiles, vbytesPerUnit: vbytesPerUnit(opts.blockVbytes * fitK, opts.resolution), gridWidth: opts.resolution };
+    packed = { tiles: keptDense.tiles, vbytesPerUnit: vbytesPerUnit(opts.blockVbytes * fitK, boardW, boardH), gridWidth: boardW };
   } else {
     packed = laid ? { tiles: laid, vbytesPerUnit: 0, gridWidth: 1 } : pack(fitK);
-    while (!laid && tallest(packed) > opts.resolution && fitK < 2) { fitK *= 1.05; packed = pack(fitK); }
+    while (!laid && tallest(packed) > boardH && fitK < 2) { fitK *= 1.05; packed = pack(fitK); }
     while (!laid && fitK > 1.0001) {
       const smaller = pack(fitK / 1.05);
-      if (tallest(smaller) > opts.resolution) break;
+      if (tallest(smaller) > boardH) break;
       fitK /= 1.05; packed = smaller;
     }
     // THE FIT, CLOSED IN ON (2026-10-01; operator: "an ordered, core compatible block properly packed"). In strict
@@ -5852,18 +5896,18 @@ export function render3d(canvas, cells, options = {}) {
     // 5% of the board there (578 empty cells of 9,216 on the pool the operator photographed). Between the last
     // scale that overflowed and the first that fits, five halvings find the smallest that fits to within 0.2%.
     // A pack is 3-12 ms on ~3,600 transactions (node, 2026-10-01).
-    if (!laid && fitK > 1.0001 && fitK < 2 && tallest(packed) <= opts.resolution) {
+    if (!laid && fitK > 1.0001 && fitK < 2 && tallest(packed) <= boardH) {
       let lo = Math.max(1, fitK / 1.05);
-      if (lo === 1 && tallest(pack(1)) <= opts.resolution) { fitK = 1; packed = pack(1); lo = fitK; }
+      if (lo === 1 && tallest(pack(1)) <= boardH) { fitK = 1; packed = pack(1); lo = fitK; }
       for (let i = 0; i < 5 && fitK - lo > 0.001; i++) {
         const mid = (lo + fitK) / 2, trial = pack(mid);
-        if (tallest(trial) <= opts.resolution) { fitK = mid; packed = trial; } else lo = mid;
+        if (tallest(trial) <= boardH) { fitK = mid; packed = trial; } else lo = mid;
       }
     }
   }
   st.fitK = fitK;
   st.densePrev = !laid && opts.dither ? packed.tiles : null;
-  const tiles0 = laid ?? packed.tiles.filter((t) => t.y + t.s <= opts.resolution);
+  const tiles0 = laid ?? packed.tiles.filter((t) => t.y + t.s <= boardH);
   // SLABS (Viewer Mode 2): with every transaction on the board, a cube as tall as it is wide
   // hides its neighbours, so each stands no taller than opts.slab
   const tiles = opts.slab ? tiles0.map((t) => ({ ...t, tall: Math.min(t.s, opts.slab) })) : tiles0;   // belt and braces past 2x
@@ -5902,8 +5946,8 @@ export function render3d(canvas, cells, options = {}) {
   bindHover(canvas, st);
   st.restTiles = tiles;          // resting footprints, for the pointer
   st.axes = opts.axes ?? null;   // the price board's axes and line, so an agent's build() knows which board it is on
-  st.gridW = Math.max(1, laid ? (opts.gridW ?? opts.resolution) : opts.resolution);
-  st.gridH = laid ? Math.max(1, opts.gridH ?? st.gridW) : st.gridW;
+  st.gridW = Math.max(1, laid ? (opts.gridW ?? opts.resolution) : boardW);
+  st.gridH = laid ? Math.max(1, opts.gridH ?? st.gridW) : boardH;
   st.gridN = st.gridW;
   // where one block's worth of vbytes ends, as a row on this grid: the
   // template line, kept meaningful now that the grid is the whole pool

@@ -206,6 +206,12 @@ export const DEFAULTS = Object.freeze({
     // keep their squares and new ones take the free space (blockpack.js packExactStable / packDenseStable) -- few moves,
     // and the order drifts until the Detailed board's re-sort.
     boardOrder: 'exact',
+    // BOARD SHAPE (operator, 2026-10-16: "how do we make the block space grid more rectangular to
+    // better fit the space", then "can we fit the rectangular board to fit the space even more?").
+    // 'square' is every board as shipped; 'rect' keeps the square's AREA and shapes it to the panel
+    // it is drawn on (details3d solves the aspect from the canvas against the oblique camera's
+    // margins), so the grid fills the panel instead of leaving empty margins.
+    boardShape: 'rect',
     // HOW CUBES LEAVE AND ARRIVE (operator, 2026-09-13: "all the left and right side blocks are
     // arcing towards/away from the sides instead of just traveling straight up ... make it a toggle
     // for Linear vs Arcing", then "give me 3 choices to see and toggle between", then, having seen
@@ -763,6 +769,11 @@ const PANEL_GROUPS = Object.freeze([
         // (the FLIGHT's length, said as such: "Rapid \u00b7 3 s" read as a refresh interval beside "Refresh every" --
         // operator, the same evening: "Just clarify the labels")
         options: Object.freeze([['blink', 'Blink (1 s flight)'], ['swift', 'Swift (2 s flight)'], ['rapid', 'Rapid (3 s flight)'], ['steady', 'Steady (5 s flight)'], ['quick', 'Quick (10 s flight)'], ['full', 'Full flight (20 s)'], ['still', 'None (no flight)']]),
+      }),
+      Object.freeze({
+        key: 'boardShape', label: 'Board shape', kind: 'segment',
+        hint: 'Square is the board as shipped: as wide as it is tall. Rectangular keeps the same area of grid and stretches it to the shape of the panel it is drawn on -- a wide screen gets a wider, shallower board -- so the view wastes none of the space on empty margins. The shape follows the window if it is resized',
+        options: Object.freeze([['rect', 'Rectangular'], ['square', 'Square']]),
       }),
       Object.freeze({
         key: 'boardOrder', label: 'Board order', kind: 'segment',
@@ -1611,6 +1622,11 @@ export function spaceOptions(s) {
   if (motion) out.transition = motion;
   out.departures = sp.departures;
   out.boardOrder = sp.boardOrder;
+  out.boardShape = sp.boardShape;
+  // THE BORDER (operator, 2026-10-16: "leave a 15% black border so we see a bit more of the
+  // background"): the block space draws at 85% of the fit, centred, so the sky shows round
+  // the yard. The markets board keeps its full-bleed fit -- its price labels own the edge.
+  out.fitBorder = 0.15;
   out.light = sp.light;
   out.lightHeight = sp.lightHeight;
   // merged into the camera by details3d (it owns the oblique constants); 0 leaves it exactly as it

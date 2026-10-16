@@ -573,9 +573,18 @@ the blocks; the background follows its own settings. Markets with its effects of
 having pieces flying"; the zeroed phases alone never stopped the arrivals' fall or the departures' flight. BOARD ORDER (the same evening; operator: "the board is not accurately redraw in order of most expensive to least
 expensive" -- "add setting for both"): `space.boardOrder` 'exact' (default) packs afresh every update; only 'stable'
 uses packExactStable / packDenseStable (render3d `stableOrder`). Everything above about kept layouts, settling, the order
-re-sort and the Detailed flight over a kept board of holds applies under Stable; under Exact the holds are whatever the
-fresh pack left in place (top-end churn leaves most of a first-fit layout where it was). A plan counts as a LANDING
-for the effect timers only on a first paint or when at least half its tweens move (in practice a found block); any
+re-sorts and the Detailed flight over a kept board of holds applies under Stable; under Exact the holds are whatever the
+fresh pack left in place (top-end churn leaves most of a first-fit layout where it was). BOARD SHAPE (2026-10-16; operator: "how do we make the block space grid more rectangular to better fit the space" -- then "can we fit the
+rectangular board to fit the space even more?"): `space.boardShape` 'rect' (default) solves the grid's ASPECT from the
+panel it draws on -- the oblique fit scales by min(pw/drawnW, ph/drawnH) and the camera's headroom adds 2*head*ox / 2*head*oy
+of drawn width / depth, so the filling aspect is the solution of W + 2*head*ox = (pw/ph)*(H + 2*head*oy) with the AREA pinned
+at resolution^2 (the template line and the side tuning keep their meaning); clamped to 1..2.6, re-solved -- kept layouts
+cleared -- when the panel resizes past a twentieth of the ratio. 'square' is every previous board exactly. The shape rides
+`opts.boardShape` -> `boardW`/`boardH` through every packer (`blockpack.js` takes `boardH` on all five entry points;
+`vbytesPerUnit(limit, w, h?)`) and `st.gridW`/`st.gridH`. The block space also draws at 85% of the fit (`spaceOptions`
+`fitBorder` 0.15 -> `obliqueFit`, a share of the LINEAR scale, centred) -- operator, the same evening: "leave a 15% black
+border so we see a bit more of the background"; markets stays full-bleed, its price labels own the edge.
+A plan counts as a LANDING only on a first paint or when at least half its tweens move (in practice a found block); any
 other update is `plan.trickle` -- under Exact every update is a fresh pack, and "landings" every 5 s had brought back
 the effects-too-often bug (test/fx-cadence.test.js, now on the shipped Rapid flight). THE RETAINED LAYER UNDER AN EFFECT (the same evening; operator: "build the retained layer for unmoved tiles"). draw()
 sets `frame.overlay` (+ `baseOps` = st.restBase, the last settled no-fx frame of this plan) when an effect is on a settled
@@ -1295,7 +1304,7 @@ connection until market polling is ticked), the Appearance tab (light/dark/syste
 a custom nine-colour scheme), the Mining tab's network row in mempool.space's layout with View
 more panels, every tab packed to one screen, the DOS Diversions (Wolfenstein 3D, DOOM, Quake on
 an emulated PC written here), the Markets board's effects (black hole, supernova, light saber,
-x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1592 tests. Screenshots
+x-ray, breathe, fireworks as a display), and the fixes of two days' use. 1595 tests. Screenshots
 re-shot at 0.1.0 (`docs/images/`, plus a Mining shot); the announcement for the bitcointalk
 thread is `docs/announcement/0.1.0/`. Upgrading a 0.0.9 install: `docs/INSTALL.md` §11.
 
@@ -1625,7 +1634,7 @@ being unable to run.
 
 ### Counts, and why they are generated
 
-`npm test` = 1592 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
+`npm test` = 1595 tests. `bash scripts/smoke.sh` = 109 checks against a real server.
 
 `npm run counts:fix` writes the test count into `README.md` and `AGENTS.md` from the
 suite itself. Do not type it by hand. The old guard compared README with AGENTS and so
