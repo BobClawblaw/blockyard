@@ -27,6 +27,20 @@ All notable changes to this project are documented here. The format follows
   straight out of the sheet, composites each one's glows and fails the suite if the ribbon's text
   would drop below 3:1 at any pixel -- the pale right end cannot come back.
 
+### Fixed
+
+- **The weather ribbon's daytime strips read at kiosk distance, on a bright panel.** The deep day skies
+  were not enough: the two overlays that sat *on top of* the sky under the text were still lightening it.
+  `.wx-glow` laid a white radial over the top-left -- exactly under the temperature and conditions -- and
+  every day tile carried a white fill (.10, .22 for "today") under the smallest figures. Both are now dark:
+  the glow is a black vignette that can only deepen the sky, and the tiles are dark wells whose "today" is
+  marked by a brighter edge instead of a white wash; a wet tile's blue tint was darkened to match, and the
+  Weather tab's hero fact cards got the same treatment. Rain's day sky is deeper, and the ribbon's text
+  shadow is stronger. The contrast test now composites the glow *and* each tile fill (normal, today, wet,
+  and the tinted high/low colours) and fails the suite if any text drops under 5:1; measured worst cases
+  went from 3.94:1 on the bare sky, 2.68:1 on today's tile and 1.98:1 for its high/low to 5.96:1, 9.81:1
+  and 7.24:1 respectively, with a 5.79:1 floor on a wet tile.
+
 ## [0.1.6] — 2026-10-14
 
 **Local weather, and a map of your own place.** Opt in under Display settings → Weather and a ribbon of

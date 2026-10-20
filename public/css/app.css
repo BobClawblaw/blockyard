@@ -2114,26 +2114,35 @@ table.sykeys td { padding: 2px 0; }
 .wx {
   position: relative; display: flex; align-items: center; gap: 0; min-height: 86px; padding: 8px 14px;
   border-radius: 12px; overflow: hidden; isolation: isolate;
-  color: #f3f7fd; font-family: var(--sans); text-shadow: 0 1px 2px rgba(0, 10, 30, .35);
+  color: #f3f7fd; font-family: var(--sans); text-shadow: 0 1px 2px rgba(0, 8, 24, .55), 0 0 1px rgba(0, 8, 24, .45);
   border: 1px solid rgba(255, 255, 255, .10);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), 0 8px 24px -10px rgba(0, 0, 0, .55);
   background: linear-gradient(100deg, #0a1430, #18306a 55%, #2b4c8f);
 }
 .wx > * { position: relative; z-index: 1; }
+/* THE SHADE, NOT THE SHEEN (operator, 2026-10-20, second pass: "still too bright during the day on some displays").
+   This overlay used to be a white radial over the top-left -- exactly where the temperature and the conditions sit --
+   plus a white wash at the top. On a bright kiosk panel that lifted the sky under the text toward the pale end of its
+   own gradient, which is what made the strip hard to read across a room. It is now a dark vignette: it can only ever
+   deepen the sky under the text, never lighten it. The skies keep their sun/moon radials for colour; the glass tiles
+   below carry their own dark fill for the same reason. */
 .wx-glow { position: absolute !important; inset: 0; z-index: 0 !important; pointer-events: none;
-  background: radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, .16), transparent 55%),
-              linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 40%, rgba(0, 0, 0, .14)); }
+  background: radial-gradient(120% 140% at 0% 0%, rgba(0, 0, 0, .24), transparent 55%),
+              linear-gradient(180deg, rgba(0, 0, 0, .05), transparent 40%, rgba(0, 0, 0, .22)); }
 /* the skies */
-/* DAY SKIES, DEEP (operator, 2026-10-20: "the light background makes it too difficult to see at a distance"): the
-   clear/partly/snow/overcast/fog skies used to fade to a pale band at the right where the white text sat at ~1.5:1
-   contrast. Now every day sky stays deep cobalt-to-slate with at most a mid-blue crest, and the sun glow dims to
-   .30/.22 so the brightest hotspot still clears ~4.5:1 against #f3f7fd (Apple Weather's saturated day skies read the
-   same way at kiosk distance: the colour says 'day', the darkness says 'read the text'). */
+/* DAY SKIES, DEEP (operator, 2026-10-20: "the light background makes it too difficult to see at a distance", then
+   "still too bright during the day on some displays"): the clear/partly/snow/overcast/fog skies used to fade to a pale
+   band at the right where the white text sat at ~1.5:1 contrast. Now every day sky stays deep cobalt-to-slate with at
+   most a mid-blue crest, the sun glow dims to .30/.22 (rain's cloud-light to .12), and the two overlays that used to
+   lift the sky under the text -- .wx-glow and the tiles' white fills -- are dark (see both below). The strip now holds
+   at least 5:1 for text on the sky and on every tile, and 4.5:1 for the tinted high/low, measured by
+   test/weather-contrast.test.js (Apple Weather's saturated day skies read the same way at kiosk distance: the colour
+   says 'day', the darkness says 'read the text'). */
 .wx-sky-clear { background: radial-gradient(260px 160px at 3% 35%, rgba(255, 206, 80, .30), transparent 70%), linear-gradient(100deg, #0a3160, #0e4079 14%, #134f88 45%, #175a95 72%, #0e2a50); }
 .wx-sky-partly { background: radial-gradient(220px 140px at 3% 30%, rgba(255, 214, 110, .22), transparent 70%), linear-gradient(100deg, #0b2f56, #103d6e 14%, #174b7e 50%, #1c547f 78%, #102646); }
 .wx-sky-overcast { background: linear-gradient(100deg, #2b3546, #3c4859 50%, #2a3444); }
 .wx-sky-overcastnight { background: linear-gradient(100deg, #121826, #222b3c 55%, #313b4f); }
-.wx-sky-rain { background: radial-gradient(400px 120px at 60% -20%, rgba(150, 190, 255, .18), transparent 70%), linear-gradient(100deg, #1f2f48, #33496a 50%, #4d6687); }
+.wx-sky-rain { background: radial-gradient(400px 120px at 60% -20%, rgba(150, 190, 255, .12), transparent 70%), linear-gradient(100deg, #182639, #2b3e58 50%, #3a5070); }
 .wx-sky-rainnight { background: linear-gradient(100deg, #070d1a, #13213a 55%, #1f3150); }
 .wx-sky-storm { background: radial-gradient(300px 140px at 8% 90%, rgba(255, 220, 90, .16), transparent 70%), radial-gradient(500px 160px at 70% 0%, rgba(160, 110, 255, .30), transparent 70%), linear-gradient(100deg, #140f26, #2c2150 50%, #432f6b); }
 .wx-sky-snow { background: radial-gradient(400px 140px at 20% 0%, rgba(255, 255, 255, .16), transparent 70%), linear-gradient(100deg, #142c48, #22405f 50%, #2c4f72 80%, #182f4c); }
@@ -2181,12 +2190,17 @@ table.sykeys td { padding: 2px 0; }
 .wx-ht { font: 500 9px var(--sans); fill: rgba(240, 246, 255, .66); }
 /* the days */
 .wx-days { flex: 1 1 auto; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(52px, 1fr); gap: 5px; padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, .14); align-self: stretch; align-items: center; }
+/* THE TILES ARE WELLS, NOT GLASS PANES (operator, 2026-10-20, second pass): a white fill at .10 (and .22 for today)
+   sat over the sky right where the weekday, the icon, the chance of rain and the high/low are drawn, so the tiles --
+   not the sky -- were the brightest thing under the smallest text. They are now dark fill over the sky, and "today"
+   is marked with a brighter edge instead of a white wash. Every tile therefore only deepens the sky, so the figures
+   keep the contrast they have against the sky itself. */
 .wx-day {
   display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 4px 6px; min-width: 0;
-  border-radius: 10px; background: linear-gradient(180deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, .03));
-  border: 1px solid rgba(255, 255, 255, .07); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  border-radius: 10px; background: linear-gradient(180deg, rgba(0, 0, 0, .18), rgba(0, 0, 0, .04));
+  border: 1px solid rgba(255, 255, 255, .09); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
 }
-.wx-day.today { background: linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .07)); border-color: rgba(255, 255, 255, .22); }
+.wx-day.today { background: linear-gradient(180deg, rgba(0, 0, 0, .34), rgba(0, 0, 0, .14)); border-color: rgba(255, 255, 255, .38); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16); }
 .wx-dn { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; opacity: .9; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
 .wx-dn small { font-size: 8.5px; font-weight: 500; letter-spacing: .04em; opacity: .75; text-transform: none; }
 .wx-pop { font-size: 9.5px; font-weight: 650; color: #a8d8ff; min-height: 12px; line-height: 12px; }
@@ -2263,7 +2277,7 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wxp-say em { font-style: normal; }
 .wxp-where { font-size: 13px; opacity: .72; margin-top: 4px; }
 .wxp-facts { flex: 1 1 380px; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-self: center; }
-.wxp-fact { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 10px; background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .04)); border: 1px solid rgba(255, 255, 255, .10); }
+.wxp-fact { display: flex; flex-direction: column; padding: 8px 12px; border-radius: 10px; background: linear-gradient(180deg, rgba(0, 0, 0, .22), rgba(0, 0, 0, .06)); border: 1px solid rgba(255, 255, 255, .10); }
 .wxp-fact i { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .09em; opacity: .7; }
 .wxp-fact b { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .wxp-fact small { font-size: 11px; opacity: .75; }
@@ -2336,7 +2350,7 @@ html[data-motion="live"] .wx-stars { animation: wxtwinkle 3.5s ease-in-out infin
 .wx-slim .wx-hours { height: 40px; }
 .wx-slim .wx-days { gap: 4px; padding-left: 10px; grid-auto-columns: minmax(0, 1fr); }
 .wx-slim .wx-day { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 4px; padding: 2px 4px; border-radius: 7px; min-width: 0; overflow: hidden; white-space: nowrap; }   /* two lines: the date, then the icon and figures */
-.wx-slim .wx-day.wet { background: linear-gradient(180deg, rgba(90, 160, 255, .22), rgba(90, 160, 255, .08)); }
+.wx-slim .wx-day.wet { background: linear-gradient(180deg, rgba(40, 110, 200, .20), rgba(40, 110, 200, .07)); }
 .wx-slim .wx-dn { font-size: 9px; width: 100%; line-height: 1.1; flex-direction: row; justify-content: center; gap: 3px; letter-spacing: .04em; }
 .wx-slim .wx-dn b { font-weight: 650; }
 .wx-slim .wx-day .wx-ico { margin: 0; }
