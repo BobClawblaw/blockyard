@@ -101,7 +101,7 @@ Everything else in BlockYard works the same against Bitcoin Core; bmc is where i
 | **A board you can tune.** Neon-tube blocks, a metallic sheen or a chrome finish that mirrors a horizon, a movable lamp, a touch of perspective, a spiral galaxy behind the board, and a switch for every one of the 34 effects — in a tabbed settings panel. Stored on the server (`config/blockyard.json`), so every screen sees the same board; they change how things are *drawn*, never what is measured. | ![Neon blocks and the metallic sheen](docs/images/block-space-neon.jpg) |
 | **An explorer that looks the part.** Search a height, block hash, txid or address. Transaction pages with fee, fee rate and dollar value, feature badges, a flow diagram from inputs to outputs, and links to where every coin came from and went. **Address pages with full history and balance** — Bitcoin Core has no address index, so BlockYard builds its own from the node's block files (**a few hours** on first start, 124 GB) and keeps it current as blocks arrive. | ![Explorer transaction](docs/images/explorer-tx.jpg) |
 | **Markets.** Five exchanges' public prices: a 3D candle chart with a neon price line, a precise flat candlestick chart, an exchange table, and a bitcoinity-style order-book depth chart with change bars. Off until you tick **Enable market polling** — it is the one thing that talks to anyone but your node — and, once on, fetched by the server only while someone is looking. | ![Markets](docs/images/markets.jpg) |
-| **Local weather, opt-in.** A ribbon of the conditions, the next 24 hours and the days ahead on Overview and the Kiosk (up to three places), and a Weather tab whose map opens on your town, zooms out to a globe you can turn, and carries observed radar or the next 48 hours of forecast over the world's coasts, borders, main roads and place names -- all shipped. Press **Build street map** and the monitor cuts the streets, buildings and names of your place out of an OpenStreetMap archive and keeps them for itself: no map-tile server, no key, nothing fetched afterwards. Off until you tick it; every host it would contact is named. | ![The Weather tab: the conditions and the street map of the place](docs/images/weather.jpg) |
+| **Local weather, opt-in.** A ribbon of the conditions, the next 24 hours and the days ahead on Overview and the Kiosk (up to three places), under skies deep enough to read across the room, and a Weather tab whose map opens on your town, zooms out to a globe you can turn, and carries observed radar or the next 48 hours of forecast over the world's coasts, borders, main roads and place names -- all shipped. Press **Build street map** and the monitor cuts the streets, buildings and names of your place out of an OpenStreetMap archive and keeps them for itself: no map-tile server, no key, nothing fetched afterwards. Off until you tick it; every host it would contact is named. | ![The Weather tab: the conditions and the street map of the place](docs/images/weather.jpg) |
 | **Kiosk.** The 3D markets board, a price panel and the block-space board side by side, the weather across the top, full screen with one click. | ![Kiosk](docs/images/kiosk.jpg) |
 | **Tetrust, Blockout and Blockanoid.** Three playable games built on the same 3D engine — trust, but verify. Tetrust is Tetris: the well is the block-space board and the music is synthesised in the browser. Blockout is Breakout, where the wall is made of block-space stones and the bat follows your mouse. Blockanoid is Arkanoid: a different wall every level, silver bricks that take more than one hit, gold that takes none, and capsules that fall out of what you break — laser, wide, catch, slow, three balls, a life. All three pause when you look away and keep high scores per browser. **Scorched Yard** is Scorched Earth on the same engine: a landscape of dirt cubes that craters and falls, the original's thirty-three weapons and eleven accessories at the manual's prices, its eight computer personalities, cash and a shop between rounds, and the wind you can see. And **Wolfenstein 3D**, **DOOM** and **Quake**: the real shareware `WOLF3D.EXE` (1992, id Software, published by Apogee), `DOOM.EXE` (1993) and `QUAKE.EXE` (1996), unmodified, on a PC emulated in the browser — processor in real and protected mode, FPU, DOS and both extenders, VGA and Sound Blaster written from scratch, still with no dependencies. So if anyone asks *"well, can it run DOOM?"*, the answer is an emphatic **"Naturally. What sort of AI slop generator do you take me for?"** | ![Tetrust](docs/images/tetrust.jpg) |
 
@@ -147,7 +147,7 @@ top of the node's own ~875 GB of block files.
 ```bash
 git clone https://github.com/BobClawblaw/blockyard.git
 cd blockyard
-npm test            # optional: 1595 unit tests, all built in
+npm test            # optional: 1596 unit tests, all built in
 npm run setup       # reads the node's bitcoin.conf, checks the node, writes config/local.json
 npm start           # builds the address index in the background (a few hours); open https://127.0.0.1:21000
                     # and sign in as admin with the password the first start prints once
@@ -260,7 +260,7 @@ Details in [docs/SECURITY.md](docs/SECURITY.md). To report a vulnerability, see
 npm run dev          # fake node doing a simulated sync, port 18088
 npm run setup        # interactive install: read bitcoin.conf, check the node, write config/local.json
 npm run check        # the same checks (every call timed) against every configured node; exits 1 on a FAIL
-npm test             # 1595 unit tests (node:test, no dependencies)
+npm test             # 1596 unit tests (node:test, no dependencies)
 npm run smoke        # boots the real server and checks the HTTP contract
 npm run counts:fix   # keep the documented test count in step with the suite
 ```
@@ -284,7 +284,7 @@ It ships **hardened**: bound to this machine, sign-in on, HTTPS with a certifica
 and **zero telemetry** — no outbound connection to anyone but your node until you tick the market
 polling switch yourself.
 The test suite is
-comprehensive (1595 tests, plus a live smoke run), the monitoring side is solid, and the
+comprehensive (1596 tests, plus a live smoke run), the monitoring side is solid, and the
 explorer's biggest gap is closed: **address history and balances**, which Bitcoin Core cannot
 answer at any setting, now come from an **address index BlockYard builds itself** from the
 node's block and undo files and keeps current as blocks arrive. It is checked against the node

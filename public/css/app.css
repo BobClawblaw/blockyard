@@ -2124,16 +2124,21 @@ table.sykeys td { padding: 2px 0; }
   background: radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, .16), transparent 55%),
               linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 40%, rgba(0, 0, 0, .14)); }
 /* the skies */
-.wx-sky-clear { background: radial-gradient(260px 160px at 3% 35%, rgba(255, 214, 90, .50), transparent 70%), linear-gradient(100deg, #1462c4, #2f8ae6 45%, #6fb8f7 80%, #9fd3ff); }
-.wx-sky-partly { background: radial-gradient(220px 140px at 3% 30%, rgba(255, 214, 110, .32), transparent 70%), linear-gradient(100deg, #275f9f, #4c86c4 50%, #8cb0d6); }
-.wx-sky-overcast { background: linear-gradient(100deg, #404b5e, #5d6a80 50%, #7d889c); }
+/* DAY SKIES, DEEP (operator, 2026-10-20: "the light background makes it too difficult to see at a distance"): the
+   clear/partly/snow/overcast/fog skies used to fade to a pale band at the right where the white text sat at ~1.5:1
+   contrast. Now every day sky stays deep cobalt-to-slate with at most a mid-blue crest, and the sun glow dims to
+   .30/.22 so the brightest hotspot still clears ~4.5:1 against #f3f7fd (Apple Weather's saturated day skies read the
+   same way at kiosk distance: the colour says 'day', the darkness says 'read the text'). */
+.wx-sky-clear { background: radial-gradient(260px 160px at 3% 35%, rgba(255, 206, 80, .30), transparent 70%), linear-gradient(100deg, #0a3160, #0e4079 14%, #134f88 45%, #175a95 72%, #0e2a50); }
+.wx-sky-partly { background: radial-gradient(220px 140px at 3% 30%, rgba(255, 214, 110, .22), transparent 70%), linear-gradient(100deg, #0b2f56, #103d6e 14%, #174b7e 50%, #1c547f 78%, #102646); }
+.wx-sky-overcast { background: linear-gradient(100deg, #2b3546, #3c4859 50%, #2a3444); }
 .wx-sky-overcastnight { background: linear-gradient(100deg, #121826, #222b3c 55%, #313b4f); }
 .wx-sky-rain { background: radial-gradient(400px 120px at 60% -20%, rgba(150, 190, 255, .18), transparent 70%), linear-gradient(100deg, #1f2f48, #33496a 50%, #4d6687); }
 .wx-sky-rainnight { background: linear-gradient(100deg, #070d1a, #13213a 55%, #1f3150); }
 .wx-sky-storm { background: radial-gradient(300px 140px at 8% 90%, rgba(255, 220, 90, .16), transparent 70%), radial-gradient(500px 160px at 70% 0%, rgba(160, 110, 255, .30), transparent 70%), linear-gradient(100deg, #140f26, #2c2150 50%, #432f6b); }
-.wx-sky-snow { background: radial-gradient(400px 140px at 20% 0%, rgba(255, 255, 255, .25), transparent 70%), linear-gradient(100deg, #48638a, #7092b8 55%, #9db7d4); }
+.wx-sky-snow { background: radial-gradient(400px 140px at 20% 0%, rgba(255, 255, 255, .16), transparent 70%), linear-gradient(100deg, #142c48, #22405f 50%, #2c4f72 80%, #182f4c); }
 .wx-sky-snownight { background: linear-gradient(100deg, #111a30, #223252 55%, #34486c); }
-.wx-sky-fog { background: linear-gradient(100deg, #4e5866, #758090 50%, #949eac); }
+.wx-sky-fog { background: linear-gradient(100deg, #2c3542, #3e4854 50%, #2d3642); }
 .wx-sky-fognight { background: linear-gradient(100deg, #171b22, #2a303b 55%, #3a414d); }
 .wx-sky-night {
   background:

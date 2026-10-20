@@ -19,6 +19,13 @@ All notable changes to this project are documented here. The format follows
 - **A 15% border round the block space board.** The board now draws at 85% of the fitted size,
   centred, so the sky shows round the yard where the grid used to run edge to edge. The Markets
   board keeps its full-bleed fit -- its price labels own the edge.
+- **The weather ribbon's day skies went deep.** The clear-day ribbon faded to a pale blue at the
+  right -- exactly where the week's tiles sit -- and the white text there measured 1.5:1 contrast,
+  unreadable across the room. Every day sky (clear, partly, overcast, snow, fog) is now a deep
+  cobalt-to-slate with at most a mid-blue crest, and the sun glow dims so its hotspot stays a
+  highlight: no ribbon sky drops under 3.9:1 anywhere on the strip. A new test parses the skies
+  straight out of the sheet, composites each one's glows and fails the suite if the ribbon's text
+  would drop below 3:1 at any pixel -- the pale right end cannot come back.
 
 ## [0.1.6] — 2026-10-14
 
