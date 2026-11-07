@@ -445,7 +445,7 @@ export function clockText(sec) {
  */
 function clockRow(fresh, tipHeight, fmt) {
   if (!fresh || fresh.level === 'n/a' || !Number.isFinite(fresh.seconds)) {
-    return `<div class="bclock na" title="${fmt.esc(fresh?.why ?? 'no reading')}"><span class="bclock-t">–:––</span><span class="bclock-s">since the last block<br>${fmt.esc(fresh?.why ?? 'no reading')}</span></div>`;
+    return `<div class="bclock na" title="${fmt.esc(fresh?.why ?? 'no reading')}"><span class="bclock-t">–:––</span><span class="bclock-s"><span>since the last block</span><span>${fmt.esc(fresh?.why ?? 'no reading')}</span></span></div>`;
   }
   const t = clockText(fresh.seconds);
   const fill = Number.isFinite(fresh.overdueAt) && fresh.overdueAt > 0 ? Math.min(100, (100 * fresh.seconds) / fresh.overdueAt) : 0;
@@ -457,7 +457,7 @@ function clockRow(fresh, tipHeight, fmt) {
   ].join('\n');
   return `<div class="bclock ${fresh.level}" title="${fmt.esc(tip)}">
       <span class="bclock-t">${byTime ? '~' : ''}${t}</span>
-      <span class="bclock-s">since ${Number.isFinite(tipHeight) ? `#${tipHeight}` : 'the tip'}<br>${fresh.gap != null ? `avg ${Math.round(fresh.gap / 60)} min` : 'avg –'}</span>
+      <span class="bclock-s"><span>since ${Number.isFinite(tipHeight) ? `#${tipHeight}` : 'the tip'}</span><span>${fresh.gap != null ? `avg ${Math.round(fresh.gap / 60)} min` : 'avg –'}</span></span>
     </div>
     <div class="bclock-bar ${fresh.level}" aria-hidden="true"><span data-w="${fill.toFixed(1)}"></span></div>`;
 }
