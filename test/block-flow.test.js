@@ -481,3 +481,28 @@ test('a height whose coinbase has not been read yet still shows everything known
   assert.match(card, /class="pill waiting"/, 'the plate says the coinbase is still being read');
   assert.ok(card.includes('reading coinbase'), 'in words, not as a blank');
 });
+
+test('the block being built shows how long it has been worked on, large and to the second', async () => {
+  // (operator, 2026-11-07: "It's nigh impossible for me to see how long the current block has
+  // been worked on") -- it was a 10 px "12m" in the header's corner.
+  const { clockText, blockFlow } = await import('../public/js/mining.js');
+  assert.equal(clockText(0), '0:00');
+  assert.equal(clockText(425), '7:05');
+  assert.equal(clockText(3729), '1:02:09');
+  assert.equal(clockText(null), null);
+  assert.equal(clockText(-1), null);
+  const at = (tipAgeSec, next = TEMPLATE(null)) => {
+    const el = { clientWidth: 900, innerHTML: '' };
+    blockFlow(el, { tipHeight: 966294, recent: ROWS(5), tipAgeSec, avgGapSec: 600, next }, FMT);
+    return el.innerHTML;
+  };
+  const clock = (html) => /<div class="bclock ([a-z/]+)"[^>]*>\s*<span class="bclock-t">([^<]+)<\/span>/.exec(html);
+  const late = clock(at(725));
+  assert.ok(late, 'the clock is drawn on the card being built');
+  assert.equal(late[1], 'late', 'in the ring\'s colour');
+  assert.equal(late[2], '~12:05', 'minutes and seconds; "~" because no arrival was witnessed, only the block time');
+  assert.match(at(725), /since #966294/, 'and it names the block it counts from');
+  assert.match(at(3000), /bclock-bar overdue"[^>]*><span data-w="100.0"/, 'the bar is full at the red mark');
+  assert.ok(clock(at(60, null)), 'the clock is there before the first template too');
+  assert.ok(!/s old · assembled in/.test(at(60)), 'the template\'s own age no longer sits where the block\'s age is read');
+});

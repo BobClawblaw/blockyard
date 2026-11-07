@@ -427,22 +427,58 @@ function blockCard(row, prev, fmt, arrived = false, isTip = false, extraClass = 
   </div>`;
 }
 
+/** "7:05", "1:02:09": a clock for the block being built, to the second. Null when there is no reading. */
+export function clockText(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return null;
+  const s = Math.floor(sec);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  const two = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${two(m)}:${two(r)}` : `${m}:${two(r)}`;
+}
+
+/**
+ * HOW LONG THIS BLOCK HAS BEEN WORKED ON, readable across a room (operator, 2026-11-07: "It's
+ * nigh impossible for me to see how long the current block has been worked on"). It was a 10 px
+ * "12m" in the card's corner, and the line under it was the TEMPLATE's age ("8s old"), which read
+ * as the block's. Now the card's largest figure: minutes and seconds since the tip, in the ring's
+ * colour, with a bar that is full at the red mark (1.5x the average gap) and the average beside it.
+ */
+function clockRow(fresh, tipHeight, fmt) {
+  if (!fresh || fresh.level === 'n/a' || !Number.isFinite(fresh.seconds)) {
+    return `<div class="bclock na" title="${fmt.esc(fresh?.why ?? 'no reading')}"><span class="bclock-t">–:––</span><span class="bclock-s">since the last block<br>${fmt.esc(fresh?.why ?? 'no reading')}</span></div>`;
+  }
+  const t = clockText(fresh.seconds);
+  const fill = Number.isFinite(fresh.overdueAt) && fresh.overdueAt > 0 ? Math.min(100, (100 * fresh.seconds) / fresh.overdueAt) : 0;
+  const byTime = fresh.basis === 'block time';
+  const tip = [
+    `${t} since block ${Number.isFinite(tipHeight) ? '#' + tipHeight : ''} ${byTime ? 'by its timestamp (this page has not watched a block arrive yet; miners set timestamps, so it can be off by minutes)' : 'arrived, as watched by this page'}`,
+    `green under ${Math.round((fresh.lateAt ?? 240) / 60)} min, amber under ${Math.round((fresh.overdueAt ?? 480) / 60)} min, red after`,
+    fresh.gap != null ? `the chain's measured average gap: ${Math.round(fresh.gap / 60)} min` : 'no measured average gap yet',
+  ].join('\n');
+  return `<div class="bclock ${fresh.level}" title="${fmt.esc(tip)}">
+      <span class="bclock-t">${byTime ? '~' : ''}${t}</span>
+      <span class="bclock-s">since ${Number.isFinite(tipHeight) ? `#${tipHeight}` : 'the tip'}<br>${fresh.gap != null ? `avg ${Math.round(fresh.gap / 60)} min` : 'avg –'}</span>
+    </div>
+    <div class="bclock-bar ${fresh.level}" aria-hidden="true"><span data-w="${fill.toFixed(1)}"></span></div>`;
+}
+
 /** The block that does not exist yet: how full it is, what it paid, what is queued behind it. */
-function nextCard(nb, mempool, drift = {}, fmt, freshClass = '', fresh = null, meter = '') {
+function nextCard(nb, mempool, drift = {}, fmt, freshClass = '', fresh = null, meter = '', tipHeight = null) {
   const ec = nb?.economy ?? null;
   const ring = freshClass ? ' ' + freshClass : '';
-  const since = fresh && Number.isFinite(fresh.seconds) ? Math.round(fresh.seconds / 60) : null;
-  if (!nb) return `<div class="bcard next empty${ring}">The block being built.<br><span class="tiny">No template yet — it is assembled from the node\u2019s mempool, which is read every twenty seconds. <a href="#mining">Mining</a> shows the packages inside it.</span></div>`;
-  if (nb.unavailable) return `<div class="bcard next empty${ring}">No block template.<br><span class="tiny">${fmt.esc(nb.unavailable)}</span></div>`;
+  const clock = clockRow(fresh, tipHeight, fmt);
+  if (!nb) return `<div class="bcard next empty${ring}">${clock}The block being built.<br><span class="tiny">No template yet — it is assembled from the node\u2019s mempool, which is read every twenty seconds. <a href="#mining">Mining</a> shows the packages inside it.</span></div>`;
+  if (nb.unavailable) return `<div class="bcard next empty${ring}">${clock}No block template.<br><span class="tiny">${fmt.esc(nb.unavailable)}</span></div>`;
   const pct = nb.weightPct ?? 0;
   const ageSec = nb.at ? Math.round((Date.now() - nb.at) / 1000) : null;
   const cap = Math.min(100, Math.max(pct, 0.6));
   const q = mempool?.bytes;
-  return `<div class="bcard next${ring}" title="${fmt.esc(nb.note ?? '')}">
+  const title = [nb.note, ageSec != null ? `template read ${ageSec}s ago, assembled in ${nb.ms ?? '?'}ms` : ''].filter(Boolean).join('\n');
+  return `<div class="bcard next${ring}" title="${fmt.esc(title)}">
     <i class="bstack" data-h="${Math.max(0, Math.min(100, pct)).toFixed(1)}" aria-hidden="true"></i>
-    <div class="bh"><span class="live"></span><b>#${nb.height ?? '?'}</b><span class="bpool">${drift.stale ? 'stale template' : 'being built'}</span>${since != null ? `<span class="bage">${since}m</span>` : ''}</div>
+    <div class="bh"><span class="live"></span><b>#${nb.height ?? '?'}</b><span class="bpool">${drift.stale ? 'stale template' : 'being built'}</span></div>
     ${drift.stale ? `<div class="note tiny warn">this reading is ${Math.abs(drift.behind)} height(s) behind the tip — the node has since mined a block</div>` : ''}
-    <div class="bgap">${ageSec != null ? `${ageSec}s old · assembled in ${nb.ms ?? '?'}ms` : ''}</div>
+    ${clock}
     ${meter}
     <div class="bgrid" title="${fmt.num(nb.weight)} of ${fmt.num(nb.weightLimit ?? WU_CAP_FALLBACK)} WU selected${q != null ? ` · ${fmt.bytes(q)} queued in the mempool` : ''}">
       <div><i>txs</i><span>${nb.txCount != null ? fmt.num(nb.txCount) : '–'}</span></div>
@@ -582,7 +618,7 @@ export function blockFlow(el, { tipHeight = null, recent = [], stats = [], next 
     <div class="rail" data-rail="${railSeconds(avgGapSec)}" title="rail speed derived from the measured average block gap"><span></span></div>
     <div class="flow${motion.shift ? ' shift' : ''}">
       <div class="flowside todo">
-        ${projectedCards(mempool?.dist?.projected, { avgGapSec, tipAgeSec }, fmt)}${nextCard(next, mempool, drift, fmt, freshClass, fresh, meter.html)}
+        ${projectedCards(mempool?.dist?.projected, { avgGapSec, tipAgeSec }, fmt)}${nextCard(next, mempool, drift, fmt, freshClass, fresh, meter.html, frame.tip.height)}
       </div>
       <div class="flowsep" title="the divider: left is the work in progress, right is work the network accepted">
         <span class="flowsep-arrow up" aria-hidden="true"></span>

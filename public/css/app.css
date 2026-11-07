@@ -1057,24 +1057,35 @@ canvas.chart.xs, .chart.xs { height: 86px }
    the accent ring, which says something else — this is the height the chain
    reports. */
 .bcard.next { border-color: var(--accent); }
-.bcard.next .bage {
-  margin-left: auto; font-size: 10px; font-variant-numeric: tabular-nums;
-  color: var(--fg-dim); font-family: var(--mono);
-}
+/* THE CLOCK (2026-11-07, operator: "nigh impossible for me to see how long the current block has
+   been worked on"): the card's biggest figure, minutes:seconds since the tip, in the ring's colour,
+   over a bar that fills to the red mark. It replaced a 10 px "12m" in the header's corner. */
+.bclock { display: flex; align-items: center; gap: 7px; margin: 3px 0 2px; line-height: 1; }
+.bclock-t { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 700;
+  letter-spacing: -.02em; color: var(--fg); }
+.bclock-s { font-size: 9.5px; line-height: 1.25; color: var(--fg-dim); white-space: nowrap; }
+.bclock.fresh .bclock-t { color: var(--ok) }
+.bclock.late .bclock-t { color: var(--warn) }
+.bclock.overdue .bclock-t { color: var(--bad) }
+.bclock.na .bclock-t { color: var(--fg-faint) }
+.bclock-bar { display: block; height: 3px; margin: 0 0 5px; border-radius: 2px; background: var(--line-soft); overflow: hidden; }
+.bclock-bar > span { display: block; height: 100%; width: 0; background: var(--fg-dim); }
+.bclock-bar.fresh > span { background: var(--ok) }
+.bclock-bar.late > span { background: var(--warn) }
+.bclock-bar.overdue > span { background: var(--bad) }
+.bcard.next.empty .bclock { margin-bottom: 6px; }
 .bcard.next.fresh {
   border-color: var(--ok);
   box-shadow: 0 0 0 1px var(--ok), 0 0 16px #2ecc8f2e,
     0 1px 0 rgba(235, 245, 255, .10) inset, 0 -16px 22px rgba(0, 0, 0, .26) inset,
     3px 4px 0 -1px rgba(0, 0, 0, .40), 7px 9px 16px rgba(0, 0, 0, .30);
 }
-.bcard.next.fresh .bage { color: var(--ok) }
 .bcard.next.late {
   border-color: var(--warn); background: #f0b4291c;
   box-shadow: 0 0 0 1px var(--warn), 0 0 16px #f0b4292e,
     0 1px 0 rgba(235, 245, 255, .10) inset, 0 -16px 22px rgba(0, 0, 0, .26) inset,
     3px 4px 0 -1px rgba(0, 0, 0, .40), 7px 9px 16px rgba(0, 0, 0, .30);
 }
-.bcard.next.late .bage { color: var(--warn) }
 .bcard.next.overdue {
   border-color: var(--bad); background: #ef5a5a22;
   box-shadow: 0 0 0 1px var(--bad), 0 0 18px #ef5a5a38,
@@ -1082,7 +1093,6 @@ canvas.chart.xs, .chart.xs { height: 86px }
     3px 4px 0 -1px rgba(0, 0, 0, .40), 7px 9px 16px rgba(0, 0, 0, .30);
   animation: due 2.4s ease-in-out infinite;
 }
-.bcard.next.overdue .bage { color: var(--bad) }
 @media (prefers-reduced-motion: reduce) { .bcard.next.overdue { animation: none } }
 
 /* the data-quality line that replaced the four-sentence explainer */
