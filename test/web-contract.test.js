@@ -244,6 +244,17 @@ test('a dead stream is noticed, explained, and re-resolved rather than retried f
   assert.match(app, /badge\.textContent = 'stale'/);
 });
 
+// 2026-11-14: a Mac's tab showed "Nothing has arrived for 2619s" for 43 minutes after a
+// restart, the server up the whole time. The browser had given up on its EventSource
+// (CLOSED: it does not retry after an answer it cannot use) and the page only said so.
+test('a stream the browser gave up on, or one gone silent, is reopened by the page', () => {
+  const app = read('js/app.js');
+  assert.match(app, /function reopenStream[\s\S]{0,200}state\.es\?\.close\(\);[\s\S]{0,40}connect\(\)/, 'reopening closes the old stream and connects anew');
+  assert.match(app, /es\.readyState === 2\) reopenStream\(/, 'a CLOSED stream is reopened, with a backoff');
+  assert.match(app, /function attemptStreamRecovery[\s\S]{0,2400}reopenStream\(0\)/, 'silence past the watchdog threshold reopens it');
+  assert.match(app, /if \(es !== state\.es\) return;/, 'a replaced stream\'s late errors are ignored');
+});
+
 test('the server refuses an unknown node on the stream rather than streaming silence', () => {
   const srv = fs.readFileSync(path.join(HERE, '..', 'server', 'http', 'server.js'), 'utf8');
   assert.match(srv, /unknown_node/, 'a typed, greppable reason');

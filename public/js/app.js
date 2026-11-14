@@ -776,6 +776,7 @@ function connect() {
   const badge = document.getElementById('sseState');
   es.onopen = () => { badge.textContent = 'live'; badge.className = 'ok'; };
   es.onerror = () => {
+    if (es !== state.es) return;   // a stream already replaced; its late errors are not news
     badge.textContent = 'reconnecting';
     badge.className = 'warn';
     // EventSource reconnects by itself -- but it reconnects to the SAME url. If the
@@ -786,6 +787,13 @@ function connect() {
     state.streamFails = (state.streamFails ?? 0) + 1;
     const quietFor = Date.now() - (state.lastFrameAt ?? 0);
     if (state.streamFails >= 2 && quietFor > 20_000) attemptStreamRecovery('the live link kept failing');
+    // A CLOSED EventSource is one the browser has given up on: it retries a dropped
+    // connection by itself, but after an answer it cannot use (anything but a 200
+    // event-stream -- a restart's half-open moment, a 429, a proxy's error page) it
+    // stops for good. 2026-11-14: a Mac's tab lost its stream in a 04:55 restart and
+    // showed "Nothing has arrived for 2619s" with the server up the whole time. So the
+    // page reopens it itself, backing off to 30 s.
+    if (es.readyState === 2) reopenStream(Math.min(30_000, 2_000 * state.streamFails));
   };
   const noteFrame = () => { state.lastFrameAt = Date.now(); state.streamFails = 0; };
   es.addEventListener('snapshot', (ev) => {
@@ -836,6 +844,16 @@ function connect() {
  * claim and must be shown as one. The failure being designed against is the silent
  * kind: a page of frozen numbers, a badge stuck on "reconnecting", nothing in any log.
  */
+let reopenTimer = null;
+function reopenStream(delayMs) {
+  if (reopenTimer) return;
+  reopenTimer = setTimeout(() => {
+    reopenTimer = null;
+    state.es?.close();
+    connect();
+  }, delayMs);
+}
+
 let recovering = false;
 async function attemptStreamRecovery(why) {
   if (recovering) return;
@@ -853,6 +871,11 @@ async function attemptStreamRecovery(why) {
     banner.innerHTML = `<b>${why}.</b> Nothing has arrived for ${since == null ? 'as long as this page has been open' : `${since}s`} `
       + '— the figures below are the last ones received, not current. Check the server log for `sse #` lines if this persists.';
     banner.classList.remove('hidden');
+    // ...and do something about it. Saying so alone left a page frozen for 43 minutes.
+    // A stream can be OPEN and still silent (a socket that died while a laptop slept), so
+    // this does not ask the readyState: silence past the threshold is reason enough. The
+    // watchdog's 15 s tick paces the retries; the banner clears with the first snapshot.
+    reopenStream(0);
   } finally {
     recovering = false;
   }
